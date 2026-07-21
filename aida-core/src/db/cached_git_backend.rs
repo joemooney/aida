@@ -412,13 +412,28 @@ impl CachedGitBackend {
     /// written row, then re-derive each from its transitive descendant set. As
     /// a bonus the rollup is now transitive, so a grandchild flip refreshes the
     /// top epic too, matching the rebuild's authoritative value.
-    // trace:BUG-626 trace:BUG-764 | ai:claude
+    ///
+    /// BUG-768: each ancestor epic's STORED status is read back from the store
+    /// (not from its cache row, which already holds a derived override) and
+    /// handed to the recompute, so a human's `--force` close survives every
+    /// child write. An unreadable epic falls back to `Draft` — a non-terminal
+    /// value, i.e. "derive normally", the pre-BUG-768 behavior.
+    // trace:BUG-626 trace:BUG-764 trace:BUG-768 | ai:claude
     fn refresh_parent_epic_status(&self, req: &Requirement) {
         let Ok(ancestor_epics) = self.cache.ancestor_epic_ids(&req.id) else {
             return;
         };
         for epic_id in ancestor_epics {
-            let _ = self.cache.recompute_epic_status_from_hierarchy(&epic_id);
+            let stored = self
+                .inner
+                .get_requirement(&epic_id)
+                .ok()
+                .flatten()
+                .map(|e| e.status)
+                .unwrap_or(crate::models::RequirementStatus::Draft);
+            let _ = self
+                .cache
+                .recompute_epic_status_from_hierarchy(&epic_id, &stored);
         }
     }
 
@@ -890,6 +905,153 @@ mod tests {
         backend.update_requirement(&child).unwrap();
 
         assert_eq!(cached_status(&backend, epic_id), "Completed");
+    }
+
+    // ---------------------------------------------------------------- BUG-768
+    // The BUG-764 re-derivation must not reopen an epic a human force-closed.
+    // Observed: EPIC-24 / EPIC-0428 were force-closed to Completed in the
+    // store, and every overnight pull re-derived them back to in-progress
+    // because a *Completed* intermediate child still carried stale Approved
+    // grandchildren that the transitive rollup counts as open.
+
+    /// Build a store holding a FORCE-CLOSED epic (stored `Completed`) that
+    /// still carries one open (Approved) child — the observed shape. Returns
+    /// the backend plus the (epic, child) ids.
+    fn force_closed_epic_with_open_child(
+        store_root: &Path,
+        cache_path: &Path,
+    ) -> (CachedGitBackend, Uuid, Uuid) {
+        use crate::models::{Relationship, RelationshipType, RequirementStatus, RequirementType};
+
+        std::fs::create_dir_all(store_root).unwrap();
+        crate::git_ops::init(store_root).unwrap();
+        crate::git_ops::configure_user(store_root, "Test", "test@example.com").unwrap();
+        let backend = CachedGitBackend::open(store_root, cache_path).unwrap();
+
+        let mut epic = sample_req("EPIC-1", "force-closed epic");
+        epic.req_type = RequirementType::Epic;
+        // The human's `aida edit EPIC-1 --status completed --force`.
+        epic.status = RequirementStatus::Completed;
+        let epic_id = epic.id;
+        backend.add_requirement(epic).unwrap();
+
+        let mut child = sample_req("TASK-1", "stale open child");
+        child.status = RequirementStatus::Approved;
+        child.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: epic_id,
+            created_at: None,
+            created_by: None,
+        });
+        let child_id = child.id;
+        backend.add_requirement(child).unwrap();
+
+        (backend, epic_id, child_id)
+    }
+
+    // A force-closed epic stays Completed across BOTH re-derivation routes —
+    // the direct write-through edit and the external raw-`GitBackend` write
+    // the `aida pull` auto-bump uses — and across a full cache rebuild.
+    // trace:BUG-768 | ai:claude
+    #[test]
+    fn force_closed_epic_is_not_reopened_by_rederivation() {
+        use crate::models::RequirementStatus;
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        let (backend, epic_id, child_id) =
+            force_closed_epic_with_open_child(&store_root, &cache_path);
+
+        // Adding the open child must not have reopened the epic.
+        assert_eq!(
+            cached_status(&backend, epic_id),
+            "Completed",
+            "adding an open child must not reopen a force-closed epic"
+        );
+
+        // Direct write-through child edit.
+        let mut child = backend.get_requirement(&child_id).unwrap().unwrap();
+        child.status = RequirementStatus::InProgress;
+        backend.update_requirement(&child).unwrap();
+        assert_eq!(
+            cached_status(&backend, epic_id),
+            "Completed",
+            "a child edit must not reopen a force-closed epic"
+        );
+
+        // External raw-GitBackend write — the `aida pull` auto-bump shape,
+        // replayed through the incremental cache catch-up.
+        {
+            let external = GitBackend::new(&store_root).unwrap();
+            let mut child = external.get_requirement(&child_id).unwrap().unwrap();
+            child.status = RequirementStatus::Approved;
+            external.update_requirement(&child).unwrap();
+        }
+        assert_eq!(
+            cached_status(&backend, epic_id),
+            "Completed",
+            "a pull-shaped external write must not reopen a force-closed epic"
+        );
+
+        // And the authoritative full rebuild agrees.
+        backend.rebuild_cache().unwrap();
+        assert_eq!(
+            cached_status(&backend, epic_id),
+            "Completed",
+            "a full rebuild must not reopen a force-closed epic"
+        );
+    }
+
+    // An epic whose children are ALL archived-completed stays terminal:
+    // archived is a view flag, not a status (BUG-628), so archived children
+    // still tally into the rollup rather than being filtered out into a
+    // "no children" default. trace:BUG-768 | ai:claude
+    #[test]
+    fn epic_with_all_archived_completed_children_stays_completed() {
+        use crate::models::{Relationship, RelationshipType, RequirementStatus, RequirementType};
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        crate::git_ops::init(&store_root).unwrap();
+        crate::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        // A NON-force-closed epic (stored InProgress) so the terminal status
+        // under test is genuinely DERIVED from the archived children.
+        let mut epic = sample_req("EPIC-1", "epic with an archived child set");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::InProgress;
+        let epic_id = epic.id;
+        backend.add_requirement(epic).unwrap();
+
+        for (i, spec) in ["TASK-1", "TASK-2"].iter().enumerate() {
+            let mut child = sample_req(spec, "archived completed child");
+            child.status = RequirementStatus::Completed;
+            child.archived = true;
+            child.relationships.push(Relationship {
+                rel_type: RelationshipType::Parent,
+                target_id: epic_id,
+                created_at: None,
+                created_by: None,
+            });
+            backend.add_requirement(child).unwrap();
+            assert_eq!(
+                cached_status(&backend, epic_id),
+                "Completed",
+                "archived-completed child {i} must count toward the rollup"
+            );
+        }
+
+        // The full rebuild derives the same value.
+        backend.rebuild_cache().unwrap();
+        assert_eq!(
+            cached_status(&backend, epic_id),
+            "Completed",
+            "a rebuild must not drop archived children from the rollup"
+        );
     }
 
     // ---------------------------------------------------------------- BUG-636

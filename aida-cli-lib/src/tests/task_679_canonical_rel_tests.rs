@@ -83,21 +83,27 @@ fn rel_add_dedups_repeated_edges() {
 
 // BUG-628: the rel-add completed-parent guard must read the EFFECTIVE
 // (derived-for-epic) status, the same value `aida show` and the cache
-// display — not the epic's stale STORED status. Previously the guard read
-// `parent.status`, so an epic carrying a stale stored `Completed` (while its
-// children derive to Draft/InProgress) was wrongly blocked as "is
-// Completed", contradicting the display. This asserts the exact guard
+// display — not the epic's raw STORED status. This asserts the exact guard
 // composition `is_terminal_status(effective_display_status(...))` tracks the
-// children, not the stored field. trace:BUG-628 | ai:claude
+// children, not the stored field.
+//
+// BUG-768 narrowed this: an epic's stored status can no longer go STALE the
+// way BUG-628 assumed — BUG-626's edit guard refuses a manual epic status set
+// unless `--force`, so a stored TERMINAL status on an epic is now a deliberate
+// human force-close and the derivation preserves it (else every pull reopened
+// the epic). So the "stored value disagrees with the children" case this test
+// pins now uses a NON-terminal stale stored value; the force-closed case is
+// covered by `rel_add_guard_respects_a_force_closed_epic` below.
+// trace:BUG-628 trace:BUG-768 | ai:claude
 #[test]
 fn rel_add_guard_reads_derived_epic_status_not_stored() {
     let mut store = RequirementsStore::new();
 
-    // Epic with a stale stored `Completed` but an InProgress child → the
-    // rollup derives InProgress (non-terminal), so the guard must NOT block.
+    // Epic with a stale stored `Draft` but an InProgress child → the rollup
+    // derives InProgress, so the guard must NOT block.
     let mut epic = Requirement::new("Epic".into(), "desc".into());
     epic.req_type = RequirementType::Epic;
-    epic.status = RequirementStatus::Completed; // stale stored value
+    epic.status = RequirementStatus::Draft; // stale stored value
     let mut child = Requirement::new("Child".into(), "desc".into());
     child.status = RequirementStatus::InProgress;
     epic.relationships.push(aida_core::models::Relationship {
@@ -121,16 +127,55 @@ fn rel_add_guard_reads_derived_epic_status_not_stored() {
     assert_eq!(
         effective,
         RequirementStatus::InProgress,
-        "guard reads the DERIVED rollup (InProgress), not stored Completed"
+        "guard reads the DERIVED rollup (InProgress), not the stored Draft"
     );
     assert!(
         !is_terminal_status(&effective),
         "a derived-InProgress epic is NOT a terminal parent — guard allows the edge"
     );
-    // Sanity: the STORED status WOULD have wrongly tripped the guard.
-    assert!(
-        is_terminal_status(&epic.status),
-        "stale stored Completed would have wrongly blocked under the old guard"
+    // The stored value genuinely disagrees — the guard did not just echo it.
+    assert_ne!(
+        epic.status, effective,
+        "the stored status must differ from the derived one for this to test anything"
+    );
+}
+
+// BUG-768: a human's `edit <epic> --status completed --force` close is
+// preserved by the derivation, so the display — and therefore this guard —
+// reports Completed even while a stale child is still open. Attaching new
+// children to a deliberately-closed epic then trips the guard, which is the
+// intended reading; `--force-parent` remains the escape hatch.
+// trace:BUG-768 | ai:claude
+#[test]
+fn rel_add_guard_respects_a_force_closed_epic() {
+    let mut store = RequirementsStore::new();
+
+    let mut epic = Requirement::new("Epic".into(), "desc".into());
+    epic.req_type = RequirementType::Epic;
+    epic.status = RequirementStatus::Completed; // deliberate --force close
+    let mut child = Requirement::new("Child".into(), "desc".into());
+    child.status = RequirementStatus::InProgress;
+    epic.relationships.push(aida_core::models::Relationship {
+        rel_type: RelationshipType::Parent,
+        target_id: child.id,
+        created_at: None,
+        created_by: None,
+    });
+    child.relationships.push(aida_core::models::Relationship {
+        rel_type: RelationshipType::Child,
+        target_id: epic.id,
+        created_at: None,
+        created_by: None,
+    });
+    let epic_ref_id = epic.id;
+    store.requirements.push(epic);
+    store.requirements.push(child);
+
+    let epic = store.get_requirement_by_id(&epic_ref_id).unwrap();
+    assert_eq!(
+        effective_display_status(&store, epic),
+        RequirementStatus::Completed,
+        "a force-closed epic must display Completed, not be reopened by the rollup"
     );
 }
 

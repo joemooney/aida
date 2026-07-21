@@ -97,19 +97,67 @@ pub fn derive_epic_status_from_rollup(r: &StatusRollup) -> Option<RequirementSta
     None
 }
 
+/// Is `status` a status a human force-closes an epic INTO — a resolved end
+/// state no further child transition should reopen?
+///
+/// `Completed` and `Rejected` are the two terminal statuses. `Done` is NOT one:
+/// it is a routine derived value ("finished on a branch, not all merged"), so
+/// treating it as sticky would freeze epics mid-flight.
+// trace:BUG-768 | ai:claude
+pub fn is_terminal_epic_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Completed | RequirementStatus::Rejected
+    )
+}
+
+/// Derive an epic's status from its child rollup while HONORING an explicit
+/// human force-close.
+///
+/// The rollup is a projection, but `aida edit <epic> --status ... --force` is
+/// the documented escape hatch for the case the projection can't see: an epic
+/// the human has declared finished even though a stale descendant is still
+/// carried open (BUG-768 — EPIC-24 and EPIC-0428 were force-closed to
+/// `Completed`, yet every re-derivation reopened them to `InProgress` because
+/// a *Completed* intermediate story still carried Approved grandchildren, which
+/// BUG-764's transitive subtree rollup counts). Without this the `--force`
+/// recovery is a no-op that silently reverts on the next read.
+///
+/// So: when the STORED status is terminal ([`is_terminal_epic_status`]) return
+/// `None` — the caller keeps the stored status. Otherwise derive normally.
+/// Reopening a force-closed epic is symmetric: set a non-terminal status
+/// (`--force`) and derivation resumes.
+///
+/// `stored` MUST be the epic's status as recorded in the store, never a cached
+/// value that may itself already be a derived override — else an epic derived
+/// `Completed` would latch there and never notice new open work (exactly the
+/// BUG-764 stuck state).
+// trace:BUG-768 | ai:claude
+pub fn derive_epic_status_from_rollup_with_stored(
+    stored: &RequirementStatus,
+    r: &StatusRollup,
+) -> Option<RequirementStatus> {
+    if is_terminal_epic_status(stored) {
+        return None;
+    }
+    derive_epic_status_from_rollup(r)
+}
+
 /// Derive an epic's effective status from the live store. Returns the rollup
 /// status for an epic with the precedence above. Returns `None` when:
 /// - `epic_id` doesn't resolve, or the resolved spec is not an Epic (callers
 ///   should only display the stored status for non-epics), or
-/// - the epic's only children are Rejected (case 7 above — keep stored status).
-// trace:BUG-626 | ai:claude
+/// - the epic's only children are Rejected (case 7 above — keep stored status),
+///   or
+/// - the epic's stored status is terminal (a human force-close — BUG-768).
+// trace:BUG-626 trace:BUG-768 | ai:claude
 pub fn derive_epic_status(store: &RequirementsStore, epic_id: Uuid) -> Option<RequirementStatus> {
     let req = store.get_requirement_by_id(&epic_id)?;
     if req.req_type != RequirementType::Epic {
         return None;
     }
     let rollup = child_status_rollup(store, epic_id);
-    derive_epic_status_from_rollup(&rollup)
+    derive_epic_status_from_rollup_with_stored(&req.status, &rollup)
 }
 
 #[cfg(test)]
@@ -297,6 +345,150 @@ mod tests {
         assert_eq!(
             derive_epic_status_from_rollup(&rollup(2, 0, 0, 1, 0, 0, 1)),
             Some(RequirementStatus::InProgress)
+        );
+    }
+
+    // ------------------------------------------------------------- BUG-768
+    // A human's `edit <epic> --status ... --force` close must survive every
+    // re-derivation. Observed: EPIC-24 and EPIC-0428 were force-closed to
+    // Completed on 07-19, and every subsequent pull reopened them to
+    // InProgress — their stored status in the store was (and stayed)
+    // Completed, so the reopening was purely the derivation overriding it at
+    // read time.
+
+    // (a) The force-closed epic with zero non-terminal DIRECT children whose
+    // transitive subtree still carries stale open grandchildren under a
+    // Completed intermediate — the exact EPIC-24 shape (STORY-252 completed,
+    // its TASK children still Approved). The rollup honestly reads
+    // InProgress; the human's close wins.
+    #[test]
+    fn force_closed_epic_is_not_reopened_by_rederivation() {
+        // 8 children: 5 completed, 3 still Approved (stale grandchildren).
+        let r = rollup(8, 5, 0, 0, 3, 0, 0);
+        // Without the stored status the rollup reopens the epic...
+        assert_eq!(
+            derive_epic_status_from_rollup(&r),
+            Some(RequirementStatus::InProgress)
+        );
+        // ...but a stored Completed is terminal: keep it (None = keep stored).
+        assert_eq!(
+            derive_epic_status_from_rollup_with_stored(&RequirementStatus::Completed, &r),
+            None
+        );
+        // A force-REJECTED epic is likewise never reopened.
+        assert_eq!(
+            derive_epic_status_from_rollup_with_stored(&RequirementStatus::Rejected, &r),
+            None
+        );
+    }
+
+    // (b) The zero-open-children epic — every child terminal (completed,
+    // some archived-completed, one rejected). Archived is a view flag, not a
+    // status (BUG-628), so archived-completed children tally as `completed`
+    // and the epic derives Completed either way; a force-closed epic in this
+    // shape stays Completed too. Both directions must be terminal.
+    #[test]
+    fn zero_open_children_epic_stays_terminal() {
+        // 4 completed (2 of them archived — same bucket) + 1 rejected.
+        let r = rollup(5, 4, 0, 0, 0, 0, 1);
+        assert_eq!(
+            derive_epic_status_from_rollup(&r),
+            Some(RequirementStatus::Completed),
+            "an epic with zero open children derives Completed"
+        );
+        assert_eq!(
+            derive_epic_status_from_rollup_with_stored(&RequirementStatus::Completed, &r),
+            None,
+            "a force-closed epic keeps its stored Completed"
+        );
+    }
+
+    // The guard against latching: only a TERMINAL stored status is sticky.
+    // Every routine stored value still derives, so an epic that gains open
+    // work is not frozen at a stale derived value (the BUG-764 stuck state).
+    #[test]
+    fn non_terminal_stored_status_still_derives() {
+        let all_done = rollup(3, 3, 0, 0, 0, 0, 0);
+        for stored in [
+            RequirementStatus::Draft,
+            RequirementStatus::Approved,
+            RequirementStatus::Planned,
+            RequirementStatus::InProgress,
+            // Done is a routine DERIVED value ("finished on a branch"), not a
+            // human force-close — it must not be sticky.
+            RequirementStatus::Done,
+            RequirementStatus::NeedsAttention,
+        ] {
+            assert!(
+                !is_terminal_epic_status(&stored),
+                "{stored:?} must not be treated as a force-close"
+            );
+            assert_eq!(
+                derive_epic_status_from_rollup_with_stored(&stored, &all_done),
+                Some(RequirementStatus::Completed),
+                "{stored:?} must still derive from the rollup"
+            );
+        }
+        // A stored Done epic that gains open work still reopens.
+        assert_eq!(
+            derive_epic_status_from_rollup_with_stored(
+                &RequirementStatus::Done,
+                &rollup(3, 2, 0, 1, 0, 0, 0)
+            ),
+            Some(RequirementStatus::InProgress)
+        );
+    }
+
+    // The store-level entry point honors the same force-close.
+    #[test]
+    fn derive_over_store_honors_force_closed_epic() {
+        use crate::models::{Relationship, RelationshipType, Requirement};
+
+        fn req(status: RequirementStatus, req_type: RequirementType) -> Requirement {
+            let mut r = Requirement::new("t".into(), "d".into());
+            r.status = status;
+            r.req_type = req_type;
+            r
+        }
+
+        // Force-closed epic carrying a still-open child.
+        let mut epic = req(RequirementStatus::Completed, RequirementType::Epic);
+        let mut child = req(RequirementStatus::Approved, RequirementType::Story);
+        // Child-authored edge (the `aida add --parent` shape).
+        child.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: epic.id,
+            created_at: None,
+            created_by: None,
+        });
+        epic.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+        let epic_id = epic.id;
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, child]);
+
+        assert_eq!(
+            derive_epic_status(&store, epic_id),
+            None,
+            "a force-closed epic must keep its stored status, not reopen"
+        );
+
+        // Reopening is symmetric: a non-terminal stored status derives again.
+        let epic = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == epic_id)
+            .unwrap();
+        epic.status = RequirementStatus::InProgress;
+        assert_eq!(
+            derive_epic_status(&store, epic_id),
+            Some(RequirementStatus::Draft),
+            "a reopened epic derives from its children again"
         );
     }
 }
