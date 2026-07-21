@@ -37527,5 +37527,28 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 3502
+- id: 019f856f-2e2e-7fc1-ad26-25189f74ea10
+  target_id: 019f856f-2ac7-7011-8127-1e0bf6748c22
+  author: aida
+  node_id: '1'
+  lamport: 3503
+  timestamp: 2026-07-21T16:08:03.886986927Z
+  kind: !Create
+    title: session end auto-files an empty 'Review PR-0' story on repos with no remote
+    description: |-
+      REPRO (aida 0.14.0, project /home/joe/ai/port_manager, git repo with NO remote):
+      1. aida session end <lease-id> --yes
+      2. Output includes: 'OK filed STORY-N (covers no specs) -> reviewer queue (PR #0)' followed by the hint 'PR #0 next: aida queue work PR-0 -> merge it to your default branch -> aida pull'.
+
+      There is no PR #0 and no GitHub remote to have one. The story is titled 'Review PR-0: ' with an empty subject and covers no specs, so it is pure noise that has to be dequeued and rejected by hand every time.
+
+      FREQUENCY: happened on every single session end in one working session - STORY-13, STORY-14, STORY-17, STORY-18 were all filed and all rejected as junk within minutes.
+
+      SUGGESTED FIX: skip the auto-file entirely when the repo has no remote (the same condition that already makes 'db sync --pull' print 'No origin remote - skipping pull'), or when the resolved PR number is 0 / the story would cover no specs.
+
+      RELATED UX ISSUE (same command): 'aida session end <id>' without --yes prints the confirmation preamble and then exits without ending the session when stdout is not a TTY, with the note 'non-interactive shell - skipping the CI/PR probe'. The lease survives, which is confusing - the command looks like it ran. It should either fail loudly or honor a non-interactive default.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3503
 node_id: '1'
