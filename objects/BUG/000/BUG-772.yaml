@@ -3,12 +3,12 @@ spec_id: BUG-772
 agreed_id: BUG-772
 title: 'queue list footer says ''needs you: resolve it out (--status rejected)'' for a spec blocked-by an IN-QUEUE predecessor — advises rejecting authorized chained work the drain will unblock itself'
 description: '2026-07-20 23:01, live drain: the ''To empty this queue'' footer listed TASK-1136/1137/1138/1139 as ''needs you: resolve it out (aida edit <id> --status rejected)''. But those four are a blocked-by chain (1136←1135, 1137←1136, ...) whose head TASK-1135 is SCHEDULED in the same running drain — the Blocked section renders it correctly (''blocked-by TASK-1135 (Approved)''). As the drain ships 1135, 1136 unblocks and drains, etc. The footer misclassifies ''blocked by a predecessor that is itself queued/in-flight'' as a dead-end needing manual rejection — and its suggested command (--status rejected) would DESTROY operator-authorized chained work. Same family as BUG-753/765 (footer/hint not drain+graph aware). Fix: the footer''s ''needs you'' bucket must exclude a spec whose blocker is Approved/queued/in-flight (it will clear automatically) — only a spec blocked by a REJECTED/abandoned/nonexistent predecessor (a true dead-end) is ''needs you'', and even then the suggestion should be ''unblock or re-scope'', not a bare reject. Acceptance: a spec blocked-by a queued/in-flight predecessor shows in Blocked but NOT in the needs-you footer; a spec blocked-by a rejected predecessor shows needs-you with an unblock suggestion; unit test both. Mode drive.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T06:01:49.539694060Z
-modified_at: 2026-07-21T06:43:09.270206337Z
+modified_at: 2026-07-21T06:44:10.306888495Z
 req_type: Bug
 tags:
 - aida:queue liveness followup:BUG-765 followup:BUG-753 from-dogfood
@@ -20,3 +20,7 @@ comments:
   modified_at: 2026-07-21T06:43:09.270206337Z
   session_id: 62606144-4981-4069-b657-73df0d647c56
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-21T06:44:10.306888495Z
+  implemented_by: joe
