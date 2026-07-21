@@ -3,12 +3,12 @@ spec_id: TASK-1018
 agreed_id: TASK-1018
 title: TASK-0430 — durable audit + one-command reversal for every `Execute` outcome (depends on the `Decision`/`Outcome` shapes defined here)
 description: ''
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:56.191783165Z
-modified_at: 2026-07-21T05:46:12.168846580Z
+modified_at: 2026-07-21T05:46:54.348399799Z
 req_type: Task
 tags:
 - zen-ready
@@ -24,3 +24,7 @@ comments:
   modified_at: 2026-07-21T05:46:12.168846580Z
   session_id: 3656084c-e702-4335-8721-954ca99bc265
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-21T05:46:54.348399799Z
+  implemented_by: joe
