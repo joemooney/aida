@@ -8,10 +8,22 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:15:18.026656783Z
-modified_at: 2026-07-21T09:06:37.486153440Z
+modified_at: 2026-07-21T16:35:35.520951081Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-12T19:15:26.589646184Z
+comments:
+- id: 019f8588-61e0-7f10-9506-f8a0a672f20d
+  author: joe
+  content: |-
+    Already delivered by TASK-1005 (commit 759494f33, PR #1220, 2026-06-29). Verified against main at b5586e28:
+    - That commit changed aida-core/templates/skills/aida-burndown.md (+26 lines) with exactly the requested rewrite.
+    - The section now reads "Route coupled file-sharing sets to a drain mode — do NOT fan them out in parallel and do NOT hand-drive the reset", documents --sequential (ordered, per-member PRs, shelve-and-continue) and --single-branch (one shared branch, one cluster PR, halt-on-failure), and closes with the rule of thumb. It carries trace:BUG-554 trace:TASK-1005.
+    - docs/aida/discipline/autonomous-burndown.md was updated in the same commit.
+    The line numbers in this task's title (100-125) refer to the pre-rewrite file; the content now lives at roughly lines 137-156. Closing as delivered rather than fanning out a no-op implementer.
+  created_at: 2026-07-21T16:35:35.520951081Z
+  modified_at: 2026-07-21T16:35:35.520951081Z
+  session_id: 019f7b628fbb
 execution_mode: drive
