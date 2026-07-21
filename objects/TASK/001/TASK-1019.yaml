@@ -3,12 +3,12 @@ spec_id: TASK-1019
 agreed_id: TASK-1019
 title: TASK-0431 — product-role recommendations as *evidence* feeding gate 3, never as authority
 description: ''
-status: InProgress
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:28:05.223930476Z
-modified_at: 2026-07-21T06:03:09.815103064Z
+modified_at: 2026-07-21T06:12:12.565420526Z
 req_type: Task
 tags:
 - zen-ready
