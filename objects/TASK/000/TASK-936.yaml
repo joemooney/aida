@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T23:49:26.855950173Z
-modified_at: 2026-06-30T16:35:33.910537068Z
+modified_at: 2026-07-21T04:56:25.927312082Z
 req_type: Task
 tags:
 - zen-ready
@@ -17,3 +17,6 @@ relationships:
   target_id: 019edaeb-0ef4-7720-a85d-3483f15c856e
   created_at: 2026-06-26T23:49:38.386587171Z
   created_by: joe
+deferred: true
+deferred_at: 2026-07-21T04:56:25.927312082Z
+deferred_until: the TUI quiet-depth reveal is specified with concrete acceptance (underspecified today)
