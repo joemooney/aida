@@ -15,8 +15,9 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-21T07:33:41.751538871Z
-modified_at: 2026-07-21T08:34:53.838975302Z
+modified_at: 2026-07-21T08:34:57.283967201Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+execution_mode: drive
