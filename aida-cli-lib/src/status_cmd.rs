@@ -7,9 +7,13 @@
 
 use crate::*;
 
-/// `aida focus [<spec>] [--clear] [--show]` — the per-worktree focus context.
-/// Set (a spec given), show (no args / `--show`), or clear (`--clear`) the
-/// focus persisted in `.aida/focus`.
+/// `aida status <spec>` — per-spec liveness inspection. Resolves the spec ID
+/// in the store, finds its spec-scoped session lease, and classifies liveness
+/// (live / stale / flag-only / no-session), demoting alive-but-idle sessions
+/// past `idle_minutes` to stale (BUG-623). Renders JSON (`json`) or a human
+/// report: status badge, liveness verdict + lease detail, any orchestrator
+/// failure reason, and the `Next:` command block.
+// trace:TASK-145 | ai:claude
 pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
