@@ -10,12 +10,12 @@ description: |-
   Root cause is by-design, not a defect: split_by_signoff partitions on queue membership, and collapse_serialize_groups returns held members that the caller folds into the same awaiting bucket. Two distinct states share one label.
 
   Suggested fix: give the serialize-held members their own key in the JSON (e.g. `serialize_held`, with the claiming spec named) so the runner and the operator can tell "blocked on advisor sign-off" apart from "queued, blessed, drains next wave". The burndown skill's step-1 wording would follow.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-21T07:33:41.751538871Z
-modified_at: 2026-07-21T08:47:57.220361817Z
+modified_at: 2026-07-21T08:58:10.445332454Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -27,8 +27,24 @@ comments:
   created_at: 2026-07-21T08:47:26.356193183Z
   modified_at: 2026-07-21T08:47:26.356193183Z
   session_id: 22a35818-13a2-4ff9-b81e-079932c2d9c9
+history:
+- id: 019f83e5-9a87-7340-9240-f385dc399849
+  author: aida-auto-bump
+  timestamp: 2026-07-21T08:58:10.439218018Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f83e5-9a8d-70b0-95f2-eef7ec0438d8
+  timestamp: 2026-07-21T08:58:10.445331829Z
+  agent: aida
+  commit_sha: a1351f68e91a58a96f67b59a487d04131d3c546c
+  summary: Completed via merge a1351f68
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T08:47:57.220361817Z
   implemented_by: joe
+  completed_at: 2026-07-21T08:58:10.395119754Z
+  completion_sha: a1351f68e91a58a96f67b59a487d04131d3c546c
