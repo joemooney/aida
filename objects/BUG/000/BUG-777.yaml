@@ -19,12 +19,12 @@ description: |-
   1. Detect that the owning session's process is gone and treat the lease as stale - either auto-reap it, or offer a '--take-over' that is explicitly safe when the worktree has no uncommitted changes.
   2. Have the error report whether the worktree is clean, so 'work there is lost unless committed' is an evaluable statement rather than a warning the user cannot act on.
   3. Make '--force-claim' (which exists and is suggested by a DIFFERENT error path for the InProgress-without-lease case) also cover the stale-lease case, so there is one recovery verb instead of three.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:08:25.171027028Z
-modified_at: 2026-07-21T16:08:25.171027028Z
+modified_at: 2026-07-21T16:12:00.533675717Z
 req_type: Bug
 tags:
 - lease
