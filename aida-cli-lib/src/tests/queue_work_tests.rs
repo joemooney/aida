@@ -343,6 +343,28 @@ fn queue_add_scope_routing_keeps_real_implicit_scope() {
     );
 }
 
+#[test]
+fn queue_add_hidden_view_reason_rejects_parked_specs() {
+    let mut deferred = req("TASK-1135", None, RequirementType::Task);
+    deferred.deferred = true;
+    assert_eq!(
+        queue_add_hidden_view_reason(&deferred),
+        Some("deferred"),
+        "deferred specs are parked outside the default queue projection"
+    );
+
+    let mut archived = req("TASK-1136", None, RequirementType::Task);
+    archived.archived = true;
+    assert_eq!(
+        queue_add_hidden_view_reason(&archived),
+        Some("archived"),
+        "archived specs are hidden from the default queue projection"
+    );
+
+    let active = req("TASK-1137", None, RequirementType::Task);
+    assert_eq!(queue_add_hidden_view_reason(&active), None);
+}
+
 /// spec_matches walks uuid, spec_id (case-insensitive), and
 // agreed_id (case-insensitive). trace:STORY-42 | ai:claude
 #[test]

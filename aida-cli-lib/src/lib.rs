@@ -14285,6 +14285,22 @@ pub(crate) fn is_terminal_status(status: &RequirementStatus) -> bool {
     aida_core::lifecycle::State::from_status(status).is_terminal()
 }
 
+/// BUG-773: `queue add` must not report success for work that the default queue
+/// projection will immediately hide. Deferred and archived specs are parked
+/// outside the work queue; unlike terminal rows, there is no queue-list widening
+/// flag that makes them visible, so accepting the write creates a silent
+/// add/list inconsistency.
+// trace:BUG-773 | ai:codex
+fn queue_add_hidden_view_reason(req: &aida_core::Requirement) -> Option<&'static str> {
+    if req.archived {
+        Some("archived")
+    } else if req.deferred {
+        Some("deferred")
+    } else {
+        None
+    }
+}
+
 /// BUG-249: validate that a `queue move` target is actually movable —
 /// distinguishing "not in the queue" from "in the queue but terminal".
 /// Pure function over `entries`; the handler builds the args from its
