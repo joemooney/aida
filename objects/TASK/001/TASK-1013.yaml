@@ -8,9 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:08.070727403Z
-modified_at: 2026-07-21T04:56:04.951670585Z
+modified_at: 2026-07-21T06:45:43.980620348Z
 req_type: Task
 tags:
+- serialize:autopilot-audit
 - zen-ready
 relationships:
 - rel_type: Child
