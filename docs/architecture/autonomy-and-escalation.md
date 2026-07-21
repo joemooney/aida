@@ -720,11 +720,62 @@ places no per-**action** limit.
 
 Autopilot adds the missing axis: a per-**action-class authority map** layered
 *inside* the fence. It does not reinvent `groom`, the fence, the cold-boot
-caveat, or the `--apply` path — it is the *authority* layer over them. Surfaced
-as `aida groom --autopilot` (+ a `[autopilot]` config posture), it is explicitly
-a config posture over an existing verb, **not** a new mode, **not** a new command
-family, **not** a role-presence flag (it changes *how much* the advisor seat may
-auto-dispose, not *who* is present).
+caveat, or the `--apply` path — it is the *authority* layer over them. Its
+designed surface is `aida groom --autopilot` (+ an `[autopilot]` config
+posture): explicitly a config posture over an existing verb, **not** a new mode,
+**not** a new command family, **not** a role-presence flag (it changes *how
+much* the advisor seat may auto-dispose, not *who* is present).
+
+That designed surface is **not wired yet**, and the gap is deliberate — see
+"What is wired today" below before reading the rest of this section as shipped
+behaviour. The envelope, its gates, and its read-only + audit surfaces exist in
+code; the grant of real approve/reject/queue authority to an unattended `groom`
+does not.
+
+### What is wired today — and what is deliberately not
+
+Autopilot shipped **envelope-first**: the judgment machinery and the read-only
+surfaces that let a human watch it are real; the authority to act unattended on
+a whole backlog is withheld. Same staging discipline as §6's v1/v2/v3 — evidence
+before authority.
+
+| Piece | State | Where |
+|-------|-------|-------|
+| Action taxonomy (nine classes), authority map, four-gate `evaluate` | **shipped** — pure, side-effect-free, exhaustively unit-tested | `aida-cli-lib/src/autopilot.rs` |
+| `[autopilot]` config posture (`approve = "auto"`, …) | **shipped** — sparse override map; unknown key/value leaves that action at its default | `parse_authority_overrides` |
+| Context-tightening precedence (headless, solo posture) | **shipped** — demote-only, unit-tested over the full cross-product | `autopilot::effective_envelope` |
+| `aida autopilot inspect` — dry-run the envelope over the live groom candidates | **shipped** — read-only; writes nothing to any spec; `--record` / `--json` | `aida autopilot inspect` |
+| `aida autopilot audit` / `aida autopilot challenge` — review + reverse a recorded verdict | **shipped** — local append-only log at `.aida/autopilot-audit.jsonl` | `aida autopilot audit` |
+| `aida zen <draft>` approve-gate — the first real consumer of `evaluate` | **shipped** — one named draft, one-spec fence | `zen_drive::run_draft_gate` |
+| `groom --autopilot` execution path | **NOT wired** — deliberately deferred | — |
+| Durable audit + one-command reversal | **not shipped** — the JSONL log is the interim substrate | — |
+| Configurable risk ceiling | **not shipped** — gate 4 is a hard-coded conservative `Medium` | `AUTOPILOT_RISK_CEILING` |
+
+Three properties of the shipped half are worth stating precisely, because they
+are what keep "envelope exists" from being mistaken for "autopilot disposes your
+backlog":
+
+- **`inspect` is a projection, not a rehearsal-then-run.** It builds the same
+  candidate set `groom` builds, grades each proposed action under the *effective*
+  envelope for the current context, and prints the verdict plus which gate
+  produced it. No disposition is executed at any verdict, including
+  `all-gates-pass`.
+- **`inspect`'s verdict is an upper bound on autonomy.** Gate 3 (grounding) is a
+  runtime advisor judgment over the live corpus, which a dry-run has no advisor
+  to make — so the projection stamps the best case (Type-A) and reports what the
+  *other* gates would do. A real pass can only be more conservative, never less.
+- **The zen approve-gate acts on exactly one operator-named draft.** The
+  operator typing `aida zen <draft>` *is* the recorded preference (grounding
+  `RecordedB`, risk `Low`), and the fence is that one spec — barred outright if
+  it is keystone-class. Under the default `approve = "propose"` posture the gate
+  does not approve at all: it surfaces the draft to the advisor and exits
+  cleanly. Auto-approval requires an explicit `[autopilot] approve = "auto"`.
+
+So, the current state in one line: **autopilot can tell you what it
+would decide, record it, and be argued with — and it can open the gate on a
+single draft you named yourself. It cannot groom your backlog.** Granting that
+last step is keystone autonomy, and keystone autonomy ships at the keyboard,
+after the envelope has been proven in supervised use.
 
 ### The per-action authority map (auto / propose / never)
 
@@ -769,6 +820,16 @@ a fenced spec and still escalates an ungrounded call. The authority map widens
 *which in-fence, grounded actions* auto-execute; it never disarms the HARD
 bounds.
 
+Two scoping notes on the diagram, so it is not read as more than it is. The
+`all pass` arm is the *contract*, not a live grooming loop: the only caller that
+acts on it today is the `aida zen` draft approve-gate (one operator-named
+spec); `aida autopilot inspect` reaches the same verdict and stops there, and
+the "durable audit" leg is currently the local append-only JSONL log rather than
+a store-backed record. And gate 4's ceiling is a fixed conservative `Medium`
+(`Unknown` risk ranks above it and parks, matching `--risk`'s existing
+semantics) — the configurable form is a later slice, so a project cannot widen
+gate 4 the way it can widen gate 2.
+
 ### Gate 3 reuses the §3 Type A/B/C calibration verbatim
 
 The grounding gate is not a new classifier — it **is** the resolve-vs-escalate
@@ -806,12 +867,20 @@ stages, consistent behaviour. A test asserts the groom fence and
 
 ### The composition matrix
 
+The matrix below is the **precedence contract** — how the two stages compose
+once the envelope is granted execution authority. Rows marked *designed* are the
+contract `effective_envelope` already implements and `aida autopilot inspect`
+already grades under; they are not a description of a grooming pass you can run
+today (see "What is wired today").
+
 | Context | Grooming stage (`groom`) | Draining stage | Autopilot's effect |
 |---------|--------------------------|----------------|--------------------|
 | **default** (operator at keyboard) | propose-by-default; operator confirms | default ladder (pause every step) | autopilot off — operator drives disposition |
-| **`groom --autopilot`** | envelope auto-executes in-fence, grounded, in-authority actions; rest held/escalated | n/a (grooming only) | the new posture |
+| **`aida autopilot inspect`** (shipped) | nothing is written — the envelope grades the live candidates and prints per-spec verdicts | n/a (grooming only) | the read-only window onto every row below |
+| **`aida zen <draft>`** (shipped) | one operator-named draft through the approve-gate: auto-approve, surface-to-advisor, or escalate | the drive proceeds only past an approve | the only wired executor of an `Execute` verdict |
+| **`groom --autopilot`** (designed, not wired) | envelope auto-executes in-fence, grounded, in-authority actions; rest held/escalated | n/a (grooming only) | the posture the envelope was built for |
 | **`--zen` drain** | unchanged (grooming is a separate stage) | mechanical auto-resolve, design-fork pause | independent — `--zen` is drain-side; on `groom` it warn-and-ignores |
-| **`--no-human` solo loop** | `groom --autopilot` (envelope, headless-tightened) | `burndown --no-human` → §2 advisor cascade | autopilot bounds the headless groom — strictly *more* conservative than binary `--apply` |
+| **`--no-human` solo loop** (designed, not wired) | envelope, headless-tightened (`propose` demotes to escalate) | `burndown --no-human` → §2 advisor cascade | autopilot would bound the headless groom — strictly *more* conservative than binary `--apply` |
 | **solo posture active** | autopilot inherits the safe/keystone partition via `is_keystone_class` | drain uses ProceedOnDefault / ParkForHuman | one classifier, consistent across stages |
 | **`groom --apply` (no `--autopilot`)** | **unchanged** binary execute (back-compat) | n/a | autopilot is opt-in; existing behaviour preserved |
 
@@ -834,15 +903,33 @@ dry-run grades under the composed effective envelope and names the context
 
 ### Back-compat and the supervised-proof rule
 
-Autopilot is **opt-in** (`--autopilot` / `[autopilot]` config). The binary
-`groom --apply` path is untouched until a project explicitly adopts the envelope.
-Making autopilot the *default* grooming posture inside the solo loop is a later,
-separate, supervised step — prove the autonomy keystone at the keyboard before
-flipping a default that runs unattended.
+Autopilot is **opt-in** (`[autopilot]` config; `--autopilot` once the grooming
+execution path is wired). The binary `groom --apply` path is untouched until a
+project explicitly adopts the envelope. Making autopilot the *default* grooming
+posture inside the solo loop is a later, separate, supervised step — prove the
+autonomy keystone at the keyboard before flipping a default that runs unattended.
+
+The staging *is* that rule applied to autopilot itself. The order shipped so far
+— pure gates, then the precedence contract, then a read-only projection, then an
+audit log you can argue with, then a gate over one operator-named draft — is
+deliberately the order that accumulates evidence before it accumulates
+authority. The unattended grooming pass is the last step for the same reason it
+is the risky one, and it stays unwired until the earlier steps have been
+watched in real use.
 
 Trace anchor: EPIC-0428, TASK-0429 (envelope), TASK-0430 (audit/reversal),
-TASK-0431 (product-role evidence), TASK-0432 (mode composition),
-`docs/solo-mode.md`, `feedback_three_mode_autonomy_taxonomy`.
+TASK-0431 (product-role evidence), TASK-0432 (mode composition), TASK-1007
+(the pure envelope), TASK-1020 (`effective_envelope` precedence), TASK-1037
+(the `aida zen` draft approve-gate), TASK-1147 (inspect / audit / challenge),
+`aida-cli-lib/src/autopilot.rs`, `docs/solo-mode.md`,
+`feedback_three_mode_autonomy_taxonomy`.
+
+This section is a **living doc** and tracks the code. The dated design artifacts
+it grew out of (`docs/plans/2026-06-29-epic-0428-*.md` and friends) record what
+was believed on their date and are deliberately **not** retro-edited to match —
+that divergence is the point of a dated record.
+
+<!-- trace:TASK-1017 | ai:claude -->
 
 ---
 
@@ -858,6 +945,8 @@ TASK-0431 (product-role evidence), TASK-0432 (mode composition),
 | Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/spikes/2026-05-20-spike-11-session-forking.md` |
 | File-based comms | `.aida/` (gitignored), TASK-329, `docs/architecture/mcp-coordination-surface.md` |
 | Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-0435, TASK-0436, TASK-0437 |
+| Advisor autopilot envelope | `aida-cli-lib/src/autopilot.rs`, `aida autopilot inspect/audit/challenge`, EPIC-0428, TASK-0429, TASK-1007, TASK-1020, TASK-1147 |
+| Autopilot's one wired executor | `aida-cli-lib/src/zen_drive.rs::run_draft_gate` (`aida zen <draft>`), TASK-1037 |
 | Reconcile-against-reality | `aida-cli/src/auto_complete.rs`, BUG-241 |
 | Findings surfaces | `aida findings list`, `aida findings calibration`, STORY-278, STORY-285 |
 
