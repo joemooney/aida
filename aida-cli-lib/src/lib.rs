@@ -46927,6 +46927,11 @@ struct PsRow {
     /// renderer surface an adopted persistent lease (pid younger than the
     /// lease) instead of silently mixing lease-age and process-age.
     pid_started_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// BUG-769: the WORK-SESSION age behind the `elapsed` column — the backing
+    /// process's uptime on an adopted lease (pid younger than the lease
+    /// record), the lease's own age on every other row. See
+    /// [`ps_elapsed_secs`]; lease-age still shows in the adopted annotation.
+    // trace:BUG-769 | ai:claude
     elapsed_secs: u64,
     /// The display id of the spec this lease is scoped to, when the lease scope
     /// resolves to a known spec id (the AIDA-launched happy path). `None` for
@@ -47095,6 +47100,50 @@ fn ps_started_cell(started_local: chrono::NaiveDateTime, today_local: chrono::Na
 /// it records, in either order).
 const PS_ADOPTED_SLACK_SECS: i64 = 300;
 
+/// Is this row's lease ADOPTED — i.e. did the live pid backing it start
+/// meaningfully (more than [`PS_ADOPTED_SLACK_SECS`]) after the lease record
+/// itself was written? The single definition of adoption, shared by the
+/// annotation ([`ps_adopted_note`]) and the elapsed column
+/// ([`ps_elapsed_secs`]) so the two can never disagree about which rows are
+/// adopted.
+// trace:BUG-769 | ai:claude
+fn ps_lease_is_adopted(
+    lease_started: chrono::DateTime<chrono::Utc>,
+    pid_started: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    pid_started
+        .signed_duration_since(lease_started)
+        .num_seconds()
+        >= PS_ADOPTED_SLACK_SECS
+}
+
+/// The `elapsed` cell for one `aida ps` row, in seconds — the age of the
+/// WORK SESSION, not unconditionally the age of the lease record.
+///
+/// BUG-769: for an adopted lease (see [`ps_lease_is_adopted`]) this is the
+/// backing process's uptime. A persistent harness lease is born once and then
+/// re-adopted by every later session, so `now - lease.started_at` printed
+/// "583h" next to a process that had been alive three minutes — the headline
+/// number contradicted the BUG-763 annotation directly under it. Lease-age
+/// keeps its place in that annotation, which still names BOTH ages; the column
+/// now carries the actionable one ("how long has this actual worker been
+/// going"). Every other row — no live pid, no resolvable start time, or a pid
+/// born with its lease — is unchanged: `now - lease.started_at`.
+///
+/// Pure so both branches are unit-testable without a lease dir or `/proc`.
+// trace:BUG-769 | ai:claude
+fn ps_elapsed_secs(
+    lease_started: chrono::DateTime<chrono::Utc>,
+    pid_started: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> u64 {
+    let anchor = match pid_started {
+        Some(p) if ps_lease_is_adopted(lease_started, p) => p,
+        _ => lease_started,
+    };
+    now.signed_duration_since(anchor).num_seconds().max(0) as u64
+}
+
 /// The adopted-lease annotation for one `aida ps` row — `Some` (naming BOTH
 /// ages) when the live pid backing the row started meaningfully later than the
 /// lease itself. That is the persistent harness-worktree pattern: the lease is
@@ -47109,11 +47158,7 @@ fn ps_adopted_note(
     now: chrono::DateTime<chrono::Utc>,
 ) -> Option<String> {
     let pid_started = pid_started?;
-    if pid_started
-        .signed_duration_since(lease_started)
-        .num_seconds()
-        < PS_ADOPTED_SLACK_SECS
-    {
+    if !ps_lease_is_adopted(lease_started, pid_started) {
         return None;
     }
     let lease_age = now
@@ -47756,7 +47801,19 @@ fn build_running_work(
                 } else {
                     None
                 });
-            let elapsed_secs = now.signed_duration_since(l.started_at).num_seconds().max(0) as u64;
+            // BUG-763: resolve the backing pid's own start time so an adopted
+            // persistent lease (pid younger than the lease record) can name
+            // both ages instead of mixing provenance silently.
+            let pid_started_at = pid.and_then(&pid_start_probe);
+            // BUG-769: the displayed `elapsed` is the WORK-SESSION age — the
+            // process's uptime on an adopted lease, the lease's age otherwise.
+            // trace:BUG-769 | ai:claude
+            let elapsed_secs = ps_elapsed_secs(l.started_at, pid_started_at, now);
+            // The lease record's own age stays the input to the dispatch-health
+            // stalled threshold (TASK-1090 semantics, deliberately unchanged by
+            // BUG-769 — that classifier is not the elapsed column).
+            let lease_elapsed_secs =
+                now.signed_duration_since(l.started_at).num_seconds().max(0) as u64;
             let spec = specs
                 .iter()
                 .find(|s| {
@@ -47785,7 +47842,7 @@ fn build_running_work(
                     pid_alive,
                     probe.dirty,
                     probe.ahead_of_main,
-                    elapsed_secs,
+                    lease_elapsed_secs,
                     dispatch_health_ps::DEFAULT_STALLED_THRESHOLD_SECS,
                 );
                 let hint = dispatch_health_ps::next_command_hint(
@@ -47807,10 +47864,6 @@ fn build_running_work(
             // advisory lease (review/claim) has an empty path that matches no
             // lease → `None`.
             let locked_by = lock_probe(&l.worktree_path).filter(|s| !s.is_empty());
-            // BUG-763: resolve the backing pid's own start time so an adopted
-            // persistent lease (pid younger than the lease record) can name
-            // both ages instead of mixing provenance silently.
-            let pid_started_at = pid.and_then(&pid_start_probe);
             PsRow {
                 lease: l.clone(),
                 state,
