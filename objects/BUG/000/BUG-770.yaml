@@ -1,0 +1,50 @@
+id: 019f828d-b05e-7840-a8ff-6009d9d3a3e3
+spec_id: BUG-770
+agreed_id: BUG-770
+title: Unit tests pollute the real .aida/events.jsonl via finish_escalated resolving project root from cwd
+description: |
+  Observed while fixing TASK-146 (aida watch follow-mode backlog replay). The
+  "162 duplicate STORY-306 advisor-escalated events in a 362-line events.jsonl"
+  is NOT a loop-append in the escalation writer. It is the unit test suite
+  writing into the DEVELOPER'S REAL event log.
+
+  Mechanism (verified by reading the code):
+
+  - aida-cli-lib/src/auto_complete.rs::finish_escalated emits the
+    AdvisorEscalated event by resolving the project root itself:
+    `if let Ok(root) = crate::find_project_root() { ... crate::events::emit(&root, ...) }`.
+    There is no injected root and no test guard.
+  - Two in-tree unit tests drive that path with spec id STORY-306:
+    auto_complete.rs:5664 (reason "a strategy call with no recorded principle")
+    and auto_complete.rs:8775 (reason "no recorded principle").
+  - Because tests run with the repo as cwd, find_project_root() resolves to the
+    dev clone, so every `cargo test` run appends two more STORY-306 lines to
+    /home/joe/ai/aida/.aida/events.jsonl. The file shows exactly that: pairs of
+    the two reason strings, tens of milliseconds apart, sharing a run_uuid,
+    accumulating across months (2026-07-02 .. 2026-07-17).
+
+  Impact: the live drain event stream is polluted with synthetic events from the
+  test suite. Any consumer that reads history (aida watch --once / --backlog,
+  integrate_view, event_wait, future analytics) sees fabricated escalations for
+  STORY-306/BUG-241. It also means the test suite has an unintended side effect
+  on repo state.
+
+  Suggested fix (not attempted here - separate subsystem, and it is a design
+  question whether to inject or to guard):
+  - Thread the project root (or an events sink) into finish_escalated instead of
+    calling find_project_root() inside it, OR
+  - have crate::events::emit no-op when a test-mode marker is set (e.g. cfg!(test)
+    is not enough for integration tests; an explicit AIDA_EVENTS_SINK / disable
+    env var honored by the emit helper would cover both), AND
+  - audit the other crate::events::emit call sites for the same
+    resolve-root-from-cwd pattern.
+
+  Do NOT delete or truncate the existing events.jsonl as part of the fix - it is
+  the real (if polluted) drain history.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T02:42:31.646139396Z
+modified_at: 2026-07-21T02:42:31.646139396Z
+req_type: Bug
