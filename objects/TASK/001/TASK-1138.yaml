@@ -3,12 +3,12 @@ spec_id: TASK-1138
 agreed_id: TASK-1138
 title: '**TASK (bless --sequential):** name + guard the existing `drain_batch` sequential-merge'
 description: ''
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:55.204147602Z
-modified_at: 2026-07-21T16:35:49.063231800Z
+modified_at: 2026-07-21T16:35:53.431265506Z
 req_type: Task
 relationships:
 - rel_type: Child
