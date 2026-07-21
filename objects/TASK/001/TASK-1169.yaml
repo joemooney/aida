@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T06:18:09.864131796Z
-modified_at: 2026-07-21T06:18:38.084807294Z
+modified_at: 2026-07-21T06:18:38.894715103Z
 req_type: Task
 tags:
 - aida:burndown orchestration reliability followup:BUG-755 from-operator
@@ -31,3 +31,4 @@ relationships:
   target_id: 019f7824-a2cf-76d1-93d8-6f850ed9a6fc
   created_at: 2026-07-21T06:18:38.084800154Z
   created_by: joe
+execution_mode: guided
