@@ -24,6 +24,10 @@ Follow the workflow in `.claude/skills/aida-drain-queue.md`:
      story); `merge` autonomously merges and skips the reviewer.
 4. With `--dry-run`: print the assembled `/goal` text and stop.
    Otherwise: invoke it as `/goal <text>` to start the drain.
+5. For an unattended / overnight loop, wait on the drain **event-driven**
+   — `Monitor(command: "aida watch --emit-wakes", persistent: true)` —
+   with a long-interval `ScheduleWakeup` as the fallback. See the skill's
+   "Waiting between items" section.
 
 Pairs with `/aida-pickup` (the per-item loop body) and `aida goal`
 (machine-checkable completion conditions).

@@ -125,6 +125,33 @@ commit → the mode's mechanism clause → next. The loop's Stop hook
 re-checks the termination command after each item and ends the loop
 when the queue is empty (or `--max` is hit).
 
+#### Waiting between items — event-driven, not timer-driven
+
+For an **unattended / overnight** loop, do not sit on a blind timer
+while an item runs. Launch the harness `Monitor` tool over the drain's
+wake feed and let it wake you:
+
+```
+Monitor(command: "aida watch --emit-wakes", persistent: true)
+```
+
+`aida watch` tails the drain's event stream and prints a line **only**
+on an actionable verb — a PR shipped or merged, a CI verdict, a punt, a
+shelve, an escalation, the drain finished — staying silent through the
+benign phase churn. The supervising session burns **zero tokens while
+the item runs** and wakes exactly when there is something to do, so
+supervision cost drops from O(time-elapsed) to O(actionable events).
+`aida watch` also emits a single wake line and exits if the orchestrator
+process dies, so an overnight loop never blocks forever on a corpse.
+
+Keep a **long-interval** `ScheduleWakeup` (e.g. 30–60 min) as the
+documented degenerate fallback: if no event stream is live, or the
+watcher wedges, the timer still resurfaces the loop. **Correctness never
+depends on the event path** — the termination check is still the exact
+`aida queue list --role <role><batch suffix>` command from the `/goal`
+text, re-run on every wake from either source. The event feed only
+changes *when* you look, never *what* decides the loop is done.
+
 ## Worked examples
 
 `/aida-drain-queue`
@@ -154,3 +181,8 @@ when the queue is empty (or `--max` is hit).
   workflow level.
 - STORY-136 — the EPIC-26 TUI autonomous-mode panel; its "Drain to
   review / Drain to merge" buttons dispatch to this skill.
+- `/aida-burndown` — the parallel fan-out drain; it waits on the same
+  `aida watch --emit-wakes` feed via `Monitor`, with the same
+  long-interval timer fallback.
+
+trace:TASK-995 | ai:claude
