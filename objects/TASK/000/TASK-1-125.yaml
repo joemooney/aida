@@ -10,12 +10,12 @@ description: |-
   Root cause is by-design, not a defect: split_by_signoff partitions on queue membership, and collapse_serialize_groups returns held members that the caller folds into the same awaiting bucket. Two distinct states share one label.
 
   Suggested fix: give the serialize-held members their own key in the JSON (e.g. `serialize_held`, with the claiming spec named) so the runner and the operator can tell "blocked on advisor sign-off" apart from "queued, blessed, drains next wave". The burndown skill's step-1 wording would follow.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-21T07:33:41.751538871Z
-modified_at: 2026-07-21T08:34:57.283967201Z
+modified_at: 2026-07-21T08:37:55.397855412Z
 req_type: Task
 tags:
 - from-advisor:general
