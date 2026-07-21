@@ -11898,6 +11898,66 @@ fn init_intake_config_section() -> &'static str {
      # on_apply = \"queue\"\n"
 }
 
+// trace:TASK-1021 trace:TASK-0429 | ai:claude
+// The commented `[autopilot]` example block `aida init` scaffolds into a new
+// project's `.aida/config.toml`. Same contract as the `[intake]` block above:
+// every knob has a conservative default, so the whole section ships
+// commented-out and exists purely to make the authority map discoverable next
+// to the policy section it composes with.
+//
+// ONLY the nine action keys are documented, because only those parse today
+// (`autopilot::ActionClass::parse` x `autopilot::Authority::parse`). The
+// example values mirror `autopilot::AutopilotEnvelope::default()` — keep them
+// in lockstep. The comment text is user-facing scaffolding, so it carries no
+// SPEC-IDs and states plainly which surfaces honor the envelope today.
+fn init_autopilot_config_section() -> &'static str {
+    "\n# Authority envelope for advisor autopilot (`aida autopilot`). Autopilot is\n\
+     # not a second disposition engine — it is a bounded-authority wrapper over\n\
+     # the same grooming pass `[intake]` above configures. For each disposition\n\
+     # the advisor proposes, the envelope decides one of: auto-execute, hold for\n\
+     # a human, or escalate. Every knob has a conservative default, so this whole\n\
+     # section is optional — uncomment a line only to change a default.\n\
+     #\n\
+     # One key per action class; each takes one of three values:\n\
+     #   auto    — autopilot may perform the action on its own\n\
+     #   propose — autopilot may only propose it; a human reviews before it runs\n\
+     #   never   — autopilot may never perform it\n\
+     #\n\
+     # Defaults: the reversible, low-blast actions are `auto`; the two\n\
+     # irreversible dispositions (approve, reject) are `propose`. An unknown key\n\
+     # or an unknown value is ignored, leaving that action at its default.\n\
+     #\n\
+     # These knobs are a CEILING, not a blanket grant. Three bounds sit OUTSIDE\n\
+     # the map and cannot be widened here:\n\
+     #   * the candidate fence — which specs are touchable at all (`[intake]`);\n\
+     #   * grounding — a call resting on judgment a freshly-started agent cannot\n\
+     #     reconstruct from what is written down always escalates;\n\
+     #   * the risk ceiling — high-risk and unknown-blast-radius work always\n\
+     #     escalates.\n\
+     # Context can only TIGHTEN the envelope, never widen it: an unattended run\n\
+     # demotes every `propose` to `never` (nobody is there to be asked), and an\n\
+     # active solo posture on keystone work demotes everything to `never`.\n\
+     #\n\
+     # What the envelope drives today: `aida autopilot inspect` — a read-only\n\
+     # dry-run of what autopilot WOULD decide over the current groom candidates,\n\
+     # recorded to a local audit log you can review (`aida autopilot audit`) and\n\
+     # reverse (`aida autopilot challenge`) — and the draft approve-gate on\n\
+     # `aida zen <spec>`. There is deliberately NO autopilot execution path on\n\
+     # the grooming pass itself yet, so widening a key below changes those two\n\
+     # surfaces and nothing else.\n\
+     #\n\
+     # [autopilot]\n\
+     # approve = \"propose\"\n\
+     # reject = \"propose\"\n\
+     # dedupe = \"auto\"\n\
+     # tag = \"auto\"\n\
+     # queue = \"auto\"\n\
+     # park = \"auto\"\n\
+     # route = \"auto\"\n\
+     # comment = \"auto\"\n\
+     # ask = \"auto\"\n"
+}
+
 /// The `[store.sync] mirror_remotes` scaffold — commented. Store pushes go to
 /// `origin` only by default; listing extra remotes here fans every store push
 /// out to additional hubs (drift prevention). Best-effort per mirror leg.
@@ -11950,6 +12010,10 @@ mod story_569_review_brief_tests;
 #[cfg(test)]
 #[path = "tests/task_760_intake_config_section_tests.rs"]
 mod task_760_intake_config_section_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1021_autopilot_config_section_tests.rs"]
+mod task_1021_autopilot_config_section_tests;
 
 #[cfg(test)]
 #[path = "tests/task_304_ultraplan_cadence_tests.rs"]

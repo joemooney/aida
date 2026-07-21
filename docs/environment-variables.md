@@ -261,6 +261,73 @@ flags rather than these vars directly.
 
 ---
 
+## Advisor autopilot config knobs (`[autopilot]`, not env vars)
+
+<!-- trace:TASK-1021 trace:TASK-0429 -->
+
+Advisor **autopilot** is configured under `[autopilot]` in `.aida/config.toml` —
+there are no `AIDA_*` env vars for it. Autopilot is not a second disposition
+engine: it is a bounded-authority envelope wrapped around the same grooming pass
+`[intake]` (above) fences. For each disposition the cold-boot advisor proposes,
+a four-gate evaluation returns one of **execute** (auto-run it), **hold**
+(propose only — a human reviews), or **escalate** (park it with a recorded
+reason). The knobs below set gate 2 only: the per-action-class authority.
+
+Each key takes one of three values — `auto`, `propose`, `never`. An unknown key
+or an unknown value is **ignored**, leaving that action at its default rather
+than guessing. Reversible, low-blast actions default to `auto`; the two
+irreversible dispositions (`approve`, `reject`) default to `propose`.
+
+| Knob | What it does | Default |
+|---|---|---|
+| `[autopilot] approve` | Move a draft to Approved. | `propose` |
+| `[autopilot] reject` | Reject a draft / spec. | `propose` |
+| `[autopilot] dedupe` | Declare a duplicate — the `auto` half is *link-only* (adds a `duplicate-of:<ID>` tag + comment); the destructive "reject the duplicate" half is governed by `reject`. | `auto` |
+| `[autopilot] tag` | Add a tag (reversible, informational). | `auto` |
+| `[autopilot] queue` | Move an already-Approved spec onto a role queue. | `auto` |
+| `[autopilot] park` | Park a spec (NeedsAttention / the deferred shelf). | `auto` |
+| `[autopilot] route` | Route to an **existing** role queue. Never creates a routing target and never routes to a human's keystone queue. | `auto` |
+| `[autopilot] comment` | Add an informational comment. | `auto` |
+| `[autopilot] ask` | Escalate-when-uncertain. A first-class recorded action (a `needs-human` finding + spec comment), not a silent no-op — which is why it defaults to `auto`. | `auto` |
+
+**The map is a ceiling, not a blanket grant.** Three bounds sit outside the
+authority map and cannot be widened by any value above:
+
+- **Gate 1 — the candidate fence.** Which specs are touchable at all is owned by
+  `[intake]` (`do_not_approve_classes`, the keystone classifier, `--risk`).
+  `approve = "auto"` still cannot touch a fenced spec.
+- **Gate 3 — grounding.** A decision resting on a preference that exists only in
+  the operator's head, or on in-flight context a cold boot cannot reconstruct,
+  always escalates. Not overridable.
+- **Gate 4 — the risk ceiling.** Fixed at **medium** (admits low + medium);
+  high-risk and unknown-blast-radius decisions always escalate. Not configurable
+  yet.
+
+**Context tightens, never widens.** The effective envelope is the configured one
+composed with the runtime context, demote-only:
+
+- `AIDA_HEADLESS=1` demotes every `propose` to `never` (nobody is present to be
+  asked, so the would-be hold becomes a recorded escalation) and forces the
+  grounding gate on.
+- An active solo posture on keystone work demotes every action to `never`.
+
+So the worst-case composition bug is over-conservatism (a held action), never an
+un-gated execute.
+
+**What honors the envelope today.** `aida autopilot inspect` — a read-only
+dry-run of what autopilot *would* decide over the current groom candidates,
+appended to a local audit log (`aida autopilot audit`) that supports one-command
+reversal (`aida autopilot challenge`) — and the Draft approve-gate on
+`aida zen <spec>`. There is deliberately **no** `groom --autopilot` execution
+path: granting real approve/reject/queue authority over the grooming pass is
+keystone autonomy that is still held back. Widening a key below therefore
+changes those two surfaces and nothing else.
+
+`aida init` scaffolds this whole section, commented out, into a new project's
+`.aida/config.toml`.
+
+---
+
 ## AI provider & models (`aida-server`)
 
 Read by `aida-server`'s LLM layer (chat, evaluate). Defaults target the latest
