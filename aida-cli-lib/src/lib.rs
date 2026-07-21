@@ -40242,8 +40242,9 @@ fn handle_autopilot_command(cmd: &crate::cli::AutopilotCommand) -> Result<()> {
             limit,
             open,
             from_product,
+            mode,
             json,
-        } => handle_autopilot_executions(*limit, *open, *from_product, *json),
+        } => handle_autopilot_executions(*limit, *open, *from_product, mode.as_deref(), *json),
         AutopilotCommand::Revert {
             target,
             dry_run,
@@ -40309,11 +40310,16 @@ fn handle_autopilot_reindex(dry_run: bool) -> Result<()> {
 /// recorded a product handoff. Product input is evidence, never authority — the
 /// filter exists so an operator can see at a glance whether a non-privileged
 /// product seat is steering what autopilot dispositions.
-// trace:TASK-1018 trace:TASK-1013 | ai:claude
+///
+/// TASK-1014: `--mode` narrows to the actions taken under one composition mode
+/// — the supervision context (`autopilot` alone, `zen+autopilot`,
+/// `solo+autopilot`) that was in effect when the action landed.
+// trace:TASK-1018 trace:TASK-1013 trace:TASK-1014 | ai:claude
 fn handle_autopilot_executions(
     limit: usize,
     open_only: bool,
     from_product: bool,
+    mode: Option<&str>,
     json: bool,
 ) -> Result<()> {
     let project_root =
@@ -40330,6 +40336,11 @@ fn handle_autopilot_executions(
     // trace:TASK-1013 | ai:claude
     if from_product {
         rows.retain(|e| autopilot_audit::is_from_product(e));
+    }
+    // Same rule for the composition filter: narrow first, cap second.
+    // trace:TASK-1014 | ai:claude
+    if let Some(wanted) = mode {
+        rows.retain(|e| autopilot_audit::mode_matches(e, wanted));
     }
     if limit > 0 && rows.len() > limit {
         rows = rows.split_off(rows.len() - limit);
@@ -40352,7 +40363,12 @@ fn handle_autopilot_executions(
                     "source": e.source,
                     "reason": e.reason,
                     "evidence": e.evidence,
+                    // `mode` is the raw recorded field; `composition` is the
+                    // mode the filter and the table report (the field, else the
+                    // surface it is derived from on a pre-`mode` row).
+                    // trace:TASK-1014 | ai:claude
                     "mode": e.mode,
+                    "composition": autopilot_audit::record_mode(e),
                     // `from_product` is the raw recorded field; `is_from_product`
                     // is the filter's verdict (flag, else evidence markers), and
                     // `product` names the seat when the marker carries a who.
@@ -40370,7 +40386,13 @@ fn handle_autopilot_executions(
     }
 
     if rows.is_empty() {
-        if from_product {
+        if let Some(wanted) = mode {
+            // trace:TASK-1014 | ai:claude
+            println!(
+                "{} no autopilot execution here ran under `{wanted}`.",
+                "·".dimmed()
+            );
+        } else if from_product {
             println!(
                 "{} no autopilot execution here acted on a product handoff.",
                 "·".dimmed()
@@ -40388,10 +40410,13 @@ fn handle_autopilot_executions(
         "{} autopilot executions — {} {}action(s)",
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
         rows.len(),
-        if from_product {
-            "product-sourced "
-        } else {
-            "recorded "
+        // Name whatever narrowed the list, so a short table is never mistaken
+        // for a quiet trail. trace:TASK-1014 | ai:claude
+        match (from_product, mode) {
+            (true, Some(m)) => format!("product-sourced {m} "),
+            (true, None) => "product-sourced ".to_string(),
+            (false, Some(m)) => format!("{m} "),
+            (false, None) => "recorded ".to_string(),
         }
     );
     for e in &rows {
@@ -40413,6 +40438,12 @@ fn handle_autopilot_executions(
         );
         if let Some(restore) = e.prior.describe() {
             println!("      {}", format!("restores: {restore}").dimmed());
+        }
+        // Only a COMPOSED mode is annotated: the bare envelope is the default
+        // and needs no comment, so calling it out on every row would bury the
+        // rows where something else was steering. trace:TASK-1014 | ai:claude
+        if let Some(composition) = autopilot_audit::mode_annotation(e) {
+            println!("      {}", composition.blue());
         }
         // The handoff is visible on every listing, not just under the filter —
         // an operator scanning the trail should not have to know to ask.
