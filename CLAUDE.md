@@ -19,7 +19,8 @@ For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For 
 - Live worktree: `.aida-store/` (gitignored)
 - Branch: `aida-store` on origin
 - Cache: `.aida/cache.db` (gitignored)
-- Manage cache: `aida cache status`, `aida cache rebuild`
+- Manage cache: `aida cache status`, `aida cache rebuild`, `aida cache verify [--fix] [--json]`
+  - `cache status` compares HEAD SHAs — it catches a cache that is BEHIND the store, but **not** a row that disagrees while the two HEADs match. `cache verify` is that sweep: it cross-checks every cached `status` against the status the store projects (stored status, or the epic rollup for an EPIC) and exits non-zero on drift; `--fix` rebuilds and re-checks. Status drift is the dangerous class — it makes closed work look open (a Rejected epic rendering as Draft in `list`/`show`) and open work look closed. trace:BUG-771
 - Compact store: `aida store compact` / `aida store gc` — substrate-tax relief for the orphan store: an aggressive, non-destructive `git gc --aggressive` repack. `--squash` (destructive history rewrite) is opt-in, gated behind `--yes` + an automatic backup; the bare command never rewrites history.
 - Fresh clone: the first store-reading command **auto-attaches** the `.aida-store/` worktree from the `aida-store` branch and rebuilds the cache, so `aida list`/`findings`/`queue` work with no manual step (TASK-621). Writing new spec ids needs a node id — `aida init` (full bootstrap) or `aida node acquire`. If distributed mode is declared but the store can't be attached (offline, etc.), reads error with setup guidance rather than silently falling back to a legacy `requirements.yaml` (BUG-428). trace:TASK-621 trace:BUG-428
 

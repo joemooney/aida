@@ -1936,6 +1936,18 @@ pub enum CacheCommand {
 
     /// Show cache state (HEAD comparison, requirement count, last build time)
     Status,
+
+    /// Cross-check every cached status against the git store and report drift
+    // trace:BUG-771 | ai:claude
+    Verify {
+        /// Rebuild the cache and re-check when drift is found
+        #[clap(long)]
+        fix: bool,
+
+        /// Emit the divergence report as JSON
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Scoped git-worktree management — the EPIC-55 workspace layer, mirroring

@@ -208,6 +208,105 @@ pub fn compute_epic_statuses(store: &RequirementsStore) -> HashMap<Uuid, String>
         .collect()
 }
 
+/// The status the git-canonical store projects for one spec — the stored
+/// status, except for an EPIC, whose status is the read-only rollup of its
+/// children ([`crate::rollup::derive_epic_status`], which itself honors a
+/// terminal force-close). This is the single definition of "what the cache's
+/// `status` column SHOULD hold" and is shared by the rebuild projection and the
+/// divergence sweep so the two can never disagree about what correct means.
+// trace:BUG-771 | ai:claude
+pub fn expected_cache_status(store: &RequirementsStore, req: &Requirement) -> String {
+    let status = if req.req_type == crate::models::RequirementType::Epic {
+        crate::rollup::derive_epic_status(store, req.id).unwrap_or_else(|| req.status.clone())
+    } else {
+        req.status.clone()
+    };
+    format!("{status:?}")
+}
+
+/// One spec whose CACHED status disagrees with the status the git-canonical
+/// store projects for it.
+///
+/// Status drift is the most dangerous cache lie: it makes closed work look open
+/// (an advisor decomposes a Rejected epic) and open work look closed. Unlike
+/// HEAD-SHA staleness — which the read path already self-heals — a row that
+/// disagrees while the cache and store HEADs MATCH is silent, so it needs an
+/// explicit audit surface (`aida cache verify`).
+// trace:BUG-771 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatusDivergence {
+    /// The spec's UUID.
+    pub id: Uuid,
+    /// The spec id (`EPIC-7`), or the UUID's string form when unset.
+    pub spec_id: String,
+    /// Whether the spec is an EPIC — an epic's cached status is the derived
+    /// rollup, so a divergence there points at the rollup projection rather
+    /// than at a plain stale row.
+    pub is_epic: bool,
+    /// The status currently in the cache's `status` column.
+    pub cached: String,
+    /// The status the store projects (see [`expected_cache_status`]).
+    pub expected: String,
+}
+
+/// Sweep EVERY cached row and compare its `status` column against the status
+/// the store projects for the same spec. Returns the divergences, sorted by
+/// spec id for a stable report; an empty vec means the projection agrees with
+/// git for every spec.
+///
+/// The comparison deliberately covers archived AND deferred rows (both view
+/// flags are orthogonal to status, and a mis-projected archived epic is exactly
+/// the shape that hid the original drift). Cached rows with no matching store
+/// record are skipped — that is an orphan-row class, not a status lie.
+///
+/// The caller must pass a store loaded WITHOUT the cache-freshness hook
+/// (`backend.inner().load()`), otherwise the load rebuilds the cache first and
+/// the sweep can only ever report agreement.
+// trace:BUG-771 | ai:claude
+pub fn status_divergences(
+    cache: &Cache,
+    store: &RequirementsStore,
+) -> Result<Vec<StatusDivergence>> {
+    let expected: HashMap<Uuid, (String, bool)> = store
+        .requirements
+        .iter()
+        .map(|req| {
+            (
+                req.id,
+                (
+                    expected_cache_status(store, req),
+                    req.req_type == crate::models::RequirementType::Epic,
+                ),
+            )
+        })
+        .collect();
+
+    let cached = cache.list_summaries(&ListFilter {
+        archive: ArchiveFilter::Both,
+        defer: DeferFilter::Both,
+        ..Default::default()
+    })?;
+
+    let mut out: Vec<StatusDivergence> = cached
+        .into_iter()
+        .filter_map(|row| {
+            let (want, is_epic) = expected.get(&row.id)?;
+            if &row.status == want {
+                return None;
+            }
+            Some(StatusDivergence {
+                id: row.id,
+                spec_id: row.spec_id.clone().unwrap_or_else(|| row.id.to_string()),
+                is_epic: *is_epic,
+                cached: row.status,
+                expected: want.clone(),
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.spec_id.cmp(&b.spec_id));
+    Ok(out)
+}
+
 /// Three-way filter for the archive axis. STORY-441 introduces archive as
 /// a view-level flag distinct from status — `aida list` defaults to
 /// `NonArchivedOnly`, `--archived` flips to `ArchivedOnly`, `--all` is
@@ -4223,6 +4322,170 @@ mod tests {
         assert_eq!(cached_status(&cache, epic_id), "InProgress");
         assert_eq!(cached_status(&cache, childless_id), "Draft");
         assert_eq!(cached_status(&cache, done_id), "Completed");
+    }
+
+    // BUG-771: a CHILDLESS epic the operator rejected must never project as
+    // Draft. Case (1) of the rollup ("no children -> Draft") fires before any
+    // other arm, so without the stored-status guard every projection path
+    // re-derives a Rejected epic back to Draft — the read lie that let an
+    // advisor start decomposing closed work. All three cache write paths
+    // (full rebuild, single-row upsert, ancestor recompute) must hold the line.
+    // trace:BUG-771 | ai:claude
+    #[test]
+    fn cache_never_reopens_a_rejected_childless_epic() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-7", "operator-rejected epic, no children");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Rejected;
+        let epic_id = epic.id;
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(epic.clone());
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert_eq!(
+            cached_status(&cache, epic_id),
+            "Rejected",
+            "full rebuild must not re-derive a rejected childless epic to Draft"
+        );
+
+        // Epic-self write (e.g. `aida comment add EPIC-7`).
+        cache.upsert_requirement(&epic).unwrap();
+        assert_eq!(
+            cached_status(&cache, epic_id),
+            "Rejected",
+            "single-row upsert must not re-derive a rejected childless epic"
+        );
+
+        // Ancestor refresh triggered by a child write elsewhere in the graph.
+        cache
+            .recompute_epic_status_from_hierarchy(&epic_id, &RequirementStatus::Rejected)
+            .unwrap();
+        assert_eq!(
+            cached_status(&cache, epic_id),
+            "Rejected",
+            "hierarchy recompute must not re-derive a rejected childless epic"
+        );
+    }
+
+    // BUG-771 audit rider: the HEAD-SHA freshness check cannot see a row that
+    // disagrees with git while the two HEADs match. `status_divergences` is the
+    // sweep that can — it must find a seeded status lie and report clean once a
+    // rebuild has repaired it. trace:BUG-771 | ai:claude
+    #[test]
+    fn status_divergence_sweep_finds_seeded_drift_and_rebuild_heals_it() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-7", "rejected epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Rejected;
+        let epic_id = epic.id;
+
+        let mut task = sample_req("TASK-1", "an ordinary spec");
+        task.status = RequirementStatus::Approved;
+        let task_id = task.id;
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, task]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        assert!(
+            status_divergences(&cache, &store).unwrap().is_empty(),
+            "a freshly-rebuilt cache agrees with the store"
+        );
+
+        // Seed the drift the incident exhibited: the row silently carries a
+        // status git never recorded, with the cache HEAD still matching.
+        {
+            let conn = cache.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE requirements_cache SET status = 'Draft' WHERE id = ?1",
+                params![epic_id.to_string()],
+            )
+            .unwrap();
+            conn.execute(
+                "UPDATE requirements_cache SET status = 'Completed' WHERE id = ?1",
+                params![task_id.to_string()],
+            )
+            .unwrap();
+        }
+
+        let found = status_divergences(&cache, &store).unwrap();
+        assert_eq!(found.len(), 2, "both seeded lies are reported: {found:?}");
+        // Sorted by spec id: EPIC-7 before TASK-1.
+        assert_eq!(found[0].spec_id, "EPIC-7");
+        assert!(found[0].is_epic, "the epic divergence is flagged as such");
+        assert_eq!(found[0].cached, "Draft");
+        assert_eq!(found[0].expected, "Rejected");
+        assert_eq!(found[1].spec_id, "TASK-1");
+        assert!(!found[1].is_epic);
+        assert_eq!(found[1].cached, "Completed");
+        assert_eq!(found[1].expected, "Approved");
+
+        // The `--fix` path: a rebuild re-projects from git and clears the drift.
+        cache.rebuild_from_store(&store, "head").unwrap();
+        assert!(
+            status_divergences(&cache, &store).unwrap().is_empty(),
+            "rebuild self-heals the seeded divergence"
+        );
+    }
+
+    // BUG-771: the sweep compares against the status the STORE PROJECTS, not
+    // the raw stored field — a legitimately derived epic status (BUG-626's
+    // read-only rollup) and an archived row are both "agreement", not drift.
+    // Without this the audit surface would cry wolf on every active epic.
+    // trace:BUG-771 | ai:claude
+    #[test]
+    fn status_divergence_sweep_accepts_derived_epic_rollup_and_archived_rows() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        // Epic STORED Draft whose child is In Progress → the cache legitimately
+        // holds InProgress.
+        let mut epic = sample_req("EPIC-1", "active epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Draft;
+        let mut child = sample_req("STORY-1", "child");
+        child.status = RequirementStatus::InProgress;
+        epic.relationships
+            .push(rel(RelationshipType::Parent, child.id));
+        child
+            .relationships
+            .push(rel(RelationshipType::Child, epic.id));
+
+        // An archived spec — a view flag, orthogonal to status.
+        let mut archived = sample_req("TASK-2", "archived spec");
+        archived.status = RequirementStatus::Completed;
+        archived.archived = true;
+        let archived_id = archived.id;
+
+        let epic_id = epic.id;
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, child, archived]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        assert_eq!(cached_status(&cache, epic_id), "InProgress");
+        assert!(
+            status_divergences(&cache, &store).unwrap().is_empty(),
+            "a derived epic rollup is agreement, not drift"
+        );
+
+        // Archived rows are swept too — the default list view hides them, which
+        // is exactly how a mis-projected archived spec would stay invisible.
+        {
+            let conn = cache.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE requirements_cache SET status = 'Draft' WHERE id = ?1",
+                params![archived_id.to_string()],
+            )
+            .unwrap();
+        }
+        let found = status_divergences(&cache, &store).unwrap();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].spec_id, "TASK-2");
     }
 
     // BUG-628: archived is a view flag, not a status — the cache-projected epic
