@@ -36552,5 +36552,17 @@ operations:
   timestamp: 2026-07-21T01:27:31.172321801Z
   kind: !SetStatus
     status: Approved
-clock: 3402
+- id: 019f8249-a3a3-7b52-b28c-ef294b68d002
+  target_id: 019f8249-95d5-7b50-8584-cb7dd32be56e
+  author: aida
+  node_id: '1'
+  lamport: 3403
+  timestamp: 2026-07-21T01:28:11.939802319Z
+  kind: !Create
+    title: awaiting mail_unread scope-shifts to fleet-wide when the operator inbox is empty — deleting 3 made unread jump 3→18
+    description: 'Observed 2026-07-20 18:35: aida awaiting showed mail_unread:3 (joe''s inbox, correct); after deleting those 3 (inbox now empty for joe), awaiting reported mail_unread:18 while mailbox inbox --all shows 33 fleet-wide messages — the counter apparently falls back to some broader scope (other identities/agent mailboxes) when the operator''s own inbox is empty, so cleaning YOUR inbox makes the awaiting number GROW. The awaiting contract is channels where the OPERATOR is the gate: it should count the operator''s identity set only, deterministically, empty=0; dead agents'' unread mail is a separate hygiene surface (maybe a doctor category), not awaiting-you. Acceptance: awaiting mail_unread is stable under operator-inbox deletion (3 deleted from 3 → 0, never 18); unit test on the counting scope; fleet-wide unread moved to or kept in a distinct labeled surface. Mode: drive.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3403
 node_id: '1'
