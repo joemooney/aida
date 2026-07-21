@@ -3,12 +3,12 @@ spec_id: TASK-1167
 agreed_id: TASK-1167
 title: aida tail <session|spec|drain> — stream a live session's log by id, resolving the path the operator shouldn't have to know
 description: 'Operator ask 2026-07-20: watching live autonomous work today requires knowing a log FILE PATH (.aida/burndown/<drain-id>.jsonl, a nohup log, or a headless-logs/*.jsonl) and tailing it by hand. Add ''aida tail <id>'' that resolves an id — session id (from aida ps), spec id (its live drive/drain), or ''drain'' (the active burndown) — to its live log and streams it (follow by default; --since N / --lines N; --json passes raw stream-json, default renders the human phase lines like burndown --verbose). Complements aida ps (what''s running) + aida drain status (is a drain up) with ''show me what THIS one is doing right now''. Resolution: ps already maps session→pid→worktree; extend it session→logfile. For a fanout member, tail its agent-<id>.jsonl. No live log (interactive session) → say so, don''t error. Acceptance: aida tail <running-drain-session> streams its live phase output; aida tail <spec-with-live-drive> finds its log; a session with no log reports that cleanly; --json emits raw events. Mode drive.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T04:11:28.430778444Z
-modified_at: 2026-07-21T07:16:13.815834471Z
+modified_at: 2026-07-21T07:26:42.190066562Z
 req_type: Task
 tags:
 - dx aida:ps aida:tail observability from-operator
@@ -19,8 +19,24 @@ comments:
   created_at: 2026-07-21T07:15:40.189461057Z
   modified_at: 2026-07-21T07:15:40.189461057Z
   session_id: b2fbf49b-dbba-4dea-8daa-00aa86595b2d
+history:
+- id: 019f8391-dc07-73f0-9b5e-918c8807223b
+  author: aida-auto-bump
+  timestamp: 2026-07-21T07:26:42.183788090Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8391-dc0e-7b22-8c8a-b47294ecb6f6
+  timestamp: 2026-07-21T07:26:42.190065481Z
+  agent: aida
+  commit_sha: 13d5e29e5c76a03f45a229a45a12dc7cd85efa5c
+  summary: Completed via merge 13d5e29e
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T07:16:13.815834471Z
   implemented_by: joe
+  completed_at: 2026-07-21T07:26:40.526375266Z
+  completion_sha: 13d5e29e5c76a03f45a229a45a12dc7cd85efa5c
