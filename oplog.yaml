@@ -36493,5 +36493,16 @@ operations:
   timestamp: 2026-07-20T07:36:30.664996973Z
   kind: !SetStatus
     status: Completed
-clock: 3395
+- id: 019f8240-a710-7c62-8478-7c79d33dc4bf
+  target_id: 019f16dc-5feb-72a1-a9b0-e3bd0abadb20
+  author: aida
+  node_id: '1'
+  lamport: 3396
+  timestamp: 2026-07-21T01:18:22.992262574Z
+  kind: !SetDescription
+    description: |-
+      Smallest valuable competition. aida zen SPEC --compete fans CLAUDE + CODEX to independently implement the same spec (separate worktrees, same acceptance, no shared context) producing 2 candidate branches. JUDGE: run each candidates CI (a CI-failing candidate is eliminated, no debate); then ONE BLIND reviewer scores the passers side-by-side against acceptance + code quality + diff-size (blind = not told which vendor wrote which). SELECT: highest-scoring passer wins, merge it, close/discard the loser. RECORD the outcome (winner vendor, scores, spec-kind) for dispatch-policy data. Depends on TASK-1048 (the vendor selector). DEFER to follow-ons: N-greater-than-2 agents, AGY in the mix, runner-up synthesis/grafting, the dispatch-policy learning loop. Parent EPIC-57.
+
+      RATIFIED RESIDUAL FORKS (operator, 2026-07-20) - binding: (a) judge blinding = the reviewer sees candidate-A/candidate-B diffs with vendor identity stripped from branch names and commit authorship in everything shown to it; (b) outcome record = one CompeteOutcome event row in .aida/events.jsonl (winner vendor, per-candidate scores, spec-kind) plus a spec comment - no new file format; (c) loser branch deleted, work discarded, the record is the learning. Deviation from these or from the spec's own decisions (2 vendors, CI-eliminates, one blind reviewer, N>2/AGY deferred) is a punt, not a judgment call.
+clock: 3396
 node_id: '1'
