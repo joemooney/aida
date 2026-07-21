@@ -9045,6 +9045,21 @@ pub enum Command {
         #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
         vendor: Option<String>,
 
+        /// 2-agent bake-off: fan claude + codex to INDEPENDENTLY implement this
+        /// spec in separate worktrees (same acceptance, no shared context), run
+        /// each candidate's CI (a failing candidate is eliminated), have ONE
+        /// BLIND reviewer score the passers side-by-side (vendor identity
+        /// stripped), merge the winner into the current branch, delete the
+        /// loser branch, and record the outcome (a CompeteOutcome row in
+        /// `.aida/events.jsonl` + a spec comment) for dispatch-policy data.
+        /// Premium mode — 2x implement cost; best for hard/ambiguous specs.
+        // trace:STORY-722 | ai:claude
+        #[clap(
+            long,
+            conflicts_with_all = ["vendor", "supervised", "no_human", "solo", "into_epic", "json"]
+        )]
+        compete: bool,
+
         /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed
         /// by a verifiable provenance or is a stale / leaked value. A skill
         /// introspection hook, not a daily-driver.

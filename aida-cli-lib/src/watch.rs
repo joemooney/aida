@@ -203,6 +203,13 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "unread-mail",
             "supervisor mailbox has unread mail".to_string(),
         ),
+        // trace:STORY-722 | ai:claude
+        EventKind::CompeteOutcome {
+            winner, spec_kind, ..
+        } => (
+            "compete-outcome",
+            format!("bake-off won by {} (spec-kind {})", winner, spec_kind),
+        ),
         EventKind::Unknown => (
             "unknown",
             "unrecognized event (newer drain binary?)".to_string(),

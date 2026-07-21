@@ -2844,6 +2844,27 @@ fn run() -> Result<()> {
         return handle_zen_command(zen_cmd);
     }
 
+    // STORY-722: `aida zen <spec> --compete` — the 2-agent bake-off. Like
+    // `aida compete` it self-loads the store (to resolve the spec + assemble
+    // the brief) and orchestrates worktrees + headless vendor runs, so it
+    // dispatches early and works identically on both storage backends.
+    // trace:STORY-722 | ai:claude
+    if let Command::Zen {
+        spec,
+        compete: true,
+        dry_run,
+        command: None,
+        ..
+    } = &cli.command
+    {
+        let Some(spec) = spec.as_deref() else {
+            anyhow::bail!(
+                "`aida zen --compete` needs a SPEC id (e.g. `aida zen TASK-123 --compete`)"
+            );
+        };
+        return compete_cmd::handle_zen_compete(spec, *dry_run);
+    }
+
     // STORY-360: live-advisor registration. `aida advisor` writes to
     // `~/.aida/advisor.toml` (per-user, not per-project) and is intended to
     // be runnable from anywhere — including outside any AIDA project. Reads
@@ -3611,6 +3632,8 @@ fn run() -> Result<()> {
             dry_run,
             json,
             vendor,
+            // trace:STORY-722 — the --compete form dispatches before storage init.
+            compete: _,
             command: _,
         } => {
             // STORY-744: the machine-readable gate probe short-circuits the

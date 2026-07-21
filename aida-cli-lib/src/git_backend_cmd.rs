@@ -527,6 +527,8 @@ pub(crate) fn handle_git_backend_command(
             dry_run,
             json,
             vendor,
+            // trace:STORY-722 — the --compete form dispatches before storage init.
+            compete: _,
             command: _,
         } => {
             let storage = Storage::new(store_path.to_path_buf());

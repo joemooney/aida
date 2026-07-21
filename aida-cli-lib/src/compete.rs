@@ -684,6 +684,113 @@ pub fn render_recommended_winner(verdict: &JudgeVerdict, results: &[ArmResult]) 
     )
 }
 
+// ---------------------------------------------------------------------------
+// STORY-722 — `aida zen <spec> --compete`: the 2-agent bake-off. Fan claude +
+// codex to independently implement the same spec, eliminate CI-failers, have
+// ONE BLIND reviewer score the passers side-by-side, merge the winner, delete
+// the loser branch, record the outcome. These are the PURE parts: the fixed
+// vendor pair, the blind labeling (candidate-A/candidate-B with vendor
+// identity stripped from everything the reviewer sees), the blind prompt
+// builder, and unblinding the verdict back to vendors. The I/O orchestration
+// lives in `compete_cmd::handle_zen_compete`.
+// trace:STORY-722 | ai:claude
+// ---------------------------------------------------------------------------
+
+// trace:STORY-722 | ai:claude
+/// The fixed vendor pair of the smallest-valuable-slice bake-off. N>2 agents
+/// and AGY-in-the-mix are explicitly deferred by the spec to follow-ons.
+pub const BAKEOFF_VENDORS: [&str; 2] = ["claude", "codex"];
+
+// trace:STORY-722 | ai:claude
+/// A `(name, diff)` candidate pair — the name is a vendor before blinding and
+/// a `candidate-X` label after.
+pub type CandidateDiff = (String, String);
+
+// trace:STORY-722 | ai:claude
+/// A `(label, vendor)` row of the blind map the caller keeps to unblind the
+/// reviewer's verdict.
+pub type BlindMapEntry = (String, String);
+
+// trace:STORY-722 | ai:claude
+/// Blind-label candidates for the reviewer-judge: `(vendor, diff)` pairs
+/// become `(candidate-A, diff)`, `(candidate-B, diff)` — vendor identity
+/// stripped from everything the reviewer sees. `swap` flips which vendor gets
+/// which label (the caller derives it from runtime entropy so the labeling is
+/// not a learnable convention). Returns the labeled candidates (what the judge
+/// sees) and the label→vendor map (what the caller keeps to unblind the
+/// verdict afterwards).
+pub fn blind_candidates(
+    candidates: &[CandidateDiff],
+    swap: bool,
+) -> (Vec<CandidateDiff>, Vec<BlindMapEntry>) {
+    let mut ordered: Vec<&(String, String)> = candidates.iter().collect();
+    if swap {
+        ordered.reverse();
+    }
+    let mut labeled = Vec::new();
+    let mut mapping = Vec::new();
+    for (i, (vendor, diff)) in ordered.iter().enumerate() {
+        let label = format!("candidate-{}", (b'A' + i as u8) as char);
+        labeled.push((label.clone(), diff.clone()));
+        mapping.push((label, vendor.clone()));
+    }
+    (labeled, mapping)
+}
+
+// trace:STORY-722 | ai:claude
+/// Map a blind label back to its vendor. `None` for a label the mapping does
+/// not know (a judge that went off-contract) so the caller can fall back to
+/// the score table instead of trusting a hallucinated name.
+pub fn unblind_label(label: &str, mapping: &[BlindMapEntry]) -> Option<String> {
+    mapping
+        .iter()
+        .find(|(l, _)| l.eq_ignore_ascii_case(label.trim()))
+        .map(|(_, v)| v.clone())
+}
+
+// trace:STORY-722 | ai:claude
+/// Rewrite a blind verdict's labels back to vendor names — scores and winner —
+/// so the human-facing report and the recorded outcome name real vendors. An
+/// unmappable label is left as-is (honest: the judge went off-contract; the
+/// caller's passer-guard catches it).
+pub fn unblind_verdict(verdict: &JudgeVerdict, mapping: &[BlindMapEntry]) -> JudgeVerdict {
+    JudgeVerdict {
+        scores: verdict
+            .scores
+            .iter()
+            .map(|s| RubricScore {
+                vendor: unblind_label(&s.vendor, mapping).unwrap_or_else(|| s.vendor.clone()),
+                ..s.clone()
+            })
+            .collect(),
+        winner: unblind_label(&verdict.winner, mapping).unwrap_or_else(|| verdict.winner.clone()),
+        reasoning: verdict.reasoning.clone(),
+    }
+}
+
+// trace:STORY-722 | ai:claude
+/// Build the BLIND judge prompt: the same rubric contract as
+/// [`build_judge_prompt`] but over blind-labeled candidates, with an explicit
+/// blinding preamble. The reviewer is told it must NOT try to infer authorship
+/// and must echo the candidate labels verbatim in its verdict's `vendor`
+/// fields (the caller unblinds them afterwards).
+pub fn build_blind_judge_prompt(
+    spec_id: &str,
+    spec_context: &str,
+    labeled: &[CandidateDiff],
+) -> String {
+    let mut p = String::from(
+        "BLIND REVIEW: the candidates below are labeled candidate-A, candidate-B, … \
+         with author identity deliberately withheld. You are NOT told which vendor \
+         or model produced which candidate — judge purely on the diff against the \
+         spec's acceptance criteria, code quality, and diff size. Do not try to \
+         infer authorship. In your JSON verdict, use the candidate labels EXACTLY \
+         as given for every `vendor` field (including `winner`).\n\n",
+    );
+    p.push_str(&build_judge_prompt(spec_id, spec_context, labeled));
+    p
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1127,5 +1234,119 @@ mod tests {
         let (_, codex_args) = judge_command(JudgeVendor::Codex, None, &prompt);
         // Both carry the identical prompt as the final positional arg.
         assert_eq!(claude_args.last(), codex_args.last());
+    }
+
+    // trace:STORY-722 | ai:claude
+    #[test]
+    fn blind_candidates_labels_in_order_without_swap() {
+        let cands = vec![
+            ("claude".to_string(), "diff-claude".to_string()),
+            ("codex".to_string(), "diff-codex".to_string()),
+        ];
+        let (labeled, mapping) = blind_candidates(&cands, false);
+        assert_eq!(
+            labeled[0],
+            ("candidate-A".to_string(), "diff-claude".to_string())
+        );
+        assert_eq!(
+            labeled[1],
+            ("candidate-B".to_string(), "diff-codex".to_string())
+        );
+        assert_eq!(
+            mapping[0],
+            ("candidate-A".to_string(), "claude".to_string())
+        );
+        assert_eq!(mapping[1], ("candidate-B".to_string(), "codex".to_string()));
+    }
+
+    // trace:STORY-722 | ai:claude
+    #[test]
+    fn blind_candidates_swap_flips_which_vendor_gets_which_label() {
+        let cands = vec![
+            ("claude".to_string(), "diff-claude".to_string()),
+            ("codex".to_string(), "diff-codex".to_string()),
+        ];
+        let (labeled, mapping) = blind_candidates(&cands, true);
+        // Labels stay A-then-B; the vendors behind them flip.
+        assert_eq!(labeled[0].0, "candidate-A");
+        assert_eq!(labeled[0].1, "diff-codex");
+        assert_eq!(
+            unblind_label("candidate-A", &mapping).as_deref(),
+            Some("codex")
+        );
+        assert_eq!(
+            unblind_label("candidate-B", &mapping).as_deref(),
+            Some("claude")
+        );
+    }
+
+    // trace:STORY-722 | ai:claude
+    #[test]
+    fn unblind_label_is_case_insensitive_and_rejects_unknown() {
+        let mapping = vec![("candidate-A".to_string(), "claude".to_string())];
+        assert_eq!(
+            unblind_label(" Candidate-a ", &mapping).as_deref(),
+            Some("claude")
+        );
+        assert_eq!(unblind_label("claude", &mapping), None);
+    }
+
+    // trace:STORY-722 | ai:claude
+    #[test]
+    fn unblind_verdict_maps_scores_and_winner_back_to_vendors() {
+        let mapping = vec![
+            ("candidate-A".to_string(), "codex".to_string()),
+            ("candidate-B".to_string(), "claude".to_string()),
+        ];
+        let verdict = JudgeVerdict {
+            scores: vec![
+                RubricScore {
+                    vendor: "candidate-A".to_string(),
+                    spec_adherence: 5,
+                    correctness: 4,
+                    simplicity: 4,
+                    test_coverage: 3,
+                },
+                RubricScore {
+                    vendor: "candidate-B".to_string(),
+                    spec_adherence: 3,
+                    correctness: 3,
+                    simplicity: 5,
+                    test_coverage: 2,
+                },
+            ],
+            winner: "candidate-A".to_string(),
+            reasoning: "meets acceptance with a focused diff".to_string(),
+        };
+        let unblinded = unblind_verdict(&verdict, &mapping);
+        assert_eq!(unblinded.winner, "codex");
+        assert_eq!(unblinded.scores[0].vendor, "codex");
+        assert_eq!(unblinded.scores[1].vendor, "claude");
+        // Scores and reasoning survive unblinding untouched.
+        assert_eq!(unblinded.scores[0].total(), 16);
+        assert_eq!(unblinded.reasoning, verdict.reasoning);
+        // An off-contract label is left as-is (the caller's passer-guard catches it).
+        let bad = JudgeVerdict {
+            winner: "gpt-5".to_string(),
+            ..verdict.clone()
+        };
+        assert_eq!(unblind_verdict(&bad, &mapping).winner, "gpt-5");
+    }
+
+    // trace:STORY-722 | ai:claude
+    #[test]
+    fn blind_judge_prompt_strips_vendor_identity() {
+        let cands = vec![
+            ("claude".to_string(), "diff one".to_string()),
+            ("codex".to_string(), "diff two".to_string()),
+        ];
+        let (labeled, _) = blind_candidates(&cands, false);
+        let prompt = build_blind_judge_prompt("STORY-722", "spec ctx", &labeled);
+        // The reviewer sees blind labels, never vendor names.
+        assert!(prompt.contains("candidate-A"));
+        assert!(prompt.contains("candidate-B"));
+        assert!(!prompt.contains("claude"));
+        assert!(!prompt.contains("codex"));
+        assert!(prompt.contains("BLIND REVIEW"));
     }
 }

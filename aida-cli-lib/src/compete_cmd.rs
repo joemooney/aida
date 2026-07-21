@@ -324,12 +324,8 @@ fn run_compete_judge(
 ) {
     // The binary defaults to the vendor's own CLI; `AIDA_COMPETE_JUDGE` overrides
     // it (parallels the other vendor-binary env knobs). trace:TASK-869
-    let binary_override = std::env::var("AIDA_COMPETE_JUDGE").ok();
-    let judge_bin = binary_override
-        .as_deref()
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or(judge_vendor.default_binary());
-    if !binary_on_path(judge_bin) {
+    let judge_bin = resolved_judge_binary(judge_vendor);
+    if !binary_on_path(&judge_bin) {
         eprintln!(
             "{} --judge needs the `{judge_bin}` CLI on PATH — skipping the rubric judge \
              (the deterministic ranking above still applies).",
@@ -371,22 +367,8 @@ fn run_compete_judge(
         candidates.len()
     );
     let prompt = compete::build_judge_prompt(spec_id, spec_context, &candidates);
-    // Same prompt, vendor-chosen binary + flags. Codex `exec` reads stdin and
-    // would hang non-interactively, so close it. trace:TASK-869
-    let (cmd_bin, cmd_args) =
-        compete::judge_command(judge_vendor, binary_override.as_deref(), &prompt);
-    let mut judge_cmd = std::process::Command::new(&cmd_bin);
-    judge_cmd.args(&cmd_args).current_dir(project_root);
-    if judge_vendor.needs_stdin_closed() {
-        judge_cmd.stdin(std::process::Stdio::null());
-    }
-    let out = judge_cmd.output();
-    let raw = match out {
-        Ok(o) => {
-            let mut s = String::from_utf8_lossy(&o.stdout).to_string();
-            s.push_str(&String::from_utf8_lossy(&o.stderr));
-            s
-        }
+    let raw = match spawn_judge(project_root, judge_vendor, &prompt) {
+        Ok(raw) => raw,
         Err(e) => {
             eprintln!(
                 "{} judge invocation failed: {e} — deterministic ranking above stands.",
@@ -415,6 +397,419 @@ fn run_compete_judge(
     }
 }
 
+/// `aida zen <SPEC> --compete` — the 2-agent bake-off (STORY-722). Fans
+/// claude + codex to INDEPENDENTLY implement the same spec (separate
+/// worktrees, same acceptance brief, no shared context), then judges:
+/// each candidate's CI (the gate mirroring PR CI) runs first and a failing
+/// candidate is eliminated, no debate; the passers then go to ONE BLIND
+/// reviewer-judge that scores candidate-A/candidate-B side-by-side with
+/// vendor identity stripped from everything it sees. SELECT: the
+/// highest-scoring passer is merged into the current branch, the loser
+/// branch is deleted (work discarded — the record is the learning), and the
+/// outcome lands as one `CompeteOutcome` event row in `.aida/events.jsonl`
+/// (winner vendor, per-candidate scores, spec-kind) plus a spec comment.
+/// N>2 agents, AGY, runner-up grafting, and the dispatch-policy learning
+/// loop are deferred follow-ons per the spec.
+// trace:STORY-722 | ai:claude
+pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
+    use compete::{ArmResult, Ran, ReportGlyphs, VendorAdapter};
+
+    let project_root = find_project_root()?;
+    let store = load_store_for_lookup(&project_root)
+        .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
+    let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
+        store.requirements.iter().find(|r| r.id == uuid)
+    } else {
+        store.get_requirement_by_spec_id(spec_arg)
+    }
+    .ok_or_else(|| anyhow::anyhow!("requirement `{spec_arg}` not found"))?;
+    let spec_id = target.display_id();
+    let spec_kind = target.req_type.to_string();
+
+    // Fail fast: a one-armed bake-off is not a competition. Both vendor CLIs
+    // must be present BEFORE any expensive arm runs.
+    for vendor in compete::BAKEOFF_VENDORS {
+        let Some(VendorAdapter::Headless { command, .. }) = compete::vendor_adapter(vendor) else {
+            anyhow::bail!("bake-off vendor `{vendor}` has no headless adapter");
+        };
+        if !binary_on_path(command) {
+            anyhow::bail!(
+                "bake-off needs both vendor CLIs — `{command}` ({vendor}) not found on PATH"
+            );
+        }
+    }
+
+    let gate_cmd = compete::DEFAULT_GATE;
+    let brief = assemble_compete_brief(&store, target, &project_root, gate_cmd);
+
+    if working_tree_is_dirty(&project_root) {
+        eprintln!(
+            "{} starting tree has uncommitted changes — candidate worktrees branch off HEAD \
+             and will NOT see them, and the winner-merge may conflict. Commit or stash first.",
+            glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+
+    println!(
+        "{} bake-off for {}: {} implement independently; CI eliminates, a blind \
+         reviewer picks, the winner merges.",
+        glyph(crate::glyphs::Glyph::Robot),
+        spec_id.bold(),
+        compete::BAKEOFF_VENDORS.join(" vs ").cyan()
+    );
+    println!("  CI gate: {}", gate_cmd.dimmed());
+    if dry_run {
+        for vendor in compete::BAKEOFF_VENDORS {
+            let branch = compete::vendor_branch(&spec_id, vendor);
+            println!(
+                "  {}: would create worktree {} on `{}`, implement headless, then gate",
+                vendor,
+                compete_worktree_dir(&project_root, &branch).display(),
+                branch
+            );
+        }
+        println!(
+            "  {}",
+            "(dry run — no vendor spawned, no git touched, no judge, no merge)".dimmed()
+        );
+        return Ok(());
+    }
+    println!();
+
+    // ── FAN: both vendors, separate worktrees, same brief, no shared context ──
+    let mut results: Vec<ArmResult> = Vec::new();
+    for vendor in compete::BAKEOFF_VENDORS {
+        let adapter = compete::vendor_adapter(vendor).expect("bake-off vendors are known");
+        let VendorAdapter::Headless { command, .. } = &adapter else {
+            unreachable!("bake-off vendors are headless (checked above)");
+        };
+        let branch = compete::vendor_branch(&spec_id, vendor);
+        let argv = compete::headless_argv(&adapter, &brief).expect("headless adapter");
+        match run_compete_arm(&project_root, vendor, command, &argv, &branch, gate_cmd) {
+            Ok((arm, _files)) => results.push(arm),
+            Err(e) => {
+                eprintln!(
+                    "{} {}: arm errored: {e}",
+                    glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    vendor
+                );
+                results.push(ArmResult {
+                    vendor: vendor.to_string(),
+                    ran: Ran::Failed,
+                    built: None,
+                    gate_passed: None,
+                    diff_lines: None,
+                    branch,
+                });
+            }
+        }
+    }
+
+    println!();
+    let g = ReportGlyphs {
+        check: glyph(crate::glyphs::Glyph::Check).to_string(),
+        cross: glyph(crate::glyphs::Glyph::Cross).to_string(),
+        pending: glyph(crate::glyphs::Glyph::Pending).to_string(),
+    };
+    print!("{}", compete::render_report(&spec_id, &results, &g));
+    println!();
+
+    // ── JUDGE step 1: CI eliminates, no debate. A passer must also have real
+    // work on its branch — an empty diff "passes CI" by doing nothing. ──
+    let mut passers: Vec<(String, String, String)> = Vec::new(); // (vendor, branch, diff)
+    for r in &results {
+        if r.gate_passed != Some(true) || r.branch.is_empty() {
+            continue;
+        }
+        let diff = std::process::Command::new("git")
+            .args(["diff", "HEAD", &r.branch])
+            .current_dir(&project_root)
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        if diff.trim().is_empty() {
+            println!(
+                "  {} {}: CI passed but the branch has NO changes — eliminated (no work).",
+                glyph(crate::glyphs::Glyph::Cross),
+                r.vendor
+            );
+            continue;
+        }
+        passers.push((r.vendor.clone(), r.branch.clone(), diff));
+    }
+    if passers.is_empty() {
+        anyhow::bail!(
+            "no candidate passed CI — no winner. Candidate branches are left in place for \
+             inspection ({}).",
+            results
+                .iter()
+                .filter(|r| !r.branch.is_empty())
+                .map(|r| r.branch.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    // ── JUDGE step 2: ONE BLIND reviewer over the passers (skipped on a
+    // walkover — CI elimination already decided). ──
+    let (winner_vendor, verdict) = if passers.len() == 1 {
+        println!(
+            "  {} single CI-passer — {} wins by elimination (blind review not needed).",
+            glyph(crate::glyphs::Glyph::Check),
+            passers[0].0.cyan()
+        );
+        (passers[0].0.clone(), None)
+    } else {
+        let judge_vendor = compete::JudgeVendor::default();
+        let judge_bin = resolved_judge_binary(judge_vendor);
+        if !binary_on_path(&judge_bin) {
+            anyhow::bail!(
+                "the blind reviewer-judge needs the `{judge_bin}` CLI on PATH — no winner \
+                 selected; candidate branches left in place."
+            );
+        }
+        // Blind the candidates: labels only, vendor identity stripped from
+        // everything the reviewer sees; label order randomized per run so the
+        // labeling is not a learnable convention.
+        let cands: Vec<(String, String)> = passers
+            .iter()
+            .map(|(v, _b, d)| (v.clone(), d.clone()))
+            .collect();
+        let swap = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos() % 2 == 1)
+            .unwrap_or(false);
+        let (labeled, mapping) = compete::blind_candidates(&cands, swap);
+        println!(
+            "{} blind reviewer-judge scoring {} candidates (vendor identity stripped)...",
+            glyph(crate::glyphs::Glyph::Hourglass),
+            labeled.len()
+        );
+        let prompt = compete::build_blind_judge_prompt(&spec_id, &brief, &labeled);
+        let raw = spawn_judge(&project_root, judge_vendor, &prompt)?;
+        let blind_verdict = compete::parse_judge_verdict(&raw).ok_or_else(|| {
+            anyhow::anyhow!(
+                "could not parse a structured verdict from the blind reviewer — no winner \
+                 selected; candidate branches left in place."
+            )
+        })?;
+        let verdict = compete::unblind_verdict(&blind_verdict, &mapping);
+        println!();
+        print!("{}", compete::render_judge_verdict(&verdict));
+        println!();
+        // The winner must be an actual passer. If the reviewer went
+        // off-contract on the winner field, fall back to its own score table
+        // (highest total among passers); a fully unusable verdict is a bail.
+        let winner = if passers.iter().any(|(v, _, _)| *v == verdict.winner) {
+            verdict.winner.clone()
+        } else {
+            verdict
+                .scores
+                .iter()
+                .filter(|s| passers.iter().any(|(v, _, _)| *v == s.vendor))
+                .max_by_key(|s| s.total())
+                .map(|s| s.vendor.clone())
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "the blind reviewer's verdict named no known candidate — no winner \
+                         selected; candidate branches left in place."
+                    )
+                })?
+        };
+        (winner, Some(verdict))
+    };
+
+    // ── SELECT: merge the winner into the current branch. ──
+    let winner_branch = passers
+        .iter()
+        .find(|(v, _, _)| *v == winner_vendor)
+        .map(|(_, b, _)| b.clone())
+        .expect("winner is a passer");
+    let current_branch = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&project_root)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|| "HEAD".to_string());
+    println!(
+        "{} winner: {} — merging `{}` into `{}`...",
+        glyph(crate::glyphs::Glyph::Check).green(),
+        winner_vendor.bold(),
+        winner_branch,
+        current_branch
+    );
+    let merge_msg =
+        format!("[AI:{winner_vendor}] feat: {spec_id} via compete bake-off winner ({spec_id})");
+    let merge = std::process::Command::new("git")
+        .args(["merge", "--no-ff", &winner_branch, "-m", &merge_msg])
+        .current_dir(&project_root)
+        .output()
+        .context("failed to run `git merge`")?;
+    if !merge.status.success() {
+        // Leave the merge state for the operator; don't half-clean.
+        let _ = std::process::Command::new("git")
+            .args(["merge", "--abort"])
+            .current_dir(&project_root)
+            .output();
+        anyhow::bail!(
+            "merging the winner failed: {} — no branches deleted; resolve manually \
+             (winner branch: {winner_branch}).",
+            String::from_utf8_lossy(&merge.stderr).trim()
+        );
+    }
+
+    // ── Cleanup: worktrees go; the loser branch is deleted (work discarded —
+    // the record is the learning); the merged winner branch is deleted too. ──
+    for r in results.iter().filter(|r| !r.branch.is_empty()) {
+        let dir = compete_worktree_dir(&project_root, &r.branch);
+        let _ = std::process::Command::new("git")
+            .args(["worktree", "remove", "--force", &dir.to_string_lossy()])
+            .current_dir(&project_root)
+            .output();
+        let flag = if r.branch == winner_branch {
+            "-d"
+        } else {
+            "-D"
+        };
+        let _ = std::process::Command::new("git")
+            .args(["branch", flag, &r.branch])
+            .current_dir(&project_root)
+            .output();
+        if r.branch != winner_branch {
+            println!("  loser branch `{}` deleted — work discarded.", r.branch);
+        }
+    }
+    let _ = std::process::Command::new("git")
+        .args(["worktree", "prune"])
+        .current_dir(&project_root)
+        .output();
+
+    // ── RECORD: one CompeteOutcome event row + a spec comment — no new file
+    // format. This is the dispatch-policy data point. ──
+    let scores: Vec<crate::events::CompeteCandidateScore> = results
+        .iter()
+        .filter(|r| !r.branch.is_empty())
+        .map(|r| crate::events::CompeteCandidateScore {
+            vendor: r.vendor.clone(),
+            ci_passed: r.gate_passed == Some(true),
+            rubric_total: verdict.as_ref().and_then(|v| {
+                v.scores
+                    .iter()
+                    .find(|s| s.vendor == r.vendor)
+                    .map(|s| s.total())
+            }),
+        })
+        .collect();
+    crate::events::emit(
+        &project_root,
+        &crate::events::Event::new(
+            Some(spec_id.clone()),
+            "",
+            crate::events::EventKind::CompeteOutcome {
+                winner: winner_vendor.clone(),
+                scores: scores.clone(),
+                spec_kind: spec_kind.clone(),
+            },
+        ),
+    );
+    let scores_line = scores
+        .iter()
+        .map(|s| {
+            let rubric = s
+                .rubric_total
+                .map(|t| format!(", rubric {t}/20"))
+                .unwrap_or_default();
+            let ci = if s.ci_passed {
+                "CI pass"
+            } else {
+                "CI fail (eliminated)"
+            };
+            format!("{}: {ci}{rubric}", s.vendor)
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let comment_text = format!(
+        "Compete bake-off (zen --compete) outcome: winner {winner_vendor}, merged into \
+         `{current_branch}`; loser branch deleted, work discarded. Scores — {scores_line}. \
+         Spec-kind: {spec_kind}. Reviewer was blind (candidate labels; vendor identity \
+         stripped)."
+    );
+    // Route the comment through the CLI's own dispatch so it lands correctly
+    // on either storage backend (git-canonical or legacy). Best-effort.
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let commented = std::process::Command::new(&aida)
+        .args([
+            "comment",
+            "add",
+            &spec_id,
+            &comment_text,
+            "--author",
+            "aida-compete",
+        ])
+        .current_dir(&project_root)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !commented {
+        eprintln!(
+            "{} could not add the outcome comment to {} — the events.jsonl record stands.",
+            glyph(crate::glyphs::Glyph::Warning).yellow(),
+            spec_id
+        );
+    }
+
+    println!();
+    println!(
+        "{} bake-off complete: {} won for {} — merged into `{}`; outcome recorded \
+         (events.jsonl + spec comment).",
+        glyph(crate::glyphs::Glyph::Check).green(),
+        winner_vendor.bold(),
+        spec_id.bold(),
+        current_branch
+    );
+    Ok(())
+}
+
+/// The judge binary that would be spawned: the `AIDA_COMPETE_JUDGE` env
+/// override when set (parallels the other vendor-binary env knobs), else the
+/// vendor's own CLI. Shared by the opt-in `--judge` rubric judge (TASK-869)
+/// and the `aida zen --compete` blind reviewer-judge (STORY-722).
+// trace:TASK-869 trace:STORY-722 | ai:claude
+fn resolved_judge_binary(judge_vendor: compete::JudgeVendor) -> String {
+    std::env::var("AIDA_COMPETE_JUDGE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| judge_vendor.default_binary().to_string())
+}
+
+/// Spawn a one-shot judge process over `prompt` and return its combined
+/// stdout+stderr. Resolves the binary via [`resolved_judge_binary`], builds
+/// the vendor argv, and closes stdin where the vendor needs it (codex `exec`
+/// reads stdin and would hang non-interactively). The prompt is identical
+/// across vendors — only the executing model changes.
+// trace:TASK-869 trace:STORY-722 | ai:claude
+fn spawn_judge(
+    project_root: &std::path::Path,
+    judge_vendor: compete::JudgeVendor,
+    prompt: &str,
+) -> Result<String> {
+    let binary_override = std::env::var("AIDA_COMPETE_JUDGE").ok();
+    let (cmd_bin, cmd_args) =
+        compete::judge_command(judge_vendor, binary_override.as_deref(), prompt);
+    let mut judge_cmd = std::process::Command::new(&cmd_bin);
+    judge_cmd.args(&cmd_args).current_dir(project_root);
+    if judge_vendor.needs_stdin_closed() {
+        judge_cmd.stdin(std::process::Stdio::null());
+    }
+    let o = judge_cmd.output().context("failed to spawn the judge")?;
+    let mut s = String::from_utf8_lossy(&o.stdout).to_string();
+    s.push_str(&String::from_utf8_lossy(&o.stderr));
+    Ok(s)
+}
+
 /// Run a single headless vendor arm: create the worktree, spawn the vendor,
 /// ensure its work is committed, then run the objective gate and measure the
 /// diff. Returns the assembled [`compete::ArmResult`]. Any I/O failure bubbles
@@ -430,10 +825,7 @@ fn run_compete_arm(
 ) -> Result<(compete::ArmResult, usize)> {
     use compete::{ArmResult, Ran};
 
-    let worktree_dir = project_root
-        .parent()
-        .unwrap_or(project_root)
-        .join(format!("aida-compete-{}", branch.replace('/', "-")));
+    let worktree_dir = compete_worktree_dir(project_root, branch);
     let worktree_str = worktree_dir.to_string_lossy().to_string();
 
     // Fresh start: drop any stale worktree/branch from a prior compete run.
@@ -571,6 +963,18 @@ fn run_compete_arm(
         },
         files_touched,
     ))
+}
+
+/// The worktree directory a compete arm uses for `branch` — a sibling of the
+/// project root, so vendor work never lands inside the operator's tree. One
+/// source of truth so the STORY-722 bake-off cleanup removes exactly what
+/// [`run_compete_arm`] created.
+// trace:STORY-722 | ai:claude
+fn compete_worktree_dir(project_root: &std::path::Path, branch: &str) -> std::path::PathBuf {
+    project_root
+        .parent()
+        .unwrap_or(project_root)
+        .join(format!("aida-compete-{}", branch.replace('/', "-")))
 }
 
 /// Where a compete run's per-vendor logs live — OUTSIDE every candidate
