@@ -1595,6 +1595,162 @@ fn advance_action_sentence(bucket: OpenBucket, id: &str) -> String {
     }
 }
 
+/// BUG-772: render a blocker list for the footer — at most three ids, then a
+/// `+N more` tail so a long chain can't run the line off the terminal.
+// trace:BUG-772 | ai:claude
+fn join_blockers(blockers: &[String]) -> String {
+    const SHOWN: usize = 3;
+    let head = blockers
+        .iter()
+        .take(SHOWN)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    if blockers.len() > SHOWN {
+        format!("{head} +{} more", blockers.len() - SHOWN)
+    } else {
+        head
+    }
+}
+
+/// BUG-772: the next action for a BLOCKED queued item, keyed off what its
+/// predecessors actually are. The old routing sent every blocked spec to
+/// `AdvanceAction::Reject` — "resolve it out (`aida edit <id> --status
+/// rejected`)" — which for a spec waiting on a live predecessor advised
+/// destroying authorized chained work. Only a genuine dead end (Rejected /
+/// dangling predecessor) is the operator's call now, and even then the verb is
+/// unblock-or-re-scope, not reject. The `Clears` arm is unreachable from the
+/// "needs you" loop (those items are filtered out before it) but is rendered
+/// truthfully rather than panicking. Pure.
+// trace:BUG-772 | ai:claude
+fn blocked_action_sentence(outlook: &BlockerOutlook, id: &str) -> String {
+    let list = join_blockers(&outlook.blockers);
+    match outlook.kind {
+        BlockerOutlookKind::DeadEnd => format!(
+            "its blocker {list} will never ship — unblock or re-scope it \
+             (`aida graph {id} --blocked-by`)"
+        ),
+        BlockerOutlookKind::PredecessorParked => {
+            // `aida why` takes ONE spec — point at the first blocker, not the
+            // whole list (a multi-id command line would not run).
+            let first = outlook.blockers.first().cloned().unwrap_or_default();
+            format!(
+                "its blocker {list} is not cleared to start — groom or triage the \
+                 blocker first (`aida why {first}`)"
+            )
+        }
+        BlockerOutlookKind::Clears => format!(
+            "waiting on {list} — authorized work already moving; it unblocks when that ships"
+        ),
+    }
+}
+
+// BUG-772: one unsatisfied `BlockedBy` predecessor, as the footer sees it —
+// the predecessor's display id plus its status. `status: None` means the edge
+// is DANGLING (the target is no longer in the store). The caller resolves the
+// edges; this stays plain data so the outlook classifier is pure.
+// trace:BUG-772 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BlockerFact {
+    /// The predecessor's display SPEC-ID (or a placeholder for a dangling edge).
+    pub id: String,
+    /// The predecessor's status, in any casing/spacing (`In Progress`,
+    /// `inprogress`, …) — normalized by [`classify_blockers`]. `None` for a
+    /// dangling edge.
+    pub status: Option<String>,
+}
+
+// BUG-772: will a blocked spec's dependency clear on its own, or does it need a
+// person? The queue footer used to treat EVERY blocked spec as "needs you:
+// resolve it out (`--status rejected`)" — which, for a spec waiting on an
+// authorized predecessor the same drain is already shipping, advises destroying
+// live work. trace:BUG-772 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BlockerOutlookKind {
+    /// Every unsatisfied predecessor is authorized, moving work (Approved /
+    /// Planned / In Progress / Done). The block clears itself as the chain
+    /// drains — NOT an operator action.
+    Clears,
+    /// A predecessor is not yet cleared to start (Draft) or is parked for
+    /// triage (NeedsAttention). It needs a person, but the action is on the
+    /// PREDECESSOR, not on the dependent.
+    PredecessorParked,
+    /// A predecessor is Rejected, or the edge dangles (target gone) — a true
+    /// dead end. The dependent needs unblocking or re-scoping.
+    DeadEnd,
+}
+
+/// BUG-772: the footer's verdict on a blocked spec's predecessors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BlockerOutlook {
+    pub kind: BlockerOutlookKind,
+    /// The predecessors that decided the kind, in store order.
+    pub blockers: Vec<String>,
+}
+
+/// BUG-772: statuses (normalized) of a predecessor that is authorized work
+/// already moving toward its own completion. `completed` is included
+/// defensively — a Completed predecessor is a satisfied edge and should never
+/// reach here, but if it does it must not read as a dead end.
+const SELF_CLEARING_BLOCKER_STATUSES: &[&str] =
+    &["approved", "planned", "inprogress", "done", "completed"];
+
+/// BUG-772: classify a blocked spec's unsatisfied predecessors into the ONE
+/// outlook that decides whether the footer may say "needs you". Precedence runs
+/// loudest-first: a dead end (Rejected / dangling) outranks a parked predecessor
+/// (Draft / NeedsAttention), which outranks the self-clearing case. `None` for
+/// an empty slice (a spec whose Blocked classification came from the `blocked`
+/// TAG rather than a graph edge — the caller keeps the legacy phrasing there).
+/// Pure + exhaustively testable.
+// trace:BUG-772 | ai:claude
+pub(crate) fn classify_blockers(blockers: &[BlockerFact]) -> Option<BlockerOutlook> {
+    if blockers.is_empty() {
+        return None;
+    }
+    let norm = |s: &str| -> String {
+        s.chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect::<String>()
+            .to_ascii_lowercase()
+    };
+    let dead: Vec<String> = blockers
+        .iter()
+        .filter(|b| {
+            b.status
+                .as_deref()
+                .map(&norm)
+                .is_none_or(|s| s == "rejected")
+        })
+        .map(|b| b.id.clone())
+        .collect();
+    if !dead.is_empty() {
+        return Some(BlockerOutlook {
+            kind: BlockerOutlookKind::DeadEnd,
+            blockers: dead,
+        });
+    }
+    let parked: Vec<String> = blockers
+        .iter()
+        .filter(|b| {
+            b.status
+                .as_deref()
+                .map(&norm)
+                .is_none_or(|s| !SELF_CLEARING_BLOCKER_STATUSES.contains(&s.as_str()))
+        })
+        .map(|b| b.id.clone())
+        .collect();
+    if !parked.is_empty() {
+        return Some(BlockerOutlook {
+            kind: BlockerOutlookKind::PredecessorParked,
+            blockers: parked,
+        });
+    }
+    Some(BlockerOutlook {
+        kind: BlockerOutlookKind::Clears,
+        blockers: blockers.iter().map(|b| b.id.clone()).collect(),
+    })
+}
+
 /// STORY-565: one queued item, already classified, for the path-to-empty footer.
 /// `bucket == Actionable` ⇒ it's part of the "ready" count; everything else gets
 /// its own per-item "needs you" line. trace:STORY-565 | ai:claude
@@ -1604,6 +1760,31 @@ pub(crate) struct QueuedItem {
     pub id: String,
     /// Its open-bucket classification (from `explain_open`).
     pub bucket: OpenBucket,
+    /// BUG-772: for a `Blocked` item, what its predecessors imply — whether the
+    /// block clears itself as the chain drains or genuinely needs a person.
+    /// `None` for every other bucket (and for a spec blocked by the `blocked`
+    /// TAG with no graph edge).
+    // trace:BUG-772 | ai:claude
+    pub blocker: Option<BlockerOutlook>,
+}
+
+impl QueuedItem {
+    /// A queued item with no blocker detail — the common (non-`Blocked`) case.
+    // trace:BUG-772 | ai:claude
+    pub(crate) fn new(id: impl Into<String>, bucket: OpenBucket) -> Self {
+        Self {
+            id: id.into(),
+            bucket,
+            blocker: None,
+        }
+    }
+
+    /// Attach the blocked-item outlook.
+    // trace:BUG-772 | ai:claude
+    pub(crate) fn with_blocker(mut self, blocker: Option<BlockerOutlook>) -> Self {
+        self.blocker = blocker;
+        self
+    }
 }
 
 // BUG-753: what the LIVE drain already covers, so the footer can stop
@@ -1704,13 +1885,47 @@ pub(crate) fn render_path_to_empty(
     //     lease lands in OpenBucket::InFlight (line ~590), a status-only
     //     in-progress spec lands in OpenBucket::InProgress (line ~728).
     // trace:BUG-621 | ai:claude
+    // BUG-772: a spec blocked by a predecessor that is ITSELF authorized work
+    // already moving (queued/in-flight/Approved) is not an operator action —
+    // the block clears as the chain drains. Telling the operator to "resolve it
+    // out (`--status rejected`)" there advises destroying authorized work.
+    // trace:BUG-772 | ai:claude
+    let clears_itself = |i: &QueuedItem| {
+        i.bucket == OpenBucket::Blocked
+            && i.blocker
+                .as_ref()
+                .is_some_and(|b| b.kind == BlockerOutlookKind::Clears)
+    };
     for item in items.iter().filter(|i| {
-        i.bucket != OpenBucket::Actionable && !self_resolving(i.bucket) && !is_drift(i.bucket)
+        i.bucket != OpenBucket::Actionable
+            && !self_resolving(i.bucket)
+            && !is_drift(i.bucket)
+            && !clears_itself(i)
     }) {
+        // BUG-772: a genuinely-stuck blocked spec gets a blocker-aware sentence
+        // — unblock or re-scope, never a bare reject.
+        let sentence = match (item.bucket, item.blocker.as_ref()) {
+            (OpenBucket::Blocked, Some(outlook)) => blocked_action_sentence(outlook, &item.id),
+            _ => advance_action_sentence(item.bucket, &item.id),
+        };
         out.push_str(&format!(
-            "\n  {bullet} {:<10} needs you: {}",
+            "\n  {bullet} {:<10} needs you: {sentence}",
             item.id,
-            advance_action_sentence(item.bucket, &item.id)
+        ));
+    }
+    // BUG-772: the self-clearing chain — visible (so the operator knows why it
+    // is sitting there) but explicitly NOT an action for them.
+    // trace:BUG-772 | ai:claude
+    for item in items.iter().filter(|i| clears_itself(i)) {
+        let blockers = item
+            .blocker
+            .as_ref()
+            .map(|b| join_blockers(&b.blockers))
+            .unwrap_or_default();
+        out.push_str(&format!(
+            "\n  {bullet} {:<10} waiting on {blockers} — authorized work already moving; \
+             nothing for you to do, it unblocks when that ships",
+            item.id,
         ));
     }
     // BUG-765: the live drain's own specs must never read as stalled — the
@@ -2850,10 +3065,10 @@ mod tests {
 
     #[test]
     fn render_path_to_empty_disambiguates_drain_from_clear() {
-        let items = vec![QueuedItem {
-            id: "TASK-101".to_string(),
-            bucket: OpenBucket::Actionable,
-        }];
+        let items = vec![QueuedItem::new(
+            "TASK-101".to_string(),
+            OpenBucket::Actionable,
+        )];
         let f = render_path_to_empty(&items, None).expect("non-empty");
         assert!(f.starts_with("To empty this queue:"));
         // Ready count + BOTH the drain (does the work) and clear (drops them)
@@ -2869,22 +3084,10 @@ mod tests {
     #[test]
     fn render_path_to_empty_names_single_action_per_nonready_item() {
         let items = vec![
-            QueuedItem {
-                id: "TASK-1".to_string(),
-                bucket: OpenBucket::Actionable,
-            },
-            QueuedItem {
-                id: "STORY-2".to_string(),
-                bucket: OpenBucket::HeldForReview,
-            },
-            QueuedItem {
-                id: "TASK-3".to_string(),
-                bucket: OpenBucket::BuildSupervised,
-            },
-            QueuedItem {
-                id: "BUG-4".to_string(),
-                bucket: OpenBucket::AwaitingDecision,
-            },
+            QueuedItem::new("TASK-1".to_string(), OpenBucket::Actionable),
+            QueuedItem::new("STORY-2".to_string(), OpenBucket::HeldForReview),
+            QueuedItem::new("TASK-3".to_string(), OpenBucket::BuildSupervised),
+            QueuedItem::new("BUG-4".to_string(), OpenBucket::AwaitingDecision),
         ];
         let f = render_path_to_empty(&items, None).expect("non-empty");
         // One ready item still drives the drain/clear line.
@@ -2915,10 +3118,7 @@ mod tests {
             OpenBucket::AwaitingMerge,
             OpenBucket::LongLived,
         ] {
-            let items = vec![QueuedItem {
-                id: "TASK-894".to_string(),
-                bucket,
-            }];
+            let items = vec![QueuedItem::new("TASK-894", bucket)];
             let f = render_path_to_empty(&items, None).expect("non-empty");
             // The self-contradiction is gone: no "needs you" on a self-resolving
             // item, and no "needs you: ... nothing to do" pairing anywhere.
@@ -2944,10 +3144,10 @@ mod tests {
     // stalled. trace:BUG-621 | ai:claude
     #[test]
     fn render_path_to_empty_in_progress_without_lease_reads_as_stalled() {
-        let items = vec![QueuedItem {
-            id: "TASK-895".to_string(),
-            bucket: OpenBucket::InProgress,
-        }];
+        let items = vec![QueuedItem::new(
+            "TASK-895".to_string(),
+            OpenBucket::InProgress,
+        )];
         let f = render_path_to_empty(&items, None).expect("non-empty");
         assert!(
             !f.contains("needs you"),
@@ -2975,14 +3175,8 @@ mod tests {
     #[test]
     fn render_path_to_empty_live_drain_replaces_launch_with_watch() {
         let items = vec![
-            QueuedItem {
-                id: "TASK-1".to_string(),
-                bucket: OpenBucket::Actionable,
-            },
-            QueuedItem {
-                id: "BUG-2".to_string(),
-                bucket: OpenBucket::Actionable,
-            },
+            QueuedItem::new("TASK-1".to_string(), OpenBucket::Actionable),
+            QueuedItem::new("BUG-2".to_string(), OpenBucket::Actionable),
         ];
         let drain = DrainFooterOverlay {
             scheduled: ["TASK-1".to_string(), "BUG-2".to_string()]
@@ -3018,14 +3212,8 @@ mod tests {
     #[test]
     fn render_path_to_empty_live_drain_uncovered_ready_waits() {
         let items = vec![
-            QueuedItem {
-                id: "TASK-1".to_string(),
-                bucket: OpenBucket::Actionable,
-            },
-            QueuedItem {
-                id: "BUG-2".to_string(),
-                bucket: OpenBucket::Actionable,
-            },
+            QueuedItem::new("TASK-1".to_string(), OpenBucket::Actionable),
+            QueuedItem::new("BUG-2".to_string(), OpenBucket::Actionable),
         ];
         let drain = DrainFooterOverlay {
             scheduled: ["TASK-1".to_string()].into_iter().collect(),
@@ -3051,10 +3239,10 @@ mod tests {
     #[test]
     fn render_path_to_empty_live_drain_suppresses_stalled_hint_for_its_specs() {
         for covered_via in ["in_flight", "scheduled"] {
-            let items = vec![QueuedItem {
-                id: "TASK-1162".to_string(),
-                bucket: OpenBucket::InProgress,
-            }];
+            let items = vec![QueuedItem::new(
+                "TASK-1162".to_string(),
+                OpenBucket::InProgress,
+            )];
             let mut drain = DrainFooterOverlay::default();
             let set = ["TASK-1162".to_string()].into_iter().collect();
             match covered_via {
@@ -3082,10 +3270,10 @@ mod tests {
     // trace:BUG-765 | ai:claude
     #[test]
     fn render_path_to_empty_live_drain_keeps_stalled_hint_for_uncovered_specs() {
-        let items = vec![QueuedItem {
-            id: "TASK-895".to_string(),
-            bucket: OpenBucket::InProgress,
-        }];
+        let items = vec![QueuedItem::new(
+            "TASK-895".to_string(),
+            OpenBucket::InProgress,
+        )];
         let drain = DrainFooterOverlay {
             scheduled: ["BUG-2".to_string()].into_iter().collect(),
             in_flight: ["TASK-9".to_string()].into_iter().collect(),
@@ -3101,15 +3289,165 @@ mod tests {
     // trace:BUG-753 | ai:claude
     #[test]
     fn render_path_to_empty_no_drain_unchanged() {
-        let items = vec![QueuedItem {
-            id: "TASK-1".to_string(),
-            bucket: OpenBucket::Actionable,
-        }];
+        let items = vec![QueuedItem::new(
+            "TASK-1".to_string(),
+            OpenBucket::Actionable,
+        )];
         let f = render_path_to_empty(&items, None).expect("non-empty");
         assert!(f.contains("1 ready"));
         assert!(f.contains("aida burndown run"));
         assert!(f.contains("aida queue clear"));
         assert!(!f.contains("a drain is already working this queue"));
+    }
+
+    // BUG-772: the blocker-outlook classifier — dead end outranks a parked
+    // predecessor, which outranks the self-clearing chain.
+    // trace:BUG-772 | ai:claude
+    #[test]
+    fn classify_blockers_ranks_dead_end_over_parked_over_clears() {
+        let fact = |id: &str, status: Option<&str>| BlockerFact {
+            id: id.to_string(),
+            status: status.map(|s| s.to_string()),
+        };
+        // No edges → no outlook (a `blocked` TAG keeps the legacy phrasing).
+        assert_eq!(classify_blockers(&[]), None);
+
+        // Every predecessor is authorized work already moving → self-clearing.
+        // Statuses arrive in the store's Debug casing (`InProgress`) and are
+        // normalized inside.
+        for status in ["Approved", "Planned", "InProgress", "In Progress", "Done"] {
+            let out = classify_blockers(&[fact("TASK-1135", Some(status))]).expect("outlook");
+            assert_eq!(
+                out.kind,
+                BlockerOutlookKind::Clears,
+                "blocker status {status} should read as self-clearing"
+            );
+            assert_eq!(out.blockers, vec!["TASK-1135".to_string()]);
+        }
+
+        // A Draft / NeedsAttention predecessor is not cleared to start.
+        for status in ["Draft", "NeedsAttention"] {
+            let out = classify_blockers(&[
+                fact("TASK-1135", Some("Approved")),
+                fact("TASK-9", Some(status)),
+            ])
+            .expect("outlook");
+            assert_eq!(out.kind, BlockerOutlookKind::PredecessorParked);
+            // Only the deciding predecessor is named.
+            assert_eq!(out.blockers, vec!["TASK-9".to_string()]);
+        }
+
+        // A Rejected predecessor, or a dangling edge, is a dead end — and
+        // outranks both other kinds.
+        for blocker in [fact("TASK-9", Some("Rejected")), fact("gone", None)] {
+            let out = classify_blockers(&[
+                fact("TASK-1135", Some("Approved")),
+                fact("TASK-8", Some("Draft")),
+                blocker.clone(),
+            ])
+            .expect("outlook");
+            assert_eq!(out.kind, BlockerOutlookKind::DeadEnd);
+            assert_eq!(out.blockers, vec![blocker.id.clone()]);
+        }
+    }
+
+    // BUG-772: a spec blocked by a predecessor that is ITSELF queued/in-flight/
+    // Approved must NOT appear in the "needs you" footer, and must never be
+    // handed the `--status rejected` suggestion — that advises destroying
+    // authorized chained work the drain will unblock itself.
+    // trace:BUG-772 | ai:claude
+    #[test]
+    fn render_path_to_empty_blocked_by_live_predecessor_is_not_needs_you() {
+        let items = vec![
+            QueuedItem::new("TASK-1136", OpenBucket::Blocked).with_blocker(Some(BlockerOutlook {
+                kind: BlockerOutlookKind::Clears,
+                blockers: vec!["TASK-1135".to_string()],
+            })),
+        ];
+        let f = render_path_to_empty(&items, None).expect("non-empty");
+        assert!(
+            !f.contains("needs you"),
+            "a chain waiting on live work is not an operator action: {f}"
+        );
+        assert!(
+            !f.contains("--status rejected"),
+            "must never advise rejecting authorized chained work: {f}"
+        );
+        // It stays VISIBLE, and says what it is waiting on.
+        assert!(
+            f.contains("TASK-1136") && f.contains("TASK-1135"),
+            "the waiting chain should still be shown with its blocker: {f}"
+        );
+        assert!(
+            f.contains("nothing for you to do"),
+            "it should read as no-action: {f}"
+        );
+    }
+
+    // BUG-772: a spec blocked by a REJECTED predecessor IS the operator's call —
+    // but the suggestion is unblock-or-re-scope, not a bare reject.
+    // trace:BUG-772 | ai:claude
+    #[test]
+    fn render_path_to_empty_blocked_by_rejected_predecessor_suggests_unblock() {
+        let items = vec![
+            QueuedItem::new("TASK-1136", OpenBucket::Blocked).with_blocker(Some(BlockerOutlook {
+                kind: BlockerOutlookKind::DeadEnd,
+                blockers: vec!["TASK-1135".to_string()],
+            })),
+        ];
+        let f = render_path_to_empty(&items, None).expect("non-empty");
+        assert!(
+            f.contains("needs you"),
+            "a dead-end block is genuinely the operator's call: {f}"
+        );
+        assert!(
+            f.contains("unblock or re-scope") && f.contains("TASK-1135"),
+            "the suggestion names the blocker and the unblock verb: {f}"
+        );
+        assert!(
+            !f.contains("--status rejected"),
+            "even a dead end is not a bare-reject suggestion: {f}"
+        );
+    }
+
+    // BUG-772: a Draft/NeedsAttention predecessor needs a person — on the
+    // BLOCKER, not on the dependent. trace:BUG-772 | ai:claude
+    #[test]
+    fn render_path_to_empty_blocked_by_parked_predecessor_points_at_the_blocker() {
+        let items = vec![
+            QueuedItem::new("TASK-1136", OpenBucket::Blocked).with_blocker(Some(BlockerOutlook {
+                kind: BlockerOutlookKind::PredecessorParked,
+                blockers: vec!["TASK-1135".to_string()],
+            })),
+        ];
+        let f = render_path_to_empty(&items, None).expect("non-empty");
+        assert!(f.contains("needs you"), "{f}");
+        assert!(
+            f.contains("aida why TASK-1135"),
+            "the action points at the BLOCKER: {f}"
+        );
+        assert!(!f.contains("--status rejected"), "{f}");
+    }
+
+    // BUG-772: a Blocked item with NO resolved outlook (the `blocked` TAG with
+    // no graph edge) keeps the pre-existing phrasing — the fix narrows the
+    // reject suggestion, it doesn't drop the bucket. trace:BUG-772 | ai:claude
+    #[test]
+    fn render_path_to_empty_blocked_without_outlook_keeps_legacy_sentence() {
+        let items = vec![QueuedItem::new("TASK-1136", OpenBucket::Blocked)];
+        let f = render_path_to_empty(&items, None).expect("non-empty");
+        assert!(f.contains("needs you"), "{f}");
+        assert!(f.contains("aida edit TASK-1136 --status rejected"), "{f}");
+    }
+
+    // BUG-772: a long chain truncates rather than running off the line.
+    // trace:BUG-772 | ai:claude
+    #[test]
+    fn join_blockers_truncates_long_chains() {
+        let ids: Vec<String> = (1..=5).map(|n| format!("TASK-{n}")).collect();
+        let s = join_blockers(&ids);
+        assert!(s.starts_with("TASK-1, TASK-2, TASK-3"), "{s}");
+        assert!(s.ends_with("+2 more"), "{s}");
     }
 
     // TASK-723: multi-reason — derived + finding-link + residual note.

@@ -710,6 +710,46 @@ pub(crate) fn dead_queue_entries<'a>(
         .collect()
 }
 
+/// BUG-772: the UNSATISFIED `BlockedBy` predecessors of `req`, as the
+/// path-to-empty footer's plain-data facts — display id + status, with `None`
+/// status marking a dangling edge (target no longer in the store). A Completed
+/// predecessor is a satisfied edge and is omitted, matching
+/// `aida_core::pickability::blocked_by_incomplete`. The verdict over these facts
+/// is the pure `burndown::classify_blockers`; this is just the store walk.
+// trace:BUG-772 | ai:claude
+pub(crate) fn unsatisfied_blocker_facts(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+) -> Vec<burndown::BlockerFact> {
+    req.relationships
+        .iter()
+        .filter(|r| matches!(r.rel_type, aida_core::RelationshipType::BlockedBy))
+        .filter_map(|rel| {
+            match store.requirements.iter().find(|r| r.id == rel.target_id) {
+                Some(target)
+                    if matches!(target.status, aida_core::RequirementStatus::Completed) =>
+                {
+                    None // satisfied edge
+                }
+                Some(target) => Some(burndown::BlockerFact {
+                    id: target
+                        .agreed_id
+                        .clone()
+                        .or_else(|| target.spec_id.clone())
+                        .unwrap_or_else(|| target.id.to_string()),
+                    status: Some(format!("{:?}", target.status)),
+                }),
+                // Dangling edge — a blocker we can't resolve. Defensively a
+                // dead end (never silently "it'll clear on its own").
+                None => Some(burndown::BlockerFact {
+                    id: "a deleted spec".to_string(),
+                    status: None,
+                }),
+            }
+        })
+        .collect()
+}
+
 /// TASK-1052: opportunistic queue self-heal on read. Drops dead routed entries
 /// (archived/Completed/Rejected targets) from the user's local queue so the
 /// underlying queue stays clean, not just the view. Cheap — reuses the
@@ -2107,15 +2147,43 @@ pub(crate) fn handle_queue_command(
                             .map(|f| (f.id.to_ascii_uppercase(), f))
                             .collect();
 
+                    // BUG-772: index the store by display id so a Blocked item
+                    // can resolve its own BlockedBy predecessors — the footer
+                    // must know whether a block clears itself (predecessor is
+                    // authorized work already moving) or is a real dead end,
+                    // instead of advising `--status rejected` for every blocked
+                    // spec. trace:BUG-772 | ai:claude
+                    let req_by_id: std::collections::HashMap<String, &aida_core::Requirement> =
+                        store
+                            .requirements
+                            .iter()
+                            .map(|r| {
+                                let display = r
+                                    .agreed_id
+                                    .clone()
+                                    .or_else(|| r.spec_id.clone())
+                                    .unwrap_or_else(|| r.id.to_string());
+                                (display.to_ascii_uppercase(), r)
+                            })
+                            .collect();
+
                     let items: Vec<burndown::QueuedItem> = queued_ids
                         .into_iter()
                         .filter_map(|display| {
-                            let facts = facts_by_id.get(&display.to_ascii_uppercase())?;
+                            let key = display.to_ascii_uppercase();
+                            let facts = facts_by_id.get(&key)?;
                             let (bucket, _reason) = burndown::explain_open(facts);
-                            Some(burndown::QueuedItem {
-                                id: display,
-                                bucket,
-                            })
+                            // Only a Blocked item needs the predecessor walk.
+                            let blocker = (bucket == burndown::OpenBucket::Blocked)
+                                .then(|| {
+                                    req_by_id.get(&key).and_then(|req| {
+                                        burndown::classify_blockers(&unsatisfied_blocker_facts(
+                                            req, &store,
+                                        ))
+                                    })
+                                })
+                                .flatten();
+                            Some(burndown::QueuedItem::new(display, bucket).with_blocker(blocker))
                         })
                         .collect();
 
