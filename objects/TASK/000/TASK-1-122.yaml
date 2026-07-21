@@ -1,5 +1,6 @@
 id: 019f8244-2882-74f2-909f-6d8251cd9063
 spec_id: TASK-1-122
+agreed_id: TASK-146
 title: aida watch follow-mode replays entire historical events.jsonl backlog on start
 description: |-
   aida watch follow-mode replays entire historical events.jsonl backlog on start
