@@ -4111,6 +4111,55 @@ pub enum AutopilotCommand {
         #[clap(long)]
         note: Option<String>,
     },
+    /// List every action autopilot actually EXECUTED, with the prior state each
+    /// one can be restored to. Distinct from `audit`, which lists the dry-run
+    /// projection of what the envelope WOULD decide.
+    // trace:TASK-1018 | ai:claude — plain `//` keeps the marker out of `--help`.
+    Executions {
+        /// Cap the number of rows shown (0 = all).
+        #[clap(long, default_value = "50")]
+        limit: usize,
+        /// Only show executions that have NOT been reversed.
+        #[clap(long)]
+        open: bool,
+        /// Emit a stable JSON shape instead of the table.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Undo one executed autopilot action, restoring the state recorded with it.
+    ///
+    /// TARGET is an execution id (from `aida autopilot executions`) or a
+    /// SPEC-ID, which reverts that spec's most recent un-reverted action. The
+    /// reversal is derived from the recorded prior state alone, applied through
+    /// the same paths `aida edit` / `aida queue` use, and itself recorded.
+    // trace:TASK-1018 | ai:claude
+    Revert {
+        /// Execution id or SPEC-ID to undo.
+        #[clap(value_name = "TARGET")]
+        target: String,
+        /// Show the restore steps without applying them.
+        #[clap(long)]
+        dry_run: bool,
+        /// Why the action is being undone.
+        #[clap(long)]
+        note: Option<String>,
+        /// Emit a stable JSON shape instead of the human summary.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Rebuild the local execution index from the durable audit comments on the
+    /// specs themselves.
+    ///
+    /// The index under `.aida/` is per-clone runtime state; the trail that
+    /// survives a fresh clone, a different machine, or a different agent is the
+    /// comment on each spec. This refills the index from it. Append-only and
+    /// idempotent — nothing already indexed is rewritten.
+    // trace:TASK-1018 | ai:claude
+    Reindex {
+        /// Report what would be recovered without writing the index.
+        #[clap(long)]
+        dry_run: bool,
+    },
 }
 
 /// Fasttrack-lane introspection subcommands.
@@ -9932,9 +9981,10 @@ pub enum Command {
     /// dry-runs the four-gate evaluation over the current groom candidates and
     /// shows, per spec, what it WOULD decide (and which gate stopped it) without
     /// touching a single spec; `audit` lists the recorded verdicts; `challenge`
-    /// marks a recorded verdict as reversed. Autopilot has NO authority to
-    /// approve/reject/queue autonomously — that is intentionally not wired.
-    // trace:TASK-1147 | ai:claude
+    /// marks a recorded verdict as reversed. `executions` lists the actions
+    /// autopilot actually took, and `revert` undoes one of them from the prior
+    /// state recorded alongside it.
+    // trace:TASK-1147 trace:TASK-1018 | ai:claude
     #[clap(subcommand)]
     Autopilot(AutopilotCommand),
 

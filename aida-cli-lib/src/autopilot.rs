@@ -11,9 +11,11 @@
 //! may auto-execute, must only be proposed (held), or must be escalated.
 //!
 //! What is wired: the read-only inspect/audit/challenge surface (TASK-1147),
-//! the `aida zen` draft approve-gate (TASK-1037), and the mode-composition
+//! the `aida zen` draft approve-gate (TASK-1037), the mode-composition
 //! precedence contract [`effective_envelope`] (TASK-1020, the TASK-0432
-//! ratification). What is deliberately NOT wired: a `groom --autopilot`
+//! ratification), and the durable execution audit + one-command reversal in the
+//! sibling [`crate::autopilot_audit`] (TASK-1018, the TASK-0430 design). What is
+//! deliberately NOT wired: a `groom --autopilot`
 //! execution path — granting real approve/reject/queue authority is
 //! keystone-autonomy the EPIC-0428 TASK-1147 decision defers.
 //!
@@ -77,6 +79,40 @@ impl ActionClass {
             ActionClass::Route => "route",
             ActionClass::Comment => "comment",
             ActionClass::Ask => "ask",
+        }
+    }
+
+    /// Whether this action class is REVERSIBLE — i.e. a later command can put
+    /// the spec back the way it was from a recorded prior state.
+    ///
+    /// This is the structural half of the gate-4 risk ceiling: gate 4 bounds a
+    /// decision by its *risk read*, and this bounds it by its *action shape*.
+    /// [`crate::autopilot_audit::execution_record`] refuses to mint a durable
+    /// execution record for an irreversible class, so "every `Execute` outcome
+    /// has a one-command reversal" is enforced at the type level rather than by
+    /// convention.
+    ///
+    /// Every class in the taxonomy is reversible today (that is *why* the
+    /// default authority table can grant `auto` at all): status flips restore,
+    /// tags remove, queue entries pop, and the two append-only actions
+    /// (`Comment` / `Ask`) reverse by retraction note. A future irreversible
+    /// class (delete, force-push, external-side-effect) returns `false` here and
+    /// is thereby barred from auto-execution.
+    // trace:TASK-1018 | ai:claude
+    pub(crate) fn is_reversible(self) -> bool {
+        match self {
+            ActionClass::Approve
+            | ActionClass::Reject
+            | ActionClass::Dedupe
+            | ActionClass::Tag
+            | ActionClass::Queue
+            | ActionClass::Park
+            | ActionClass::Route => true,
+            // Append-only: the substrate keeps the comment/finding, so the
+            // reversal is a recorded RETRACTION rather than a deletion. Still
+            // reversible in the sense that matters — the operator can undo the
+            // effect with one command and the trail stays honest.
+            ActionClass::Comment | ActionClass::Ask => true,
         }
     }
 
@@ -147,6 +183,19 @@ pub(crate) enum Grounding {
     /// Type-C: synthesized in-flight context a cold boot can't reconstruct —
     /// escalate.
     TypeC,
+}
+
+impl Grounding {
+    /// Stable lowercase token for display + the durable audit record.
+    // trace:TASK-1018 | ai:claude
+    pub(crate) fn token(self) -> &'static str {
+        match self {
+            Grounding::TypeA => "type-a",
+            Grounding::RecordedB => "recorded-b",
+            Grounding::UnrecordedB => "unrecorded-b",
+            Grounding::TypeC => "type-c",
+        }
+    }
 }
 
 /// True iff the grounding is resolvable on a cold boot — Type-A (recorded
@@ -525,11 +574,14 @@ pub(crate) fn project_decisions(
 
 /// One line of the local autopilot audit log (`.aida/autopilot-audit.jsonl`).
 ///
-/// TASK-0430's durable audit does not exist yet, so TASK-1147 ships this
-/// lightweight append-only log; when the durable store lands, the same reader
-/// can surface it instead. Two entry kinds share one shape:
+/// Two PROJECTION entry kinds share one shape here:
 ///   - `decision`  — a projected envelope verdict for one spec + action.
 ///   - `challenge` — a reversal marker targeting a prior `decision` entry's id.
+///
+/// The same log also carries the TASK-0430 durable EXECUTION rows (`execution`
+/// / `reversal`, defined in [`crate::autopilot_audit`]). One file, one format,
+/// four discriminated kinds: readers filter on `type`, so the projection
+/// readers below and the execution readers there never see each other's rows.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct AuditEntry {
     /// Stable short id (`d########` for decisions, `c########` for challenges).
@@ -558,8 +610,11 @@ pub(crate) struct AuditEntry {
     pub note: Option<String>,
 }
 
-/// FNV-1a → 8 hex chars, prefixed to keep decision / challenge ids distinct.
-fn short_id(prefix: char, seed: &str) -> String {
+/// FNV-1a → 8 hex chars, prefixed to keep decision / challenge / execution /
+/// reversal ids distinct. Shared with [`crate::autopilot_audit`] so every row in
+/// the one log mints ids the same way.
+// trace:TASK-1018 | ai:claude
+pub(crate) fn short_id(prefix: char, seed: &str) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for b in seed.bytes() {
         hash ^= b as u64;
@@ -659,6 +714,10 @@ pub(crate) fn read_audit_entries(project_root: &Path) -> std::io::Result<Vec<Aud
         .lines()
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str::<AuditEntry>(l).ok())
+        // The log is shared with the TASK-1018 durable `execution` / `reversal`
+        // rows; keep this reader to the PROJECTION kinds so the two surfaces
+        // can never cross-talk. trace:TASK-1018
+        .filter(|e: &AuditEntry| e.kind == "decision" || e.kind == "challenge")
         .collect())
 }
 
@@ -1073,6 +1132,40 @@ mod tests {
         assert_eq!(resolve_challenge_target(&entries, "TASK-9"), None);
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- TASK-1018: reversibility is a precondition for auto-execution ----
+
+    #[test]
+    fn every_auto_authority_action_is_reversible() {
+        // INVARIANT: an action the default envelope may auto-execute MUST be
+        // reversible — otherwise "every Execute outcome has a one-command
+        // reversal" is unenforceable. Widening `[autopilot]` cannot break this
+        // either: the durable record refuses to mint for an irreversible class.
+        let env = AutopilotEnvelope::default();
+        for action in ALL_ACTIONS {
+            if env.authority_for(action) == Authority::Auto {
+                assert!(
+                    action.is_reversible(),
+                    "{action:?} is auto-executable but not reversible"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn grounding_tokens_are_stable_and_distinct() {
+        // The durable audit record stores the grounding as a token; drift there
+        // would silently rewrite history's meaning.
+        let tokens = [
+            Grounding::TypeA.token(),
+            Grounding::RecordedB.token(),
+            Grounding::UnrecordedB.token(),
+            Grounding::TypeC.token(),
+        ];
+        assert_eq!(tokens, ["type-a", "recorded-b", "unrecorded-b", "type-c"]);
+        let unique: HashSet<&str> = tokens.iter().copied().collect();
+        assert_eq!(unique.len(), tokens.len());
     }
 
     // ---- TASK-1020: mode-composition precedence (effective_envelope) ----
