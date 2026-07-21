@@ -448,13 +448,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 019f82ea-c965-7d31-bd9d-ccc34ffc380b
-  position: 343000
-  added_by: joe
-  added_at: 2026-07-21T04:24:18.038887592Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019f82b2-b280-7720-9531-7b9bd0fecd56
   position: 344000
   added_by: joe
