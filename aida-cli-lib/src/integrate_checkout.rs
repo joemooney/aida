@@ -253,6 +253,9 @@ mod tests {
     // acquisition against a live first holder is still refused.
     #[test]
     fn acquire_drain_lock_still_refuses_a_second_authority() {
+        // trace:TASK-148 | ai:claude — same borrow/force env race as the
+        // drain_lock refusal tests; isolate before touching the real acquire.
+        let _env = crate::drain_lock::test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let _held = crate::drain_lock::acquire_drain_lock(root, "queue integrate").unwrap();
