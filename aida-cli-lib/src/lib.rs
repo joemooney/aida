@@ -70512,6 +70512,17 @@ fn orchestrator_phase_child_env(
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
+    /// BUG-770: the real driver already knows the project it is driving, so it
+    /// hands the orchestrator that root rather than letting the escalation
+    /// epilogue re-derive one from the process cwd. This is the only
+    /// implementor that returns `Some` — the test drivers keep the fail-safe
+    /// `None` default, which is what stops `cargo test` from appending
+    /// synthetic escalation events to the developer's real supervision stream.
+    // trace:BUG-770 | ai:claude
+    fn events_root(&self) -> Option<std::path::PathBuf> {
+        Some(self.project_root.clone())
+    }
+
     fn run_implementer(
         &mut self,
     ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
