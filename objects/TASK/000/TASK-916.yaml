@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T18:22:07.259989719Z
-modified_at: 2026-07-15T02:00:37.015472459Z
+modified_at: 2026-07-21T04:30:11.883987147Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,3 +16,6 @@ relationships:
 - rel_type: Child
   target_id: 019edd85-f965-76e0-90bf-ce458f1de256
   created_at: 2026-06-26T18:22:12.637184637Z
+deferred: true
+deferred_at: 2026-07-21T04:30:11.883987147Z
+deferred_until: the SPIKE-67 field study is actually run over weeks — this is the harvest, not a code task
