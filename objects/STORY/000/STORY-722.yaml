@@ -6,12 +6,12 @@ description: |-
   Smallest valuable competition. aida zen SPEC --compete fans CLAUDE + CODEX to independently implement the same spec (separate worktrees, same acceptance, no shared context) producing 2 candidate branches. JUDGE: run each candidates CI (a CI-failing candidate is eliminated, no debate); then ONE BLIND reviewer scores the passers side-by-side against acceptance + code quality + diff-size (blind = not told which vendor wrote which). SELECT: highest-scoring passer wins, merge it, close/discard the loser. RECORD the outcome (winner vendor, scores, spec-kind) for dispatch-policy data. Depends on TASK-1048 (the vendor selector). DEFER to follow-ons: N-greater-than-2 agents, AGY in the mix, runner-up synthesis/grafting, the dispatch-policy learning loop. Parent EPIC-57.
 
   RATIFIED RESIDUAL FORKS (operator, 2026-07-20) - binding: (a) judge blinding = the reviewer sees candidate-A/candidate-B diffs with vendor identity stripped from branch names and commit authorship in everything shown to it; (b) outcome record = one CompeteOutcome event row in .aida/events.jsonl (winner vendor, per-candidate scores, spec-kind) plus a spec comment - no new file format; (c) loser branch deleted, work discarded, the record is the learning. Deviation from these or from the spec's own decisions (2 vendors, CI-eliminates, one blind reviewer, N>2/AGY deferred) is a punt, not a judgment call.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T04:49:29.067476757Z
-modified_at: 2026-07-21T01:51:15.506733548Z
+modified_at: 2026-07-21T02:00:52.853670193Z
 req_type: Story
 tags:
 - bake-off
@@ -24,8 +24,24 @@ relationships:
 - rel_type: Child
   target_id: 019f16dc-1929-7573-a289-6536dae296fc
   created_at: 2026-06-30T04:49:34.270442200Z
+history:
+- id: 019f8267-8f6f-7e81-b073-97b40ce86c96
+  author: aida-auto-bump
+  timestamp: 2026-07-21T02:00:52.847519220Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8267-8f75-71c2-8594-beae765fe081
+  timestamp: 2026-07-21T02:00:52.853669663Z
+  agent: aida
+  commit_sha: c7e0f67f33373b668eaef86f7157f10f003a1da3
+  summary: Completed via merge c7e0f67f
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T01:51:15.506733548Z
   implemented_by: joe
+  completed_at: 2026-07-21T02:00:52.847420488Z
+  completion_sha: c7e0f67f33373b668eaef86f7157f10f003a1da3
