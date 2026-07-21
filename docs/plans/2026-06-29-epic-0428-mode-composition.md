@@ -2,11 +2,28 @@
 
 Date: 2026-06-29
 Specs: TASK-0432 (parent EPIC-0428) — depends on TASK-0429 (envelope)
-Status: Draft — **design only, needs master-advisor sign-off before any code**
+Status: Draft — **design only, needs master-advisor sign-off before any code**. Precedence ratified by TASK-1020; the audit `mode` field recorded by TASK-1014.
 Complexity: ~60 prod LOC + ~80 test LOC + doc edits when built, 0 commits now, risk medium (precedence bugs are silent-degradation bugs)
 
 <!-- Do NOT implement. This plan RATIFIES the surface the other three assumed
-     (config posture + one flag) and defines precedence. -->
+     (config posture + one flag) and defines precedence.
+
+     Two slices have landed against it:
+
+     - TASK-1020: `autopilot::effective_envelope(base, headless, solo_posture)`
+       — the demote-only runtime tightening, applied by `aida autopilot inspect`.
+     - TASK-1014: the composition is now RECORDED, in
+       `aida-cli-lib/src/autopilot_audit.rs`. `ExecutionRecord.mode` is derived
+       at mint from the producing surface plus the live solo posture
+       (`composition_mode`), read back with a surface-only fallback for
+       pre-`mode` rows (`record_mode`), filtered by
+       `aida autopilot executions --mode <token|layer>` (`mode_matches`), and
+       annotated on every composed row of the table (`mode_annotation`). The
+       token vocabulary is `autopilot` / `zen+autopilot` / `solo+autopilot`,
+       with layers additive (`solo+zen+autopilot`) rather than lossy. Noting
+       product-sourced decisions taken during a headless drain is TASK-1022's
+       separate half. -->
+
 
 ## Approach
 

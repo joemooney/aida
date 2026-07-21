@@ -48,9 +48,10 @@
 //!   decision's evidence came from a product handoff. The filter and the
 //!   evidence CONVENTION that feeds it are live (see "Product-sourced evidence"
 //!   below); the producer that emits product evidence is TASK-0431's half.
-//! - `mode` — TASK-1014/TASK-1022: which composition mode produced the decision
-//!   (`autopilot` / `zen+autopilot` / `solo+autopilot`), including whether it was
-//!   taken during a headless drain.
+//! - `mode` — which composition mode produced the decision (`autopilot` /
+//!   `zen+autopilot` / `solo+autopilot`). Derived at mint from the surface and
+//!   the live solo posture (see "Composition mode" below); TASK-1014. Noting
+//!   product-sourced decisions taken during a headless drain is TASK-1022's half.
 //! - `extra` — a `#[serde(flatten)]` catch-all so a record written by a NEWER
 //!   binary round-trips through an older one without losing fields.
 //!
@@ -218,8 +219,12 @@ pub(crate) struct ExecutionRecord {
     /// RESERVED (TASK-1019): cited substrate backing the grounding.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence: Vec<String>,
-    /// RESERVED (TASK-1014 / TASK-1022): the composition mode that produced the
-    /// decision (`autopilot` / `zen+autopilot` / `solo+autopilot`).
+    /// The composition mode that produced the decision (`autopilot` /
+    /// `zen+autopilot` / `solo+autopilot`). Derived at mint from the producing
+    /// surface plus the live solo posture ([`composition_mode`]); absent only on
+    /// a row minted before the field was written, where [`record_mode`] falls
+    /// back to the surface alone.
+    // trace:TASK-1014 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
     /// `Some(true)` when the decision's evidence recorded a product handoff —
@@ -362,6 +367,109 @@ pub(crate) fn product_annotation(rec: &ExecutionRecord) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
+// Composition mode
+// ---------------------------------------------------------------------------
+//
+// Autopilot is a GROOMING-stage posture; the three-mode autonomy ladder and the
+// solo presence marker are DRAINING-stage/session-wide axes. They compose rather
+// than conflict, so "autopilot did this" is never the whole story: the same
+// envelope executing under an operator-invoked `aida zen`, under an active solo
+// posture, or on its own during a headless `groom --autopilot` are materially
+// different levels of supervision. A trail that flattens them cannot answer the
+// question an operator actually asks of it — "what was I doing when this
+// landed?" — and cannot tell a supervised one-shot apart from an unattended pass
+// after the fact.
+//
+// `mode` is that answer, recorded at mint from two things already in hand: the
+// SURFACE that produced the action (the record's `source`) and the solo POSTURE
+// in effect at the time. Composed outermost-first and always ending in
+// `autopilot`, so the vocabulary is `autopilot` / `zen+autopilot` /
+// `solo+autopilot` — and a composition of both layers keeps both rather than
+// silently dropping one.
+// trace:TASK-1014 | ai:claude
+
+/// The innermost layer, present on every mode: the envelope itself. Alone, it
+/// is the bare mode — a `groom --autopilot` pass with nothing composed over it.
+pub(crate) const MODE_AUTOPILOT: &str = "autopilot";
+/// The `zen` SURFACE layer: an operator-invoked one-shot composed the action.
+/// Matched against [`ExecutionRecord::source`].
+pub(crate) const MODE_LAYER_ZEN: &str = "zen";
+/// The solo POSTURE layer: the operator is the only one home, so the session
+/// carries the safe-vs-keystone partition `presence::resolve_solo_posture` maps.
+pub(crate) const MODE_LAYER_SOLO: &str = "solo";
+
+/// PURE: the composition mode token for one action.
+///
+/// `solo` is the OUTER layer — a posture spanning the whole session — and the
+/// surface is the inner one, so the three named compositions come out as
+/// `autopilot`, `zen+autopilot` and `solo+autopilot`. A zen one-shot taken while
+/// solo is active records BOTH (`solo+zen+autopilot`): the layers are additive,
+/// because dropping one to force the token into a fixed set of three would make
+/// the record less true than the run it describes.
+// trace:TASK-1014 | ai:claude
+pub(crate) fn composition_mode(source: &str, solo: bool) -> String {
+    let mut layers: Vec<&str> = Vec::new();
+    if solo {
+        layers.push(MODE_LAYER_SOLO);
+    }
+    // `solo` is a posture, so it composes with any surface; `zen` is the one
+    // surface that is itself an autonomy composition. Every other source
+    // (`groom`, `inspect`, …) IS the bare envelope and adds no layer — the
+    // record's `source` already names it.
+    if source.trim().eq_ignore_ascii_case(MODE_LAYER_ZEN) {
+        layers.push(MODE_LAYER_ZEN);
+    }
+    layers.push(MODE_AUTOPILOT);
+    layers.join("+")
+}
+
+/// PURE: the mode to REPORT for one record.
+///
+/// Reads the recorded field FIRST and falls back to deriving from the surface,
+/// so a row minted before the field was written still reports a truthful
+/// composition instead of a blank. The fallback deliberately assumes solo was
+/// OFF: the posture is unrecoverable after the fact, and under-claiming
+/// supervision is the safe direction to be wrong in.
+// trace:TASK-1014 | ai:claude
+pub(crate) fn record_mode(rec: &ExecutionRecord) -> String {
+    match rec.mode.as_deref().map(str::trim) {
+        Some(m) if !m.is_empty() => m.to_string(),
+        _ => composition_mode(&rec.source, false),
+    }
+}
+
+/// PURE: the `--mode` filter predicate.
+///
+/// A full token (`zen+autopilot`) or the bare `autopilot` matches EXACTLY —
+/// `--mode autopilot` asks for the un-composed actions, and a layer match would
+/// quietly degrade that into "everything", since every mode ends in the
+/// envelope. Any other single word is read as a LAYER, so `--mode solo` selects
+/// every solo-composed action however else it was composed. Case-insensitive
+/// throughout: the tokens are recorded lowercase, an operator need not know.
+// trace:TASK-1014 | ai:claude
+pub(crate) fn mode_matches(rec: &ExecutionRecord, wanted: &str) -> bool {
+    let wanted = wanted.trim();
+    if wanted.is_empty() {
+        return true;
+    }
+    let mode = record_mode(rec);
+    if wanted.contains('+') || wanted.eq_ignore_ascii_case(MODE_AUTOPILOT) {
+        return mode.eq_ignore_ascii_case(wanted);
+    }
+    mode.split('+')
+        .any(|l| l.trim().eq_ignore_ascii_case(wanted))
+}
+
+/// PURE: the one-line composition annotation for the executions table, or
+/// `None` when the action ran under the bare envelope — the default needs no
+/// comment, and annotating every row would bury the composed ones.
+// trace:TASK-1014 | ai:claude
+pub(crate) fn mode_annotation(rec: &ExecutionRecord) -> Option<String> {
+    let mode = record_mode(rec);
+    (mode != MODE_AUTOPILOT).then(|| format!("mode: {mode}"))
+}
+
+// ---------------------------------------------------------------------------
 // Minting (pure)
 // ---------------------------------------------------------------------------
 
@@ -412,8 +520,10 @@ impl std::error::Error for AuditError {}
 /// Refuses (rather than silently degrading) on all three reversibility
 /// preconditions — see the module doc. `seq` disambiguates records minted in the
 /// same millisecond so ids stay unique within a batch, exactly as
-/// `autopilot::decision_entry` does.
-// trace:TASK-1018 | ai:claude
+/// `autopilot::decision_entry` does. `solo` is the solo posture in effect at the
+/// time, the one composition layer the record cannot recover from its own
+/// fields — [`record_execution`] resolves it so no producer has to remember to.
+// trace:TASK-1018 trace:TASK-1014 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn execution_record(
     ts: &str,
@@ -423,6 +533,7 @@ pub(crate) fn execution_record(
     authority: Authority,
     actor: &str,
     source: &str,
+    solo: bool,
     prior: PriorState,
 ) -> Result<ExecutionRecord, AuditError> {
     if outcome != Outcome::Execute {
@@ -467,7 +578,10 @@ pub(crate) fn execution_record(
         // cites a product handoff becomes filterable without touching this call.
         from_product: from_product_flag(&decision.evidence),
         evidence: decision.evidence.clone(),
-        mode: None,
+        // TASK-1014: recorded at mint, because supervision context is exactly
+        // the thing that cannot be reconstructed later — the posture has moved
+        // on by the time anyone reads the trail.
+        mode: Some(composition_mode(source, solo)),
         extra: BTreeMap::new(),
     })
 }
@@ -858,7 +972,12 @@ pub(crate) fn read_reversals(project_root: &Path) -> std::io::Result<Vec<Reversa
 /// would leave the caller unable to complete something that already happened.
 /// The loudness matters: an unaudited execution is precisely the state this
 /// machinery exists to prevent.
-// trace:TASK-1018 trace:TASK-0430 | ai:claude
+///
+/// TASK-1014: the composition mode is resolved HERE, not threaded through the
+/// producers — the solo posture is a runtime read, so it belongs next to the
+/// clock, and deriving it in the one recording surface means a producer cannot
+/// forget to record the supervision context its action ran under.
+// trace:TASK-1018 trace:TASK-0430 trace:TASK-1014 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn record_execution(
     project_root: &Path,
@@ -869,8 +988,12 @@ pub(crate) fn record_execution(
     source: &str,
     prior: PriorState,
 ) -> Result<ExecutionRecord, AuditError> {
-    let ts = chrono::Utc::now().to_rfc3339();
-    let rec = execution_record(&ts, 0, decision, outcome, authority, actor, source, prior)?;
+    let now = chrono::Utc::now();
+    let ts = now.to_rfc3339();
+    let solo = crate::presence::current_solo(now);
+    let rec = execution_record(
+        &ts, 0, decision, outcome, authority, actor, source, solo, prior,
+    )?;
     if let Err(e) = write_durable_comment(project_root, &rec.spec_id, &audit_comment(&rec)) {
         eprintln!(
             "  warning: the durable audit comment could not be written ({e}) — \
@@ -1122,6 +1245,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             PriorState::from_status("draft"),
         )
         .expect("an executed, reversible, prior-state-bearing action mints");
@@ -1140,12 +1264,13 @@ mod tests {
         assert_eq!(rec.source, "zen");
         assert_eq!(rec.prior.status.as_deref(), Some("draft"));
         // Evidence rides across from the decision (the TASK-1019 extension
-        // point); mode / from_product stay reserved-and-unset.
+        // point); mode is derived from the surface + posture (TASK-1014);
+        // from_product stays absent with no product handoff in the evidence.
         assert_eq!(
             rec.evidence,
             vec!["aida zen <draft> invocation".to_string()]
         );
-        assert_eq!(rec.mode, None);
+        assert_eq!(rec.mode.as_deref(), Some("zen+autopilot"));
         assert_eq!(rec.from_product, None);
     }
 
@@ -1168,6 +1293,7 @@ mod tests {
                 Authority::Auto,
                 "joe",
                 "zen",
+                false,
                 PriorState::from_status("draft"),
             )
             .unwrap_err();
@@ -1187,6 +1313,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             PriorState::default(),
         )
         .unwrap_err();
@@ -1206,6 +1333,7 @@ mod tests {
                 Authority::Auto,
                 "joe",
                 "zen",
+                false,
                 PriorState::from_status("draft"),
             )
             .unwrap()
@@ -1258,6 +1386,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             PriorState::from_status("draft"),
         )
         .expect("a reversible executed action with prior state mints")
@@ -1382,6 +1511,167 @@ mod tests {
         );
     }
 
+    // ---- composition mode + the --mode filter ------------------------------
+
+    /// Mint under a named surface and solo posture — the two inputs the
+    /// composition mode is derived from.
+    fn mint_under(source: &str, solo: bool) -> ExecutionRecord {
+        execution_record(
+            "2026-07-20T00:00:00Z",
+            0,
+            &decision("TASK-1", ActionClass::Approve),
+            Outcome::Execute,
+            Authority::Auto,
+            "joe",
+            source,
+            solo,
+            PriorState::from_status("draft"),
+        )
+        .expect("a reversible executed action with prior state mints")
+    }
+
+    #[test]
+    fn mode_records_the_three_supervision_levels_at_mint() {
+        // The vocabulary the trail is read with: autopilot alone, autopilot
+        // under an operator-invoked one-shot, autopilot under a solo posture.
+        assert_eq!(
+            mint_under("groom", false).mode.as_deref(),
+            Some("autopilot")
+        );
+        assert_eq!(
+            mint_under("zen", false).mode.as_deref(),
+            Some("zen+autopilot")
+        );
+        assert_eq!(
+            mint_under("groom", true).mode.as_deref(),
+            Some("solo+autopilot")
+        );
+    }
+
+    #[test]
+    fn mode_keeps_both_layers_when_a_zen_one_shot_runs_under_solo() {
+        // Layers are additive: dropping one to force the token into a fixed set
+        // of three would make the record less true than the run it describes.
+        assert_eq!(
+            mint_under("zen", true).mode.as_deref(),
+            Some("solo+zen+autopilot")
+        );
+    }
+
+    #[test]
+    fn unnamed_surfaces_record_the_bare_envelope() {
+        // Every other surface IS the bare envelope — `source` already names it,
+        // so the mode must not invent a layer for it.
+        for source in ["", "inspect", "groom", "something-new"] {
+            assert_eq!(
+                mint_under(source, false).mode.as_deref(),
+                Some("autopilot"),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn zen_surface_matches_case_insensitively() {
+        assert_eq!(
+            mint_under("ZEN", false).mode.as_deref(),
+            Some("zen+autopilot")
+        );
+        assert_eq!(
+            mint_under("  Zen ", false).mode.as_deref(),
+            Some("zen+autopilot")
+        );
+    }
+
+    #[test]
+    fn record_mode_falls_back_to_the_surface_on_a_pre_mode_row() {
+        // A row minted before the field existed still reports a truthful
+        // SURFACE composition. The solo posture is unrecoverable after the fact,
+        // so the fallback under-claims composition rather than guessing at it.
+        let mut old = mint_under("zen", true);
+        old.mode = None;
+        assert_eq!(record_mode(&old), "zen+autopilot");
+
+        let mut blank = mint_under("groom", false);
+        blank.mode = Some("   ".to_string());
+        assert_eq!(record_mode(&blank), "autopilot");
+    }
+
+    #[test]
+    fn mode_filter_matches_a_whole_token_or_a_single_layer() {
+        let zen_solo = mint_under("zen", true);
+        // The whole token, exactly.
+        assert!(mode_matches(&zen_solo, "solo+zen+autopilot"));
+        assert!(mode_matches(&zen_solo, "SOLO+ZEN+AUTOPILOT"));
+        assert!(!mode_matches(&zen_solo, "zen+autopilot"));
+        // Either layer, broadly — an operator can ask "anything solo-composed?"
+        // without knowing what else was composed over it.
+        assert!(mode_matches(&zen_solo, "solo"));
+        assert!(mode_matches(&zen_solo, "zen"));
+        assert!(!mode_matches(&zen_solo, "groom"));
+    }
+
+    #[test]
+    fn mode_filter_reads_bare_autopilot_as_exact_not_as_everything() {
+        // Every mode ends in the envelope, so a layer match would silently turn
+        // `--mode autopilot` — "what did autopilot do entirely on its own?" —
+        // into "show me everything".
+        assert!(mode_matches(&mint_under("groom", false), "autopilot"));
+        assert!(!mode_matches(&mint_under("zen", false), "autopilot"));
+        assert!(!mode_matches(&mint_under("groom", true), "autopilot"));
+    }
+
+    #[test]
+    fn an_empty_mode_filter_narrows_nothing() {
+        for rec in [mint_under("groom", false), mint_under("zen", true)] {
+            assert!(mode_matches(&rec, ""));
+            assert!(mode_matches(&rec, "  "));
+        }
+    }
+
+    #[test]
+    fn mode_filter_selects_only_the_matching_rows() {
+        // The filter as the CLI applies it, over a mixed trail.
+        let rows = vec![
+            mint_under("groom", false),
+            mint_under("zen", false),
+            mint_under("groom", true),
+        ];
+        let modes: Vec<String> = rows
+            .iter()
+            .filter(|r| mode_matches(r, "solo"))
+            .map(record_mode)
+            .collect();
+        assert_eq!(modes, vec!["solo+autopilot".to_string()]);
+    }
+
+    #[test]
+    fn mode_annotation_stays_quiet_for_the_bare_envelope() {
+        // Annotating the default on every row would bury the rows where
+        // something else was steering.
+        assert_eq!(mode_annotation(&mint_under("groom", false)), None);
+        assert_eq!(
+            mode_annotation(&mint_under("zen", false)).as_deref(),
+            Some("mode: zen+autopilot")
+        );
+        assert_eq!(
+            mode_annotation(&mint_under("groom", true)).as_deref(),
+            Some("mode: solo+autopilot")
+        );
+    }
+
+    #[test]
+    fn mode_survives_the_durable_comment_round_trip() {
+        // The supervision context must still be readable after a reindex from
+        // the durable comments — the trail that outlives `.aida/`.
+        let rec = mint_under("zen", true);
+        let recovered =
+            parse_audit_comment(&audit_comment(&rec)).expect("the comment round-trips losslessly");
+        assert_eq!(recovered, rec);
+        assert_eq!(record_mode(&recovered), "solo+zen+autopilot");
+        assert!(mode_matches(&recovered, "solo"));
+    }
+
     // ---- durable append ----------------------------------------------------
 
     #[test]
@@ -1398,6 +1688,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             PriorState {
                 queued_to_role: Some("implementer".to_string()),
                 ..PriorState::default()
@@ -1415,6 +1706,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             PriorState::from_status("draft"),
         )
         .unwrap();
@@ -1450,6 +1742,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             PriorState::from_status("draft"),
         )
         .unwrap();
@@ -1474,6 +1767,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             PriorState::from_status("draft"),
         )
         .unwrap();
@@ -1507,6 +1801,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             PriorState::from_status("draft"),
         )
         .unwrap();
@@ -1597,6 +1892,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             prior,
         )
         .unwrap()

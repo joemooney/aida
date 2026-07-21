@@ -4172,6 +4172,14 @@ pub enum AutopilotCommand {
         // trace:TASK-1013 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         from_product: bool,
+        /// Only show executions taken under this composition mode — the level
+        /// of supervision in effect when the action landed. Pass a whole token
+        /// (`autopilot` for the bare envelope, `zen+autopilot`, …) to match it
+        /// exactly, or a single layer (`zen`, `solo`) to match every
+        /// composition that used it.
+        // trace:TASK-1014 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long, value_name = "MODE")]
+        mode: Option<String>,
         /// Emit a stable JSON shape instead of the table.
         #[clap(long)]
         json: bool,
