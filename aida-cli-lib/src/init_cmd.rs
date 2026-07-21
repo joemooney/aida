@@ -1936,6 +1936,9 @@ pub(crate) fn handle_init_distributed_worktree(
     // Commented [intake] example block (defaults are safe; discoverability only).
     // trace:TASK-760 | ai:claude
     let config_content = config_content + init_intake_config_section();
+    // Commented [autopilot] authority-map block — the bounded-authority envelope
+    // that composes with the [intake] policy above. trace:TASK-1021 | ai:claude
+    let config_content = config_content + init_autopilot_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
@@ -2163,6 +2166,9 @@ fn handle_init_post_clone(
     // Commented [intake] example block (defaults are safe; discoverability only).
     // trace:TASK-760 | ai:claude
     let config_content = config_content + init_intake_config_section();
+    // Commented [autopilot] authority-map block — the bounded-authority envelope
+    // that composes with the [intake] policy above. trace:TASK-1021 | ai:claude
+    let config_content = config_content + init_autopilot_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
@@ -2709,6 +2715,9 @@ pub(crate) fn handle_init_distributed_sibling(
     // Commented [intake] example block (defaults are safe; discoverability only).
     // trace:TASK-760 | ai:claude
     let config_content = config_content + init_intake_config_section();
+    // Commented [autopilot] authority-map block — the bounded-authority envelope
+    // that composes with the [intake] policy above. trace:TASK-1021 | ai:claude
+    let config_content = config_content + init_autopilot_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
