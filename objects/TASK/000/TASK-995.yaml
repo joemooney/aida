@@ -3,12 +3,12 @@ spec_id: TASK-995
 agreed_id: TASK-995
 title: Wire `Monitor`-based consumption into the `/goal` overnight loop skill template (skills-side, not Rust)
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:29:30.916434969Z
-modified_at: 2026-07-21T05:43:23.657833958Z
+modified_at: 2026-07-21T05:53:31.077999992Z
 req_type: Task
 tags:
 - zen-ready
@@ -23,8 +23,24 @@ comments:
   created_at: 2026-07-21T05:42:50.861404180Z
   modified_at: 2026-07-21T05:42:50.861404180Z
   session_id: 3656084c-e702-4335-8721-954ca99bc265
+history:
+- id: 019f833c-8bbe-7b30-9f03-7d9b28c05924
+  author: aida-auto-bump
+  timestamp: 2026-07-21T05:53:31.070573810Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f833c-8bc5-7520-a393-84c09854ba73
+  timestamp: 2026-07-21T05:53:31.077999460Z
+  agent: aida
+  commit_sha: b9c4a003888c95afa9f790b33e8ecd89d5f6f132
+  summary: Completed via merge b9c4a003
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T05:43:23.657833958Z
   implemented_by: joe
+  completed_at: 2026-07-21T05:53:29.900208531Z
+  completion_sha: b9c4a003888c95afa9f790b33e8ecd89d5f6f132
