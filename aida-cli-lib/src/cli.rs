@@ -8148,7 +8148,12 @@ pub enum Command {
     /// tool so a supervising session burns nothing while nothing is happening.
     /// If the drain's orchestrator process has died, prints one
     /// `WAKE drain-crashed` line and exits so a follower never blocks forever.
+    ///
+    /// Follow mode starts at end-of-file (`tail -f` semantics) — only events
+    /// appended after it started are emitted. Use `--once` to classify the
+    /// existing backlog and exit, or `--backlog` to replay then follow.
     // trace:TASK-990 | ai:claude
+    // trace:TASK-146 | ai:claude
     Watch {
         /// Emit wake lines for actionable events (the default behavior — this
         /// flag makes it explicit for the `Monitor`-tool invocation).
@@ -8164,6 +8169,13 @@ pub enum Command {
         /// following the stream (cron / test mode).
         #[clap(long)]
         once: bool,
+
+        /// Replay the whole historical backlog before following, instead of
+        /// starting at end-of-file. Off by default: a fresh follower wakes
+        /// only on events appended after it started (`tail -f` semantics).
+        // trace:TASK-146 | ai:claude
+        #[clap(long)]
+        backlog: bool,
     },
 
     /// List the team: every registered node/clone sharing this store

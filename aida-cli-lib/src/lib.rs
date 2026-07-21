@@ -2267,6 +2267,7 @@ fn run() -> Result<()> {
         emit_wakes: _,
         all,
         once,
+        backlog,
     } = &cli.command
     {
         let project_root =
@@ -2276,6 +2277,7 @@ fn run() -> Result<()> {
             &watch::WatchOpts {
                 all: *all,
                 once: *once,
+                backlog: *backlog,
             },
         );
     }
