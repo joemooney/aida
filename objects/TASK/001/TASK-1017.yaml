@@ -3,12 +3,12 @@ spec_id: TASK-1017
 agreed_id: TASK-1017
 title: 'Followup: the §8 autonomy-doc edit is a *living-doc* update — leave dated SPIKE/snapshot artifacts frozen (`feedback_dated_artifacts_immutable`)'
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:46.858306535Z
-modified_at: 2026-07-21T04:56:15.421113402Z
+modified_at: 2026-07-21T05:27:43.610000721Z
 req_type: Task
 tags:
 - zen-ready
