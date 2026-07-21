@@ -4122,6 +4122,12 @@ pub enum AutopilotCommand {
         /// Only show executions that have NOT been reversed.
         #[clap(long)]
         open: bool,
+        /// Only show executions whose evidence records a product handoff — the
+        /// "is a product seat steering the queue?" review lens. A product
+        /// recommendation is evidence only; it never carries approval authority.
+        // trace:TASK-1013 | ai:claude — plain `//` keeps the marker out of `--help`.
+        #[clap(long)]
+        from_product: bool,
         /// Emit a stable JSON shape instead of the table.
         #[clap(long)]
         json: bool,
