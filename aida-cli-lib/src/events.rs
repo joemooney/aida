@@ -294,6 +294,41 @@ fn rotate_over_cap(project_root: &Path, max_bytes: u64) {
     let _ = std::fs::rename(&path, &archive);
 }
 
+/// Env var that turns the whole event stream OFF for the process: when set to
+/// a truthy value, [`emit`] is a no-op and nothing is ever appended to any
+/// project's `.aida/events.jsonl`.
+///
+/// The escape hatch exists for TEST HARNESSES (BUG-770). An in-process unit
+/// test can be isolated by injecting a temp root at the call site, but an
+/// *integration* test spawns the real binary in a child process, where no
+/// injected seam reaches — and `cfg!(test)` is false in that child. This var
+/// is the one lever that covers both: export it once around a test invocation
+/// and no test, at any nesting depth, can append to a developer's real
+/// supervision stream. It is deliberately NOT the primary fix — the primary
+/// fix is that callers pass the root they mean rather than resolving it from
+/// the process cwd.
+// trace:BUG-770 | ai:claude
+pub const EVENTS_DISABLE_ENV: &str = "AIDA_EVENTS_DISABLE";
+
+/// Whether [`EVENTS_DISABLE_ENV`] is set to a truthy value. Empty, `0`,
+/// `false`, `no`, `off` (any case) all mean "not disabled", so an accidentally
+/// exported empty var can't silently blind a real drain's supervision stream.
+// trace:BUG-770 | ai:claude
+fn events_disabled() -> bool {
+    std::env::var(EVENTS_DISABLE_ENV)
+        .map(|v| is_truthy(&v))
+        .unwrap_or(false)
+}
+
+/// Shared truthiness spelling for [`events_disabled`].
+// trace:BUG-770 | ai:claude
+fn is_truthy(value: &str) -> bool {
+    !matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "" | "0" | "false" | "no" | "off"
+    )
+}
+
 /// Append one event to `.aida/events.jsonl`, creating the file (and `.aida/`)
 /// if needed. One JSON object per line.
 ///
@@ -302,8 +337,17 @@ fn rotate_over_cap(project_root: &Path, max_bytes: u64) {
 /// on the drain's hot path and must never stall it. The serialized line + `\n`
 /// is written in a single `write_all` so POSIX `O_APPEND` atomicity holds
 /// under concurrent writers (the [`crate::punt::append_to_ledger`] contract).
-// trace:TASK-987 | ai:claude
+///
+/// BUG-770: honors the [`EVENTS_DISABLE_ENV`] kill switch. Note that emit
+/// writes wherever `project_root` points — it has no way to tell a real
+/// project from a test fixture, so **the caller owns that decision**: pass the
+/// root you mean, never one resolved from the ambient process cwd at the emit
+/// site.
+// trace:TASK-987 trace:BUG-770 | ai:claude
 pub fn emit(project_root: &Path, ev: &Event) {
+    if events_disabled() {
+        return;
+    }
     let _ = try_emit(project_root, ev);
 }
 
@@ -552,6 +596,38 @@ mod tests {
         let gen2 = std::fs::read_to_string(events_archive_path(dir.path())).unwrap();
         assert!(gen2.contains("gen-2"));
         assert!(!gen2.contains("gen-1"), "archive keeps only one generation");
+    }
+
+    /// BUG-770: the kill switch turns emit into a no-op for the whole process
+    /// — the lever a test harness (or an integration test, where no in-process
+    /// seam reaches) exports so nothing can append to a real supervision
+    /// stream. Falsy and empty spellings must NOT disable it, or an
+    /// accidentally-exported empty var would silently blind a live drain.
+    // trace:BUG-770 | ai:claude
+    #[test]
+    fn emit_is_noop_when_disable_env_is_truthy() {
+        let dir = tempfile::tempdir().unwrap();
+        let ev = || Event::new(None, "", EventKind::RunStarted);
+
+        // Truthy → nothing is written at all (not even the `.aida/` dir).
+        let mut guard = crate::test_env::EnvVarGuard::set(EVENTS_DISABLE_ENV, "1");
+        emit(dir.path(), &ev());
+        assert!(
+            !events_path(dir.path()).exists(),
+            "the kill switch must suppress the write entirely"
+        );
+
+        // Falsy / empty spellings are NOT a disable — emit still works.
+        for falsy in ["", "0", "false", "no", "off", "OFF"] {
+            guard.reset(falsy);
+            assert!(!events_disabled(), "{falsy:?} must not disable emit");
+        }
+        guard.reset_unset();
+        assert!(!events_disabled(), "absent env is not a disable");
+        emit(dir.path(), &ev());
+        drop(guard);
+        let body = std::fs::read_to_string(events_path(dir.path())).unwrap();
+        assert_eq!(body.lines().count(), 1, "only the enabled emit landed");
     }
 
     #[test]

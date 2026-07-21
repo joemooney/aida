@@ -11,6 +11,7 @@
 //! See `docs/plans/2026-05-16-story-246-auto-complete.md`.
 //! trace:STORY-246 | ai:claude
 
+use std::path::Path;
 use std::time::Instant;
 
 use colored::Colorize;
@@ -1188,6 +1189,25 @@ pub(crate) trait PhaseDriver {
     /// trace:TASK-358 | ai:claude
     fn mark_implementer_lease_escalated(&mut self) {}
 
+    /// BUG-770: the project root whose `.aida/events.jsonl` this run's
+    /// supervision events belong to — the ONE seam that decides where an
+    /// orchestration event lands. `None` means "this driver has no event
+    /// stream" and every emit on the orchestration path is skipped.
+    ///
+    /// The default is `None`, deliberately NOT `crate::find_project_root()`.
+    /// Resolving the root from the process cwd *inside* the emit site is
+    /// exactly what let the in-tree unit tests — which run with the repo as
+    /// cwd — append synthetic `AdvisorEscalated` lines to the developer's REAL
+    /// `.aida/events.jsonl` on every `cargo test`, for months. A fail-safe
+    /// default means a driver that never opts in can only lose events (benign,
+    /// best-effort by contract), never fabricate them in someone's live drain
+    /// history. `RealPhaseDriver` — which already carries its project root —
+    /// is the only implementor that overrides it.
+    // trace:BUG-770 | ai:claude
+    fn events_root(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
     /// EPIC-28: park a failed spec in `NeedsAttention` with a structured
     /// `FailureReason` so a batch drain can continue past the failure
     /// rather than halting the whole batch. Called from `finish_failure`
@@ -1878,17 +1898,25 @@ fn finish_escalated(
     durations: Vec<(Phase, u128)>,
     kind: EscalationKind,
     reason: &str,
+    events_root: Option<&Path>,
 ) -> OrchestrationResult {
     let elapsed = start.elapsed().as_millis();
     // STORY-712: reaching the human tier is an actionable wake. This is the one
     // convergence point for both escalation kinds (the advisor's design-fork
     // and the reviewer's merge decision), so emit AdvisorEscalated here.
-    // Best-effort — resolve the project root the same way the module's `glyph`
-    // helper does; a missing root simply skips the emit. trace:TASK-988 | ai:claude
-    if let Ok(root) = crate::find_project_root() {
-        let (_, run_uuid) = crate::drain_state::current_context(&root);
+    //
+    // BUG-770: the root is INJECTED by the caller ([`PhaseDriver::events_root`])
+    // rather than resolved here via `crate::find_project_root()`. The old
+    // resolve-from-cwd form made this function write to whatever project the
+    // process happened to be standing in — so the two in-tree unit tests that
+    // drive this path appended a synthetic `STORY-306` AdvisorEscalated line to
+    // the developer's real `.aida/events.jsonl` on every `cargo test` run.
+    // `None` (every test driver, and any driver without a project) skips the
+    // emit; best-effort either way. trace:BUG-770 trace:TASK-988 | ai:claude
+    if let Some(root) = events_root {
+        let (_, run_uuid) = crate::drain_state::current_context(root);
         crate::events::emit(
-            &root,
+            root,
             &crate::events::Event::new(
                 Some(spec.to_string()),
                 run_uuid,
@@ -2562,6 +2590,8 @@ fn resolve_punt_via_advisor(
                 // worktree is preserved for the resume.
                 // trace:TASK-358 | ai:claude
                 driver.mark_implementer_lease_escalated();
+                // trace:BUG-770 | ai:claude — the driver names the event root.
+                let events_root = driver.events_root();
                 PuntFlow::Terminal(Box::new(finish_escalated(
                     spec,
                     json,
@@ -2569,6 +2599,7 @@ fn resolve_punt_via_advisor(
                     durations.to_vec(),
                     EscalationKind::DesignFork,
                     &reason,
+                    events_root.as_deref(),
                 )))
             }
             EscalateMode::Defaults => {
@@ -3130,6 +3161,8 @@ pub(crate) fn orchestrate_with_resume(
             // crashed reviewer. trace:STORY-306 | ai:claude
             Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
                 durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                // trace:BUG-770 | ai:claude — the driver names the event root.
+                let events_root = driver.events_root();
                 return finish_escalated(
                     spec,
                     json,
@@ -3137,6 +3170,7 @@ pub(crate) fn orchestrate_with_resume(
                     durations,
                     EscalationKind::MergeDecision,
                     &reason,
+                    events_root.as_deref(),
                 );
             }
             Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
@@ -3187,6 +3221,8 @@ pub(crate) fn orchestrate_with_resume(
         // escalation — exit `0`, no merge, the PR left mergeable for the
         // human/advisor, a batch drain advances. trace:BUG-727 | ai:claude
         if let Some(reason) = driver.merge_supervision_hold() {
+            // trace:BUG-770 | ai:claude — the driver names the event root.
+            let events_root = driver.events_root();
             return finish_escalated(
                 spec,
                 json,
@@ -3194,6 +3230,7 @@ pub(crate) fn orchestrate_with_resume(
                 durations,
                 EscalationKind::SupervisedMerge,
                 &reason,
+                events_root.as_deref(),
             );
         }
         emit_start(Phase::Merge, spec, json, start.elapsed().as_millis());
@@ -5680,6 +5717,61 @@ mod tests {
         assert_eq!(
             driver.mark_escalated_calls, 1,
             "--escalate-blocks must mark the lease so the lingering worktree gets cleaned"
+        );
+    }
+
+    /// BUG-770 regression: driving the escalation path from a TEST driver must
+    /// not append to a REAL project's `.aida/events.jsonl`.
+    ///
+    /// The bug: `finish_escalated` resolved the project root itself with
+    /// `find_project_root()`, which — because `cargo test` runs with the repo
+    /// as cwd — resolved to the developer's own clone. Every `cargo test` run
+    /// therefore appended synthetic `AdvisorEscalated` lines to the live drain
+    /// event stream, for months, and every history consumer (`aida watch
+    /// --backlog`, `event_wait`, integrate_view) saw fabricated escalations.
+    ///
+    /// The assertion is scoped to a marker string unique to this fixture, so
+    /// it stays honest under `--test-threads=N` (a sibling test emitting to
+    /// its own temp root can never move this count) while still failing loudly
+    /// if the resolve-root-from-cwd form ever comes back.
+    // trace:BUG-770 | ai:claude
+    #[test]
+    fn orchestrate_escalation_never_writes_to_the_ambient_project_event_stream() {
+        const MARKER: &str = "BUG-770 probe fork — synthetic, must never reach a real stream";
+        let ambient = crate::find_project_root().expect("cargo test runs inside a git checkout");
+        let stream = crate::events::events_path(&ambient);
+        let marker_lines = || {
+            std::fs::read_to_string(&stream)
+                .map(|body| body.lines().filter(|l| l.contains(MARKER)).count())
+                .unwrap_or(0)
+        };
+        assert_eq!(marker_lines(), 0, "fixture marker must not pre-exist");
+
+        let mut driver = MockPhaseDriver::punting_at_implementer("project-strategy fork")
+            .advisor_escalates(MARKER);
+        let result = orchestrate(
+            &mut driver,
+            "STORY-306",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        // The fixture really did take the emitting path.
+        assert!(
+            result.escalation.is_some(),
+            "fixture must actually escalate, or it proves nothing"
+        );
+        // A test driver keeps the fail-safe default: no event root, so the
+        // epilogue has nowhere to write.
+        assert!(
+            driver.events_root().is_none(),
+            "test drivers must not name a real project as their event root"
+        );
+        assert_eq!(
+            marker_lines(),
+            0,
+            "the test suite appended a synthetic escalation to {} — BUG-770 regressed",
+            stream.display()
         );
     }
 
