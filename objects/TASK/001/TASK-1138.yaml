@@ -8,10 +8,22 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:55.204147602Z
-modified_at: 2026-07-21T09:06:36.534430859Z
+modified_at: 2026-07-21T16:35:27.663699491Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-12T19:15:09.941573199Z
+comments:
+- id: 019f8588-432f-7362-8f3a-ef9c1c5cb7b8
+  author: joe
+  content: |-
+    Already delivered by TASK-1005 (commit 759494f33, PR #1220, 2026-06-29). Verified against main at b5586e28:
+    - aida-cli-lib/src/cli.rs:4973 — the --sequential flag exists with `requires = "autonomous"` and `conflicts_with = "single_branch"`, and its doc comment names the mode (ordered per-member PRs, shelve-and-continue) vs --single-branch.
+    - aida-cli-lib/src/queue_cmd.rs:4664 — the runtime guard: --sequential bails unless paired with --batch/--batches, prints the mode banner, and falls through to the batch dispatch with concurrency pinned to SEQUENTIAL_DRAIN_CONCURRENCY.
+    - aida-cli-lib/src/cli.rs:11914+ — parse/guard tests traced TASK-1005.
+    Nothing in this task's title remains unimplemented. Closing as delivered rather than fanning out a no-op implementer. Reversible: reopen if the advisor sees scope here beyond TASK-1005.
+  created_at: 2026-07-21T16:35:27.663699491Z
+  modified_at: 2026-07-21T16:35:27.663699491Z
+  session_id: 019f7b628fbb
 execution_mode: drive
