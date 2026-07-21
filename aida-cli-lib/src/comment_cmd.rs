@@ -108,7 +108,7 @@ fn add_comment_interactive(
     Ok(())
 }
 
-fn add_comment_cli(
+pub(crate) fn add_comment_cli(
     storage: &Storage,
     req_id: &str,
     content: &str,

@@ -14,6 +14,8 @@ mod auto_complete;
 mod auto_complete_telemetry;
 mod autonomy_cmd;
 mod autopilot;
+// trace:TASK-1018 | ai:claude — durable execution audit + one-command reversal.
+mod autopilot_audit;
 mod awaiting_you;
 mod backlog;
 mod brief_cmd;
@@ -40131,7 +40133,241 @@ fn handle_autopilot_command(cmd: &crate::cli::AutopilotCommand) -> Result<()> {
         AutopilotCommand::Challenge { target, note } => {
             handle_autopilot_challenge(target, note.as_deref())
         }
+        // TASK-1018: the DURABLE half — what autopilot actually did, and the
+        // one command that undoes it.
+        AutopilotCommand::Executions { limit, open, json } => {
+            handle_autopilot_executions(*limit, *open, *json)
+        }
+        AutopilotCommand::Revert {
+            target,
+            dry_run,
+            note,
+            json,
+        } => handle_autopilot_revert(target, *dry_run, note.as_deref(), *json),
+        AutopilotCommand::Reindex { dry_run } => handle_autopilot_reindex(*dry_run),
     }
+}
+
+/// `aida autopilot reindex` — refill the per-clone execution index from the
+/// durable audit comments on the specs. The comments are the source of truth;
+/// the index is rebuildable, exactly like `.aida/cache.db` vs the orphan-branch
+/// YAML.
+// trace:TASK-1018 | ai:claude
+fn handle_autopilot_reindex(dry_run: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let indexed = autopilot_audit::read_executions(&project_root)?;
+    let recovered = autopilot_audit::recover_from_comments(&project_root)?;
+    let missing = autopilot_audit::reindex_missing(&indexed, &recovered);
+
+    if missing.is_empty() {
+        println!(
+            "{} the index already holds every recorded autopilot action ({} recovered, {} indexed).",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            recovered.len(),
+            indexed.len()
+        );
+        return Ok(());
+    }
+    if !dry_run {
+        autopilot_audit::append_executions(&project_root, &missing)?;
+    }
+    println!(
+        "{} {} {} action(s) recovered from the durable trail:",
+        if dry_run {
+            "·".dimmed().to_string()
+        } else {
+            crate::glyph(crate::glyphs::Glyph::Check)
+                .green()
+                .to_string()
+        },
+        if dry_run { "would restore" } else { "restored" },
+        missing.len()
+    );
+    for rec in &missing {
+        println!(
+            "    {} {}  {:<12} {}",
+            "→".green(),
+            rec.id.cyan(),
+            rec.spec_id,
+            rec.action
+        );
+    }
+    Ok(())
+}
+
+/// `aida autopilot executions` — list the actions autopilot actually EXECUTED
+/// (as opposed to `audit`'s dry-run projection), newest last.
+// trace:TASK-1018 | ai:claude
+fn handle_autopilot_executions(limit: usize, open_only: bool, json: bool) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let executions = autopilot_audit::read_executions(&project_root)?;
+    let reversals = autopilot_audit::read_reversals(&project_root)?;
+
+    let mut rows: Vec<&autopilot_audit::ExecutionRecord> = executions.iter().collect();
+    if open_only {
+        rows.retain(|e| !autopilot_audit::is_reversed(&reversals, &e.id));
+    }
+    if limit > 0 && rows.len() > limit {
+        rows = rows.split_off(rows.len() - limit);
+    }
+
+    if json {
+        let out: Vec<_> = rows
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "id": e.id,
+                    "ts": e.ts,
+                    "spec_id": e.spec_id,
+                    "action": e.action,
+                    "authority": e.authority,
+                    "gate": e.gate,
+                    "grounding": e.grounding,
+                    "risk": e.risk,
+                    "actor": e.actor,
+                    "source": e.source,
+                    "reason": e.reason,
+                    "evidence": e.evidence,
+                    "mode": e.mode,
+                    "from_product": e.from_product,
+                    "prior": e.prior,
+                    "reverted": autopilot_audit::is_reversed(&reversals, &e.id),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!(out))?);
+        return Ok(());
+    }
+
+    if rows.is_empty() {
+        println!(
+            "{} autopilot has not executed any action here yet.",
+            "·".dimmed()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} autopilot executions — {} recorded action(s)",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        rows.len()
+    );
+    for e in &rows {
+        let reverted = autopilot_audit::is_reversed(&reversals, &e.id);
+        let mark = if reverted {
+            "↩ reverted".yellow().to_string()
+        } else {
+            "· in effect".dimmed().to_string()
+        };
+        println!(
+            "  {} {}  {:<12} {:<8} {:<9} {}  {}",
+            e.id.cyan(),
+            e.ts.dimmed(),
+            e.spec_id,
+            e.action,
+            e.authority,
+            e.source.dimmed(),
+            mark
+        );
+        if let Some(restore) = e.prior.describe() {
+            println!("      {}", format!("restores: {restore}").dimmed());
+        }
+    }
+    println!(
+        "\n  {} undo one with `aida autopilot revert <id|SPEC-ID>` (add --dry-run to preview).",
+        "note:".dimmed()
+    );
+    Ok(())
+}
+
+/// `aida autopilot revert <target>` — the one-command reversal. Resolves the
+/// execution record, derives the restore plan from it alone, applies it through
+/// the same in-process paths the CLI verbs use, and records the reversal.
+// trace:TASK-1018 | ai:claude
+fn handle_autopilot_revert(
+    target: &str,
+    dry_run: bool,
+    note: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    let executions = autopilot_audit::read_executions(&project_root)?;
+    let reversals = autopilot_audit::read_reversals(&project_root)?;
+
+    let record = autopilot_audit::resolve_revert_target(&executions, &reversals, target)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let plan = autopilot_audit::plan_reversal(&record).map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    let applied = autopilot_audit::apply_reversal(&project_root, &plan, dry_run)?;
+    if !dry_run {
+        // A reversal is itself an audited event — durable comment first (the
+        // trail that replicates), then the fast index.
+        let actor = current_user_id(None);
+        let entry =
+            autopilot_audit::reversal_record(&chrono::Utc::now().to_rfc3339(), &plan, &actor, note);
+        let storage = Storage::new(project_root.join(".aida-store"));
+        if let Err(e) = comment_cmd::add_comment_cli(
+            &storage,
+            &plan.spec_id,
+            &autopilot_audit::reversal_comment(&entry),
+            Some("autopilot"),
+            None,
+        ) {
+            eprintln!("  warning: the durable reversal comment could not be written: {e}");
+        }
+        autopilot_audit::append_reversals(&project_root, &[entry])?;
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "target": plan.target,
+                "spec_id": plan.spec_id,
+                "action": record.action,
+                "dry_run": dry_run,
+                "complete": plan.complete,
+                "steps": applied,
+            }))?
+        );
+        return Ok(());
+    }
+
+    let verb = if dry_run { "would restore" } else { "restored" };
+    println!(
+        "{} {} {} ({} {}) — {verb}:",
+        if dry_run {
+            "·".dimmed().to_string()
+        } else {
+            crate::glyph(crate::glyphs::Glyph::Check)
+                .green()
+                .to_string()
+        },
+        plan.target.cyan(),
+        plan.spec_id.bold(),
+        record.action,
+        record.source.dimmed(),
+    );
+    for line in &applied {
+        println!("    {} {line}", "→".green());
+    }
+    if !plan.complete {
+        println!(
+            "  {} the appended note stays on the record — an append-only trail is \
+             retracted, never erased.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+        );
+    }
+    if dry_run {
+        println!(
+            "  {} nothing was written. Drop --dry-run to apply.",
+            "·".dimmed()
+        );
+    }
+    Ok(())
 }
 
 /// `aida autopilot inspect` — dry-run the envelope over the current groom
@@ -68299,9 +68535,19 @@ fn run_zen_drive(
                         );
                     } else {
                         zen_auto_approve(store_path, req)?;
+                        // TASK-1018: the ONLY wired `Execute` outcome today —
+                        // so it gets the durable record + the one-command
+                        // reversal, right where the side effect lands. Prior
+                        // state is the Draft status the gate flipped off.
+                        record_autopilot_execution(
+                            project_root.as_deref(),
+                            &display,
+                            "zen",
+                            autopilot_audit::PriorState::from_status("draft"),
+                        );
                         eprintln!(
                             "  {} {display} was a draft — the autopilot approve-gate \
-                             auto-approved it; driving.",
+                             auto-approved it; driving. Undo with `aida autopilot revert {display}`.",
                             check.green()
                         );
                     }
@@ -68536,6 +68782,43 @@ fn zen_auto_approve(store_path: &std::path::Path, req: &Requirement) -> Result<(
     owned.modified_at = chrono::Utc::now();
     backend.update_requirement(&owned)?;
     Ok(())
+}
+
+/// TASK-1018: durably record an autopilot action that just EXECUTED, so it has
+/// both an audit trail and a one-command reversal (`aida autopilot revert`).
+///
+/// Call this immediately AFTER the side effect lands, never before — the record
+/// asserts "this happened". Best-effort: the action already succeeded, so a
+/// missing project root or an unwritable log warns rather than failing the
+/// command (and the warning is loud, because an unaudited execution is exactly
+/// the state this spec exists to prevent).
+// trace:TASK-1018 | ai:claude
+fn record_autopilot_execution(
+    project_root: Option<&std::path::Path>,
+    display: &str,
+    source: &str,
+    prior: autopilot_audit::PriorState,
+) {
+    let Some(root) = project_root else {
+        eprintln!("  warning: no project root — the autopilot action was not audited.");
+        return;
+    };
+    // The zen approve-gate's decision, re-stated for the record: the operator's
+    // explicit invocation IS the recorded preference (RecordedB), approving one
+    // named draft is Low risk, and it cleared all four gates under `auto`.
+    let decision = zen_drive::draft_approve_decision(display);
+    let actor = current_user_id(None);
+    if let Err(e) = autopilot_audit::record_execution(
+        root,
+        &decision,
+        crate::autopilot::Outcome::Execute,
+        crate::autopilot::Authority::Auto,
+        &actor,
+        source,
+        prior,
+    ) {
+        eprintln!("  warning: the autopilot action was not audited: {e}");
+    }
 }
 
 /// Record a pending-approval brief in the advisor's mailbox when a Draft zen

@@ -2,10 +2,28 @@
 
 Date: 2026-06-29
 Specs: TASK-0430 (parent EPIC-0428) — depends on TASK-0429 (the envelope)
-Status: Draft — **design only, needs master-advisor sign-off before any code**
+Status: Implemented by TASK-1018 — `aida-cli-lib/src/autopilot_audit.rs` (`ExecutionRecord` / `PriorState` / `plan_reversal`), `aida autopilot executions | revert | reindex`
 Complexity: ~150 prod LOC + ~120 test LOC when built, 0 commits now, risk medium (audit must be durable + reversal must be safe)
 
-<!-- Depends on the Decision/Outcome shapes from TASK-0429. Do NOT implement. -->
+<!--
+TASK-1018 shipped the two-layer core of this design: the durable git-canonical
+spec comment (the trail that survives) + the rebuildable `.aida/` JSONL index,
+the reversal derived deterministically from a recorded prior state, and
+reversals audited as their own events. Deliberate deltas from the design below,
+all in the direction of a smaller first slice:
+
+- The reversal is derived from a recorded `PriorState` DELTA rather than an
+  inverse-action table keyed on `ActionClass` — a delta reverses cleanly even
+  when a human edited the spec in between, where a per-action inverse would
+  need the action's semantics AND the intervening state.
+- The comment's machine-recoverable half is the record's own JSON behind a
+  marker, not a regex over prose. Lossless by construction; cannot drift as
+  fields are added (the four reserved extension points depend on that).
+- Audit lives in the one `.aida/autopilot-audit.jsonl` the TASK-1147 projection
+  surface already writes (four `type` discriminators), not a second file.
+- Still open: the `FindingSource::Autopilot` thread-through, the MCP parity
+  tools, the TUI panel, and the stale-state guard (risk #2 below).
+-->
 
 ## Approach
 
