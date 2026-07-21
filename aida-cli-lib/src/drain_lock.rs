@@ -245,6 +245,24 @@ fn borrow_requested() -> bool {
         .unwrap_or(false)
 }
 
+/// Test-only isolation guard for every test that exercises the real
+/// `acquire_drain_lock` path.
+///
+/// TASK-148: `acquire_drain_lock` reads `AIDA_DRAIN_BORROW` / `AIDA_DRAIN_FORCE`
+/// from the PROCESS environment, and `borrow_guard_preserves_parent_lock_on_drop`
+/// sets both process-wide. Under `--test-threads>1` that leaked into any sibling
+/// mid-acquire — a refusal assertion would instead get a `borrowed: true` guard
+/// (the flake was `lock_with_specs_is_probe_visible_for_the_guards_whole_lifetime`,
+/// reproduced at ~50% on a 16-thread filtered run). Holding this guard clears both
+/// keys AND takes the process-global env lock the setters use, so readers and
+/// setters are mutually exclusive instead of racing. Prefer this over
+/// `--test-threads=1`: it serialises only the env-sensitive tests.
+// trace:TASK-148 | ai:claude
+#[cfg(test)]
+pub(crate) fn test_env_isolation() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[(BORROW_ENV, None), (FORCE_ENV, None)])
+}
+
 /// Acquire the global drain lock for `project_root`, launched as `command`.
 ///
 /// On success returns a [`DrainGuard`] that removes the lock on `Drop`. On a
@@ -709,6 +727,7 @@ mod tests {
 
     #[test]
     fn acquire_writes_lock_and_guard_drop_removes_it() {
+        let _env = test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let path = drain_lock_path(root);
@@ -728,6 +747,7 @@ mod tests {
 
     #[test]
     fn second_acquire_refuses_while_our_live_pid_holds_it() {
+        let _env = test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let _held = acquire_drain_lock(root, "first drain").unwrap();
@@ -744,6 +764,7 @@ mod tests {
 
     #[test]
     fn acquire_reclaims_a_dead_pid_lock() {
+        let _env = test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let path = drain_lock_path(root);
@@ -766,6 +787,7 @@ mod tests {
     fn guard_drop_leaves_a_successor_lock_intact() {
         // If our guard's file was reclaimed by another drain (different pid),
         // Drop must NOT delete the successor's live lock.
+        let _env = test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let path = drain_lock_path(root);
@@ -820,7 +842,10 @@ mod tests {
     fn borrow_without_live_parent_falls_back_to_normal_acquire() {
         // A leaked AIDA_DRAIN_BORROW must not bypass the lock if there is no
         // live parent to borrow; the command becomes the owner as usual.
-        let _env = crate::test_env::EnvVarGuard::set(BORROW_ENV, "1");
+        // TASK-148: also CLEAR the force escape — a leaked `AIDA_DRAIN_FORCE`
+        // would reach the same "owns the lock" outcome for the wrong reason.
+        let _env =
+            crate::test_env::EnvVarsGuard::apply(&[(BORROW_ENV, Some("1")), (FORCE_ENV, None)]);
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let path = drain_lock_path(root);
@@ -858,6 +883,7 @@ mod tests {
 
     #[test]
     fn probe_lock_reads_a_just_written_lock() {
+        let _env = test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         // A live lock recording OUR pid round-trips through probe_lock as Running.
@@ -886,6 +912,10 @@ mod tests {
     // progress" while a `burndown run` launcher is alive.
     #[test]
     fn lock_with_specs_is_probe_visible_for_the_guards_whole_lifetime() {
+        // trace:TASK-148 | ai:claude — the second-acquire refusal below reads the
+        // borrow/force env, which a sibling test sets process-wide; without this
+        // guard the two race and the refusal assertion flakes.
+        let _env = test_env_isolation();
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let specs = vec!["BUG-101".to_string(), "TASK-202".to_string()];

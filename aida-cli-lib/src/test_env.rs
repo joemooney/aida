@@ -71,6 +71,20 @@ impl EnvVarsGuard {
     /// Set each `(key, value)` for the guard's lifetime; restore prior
     /// values on drop. Same lock-poisoning tolerance as [`EnvVarGuard::set`].
     pub(crate) fn set(pairs: &[(&'static str, &str)]) -> Self {
+        let owned: Vec<(&'static str, Option<&str>)> =
+            pairs.iter().map(|(k, v)| (*k, Some(*v))).collect();
+        Self::apply(&owned)
+    }
+
+    /// General form of [`Self::set`]: `Some(value)` sets the key, `None`
+    /// REMOVES it, for the guard's lifetime. The removal case is what lets a
+    /// test assert the *absent-env* behaviour hermetically — it both clears an
+    /// ambient value and (because the guard holds `ENV_LOCK` for its whole
+    /// lifetime) serialises against every sibling test that sets those same
+    /// keys. A test that merely *reads* env-derived state through the code
+    /// under test must hold one of these guards too, or it races the setters.
+    // trace:TASK-148 | ai:claude
+    pub(crate) fn apply(pairs: &[(&'static str, Option<&str>)]) -> Self {
         let guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let mut prev = Vec::with_capacity(pairs.len());
         for (key, value) in pairs {
@@ -78,7 +92,10 @@ impl EnvVarsGuard {
             // SAFETY: serialised by ENV_LOCK.
             #[allow(unused_unsafe)]
             unsafe {
-                std::env::set_var(key, value);
+                match value {
+                    Some(v) => std::env::set_var(key, v),
+                    None => std::env::remove_var(key),
+                }
             }
         }
         Self {
