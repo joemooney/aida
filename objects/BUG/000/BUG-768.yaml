@@ -3,12 +3,12 @@ spec_id: BUG-768
 agreed_id: BUG-768
 title: BUG-764 rollup re-derivation regresses force-closed epics with zero open children back to in-progress
 description: 'Observed 2026-07-20 18:45: EPIC-24 and EPIC-0428 — force-closed Completed on 07-19 19:25 with zero non-terminal children (audited) — both read in-progress again after overnight drains ran pulls with the BUG-764 re-derivation merged (#1541). Both re-forced 18:46; watch for recurrence. NOT BUG-628 (that shipped earlier — verified completed). Hypothesis to verify: the #1541 derivation classifies an all-terminal or all-archived child set as in-progress instead of preserving/deriving completed (e.g. archived-completed children filtered out before counting, leaving ''no children → some non-terminal default''), and it OVERRIDES a manually-forced terminal epic status on every pull. Fix: derivation for a zero-open-children epic must yield Done/Completed (or leave a manually-set terminal status alone); add the regression pair (force-closed epic + archived children) to tests. Evidence: epic YAML git history around the overnight pulls will show the exact reverting commits. Mode: drive.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T01:47:16.696013673Z
-modified_at: 2026-07-21T02:27:04.093475130Z
+modified_at: 2026-07-21T02:28:27.734485173Z
 req_type: Bug
 tags:
 - aida:lifecycle rollup followup:BUG-764 from-dogfood
