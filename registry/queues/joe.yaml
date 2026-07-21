@@ -468,3 +468,10 @@
   note: Promoted from finding TASK-1-123 via `aida findings promote`
   added_at: 2026-07-21T02:27:08.989321139Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 019f8284-d616-7441-8a18-e1ffd790cc36
+  position: 348000
+  added_by: joe
+  added_at: 2026-07-21T02:33:02.931295354Z
+  for_role: implementer
+  added_by_machine: imac
