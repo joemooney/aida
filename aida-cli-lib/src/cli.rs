@@ -1711,7 +1711,9 @@ pub enum BurndownCommand {
         // trace:STORY-546 | ai:claude
         #[clap(long)]
         candidates: bool,
-        /// Machine-readable JSON (`{ready, awaiting_signoff, parked}`).
+        /// Machine-readable JSON
+        /// (`{ready, awaiting_signoff, serialize_held, supervised, parked}`).
+        // trace:TASK-149 | ai:claude
         #[clap(long)]
         json: bool,
     },

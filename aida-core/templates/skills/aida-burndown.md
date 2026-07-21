@@ -49,14 +49,30 @@ Parse the selector from `$ARGUMENTS` (default `--status approved`):
 aida burndown plan --status approved --json     # or --tag <T> / --batch <B>
 ```
 
-This returns `{ ready: [...], awaiting_signoff: [...], parked: [{spec, reason}] }`.
+This returns
+`{ ready: [...], awaiting_signoff: [...], serialize_held: [{spec, held_by, group}], supervised: [...], parked: [{spec, reason}] }`.
+
 **Only `ready` is fan-out-able.** `ready` is the advisor-blessed drain set:
 queued + bounded + unblocked + decision-free — queue membership IS the advisor
 sign-off (STORY-546), so the runner can never drain a spec the advisor didn't
-deliberately queue. `awaiting_signoff` is pickable-but-unqueued (the advisor
-hasn't blessed it yet) — report it but never act on it. Report the parked count
-+ reasons once (so the operator sees what's held + why) but never act on parked
-specs. If `ready` is empty, stop — nothing blessed to drain for this selector.
+deliberately queue.
+
+The non-ready buckets are three DIFFERENT states — do not conflate them:
+
+- `awaiting_signoff` — pickable but **not queued**: the advisor has not blessed
+  it yet. Report it, never act on it. Clearing it needs a human/advisor
+  (`aida queue add <id>`).
+- `serialize_held` — **queued and blessed**, held out of *this* wave only
+  because a sibling already claimed its `serialize:<group>` (see "Never co-fan a
+  serialize-group" below). Nothing is awaiting a human. Report it as
+  "held behind `held_by` in serialize group `group` — drains in a later wave",
+  and never act on it *this* wave; it becomes `ready` on the next resolve once
+  the claiming spec lands.
+- `parked` — mechanically blocked (blocker, pending decision, deferred tag).
+  Report the count + reasons once so the operator sees what's held + why, but
+  never act on parked specs.
+
+If `ready` is empty, stop — nothing blessed to drain for this selector.
 
 ### 2. Fan out a wave (the engine)
 
@@ -147,7 +163,13 @@ the rest of that group drain in **successive** waves, after the first one lands
 and merges. Independent specs still fan out in parallel — only the tagged
 collision-set is serialized. This is the operator marking known file-overlap
 ("these touch the same code") so the drain enforces the ordering instead of
-relying on someone remembering `--concurrency 1`. (A typed `ConflictsWith` edge
+relying on someone remembering `--concurrency 1`.
+
+The gate already enforces this for you: `burndown plan` collapses the groups
+before it reports, so the held members arrive in the **`serialize_held`** key
+(each naming its `held_by` claimer + `group`), not in `ready` and not in
+`awaiting_signoff`. Treat them as blessed work scheduled for a later wave — do
+not tell the operator they need sign-off. (A typed `ConflictsWith` edge
 enforced in `resolve_burndown_sets` is the substrate-v2 follow-up — STORY-614;
 the tag is the working slice.)
 

@@ -102,11 +102,13 @@ epic type — does **not** get fanned out. Surface it for the human (`aida human
 `supervised` set, so prefer it to enumerate the fan-out-able ready set:
 
 ```bash
-aida burndown plan --status approved --json   # {ready, awaiting_signoff, parked}
+aida burndown plan --status approved --json   # {ready, awaiting_signoff, serialize_held, supervised, parked}
 ```
 
 Fan out only `ready`. Drop any spec already in flight (open PR / active lease)
-and include AT MOST ONE spec per `serialize:<group>` tag per wave — see
+and include AT MOST ONE spec per `serialize:<group>` tag per wave (the gate
+already collapses these into `serialize_held` — those are queued + blessed and
+drain in a later wave, NOT awaiting sign-off) — see
 `/aida-burndown` for the full fan-out discipline (it is the engine for this
 phase).
 
