@@ -1,0 +1,14 @@
+id: 019f82d3-3ac8-7f73-b3cd-e27111c583e0
+spec_id: BUG-771
+agreed_id: BUG-771
+title: cache reported a Rejected epic (EPIC-7) as 'draft' in list/show — status drift misled an advisor into decomposing closed work; the add parent-gate (reading the store) caught it
+description: '2026-07-20: aida list --type epic and aida show EPIC-7 both reported status=draft; the orphan-store YAML says Rejected (operator 2026-06-06 + advisor 2026-06-26). An advisor decomposition proceeded on the false ''draft'' until aida add --parent EPIC-7 refused (''parent is Rejected'') — that gate reads the store/backend, not the drifted cache, and was the only thing that caught it. Root: the cache projection carried a stale status (drift, likely the same open-path that intermittently loses requirements_fts / serves an old snapshot — cache rebuild resolved it this session). Status drift is more dangerous than the elapsed/mail drifts: it makes closed work look open and open work look closed. Fix: (1) the cache open-path schema/snapshot check must catch status staleness (the BUG-627/BUG-757 family — verify projection freshness includes status, not just table presence); (2) list/show should cross-check status against the store on a cheap key when the cache HEAD != store HEAD; (3) consider surfacing a ''cache stale — rebuilding'' notice instead of silently serving old rows. Acceptance: a spec rejected in the store never renders as draft/approved in list/show after the store advances; a targeted regression seeds a status divergence and asserts the read self-heals or refuses. Mode drive.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T03:58:29.064280635Z
+modified_at: 2026-07-21T03:58:29.064280635Z
+req_type: Bug
+tags:
+- aida:cache integrity status-drift from-dogfood
