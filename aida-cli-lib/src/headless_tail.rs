@@ -600,30 +600,65 @@ fn install_sigint_trap() {}
 #[cfg(not(unix))]
 fn uninstall_sigint_trap() {}
 
+/// Streaming behaviour shared by `aida headless tail` (which discovers a log by
+/// filename) and the id-resolving `aida tail` (which discovers it by session /
+/// spec / drain id). Both end up pointed at one JSONL file; only the *how much*
+/// and *rendered vs raw* differ.
+// trace:TASK-1167 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub struct StreamOpts {
+    /// Keep reading bytes appended after the current end-of-file.
+    pub follow: bool,
+    /// Emit at most the last N rendered lines of the pre-existing backlog
+    /// before switching to live output. `None` replays the whole file.
+    pub backlog_lines: Option<usize>,
+    /// Pass each JSONL line through verbatim instead of rendering it.
+    pub raw: bool,
+}
+
 /// Open `entry.path`, stream existing content, and (when `follow`) keep
 /// reading new bytes appended to the file. Counts malformed JSONL lines and
 /// reports a summary on stderr at end-of-stream.
 fn stream_log(entry: &LogEntry, opts: &FormatOpts, follow: bool) -> Result<()> {
+    stream_path(
+        &entry.path,
+        opts,
+        &StreamOpts {
+            follow,
+            ..StreamOpts::default()
+        },
+    )
+}
+
+/// Stream one JSONL log file by path. The reusable core behind both tailers.
+// trace:TASK-1167 | ai:claude
+pub fn stream_path(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Result<()> {
     INTERRUPTED.store(false, Ordering::SeqCst);
     install_sigint_trap();
-    let result = stream_log_inner(entry, opts, follow);
+    let result = stream_path_inner(path, opts, stream);
     uninstall_sigint_trap();
     result
 }
 
-fn stream_log_inner(entry: &LogEntry, opts: &FormatOpts, follow: bool) -> Result<()> {
+fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Result<()> {
     let mut pos: u64 = 0;
     let mut malformed: u64 = 0;
     let mut emitted: u64 = 0;
     let mut seen_result = false;
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
+    // The `--lines N` backlog buffer: rendered output from the FIRST pass is
+    // collected here rather than printed, so only its tail reaches the
+    // terminal. Cleared (and never refilled) once that pass completes, so
+    // followed output is live. trace:TASK-1167
+    let mut backlog: Vec<String> = Vec::new();
+    let mut buffering = stream.backlog_lines.is_some();
 
-    loop {
+    'outer: loop {
         // Reopen each tick so a file truncated/rotated between iterations is
         // handled gracefully — fresh open, fresh seek.
-        let mut file = fs::File::open(&entry.path)
-            .with_context(|| format!("opening {}", entry.path.display()))?;
+        let mut file =
+            fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
         let file_len = file.metadata().map(|m| m.len()).unwrap_or(pos);
         if file_len < pos {
             // Truncation — reset and re-read from the top.
@@ -636,7 +671,7 @@ fn stream_log_inner(entry: &LogEntry, opts: &FormatOpts, follow: bool) -> Result
             buf.clear();
             let read = reader
                 .read_line(&mut buf)
-                .with_context(|| format!("reading {}", entry.path.display()))?;
+                .with_context(|| format!("reading {}", path.display()))?;
             if read == 0 {
                 break;
             }
@@ -646,17 +681,34 @@ fn stream_log_inner(entry: &LogEntry, opts: &FormatOpts, follow: bool) -> Result
                 break;
             }
             if INTERRUPTED.load(Ordering::SeqCst) {
-                return finish(out, malformed, emitted);
+                break 'outer;
             }
             pos += read as u64;
-            let fmt = format_line(buf.trim_end_matches('\n'), opts);
+            let raw_line = buf.trim_end_matches('\n');
+            if stream.raw {
+                // Raw passthrough: the caller asked for the underlying
+                // stream-json events, so no parse, no filter, no render.
+                if buffering {
+                    backlog.push(raw_line.to_string());
+                } else if writeln!(out, "{}", raw_line).is_err() {
+                    break 'outer;
+                } else {
+                    emitted += 1;
+                }
+                continue;
+            }
+            let fmt = format_line(raw_line, opts);
             if fmt.malformed {
                 malformed += 1;
                 continue;
             }
             for line in &fmt.lines {
+                if buffering {
+                    backlog.push(line.clone());
+                    continue;
+                }
                 if writeln!(out, "{}", line).is_err() {
-                    return finish(out, malformed, emitted);
+                    break 'outer;
                 }
                 emitted += 1;
             }
@@ -664,10 +716,23 @@ fn stream_log_inner(entry: &LogEntry, opts: &FormatOpts, follow: bool) -> Result
                 seen_result = true;
             }
         }
+        if buffering {
+            // End of the backlog pass — emit only its tail, then go live.
+            buffering = false;
+            let keep = stream.backlog_lines.unwrap_or(0);
+            let start = backlog.len().saturating_sub(keep);
+            for line in &backlog[start..] {
+                if writeln!(out, "{}", line).is_err() {
+                    break 'outer;
+                }
+                emitted += 1;
+            }
+            backlog.clear();
+        }
         if INTERRUPTED.load(Ordering::SeqCst) {
             break;
         }
-        if !follow {
+        if !stream.follow {
             break;
         }
         if seen_result {
