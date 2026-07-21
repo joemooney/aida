@@ -40188,9 +40188,12 @@ fn handle_autopilot_command(cmd: &crate::cli::AutopilotCommand) -> Result<()> {
         }
         // TASK-1018: the DURABLE half — what autopilot actually did, and the
         // one command that undoes it.
-        AutopilotCommand::Executions { limit, open, json } => {
-            handle_autopilot_executions(*limit, *open, *json)
-        }
+        AutopilotCommand::Executions {
+            limit,
+            open,
+            from_product,
+            json,
+        } => handle_autopilot_executions(*limit, *open, *from_product, *json),
         AutopilotCommand::Revert {
             target,
             dry_run,
@@ -40251,8 +40254,18 @@ fn handle_autopilot_reindex(dry_run: bool) -> Result<()> {
 
 /// `aida autopilot executions` — list the actions autopilot actually EXECUTED
 /// (as opposed to `audit`'s dry-run projection), newest last.
-// trace:TASK-1018 | ai:claude
-fn handle_autopilot_executions(limit: usize, open_only: bool, json: bool) -> Result<()> {
+///
+/// TASK-1013: `--from-product` narrows the list to the actions whose evidence
+/// recorded a product handoff. Product input is evidence, never authority — the
+/// filter exists so an operator can see at a glance whether a non-privileged
+/// product seat is steering what autopilot dispositions.
+// trace:TASK-1018 trace:TASK-1013 | ai:claude
+fn handle_autopilot_executions(
+    limit: usize,
+    open_only: bool,
+    from_product: bool,
+    json: bool,
+) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let executions = autopilot_audit::read_executions(&project_root)?;
@@ -40261,6 +40274,12 @@ fn handle_autopilot_executions(limit: usize, open_only: bool, json: bool) -> Res
     let mut rows: Vec<&autopilot_audit::ExecutionRecord> = executions.iter().collect();
     if open_only {
         rows.retain(|e| !autopilot_audit::is_reversed(&reversals, &e.id));
+    }
+    // Narrow BEFORE the limit so `--from-product --limit N` means "the last N
+    // product-sourced actions", not "the product-sourced ones among the last N".
+    // trace:TASK-1013 | ai:claude
+    if from_product {
+        rows.retain(|e| autopilot_audit::is_from_product(e));
     }
     if limit > 0 && rows.len() > limit {
         rows = rows.split_off(rows.len() - limit);
@@ -40284,7 +40303,13 @@ fn handle_autopilot_executions(limit: usize, open_only: bool, json: bool) -> Res
                     "reason": e.reason,
                     "evidence": e.evidence,
                     "mode": e.mode,
+                    // `from_product` is the raw recorded field; `is_from_product`
+                    // is the filter's verdict (flag, else evidence markers), and
+                    // `product` names the seat when the marker carries a who.
+                    // trace:TASK-1013 | ai:claude
                     "from_product": e.from_product,
+                    "is_from_product": autopilot_audit::is_from_product(e),
+                    "product": autopilot_audit::product_provenance(&e.evidence),
                     "prior": e.prior,
                     "reverted": autopilot_audit::is_reversed(&reversals, &e.id),
                 })
@@ -40295,17 +40320,29 @@ fn handle_autopilot_executions(limit: usize, open_only: bool, json: bool) -> Res
     }
 
     if rows.is_empty() {
-        println!(
-            "{} autopilot has not executed any action here yet.",
-            "·".dimmed()
-        );
+        if from_product {
+            println!(
+                "{} no autopilot execution here acted on a product handoff.",
+                "·".dimmed()
+            );
+        } else {
+            println!(
+                "{} autopilot has not executed any action here yet.",
+                "·".dimmed()
+            );
+        }
         return Ok(());
     }
 
     println!(
-        "{} autopilot executions — {} recorded action(s)",
+        "{} autopilot executions — {} {}action(s)",
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
-        rows.len()
+        rows.len(),
+        if from_product {
+            "product-sourced "
+        } else {
+            "recorded "
+        }
     );
     for e in &rows {
         let reverted = autopilot_audit::is_reversed(&reversals, &e.id);
@@ -40326,6 +40363,12 @@ fn handle_autopilot_executions(limit: usize, open_only: bool, json: bool) -> Res
         );
         if let Some(restore) = e.prior.describe() {
             println!("      {}", format!("restores: {restore}").dimmed());
+        }
+        // The handoff is visible on every listing, not just under the filter —
+        // an operator scanning the trail should not have to know to ask.
+        // trace:TASK-1013 | ai:claude
+        if let Some(handoff) = autopilot_audit::product_annotation(e) {
+            println!("      {}", handoff.magenta());
         }
     }
     println!(

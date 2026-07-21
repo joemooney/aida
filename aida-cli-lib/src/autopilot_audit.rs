@@ -45,7 +45,9 @@
 //!   with product-role recommendations feeding gate 3 (as EVIDENCE, never as
 //!   authority).
 //! - `from_product` — the TASK-1013 `--from-product` audit filter: true when the
-//!   decision's evidence came from a product handoff.
+//!   decision's evidence came from a product handoff. The filter and the
+//!   evidence CONVENTION that feeds it are live (see "Product-sourced evidence"
+//!   below); the producer that emits product evidence is TASK-0431's half.
 //! - `mode` — TASK-1014/TASK-1022: which composition mode produced the decision
 //!   (`autopilot` / `zen+autopilot` / `solo+autopilot`), including whether it was
 //!   taken during a headless drain.
@@ -220,8 +222,11 @@ pub(crate) struct ExecutionRecord {
     /// decision (`autopilot` / `zen+autopilot` / `solo+autopilot`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
-    /// RESERVED (TASK-1013): true when the evidence came from a product
-    /// handoff — the field the `--from-product` audit filter reads.
+    /// `Some(true)` when the decision's evidence recorded a product handoff —
+    /// the field the `--from-product` audit filter reads. Derived at mint from
+    /// the `product:<who>` evidence markers ([`from_product_flag`]); absent
+    /// rather than `Some(false)` when there was no product input.
+    // trace:TASK-1013 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from_product: Option<bool>,
     /// Forward-compatibility: fields written by a NEWER binary survive a
@@ -259,6 +264,101 @@ pub(crate) struct ReversalRecord {
     pub note: Option<String>,
     #[serde(flatten, default, skip_serializing_if = "BTreeMap::is_empty")]
     pub extra: BTreeMap<String, serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Product-sourced evidence
+// ---------------------------------------------------------------------------
+//
+// The product seat is non-privileged BY CONSTRUCTION: the advisor-authority gate
+// downgrades a product `--status approved` to Draft and refuses its queue
+// writes, so a product recommendation can only ever reach autopilot as
+// EVIDENCE feeding gate 3 — never as authority over gates 1, 2 or 4.
+//
+// That makes one question an operator has to be able to ask of the trail:
+// "which autopilot actions acted on product input?" — the provenance-laundering
+// guard, i.e. is a product seat quietly steering the queue. This section is the
+// answer side of it: the evidence-marker CONVENTION (`product:<who>`), the pure
+// predicates that read it, and the `--from-product` filter they power.
+//
+// The producer that WRITES product evidence lands separately; the convention is
+// fixed here so the writer and the reader cannot disagree on the spelling, and
+// so the filter is truthful the moment the first product-sourced record appears
+// (no migration, no reindex — the flag is derived from the evidence at mint).
+// trace:TASK-1013 | ai:claude
+
+/// Prefix marking one `Decision::evidence` entry as a PRODUCT-ROLE handoff:
+/// `product:<who>`. Matched case-insensitively so a hand-written marker is not
+/// silently dropped from the audit.
+pub(crate) const PRODUCT_EVIDENCE_PREFIX: &str = "product:";
+
+/// The `<who>` half of one `product:<who>` evidence entry, or `None` when the
+/// entry is not a product marker. A bare `product:` IS a valid marker (the
+/// handoff happened; the seat just did not name itself) and yields `Some("")`.
+fn product_marker_who(entry: &str) -> Option<&str> {
+    let entry = entry.trim();
+    let head = entry.get(..PRODUCT_EVIDENCE_PREFIX.len())?;
+    head.eq_ignore_ascii_case(PRODUCT_EVIDENCE_PREFIX)
+        .then(|| entry[PRODUCT_EVIDENCE_PREFIX.len()..].trim())
+}
+
+/// PURE: does this evidence set record a product handoff?
+// trace:TASK-1013 | ai:claude
+pub(crate) fn evidence_has_product_handoff(evidence: &[String]) -> bool {
+    evidence.iter().any(|e| product_marker_who(e).is_some())
+}
+
+/// PURE: who handed the recommendation over, from the first named
+/// `product:<who>` entry. `None` when there is no product evidence, or when the
+/// marker is present but unnamed.
+// trace:TASK-1013 | ai:claude
+pub(crate) fn product_provenance(evidence: &[String]) -> Option<String> {
+    evidence
+        .iter()
+        .filter_map(|e| product_marker_who(e))
+        .find(|who| !who.is_empty())
+        .map(|who| who.to_string())
+}
+
+/// PURE: the value the mint path writes into [`ExecutionRecord::from_product`].
+///
+/// `Some(true)` when the decision consumed a product handoff, `None` when it did
+/// not — deliberately absent rather than `Some(false)`, so a row only carries the
+/// field when it has something to say (matching the `skip_serializing_if` on the
+/// struct, and keeping every existing non-product row byte-identical).
+// trace:TASK-1013 | ai:claude
+pub(crate) fn from_product_flag(evidence: &[String]) -> Option<bool> {
+    evidence_has_product_handoff(evidence).then_some(true)
+}
+
+/// PURE: the `--from-product` filter predicate.
+///
+/// Reads the recorded flag FIRST, then falls back to the evidence markers, so
+/// the filter is truthful for three kinds of row at once: one this binary
+/// minted (flag set from the evidence), one a newer binary set the flag on
+/// directly, and one whose producer only tagged the evidence. An explicit
+/// `from_product: false` is honoured as a deliberate "not product-sourced" even
+/// if a marker-shaped string is loose in the evidence.
+// trace:TASK-1013 | ai:claude
+pub(crate) fn is_from_product(rec: &ExecutionRecord) -> bool {
+    match rec.from_product {
+        Some(flag) => flag,
+        None => evidence_has_product_handoff(&rec.evidence),
+    }
+}
+
+/// PURE: the one-line product-handoff annotation for the executions table, or
+/// `None` when the row is not product-sourced. Shared by every surface so the
+/// human table and any later renderer describe the handoff identically.
+// trace:TASK-1013 | ai:claude
+pub(crate) fn product_annotation(rec: &ExecutionRecord) -> Option<String> {
+    if !is_from_product(rec) {
+        return None;
+    }
+    Some(match product_provenance(&rec.evidence) {
+        Some(who) => format!("product handoff: {who}"),
+        None => "product handoff".to_string(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -362,9 +462,12 @@ pub(crate) fn execution_record(
             source.to_string()
         },
         prior,
+        // TASK-1013: derived from the evidence, not passed in — the flag and the
+        // markers it summarizes can never drift apart, and every producer that
+        // cites a product handoff becomes filterable without touching this call.
+        from_product: from_product_flag(&decision.evidence),
         evidence: decision.evidence.clone(),
         mode: None,
-        from_product: None,
         extra: BTreeMap::new(),
     })
 }
@@ -1134,6 +1237,149 @@ mod tests {
         assert!(serde_json::to_string(&rec)
             .unwrap()
             .contains("future_field"));
+    }
+
+    // ---- product-sourced evidence + the --from-product filter --------------
+
+    /// A decision whose evidence cites a product handoff.
+    fn product_decision(spec: &str, marker: &str) -> Decision {
+        Decision {
+            evidence: vec!["PRIN-3".to_string(), marker.to_string()],
+            ..decision(spec, ActionClass::Approve)
+        }
+    }
+
+    fn mint(d: &Decision) -> ExecutionRecord {
+        execution_record(
+            "2026-07-20T00:00:00Z",
+            0,
+            d,
+            Outcome::Execute,
+            Authority::Auto,
+            "joe",
+            "groom",
+            PriorState::from_status("draft"),
+        )
+        .expect("a reversible executed action with prior state mints")
+    }
+
+    #[test]
+    fn product_evidence_marker_sets_from_product_at_mint() {
+        // The whole point of deriving rather than passing: the moment a producer
+        // cites a product handoff, the record is filterable — no second write.
+        let rec = mint(&product_decision("TASK-1", "product:pat"));
+        assert_eq!(rec.from_product, Some(true));
+        assert!(is_from_product(&rec));
+        assert_eq!(product_provenance(&rec.evidence).as_deref(), Some("pat"));
+    }
+
+    #[test]
+    fn non_product_evidence_leaves_from_product_absent() {
+        // Absent, not `Some(false)` — a row says nothing about product input
+        // unless there WAS product input, so non-product rows stay byte-identical
+        // to the ones minted before this filter existed.
+        let rec = mint(&decision("TASK-1", ActionClass::Approve));
+        assert_eq!(rec.from_product, None);
+        assert!(!is_from_product(&rec));
+        assert!(!serde_json::to_string(&rec)
+            .unwrap()
+            .contains("from_product"));
+    }
+
+    #[test]
+    fn product_marker_is_case_insensitive_and_tolerates_whitespace() {
+        // A hand-written marker must not fall out of the audit on capitalization.
+        for marker in ["Product:Pat", "  PRODUCT: pat  ", "product:pat"] {
+            let rec = mint(&product_decision("TASK-1", marker));
+            assert!(is_from_product(&rec), "{marker}");
+        }
+    }
+
+    #[test]
+    fn unnamed_product_marker_still_counts_as_a_handoff() {
+        // The handoff happened even if the seat did not name itself; the filter
+        // must not lose the row just because provenance is anonymous.
+        let rec = mint(&product_decision("TASK-1", "product:"));
+        assert!(is_from_product(&rec));
+        assert_eq!(product_provenance(&rec.evidence), None);
+        assert_eq!(product_annotation(&rec).as_deref(), Some("product handoff"));
+    }
+
+    #[test]
+    fn product_lookalike_evidence_is_not_a_handoff() {
+        // Only the `product:` PREFIX marks a handoff — prose that merely mentions
+        // the product seat must never light up the provenance filter.
+        for entry in [
+            "the product roadmap says so",
+            "ADR-4 product positioning",
+            "productivity:pat",
+        ] {
+            let rec = mint(&product_decision("TASK-1", entry));
+            assert!(!is_from_product(&rec), "{entry}");
+        }
+    }
+
+    #[test]
+    fn from_product_filter_reads_the_flag_before_the_evidence() {
+        // Three row shapes must all filter correctly: flag-only (a newer binary
+        // set it directly), evidence-only (a producer that only tagged), and an
+        // explicit false (a deliberate "not product-sourced" wins over a loose
+        // marker-shaped string).
+        let mut flag_only = mint(&decision("TASK-1", ActionClass::Approve));
+        flag_only.from_product = Some(true);
+        assert!(is_from_product(&flag_only));
+
+        let mut evidence_only = mint(&product_decision("TASK-2", "product:pat"));
+        evidence_only.from_product = None;
+        assert!(is_from_product(&evidence_only));
+
+        let mut explicit_false = mint(&product_decision("TASK-3", "product:pat"));
+        explicit_false.from_product = Some(false);
+        assert!(!is_from_product(&explicit_false));
+    }
+
+    #[test]
+    fn from_product_filter_selects_only_product_sourced_rows() {
+        // The filter as the CLI applies it, over a mixed trail.
+        let rows = vec![
+            mint(&decision("TASK-1", ActionClass::Approve)),
+            mint(&product_decision("TASK-2", "product:pat")),
+            mint(&decision("TASK-3", ActionClass::Tag)),
+            mint(&product_decision("TASK-4", "product:sam")),
+        ];
+        let selected: Vec<&str> = rows
+            .iter()
+            .filter(|r| is_from_product(r))
+            .map(|r| r.spec_id.as_str())
+            .collect();
+        assert_eq!(selected, vec!["TASK-2", "TASK-4"]);
+    }
+
+    #[test]
+    fn product_annotation_names_the_seat_and_stays_none_otherwise() {
+        assert_eq!(
+            product_annotation(&mint(&product_decision("TASK-1", "product:pat"))).as_deref(),
+            Some("product handoff: pat")
+        );
+        assert_eq!(
+            product_annotation(&mint(&decision("TASK-1", ActionClass::Approve))),
+            None
+        );
+    }
+
+    #[test]
+    fn product_provenance_survives_the_durable_comment_round_trip() {
+        // The filter must still be truthful after a reindex from the durable
+        // comments — the trail that outlives `.aida/`.
+        let rec = mint(&product_decision("TASK-1", "product:pat"));
+        let recovered =
+            parse_audit_comment(&audit_comment(&rec)).expect("the comment round-trips losslessly");
+        assert_eq!(recovered, rec);
+        assert!(is_from_product(&recovered));
+        assert_eq!(
+            product_provenance(&recovered.evidence).as_deref(),
+            Some("pat")
+        );
     }
 
     // ---- durable append ----------------------------------------------------
