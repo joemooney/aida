@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T06:01:49.539694060Z
-modified_at: 2026-07-21T06:41:30.386335400Z
+modified_at: 2026-07-21T06:43:09.270206337Z
 req_type: Bug
 tags:
 - aida:queue liveness followup:BUG-765 followup:BUG-753 from-dogfood
+comments:
+- id: 019f8369-fd56-7550-b089-7fb32abb5703
+  author: joe
+  content: Commit 078f97773 references this requirement
+  created_at: 2026-07-21T06:43:09.270206337Z
+  modified_at: 2026-07-21T06:43:09.270206337Z
+  session_id: 62606144-4981-4069-b657-73df0d647c56
 execution_mode: drive
