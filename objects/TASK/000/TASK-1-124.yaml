@@ -8,12 +8,12 @@ description: |-
   Reported by the TASK-144 implementer (delegated observation): the inline fallback pre-commit hook body in aida-core/src/scaffolding/hooks.rs (used only if EMBEDDED_TEMPLATES is missing, believed impossible-in-practice) has drifted from the master template: no TASK-917 sentinel, no BUG-651 robust binary resolution, no TASK-984 glyph lint, and now no TASK-144 move-detection either.
 
   Either delete the dead fallback (preferred if truly unreachable) or generate it from the same template source so it cannot drift.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-07-21T01:39:55.902499628Z
-modified_at: 2026-07-21T02:27:05.632281791Z
+modified_at: 2026-07-21T02:28:48.057239458Z
 req_type: Task
 tags:
 - from-advisor:general
