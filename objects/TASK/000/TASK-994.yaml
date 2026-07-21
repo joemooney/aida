@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T17:29:22.191258079Z
-modified_at: 2026-07-21T06:47:23.971473069Z
+modified_at: 2026-07-21T07:10:16.092412286Z
 req_type: Task
 tags:
 - zen-ready
@@ -16,4 +16,11 @@ relationships:
 - rel_type: Child
   target_id: 019f1047-d9a5-7673-a495-8cbe9eaa20b5
   created_at: 2026-06-29T17:29:27.164936033Z
+comments:
+- id: 019f8382-d01c-7363-902e-2076cb528ae3
+  author: joe
+  content: Commit bd63cae28 references this requirement
+  created_at: 2026-07-21T07:10:16.092412286Z
+  modified_at: 2026-07-21T07:10:16.092412286Z
+  session_id: b2fbf49b-dbba-4dea-8daa-00aa86595b2d
 execution_mode: drive
