@@ -1,0 +1,14 @@
+id: 019f82df-1f2e-7ee0-946f-f1753f5e2cf3
+spec_id: TASK-1167
+agreed_id: TASK-1167
+title: aida tail <session|spec|drain> — stream a live session's log by id, resolving the path the operator shouldn't have to know
+description: 'Operator ask 2026-07-20: watching live autonomous work today requires knowing a log FILE PATH (.aida/burndown/<drain-id>.jsonl, a nohup log, or a headless-logs/*.jsonl) and tailing it by hand. Add ''aida tail <id>'' that resolves an id — session id (from aida ps), spec id (its live drive/drain), or ''drain'' (the active burndown) — to its live log and streams it (follow by default; --since N / --lines N; --json passes raw stream-json, default renders the human phase lines like burndown --verbose). Complements aida ps (what''s running) + aida drain status (is a drain up) with ''show me what THIS one is doing right now''. Resolution: ps already maps session→pid→worktree; extend it session→logfile. For a fanout member, tail its agent-<id>.jsonl. No live log (interactive session) → say so, don''t error. Acceptance: aida tail <running-drain-session> streams its live phase output; aida tail <spec-with-live-drive> finds its log; a session with no log reports that cleanly; --json emits raw events. Mode drive.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T04:11:28.430778444Z
+modified_at: 2026-07-21T04:11:28.430778444Z
+req_type: Task
+tags:
+- dx aida:ps aida:tail observability from-operator
