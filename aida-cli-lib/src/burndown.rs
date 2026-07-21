@@ -266,12 +266,32 @@ pub(crate) fn serialize_groups(tags: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// A ready spec held out of THIS wave because a sibling already claimed its
+/// `serialize:<group>`. Distinct from "awaiting advisor sign-off": the spec IS
+/// queued and blessed — it simply drains in a later wave. Carries the claiming
+/// spec + group so the reader can see WHY it is held rather than guessing that
+/// a human gate is missing.
+// trace:TASK-149 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SerializeHold {
+    /// The held spec's display id.
+    pub(crate) spec: String,
+    /// The spec that claimed the group this wave.
+    pub(crate) held_by: String,
+    /// The serialize group name (lowercased, `serialize:` prefix stripped).
+    pub(crate) group: String,
+}
+
 /// STORY-614: substrate-enforce the `serialize:<group>` convention. Given the
 /// READY fan-out set (display ids, in deterministic order) and a lookup from
 /// display id → its serialize groups, collapse the set so that AT MOST ONE spec
 /// per distinct group survives in this wave. The held-back members are returned
-/// separately (NOT dropped) so the caller can fold them into the "awaiting" set
-/// — they drain in successive waves.
+/// separately (NOT dropped) — they drain in successive waves.
+///
+/// TASK-149: each held member is returned as a [`SerializeHold`] naming the
+/// claiming spec + group, so the caller can report it as its OWN state
+/// ("queued, blessed, drains next wave") instead of folding it into the
+/// awaiting-sign-off bucket, which reads as "a human still has to bless this".
 ///
 /// Pick is deterministic: the FIRST id (in the supplied order) claims each
 /// group; later members sharing any already-claimed group are held. The caller
@@ -279,23 +299,34 @@ pub(crate) fn serialize_groups(tags: &[String]) -> Vec<String> {
 /// Specs with no serialize tag are never held — they all stay parallel. Pure +
 /// order-preserving so the gate is unit-testable without a live store.
 /// trace:STORY-614 | ai:claude
+// trace:TASK-149 | ai:claude
 pub(crate) fn collapse_serialize_groups(
     ready: Vec<String>,
     groups_by_id: &std::collections::HashMap<String, Vec<String>>,
-) -> (Vec<String>, Vec<String>) {
+) -> (Vec<String>, Vec<SerializeHold>) {
     let mut kept = Vec::new();
     let mut held = Vec::new();
-    let mut claimed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // group → the spec that claimed it this wave (so a hold can name its claimer).
+    let mut claimed: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for id in ready {
         let groups = groups_by_id.get(&id).cloned().unwrap_or_default();
-        // A spec is held if ANY of its groups is already claimed this wave.
-        if groups.iter().any(|g| claimed.contains(g)) {
-            held.push(id);
-        } else {
-            for g in groups {
-                claimed.insert(g);
+        // A spec is held if ANY of its groups is already claimed this wave; the
+        // FIRST such group (in the spec's own tag order) names the hold.
+        match groups
+            .iter()
+            .find_map(|g| claimed.get(g).map(|owner| (g.clone(), owner.clone())))
+        {
+            Some((group, held_by)) => held.push(SerializeHold {
+                spec: id,
+                held_by,
+                group,
+            }),
+            None => {
+                for g in groups {
+                    claimed.insert(g, id.clone());
+                }
+                kept.push(id);
             }
-            kept.push(id);
         }
     }
     (kept, held)
@@ -4016,10 +4047,72 @@ mod tests {
 
         // Exactly one of the docs-group pair + the independent spec survive.
         assert_eq!(kept, vec!["TASK-1".to_string(), "TASK-3".to_string()]);
-        // The held member is preserved, not dropped.
-        assert_eq!(held, vec!["TASK-2".to_string()]);
+        // The held member is preserved, not dropped — and names its claimer.
+        assert_eq!(
+            held,
+            vec![SerializeHold {
+                spec: "TASK-2".to_string(),
+                held_by: "TASK-1".to_string(),
+                group: "docs".to_string(),
+            }]
+        );
         // Nothing is lost across the split.
         assert_eq!(kept.len() + held.len(), 3);
+    }
+
+    /// TASK-149: a serialize-held spec is a DISTINCT state from "awaiting
+    /// advisor sign-off" — it is queued and blessed, only deferred to a later
+    /// wave. With 3 queued members of one group, exactly one lands in `ready`
+    /// and the other two come back as holds naming the claiming spec + group;
+    /// the sign-off split (the source of `awaiting_signoff`) never sees them,
+    /// so that bucket stays empty for these specs.
+    // trace:TASK-149 | ai:claude
+    #[test]
+    fn serialize_held_members_are_not_awaiting_signoff() {
+        let pickable = vec![
+            "TASK-1".to_string(),
+            "TASK-2".to_string(),
+            "TASK-3".to_string(),
+        ];
+        // All three are queued — i.e. all three ARE advisor-blessed.
+        let queued: std::collections::HashSet<String> = pickable.iter().cloned().collect();
+        let (mut ready, awaiting) = split_by_signoff(pickable, &queued);
+        assert!(
+            awaiting.is_empty(),
+            "every member is queued, so nothing awaits sign-off"
+        );
+
+        let mut groups: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for id in ["TASK-1", "TASK-2", "TASK-3"] {
+            groups.insert(id.to_string(), vec!["docs".to_string()]);
+        }
+        ready.sort();
+        let (kept, held) = collapse_serialize_groups(ready, &groups);
+
+        // Exactly one member drains this wave.
+        assert_eq!(kept, vec!["TASK-1".to_string()]);
+        // The rest are serialize-held, each naming the claiming spec + group —
+        // NOT folded into the awaiting-sign-off bucket.
+        assert_eq!(
+            held,
+            vec![
+                SerializeHold {
+                    spec: "TASK-2".to_string(),
+                    held_by: "TASK-1".to_string(),
+                    group: "docs".to_string(),
+                },
+                SerializeHold {
+                    spec: "TASK-3".to_string(),
+                    held_by: "TASK-1".to_string(),
+                    group: "docs".to_string(),
+                },
+            ]
+        );
+        assert!(
+            awaiting.is_empty(),
+            "serialize-held specs must never land in awaiting_signoff"
+        );
     }
 
     /// STORY-614: specs with NO serialize tag all stay parallel — the collapse

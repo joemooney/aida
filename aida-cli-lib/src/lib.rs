@@ -7569,9 +7569,10 @@ fn handle_advisor_dashboard(
         .count();
 
     // --- Burndown readiness (reuses the exact `aida burndown plan` resolver)
-    let (ready, awaiting_signoff, parked, _supervised, _titles) =
+    let (ready, awaiting_signoff, _serialize_held, parked, _supervised, _titles) =
         resolve_burndown_sets("approved", None, None).unwrap_or_else(|_| {
             (
+                Vec::new(),
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -41376,7 +41377,10 @@ fn handle_burndown_run(
         }
     }
 
-    let (ready, awaiting_signoff, parked, _supervised, _titles) =
+    // trace:TASK-149 — serialize-held specs are queued + blessed and drain in a
+    // later wave; the runner never acts on them THIS wave, so they are not part
+    // of the "nothing blessed" report below.
+    let (ready, awaiting_signoff, _serialize_held, parked, _supervised, _titles) =
         resolve_burndown_sets(status, tag, batch)?;
 
     println!(
@@ -49082,13 +49086,17 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
 // trace:BUG-532 — the title map (display-id → title) is built from the SAME
 // single store load the set resolution already does, so `burndown plan`'s text
 // output can show id+title with no extra store scan (no N+1 lookup).
-// (ready, awaiting_signoff, parked, supervised, titles)
+// (ready, awaiting_signoff, serialize_held, parked, supervised, titles)
 // `supervised` (STORY-610): specs tagged `supervised` — signed off for KEYBOARD
 // pickup but excluded from the unattended drain. Surfaced as its own section in
 // `burndown plan` so the route per spec (`queue work` vs drain) is visible.
+// `serialize_held` (TASK-149): queued + blessed specs a sibling's
+// `serialize:<group>` claim deferred to a LATER wave. Kept out of
+// `awaiting_signoff` — nothing human is pending on them.
 type BurndownSets = (
     Vec<String>,
     Vec<String>,
+    Vec<burndown::SerializeHold>,
     Vec<(String, String)>,
     Vec<String>,
     std::collections::HashMap<String, String>,
@@ -49215,20 +49223,31 @@ fn resolve_burndown_sets(
     // STORY-546: split the pickable set by advisor sign-off (queue membership).
     // `ready` = blessed + drainable; `awaiting_signoff` = pickable but the
     // advisor hasn't queued it yet (the `--candidates` curation list).
-    let (mut ready, mut awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
+    let (mut ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
 
     // STORY-614: substrate-enforce the `serialize:<group>` convention — the
     // fan-out set must never carry more than one spec per group, so a drain that
     // ignores the skill text still can't co-fan a collision group. Sort the
     // ready set (lowest id first) so the deterministic "first claims the group"
-    // pick is stable across runs; the held members fold into awaiting (they
-    // drain in successive waves, not dropped). trace:STORY-614 | ai:claude
+    // pick is stable across runs.
+    //
+    // TASK-149: the held members are their OWN bucket, not part of
+    // `awaiting_signoff`. They are queued and blessed — only a sibling's group
+    // claim defers them to a later wave — so labelling them "awaiting advisor
+    // sign-off" told both the drain runner and the operator that a human gate
+    // was missing when nothing was pending. trace:STORY-614 trace:TASK-149 | ai:claude
     ready.sort();
-    let (kept_ready, held_serialized) = burndown::collapse_serialize_groups(ready, &groups_by_id);
+    let (kept_ready, serialize_held) = burndown::collapse_serialize_groups(ready, &groups_by_id);
     ready = kept_ready;
-    awaiting_signoff.extend(held_serialized);
     supervised.sort();
-    Ok((ready, awaiting_signoff, parked, supervised, titles))
+    Ok((
+        ready,
+        awaiting_signoff,
+        serialize_held,
+        parked,
+        supervised,
+        titles,
+    ))
 }
 
 /// STORY-527 slice 1: resolve a selector to the ready + parked sets via the
@@ -49248,7 +49267,7 @@ fn handle_burndown_plan(
     candidates_view: bool,
     json: bool,
 ) -> Result<()> {
-    let (ready, awaiting_signoff, parked, supervised, titles) =
+    let (ready, awaiting_signoff, serialize_held, parked, supervised, titles) =
         resolve_burndown_sets(status, tag, batch)?;
 
     // trace:BUG-532 — render the spec's (truncated) title beside its id so the
@@ -49284,6 +49303,18 @@ fn handle_burndown_plan(
             "selector": { "status": status, "tag": tag, "batch": batch },
             "ready": ready,
             "awaiting_signoff": awaiting_signoff,
+            // trace:TASK-149 — its own key, NOT folded into awaiting_signoff:
+            // these are queued + blessed, deferred to a later wave by a
+            // sibling's serialize-group claim. Each entry names the claiming
+            // spec + group so a consumer can explain the hold.
+            "serialize_held": serialize_held
+                .iter()
+                .map(|h| serde_json::json!({
+                    "spec": h.spec,
+                    "held_by": h.held_by,
+                    "group": h.group,
+                }))
+                .collect::<Vec<_>>(),
             "supervised": supervised,
             "parked": parked.iter().map(|(id, reason)| serde_json::json!({ "spec": id, "reason": reason })).collect::<Vec<_>>(),
             "drain": drain,
@@ -49337,13 +49368,22 @@ fn handle_burndown_plan(
         "  {}",
         burndown::selector_summary(status, tag, batch).dimmed()
     );
+    // trace:TASK-149 — serialize-held is counted separately from awaiting
+    // sign-off (and only mentioned when non-empty, so the common line is
+    // unchanged): nothing human is pending on a held spec.
+    let held_summary = if serialize_held.is_empty() {
+        String::new()
+    } else {
+        format!(", {} held for a later wave", serialize_held.len())
+    };
     println!(
-        "  {} {} ready to fan out, {} awaiting sign-off, {} supervised, {} parked",
+        "  {} {} ready to fan out, {} awaiting sign-off, {} supervised, {} parked{}",
         "→".green(),
         ready.len(),
         awaiting_signoff.len(),
         supervised.len(),
-        parked.len()
+        parked.len(),
+        held_summary
     );
 
     // TASK-805: if a drain is actively running, surface it as a banner +
@@ -49392,6 +49432,26 @@ fn handle_burndown_plan(
         );
         for id in &awaiting_signoff {
             println!("  {} {}{}", "+".yellow(), id, title_cell(id));
+        }
+    }
+    // TASK-149: serialize-held — queued AND blessed, just not this wave. Its own
+    // section (never the awaiting-sign-off list) so neither the drain runner nor
+    // a reading operator concludes a human gate is missing; each row names the
+    // spec that claimed the group. trace:TASK-149 | ai:claude
+    if !serialize_held.is_empty() {
+        println!(
+            "\n{}",
+            "Held for a later wave (queued + blessed — one spec per `serialize:<group>` drains at a time; no action needed):"
+                .bold()
+        );
+        for h in &serialize_held {
+            println!(
+                "  {} {}{} — {}",
+                "◷".yellow(),
+                h.spec.cyan(),
+                title_cell(&h.spec),
+                format!("held behind {} in serialize group `{}`", h.held_by, h.group).dimmed()
+            );
         }
     }
     // STORY-610: the supervised section — the structural answer to the recurring
