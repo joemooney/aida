@@ -3,12 +3,12 @@ spec_id: TASK-1168
 agreed_id: TASK-1168
 title: aida ps role + spec columns truncate short identifiers to ~13 chars ('harness-workt…', 'general-p…') despite the table auto-sizing to content
 description: 'Operator 2026-07-20: ps role/spec columns are too narrow — ''harness-worktree'' renders ''harness-workt…'', ''general-purpose'' renders ''general-p…''. Root: the ps command pre-truncates the role and spec/scope CELL VALUES to a ~13-char cap before handing them to the shared table renderer (aida-cli-lib/src/lib.rs ~1085-1144), which ALREADY auto-widths each column to the widest cell — so the cap is the only thing causing the ellipsis and it fights the auto-sizer. Fix (recommended): remove/raise the pre-truncation for role and spec — role is a bounded closed set (implementer/advisor/reviewer/general-purpose/harness-worktree, ~16 chars max) and spec is a SPEC-ID (~10), so letting them auto-size renders them whole with no width blowup. Fallback for a genuinely long scope value: wrap the overflow to a continuation line, consistent with the existing per-row continuation lines (worktree path, the ''adopted — lease born…'' annotation). Acceptance: aida ps shows ''harness-worktree'' and ''general-purpose'' un-truncated; a pathological long scope wraps rather than ellipsizes mid-word; --json unaffected; the table stays within a normal terminal width for the common closed-set values. Mode drive.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T04:24:12.901970566Z
-modified_at: 2026-07-21T04:24:17.249112368Z
+modified_at: 2026-07-21T04:31:00.034743691Z
 req_type: Task
 tags:
 - dx aida:ps papercut from-operator
