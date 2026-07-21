@@ -1,0 +1,14 @@
+id: 019f83ee-4004-7ff0-9ced-e84b1136d9b8
+spec_id: BUG-773
+agreed_id: BUG-773
+title: queue add succeeds ('✓ Added') but queue list count doesn't reflect it — write/read inconsistency stalls a drain (specs read as awaiting_signoff despite being queued)
+description: '2026-07-21 ~02:10, recovering the drain-machinery chain: ''aida queue add TASK-1135 --for implementer --user joe'' returns ''✓ Added TASK-1135 ... to queue [for:implementer]'' repeatedly, but ''aida queue list --user joe'' count stays at 4 and does NOT include TASK-1135; ''aida burndown plan'' classifies it as pickable-awaiting-signoff (i.e. UNqueued) so a fresh drain blesses 0 and exits. So queue ADD reports success while queue LIST/plan don''t see the entry — a write/read inconsistency (likely the queue projection is cache-backed and stale vs the store write, same family as BUG-771 status-drift; OR the add and list resolve different queue keys/files). Impact: a drain can''t be fed — re-queued specs silently don''t drain, and the operator/advisor can''t tell (add says success). Repro: aida queue add <id> --for implementer; aida queue list | grep <id> → absent; aida burndown plan → id under awaiting_signoff. Fix: make queue add''s write and queue list/plan''s read hit the same source (or invalidate/rebuild the queue projection on add); an add that ''succeeds'' must appear in the very next list. Diagnostic: compare the store queue registry (registry/queues/*.yaml) against the cache after an add. Blocks completing the drain-machinery chain (TASK-1135-1139) + TASK-1016 — left for fresh eyes. Mode drive. Priority high (silent queue data inconsistency).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T09:07:37.092894598Z
+modified_at: 2026-07-21T09:07:37.092894598Z
+req_type: Bug
+tags:
+- aida:queue integrity cache-drift from-dogfood
