@@ -49,9 +49,11 @@
 //!   evidence CONVENTION that feeds it are live (see "Product-sourced evidence"
 //!   below); the producer that emits product evidence is TASK-0431's half.
 //! - `mode` — which composition mode produced the decision (`autopilot` /
-//!   `zen+autopilot` / `solo+autopilot`). Derived at mint from the surface and
-//!   the live solo posture (see "Composition mode" below); TASK-1014. Noting
-//!   product-sourced decisions taken during a headless drain is TASK-1022's half.
+//!   `zen+autopilot` / `solo+autopilot`). Derived at mint from the surface, the
+//!   live solo posture, the headless context and the decision's product
+//!   provenance (see "Composition mode" below); TASK-1014, extended by TASK-1022
+//!   with the `headless` + `product` layers so a product-sourced decision taken
+//!   during a headless drain reads `headless+product+autopilot`.
 //! - `extra` — a `#[serde(flatten)]` catch-all so a record written by a NEWER
 //!   binary round-trips through an older one without losing fields.
 //!
@@ -380,13 +382,24 @@ pub(crate) fn product_annotation(rec: &ExecutionRecord) -> Option<String> {
 // landed?" — and cannot tell a supervised one-shot apart from an unattended pass
 // after the fact.
 //
-// `mode` is that answer, recorded at mint from two things already in hand: the
-// SURFACE that produced the action (the record's `source`) and the solo POSTURE
-// in effect at the time. Composed outermost-first and always ending in
-// `autopilot`, so the vocabulary is `autopilot` / `zen+autopilot` /
-// `solo+autopilot` — and a composition of both layers keeps both rather than
-// silently dropping one.
+// `mode` is that answer, recorded at mint from what is already in hand: the
+// SURFACE that produced the action (the record's `source`), the solo POSTURE and
+// the HEADLESS context in effect at the time, and whether the decision consumed
+// a product handoff. Composed outermost-first and always ending in `autopilot`,
+// so the vocabulary is `autopilot` / `zen+autopilot` / `solo+autopilot` — and a
+// composition of layers keeps all of them rather than silently dropping one.
 // trace:TASK-1014 | ai:claude
+//
+// TASK-1022 adds the two layers that make the sharpest supervision question
+// answerable: a product seat grants NO NEW AUTHORITY under `--no-human` / solo
+// (gate 3 is non-relaxable there — `autopilot::effective_envelope`, and the
+// cross-product invariants in `autopilot.rs`'s test module assert it), but a
+// product-sourced decision taken while nobody was in the loop is still the thing
+// an operator most needs to SEE afterwards. `headless` records the unattended
+// context, `product` records the non-privileged provenance, and their
+// composition — `headless+product+autopilot` — is that decision, named.
+// `aida autopilot executions --from-product --mode headless` is the query.
+// trace:TASK-1022 | ai:claude
 
 /// The innermost layer, present on every mode: the envelope itself. Alone, it
 /// is the bare mode — a `groom --autopilot` pass with nothing composed over it.
@@ -397,20 +410,40 @@ pub(crate) const MODE_LAYER_ZEN: &str = "zen";
 /// The solo POSTURE layer: the operator is the only one home, so the session
 /// carries the safe-vs-keystone partition `presence::resolve_solo_posture` maps.
 pub(crate) const MODE_LAYER_SOLO: &str = "solo";
+/// The headless CONTEXT layer (`AIDA_HEADLESS=1`): nobody was in the loop, so
+/// the run could not pause and ask. Recorded, never a grant — headlessness only
+/// ever TIGHTENS the envelope (`autopilot::effective_envelope`).
+// trace:TASK-1022 | ai:claude
+pub(crate) const MODE_LAYER_HEADLESS: &str = "headless";
+/// The product PROVENANCE layer: the decision consumed a product-role handoff.
+/// Product input is gate-3 evidence and nothing else, so this layer describes
+/// where the grounding came from — it never widens what the action may do.
+// trace:TASK-1022 | ai:claude
+pub(crate) const MODE_LAYER_PRODUCT: &str = "product";
 
 /// PURE: the composition mode token for one action.
 ///
-/// `solo` is the OUTER layer — a posture spanning the whole session — and the
-/// surface is the inner one, so the three named compositions come out as
-/// `autopilot`, `zen+autopilot` and `solo+autopilot`. A zen one-shot taken while
-/// solo is active records BOTH (`solo+zen+autopilot`): the layers are additive,
-/// because dropping one to force the token into a fixed set of three would make
-/// the record less true than the run it describes.
-// trace:TASK-1014 | ai:claude
-pub(crate) fn composition_mode(source: &str, solo: bool) -> String {
+/// Layers are ordered by SCOPE, widest first: `solo` is a session-wide posture,
+/// `headless` is the context of this run, `zen` is the surface that invoked it,
+/// `product` is the provenance of this one decision, and `autopilot` — the
+/// envelope every mode ends in — is innermost. So the named compositions come
+/// out as `autopilot`, `zen+autopilot`, `solo+autopilot`, and the TASK-1022
+/// one, `headless+product+autopilot`.
+///
+/// Layers are ADDITIVE: a zen one-shot taken while solo is active records BOTH
+/// (`solo+zen+autopilot`), because dropping one to force the token into a fixed
+/// set would make the record less true than the run it describes. Each layer
+/// means exactly one thing regardless of which others are present — `product`
+/// is recorded on every product-sourced decision, attended or not, so
+/// `--mode product` never silently means something narrower than it says.
+// trace:TASK-1014 trace:TASK-1022 | ai:claude
+pub(crate) fn composition_mode(source: &str, solo: bool, headless: bool, product: bool) -> String {
     let mut layers: Vec<&str> = Vec::new();
     if solo {
         layers.push(MODE_LAYER_SOLO);
+    }
+    if headless {
+        layers.push(MODE_LAYER_HEADLESS);
     }
     // `solo` is a posture, so it composes with any surface; `zen` is the one
     // surface that is itself an autonomy composition. Every other source
@@ -418,6 +451,9 @@ pub(crate) fn composition_mode(source: &str, solo: bool) -> String {
     // record's `source` already names it.
     if source.trim().eq_ignore_ascii_case(MODE_LAYER_ZEN) {
         layers.push(MODE_LAYER_ZEN);
+    }
+    if product {
+        layers.push(MODE_LAYER_PRODUCT);
     }
     layers.push(MODE_AUTOPILOT);
     layers.join("+")
@@ -427,15 +463,58 @@ pub(crate) fn composition_mode(source: &str, solo: bool) -> String {
 ///
 /// Reads the recorded field FIRST and falls back to deriving from the surface,
 /// so a row minted before the field was written still reports a truthful
-/// composition instead of a blank. The fallback deliberately assumes solo was
-/// OFF: the posture is unrecoverable after the fact, and under-claiming
-/// supervision is the safe direction to be wrong in.
-// trace:TASK-1014 | ai:claude
+/// composition instead of a blank. The fallback is asymmetric on purpose: the
+/// solo posture and the headless context are UNRECOVERABLE after the fact, so
+/// it assumes both were off (under-claiming supervision is the safe direction
+/// to be wrong in), whereas the product provenance IS recoverable — it lives in
+/// the row's own flag and evidence markers ([`is_from_product`]) — so the
+/// fallback reports it rather than throwing away a fact the record still holds.
+// trace:TASK-1014 trace:TASK-1022 | ai:claude
 pub(crate) fn record_mode(rec: &ExecutionRecord) -> String {
     match rec.mode.as_deref().map(str::trim) {
         Some(m) if !m.is_empty() => m.to_string(),
-        _ => composition_mode(&rec.source, false),
+        _ => composition_mode(&rec.source, false, false, is_from_product(rec)),
     }
+}
+
+/// PURE: does the reported mode carry this layer?
+// trace:TASK-1022 | ai:claude
+pub(crate) fn mode_has_layer(rec: &ExecutionRecord, layer: &str) -> bool {
+    record_mode(rec)
+        .split('+')
+        .any(|l| l.trim().eq_ignore_ascii_case(layer))
+}
+
+/// PURE: did this action consume product input with nobody in the loop?
+///
+/// The composition TASK-1022 exists to surface. It is not a warning that
+/// something illegitimate happened — a product seat grants no new authority
+/// under `--no-human`, and the gates enforce that structurally — it is the row
+/// an operator reviewing an unattended drain should read first, because it is
+/// where non-privileged input met the least supervision.
+///
+/// Product provenance is read from the record's own flag/evidence chain (which
+/// survives a pre-`mode` row); the unattended context is read from the mode
+/// token, the only place it is recorded. A row minted before the headless layer
+/// existed therefore reports `false` — the same safe under-claim [`record_mode`]
+/// makes.
+// trace:TASK-1022 | ai:claude
+pub(crate) fn unattended_product_decision(rec: &ExecutionRecord) -> bool {
+    is_from_product(rec) && mode_has_layer(rec, MODE_LAYER_HEADLESS)
+}
+
+/// PURE: the one-line note for a product-sourced decision taken during a
+/// headless drain, or `None` for every other row.
+///
+/// States the bound as well as the fact: what the product seat supplied was
+/// evidence, and no authority came with it.
+// trace:TASK-1022 | ai:claude
+pub(crate) fn unattended_product_annotation(rec: &ExecutionRecord) -> Option<String> {
+    unattended_product_decision(rec).then(|| {
+        "unattended: product input consumed with nobody in the loop \
+         (evidence only — no authority was granted)"
+            .to_string()
+    })
 }
 
 /// PURE: the `--mode` filter predicate.
@@ -520,10 +599,12 @@ impl std::error::Error for AuditError {}
 /// Refuses (rather than silently degrading) on all three reversibility
 /// preconditions — see the module doc. `seq` disambiguates records minted in the
 /// same millisecond so ids stay unique within a batch, exactly as
-/// `autopilot::decision_entry` does. `solo` is the solo posture in effect at the
-/// time, the one composition layer the record cannot recover from its own
-/// fields — [`record_execution`] resolves it so no producer has to remember to.
-// trace:TASK-1018 trace:TASK-1014 | ai:claude
+/// `autopilot::decision_entry` does. `solo` and `headless` are the two
+/// composition layers the record cannot recover from its own fields — the
+/// posture and the presence of a human — so [`record_execution`] resolves both
+/// and no producer has to remember to. The product layer is NOT a parameter: it
+/// is derived from the decision's evidence, exactly like `from_product`.
+// trace:TASK-1018 trace:TASK-1014 trace:TASK-1022 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn execution_record(
     ts: &str,
@@ -534,6 +615,7 @@ pub(crate) fn execution_record(
     actor: &str,
     source: &str,
     solo: bool,
+    headless: bool,
     prior: PriorState,
 ) -> Result<ExecutionRecord, AuditError> {
     if outcome != Outcome::Execute {
@@ -580,8 +662,15 @@ pub(crate) fn execution_record(
         evidence: decision.evidence.clone(),
         // TASK-1014: recorded at mint, because supervision context is exactly
         // the thing that cannot be reconstructed later — the posture has moved
-        // on by the time anyone reads the trail.
-        mode: Some(composition_mode(source, solo)),
+        // on by the time anyone reads the trail. TASK-1022: the product layer
+        // rides the SAME evidence read as `from_product` above, so the mode and
+        // the flag can never disagree about whether product input was consumed.
+        mode: Some(composition_mode(
+            source,
+            solo,
+            headless,
+            evidence_has_product_handoff(&decision.evidence),
+        )),
         extra: BTreeMap::new(),
     })
 }
@@ -976,8 +1065,9 @@ pub(crate) fn read_reversals(project_root: &Path) -> std::io::Result<Vec<Reversa
 /// TASK-1014: the composition mode is resolved HERE, not threaded through the
 /// producers — the solo posture is a runtime read, so it belongs next to the
 /// clock, and deriving it in the one recording surface means a producer cannot
-/// forget to record the supervision context its action ran under.
-// trace:TASK-1018 trace:TASK-0430 trace:TASK-1014 | ai:claude
+/// forget to record the supervision context its action ran under. TASK-1022
+/// resolves the headless context in the same place and for the same reason.
+// trace:TASK-1018 trace:TASK-0430 trace:TASK-1014 trace:TASK-1022 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn record_execution(
     project_root: &Path,
@@ -991,8 +1081,9 @@ pub(crate) fn record_execution(
     let now = chrono::Utc::now();
     let ts = now.to_rfc3339();
     let solo = crate::presence::current_solo(now);
+    let headless = crate::autopilot::current_headless();
     let rec = execution_record(
-        &ts, 0, decision, outcome, authority, actor, source, solo, prior,
+        &ts, 0, decision, outcome, authority, actor, source, solo, headless, prior,
     )?;
     if let Err(e) = write_durable_comment(project_root, &rec.spec_id, &audit_comment(&rec)) {
         eprintln!(
@@ -1246,6 +1337,7 @@ mod tests {
             "joe",
             "zen",
             false,
+            false,
             PriorState::from_status("draft"),
         )
         .expect("an executed, reversible, prior-state-bearing action mints");
@@ -1294,6 +1386,7 @@ mod tests {
                 "joe",
                 "zen",
                 false,
+                false,
                 PriorState::from_status("draft"),
             )
             .unwrap_err();
@@ -1314,6 +1407,7 @@ mod tests {
             "joe",
             "zen",
             false,
+            false,
             PriorState::default(),
         )
         .unwrap_err();
@@ -1333,6 +1427,7 @@ mod tests {
                 Authority::Auto,
                 "joe",
                 "zen",
+                false,
                 false,
                 PriorState::from_status("draft"),
             )
@@ -1386,6 +1481,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             false,
             PriorState::from_status("draft"),
         )
@@ -1513,18 +1609,31 @@ mod tests {
 
     // ---- composition mode + the --mode filter ------------------------------
 
-    /// Mint under a named surface and solo posture — the two inputs the
-    /// composition mode is derived from.
+    /// Mint under a named surface and solo posture — attended, no product
+    /// input, the two-axis case TASK-1014 fixed the vocabulary for.
     fn mint_under(source: &str, solo: bool) -> ExecutionRecord {
+        mint_composed(
+            source,
+            solo,
+            false,
+            &decision("TASK-1", ActionClass::Approve),
+        )
+    }
+
+    /// Mint under the FULL composition context — surface, solo posture, headless
+    /// context — over an arbitrary decision, so the product layer (derived from
+    /// the evidence, never passed in) can be exercised alongside the others.
+    fn mint_composed(source: &str, solo: bool, headless: bool, d: &Decision) -> ExecutionRecord {
         execution_record(
             "2026-07-20T00:00:00Z",
             0,
-            &decision("TASK-1", ActionClass::Approve),
+            d,
             Outcome::Execute,
             Authority::Auto,
             "joe",
             source,
             solo,
+            headless,
             PriorState::from_status("draft"),
         )
         .expect("a reversible executed action with prior state mints")
@@ -1672,6 +1781,146 @@ mod tests {
         assert!(mode_matches(&recovered, "solo"));
     }
 
+    // ---- TASK-1022: the headless + product layers ---------------------------
+    //
+    // A product seat grants NO NEW AUTHORITY under `--no-human` / solo — that
+    // invariant is asserted where the gates live (`autopilot.rs`). What is
+    // asserted HERE is the other half: that a product-sourced decision taken
+    // while nobody was in the loop is VISIBLE in the trail afterwards.
+
+    /// A decision whose evidence cites a product handoff, for the layer tests.
+    fn product_sourced() -> Decision {
+        product_decision("TASK-1", "product:pat")
+    }
+
+    #[test]
+    fn mode_notes_a_product_sourced_decision_taken_during_a_headless_drain() {
+        // The composition this spec exists for, in one token: unattended
+        // context + non-privileged provenance, still ending in the envelope.
+        let rec = mint_composed("groom", false, true, &product_sourced());
+        assert_eq!(rec.mode.as_deref(), Some("headless+product+autopilot"));
+        assert!(unattended_product_decision(&rec));
+        assert!(unattended_product_annotation(&rec).is_some());
+    }
+
+    #[test]
+    fn each_new_layer_is_recorded_independently() {
+        // Layers mean one thing each, regardless of which others are present —
+        // so `--mode headless` and `--mode product` never quietly mean something
+        // narrower than they say.
+        let plain = decision("TASK-1", ActionClass::Approve);
+        assert_eq!(
+            mint_composed("groom", false, true, &plain).mode.as_deref(),
+            Some("headless+autopilot")
+        );
+        assert_eq!(
+            mint_composed("groom", false, false, &product_sourced())
+                .mode
+                .as_deref(),
+            Some("product+autopilot")
+        );
+    }
+
+    #[test]
+    fn the_product_layer_rides_the_same_evidence_read_as_the_flag() {
+        // Derived, not passed in — so the mode and `from_product` can never
+        // disagree about whether product input was consumed.
+        let rec = mint_composed("groom", false, true, &product_sourced());
+        assert_eq!(rec.from_product, Some(true));
+        assert!(mode_has_layer(&rec, MODE_LAYER_PRODUCT));
+
+        let plain = mint_composed(
+            "groom",
+            false,
+            true,
+            &decision("TASK-1", ActionClass::Approve),
+        );
+        assert_eq!(plain.from_product, None);
+        assert!(!mode_has_layer(&plain, MODE_LAYER_PRODUCT));
+    }
+
+    #[test]
+    fn every_layer_survives_the_maximal_composition() {
+        // Widest scope first — session posture, run context, surface,
+        // this-decision provenance, envelope — and nothing dropped to fit.
+        assert_eq!(
+            mint_composed("zen", true, true, &product_sourced())
+                .mode
+                .as_deref(),
+            Some("solo+headless+zen+product+autopilot")
+        );
+    }
+
+    #[test]
+    fn an_attended_product_decision_is_not_flagged_as_unattended() {
+        // The `product` layer alone is not the finding — a supervised product
+        // handoff is ordinary. Only the composition with `headless` is noted.
+        let attended = mint_composed("groom", false, false, &product_sourced());
+        assert!(!unattended_product_decision(&attended));
+        assert_eq!(unattended_product_annotation(&attended), None);
+    }
+
+    #[test]
+    fn a_headless_decision_with_no_product_input_is_not_flagged_either() {
+        let headless_only = mint_composed(
+            "groom",
+            false,
+            true,
+            &decision("TASK-1", ActionClass::Approve),
+        );
+        assert!(!unattended_product_decision(&headless_only));
+        assert_eq!(unattended_product_annotation(&headless_only), None);
+    }
+
+    #[test]
+    fn the_two_filters_compose_into_the_unattended_product_query() {
+        // The review question — "which actions consumed product input with
+        // nobody in the loop?" — is the EXISTING `--from-product` filter plus
+        // `--mode headless`. No third filter, and the intersection is exactly
+        // the rows the annotation calls out.
+        let plain = decision("TASK-2", ActionClass::Approve);
+        let rows = vec![
+            mint_composed("groom", false, false, &plain),
+            mint_composed("groom", false, true, &plain),
+            mint_composed("groom", false, false, &product_sourced()),
+            mint_composed("groom", false, true, &product_sourced()),
+        ];
+        let selected: Vec<bool> = rows
+            .iter()
+            .map(|r| is_from_product(r) && mode_matches(r, MODE_LAYER_HEADLESS))
+            .collect();
+        assert_eq!(selected, vec![false, false, false, true]);
+        for r in &rows {
+            assert_eq!(
+                unattended_product_decision(r),
+                is_from_product(r) && mode_matches(r, MODE_LAYER_HEADLESS)
+            );
+        }
+    }
+
+    #[test]
+    fn record_mode_recovers_the_provenance_but_not_the_context_on_a_pre_mode_row() {
+        // The asymmetric fallback: product provenance lives in the row's own
+        // flag/evidence and is recovered, while the headless context exists
+        // only in the mode token and is under-claimed rather than guessed at.
+        let mut old = mint_composed("groom", false, true, &product_sourced());
+        old.mode = None;
+        assert_eq!(record_mode(&old), "product+autopilot");
+        assert!(!unattended_product_decision(&old));
+    }
+
+    #[test]
+    fn the_unattended_product_note_survives_the_durable_comment_round_trip() {
+        // The trail that outlives `.aida/` must still name the composition.
+        let rec = mint_composed("groom", false, true, &product_sourced());
+        let recovered =
+            parse_audit_comment(&audit_comment(&rec)).expect("the comment round-trips losslessly");
+        assert_eq!(recovered, rec);
+        assert!(unattended_product_decision(&recovered));
+        assert!(mode_matches(&recovered, MODE_LAYER_HEADLESS));
+        assert!(mode_matches(&recovered, MODE_LAYER_PRODUCT));
+    }
+
     // ---- durable append ----------------------------------------------------
 
     #[test]
@@ -1688,6 +1937,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             false,
             PriorState {
                 queued_to_role: Some("implementer".to_string()),
@@ -1706,6 +1956,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             false,
             PriorState::from_status("draft"),
         )
@@ -1743,6 +1994,7 @@ mod tests {
             "joe",
             "zen",
             false,
+            false,
             PriorState::from_status("draft"),
         )
         .unwrap();
@@ -1767,6 +2019,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             false,
             PriorState::from_status("draft"),
         )
@@ -1801,6 +2054,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "zen",
+            false,
             false,
             PriorState::from_status("draft"),
         )
@@ -1892,6 +2146,7 @@ mod tests {
             Authority::Auto,
             "joe",
             "groom",
+            false,
             false,
             prior,
         )

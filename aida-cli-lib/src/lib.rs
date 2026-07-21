@@ -40376,6 +40376,11 @@ fn handle_autopilot_executions(
                     "from_product": e.from_product,
                     "is_from_product": autopilot_audit::is_from_product(e),
                     "product": autopilot_audit::product_provenance(&e.evidence),
+                    // The composition of the two: product input consumed with
+                    // nobody in the loop. Evidence only — no authority came with
+                    // it — but it is the row to review first after an unattended
+                    // drain. trace:TASK-1022 | ai:claude
+                    "unattended_product": autopilot_audit::unattended_product_decision(e),
                     "prior": e.prior,
                     "reverted": autopilot_audit::is_reversed(&reversals, &e.id),
                 })
@@ -40450,6 +40455,14 @@ fn handle_autopilot_executions(
         // trace:TASK-1013 | ai:claude
         if let Some(handoff) = autopilot_audit::product_annotation(e) {
             println!("      {}", handoff.magenta());
+        }
+        // Loudest of the three, and only when both layers are present: a
+        // non-privileged seat's input was consumed with the least supervision
+        // the system offers. The gates guarantee it granted nothing; this line
+        // guarantees the operator can still SEE it.
+        // trace:TASK-1022 | ai:claude
+        if let Some(unattended) = autopilot_audit::unattended_product_annotation(e) {
+            println!("      {}", unattended.yellow());
         }
     }
     println!(
@@ -40639,7 +40652,9 @@ fn handle_autopilot_inspect(
     let config_text =
         std::fs::read_to_string(project_root.join(".aida").join("config.toml")).unwrap_or_default();
     let overrides = autopilot::parse_authority_overrides(&config_text);
-    let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
+    // trace:TASK-1022 | ai:claude — one reader of the flag, so the envelope
+    // tightening and the audit trail's `headless` layer cannot disagree.
+    let headless = autopilot::current_headless();
     let solo_active = presence::current_solo(chrono::Utc::now());
     // The candidates graded below are post-fence: gate 1 already excluded
     // keystone via the same `is_keystone_class` classifier, so an active solo
