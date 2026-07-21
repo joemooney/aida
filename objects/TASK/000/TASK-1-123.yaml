@@ -1,0 +1,20 @@
+id: 019f8254-45a5-7ff1-9d61-addd9961e934
+spec_id: TASK-1-123
+title: 'drain_lock lifetime test flaky: sibling test leaks AIDA_DRAIN_BORROW/FORCE process-wide'
+description: |-
+  drain_lock lifetime test flaky: sibling test leaks AIDA_DRAIN_BORROW/FORCE process-wide
+
+  Reported by the TASK-144 implementer agent (delegated observation, not independently reproduced): drain_lock::tests::lock_with_specs_is_probe_visible_for_the_guards_whole_lifetime (aida-cli-lib/src/drain_lock.rs:907) intermittently fails under parallel test execution because the sibling test at line 794 sets AIDA_DRAIN_BORROW=1/AIDA_DRAIN_FORCE=1 process-wide via EnvVarsGuard, making the second acquire return a borrowed:true guard instead of refusing. Passes with --test-threads=1 and on full-suite rerun.
+
+  Fix shape: serialize the two tests (shared mutex / serial_test) or refactor the borrow/force inputs to be injectable rather than read from process env in tests.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-07-21T01:39:48.773003935Z
+modified_at: 2026-07-21T01:39:48.773003935Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
