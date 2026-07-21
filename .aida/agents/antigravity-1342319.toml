@@ -1,0 +1,11 @@
+id = "antigravity-1342319"
+agent_type = "antigravity"
+pid = 1342319
+started_at = "2026-07-21T02:27:23.061804387Z"
+last_active_at = "2026-07-21T02:27:23.081724743Z"
+role = "advisor"
+worktree_path = "/home/joe/ai/aida/.aida-store"
+source = "mcp"
+binary_version = "0.14.0"
+build_sha = "aa97f61d2"
+availability = "available"
