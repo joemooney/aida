@@ -1,0 +1,22 @@
+id: 019f8244-2882-74f2-909f-6d8251cd9063
+spec_id: TASK-1-122
+title: aida watch follow-mode replays entire historical events.jsonl backlog on start
+description: |-
+  aida watch follow-mode replays entire historical events.jsonl backlog on start
+
+  Observed 2026-07-20 ~18:20 MST during a /aida-burndown drain: armed the harness Monitor over 'aida watch --emit-wakes' per the skill, and the first notification was a flood of WAKE lines for specs from PRIOR drains (BUG-678, STORY-744, STORY-698, BUG-680, STORY-306, BUG-241...). Verified stale: newest events.jsonl entry was 2026-07-20T01:14Z, ~17h before the watch started; none of the current wave's specs appeared.
+
+  Expected: follow mode should seek to end-of-file like tail -f and emit only NEW events; --once is the documented drain-the-backlog mode. Actual: follow mode emitted the whole file (362 lines), including 162 duplicate STORY-306 advisor-escalated events, burning a supervisor wake + tokens on noise and risking the monitor being auto-stopped for volume.
+
+  Secondary observation, same feed: STORY-306/BUG-241 advisor-escalated events are massively duplicated in the log (162 occurrences of STORY-306 in a 362-line file) - the escalation writer may loop-append per poll rather than dedupe per escalation.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-07-21T01:22:12.738533633Z
+modified_at: 2026-07-21T01:22:12.738533633Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
