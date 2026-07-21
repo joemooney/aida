@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T03:58:29.064280635Z
-modified_at: 2026-07-21T03:59:40.696799477Z
+modified_at: 2026-07-21T04:00:45.495292256Z
 req_type: Bug
 tags:
 - aida:cache integrity status-drift from-dogfood
@@ -18,5 +18,11 @@ comments:
   content: 'CORRECTION: cache rebuild did NOT resolve it (initial description was wrong). Single object uuid 3999e6a2, no agreed_id collision. After delete+rebuild AND explicit ''aida cache rebuild'', requirements_cache still holds status=Draft while the worktree YAML + the add --parent gate both read Rejected. So the cache REBUILD SOURCE disagrees with the targeted-lookup source for the same object — either the rebuild reads a different git ref than the worktree (branch tip vs worktree checkout divergence) or the projection has a stale-row that survives rebuild. Elevated: this is a store-vs-cache divergence a rebuild cannot fix, the worst variant. Repro: aida show EPIC-7 (Draft) vs grep .aida-store/objects/EPIC/000/EPIC-7.yaml (Rejected).'
   created_at: 2026-07-21T03:59:40.696799477Z
   modified_at: 2026-07-21T03:59:40.696799477Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f82d5-4fb7-7fb0-a9e3-b8ed02b82b59
+  author: joe
+  content: 'FINAL diagnosis (superseding both earlier comments — I asserted twice before verifying, wrong both times): git is Rejected EVERYWHERE — HEAD:objects/EPIC/000/EPIC-7.yaml = Rejected, worktree file = Rejected, worktree clean, and the clobber 90d6b6f90 never touched its status (no ±status in that commit). The add --parent gate (git backend) reads Rejected correctly. But requirements_cache.status = Draft even immediately after ''aida cache rebuild'' reports ''2948 projected from git store''. So the CACHE PROJECTION reads a Rejected YAML and writes Draft for this record, and rebuild does not correct it — a deterministic projection bug isolated to (at least) EPIC-7, NOT staleness, NOT the clobber, NOT worktree divergence. Repro: git -C .aida-store show HEAD:objects/EPIC/000/EPIC-7.yaml | grep status → Rejected; sqlite3 .aida/cache.db ''select status from requirements_cache where spec_id="EPIC-7"'' → Draft. Next step for the implementer: instrument the projection for this uuid (3999e6a2) during rebuild — suspect a status-enum parse fallback-to-Draft for some field ordering/format in this specific record. AUDIT RIDER: sweep the cache for other spec_id where cache.status != git HEAD status — there may be more mis-projected records this one exposed.'
+  created_at: 2026-07-21T04:00:45.495292256Z
+  modified_at: 2026-07-21T04:00:45.495292256Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
