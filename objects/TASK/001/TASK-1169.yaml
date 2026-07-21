@@ -1,0 +1,28 @@
+id: 019f8353-1c48-7041-9d69-9be05d600b78
+spec_id: TASK-1169
+agreed_id: TASK-1169
+title: 'drain integration-wait architecture: foreground-block CI/merge waits + bounded ceiling + punt-not-abort, all launcher-set (BUG-755 follow-up, ratified)'
+description: |-
+  Ratified design (operator, 2026-07-20) after the manual-launch limp incident. BUG-755 (#1517) shipped a PARTIAL fix (launcher relaunches a drain that exited with unfinished work), but the root — the drain relying on turn-end BACKGROUND tasks for load-bearing CI/merge waits, which the CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=600s ceiling reaps mid-wave, silently orphaning uncommitted work — remains. The =0 (wait-forever) env override currently used by daemonized launches is a STOPGAP, not the design: it removes the safety valve, so a genuinely-wedged task hangs the drain forever.
+
+  RATIFIED THREE-PART DESIGN (binding acceptance):
+  1. PRIMARY — foreground-block the integration waits. The orchestrator's top turn blocks in the FOREGROUND on `gh pr checks --watch` (or an equivalent poll) until CI resolves and the merge lands, INSTEAD of spawning background CI-watch tasks that die at turn-end. When the wait is foreground, the turn does not end until the work is done, so the ceiling is IRRELEVANT at any value. This is the real fix; 2+3 are defense-in-depth.
+  2. SECONDARY — bounded, generous ceiling as a floor (not =0). Set the wait ceiling well above worst-case CI (cross-platform runs are slower) + margin, so it never bites normal operation but a truly-hung task eventually surfaces. A real ceiling that rarely fires beats wait-forever.
+  3. SAFETY — punt, never silent-abort. When a bound IS hit, PARK the spec NeedsAttention (EPIC-28 punt-and-continue) or trigger an advisor evaluation — never terminate-and-orphan. Silent-abort-losing-uncommitted-work is the actual defect.
+  4. LAUNCHER-SET, not operator-set. `aida burndown run` (and every drive/drain entry) applies the chosen ceiling/policy ITSELF via the spawned child's env — so a hand-typed launch behaves IDENTICALLY to a daemonized one. Tonight's whole limp came from the manual launch lacking the env var the daemonized one had; that inconsistency is a bug in itself. Retire the =0 stopgap once foreground-blocking lands.
+
+  Acceptance:
+  - A drain's CI/merge wait runs foreground; a wave PR taking longer than the old 600s ceiling completes and merges without the wave dying.
+  - The launcher sets the ceiling env on the child unconditionally; `aida burndown run` and a daemonized launch produce identical behavior (test the spawn env).
+  - A wait that exceeds the bounded ceiling parks the spec NeedsAttention with a recorded reason, never silently terminates; no uncommitted work is orphaned without a punt record.
+  - Regression: a wave with a >600s CI simulated does not lose its work.
+  This is drain-loop surgery (reflexive, keystone-ish) — GUIDED/keyboard, not a headless drain of itself.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-21T06:18:09.864131796Z
+modified_at: 2026-07-21T06:18:09.864131796Z
+req_type: Task
+tags:
+- aida:burndown orchestration reliability followup:BUG-755 from-operator
