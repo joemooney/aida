@@ -28,10 +28,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:07:48.363850380Z
-modified_at: 2026-07-21T16:11:58.462415308Z
+modified_at: 2026-07-21T16:11:59.313341058Z
 req_type: Bug
 tags:
 - queue
 - review
 - safety
 - workflow
+execution_mode: drive
