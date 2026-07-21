@@ -3,12 +3,12 @@ spec_id: TASK-1018
 agreed_id: TASK-1018
 title: TASK-0430 — durable audit + one-command reversal for every `Execute` outcome (depends on the `Decision`/`Outcome` shapes defined here)
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:56.191783165Z
-modified_at: 2026-07-21T05:46:54.348399799Z
+modified_at: 2026-07-21T05:57:27.425115879Z
 req_type: Task
 tags:
 - zen-ready
@@ -23,8 +23,24 @@ comments:
   created_at: 2026-07-21T05:46:12.168846580Z
   modified_at: 2026-07-21T05:46:12.168846580Z
   session_id: 3656084c-e702-4335-8721-954ca99bc265
+history:
+- id: 019f8340-26fb-7960-94d3-9d888c9bc70a
+  author: aida-auto-bump
+  timestamp: 2026-07-21T05:57:27.419068235Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8340-2701-7511-a92b-cf8636875ee9
+  timestamp: 2026-07-21T05:57:27.425115349Z
+  agent: aida
+  commit_sha: 9a6a5c0fbb5f814729bd57f2128e617ad8af7204
+  summary: Completed via merge 9a6a5c0f
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-21T05:46:54.348399799Z
   implemented_by: joe
+  completed_at: 2026-07-21T05:57:27.418979691Z
+  completion_sha: 9a6a5c0fbb5f814729bd57f2128e617ad8af7204
