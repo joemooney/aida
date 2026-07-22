@@ -254,7 +254,7 @@ fn enter_shell_payload_cd_then_sources_session_env() {
     )
     .unwrap();
 
-    let payload = enter_shell_payload(tree.path(), "STORY-742");
+    let payload = enter_shell_payload(tree.path(), "STORY-742", None);
     assert!(payload.starts_with(&format!("{}\n", enter_cd_line(tree.path()))));
     assert!(payload.contains("export CARGO_TARGET_DIR='/tmp/aida/target'\n"));
     // TASK-1160: the payload also splices the ambient worktree PS1 segment.
@@ -269,7 +269,7 @@ fn enter_shell_payload_cd_then_sources_session_env() {
 #[test]
 fn enter_payload_without_session_env_still_splices_ps1() {
     let tree = tempfile::tempdir().unwrap();
-    let payload = enter_shell_payload(tree.path(), "EPIC-54");
+    let payload = enter_shell_payload(tree.path(), "EPIC-54", None);
     assert!(payload.starts_with(&format!("{}\n", enter_cd_line(tree.path()))));
     assert!(payload.contains("export AIDA_WT_PS1_PREFIX='(wt:EPIC-54) '\n"));
 }
@@ -280,10 +280,139 @@ fn exit_payload_is_the_inverse_of_enter() {
     let main_root = std::path::Path::new("/home/joe/ai/aida");
     let payload = crate::worktree::exit_shell_payload(main_root, &["AIDA_AGENT_TYPE".to_string()]);
     assert!(payload.starts_with("cd '/home/joe/ai/aida'\n"));
-    assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_AGENT_TYPE\n"));
+    assert!(payload
+        .contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_WT_LEASE_FILE AIDA_AGENT_TYPE\n"));
     assert!(payload.contains("unset AIDA_WT_PS1_PREFIX\n"));
     // Never re-exports anything: exit only removes state.
     assert!(!payload.contains("export "));
+}
+
+/// BUG-780: entering a spec worktree records the lease file backing the
+/// marker, so a later prompt can tell the session is gone.
+// trace:BUG-780 | ai:claude
+#[test]
+fn enter_payload_records_the_lease_file_when_a_session_backs_the_worktree() {
+    let tree = tempfile::tempdir().unwrap();
+    let lease = std::path::Path::new("/home/joe/ai/aida/.aida/sessions/019f7683.toml");
+    let payload = enter_shell_payload(tree.path(), "BUG-780", Some(lease));
+    assert!(payload
+        .contains("export AIDA_WT_LEASE_FILE='/home/joe/ai/aida/.aida/sessions/019f7683.toml'\n"));
+}
+
+/// BUG-780: a carried session id resolves against the live leases exactly, or
+/// by the short form the session verbs print. No match = dangling.
+// trace:BUG-780 | ai:claude
+#[test]
+fn carried_session_id_matches_full_and_short_lease_ids() {
+    assert!(lease_id_matches("019f7683ab12", "019f7683ab12"));
+    assert!(lease_id_matches("019f7683ab12", "019f7683")); // the printed short id
+    assert!(lease_id_matches("019F7683AB12", "019f7683ab12")); // case-insensitive
+    assert!(lease_id_matches("019f7683ab12", "  019f7683ab12  ")); // trimmed
+                                                                   // A too-short prefix must not fuzzy-match a live lease.
+    assert!(!lease_id_matches("019f7683ab12", "019f"));
+    // The dangling case: the session was ended from another shell.
+    assert!(!lease_id_matches("019f7683ab12", "0a0a0a0a0a0a"));
+    assert!(!lease_id_matches("019f7683ab12", ""));
+}
+
+/// BUG-780: cwd only answers "am I standing in a scoped worktree" — the main
+/// checkout (and a cwd outside any checkout / project) is not one, which is
+/// exactly the case that used to make `exit` a no-op while the shell still
+/// carried the session.
+// trace:BUG-780 | ai:claude
+#[test]
+fn scoped_worktree_detection_is_cwd_only() {
+    let main = std::path::Path::new("/home/joe/ai/aida");
+    let wt = std::path::Path::new("/home/joe/ai/aida-bug780");
+    assert_eq!(
+        scoped_worktree_for_exit(Some(wt), Some(main)),
+        Some(wt.to_path_buf())
+    );
+    // Standing in the main checkout: nothing to cd out of.
+    assert_eq!(scoped_worktree_for_exit(Some(main), Some(main)), None);
+    // Outside any git checkout, or outside any AIDA project.
+    assert_eq!(scoped_worktree_for_exit(None, Some(main)), None);
+    assert_eq!(scoped_worktree_for_exit(Some(wt), None), None);
+}
+
+/// BUG-780: the wrapper's self-heal capability is its own token — a wrapper
+/// that evals `worktree exit` but predates the stale-marker hook must not be
+/// assumed to clear a dangling marker on its own.
+// trace:BUG-780 | ai:claude
+#[test]
+fn stale_marker_self_heal_is_its_own_wrapper_capability() {
+    assert!(wrapper_marker_has_cap(
+        Some("role,session,dev,worktree,worktree-exit,worktree-stale"),
+        "worktree-stale"
+    ));
+    assert!(!wrapper_marker_has_cap(
+        Some("role,session,dev,worktree,worktree-exit"),
+        "worktree-stale"
+    ));
+    assert!(!wrapper_marker_has_cap(None, "worktree-stale"));
+}
+
+/// BUG-780: drive the wrapper's stale-marker prompt hook through a real bash.
+/// A live lease file leaves the marker alone; a lease that has been removed
+/// (session ended elsewhere) strips the `(wt:)` segment and clears the
+/// dangling session env — the `unset AIDA_SESSION_ID` the operator otherwise
+/// has to know by hand.
+// trace:BUG-780 | ai:claude
+#[test]
+fn wrapper_prompt_hook_clears_a_dangling_marker_in_bash() {
+    let dir = tempfile::tempdir().unwrap();
+    let lease = dir.path().join("019f7683.toml");
+    std::fs::write(&lease, "id = \"019f7683\"\n").unwrap();
+
+    let run = |lease_file: &str| -> String {
+        let script = format!(
+            "{helpers}\n\
+             PS1='(wt:BUG-780) (aida-release) \\u@\\h$ '\n\
+             export AIDA_WT_PS1_PREFIX='(wt:BUG-780) '\n\
+             export AIDA_SESSION_ID='019f7683'\n\
+             export AIDA_WT_LEASE_FILE='{lease_file}'\n\
+             _aida_wt_prompt_marker\n\
+             echo \"ps1:$PS1\"\n\
+             echo \"marker:${{AIDA_WT_PS1_PREFIX-unset}}\"\n\
+             echo \"session:${{AIDA_SESSION_ID-unset}}\"\n",
+            helpers = crate::dev_cmd::SHELL_HELPERS,
+            lease_file = lease_file,
+        );
+        let out = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&script)
+            .output()
+            .expect("bash available");
+        assert!(
+            out.status.success(),
+            "hook script failed:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    // Live lease → the marker is real, leave it (and the session env) alone.
+    let live = run(&lease.display().to_string());
+    assert!(
+        live.contains("ps1:(wt:BUG-780) (aida-release) \\u@\\h$ "),
+        "live session keeps its marker:\n{live}"
+    );
+    assert!(live.contains("session:019f7683"), "{live}");
+
+    // Session ended elsewhere → the lease file is gone, so the marker is
+    // dangling: strip it and clear the carried session env.
+    std::fs::remove_file(&lease).unwrap();
+    let dangling = run(&lease.display().to_string());
+    assert!(
+        dangling.contains("ps1:(aida-release) \\u@\\h$ "),
+        "dangling marker is stripped, dev prefix survives:\n{dangling}"
+    );
+    assert!(
+        !dangling.contains("(wt:"),
+        "no live marker left:\n{dangling}"
+    );
+    assert!(dangling.contains("marker:unset"), "{dangling}");
+    assert!(dangling.contains("session:unset"), "{dangling}");
 }
 
 // A worktree already registered (git) at the default path but carrying no

@@ -960,7 +960,10 @@ fn handle_dev_status() -> Result<()> {
 ///
 /// Use `command aida ...` to bypass the wrapper and invoke the binary
 /// directly (e.g., for scripting where you want raw stdout).
-const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
+// `pub(crate)` so the emitted shell can be driven through a real bash in tests
+// (the marker hooks are pure shell — worth exercising, not just eyeballing).
+// trace:BUG-780 | ai:claude
+pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 #
 # Most `aida` subcommands run as plain commands. The few that need to
 # modify the calling shell (set env vars, prepend PATH, change PS1) get
@@ -974,7 +977,7 @@ const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # (`aida role enter <role>`); printing `eval "$(...)"` would double-eval and
 # lose the effect. The value lists the auto-evaled verb groups for any future
 # wrapper-aware decisions.
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit'
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale'
 
 aida() {
     # Take the first two positional words verbatim — that's enough to
@@ -1026,22 +1029,55 @@ _aida_dev_prompt_marker() {
     export PS1="$AIDA_DEV_PS1_PREFIX$PS1"
 }
 
+# Drop a DANGLING worktree marker. `aida worktree enter` records the session
+# lease file backing the `(wt:...)` PS1 segment; once that lease is gone — the
+# session was ended from another shell — the marker points at work that no
+# longer exists, so clear it (and the session env it carried) instead of
+# rendering a live-looking marker forever. Builtin-only: one file test per
+# prompt, no subprocess. A shell with no recorded lease file (e.g. an
+# epic-scoped worktree, or a marker spliced by an older binary) is left alone.
+_aida_wt_prompt_marker() {
+    [ -n "${PS1+x}" ] || return 0
+    [ -n "${AIDA_WT_LEASE_FILE:-}" ] || return 0
+    [ -e "$AIDA_WT_LEASE_FILE" ] && return 0
+
+    while case "$PS1" in *'(wt:'*') '*) true;; *) false;; esac; do
+        _aida_old_ps1="$PS1"
+        _aida_after="${PS1#*'(wt:'}"
+        _aida_tag="${_aida_after%%') '*}"
+        PS1="${PS1//'(wt:'$_aida_tag') '/}"
+        [ "$PS1" = "$_aida_old_ps1" ] && break
+    done
+    unset _aida_old_ps1 _aida_after _aida_tag
+    unset AIDA_WT_PS1_PREFIX AIDA_WT_LEASE_FILE AIDA_SESSION_ID
+    return 0
+}
+
 if [ -n "${ZSH_VERSION:-}" ]; then
     if ! command -v add-zsh-hook >/dev/null 2>&1; then
         autoload -Uz add-zsh-hook 2>/dev/null || true
     fi
     if command -v add-zsh-hook >/dev/null 2>&1; then
         add-zsh-hook precmd _aida_dev_prompt_marker 2>/dev/null || true
+        add-zsh-hook precmd _aida_wt_prompt_marker 2>/dev/null || true
     else
         case " ${precmd_functions[*]-} " in
             *" _aida_dev_prompt_marker "*) ;;
             *) precmd_functions+=(_aida_dev_prompt_marker) ;;
+        esac
+        case " ${precmd_functions[*]-} " in
+            *" _aida_wt_prompt_marker "*) ;;
+            *) precmd_functions+=(_aida_wt_prompt_marker) ;;
         esac
     fi
 else
     case ";${PROMPT_COMMAND:-};" in
         *";_aida_dev_prompt_marker;"*) ;;
         *) PROMPT_COMMAND="_aida_dev_prompt_marker${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+    esac
+    case ";${PROMPT_COMMAND:-};" in
+        *";_aida_wt_prompt_marker;"*) ;;
+        *) PROMPT_COMMAND="_aida_wt_prompt_marker${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
     esac
 fi
 
