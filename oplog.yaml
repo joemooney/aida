@@ -38437,5 +38437,17 @@ operations:
   timestamp: 2026-07-22T14:54:59.361522139Z
   kind: !SetStatus
     status: In Progress
-clock: 3594
+- id: 019f8a54-731b-77b1-b64e-de8fa06c821e
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3595
+  timestamp: 2026-07-22T14:56:58.139904826Z
+  kind: !Create
+    title: burndown plan --candidates and backlog list offer non-work types (decision/vision/term) as blessable candidates
+    description: 'Verified against main sha a7cd68909 2026-07-22: burndown.rs and backlog.rs candidate/ready paths filter on status (approved+pickable, decision-FREE meaning no human-decision-required) but have NO work-item type-class filter — grep for RequirementType::Decision/Vision/Term/Principle in those paths returns nothing. So accepted ADR-* and VIS-* records are offered as implementable candidates. BUG-781 (this weekend) only dropped accepted decisions from the ''aida list'' OPEN LENS, not the burndown/backlog candidate surfaces. Downstream (quizdom) confirmed it reproduces on any repo with ADRs even with zero domain data (13 candidates, all ADR-*/VIS-*). Fix: exclude non-work types (decision/vision/term/principle) from burndown plan --candidates + backlog list by default, or add a work-item type-class filter. Acceptance: burndown plan --candidates and backlog list omit decision/vision/term/principle by default; a --type or --include flag opts them back in; unit test a repo with ADRs shows zero ADR candidates. Downstream: quizdom.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3595
 node_id: '1'
