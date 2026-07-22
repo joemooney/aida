@@ -956,13 +956,17 @@ fn handle_dev_status() -> Result<()> {
 /// deactivate, role enter, role end, role add, worktree enter — those that
 /// need to mutate the calling shell, e.g. cd into a new worktree), it wraps
 /// them in `eval "$(command aida ...)"` so they actually take effect in the
-/// user's shell instead of getting lost in the subprocess.
+/// user's shell instead of getting lost in the subprocess. The eval fires
+/// ONLY when the command exited 0 — a failing command's stdout is its error
+/// text, not shell code, and eval'ing it hides the real message behind
+/// `command not found` noise.
 ///
 /// Use `command aida ...` to bypass the wrapper and invoke the binary
 /// directly (e.g., for scripting where you want raw stdout).
 // `pub(crate)` so the emitted shell can be driven through a real bash in tests
 // (the marker hooks are pure shell — worth exercising, not just eyeballing).
 // trace:BUG-780 | ai:claude
+// trace:BUG-779 | ai:claude
 pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 #
 # Most `aida` subcommands run as plain commands. The few that need to
@@ -988,9 +992,26 @@ aida() {
             # session start/end split output: stderr for human messages
             # (status, prompts), stdout for the shell-modifying lines
             # (`export AIDA_SESSION_ID=...` / `unset AIDA_SESSION_ID`).
-            # `eval "$(...)"` captures stdout only — stderr passes through
-            # to the user, stdin still reaches the binary for prompts.
-            eval "$(command aida "$@")"
+            # Capturing stdout leaves stderr passing straight through to the
+            # user, and stdin still reaches the binary for prompts.
+            #
+            # Eval ONLY on success. When the command FAILS, stdout carries its
+            # human-readable error text (the capture makes stdout a pipe, which
+            # is what routes the message there), not shell code — eval'ing that
+            # turned every failure into a burst of `command not found` and hid
+            # the real message. Print it to stderr instead and propagate the
+            # status so callers can branch on it. (trace:BUG-779)
+            local _aida_out _aida_rc
+            _aida_out=$(command aida "$@")
+            _aida_rc=$?
+            if [ "$_aida_rc" -eq 0 ]; then
+                eval "$_aida_out"
+            else
+                if [ -n "$_aida_out" ]; then
+                    printf '%s\n' "$_aida_out" >&2
+                fi
+                return "$_aida_rc"
+            fi
             ;;
         "tui"|"tui "*)
             # STORY-681: `aida tui` is now self-sufficient — it dispatches

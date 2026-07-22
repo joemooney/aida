@@ -28915,6 +28915,32 @@ fn session_end_confirm_refusal(session_id: &str, lease_path: &std::path::Path) -
 #[path = "tests/bug776_session_end_confirm_tests.rs"]
 mod bug776_session_end_confirm_tests;
 
+/// BUG-779: did this `session end` invocation name a specific session? With
+/// zero active leases that distinction decides the exit code, and the exit code
+/// is what the `aida()` shell wrapper branches on: a BARE `session end` with
+/// nothing to end is a benign no-op (exit 0, empty stdout, eval is a no-op),
+/// while an EXPLICIT target that cannot exist is a failed request that must
+/// exit non-zero so its error text is never eval'd as shell.
+///
+/// Returns the named target (first of id / --spec / --branch), ignoring blanks.
+// trace:BUG-779 | ai:claude
+fn session_end_explicit_target(
+    id_query: Option<&str>,
+    spec_query: Option<&str>,
+    branch_query: Option<&str>,
+) -> Option<String> {
+    [id_query, spec_query, branch_query]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|q| !q.is_empty())
+        .map(str::to_string)
+}
+
+#[cfg(test)]
+#[path = "tests/bug_779_wrapper_eval_tests.rs"]
+mod bug_779_wrapper_eval_tests;
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn session_end(
@@ -28936,6 +28962,18 @@ fn session_end(
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
+        // BUG-779: a BARE `session end` with nothing to end is a benign no-op
+        // (exit 0 — the shell wrapper evals empty stdout and moves on). But an
+        // EXPLICIT target that cannot exist is a failed request; exiting 0 there
+        // let the wrapper treat the error text as shell code.
+        // trace:BUG-779 | ai:claude
+        if let Some(q) = session_end_explicit_target(id_query, spec_query, branch_query) {
+            anyhow::bail!(
+                "No lease found for `{}` — there are no active sessions in this project. \
+                 Run `aida session leases` to see active leases",
+                q
+            );
+        }
         eprintln!("(no active sessions)");
         return Ok(());
     }
