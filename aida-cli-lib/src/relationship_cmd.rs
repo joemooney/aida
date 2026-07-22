@@ -260,6 +260,9 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
                 // trace:STORY-333 | ai:claude
                 RelationshipType::BlockedBy => "is blocked by".to_string(),
                 RelationshipType::Blocks => "blocks".to_string(),
+                // trace:TASK-1176 | ai:claude
+                RelationshipType::SupersededBy => "is superseded by".to_string(),
+                RelationshipType::Supersedes => "supersedes".to_string(),
                 RelationshipType::Custom(name) => name.clone(),
             };
 

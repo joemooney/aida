@@ -61,6 +61,9 @@ pub(crate) enum ZenEligibility {
     Shelved,
     /// Rejected — refuse.
     Rejected,
+    /// Superseded — adopted then replaced; the successor spec is the work.
+    // trace:TASK-1176 | ai:claude
+    Superseded,
 }
 
 /// Classify a spec's drive-eligibility from its status. Pure: the caller reads
@@ -74,6 +77,8 @@ pub(crate) fn classify_eligibility(status: &RequirementStatus) -> ZenEligibility
         RequirementStatus::Done | RequirementStatus::Completed => ZenEligibility::AlreadyShipped,
         RequirementStatus::NeedsAttention => ZenEligibility::Shelved,
         RequirementStatus::Rejected => ZenEligibility::Rejected,
+        // trace:TASK-1176 | ai:claude
+        RequirementStatus::Superseded => ZenEligibility::Superseded,
     }
 }
 
@@ -97,6 +102,12 @@ impl ZenEligibility {
                  and resolve the punt before driving it."
             )),
             ZenEligibility::Rejected => Some(format!("{spec} was rejected — nothing to zen.")),
+            // trace:TASK-1176 | ai:claude — superseded is NOT rejected: the
+            // work was adopted, then handed to a successor. Say so.
+            ZenEligibility::Superseded => Some(format!(
+                "{spec} was superseded — a later spec replaced it. Find the successor \
+                 with aida show {spec} and zen that instead."
+            )),
         }
     }
 }

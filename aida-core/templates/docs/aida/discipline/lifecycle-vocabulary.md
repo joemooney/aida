@@ -48,6 +48,28 @@ Punting is a discipline, not a failure: a punted fork is a recorded decision
 point. Guessing past it produces a silent wrong implementation; punting keeps
 the wrong call from being made at all.
 
+## The two terminal off-ramps: rejected vs superseded
+
+Not every spec reaches Completed, and the two exits mean opposite things.
+Say the precise one.
+
+- **Rejected** — **declined.** We looked at it and said no. Nothing was
+  adopted. `aida edit <SPEC> --status rejected`.
+- **Superseded** — **adopted, then replaced.** This spec governed, and a later
+  spec now governs instead. `aida edit <SPEC> --status superseded
+  --superseded-by <NEW-SPEC>` — naming the successor is enough (the flag
+  implies the status), and it records a **typed relationship**, not a tag, so
+  `aida graph` can walk "what replaced this?" in both directions.
+
+The archetype is an **ADR** whose documented lifecycle is *proposed → accepted
+→ superseded*. Without a superseded state, a decision that was followed for
+months and then replaced had to masquerade as *rejected* — reading, in any
+listing, exactly like one that was turned down.
+
+Both are terminal: excluded from the default `aida list` view, from the open
+tally, and from the ready set. Superseded renders `⊡ Superseded` (dimmed
+closed-green — it *was* adopted), never the red `✗ Rejected`.
+
 ## The view axis: archive / unarchive / archive-sweep
 
 **Archive** is *orthogonal* to the lifecycle above — every state can be

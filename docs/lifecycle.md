@@ -15,7 +15,8 @@ that **"merged" and "completed" are not the same event** and **"merged" and
 ## The lifecycle states
 
 A spec's `status` field moves through up to seven mainline values, plus one
-off-mainline pause state. List or filter on any of them with
+off-mainline pause state and two terminal off-ramps (**Rejected** and
+**Superseded**). List or filter on any of them with
 `aida list --status <state>`.
 
 | State | Meaning | How it gets here |
@@ -27,6 +28,48 @@ off-mainline pause state. List or filter on any of them with
 | **Done** | The work is finished **on a branch** — a PR is open, but it has not landed on `main` yet. | `aida queue done SPEC`, or `/aida-pr` |
 | **Completed** | The work is **merged to `main`**. This is the terminal status for a spec. | auto-bumped by `aida pull` when a commit referencing the spec lands on the default branch |
 | **Released** | Not a spec status — a *cross-spec* milestone. Many Completed specs aggregate into one tagged, published version. | `make release-minor` (or `scripts/release.sh`) |
+
+### The two terminal off-ramps: Rejected vs Superseded
+
+Not every spec reaches Completed, and the two ways out mean opposite things.
+Keeping them distinct is the point — a spec that was **followed for months and
+then replaced** must not read like one that was **turned down**.
+
+| State | Meaning | How it gets here |
+|-------|---------|------------------|
+| **Rejected** | **Declined.** We looked at it and said no. Nothing was adopted. | `aida edit SPEC --status rejected` |
+| **Superseded** | **Adopted, then replaced.** This spec governed, and a later spec now governs instead. | `aida edit SPEC --status superseded --superseded-by NEW-SPEC` |
+
+The canonical case is an **ADR** (`decision` spec). Its documented lifecycle is
+*proposed → accepted → superseded / deprecated*; in AIDA statuses `draft` =
+proposed and `approved` = accepted. Without a `superseded` state, an ADR that
+was accepted and later replaced had to masquerade as `rejected` plus a
+`superseded-by:ADR-N` string tag — indistinguishable, in any listing, from a
+decision that was declined.
+
+- **`--superseded-by <SPEC-ID>` records the successor as a first-class typed
+  relationship** (`SupersededBy`, with the reciprocal `Supersedes` written on
+  the successor), not a tag. So `aida graph` / `query_graph` can walk "what
+  replaced this?" and "what did this replace?", and the link survives a rename.
+- **The flag implies the status.** `aida edit ADR-3 --superseded-by ADR-7` sets
+  the status to Superseded as well — naming a successor *is* the supersede
+  move, and letting the two halves be set separately is how they drift apart.
+  An explicit `--status` still wins, so a recovery edit stays expressible.
+- **Superseded is terminal, and it is not type-gated.** Any spec type can be
+  superseded (a TASK replaced by a broader STORY is the same story as an ADR
+  replaced by a later ADR); an EPIC is the one exception, because an epic's
+  status is a read-only rollup of its children (BUG-626). Being terminal, it is
+  excluded from the default `aida list` open lens, from the `aida status` open
+  tally, and from every candidate/ready surface — exactly like Completed and
+  Rejected. `aida list closed` / `--status superseded` / `--all` show it.
+- **It renders distinctly.** `⊡ Superseded` in dimmed closed-green — the
+  adopted box family (cf. `☑ Accepted`), never the red `✗ Rejected` that means
+  declined. ASCII profile: `[=]`.
+- **A superseded child does not corrupt an epic rollup** — like a rejected
+  child, it is *resolved* (it can never transition again), so it drops out of
+  the open denominator instead of pinning the epic at In Progress forever.
+
+<!-- trace:TASK-1176 | ai:claude -->
 
 ### The off-mainline state: Needs Attention
 
@@ -153,7 +196,8 @@ AIDA grew its own vocabulary; here it is in plain words.
 | **PR** | GitHub "Pull Request" — a bundle of proposed code changes to review and merge. |
 | **parked** | a queued spec that one of the five gates is blocking — *not* autonomously workable until the gate clears. |
 | **Ready** | a queued spec that passes all five gates — an agent will take it. |
-| **the "open set"** | every spec that isn't Completed, Rejected, or archived — the specs still "in play" (`aida why` and `aida list open` work over this set). |
+| **the "open set"** | every spec that isn't Completed, Rejected, Superseded, or archived — the specs still "in play" (`aida why` and `aida list open` work over this set). |
+| **superseded** | this spec *was* followed, and a newer spec now governs. Not "rejected" (that means we said no) — the successor is recorded as a real link, so you can always walk to what replaced it. |
 
 ## The lifecycle diagrams
 
@@ -203,22 +247,37 @@ status chain every spec aims to walk straight through.
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> Draft: aida add
+    [*] --> Draft: aida add (LLM/human)
+
     Draft --> Approved: aida edit --status approved
-    Approved --> Planned: aida edit --status planned (optional)
-    Planned --> InProgress: aida queue work
+    Approved --> Planned: aida edit --status planned
     Approved --> InProgress: aida queue work
-    InProgress --> Done: /aida-pr (push + open PR)
+    Planned --> InProgress: aida queue work
+    InProgress --> Done: aida queue done / aida-pr
     Done --> Completed: merge auto-bump (aida pull)
     Completed --> Released: release tag (scripts/release.sh)
+
+    InProgress --> NeedsAttention: punt (design-fork)
+    NeedsAttention --> InProgress: aida edit --status in-progress
+    NeedsAttention --> Approved: aida edit --status approved
+    NeedsAttention --> Rejected: aida edit --status rejected
+
+    Draft --> Rejected: aida edit --status rejected
+    Approved --> Rejected: aida edit --status rejected
+    Done --> InProgress: reviewer RequestChanges
+    Approved --> Superseded: aida edit --status superseded --superseded-by
+
     Released --> [*]
+    Rejected --> [*]
+    Completed --> [*]
+    Superseded --> [*]
 
     classDef cli fill:#1f6feb,stroke:#0d3b8a,color:#fff
     classDef llm fill:#8957e5,stroke:#5a2ca0,color:#fff
     classDef git fill:#2da44e,stroke:#176b2e,color:#fff
 
-    class Draft,Approved,Planned cli
-    class InProgress llm
+    class Draft,Approved,Planned,Rejected,Superseded cli
+    class InProgress,NeedsAttention llm
     class Done,Completed,Released git
 ```
 

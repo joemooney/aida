@@ -7674,9 +7674,19 @@ pub enum Command {
         description: Option<String>,
 
         /// New status (draft, approved, planned, in-progress, done,
-        /// completed, rejected). Needs Attention is set via `aida punt`.
+        /// completed, rejected, superseded). Needs Attention is set via
+        /// `aida punt`. `superseded` = adopted, then replaced by a later
+        /// spec — pair it with --superseded-by.
         #[clap(long)]
         status: Option<String>,
+
+        // trace:TASK-1176 | ai:claude — plain `//` keeps the id out of --help.
+        /// Record the spec that REPLACES this one, as a typed superseded-by
+        /// edge (plus the inverse supersedes edge on the successor). Implies
+        /// `--status superseded` unless --status says otherwise, so
+        /// `aida edit ADR-3 --superseded-by ADR-7` is the whole move.
+        #[clap(long = "superseded-by", value_name = "SPEC-ID")]
+        superseded_by: Option<String>,
 
         /// New priority (high, medium, low)
         #[clap(long)]

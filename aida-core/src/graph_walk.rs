@@ -397,6 +397,11 @@ pub struct StatusRollup {
     /// NeedsAttention — shelved, needs a decision.
     pub shelved: usize,
     pub rejected: usize,
+    /// Superseded — adopted, then replaced by a successor spec. RESOLVED like
+    /// `rejected` (it can never transition again), so the epic rollup excludes
+    /// it from the open denominator.
+    // trace:TASK-1176 | ai:claude
+    pub superseded: usize,
 }
 
 /// Tally the statuses of `ids` against the live store. trace:STORY-489
@@ -416,6 +421,8 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
             }
             RequirementStatus::NeedsAttention => r.shelved += 1,
             RequirementStatus::Rejected => r.rejected += 1,
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded => r.superseded += 1,
         }
     }
     r

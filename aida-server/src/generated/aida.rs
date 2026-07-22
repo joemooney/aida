@@ -931,6 +931,10 @@ pub enum RequirementStatus {
     /// STORY-332: work was in progress but is paused — an autonomous agent
     /// punted a design-fork it could not safely resolve; awaits triage.
     NeedsAttention = 8,
+    /// TASK-1176: adopted, then replaced by a successor spec. Terminal like
+    /// REJECTED, but the opposite meaning — followed-then-handed-off, not
+    /// declined. The successor is a typed superseded-by relationship.
+    Superseded = 9,
 }
 impl RequirementStatus {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -948,6 +952,7 @@ impl RequirementStatus {
             Self::Rejected => "REQUIREMENT_STATUS_REJECTED",
             Self::Done => "REQUIREMENT_STATUS_DONE",
             Self::NeedsAttention => "REQUIREMENT_STATUS_NEEDS_ATTENTION",
+            Self::Superseded => "REQUIREMENT_STATUS_SUPERSEDED",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -962,6 +967,7 @@ impl RequirementStatus {
             "REQUIREMENT_STATUS_REJECTED" => Some(Self::Rejected),
             "REQUIREMENT_STATUS_DONE" => Some(Self::Done),
             "REQUIREMENT_STATUS_NEEDS_ATTENTION" => Some(Self::NeedsAttention),
+            "REQUIREMENT_STATUS_SUPERSEDED" => Some(Self::Superseded),
             _ => None,
         }
     }

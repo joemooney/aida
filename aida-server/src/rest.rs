@@ -2413,6 +2413,8 @@ fn parse_status(s: &str) -> aida_core::RequirementStatus {
         "done" => aida_core::RequirementStatus::Done,
         "completed" => aida_core::RequirementStatus::Completed,
         "rejected" => aida_core::RequirementStatus::Rejected,
+        // trace:TASK-1176 | ai:claude
+        "superseded" => aida_core::RequirementStatus::Superseded,
         "needsattention" | "needs_attention" | "needs-attention" => {
             aida_core::RequirementStatus::NeedsAttention
         }

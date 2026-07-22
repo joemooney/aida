@@ -168,6 +168,13 @@ pub fn graph_from_relationships(
             RelationshipType::BlockedBy => graph.blocked_by.push(row),
             RelationshipType::Blocks => graph.blocks.push(row),
             RelationshipType::References => graph.references.push(row),
+            // trace:TASK-1176 | ai:claude — the supersede lineage (which spec
+            // replaced this one, or which one this replaces) is a first-class
+            // edge, so surface it in the modal's related-specs group rather
+            // than dropping it silently.
+            RelationshipType::SupersededBy | RelationshipType::Supersedes => {
+                graph.references.push(row)
+            }
             // Not surfaced in the preview modal's graph section.
             RelationshipType::Duplicate
             | RelationshipType::Verifies

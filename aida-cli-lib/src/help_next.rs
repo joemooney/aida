@@ -53,6 +53,8 @@ fn state_token(s: State) -> &'static str {
         State::Completed => "completed",
         State::Released => "released",
         State::Rejected => "rejected",
+        // trace:TASK-1176 | ai:claude
+        State::Superseded => "superseded",
         State::NeedsAttention => "needs-attention",
     }
 }
@@ -67,7 +69,10 @@ fn rank(to: State) -> u8 {
         State::Approved => 1,
         State::Planned => 2,
         // Off-ramps.
+        // trace:TASK-1176 | ai:claude — superseding is rarer than rejecting,
+        // so it sorts just after it.
         State::Rejected => 8,
+        State::Superseded => 8,
         _ => 5,
     }
 }
@@ -91,6 +96,11 @@ fn transition_command(from: State, to: State, id: &str) -> Option<String> {
         (Done, Completed) => "aida pull".to_string(), // merge auto-bump
         (Completed, Released) => return None,         // repo-level release act
         (_, Rejected) => format!("aida edit {id} --status rejected"),
+        // trace:TASK-1176 | ai:claude — the successor is the point of the
+        // move, so the suggested command carries the flag that records it.
+        (_, Superseded) => {
+            format!("aida edit {id} --status superseded --superseded-by <NEW-ID>")
+        }
         _ => return None,
     })
 }

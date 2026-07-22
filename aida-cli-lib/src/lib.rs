@@ -3501,6 +3501,9 @@ fn run() -> Result<()> {
             remove_tag,
             blocked_by: _, // STORY-446: blocked-by edges land on the git-backend path
             remove_blocked_by: _,
+            // TASK-1176: the supersede lineage edge is git-canonical only, same
+            // rule as blocked-by. trace:TASK-1176 | ai:claude
+            superseded_by: _,
             // STORY-476: external refs land on the git-backend path only;
             // the legacy SQLite path ignores them. trace:STORY-476 | ai:claude
             add_ref: _,
@@ -10435,6 +10438,9 @@ fn relationship_phrase(rt: &aida_core::models::RelationshipType) -> String {
         R::References => "references".to_string(),
         R::BlockedBy => "is blocked by".to_string(),
         R::Blocks => "blocks".to_string(),
+        // trace:TASK-1176 | ai:claude
+        R::SupersededBy => "is superseded by".to_string(),
+        R::Supersedes => "supersedes".to_string(),
         R::Custom(name) => name.clone(),
     }
 }
@@ -10500,6 +10506,71 @@ fn add_blocked_by_edge(
         backend.update_requirement(&blocker)?;
     }
     Ok(blocker_display)
+}
+
+/// TASK-1176: record that `spec_id` was REPLACED BY `successor_id` — a typed
+/// `SupersededBy` edge on the superseded spec plus the inverse `Supersedes`
+/// edge on the successor, atomically and idempotently. Returns the successor's
+/// display id for messaging.
+///
+/// This is the first-class alternative to the `superseded-by:ADR-N` string tag
+/// downstream projects had to invent: a typed edge is walkable by `aida graph`
+/// / `query_graph`, survives an id rename, and cannot silently disagree with
+/// the status. Shaped deliberately like [`add_blocked_by_edge`] so the two
+/// bidirectional-edge writers stay recognizably the same code.
+// trace:TASK-1176 | ai:claude
+fn add_superseded_by_edge(
+    backend: &aida_core::CachedGitBackend,
+    spec_id: &str,
+    successor_id: &str,
+) -> Result<String> {
+    use aida_core::models::{Relationship, RelationshipType};
+    use aida_core::DatabaseBackend;
+
+    let mut req = backend
+        .get_requirement_by_spec_id(spec_id)?
+        .ok_or_else(|| not_found::requirement_not_found(spec_id, None))?;
+    let successor = backend
+        .get_requirement_by_spec_id(successor_id)?
+        .ok_or_else(|| not_found::requirement_not_found(successor_id, None))?;
+    if successor.id == req.id {
+        anyhow::bail!("a requirement cannot supersede itself ({})", spec_id);
+    }
+    let successor_display = successor
+        .spec_id
+        .clone()
+        .unwrap_or_else(|| successor_id.to_string());
+
+    if !req.relationships.iter().any(|r| {
+        matches!(r.rel_type, RelationshipType::SupersededBy) && r.target_id == successor.id
+    }) {
+        req.relationships.push(Relationship {
+            rel_type: RelationshipType::SupersededBy,
+            target_id: successor.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        req.modified_at = chrono::Utc::now();
+        backend.update_requirement(&req)?;
+    }
+
+    // Inverse Supersedes edge on the successor (also idempotent).
+    let mut successor = backend.get_requirement_by_spec_id(successor_id)?.unwrap();
+    if !successor
+        .relationships
+        .iter()
+        .any(|r| matches!(r.rel_type, RelationshipType::Supersedes) && r.target_id == req.id)
+    {
+        successor.relationships.push(Relationship {
+            rel_type: RelationshipType::Supersedes,
+            target_id: req.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some(get_default_author()),
+        });
+        successor.modified_at = chrono::Utc::now();
+        backend.update_requirement(&successor)?;
+    }
+    Ok(successor_display)
 }
 
 /// STORY-446: remove the BlockedBy edge from `spec_id` to `blocker_id` and the
@@ -10648,7 +10719,12 @@ pub fn is_terminal_status_str(s: &str) -> bool {
     // trace:STORY-86 | ai:claude — "Done" is NOT terminal anymore (work
     // finished on a branch; auto-bumps to Completed once merged to main).
     let t = s.trim();
-    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
+    // trace:TASK-1176 | ai:claude — Superseded is terminal too: adopted, then
+    // replaced by a successor spec. Closed for every gate that asks "is this
+    // still open?"; it differs from Rejected only in meaning and rendering.
+    t.eq_ignore_ascii_case("completed")
+        || t.eq_ignore_ascii_case("rejected")
+        || t.eq_ignore_ascii_case("superseded")
 }
 
 fn create_agent_brief(
@@ -11660,6 +11736,13 @@ mod task_492_brief_tests;
 /// Err with a list-of-valid-values message. Use at the CLI layer before
 /// calling `Requirement::set_status_from_str` to prevent typos like
 /// `approvedxxx` from silently landing as a `custom_status`. trace:BUG-47
+/// The canonical status list echoed by every "invalid status" refusal, so the
+/// plain validator and its type-aware wrapper can never disagree on what the
+/// CLI accepts.
+// trace:TASK-1176 | ai:claude
+pub(crate) const VALID_STATUS_INPUTS: &str =
+    "draft, approved, planned, in-progress, done, completed, rejected, superseded, needs-attention";
+
 pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
     let normalized: String = raw
         .chars()
@@ -11678,11 +11761,13 @@ pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
         "done" => Ok("Done"),
         "completed" => Ok("Completed"),
         "rejected" => Ok("Rejected"),
+        // trace:TASK-1176 | ai:claude — adopted-then-replaced (NOT declined).
+        "superseded" => Ok("Superseded"),
         // trace:STORY-332 | ai:claude — the punt/pause state.
         "needsattention" => Ok("NeedsAttention"),
         _ => Err(format!(
-            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, done, completed, rejected, needs-attention",
-            raw
+            "invalid status `{}` — expected one of: {}",
+            raw, VALID_STATUS_INPUTS
         )),
     }
 }
@@ -13456,6 +13541,9 @@ fn list_requirements(
             RequirementStatus::Done => "Done".bright_green().bold(),
             RequirementStatus::Completed => "Completed".green(),
             RequirementStatus::Rejected => "Rejected".red(),
+            // trace:TASK-1176 | ai:claude — closed-green family (adopted),
+            // dimmed (history) — never the red a DECLINED spec wears.
+            RequirementStatus::Superseded => "Superseded".green().dimmed(),
             RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
         };
 
@@ -13585,6 +13673,8 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementStatus::Done => "Done".bright_green().bold(),
         RequirementStatus::Completed => "Completed".green(),
         RequirementStatus::Rejected => "Rejected".red(),
+        // trace:TASK-1176 | ai:claude
+        RequirementStatus::Superseded => "Superseded".green().dimmed(),
         RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
     };
     println!("{}: {}", "Status".blue(), status_str);
@@ -14566,6 +14656,8 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
         "done" => Ok(RequirementStatus::Done),
         "completed" => Ok(RequirementStatus::Completed),
         "rejected" => Ok(RequirementStatus::Rejected),
+        // trace:TASK-1176 | ai:claude
+        "superseded" => Ok(RequirementStatus::Superseded),
         "needs_attention" | "needs-attention" | "needsattention" => {
             Ok(RequirementStatus::NeedsAttention)
         }
@@ -24718,6 +24810,13 @@ fn preflight_spec_status(
         RequirementStatus::Rejected => PreflightDecision::Refuse(format!(
             "spec `{}` is Rejected — refusing to start a session against work that's been dropped. \
              Reopen it first (`aida edit {} --status approved --force`) if you mean to revive it.",
+            owns, owns
+        )),
+        // trace:TASK-1176 | ai:claude — superseded work was adopted then
+        // replaced; the session belongs on the successor, not this record.
+        RequirementStatus::Superseded => PreflightDecision::Refuse(format!(
+            "spec `{}` is Superseded — a later spec replaced it. Start the session against \
+             the successor instead (`aida show {}` prints the superseded-by link).",
             owns, owns
         )),
         RequirementStatus::Draft => PreflightDecision::Refuse(format!(
@@ -36714,9 +36813,8 @@ pub(crate) fn validate_status_input_for_type(
         }
         return Err(format!(
             "invalid status `{}` — `accepted` applies to decision specs (where it \
-             records as `approved`); expected one of: draft, approved, planned, \
-             in-progress, done, completed, rejected, needs-attention",
-            raw
+             records as `approved`); expected one of: {}",
+            raw, VALID_STATUS_INPUTS
         ));
     }
     validate_status_input(raw)
@@ -59169,6 +59267,10 @@ fn fast_status_counts<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) ->
         let terminal = status.eq_ignore_ascii_case("completed")
             || status.eq_ignore_ascii_case("rejected")
             || status.eq_ignore_ascii_case("released")
+            // TASK-1176: adopted-then-superseded is terminal — it must not
+            // inflate the open backlog any more than a rejected spec does.
+            // trace:TASK-1176 | ai:claude
+            || status.eq_ignore_ascii_case("superseded")
             || aida_core::lifecycle::is_accepted_decision(req_type, status);
         if !terminal {
             c.open += 1;
@@ -59511,6 +59613,11 @@ fn hide_accepted_decisions(
 #[cfg(test)]
 #[path = "tests/bug_781_accepted_decision_lens_tests.rs"]
 mod bug_781_accepted_decision_lens_tests;
+
+// trace:TASK-1176 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1176_superseded_state_tests.rs"]
+mod task_1176_superseded_state_tests;
 
 /// STORY-723: the denominator label for the agent `aida list` `count: N of M`
 /// header — `open` under the default actionable lens (so it reconciles with the
@@ -60558,6 +60665,9 @@ const STANDARD_REL_TYPES: &[&str] = &[
     "references",
     "blocked-by",
     "blocks",
+    // trace:TASK-1176 | ai:claude — the supersede lineage pair.
+    "superseded-by",
+    "supersedes",
 ];
 
 /// Plain Levenshtein edit distance between two strings (case folding is the
@@ -60608,7 +60718,7 @@ fn nearest_standard_rel_type(input: &str) -> Option<&'static str> {
     match best {
         // Only call it a typo when it's close: ≤2 edits. Empirically the
         // standard-type typos sit at d≤2 while deliberate custom types
-        // ("supersedes", "implements", "relates-to") sit at d≥6, so this cleanly
+        // ("implements", "relates-to") sit at d≥6, so this cleanly
         // separates the two without nagging genuine custom edges.
         Some((ty, d)) if d <= 2 => Some(ty),
         _ => None,
@@ -61080,6 +61190,9 @@ fn rel_type_label(rt: &RelationshipType) -> String {
         // trace:STORY-333 | ai:claude
         RelationshipType::BlockedBy => "blocked-by".to_string(),
         RelationshipType::Blocks => "blocks".to_string(),
+        // trace:TASK-1176 | ai:claude
+        RelationshipType::SupersededBy => "superseded-by".to_string(),
+        RelationshipType::Supersedes => "supersedes".to_string(),
         RelationshipType::Custom(s) => s.clone(),
     }
 }
@@ -70897,7 +71010,9 @@ fn run_zen_drive(
     match zen_drive::classify_eligibility(&req.status) {
         zen_drive::ZenEligibility::AlreadyShipped
         | zen_drive::ZenEligibility::Shelved
-        | zen_drive::ZenEligibility::Rejected => {
+        | zen_drive::ZenEligibility::Rejected
+        // trace:TASK-1176 | ai:claude
+        | zen_drive::ZenEligibility::Superseded => {
             if let Some(msg) = zen_drive::classify_eligibility(&req.status).refusal(&display) {
                 anyhow::bail!(msg);
             }

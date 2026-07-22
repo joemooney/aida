@@ -20,6 +20,12 @@
 //! | Rejected    | red                 | ✗     |
 //! | NeedsAttention | magenta (bold)   | ⚠     |
 //! | Accepted    | green               | ☑     |
+//! | Superseded  | green (dimmed)      | ⊡     |
+//!
+//! `Superseded` (TASK-1176) is terminal-but-ADOPTED: the spec was followed and
+//! then replaced by a successor. It sits in the closed-green family (dimmed,
+//! because a newer spec governs) and deliberately never wears the red ✗ that
+//! means DECLINED.
 //!
 //! `Accepted` is a DISPLAY-only label (BUG-781): a decision spec's stored
 //! `Approved` is that class's terminal state, so it renders as `Accepted` via
@@ -72,6 +78,8 @@ pub(crate) fn status_glyph_for_profile(
         "needsattention" => Glyph::Blocked,
         // trace:BUG-781 | ai:claude — the decision-class terminal label.
         "accepted" => Glyph::Accepted,
+        // trace:TASK-1176 | ai:claude — adopted, then replaced.
+        "superseded" => Glyph::Superseded,
         // Unmapped/custom statuses get the neutral bullet (also profile-aware).
         _ => Glyph::Neutral,
     };
@@ -111,6 +119,10 @@ fn status_glyph_literal(status: &str) -> &'static str {
         "needsattention" => "⚠",
         // trace:BUG-781 | ai:claude — a ratified decision: checked and closed.
         "accepted" => "☑",
+        // trace:TASK-1176 | ai:claude — adopted, then replaced: the same box
+        // family as `accepted`, with the check swapped for a dot. NOT the ✗ a
+        // DECLINED spec wears.
+        "superseded" => "⊡",
         _ => "·",
     }
 }
@@ -141,6 +153,11 @@ pub(crate) fn paint_status(text: &str, status: &str) -> ColoredString {
         // green family — never the cyan `Approved` wears on a task that has yet
         // to be started. trace:BUG-781 | ai:claude
         "accepted" => text.green(),
+        // TASK-1176: superseded is terminal-but-ADOPTED — it paints in the
+        // closed GREEN family (the spec was followed) but dimmed, because a
+        // successor now governs. Never red: red means DECLINED.
+        // trace:TASK-1176 | ai:claude
+        "superseded" => text.green().dimmed(),
         // History rows can carry a synthetic "(deleted)" status.
         "(deleted)" => text.red().dimmed(),
         _ => text.normal(),
