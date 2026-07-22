@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:03:42.698777313Z
-modified_at: 2026-07-22T06:47:34.503613066Z
+modified_at: 2026-07-22T07:15:41.881107175Z
 req_type: Bug
 tags:
 - aida:list dx noise batch:papercuts-0721 from-dogfood
+comments:
+- id: 019f88ae-24b9-7460-a7bc-f86db3991e16
+  author: joe
+  content: Commit 1350de25b references this requirement
+  created_at: 2026-07-22T07:15:41.881107175Z
+  modified_at: 2026-07-22T07:15:41.881107175Z
+  session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
 execution_mode: drive
