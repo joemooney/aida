@@ -38503,5 +38503,17 @@ operations:
   timestamp: 2026-07-22T15:06:58.000628029Z
   kind: !SetStatus
     status: Approved
-clock: 3598
+- id: 019f8a76-076a-7d63-a66f-d6d437d1c771
+  target_id: 019f8a75-fb8e-7fc2-837e-9eb91eba54c5
+  author: aida
+  node_id: '1'
+  lamport: 3599
+  timestamp: 2026-07-22T15:33:38.794559256Z
+  kind: !Create
+    title: 'Reap slice (FR-284 child): supervisor reaps finished+merged+EXITED sessions on substrate state'
+    description: 'First drive-safe slice of FR-284''s ratified design. Extend the aida worktree gc / a supervisor pass to reap sessions whose reapable predicate is true: spec is Done/Completed AND branch is merged AND process has EXITED. Handles headless sessions (already exited) automatically; a live interactive session (process alive) is NOT reaped (cannot remove a live cwd). NO terminal scraping (read substrate state only: spec status + branch-merged + process-liveness, the latter from the shipped liveness detection). NO force-kill. Reuse aida worktree gc safety checks (never remove dirty / unmerged-unique-commit worktrees). NOTIFY + CHAIN slices stay in the parent FR-284 (guided). Acceptance: a finished+merged headless session (process exited) is reaped by the pass (worktree removed, lease deleted, branch cleaned) with no manual step; a finished session whose process is still alive is left untouched; no code path scrapes terminals or force-kills; gc safety checks honored. Mode drive.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3599
 node_id: '1'
