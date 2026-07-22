@@ -38515,5 +38515,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3599
+- id: 019f8a76-3505-79a2-92be-a41f9b8eb709
+  target_id: 019f8a76-304d-7551-8d4a-f62e096d2d2a
+  author: aida
+  node_id: '1'
+  lamport: 3600
+  timestamp: 2026-07-22T15:33:50.469572082Z
+  kind: !Create
+    title: pre-commit guard warns when a scoped session's commit touches paths outside its worktree (detect-not-prevent)
+    description: 'Quizdom #8: an agent in a scoped session landed edits in the shared main checkout (wrong cwd/abs path) instead of its worktree. AIDA cannot PREVENT file writes (harness/git-worktree concern), but it can DETECT: a pre-commit guard (git hook, scaffolded) that, when a scoped session (AIDA_SESSION_ID set, worktree lease present) commits, warns if the commit touches paths resolving OUTSIDE the session worktree. Warn-only (does not block); does not attempt harness-level enforcement. Recurrence of the isolation-discipline family. Acceptance: a scoped-session commit touching out-of-worktree paths emits a clear warning naming the stray paths; an in-worktree commit is silent; non-scoped sessions unaffected; the guard is scaffolded by aida init hooks; unit/integration test the path-scoping check. Mode drive.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3600
 node_id: '1'
