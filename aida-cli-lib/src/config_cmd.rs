@@ -408,11 +408,11 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "false",
         edit: EditSafety::Bool { default: false },
     },
-    // trace:TASK-1172
+    // trace:TASK-1172 trace:TASK-1175
     KnobSpec {
         section: "burndown",
         key: "order",
-        doc: "How the ready set is ordered before a wave is fanned: by priority (high first), or strict queue order.",
+        doc: "How the ready set is ordered before a wave is fanned: by priority (high first, ties by queue-insertion time), or strict queue-insertion order (oldest queued first).",
         default: "priority",
         edit: EditSafety::Enum {
             allowed: &["priority", "queue"],

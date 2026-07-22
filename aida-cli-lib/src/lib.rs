@@ -22546,6 +22546,49 @@ fn all_queued_requirement_ids(project_root: &std::path::Path) -> HashSet<Uuid> {
     out
 }
 
+/// The queue-insertion timestamp per requirement — requirement UUID → the
+/// EARLIEST `added_at` across every user's queue file. The substrate fact the
+/// burndown's ready-set ordering is anchored on: "when did this spec enter the
+/// queue", as opposed to the accident of how its spec id happens to spell.
+///
+/// Same cheap `read_dir` + per-file YAML parse as [`all_queued_requirement_ids`]
+/// (no `Storage::load()`), and the same project-global union: a spec routed into
+/// two role queues carries the earlier of the two stamps, so re-routing work
+/// never silently moves it to the back of the wave. Returns an empty map when
+/// the queue dir is absent.
+// trace:TASK-1175 | ai:claude
+fn all_queued_added_at(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> {
+    let mut out: std::collections::HashMap<Uuid, chrono::DateTime<chrono::Utc>> =
+        std::collections::HashMap::new();
+    let dir = project_root.join(".aida-store/registry/queues");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        if let Ok(items) = serde_yaml::from_str::<Vec<aida_core::QueueEntry>>(&content) {
+            for item in items {
+                out.entry(item.requirement_id)
+                    .and_modify(|at| {
+                        if item.added_at < *at {
+                            *at = item.added_at;
+                        }
+                    })
+                    .or_insert(item.added_at);
+            }
+        }
+    }
+    out
+}
+
 /// BUG-527: queue memberships for a single spec, across every user's queue
 /// file, for the `Queued:` line on `aida show <ID>` (and the MCP
 /// `show_requirement` mirror). Each membership is `(for_role, rank)`, where
@@ -41716,6 +41759,29 @@ fn handle_intake_command(
     }
 }
 
+/// Install a per-invocation `--order` override by exporting
+/// `AIDA_BURNDOWN_ORDER`, the top tier of [`resolved_burndown_ready_order`].
+/// Exporting (rather than threading a parameter) means the headless drain
+/// `burndown run` launches — and every `burndown plan` that drain re-resolves
+/// through — inherits the operator's one-run choice for free. An unrecognized
+/// token is a hard error rather than a silent fallback: the operator asked for a
+/// specific order, so guessing would be worse than refusing.
+// trace:TASK-1175 | ai:claude
+fn install_burndown_order_override(raw: Option<&String>) -> Result<()> {
+    let Some(raw) = raw else { return Ok(()) };
+    let order = burndown::parse_ready_order(raw).ok_or_else(|| {
+        anyhow::anyhow!("unknown --order value `{raw}` (expected: priority, queue)")
+    })?;
+    std::env::set_var(
+        "AIDA_BURNDOWN_ORDER",
+        match order {
+            burndown::ReadyOrder::Priority => "priority",
+            burndown::ReadyOrder::Queue => "queue",
+        },
+    );
+    Ok(())
+}
+
 fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
     match cmd {
         crate::cli::BurndownCommand::Plan {
@@ -41723,8 +41789,12 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             tag,
             batch,
             candidates,
+            order,
             json,
-        } => handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *candidates, *json),
+        } => {
+            install_burndown_order_override(order.as_ref())?;
+            handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *candidates, *json)
+        }
         crate::cli::BurndownCommand::Explain { json } => handle_burndown_explain(*json),
         crate::cli::BurndownCommand::Run {
             status,
@@ -41732,6 +41802,7 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             batch,
             max,
             concurrency,
+            order,
             permission_mode,
             dry_run,
             verbose,
@@ -41739,20 +41810,23 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             force,
             vendor,
             panes,
-        } => handle_burndown_run(
-            status,
-            tag.as_deref(),
-            batch.as_deref(),
-            *max,
-            *concurrency,
-            permission_mode.as_deref(),
-            *dry_run,
-            *verbose,
-            *quiet,
-            *force,
-            vendor.as_deref(),
-            panes.as_deref(),
-        ),
+        } => {
+            install_burndown_order_override(order.as_ref())?;
+            handle_burndown_run(
+                status,
+                tag.as_deref(),
+                batch.as_deref(),
+                *max,
+                *concurrency,
+                permission_mode.as_deref(),
+                *dry_run,
+                *verbose,
+                *quiet,
+                *force,
+                vendor.as_deref(),
+                panes.as_deref(),
+            )
+        }
         crate::cli::BurndownCommand::Status { json } => handle_burndown_status(*json),
     }
 }
@@ -41837,12 +41911,20 @@ fn read_burndown_order_from_config_path(path: &std::path::Path) -> Option<burndo
         .and_then(burndown::parse_ready_order)
 }
 
-/// TASK-1172: how the drain orders its ready set. Project config → machine-global
-/// config → the `priority` default. Never fails: a missing or malformed config
-/// simply keeps the default ordering.
+/// TASK-1172 / TASK-1175: how the drain orders its ready set. `AIDA_BURNDOWN_ORDER`
+/// env (what the `--order` flag exports, so a headless child drain inherits the
+/// operator's one-run choice) → project config → machine-global config → the
+/// `priority` default. Never fails: a missing or malformed value at any tier
+/// simply falls through to the next one.
 // trace:TASK-1172 | ai:claude
+// trace:TASK-1175 | ai:claude
 fn resolved_burndown_ready_order(project_root: &std::path::Path) -> burndown::ReadyOrder {
-    read_burndown_order_from_config_path(&project_root.join(".aida").join("config.toml"))
+    std::env::var("AIDA_BURNDOWN_ORDER")
+        .ok()
+        .and_then(|raw| burndown::parse_ready_order(&raw))
+        .or_else(|| {
+            read_burndown_order_from_config_path(&project_root.join(".aida").join("config.toml"))
+        })
         .or_else(|| {
             aida_home_dir().and_then(|home| {
                 read_burndown_order_from_config_path(&home.join(".aida/config.toml"))
@@ -50438,6 +50520,9 @@ fn resolve_burndown_sets(
     // queue (matches `aida list --queued`). A spec is drainable only if the
     // advisor deliberately queued it.
     let queued_ids = all_queued_requirement_ids(&project_root);
+    // TASK-1175: the queue-insertion timestamps that order the ready set.
+    // trace:TASK-1175 | ai:claude
+    let queued_added_at = all_queued_added_at(&project_root);
 
     let mut candidates: Vec<burndown::BurndownCandidate> = Vec::new();
     // Display-ids of queued specs in the selector scope, so the pickable set can
@@ -50452,6 +50537,12 @@ fn resolve_burndown_sets(
     // TASK-1172: display-id → priority label, populated from this same scan so
     // the ready set can be ordered by priority without a second store read.
     let mut priority_by_id: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    // TASK-1175: display-id → queue-entry `added_at`, joined here (the only
+    // place display id and requirement UUID are both in hand) so the ordering
+    // sort downstream stays a pure function of its arguments.
+    // trace:TASK-1175 | ai:claude
+    let mut added_at_by_id: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> =
         std::collections::HashMap::new();
     for req in &store.requirements {
         // TASK-803: the per-spec filter/bucket decision now lives in the pure,
@@ -50511,6 +50602,10 @@ fn resolve_burndown_sets(
                 titles.insert(disp.clone(), req.title.clone());
                 // trace:TASK-1172 | ai:claude
                 priority_by_id.insert(disp.clone(), req.priority.to_string());
+                // trace:TASK-1175 | ai:claude
+                if let Some(at) = queued_added_at.get(&req.id) {
+                    added_at_by_id.insert(disp.clone(), *at);
+                }
                 candidates.push(candidate);
             }
         }
@@ -50530,28 +50625,31 @@ fn resolve_burndown_sets(
     // advisor hasn't queued it yet (the `--candidates` curation list).
     let (mut ready, awaiting_signoff) = burndown::split_by_signoff(pickable, &queued_disp);
 
+    // TASK-1172: order the wave BEFORE it is fanned, so a high-priority spec
+    // queued after a low-priority one still drains first. Dependencies are
+    // unaffected — a blocked spec never entered this set.
+    //
+    // TASK-1175: both orders are anchored on the queue-entry `added_at`.
+    // `[burndown] order = queue` (or `--order queue`) drains strictly oldest-
+    // queued first; the default priority order uses that same insertion time as
+    // the tiebreak within a band. The sort is TOTAL (final tiebreak = display
+    // id), which is why no pre-sort is needed here for the serialize claim
+    // below to stay stable across runs.
+    //
     // STORY-614: substrate-enforce the `serialize:<group>` convention — the
     // fan-out set must never carry more than one spec per group, so a drain that
-    // ignores the skill text still can't co-fan a collision group. Sort the
-    // ready set (lowest id first) so the deterministic "first claims the group"
-    // pick is stable across runs.
+    // ignores the skill text still can't co-fan a collision group. The
+    // deterministic order above is what makes the "first claims the group" pick
+    // reproducible.
     //
     // TASK-149: the held members are their OWN bucket, not part of
     // `awaiting_signoff`. They are queued and blessed — only a sibling's group
     // claim defers them to a later wave — so labelling them "awaiting advisor
     // sign-off" told both the drain runner and the operator that a human gate
-    // was missing when nothing was pending. trace:STORY-614 trace:TASK-149 | ai:claude
-    ready.sort();
-
-    // TASK-1172: order the wave by priority BEFORE it is fanned, so a
-    // high-priority spec queued after a low-priority one still drains first.
-    // A pure, stable sort layered on the deterministic id order above: equal
-    // priorities keep that order, so the serialize claim below stays stable
-    // across runs. Dependencies are unaffected — a blocked spec never entered
-    // this set. `[burndown] order = queue` restores strict queue order.
-    // trace:TASK-1172 | ai:claude
+    // was missing when nothing was pending.
+    // trace:STORY-614 trace:TASK-149 trace:TASK-1172 trace:TASK-1175 | ai:claude
     let ready_order = resolved_burndown_ready_order(&project_root);
-    ready = burndown::sort_ready_by_priority(ready, &priority_by_id, ready_order);
+    ready = burndown::sort_ready(ready, &priority_by_id, &added_at_by_id, ready_order);
 
     let (kept_ready, serialize_held) = burndown::collapse_serialize_groups(ready, &groups_by_id);
     ready = kept_ready;
@@ -76229,3 +76327,11 @@ mod story_698_test_plan_capture_tests;
 #[cfg(test)]
 #[path = "tests/bug_777_stale_lease_recovery_tests.rs"]
 mod bug_777_stale_lease_recovery_tests;
+
+// TASK-1175: the burndown ready set orders on QUEUE-INSERTION time. These tests
+// cover the impure halves — the per-user queue-file `added_at` join and the
+// env → project → global → default resolution ladder for `[burndown] order`.
+// trace:TASK-1175 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1175_queue_insertion_order_tests.rs"]
+mod task_1175_queue_insertion_order_tests;

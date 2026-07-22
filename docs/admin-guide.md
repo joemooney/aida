@@ -97,11 +97,12 @@ The built-in default remains `false` for script compatibility. Resolution is
 
 Each wave of a drain fans the unblocked ready set **highest priority first**
 (high > medium > low), so a high-priority bug queued after a low-priority chore
-still drains first. Equal-priority specs keep the order they were already in, so
-ordering is deterministic across runs.
+still drains first. Within a priority band the tiebreak is **queue-insertion
+order** — the `added_at` timestamp on each spec's queue entry — so equal-priority
+specs drain in the order you queued them.
 
-To restore strict queue order — explicit manual sequencing, no priority
-reordering — set:
+To drain in **strict queue-insertion order** — oldest-queued first, no priority
+reordering at all — set:
 
 ```toml
 [burndown]
@@ -109,13 +110,29 @@ order = "queue"
 ```
 
 Valid values are `priority` (default) and `queue`; an unrecognized value falls
-back to the default rather than failing the drain. Resolution is project
-`.aida/config.toml` > user `~/.aida/config.toml` > built-in `priority`.
+back to the default rather than failing the drain. Resolution is
+`AIDA_BURNDOWN_ORDER` (what `--order` exports) > project `.aida/config.toml` >
+user `~/.aida/config.toml` > built-in `priority`.
+
+Both `aida burndown plan` and `aida burndown run` accept `--order priority|queue`
+to override the configured value for one invocation; `burndown run` exports the
+choice to the headless drain so every wave it re-resolves uses the same order.
+
+```bash
+aida burndown plan --order queue    # preview the wave in queue-insertion order
+aida burndown run  --order queue    # drain oldest-queued first for this run
+```
+
+Ordering is anchored on queue-insertion time, never on how a spec id happens to
+spell: `TASK-9` queued before `TASK-1` drains first. Specs with no readable queue
+entry sort last, and the display id is the final tiebreak, so a wave is
+reproducible across runs.
 
 Ordering is *only* ordering. It never changes what is eligible: a spec blocked
 by an unsatisfied `BlockedBy` edge still waits regardless of its priority, and
 `serialize:<group>` members are still sequenced one per wave (the group claim
-simply goes to the highest-priority member).
+goes to whichever member the active order puts first — the highest-priority one
+under `priority`, the earliest-queued one under `queue`).
 
 ### Feature Configuration
 

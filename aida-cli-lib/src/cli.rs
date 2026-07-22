@@ -1779,6 +1779,13 @@ pub enum BurndownCommand {
         // trace:STORY-546 | ai:claude
         #[clap(long)]
         candidates: bool,
+        /// How to order the ready set for this run: `priority` (high before
+        /// medium before low, ties broken by queue-insertion time) or `queue`
+        /// (strict queue-insertion order — oldest queued first). Overrides
+        /// `[burndown] order` in config for this invocation only.
+        // trace:TASK-1175 | ai:claude
+        #[clap(long, value_name = "ORDER")]
+        order: Option<String>,
         /// Machine-readable JSON
         /// (`{ready, awaiting_signoff, serialize_held, supervised, parked}`).
         // trace:TASK-149 | ai:claude
@@ -1826,6 +1833,14 @@ pub enum BurndownCommand {
         /// Parallel wave size — how many implementers fan out at once.
         #[clap(long)]
         concurrency: Option<usize>,
+        /// How to order the ready set for this drain: `priority` (high before
+        /// medium before low, ties broken by queue-insertion time) or `queue`
+        /// (strict queue-insertion order — oldest queued first). Overrides
+        /// `[burndown] order` in config, and is exported to the headless drain
+        /// so every wave it re-resolves uses the same order.
+        // trace:TASK-1175 | ai:claude
+        #[clap(long, value_name = "ORDER")]
+        order: Option<String>,
         /// Claude permission mode for the headless drain. Defaults to
         /// `bypassPermissions` so the unattended drain can push/merge/fan-out
         /// without stalling on prompts. Override with e.g. `acceptEdits`.
