@@ -14,12 +14,12 @@ description: |-
   SUGGESTED FIX: skip the auto-file entirely when the repo has no remote (the same condition that already makes 'db sync --pull' print 'No origin remote - skipping pull'), or when the resolved PR number is 0 / the story would cover no specs.
 
   RELATED UX ISSUE (same command): 'aida session end <id>' without --yes prints the confirmation preamble and then exits without ending the session when stdout is not a TTY, with the note 'non-interactive shell - skipping the CI/PR probe'. The lease survives, which is confusing - the command looks like it ran. It should either fail loudly or honor a non-interactive default.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:08:03.015211493Z
-modified_at: 2026-07-22T02:52:32.450791144Z
+modified_at: 2026-07-22T03:12:19.424347170Z
 req_type: Bug
 tags:
 - no-remote
@@ -32,8 +32,24 @@ comments:
   created_at: 2026-07-22T02:50:31.874741047Z
   modified_at: 2026-07-22T02:50:31.874741047Z
   session_id: d7909c1f-6457-4cf7-b374-59df8ef5424b
+history:
+- id: 019f87cf-53ba-7a60-b08a-736b1c91b9e0
+  author: aida-auto-bump
+  timestamp: 2026-07-22T03:12:19.386245542Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f87cf-53e0-78b3-b567-88c011c8efee
+  timestamp: 2026-07-22T03:12:19.424345821Z
+  agent: aida
+  commit_sha: 16152a63bf73ea6fd378b8b97e3099bbe1c1d548
+  summary: Completed via merge 16152a63
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T02:52:32.450791144Z
   implemented_by: joe
+  completed_at: 2026-07-22T03:12:19.386132241Z
+  completion_sha: 16152a63bf73ea6fd378b8b97e3099bbe1c1d548
