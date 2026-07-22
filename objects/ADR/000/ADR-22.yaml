@@ -1,0 +1,28 @@
+id: 019f87dc-0929-7970-8cae-c208dcca5d02
+spec_id: ADR-22
+agreed_id: ADR-22
+title: bounded launcher-set background-wait ceiling with punt-not-abort on expiry
+description: |
+  Decision (operator, 2026-07-21, guided implementation of TASK-1169): the background-wait ceiling for headless AIDA-spawned agent sessions is a bounded, launcher-set, configurable value -- never the wait-forever zero stopgap -- and hitting any bound parks work rather than terminating it.
+
+  Context: daemonized drains were launched with CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 (wait forever) to stop the 600s reaper from killing mid-wave integration work. That removes the safety valve, so a genuinely wedged task hangs the drain forever. A hand-typed aida burndown run lacked the variable entirely and behaved differently from the daemonized one -- the inconsistency that produced the 2026-07-18 limp incident.
+
+  Decision, three parts:
+  1. Ceiling value and configurability: a [burndown] bg_wait_ceiling_ms knob in .aida/config.toml, default 2700000 ms (45 minutes: worst-case cross-platform CI plus margin), overridable by AIDA_BURNDOWN_BG_WAIT_CEILING_MS, clamped to a non-zero floor so the zero stopgap cannot be re-created through configuration. Documented in docs/environment-variables.md.
+  2. Env scope: the ceiling is applied CENTRALLY at every headless spawn site -- compose/spawn_vendor_headless, the one path every headless phase goes through, plus both burndown launch sites (quiet and verbose). A hand-typed launch, a daemonized launch, and queue work --auto-complete headless phases then behave identically. The inconsistency CLASS is closed, not just this instance.
+  3. Punt, never silent-abort: when a bound is hit (a CI wait exceeds the ceiling, or the resume budget is spent), each affected spec is parked NeedsAttention with a recorded reason naming the PR, the wait duration, and the last observed CI state; a finding is filed for the triage sweep; the PR is left OPEN and untouched; the drain continues with the remaining work and exits 2 (the EPIC-28 punt-and-continue convention).
+
+  Consequences:
+  - A real ceiling that rarely fires replaces wait-forever, so a wedged task eventually surfaces instead of hanging the drain.
+  - Nothing is destroyed on timeout and no uncommitted work is orphaned without a record.
+  - aida findings list is the triage surface for expired waits.
+  - Rejected: a hardcoded const (no escape hatch for a slower forge); deriving the ceiling from ci_idle_timeout DEFAULT_CI_ABSOLUTE_SECS (couples two knobs that may want to move independently); parking without filing a finding (the timeout would miss the sweep the operator already runs).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-22T03:26:12.265182876Z
+modified_at: 2026-07-22T03:26:12.265182876Z
+req_type: Decision
+tags:
+- aida:burndown orchestration reliability adr:task-1169
