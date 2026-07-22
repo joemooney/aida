@@ -38421,5 +38421,13 @@ operations:
   timestamp: 2026-07-22T14:48:15.437391477Z
   kind: !SetTitle
     title: 'burndown order=queue: implement TRUE added_at insertion order (not id order); added_at tiebreak in priority mode; keep priority default'
-clock: 3592
+- id: 019f8a4c-7db7-7de2-a408-8803b1f00a2b
+  target_id: 019f88d7-2f74-7f93-8831-f413080a0063
+  author: aida
+  node_id: '1'
+  lamport: 3593
+  timestamp: 2026-07-22T14:48:16.567502350Z
+  kind: !SetPriority
+    priority: Medium
+clock: 3593
 node_id: '1'
