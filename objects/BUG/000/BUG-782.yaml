@@ -8,9 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T05:57:23.758928648Z
-modified_at: 2026-07-22T06:43:13.594107629Z
+modified_at: 2026-07-22T07:03:33.941595926Z
 req_type: Bug
 tags:
 - aida:tail dx observability batch:papercuts-0721 followup:TASK-1167 from-dogfood
 - serialize:aida-tail
+comments:
+- id: 019f88a3-0935-7142-b048-7b738527160f
+  author: joe
+  content: Commit a263c207b references this requirement
+  created_at: 2026-07-22T07:03:33.941595926Z
+  modified_at: 2026-07-22T07:03:33.941595926Z
+  session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
 execution_mode: drive
