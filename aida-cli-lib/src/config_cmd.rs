@@ -408,6 +408,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "false",
         edit: EditSafety::Bool { default: false },
     },
+    // trace:TASK-1172
+    KnobSpec {
+        section: "burndown",
+        key: "order",
+        doc: "How the ready set is ordered before a wave is fanned: by priority (high first), or strict queue order.",
+        default: "priority",
+        edit: EditSafety::Enum {
+            allowed: &["priority", "queue"],
+        },
+    },
     // --- [mailbox]. ---
     KnobSpec {
         section: "mailbox",
@@ -919,14 +929,40 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             (None, Some(v)) => (v, PolicySource::GlobalConfig),
             (None, None) => (false, PolicySource::Default),
         };
+        // TASK-1172: ready-set ordering, resolved on the same project → global →
+        // default ladder. Only the two recognized values are surfaced; anything
+        // else reads as the default rather than echoing a typo back as policy.
+        let order_of = |v: Option<&toml::Value>| -> Option<String> {
+            v.and_then(|v| v.as_str())
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| s == "priority" || s == "queue")
+        };
+        let order_project = order_of(config_lookup(cfg.as_ref(), "burndown", "order"));
+        let order_global = aida_home_dir()
+            .map(|h| h.join(".aida/config.toml"))
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|body| toml::from_str::<toml::Value>(&body).ok())
+            .and_then(|v| order_of(config_lookup(Some(&v), "burndown", "order")));
+        let (order_value, order_source) = match (order_project, order_global) {
+            (Some(v), _) => (v, PolicySource::ProjectConfig),
+            (None, Some(v)) => (v, PolicySource::GlobalConfig),
+            (None, None) => ("priority".to_string(), PolicySource::Default),
+        };
         PolicySection {
             section: "burndown",
             header: "[burndown]".to_string(),
-            rows: vec![PolicyRow {
-                key: "verbose",
-                value: effective.to_string(),
-                source,
-            }],
+            rows: vec![
+                PolicyRow {
+                    key: "verbose",
+                    value: effective.to_string(),
+                    source,
+                },
+                PolicyRow {
+                    key: "order",
+                    value: order_value,
+                    source: order_source,
+                },
+            ],
         }
     });
 

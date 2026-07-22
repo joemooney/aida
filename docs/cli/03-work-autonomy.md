@@ -96,9 +96,12 @@ Three cross-cutting truths the tree assumes:
 
 **Gotchas.** `burndown plan`'s default set is the *queued* pickable specs — queue membership is the gate, so an approved-but-unqueued spec won't appear until you groom it. The parked entries each carry a reason; `aida why <spec>` explains any single one. `burndown run --verbose` streams live progress and tees JSONL to `.aida/burndown/<drain-id>.jsonl`; set `[burndown] verbose = true` in `.aida/config.toml` or `~/.aida/config.toml` to make that the default, and pass `--quiet` for the legacy buffered launch. `burndown status` reads the headless `burndown run` lock; the in-process `queue work --auto-complete` orchestrator has its own richer window at `aida drain status` (member-by-member phases). **While a drain is live**, both `burndown plan` and `aida queue list` lead with a `⚡ a drain is running (pid N)` banner and mark the specs it owns — `▶ in-flight` (an implementer is leased on it now) vs `◷ scheduled` (claimed, not yet picked up) — so a running drain doesn't read as a fresh, idle ready set. The signal is the same `.aida/drain.lock` the drain writes (no parallel liveness probe), so the marking and `burndown status` never disagree.
 
+**Ordering.** The ready set is fanned **highest priority first** (high > medium > low), with the existing deterministic order as the stable tiebreak — a high-priority bug queued after a low-priority chore still drains first. Ordering never changes eligibility: a blocked spec still waits regardless of priority, and `serialize:<group>` members are still sequenced one per wave. Set `[burndown] order = "queue"` for strict queue order (explicit manual sequencing).
+
 ```toml
 [burndown]
 verbose = true
+order = "priority"   # or "queue" for strict queue order
 ```
 
 **Chains with** — `backlog groom` (fill the queue) → `burndown plan` (verify the ready set) → `/aida-burndown` (run it) → `burndown status` / `drain status` (watch).
