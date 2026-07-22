@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:08:15.784325728Z
-modified_at: 2026-07-22T06:41:54.994513999Z
+modified_at: 2026-07-22T07:02:21.056712195Z
 req_type: Task
 tags:
 - aida:burndown ordering dx from-operator
@@ -25,4 +25,10 @@ comments:
   created_at: 2026-07-22T06:20:19.320697945Z
   modified_at: 2026-07-22T06:20:19.320697945Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f88a1-ec80-7792-ae23-98539503f129
+  author: joe
+  content: Commit c6cc709ed references this requirement
+  created_at: 2026-07-22T07:02:21.056712195Z
+  modified_at: 2026-07-22T07:02:21.056712195Z
+  session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
 execution_mode: drive
