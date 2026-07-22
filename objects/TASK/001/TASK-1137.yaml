@@ -3,12 +3,12 @@ spec_id: TASK-1137
 agreed_id: TASK-1137
 title: '**TASK (checkpoint):** per-member `--zen` pause / `--no-human=both` auto-continue hook. ~40 LOC'
 description: ''
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:42.536952431Z
-modified_at: 2026-07-22T05:28:13.922455659Z
+modified_at: 2026-07-22T06:40:33.030482389Z
 req_type: Task
 tags:
 - autonomy-machinery
