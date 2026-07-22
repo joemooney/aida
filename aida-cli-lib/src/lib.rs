@@ -22086,6 +22086,20 @@ pub(crate) struct SessionLease {
     // trace:TASK-957 | ai:claude
     #[serde(default)]
     claim_verb: bool,
+    /// BUG-778: stamped when this worktree was handed to a HUMAN by
+    /// `aida worktree enter|add` — the verbs that take the implementer lease
+    /// and then deliberately launch NO agent (the operator starts one
+    /// themselves). Its presence is the "was an agent ever expected here?"
+    /// provenance `aida ps` needs: without it, the seconds between `enter` and
+    /// the operator's launch look exactly like a crashed agent, and the row
+    /// read "process dead — resume/rebrief: `aida queue work <spec>`" — a hint
+    /// that would start a SECOND session competing with the hand-worked one.
+    /// Refreshed on every re-enter (the worktree is being handed over again).
+    /// Absent on orchestrator-spawned leases, so their crash detection is
+    /// unchanged.
+    // trace:BUG-778 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    manual_enter_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -22185,6 +22199,7 @@ fn session_harness_worktree_register(
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -25665,6 +25680,7 @@ fn session_start(
         parent_branch_sha: stack_parent_sha.clone(),
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -46881,6 +46897,7 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: true,
+        manual_enter_at: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -47370,6 +47387,20 @@ fn ensure_spec_worktree(
                     .is_file();
         }
         Ok(out)
+    })
+    .map(|out| {
+        // BUG-778: both verbs that land here (`worktree enter` / `worktree
+        // add`) hand the worktree to a HUMAN and launch no agent. Stamp that
+        // provenance on the lease so `aida ps` reads the gap before the
+        // operator's launch as "awaiting agent", not "process dead — resume
+        // with `aida queue work <spec>`" (which would dispatch a competing
+        // session onto a spec someone is working by hand). Best-effort: a
+        // failed stamp costs a cosmetic misread, never the worktree the
+        // operator asked for. trace:BUG-778 | ai:claude
+        if let Some(id) = out.lease_id.as_deref() {
+            let _ = mark_lease_manual_enter(&main_root, id);
+        }
+        out
     })
 }
 
@@ -48416,8 +48447,18 @@ struct PsOrphan {
 /// orphaned with `stale_lease = true` (crashed session). No lease → orphaned
 /// flag-only. Pure so the orphan matrix is unit-testable without a store or a
 /// lease dir.
+///
+/// BUG-778: `awaiting_agent` short-circuits to "not orphaned". A spec whose
+/// worktree a human just entered by hand has no live process backing it *yet*
+/// — that is the launch-lag, not an orphan, and listing it under "no live
+/// session backing the flag" pointed the operator at a re-dispatch that would
+/// race them. The row still shows in the running-work table, framed honestly.
 // trace:STORY-696 | ai:claude
-fn ps_orphan_verdict(lease_state: Option<LeaseState>) -> Option<bool> {
+// trace:BUG-778 | ai:claude
+fn ps_orphan_verdict(lease_state: Option<LeaseState>, awaiting_agent: bool) -> Option<bool> {
+    if awaiting_agent {
+        return None;
+    }
     match lease_state {
         Some(LeaseState::Live) => None,
         Some(_) => Some(true),
@@ -48485,6 +48526,32 @@ fn ps_pid_liveness(state: LeaseState, harness_without_pid_signal: bool) -> Optio
         _ if harness_without_pid_signal => None,
         _ => Some(false),
     }
+}
+
+/// BUG-778: seconds since `aida worktree enter|add` handed this worktree to a
+/// human, or `None` when it never did (every orchestrator-spawned lease). The
+/// "was an agent ever expected here?" input to the dispatch-health classifier.
+/// A clock-skewed future stamp clamps to 0 (freshly handed over) rather than
+/// underflowing. Pure so the provenance read is unit-testable on fixtures.
+// trace:BUG-778 | ai:claude
+fn ps_manual_enter_secs(l: &SessionLease, now: chrono::DateTime<chrono::Utc>) -> Option<u64> {
+    l.manual_enter_at
+        .map(|at| now.signed_duration_since(at).num_seconds().max(0) as u64)
+}
+
+/// BUG-778: is this lease's row the hand-entered, launch-pending shape? Read
+/// straight off the row's already-computed dispatch state so the orphan
+/// section and the running-work table can never disagree about the same lease
+/// (the reported bug listed ONE hand-entered spec in both, under two
+/// contradictory framings). Pure over the built rows.
+// trace:BUG-778 | ai:claude
+fn ps_row_awaiting_agent(rows: &[PsRow], lease_id: &str) -> bool {
+    rows.iter().any(|r| {
+        r.lease.id == lease_id
+            && r.dispatch
+                .as_ref()
+                .is_some_and(|d| d.state == dispatch_health_ps::DispatchState::AwaitingAgent)
+    })
 }
 
 /// TASK-1143: the `locked-by` cell for one `aida ps` row — the advisor holding
@@ -49318,12 +49385,19 @@ fn build_running_work(
                 // cwd-based worktree probe), so it must not be treated as a
                 // dead process and offered the salvage-commit hint.
                 let pid_alive = ps_pid_liveness(state, harness_lease_without_pid_signal(l));
+                // BUG-778: how long ago `aida worktree enter|add` handed this
+                // worktree to a human, when it did. `None` on every
+                // orchestrator-spawned lease — those DO expect an agent, so
+                // their crash detection is untouched. trace:BUG-778 | ai:claude
+                let manual_enter_secs = ps_manual_enter_secs(l, now);
                 let ds = dispatch_health_ps::dispatch_state(
                     pid_alive,
                     probe.dirty,
                     probe.ahead_of_main,
                     lease_elapsed_secs,
                     dispatch_health_ps::DEFAULT_STALLED_THRESHOLD_SECS,
+                    manual_enter_secs,
+                    dispatch_health_ps::DEFAULT_AWAITING_AGENT_GRACE_SECS,
                 );
                 let hint = dispatch_health_ps::next_command_hint(
                     ds,
@@ -49331,6 +49405,7 @@ fn build_running_work(
                     &l.branch,
                     probe.last_commit_subject.as_deref(),
                     spec.as_deref(),
+                    manual_enter_secs.is_some(),
                 );
                 Some(PsDispatch {
                     state: ds,
@@ -49387,7 +49462,9 @@ fn build_running_work(
         let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
         let lease = spec_scoped_lease(leases, &id_refs);
         let lease_state = lease.map(|l| lease_state_for(l, live, now));
-        if let Some(stale_lease) = ps_orphan_verdict(lease_state) {
+        // trace:BUG-778 | ai:claude
+        let awaiting_agent = lease.is_some_and(|l| ps_row_awaiting_agent(&rows, &l.id));
+        if let Some(stale_lease) = ps_orphan_verdict(lease_state, awaiting_agent) {
             orphans.push(PsOrphan {
                 spec: s.disp.clone(),
                 title: s.title.clone(),
@@ -49758,6 +49835,14 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                         dispatch_health_ps::DispatchState::Unknown => (
                             crate::glyph(crate::glyphs::Glyph::Neutral),
                             d.state.label().dimmed(),
+                        ),
+                        // BUG-778: the operator entered this worktree by hand
+                        // and hasn't launched an agent in it yet — an
+                        // informational nudge (start one), never an alarm.
+                        // trace:BUG-778 | ai:claude
+                        dispatch_health_ps::DispatchState::AwaitingAgent => (
+                            crate::glyph(crate::glyphs::Glyph::Info),
+                            d.state.label().cyan(),
                         ),
                         dispatch_health_ps::DispatchState::Moving => unreachable!(
                             "hint is None for Moving — see dispatch_health_ps::next_command_hint"
@@ -64102,6 +64187,7 @@ fn acquire_review_lease(
         parent_branch_sha: None,
         review_verb: true,
         claim_verb: false,
+        manual_enter_at: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
@@ -70852,6 +70938,36 @@ fn mark_lease_escalated_to_human(project_root: &std::path::Path, lease_id: &str)
         toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
     lease.escalated_to_human = Some(chrono::Utc::now());
     let content = toml::to_string_pretty(&lease)?;
+    write_atomic(&path, &content).with_context(|| format!("writing lease {}", path.display()))?;
+    Ok(())
+}
+
+/// BUG-778: stamp `manual_enter_at = now` on a lease `aida worktree enter|add`
+/// just handed to a human — the provenance marker that keeps `aida ps` from
+/// reading the operator's launch-lag as a dead agent (and from offering the
+/// `aida queue work` re-dispatch that would race them).
+///
+/// Patched as a single generic `toml::Value` key insert, the
+/// [`crate::worktree_lock`] pattern, rather than a `SessionLease`
+/// round-trip: a lease may carry keys this struct doesn't model (STORY-711's
+/// `authorized_by` is written the same way), and a deserialize/reserialize
+/// would silently drop them.
+///
+/// Idempotent by construction — re-entering refreshes the stamp, which is
+/// exactly right: the worktree is being handed over again.
+// trace:BUG-778 | ai:claude
+fn mark_lease_manual_enter(project_root: &std::path::Path, lease_id: &str) -> Result<()> {
+    let path = lease_path(project_root, lease_id);
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading lease {}", path.display()))?;
+    let mut value: toml::Value =
+        toml::from_str(&body).with_context(|| format!("parsing lease {}", path.display()))?;
+    let table = value.as_table_mut().context("lease TOML is not a table")?;
+    table.insert(
+        "manual_enter_at".to_string(),
+        toml::Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+    let content = toml::to_string_pretty(&value)?;
     write_atomic(&path, &content).with_context(|| format!("writing lease {}", path.display()))?;
     Ok(())
 }

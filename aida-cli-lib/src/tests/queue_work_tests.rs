@@ -414,6 +414,7 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 

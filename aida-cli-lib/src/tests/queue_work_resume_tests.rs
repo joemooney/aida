@@ -238,6 +238,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     };
     std::fs::write(
         sessions.join("019eabcd-1234.toml"),
@@ -307,6 +308,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     };
     std::fs::write(
         sessions.join("019eaaaa-bbbb.toml"),

@@ -25,6 +25,7 @@ fn lease(scope: &str) -> SessionLease {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 

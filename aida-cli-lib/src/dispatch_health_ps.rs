@@ -61,6 +61,15 @@ pub(crate) enum DispatchState {
     /// half-done work out from under a live agent and double-dispatch.
     // trace:BUG-752 | ai:claude
     Unknown,
+    /// The worktree was handed to a HUMAN by `aida worktree enter|add` — that
+    /// verb takes the implementer lease but deliberately launches NO agent, so
+    /// nothing is expected to back the lease until the operator starts one
+    /// themselves. Within the grace window this is the normal, healthy shape,
+    /// NOT a dead process: the absent worker is the operator's next keystroke.
+    /// Never carries a re-dispatch hint — `aida queue work <spec>` on a
+    /// hand-entered spec starts a SECOND session competing with the human.
+    // trace:BUG-778 | ai:claude
+    AwaitingAgent,
 }
 
 impl DispatchState {
@@ -72,6 +81,8 @@ impl DispatchState {
             DispatchState::Salvageable => "salvageable",
             // trace:BUG-752 | ai:claude
             DispatchState::Unknown => "unknown",
+            // trace:BUG-778 | ai:claude
+            DispatchState::AwaitingAgent => "awaiting-agent",
         }
     }
 }
@@ -96,6 +107,26 @@ impl DispatchState {
 // trace:TASK-1090 | ai:claude
 pub(crate) const DEFAULT_STALLED_THRESHOLD_SECS: u64 = 30 * 60;
 
+/// BUG-778: how long a HAND-ENTERED worktree (`aida worktree enter|add` — takes
+/// the lease, launches no agent) reads as AWAITING-AGENT before the ordinary
+/// agent-expected matrix takes over.
+///
+/// Deliberately the same 30 minutes as [`DEFAULT_STALLED_THRESHOLD_SECS`]: the
+/// question both bars answer is "how long may a worktree show zero movement
+/// before it is worth a glance?", and there is no reason a human's launch-lag
+/// budget should differ from an agent's produce-something budget. The window
+/// only has to be comfortably longer than the seconds-to-minutes between
+/// `worktree enter` and the operator's `claude` — the observed false positive
+/// fired ~30 SECONDS in.
+///
+/// After the window a hand-entered lease still ages into STALLED (an entered
+/// worktree nobody ever worked is genuinely worth surfacing) — what it never
+/// does, at any age, is claim "process dead" or offer the `aida queue work`
+/// re-dispatch, because no agent was ever expected here and re-dispatching
+/// would start a session competing with the human.
+// trace:BUG-778 | ai:claude
+pub(crate) const DEFAULT_AWAITING_AGENT_GRACE_SECS: u64 = 30 * 60;
+
 /// Pure classifier: given the four signals `aida ps` already has (or can
 /// cheaply probe) per row, decide MOVING / STALLED / SALVAGEABLE / UNKNOWN.
 /// No I/O, no mutable state — every input is a plain value so the full
@@ -109,11 +140,20 @@ pub(crate) const DEFAULT_STALLED_THRESHOLD_SECS: u64 = 30 * 60;
 /// Salvageable: the salvage hint fires only on a genuinely determined death.
 /// (It was a plain `bool` before the third false-negative variant.)
 ///
+/// `manual_enter_secs` (BUG-778) is `Some(seconds since the worktree was handed
+/// to a human by `aida worktree enter|add`)` for a hand-entered lease and `None`
+/// for every orchestrator-spawned one — the "was an agent ever expected here?"
+/// provenance. A hand-entered lease with nothing yet to show, still inside
+/// `awaiting_agent_grace_secs`, short-circuits to `AwaitingAgent` before the
+/// agent-expected matrix below can call its absent worker dead.
+///
 /// Decision matrix (documented so a future reader doesn't have to reverse it
 /// out of the `if` chain):
 ///
 /// | pid alive | branch ahead | worktree dirty | elapsed        | state       |
 /// |-----------|--------------|-----------------|----------------|-------------|
+/// | not live  | 0            | no              | hand-entered,  | Awaiting-   |
+/// |           |              |                 | < grace        | Agent       |
 /// | unknown   | —            | —               | —              | Unknown     |
 /// | no        | —            | yes             | —              | Salvageable |
 /// | no        | —            | no              | —              | Stalled     |
@@ -135,15 +175,37 @@ pub(crate) const DEFAULT_STALLED_THRESHOLD_SECS: u64 = 30 * 60;
 ///   evidence either way, claiming Moving would overstate and claiming
 ///   Salvageable would invite a mid-drain salvage-commit of a live agent's
 ///   half-done work. Surface the uncertainty honestly instead.
+/// - **Fresh hand-enter → AwaitingAgent, not "dead"**: `worktree enter` mints
+///   the lease and stops; the operator launches the agent themselves moments
+///   later. Reading that gap as a dead process (and hinting `aida queue work`)
+///   would re-dispatch a spec a human is about to work by hand. Guarded on a
+///   still-untouched worktree so a hand-entered session that DID produce
+///   something and then died keeps its salvage urgency.
 // trace:TASK-1090 | ai:claude
 // trace:BUG-752 | ai:claude
+// trace:BUG-778 | ai:claude
 pub(crate) fn dispatch_state(
     pid_alive: Option<bool>,
     worktree_dirty: bool,
     branch_ahead_of_main: u32,
     elapsed_secs: u64,
     stalled_threshold_secs: u64,
+    manual_enter_secs: Option<u64>,
+    awaiting_agent_grace_secs: u64,
 ) -> DispatchState {
+    // BUG-778: hand-entered, still pristine, still inside the launch-lag
+    // window — the missing worker is the operator's next keystroke, not a
+    // corpse. Checked FIRST so the dead/unknown arms below never see it.
+    // trace:BUG-778 | ai:claude
+    if let Some(since_enter) = manual_enter_secs {
+        if pid_alive != Some(true)
+            && !worktree_dirty
+            && branch_ahead_of_main == 0
+            && since_enter < awaiting_agent_grace_secs
+        {
+            return DispatchState::AwaitingAgent;
+        }
+    }
     let Some(pid_alive) = pid_alive else {
         // trace:BUG-752 | ai:claude
         return DispatchState::Unknown;
@@ -224,27 +286,69 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
 /// commit-early discipline STORY-759 already documents under
 /// `docs/agents/` — never the patch-file salvage path
 /// (`preserve_dirty_worktree`), which this read-only report must not invoke.
+///
+/// BUG-778: `manual_enter` says the worktree was handed to a HUMAN by `aida
+/// worktree enter|add`. Every hint for such a row resumes it IN PLACE — the
+/// re-dispatch verb is withheld at ANY age, because running it would start a
+/// second session on a spec someone is working by hand.
 // trace:TASK-1090 | ai:claude
+// trace:BUG-778 | ai:claude
 pub(crate) fn next_command_hint(
     state: DispatchState,
     worktree_path: &Path,
     branch: &str,
     last_commit_subject: Option<&str>,
     spec: Option<&str>,
+    manual_enter: bool,
 ) -> Option<String> {
     let wt = worktree_path.display();
     let last_commit = last_commit_subject.unwrap_or("(no commits yet)");
-    let rebrief = match spec {
-        Some(id) => format!("aida queue work {id}"),
-        None => format!("aida agent new claude --cwd {wt}"),
+    // trace:BUG-778 | ai:claude
+    let rebrief = if manual_enter {
+        format!(
+            "pick it back up in place — cd {wt} and start your agent there \
+             (this worktree was entered by hand, so re-dispatching the spec would \
+             start a second session competing with you)"
+        )
+    } else {
+        match spec {
+            Some(id) => format!("aida queue work {id}"),
+            None => format!("aida agent new claude --cwd {wt}"),
+        }
     };
     match state {
         DispatchState::Moving => None,
-        DispatchState::Salvageable => Some(format!(
-            "dead process, uncommitted work in {wt} (branch {branch}, last commit \"{last_commit}\") — \
-             salvage-commit then rebrief: git -C {wt} add -A && git -C {wt} commit -m \"wip: salvage {branch}\" \
-             — then: {rebrief}"
-        )),
+        // BUG-778: the hand-entered, launch-pending shape. Names the ONE thing
+        // the operator has left to do (start an agent in the worktree they just
+        // stepped into) plus the release verb if they changed their mind — and
+        // deliberately says nothing about a dead process or a re-dispatch.
+        // trace:BUG-778 | ai:claude
+        DispatchState::AwaitingAgent => {
+            let release = match spec {
+                Some(id) => format!("aida session end {id}"),
+                None => "aida session end".to_string(),
+            };
+            Some(format!(
+                "entered by hand — worktree {wt} (branch {branch}) is yours and no agent has been \
+                 launched in it yet; start one there, or {release} to hand the lease back"
+            ))
+        }
+        // BUG-778: a hand-entered worktree never had an agent to lose, so its
+        // lead-in says "nothing running" rather than "dead process" — the diff
+        // is still at risk and still worth salvaging, but the framing must not
+        // imply a crash that never happened. trace:BUG-778 | ai:claude
+        DispatchState::Salvageable => {
+            let lead = if manual_enter {
+                "nothing running, uncommitted work"
+            } else {
+                "dead process, uncommitted work"
+            };
+            Some(format!(
+                "{lead} in {wt} (branch {branch}, last commit \"{last_commit}\") — \
+                 salvage-commit then rebrief: git -C {wt} add -A && git -C {wt} commit -m \"wip: salvage {branch}\" \
+                 — then: {rebrief}"
+            ))
+        }
         DispatchState::Stalled => Some(format!(
             "no branch/dirty movement in {wt} (branch {branch}, last commit \"{last_commit}\") — resume/rebrief: {rebrief}"
         )),
@@ -269,13 +373,29 @@ mod tests {
     #[test]
     fn dead_pid_dirty_worktree_is_salvageable() {
         assert_eq!(
-            dispatch_state(Some(false), true, 0, 999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(false),
+                true,
+                0,
+                999,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Salvageable
         );
         // Dirty + ahead: still Salvageable — a dead process always wins on
         // the salvage-urgency axis regardless of what's already pushed.
         assert_eq!(
-            dispatch_state(Some(false), true, 3, 10, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(false),
+                true,
+                3,
+                10,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Salvageable
         );
     }
@@ -283,14 +403,30 @@ mod tests {
     #[test]
     fn dead_pid_clean_worktree_is_stalled_not_moving() {
         assert_eq!(
-            dispatch_state(Some(false), false, 0, 5, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(false),
+                false,
+                0,
+                5,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Stalled
         );
         // Nothing to lose even if commits already landed — a dead process
         // still needs a resume decision, so this stays Stalled rather than
         // Moving.
         assert_eq!(
-            dispatch_state(Some(false), false, 4, 5, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(false),
+                false,
+                4,
+                5,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Stalled
         );
     }
@@ -298,12 +434,28 @@ mod tests {
     #[test]
     fn alive_branch_ahead_of_main_is_moving() {
         assert_eq!(
-            dispatch_state(Some(true), false, 1, 99_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(true),
+                false,
+                1,
+                99_999,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Moving
         );
         // Dirty on top of ahead — still Moving.
         assert_eq!(
-            dispatch_state(Some(true), true, 2, 99_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(true),
+                true,
+                2,
+                99_999,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Moving
         );
     }
@@ -314,11 +466,27 @@ mod tests {
         // of the doubt goes to Moving whenever there IS a diff, no matter how
         // long the session has been running.
         assert_eq!(
-            dispatch_state(Some(true), true, 0, 0, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(true),
+                true,
+                0,
+                0,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Moving
         );
         assert_eq!(
-            dispatch_state(Some(true), true, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(true),
+                true,
+                0,
+                999_999,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Moving
         );
     }
@@ -328,7 +496,15 @@ mod tests {
         // Fresh session, nothing produced yet, but still within the grace
         // window — too early to call it stalled.
         assert_eq!(
-            dispatch_state(Some(true), false, 0, 60, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                Some(true),
+                false,
+                0,
+                60,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Moving
         );
     }
@@ -341,7 +517,9 @@ mod tests {
                 false,
                 0,
                 DEFAULT_STALLED_THRESHOLD_SECS,
-                DEFAULT_STALLED_THRESHOLD_SECS
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
             ),
             DispatchState::Stalled
         );
@@ -351,7 +529,9 @@ mod tests {
                 false,
                 0,
                 DEFAULT_STALLED_THRESHOLD_SECS + 1,
-                DEFAULT_STALLED_THRESHOLD_SECS
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
             ),
             DispatchState::Stalled
         );
@@ -375,16 +555,40 @@ mod tests {
         // Dirty worktree — the exact shape the false negative misread as
         // "dead process, salvage-commit then rebrief" mid-drain.
         assert_eq!(
-            dispatch_state(None, true, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                None,
+                true,
+                0,
+                999_999,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Unknown
         );
         // Clean, ahead, fresh, aged — Unknown regardless of git state.
         assert_eq!(
-            dispatch_state(None, false, 3, 10, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                None,
+                false,
+                3,
+                10,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Unknown
         );
         assert_eq!(
-            dispatch_state(None, false, 0, 999_999, DEFAULT_STALLED_THRESHOLD_SECS),
+            dispatch_state(
+                None,
+                false,
+                0,
+                999_999,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
             DispatchState::Unknown
         );
     }
@@ -398,6 +602,7 @@ mod tests {
             "worktree-agent-abc",
             None,
             None,
+            false,
         )
         .expect("Unknown must surface an explanatory hint");
         assert!(hint.contains("liveness unknown"), "{hint}");
@@ -475,7 +680,8 @@ mod tests {
                 Path::new("/tmp/wt"),
                 "story-1",
                 Some("wip"),
-                Some("STORY-1")
+                Some("STORY-1"),
+                false
             ),
             None
         );
@@ -489,6 +695,7 @@ mod tests {
             "task-1090-x",
             Some("wip: partial edit"),
             Some("TASK-1090"),
+            false,
         )
         .expect("Salvageable must always produce a hint");
         assert!(hint.contains("/tmp/wt-salvage"), "{hint}");
@@ -511,6 +718,7 @@ mod tests {
             "harness-worktree",
             None,
             None,
+            false,
         )
         .unwrap();
         assert!(
@@ -528,6 +736,7 @@ mod tests {
             "story-42",
             Some("prior commit"),
             Some("STORY-42"),
+            false,
         )
         .expect("Stalled must always produce a hint");
         assert!(hint.contains("/tmp/wt-stalled"), "{hint}");
@@ -536,5 +745,220 @@ mod tests {
         // Stalled is a resume hint, not a salvage-commit instruction — no
         // dirty-work commit is implied.
         assert!(!hint.contains("git -C /tmp/wt-stalled add"), "{hint}");
+    }
+
+    // ── BUG-778: hand-entered worktrees ──────────────────────────────────
+
+    /// The reported false positive: `aida worktree enter <SPEC>` mints the
+    /// lease and stops, and for the ~30s before the operator launches their
+    /// agent the row read "process dead / resume: aida queue work <SPEC>".
+    /// A pristine hand-entered worktree inside the grace window is
+    /// AwaitingAgent — never one of the dead-process states.
+    // trace:BUG-778 | ai:claude
+    #[test]
+    fn hand_entered_worktree_inside_grace_is_awaiting_agent_not_dead() {
+        // 30 seconds after `worktree enter`: no pid, clean tree, no commits.
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                false,
+                0,
+                30,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(30),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::AwaitingAgent
+        );
+        // Right up to the last second of the window.
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                false,
+                0,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS - 1,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(DEFAULT_AWAITING_AGENT_GRACE_SECS - 1),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::AwaitingAgent
+        );
+        // Undeterminable liveness on a hand-entered lease is the same shape —
+        // still nobody's corpse.
+        assert_eq!(
+            dispatch_state(
+                None,
+                false,
+                0,
+                30,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(30),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::AwaitingAgent
+        );
+    }
+
+    /// The other half of the acceptance: the grace window is a window, not a
+    /// blanket amnesty. Past it, a hand-entered worktree that still shows
+    /// nothing ages into STALLED like any other idle row — and a genuinely
+    /// dead AGENT lease (no hand-enter stamp) stalls exactly as it always did.
+    // trace:BUG-778 | ai:claude
+    #[test]
+    fn dead_lease_still_stalls_after_the_grace_window() {
+        // Hand-entered, but the operator never launched anything.
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                false,
+                0,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(DEFAULT_AWAITING_AGENT_GRACE_SECS),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::Stalled
+        );
+        // An orchestrator-spawned lease whose agent died: unchanged behavior,
+        // at any age — no hand-enter stamp, so no grace at all.
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                false,
+                0,
+                5,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::Stalled
+        );
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                true,
+                0,
+                5,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                None,
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::Salvageable
+        );
+    }
+
+    /// The grace only covers a PRISTINE worktree. A hand-entered session that
+    /// produced something and then lost its process keeps the salvage urgency
+    /// (that diff is still one cleanup away from gone), and one that is
+    /// demonstrably alive is Moving.
+    // trace:BUG-778 | ai:claude
+    #[test]
+    fn hand_entered_grace_never_masks_work_in_flight() {
+        // Dirty inside the window → Salvageable, not AwaitingAgent.
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                true,
+                0,
+                10,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(10),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::Salvageable
+        );
+        // Commits already on the branch inside the window → the ordinary
+        // matrix (dead + clean = Stalled).
+        assert_eq!(
+            dispatch_state(
+                Some(false),
+                false,
+                2,
+                10,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(10),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::Stalled
+        );
+        // The operator launched their agent → live → Moving.
+        assert_eq!(
+            dispatch_state(
+                Some(true),
+                false,
+                0,
+                10,
+                DEFAULT_STALLED_THRESHOLD_SECS,
+                Some(10),
+                DEFAULT_AWAITING_AGENT_GRACE_SECS
+            ),
+            DispatchState::Moving
+        );
+    }
+
+    // trace:BUG-778 | ai:claude
+    #[test]
+    fn awaiting_agent_hint_names_the_launch_and_never_redispatches() {
+        let hint = next_command_hint(
+            DispatchState::AwaitingAgent,
+            Path::new("/tmp/wt-entered"),
+            "task-1169-launcher",
+            None,
+            Some("TASK-1169"),
+            true,
+        )
+        .expect("AwaitingAgent must surface an explanatory hint");
+        assert!(hint.contains("entered by hand"), "{hint}");
+        assert!(hint.contains("/tmp/wt-entered"), "{hint}");
+        assert!(hint.contains("aida session end TASK-1169"), "{hint}");
+        // The dangerous parts: re-dispatch would start a session competing
+        // with the human, and nothing here died.
+        assert!(!hint.contains("aida queue work"), "{hint}");
+        assert!(!hint.contains("process dead"), "{hint}");
+        assert!(!hint.contains("dead process"), "{hint}");
+        assert!(!hint.contains("add -A"), "{hint}");
+    }
+
+    /// Past the grace window a hand-entered row does get a stalled/salvageable
+    /// hint — but still never the re-dispatch verb, and never the
+    /// "dead process" framing for an agent that was never launched.
+    // trace:BUG-778 | ai:claude
+    #[test]
+    fn hand_entered_hints_withhold_redispatch_at_any_age() {
+        let stalled = next_command_hint(
+            DispatchState::Stalled,
+            Path::new("/tmp/wt-entered"),
+            "task-1169-launcher",
+            Some("prior commit"),
+            Some("TASK-1169"),
+            true,
+        )
+        .expect("Stalled always produces a hint");
+        assert!(!stalled.contains("aida queue work"), "{stalled}");
+        assert!(stalled.contains("cd /tmp/wt-entered"), "{stalled}");
+        assert!(stalled.contains("competing"), "{stalled}");
+
+        let salvageable = next_command_hint(
+            DispatchState::Salvageable,
+            Path::new("/tmp/wt-entered"),
+            "task-1169-launcher",
+            None,
+            Some("TASK-1169"),
+            true,
+        )
+        .expect("Salvageable always produces a hint");
+        assert!(!salvageable.contains("aida queue work"), "{salvageable}");
+        assert!(!salvageable.contains("dead process"), "{salvageable}");
+        // The diff is still at risk — the salvage-commit stays on offer.
+        assert!(
+            salvageable.contains("git -C /tmp/wt-entered add -A"),
+            "{salvageable}"
+        );
+    }
+
+    // trace:BUG-778 | ai:claude
+    #[test]
+    fn awaiting_agent_label_round_trips() {
+        assert_eq!(DispatchState::AwaitingAgent.label(), "awaiting-agent");
     }
 }

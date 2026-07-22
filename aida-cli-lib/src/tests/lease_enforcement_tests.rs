@@ -26,6 +26,7 @@ fn lease(scope: &str, id: &str) -> SessionLease {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 
@@ -435,6 +436,7 @@ fn worktree_occupant_finds_only_live_same_worktree_lease() {
             parent_branch_sha: None,
             review_verb: false,
             claim_verb: false,
+            manual_enter_at: None,
         }
     }
     let leases = vec![

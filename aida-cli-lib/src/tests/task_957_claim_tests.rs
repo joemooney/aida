@@ -26,6 +26,7 @@ fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: true,
+        manual_enter_at: None,
     }
 }
 
