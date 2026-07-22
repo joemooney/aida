@@ -3,12 +3,12 @@ spec_id: BUG-783
 agreed_id: BUG-783
 title: aida list prints verbose 'N archived hidden / N deferred hidden' hint lines on every default/open view — noise for a daily driver
 description: '2026-07-21 operator: aida list open (and the default list) footers with two lines — ''(138 archived hidden — pass --all or --archived to see them)'' + ''(41 deferred hidden — pass --all or --deferred to see them)''. On an EXPLICIT open request these are pure noise: the operator asked for open work, doesn''t need reminding every invocation that archived/deferred tiers exist, and the counts are discoverable via aida status + the flags. Fix (configurable-policy): suppress the archived+deferred hidden-hint lines by default on the open/default list view; keep them discoverable via --help and available behind a config (e.g. [list] show_hidden_hints = false default) or show at most a single terse line only when it changes. Do NOT suppress the actual --archived/--deferred/--all output. Acceptance: bare aida list / aida list open prints no archived/deferred hidden-count footer by default; --all/--archived/--deferred still work; the counts remain available (aida status or a flag); no loss of discoverability in --help. Mode drive.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:03:42.698777313Z
-modified_at: 2026-07-22T07:16:10.143434780Z
+modified_at: 2026-07-22T07:25:09.385751832Z
 req_type: Bug
 tags:
 - aida:list dx noise batch:papercuts-0721 from-dogfood
@@ -19,8 +19,24 @@ comments:
   created_at: 2026-07-22T07:15:41.881107175Z
   modified_at: 2026-07-22T07:15:41.881107175Z
   session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
+history:
+- id: 019f88b6-cd83-7693-b55f-9efcf7a70494
+  author: aida-auto-bump
+  timestamp: 2026-07-22T07:25:09.379436097Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f88b6-cd89-7b91-9971-2fd86eb021f8
+  timestamp: 2026-07-22T07:25:09.385750812Z
+  agent: aida
+  commit_sha: 2ae6325ad5ee6e1ec558d559f1b967223fa6ca3c
+  summary: Completed via merge 2ae6325a
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T07:16:10.143434780Z
   implemented_by: joe
+  completed_at: 2026-07-22T07:25:09.379331829Z
+  completion_sha: 2ae6325ad5ee6e1ec558d559f1b967223fa6ca3c
