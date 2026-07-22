@@ -38539,5 +38539,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 3601
+- id: 019f8a76-f530-7be1-bacb-4c220be032ce
+  target_id: 019f8a76-f0fe-7b43-ad09-8493ca7acd1d
+  author: aida
+  node_id: '1'
+  lamport: 3602
+  timestamp: 2026-07-22T15:34:39.664853763Z
+  kind: !Create
+    title: 'queue work phase-1 session-lease match fails + --resume both legs broken (quizdom #2 — likely fixed by STORY-492, UNVERIFIED)'
+    description: 'Quizdom #2 (2026-07-19): ''could not match the orchestrated session (claude id X) to a session lease'' then ''--resume'' also failed both ways. LIKELY FIXED on current main by STORY-492 (live --resume re-entry, Completed) + BUG-478; the error strings still exist as failure modes but the matching logic was reworked. UNVERIFIED — needs the EPIC-202-style drain re-run on current main. If the lease-match still fails, this is a live residual to file properly.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3602
 node_id: '1'
