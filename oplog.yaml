@@ -38385,5 +38385,25 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 3589
+- id: 019f88d7-331b-7453-9931-ae4be23df5f0
+  target_id: 019f88d7-2f74-7f93-8831-f413080a0063
+  author: aida
+  node_id: '1'
+  lamport: 3590
+  timestamp: 2026-07-22T08:00:32.539757975Z
+  kind: !Create
+    title: 'clarify [burndown] order = queue: it restores id order, not added_at order'
+    description: |-
+      TASK-1172 added [burndown] order = priority|queue. Its spec described the pre-existing behavior as INPUT/QUEUE order and asked for queue-order/added_at as the stable tiebreak. In fact resolve_burndown_sets already called ready.sort() (a lexical display-id sort) before the change, so:
+
+      - the priority sort is layered on id order, and id order is the stable tiebreak for equal priorities;
+      - order = queue restores ID order, which is what the drain did before TASK-1172 — NOT true queue-insertion / added_at order.
+
+      The implementation is self-consistent and its comments say exactly this; only the spec's premise (and hence the config key's name/doc) is imprecise. Nothing is broken.
+
+      Acceptance: the [burndown] order doc string and the admin-guide/work-autonomy docs describe the queue value accurately (restores the deterministic id ordering used before priority sorting), OR the value is renamed to something truthful, OR added_at ordering is actually implemented if that is the wanted behavior. Pick one deliberately and say which.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3590
 node_id: '1'
