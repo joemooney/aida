@@ -142,15 +142,31 @@ fn ps1_wt_strip_loop() -> String {
 /// stale `(wt:...) ` segments, then splice `(wt:<focus>) ` onto the front of
 /// PS1 and record it in `AIDA_WT_PS1_PREFIX`. Idempotent — re-entering never
 /// duplicates the segment.
-// trace:TASK-1160 | ai:claude
-pub fn ps1_wt_splice_block(focus: &str) -> String {
+///
+/// `lease_file` is the session lease this shell is carrying, recorded in
+/// `AIDA_WT_LEASE_FILE` so the wrapper's prompt hook can tell a live session
+/// from a dangling one (the lease was ended elsewhere) and stop rendering a
+/// marker for work that no longer exists. Recorded as an explicit `unset` when
+/// there is no lease, so a previous enter's value can never make the next
+/// shell look dangling.
+// trace:TASK-1160 trace:BUG-780 | ai:claude
+pub fn ps1_wt_splice_block(focus: &str, lease_file: Option<&Path>) -> String {
+    let lease_line = match lease_file {
+        Some(p) => format!(
+            "\x20   export AIDA_WT_LEASE_FILE='{}'\n",
+            wt_single_quote(&p.display().to_string())
+        ),
+        None => "\x20   unset AIDA_WT_LEASE_FILE\n".to_string(),
+    };
     format!(
         "{strip}if [ -n \"${{PS1+x}}\" ]; then\n\
         \x20   export AIDA_WT_PS1_PREFIX='{prefix}'\n\
+        {lease_line}\
         \x20   export PS1=\"$AIDA_WT_PS1_PREFIX$PS1\"\n\
         fi\n",
         strip = ps1_wt_strip_loop(),
         prefix = wt_single_quote(&wt_ps1_prefix(focus)),
+        lease_line = lease_line,
     )
 }
 
@@ -161,25 +177,35 @@ pub fn ps1_wt_strip_block() -> String {
     format!("{}unset AIDA_WT_PS1_PREFIX\n", ps1_wt_strip_loop())
 }
 
-/// The full stdout payload for `aida worktree exit`, auto-evaled by the
-/// `aida()` wrapper: cd back to the main checkout, unset the session env
-/// exports `enter` applied (always `AIDA_SESSION_ID` + `CARGO_TARGET_DIR`,
-/// plus any extra names derived from the worktree's `session-env.sh`), and
-/// strip the PS1 worktree segment. The session lease itself is untouched.
-// trace:TASK-1160 | ai:claude
-pub fn exit_shell_payload(main_root: &Path, extra_unsets: &[String]) -> String {
-    let mut names: Vec<&str> = vec!["AIDA_SESSION_ID", "CARGO_TARGET_DIR"];
+/// The cwd-independent half of the `worktree exit` payload: unset the session
+/// env exports `enter` applied (always `AIDA_SESSION_ID` + `CARGO_TARGET_DIR` +
+/// `AIDA_WT_LEASE_FILE`, plus any extra names derived from the worktree's
+/// `session-env.sh`) and strip the PS1 worktree segment. Emitted on its own
+/// when the shell CARRIES a worktree session but is no longer standing in it —
+/// stepping out of a session you carry must work wherever you stand, and moving
+/// the operator's cwd from an unrelated directory would be the surprise.
+// trace:TASK-1160 trace:BUG-780 | ai:claude
+pub fn session_clear_payload(extra_unsets: &[String]) -> String {
+    let mut names: Vec<&str> = vec!["AIDA_SESSION_ID", "CARGO_TARGET_DIR", "AIDA_WT_LEASE_FILE"];
     for n in extra_unsets {
         let n = n.trim();
         if !n.is_empty() && !names.contains(&n) {
             names.push(n);
         }
     }
+    format!("unset {}\n{}", names.join(" "), ps1_wt_strip_block())
+}
+
+/// The full stdout payload for `aida worktree exit`, auto-evaled by the
+/// `aida()` wrapper: cd back to the main checkout, then the same session-env +
+/// PS1 clearing [`session_clear_payload`] emits. The session lease itself is
+/// untouched.
+// trace:TASK-1160 | ai:claude
+pub fn exit_shell_payload(main_root: &Path, extra_unsets: &[String]) -> String {
     format!(
-        "cd '{}'\nunset {}\n{}",
+        "cd '{}'\n{}",
         wt_single_quote(&main_root.display().to_string()),
-        names.join(" "),
-        ps1_wt_strip_block(),
+        session_clear_payload(extra_unsets),
     )
 }
 
@@ -247,7 +273,7 @@ branch refs/heads/epic-54-work
     fn exit_payload_cds_to_main_root_and_unsets_session_env() {
         let payload = exit_shell_payload(Path::new("/home/joe/ai/aida"), &[]);
         assert!(payload.starts_with("cd '/home/joe/ai/aida'\n"));
-        assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR\n"));
+        assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_WT_LEASE_FILE\n"));
         assert!(payload.contains("unset AIDA_WT_PS1_PREFIX\n"));
     }
 
@@ -262,7 +288,41 @@ branch refs/heads/epic-54-work
                 "".to_string(), // blank names are dropped
             ],
         );
-        assert!(payload.contains("unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_AGENT_TYPE\n"));
+        assert!(payload.contains(
+            "unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_WT_LEASE_FILE AIDA_AGENT_TYPE\n"
+        ));
+    }
+
+    /// BUG-780: the carrying-but-not-standing-in-it payload clears the same
+    /// session env + PS1 marker as a full exit, WITHOUT moving the shell.
+    // trace:BUG-780 | ai:claude
+    #[test]
+    fn session_clear_payload_has_no_cd() {
+        let payload = session_clear_payload(&["AIDA_AGENT_TYPE".to_string()]);
+        assert!(
+            !payload.contains("cd "),
+            "must not move the shell: {payload}"
+        );
+        assert!(payload.starts_with(
+            "unset AIDA_SESSION_ID CARGO_TARGET_DIR AIDA_WT_LEASE_FILE AIDA_AGENT_TYPE\n"
+        ));
+        assert!(payload.contains("unset AIDA_WT_PS1_PREFIX\n"));
+    }
+
+    /// BUG-780: enter records the lease file backing the marker so the prompt
+    /// hook can spot a dangling session; with no lease it explicitly clears
+    /// the recorded path rather than leaving a previous enter's value behind.
+    // trace:BUG-780 | ai:claude
+    #[test]
+    fn splice_block_records_or_clears_the_lease_file() {
+        let with_lease = ps1_wt_splice_block(
+            "TASK-42",
+            Some(Path::new("/home/joe/ai/aida/.aida/sessions/019f.toml")),
+        );
+        assert!(with_lease
+            .contains("export AIDA_WT_LEASE_FILE='/home/joe/ai/aida/.aida/sessions/019f.toml'\n"));
+        let without = ps1_wt_splice_block("EPIC-54", None);
+        assert!(without.contains("unset AIDA_WT_LEASE_FILE\n"));
     }
 
     // trace:TASK-1160 | ai:claude
@@ -296,8 +356,8 @@ branch refs/heads/epic-54-work
              echo \"stripped:$PS1\"\n\
              echo \"marker2:${{AIDA_WT_PS1_PREFIX-unset}}\"\n\
              [ \"$PS1\" = \"$_orig\" ] && echo roundtrip:ok\n",
-            splice = ps1_wt_splice_block("TASK-42"),
-            splice_again = ps1_wt_splice_block("TASK-42"),
+            splice = ps1_wt_splice_block("TASK-42", None),
+            splice_again = ps1_wt_splice_block("TASK-42", None),
             strip = ps1_wt_strip_block(),
         );
         let out = std::process::Command::new("bash")

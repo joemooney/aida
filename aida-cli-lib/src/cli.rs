@@ -2058,9 +2058,12 @@ pub enum WorktreeCommand {
     /// prompt segment. The session lease and the spec's status are UNTOUCHED —
     /// the worktree stays live for an idempotent re-enter; `aida session end`
     /// is the verb that finishes the work. Run it BARE (`aida worktree exit`)
-    /// — the wrapper auto-evals it; double-eval would lose the cd. From a
-    /// non-worktree directory this is a friendly no-op.
+    /// — the wrapper auto-evals it; double-eval would lose the cd. Standing
+    /// outside a worktree while still CARRYING its session (you cd'd out, or
+    /// the session was ended from another shell) still clears the env and the
+    /// prompt segment — minus the cd. Only a shell carrying nothing is a no-op.
     // trace:TASK-1160 | ai:claude
+    // trace:BUG-780 | ai:claude
     Exit,
 
     /// List AIDA-managed worktrees, each annotated with its `.aida/focus`.

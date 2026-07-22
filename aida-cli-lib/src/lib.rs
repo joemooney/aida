@@ -47978,21 +47978,126 @@ fn handle_worktree_enter(
     }
     let shell_payload_evaled = wrapper_can_eval_worktree_enter();
     print_worktree_next("enter", arg, &out, shell_payload_evaled);
-    // trace:TASK-1160 | ai:claude
-    print!("{}", enter_shell_payload(&out.path, &out.focus));
+    // BUG-780: record the lease file backing the marker so the wrapper's prompt
+    // hook can tell a live session from one ended elsewhere.
+    // trace:TASK-1160 trace:BUG-780 | ai:claude
+    let lease_file = out.lease_id.as_deref().and_then(|id| {
+        find_main_worktree_root()
+            .ok()
+            .map(|root| lease_path(&root, id))
+    });
+    print!(
+        "{}",
+        enter_shell_payload(&out.path, &out.focus, lease_file.as_deref())
+    );
     Ok(())
+}
+
+/// BUG-780: the worktree session a shell CARRIES — the `AIDA_SESSION_ID` export
+/// and the `(wt:...) ` PS1 segment `enter` spliced in. Both live in the shell,
+/// not in cwd, so a bare `cd` out (or a `session end` run from another shell)
+/// leaves them behind. `worktree exit` clears whichever of the two is present.
+// trace:BUG-780 | ai:claude
+struct CarriedSession {
+    session_id: Option<String>,
+    marker: Option<String>,
+}
+
+/// Read `key` from the env, trimmed, treating blank as unset.
+// trace:BUG-780 | ai:claude
+fn carried_env_value(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// BUG-780: is this shell carrying a worktree session? `None` means there is
+/// genuinely nothing to step out of, wherever the shell stands.
+// trace:BUG-780 | ai:claude
+fn carried_worktree_session() -> Option<CarriedSession> {
+    let session_id = carried_env_value("AIDA_SESSION_ID");
+    let marker = carried_env_value("AIDA_WT_PS1_PREFIX");
+    if session_id.is_none() && marker.is_none() {
+        return None;
+    }
+    Some(CarriedSession { session_id, marker })
+}
+
+/// Does `lease_id` name the session the shell carries? Exact match, or the
+/// short (>= 8 char) prefix the session verbs print — so an id copied off a
+/// status line still resolves. A carried id that matches NO lease is dangling:
+/// the session was ended from another shell and the marker is pointing at work
+/// that no longer exists. Pure so the decision is unit-testable.
+// trace:BUG-780 | ai:claude
+fn lease_id_matches(lease_id: &str, carried: &str) -> bool {
+    let carried = carried.trim().to_ascii_lowercase();
+    if carried.is_empty() {
+        return false;
+    }
+    let lease_id = lease_id.trim().to_ascii_lowercase();
+    lease_id == carried || (carried.len() >= 8 && lease_id.starts_with(&carried))
+}
+
+/// The env names a worktree's generated `session-env.sh` exports — the extra
+/// unsets `worktree exit` emits beyond the well-known base set, derived from
+/// the same file `enter` sources so the two never drift.
+// trace:TASK-1160 trace:BUG-780 | ai:claude
+fn session_env_unset_names(worktree: &std::path::Path) -> Vec<String> {
+    std::fs::read_to_string(worktree.join(".aida").join("session-env.sh"))
+        .map(|body| {
+            parse_session_env(&body)
+                .into_iter()
+                .map(|(n, _)| n)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Pure decision: is the shell STANDING in a scoped worktree? `toplevel` is the
+/// checkout containing cwd (`None` when cwd is outside any git checkout), and a
+/// toplevel equal to the main checkout — or an unresolvable main root — means
+/// there is no worktree to step out of. This is only half the exit question:
+/// BUG-780's other half is what the shell CARRIES, which is cwd-independent.
+// trace:BUG-780 | ai:claude
+fn scoped_worktree_for_exit(
+    toplevel: Option<&std::path::Path>,
+    main_root: Option<&std::path::Path>,
+) -> Option<std::path::PathBuf> {
+    let toplevel = toplevel?;
+    let main_root = main_root?;
+    (crate::worktree::canonical_or_self(toplevel) != crate::worktree::canonical_or_self(main_root))
+        .then(|| toplevel.to_path_buf())
 }
 
 /// `aida worktree exit` — the symmetric step-out: emit `cd '<main root>'`,
 /// unset the session env exports `enter` applied, and strip the `(wt:...)`
 /// PS1 segment, all via the same auto-evaled stdout payload. The session
 /// lease and the spec's status are untouched — the worktree stays live for
-/// re-enter; `aida session end` is the verb that finishes the work. From a
-/// non-worktree cwd this is a friendly no-op naming the main checkout.
+/// re-enter; `aida session end` is the verb that finishes the work.
+///
+/// BUG-780: the step-out is keyed on what the shell CARRIES, not only on cwd.
+/// Standing outside a scoped worktree while still carrying its session env (a
+/// bare `cd` out, or a session ended from another shell) used to be a no-op
+/// that left the `(wt:)` marker stuck with no verb to clear it — now the
+/// session env + marker are cleared wherever you stand, minus the `cd` (moving
+/// the shell out of an unrelated directory would be the surprise). Only a shell
+/// carrying nothing gets the friendly no-op.
 // trace:TASK-1160 | ai:claude
+// trace:BUG-780 | ai:claude
 fn handle_worktree_exit() -> Result<()> {
-    let main_root = find_main_worktree_root()?;
-    let main_canon = crate::worktree::canonical_or_self(&main_root);
+    let carried = carried_worktree_session();
+    // Outside an AIDA project entirely we can still clear what the shell
+    // carries — the env is the shell's, not the project's.
+    let main_root = match find_main_worktree_root() {
+        Ok(root) => Some(root),
+        Err(e) => {
+            if carried.is_none() {
+                return Err(e);
+            }
+            None
+        }
+    };
 
     // Where is the shell standing? The toplevel of the checkout containing
     // cwd, or None when cwd isn't inside any git checkout.
@@ -48008,30 +48113,16 @@ fn handle_worktree_exit() -> Result<()> {
         })
         .filter(|o| o.status.success())
         .map(|o| std::path::PathBuf::from(String::from_utf8_lossy(&o.stdout).trim().to_string()));
+    let toplevel = scoped_worktree_for_exit(toplevel.as_deref(), main_root.as_deref());
 
-    let Some(toplevel) = toplevel.filter(|t| crate::worktree::canonical_or_self(t) != main_canon)
-    else {
-        // Friendly no-op: nothing to step out of.
-        eprintln!(
-            "{} Not inside a scoped worktree — the main checkout is {}. Nothing to step out of.",
-            crate::glyph(crate::glyphs::Glyph::Check),
-            main_root.display().to_string().cyan(),
-        );
-        return Ok(());
+    let Some(toplevel) = toplevel else {
+        return worktree_exit_from_outside(main_root.as_deref(), carried);
     };
 
-    // Session env exports to clear: always the well-known pair, plus whatever
-    // else this worktree's session-env.sh exports (future-proof — the unset
-    // list is derived from the same file enter sources).
-    let extra_unsets: Vec<String> =
-        std::fs::read_to_string(toplevel.join(".aida").join("session-env.sh"))
-            .map(|body| {
-                parse_session_env(&body)
-                    .into_iter()
-                    .map(|(n, _)| n)
-                    .collect()
-            })
-            .unwrap_or_default();
+    // Session env exports to clear: always the well-known base set, plus
+    // whatever else this worktree's session-env.sh exports.
+    let extra_unsets = session_env_unset_names(&toplevel);
+    let main_root = main_root.expect("a scoped worktree implies a resolvable main root");
 
     // The lease (if any) survives the step-out — say so, with the way back.
     let toplevel_canon = crate::worktree::canonical_or_self(&toplevel);
@@ -48083,6 +48174,91 @@ fn handle_worktree_exit() -> Result<()> {
         "{}",
         crate::worktree::exit_shell_payload(&main_root, &extra_unsets)
     );
+    Ok(())
+}
+
+/// BUG-780: `worktree exit` run from OUTSIDE a scoped worktree. Carrying
+/// nothing is the old friendly no-op. Carrying a session (id and/or the `(wt:)`
+/// PS1 marker) clears it right here — the shell's carrying is the thing exit
+/// ends, and it outlives the cwd that created it. No `cd` is emitted: the shell
+/// is already out of the worktree, and relocating it from wherever it stands
+/// would be the surprise.
+// trace:BUG-780 | ai:claude
+fn worktree_exit_from_outside(
+    main_root: Option<&std::path::Path>,
+    carried: Option<CarriedSession>,
+) -> Result<()> {
+    let Some(carried) = carried else {
+        let where_main = main_root
+            .map(|m| format!(" — the main checkout is {}", m.display().to_string().cyan()))
+            .unwrap_or_default();
+        eprintln!(
+            "{} Not inside a scoped worktree{}. Nothing to step out of.",
+            crate::glyph(crate::glyphs::Glyph::Check),
+            where_main,
+        );
+        return Ok(());
+    };
+
+    // Resolve the carried id against the live leases so the report can say
+    // whether the session is still running or was ended elsewhere, and so the
+    // unset list covers that worktree's own session-env exports.
+    let leases = main_root.map(list_leases).unwrap_or_default();
+    let lease = carried
+        .session_id
+        .as_deref()
+        .and_then(|id| leases.iter().find(|l| lease_id_matches(&l.id, id)));
+    let extra_unsets = lease
+        .map(|l| session_env_unset_names(&l.worktree_path))
+        .unwrap_or_default();
+
+    let label = lease
+        .map(|l| l.scope.clone())
+        .or_else(|| {
+            carried
+                .marker
+                .as_deref()
+                .and_then(|m| m.trim().strip_prefix("(wt:"))
+                .and_then(|m| m.strip_suffix(')'))
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "this shell's session".to_string());
+
+    eprintln!(
+        "{} Stepped out of {} — this shell carried it but was standing elsewhere.",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        label.cyan().bold(),
+    );
+    match lease {
+        Some(l) => {
+            let short = &l.id[..l.id.len().min(8)];
+            eprintln!(
+                "  the session is still live — re-enter with `aida worktree enter {}`, \
+                 finish with `aida session end {}`",
+                l.scope, short,
+            );
+        }
+        None => {
+            eprintln!(
+                "  the session it pointed at is gone (ended elsewhere) — the marker was stale."
+            );
+        }
+    }
+    if !wrapper_can_eval_worktree_exit() {
+        eprintln!(
+            "  {} shell wrapper looks stale or missing — the clearing below won't auto-apply. \
+             Run `aida dev shell-init --install` to refresh it, or \
+             `eval \"$(aida worktree exit)\"`.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        );
+    } else if !wrapper_can_self_heal_wt_marker() {
+        eprintln!(
+            "  {} refresh the shell wrapper (`aida dev shell-init --install`) so the marker \
+             also clears itself when a session ends elsewhere.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        );
+    }
+    print!("{}", crate::worktree::session_clear_payload(&extra_unsets));
     Ok(())
 }
 
@@ -48189,6 +48365,18 @@ fn wrapper_can_eval_worktree_exit() -> bool {
     )
 }
 
+/// BUG-780: does the installed wrapper carry the prompt hook that drops the
+/// `(wt:)` marker when the session it names has ended elsewhere? Only wrappers
+/// advertising the `worktree-stale` capability self-heal; older ones need
+/// `aida worktree exit` (or a hand-rolled `unset`) to clear a dangling marker.
+// trace:BUG-780 | ai:claude
+fn wrapper_can_self_heal_wt_marker() -> bool {
+    wrapper_marker_has_cap(
+        std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref(),
+        "worktree-stale",
+    )
+}
+
 /// BUG-654: pure decision half of [`wrapper_can_eval_worktree_enter`] — given
 /// the `AIDA_SHELL_WRAPPER` marker value (`None` when unset), is the `worktree`
 /// capability advertised? Pure so the parsing is unit-testable without mutating
@@ -48223,7 +48411,11 @@ fn enter_cd_line(path: &std::path::Path) -> String {
 /// so the shell always shows where it is standing; `worktree exit` strips it.
 // trace:TASK-1156 | ai:codex
 // trace:TASK-1160 | ai:claude
-fn enter_shell_payload(path: &std::path::Path, focus: &str) -> String {
+fn enter_shell_payload(
+    path: &std::path::Path,
+    focus: &str,
+    lease_file: Option<&std::path::Path>,
+) -> String {
     let mut payload = format!("{}\n", enter_cd_line(path));
     let env_path = path.join(".aida").join("session-env.sh");
     if let Ok(body) = std::fs::read_to_string(env_path) {
@@ -48232,7 +48424,7 @@ fn enter_shell_payload(path: &std::path::Path, focus: &str) -> String {
             payload.push('\n');
         }
     }
-    payload.push_str(&crate::worktree::ps1_wt_splice_block(focus));
+    payload.push_str(&crate::worktree::ps1_wt_splice_block(focus, lease_file));
     payload
 }
 
