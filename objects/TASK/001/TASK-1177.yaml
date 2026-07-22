@@ -12,3 +12,7 @@ modified_at: 2026-07-22T15:33:35.758247256Z
 req_type: Task
 tags:
 - aida:worktree session-lifecycle from-downstream:quizdom slice-of:FR-284
+relationships:
+- rel_type: Child
+  target_id: 019f7b89-13cc-7453-ba1d-d322d88992de
+  created_at: 2026-07-22T15:33:39.933201982Z
