@@ -358,6 +358,42 @@ pub fn is_accepted_decision(req_type: &str, status: &str) -> bool {
         && status.trim().eq_ignore_ascii_case("approved")
 }
 
+/// Is this requirement type a **work item** — something an implementer can pick
+/// up and ship as a pull request?
+///
+/// The knowledge-class types are the exception: a decision (ADR), a vision, a
+/// glossary term and a constitution principle are *authored*, not implemented.
+/// They live in the same store as work specs and reach the same `Approved`
+/// status (for an ADR, `Approved` IS "accepted" — see
+/// [`is_accepted_decision_typed`]), so any surface that selects
+/// "approved + pickable" specs will happily offer them as implementable
+/// candidates unless it also applies this type-class filter.
+///
+/// ONE definition, read by every candidate/ready surface (the burndown selector
+/// and the backlog candidate collector) so the two can never disagree on what
+/// counts as buildable work.
+// trace:BUG-784 | ai:claude
+pub fn is_work_item_type(req_type: &crate::models::RequirementType) -> bool {
+    use crate::models::RequirementType as T;
+    !matches!(req_type, T::Decision | T::Vision | T::Term | T::Principle)
+}
+
+/// String form of [`is_work_item_type`], for the surfaces that carry `req_type`
+/// as the lowercased `Debug` projection (the burndown candidate's `req_type`,
+/// the SQLite cache column) rather than the typed enum.
+///
+/// Matching is trimmed and case-insensitive. An **unrecognized** token is
+/// treated as a work item: an unknown type must never be silently dropped from
+/// a candidate view — better to show a row that shouldn't be there than to hide
+/// real work.
+// trace:BUG-784 | ai:claude
+pub fn is_work_item_type_str(req_type: &str) -> bool {
+    match crate::models::RequirementType::from_cache_str(req_type) {
+        Some(t) => is_work_item_type(&t),
+        None => true,
+    }
+}
+
 /// Type-aware form of [`archive_invariant_block`]: identical queued-axis
 /// precedence, but the status axis consults [`status_is_closed_for_type`]
 /// so an accepted (`Approved`) decision spec archives without a block while
@@ -1021,6 +1057,49 @@ mod tests {
         assert!(is_accepted_decision("Decision", " Approved "));
         assert!(!is_accepted_decision("decision", "draft"));
         assert!(!is_accepted_decision("task", "approved"));
+    }
+
+    /// BUG-784: the work-item type class — exactly the four knowledge-class
+    /// types are excluded, every other type is buildable work, and the string
+    /// form agrees with the typed form for every variant.
+    // trace:BUG-784 | ai:claude
+    #[test]
+    fn work_item_type_class_excludes_only_the_knowledge_types() {
+        use crate::models::RequirementType as T;
+        let knowledge = [T::Decision, T::Vision, T::Term, T::Principle];
+        for t in [
+            T::Functional,
+            T::NonFunctional,
+            T::System,
+            T::User,
+            T::ChangeRequest,
+            T::Bug,
+            T::Epic,
+            T::Story,
+            T::Task,
+            T::Spike,
+            T::Sprint,
+            T::Folder,
+            T::Meta,
+            T::Principle,
+            T::Vision,
+            T::Constraint,
+            T::Decision,
+            T::Term,
+            T::Doc,
+        ] {
+            let want = !knowledge.contains(&t);
+            assert_eq!(is_work_item_type(&t), want, "typed verdict wrong for {t:?}");
+            assert_eq!(
+                is_work_item_type_str(&format!("{t:?}")),
+                want,
+                "string verdict wrong for {t:?}"
+            );
+        }
+        // Trimmed + case-insensitive, and an unknown token stays a work item so
+        // a future type is never silently hidden from a candidate view.
+        assert!(!is_work_item_type_str(" DECISION "));
+        assert!(is_work_item_type_str("some-future-type"));
     }
 
     #[test]

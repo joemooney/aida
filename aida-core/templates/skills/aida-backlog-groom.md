@@ -78,6 +78,12 @@ read-only, never auto-queues. `aida backlog list` adds the risk chip per
 spec. Render the two buckets as a short combined table (drafts first, then
 approved-not-queued), not a wall of output.
 
+Both views are **work types only**. An accepted ADR sits at `Approved`
+exactly like blessed work does, but a decision, a vision, a glossary term
+and a principle are authored, not implemented — so they never show up as
+groomable candidates. Pass `--type decision` (or `vision` / `term` /
+`principle`) to either command if you deliberately want to see one.
+
 ### Prep-B: Approve / select per item — NEVER auto-approve
 
 Approval is an **explicit advisor (human) judgment**, one item at a time

@@ -268,9 +268,20 @@ pub(crate) fn classify_risk_with_reason(req: &Requirement, has_plan: bool) -> (R
     )
 }
 
+/// The Approved-but-unqueued backlog set.
+///
+/// `explicit_type` is the caller's `--type` filter, when given. Its role here is
+/// the type-CLASS gate (BUG-784), not the per-row narrowing the caller still
+/// applies: by default only WORK types are collected, because the
+/// knowledge-class records (decision / vision / term / principle) reach
+/// `Approved` exactly like blessed work does — an accepted ADR IS `Approved` —
+/// and would otherwise be offered as blessable, implementable candidates.
+/// Naming one of those types explicitly opts it back into the view.
+// trace:BUG-784 | ai:claude
 fn collect_backlog_candidates(
     store: &aida_core::RequirementsStore,
     queued_ids: &HashSet<uuid::Uuid>,
+    explicit_type: Option<&RequirementType>,
 ) -> Vec<Requirement> {
     let mut out: Vec<Requirement> = store
         .requirements
@@ -280,6 +291,11 @@ fn collect_backlog_candidates(
         .filter(|r| matches!(r.status, RequirementStatus::Approved))
         .filter(|r| !r.archived)
         .filter(|r| !queued_ids.contains(&r.id))
+        // trace:BUG-784 | ai:claude
+        .filter(|r| {
+            aida_core::lifecycle::is_work_item_type(&r.req_type)
+                || explicit_type == Some(&r.req_type)
+        })
         .cloned()
         .collect();
     out.sort_by(|a, b| {
@@ -497,7 +513,10 @@ fn handle_list(
     let queued_ids = collect_queued_ids(storage, &user_id)?;
     let project_root = find_project_root().unwrap_or_else(|_| PathBuf::from("."));
 
-    let candidates = collect_backlog_candidates(&store, &queued_ids);
+    // trace:BUG-784 | ai:claude — an explicit `--type decision` (or vision /
+    // term / principle) is the opt-back-in for the knowledge-class records the
+    // default view now omits.
+    let candidates = collect_backlog_candidates(&store, &queued_ids, type_filter.as_ref());
     let mut rows: Vec<BacklogListRow> = Vec::new();
     for req in &candidates {
         if let Some(t) = &type_filter {
@@ -1084,7 +1103,9 @@ fn handle_groom_pickable(
     // `aida backlog list` ranks it (priority then age). Build a PickableItem per
     // member: its advisory risk chip (reused `classify_risk`) + the burndown
     // gate facts (reused `BurndownCandidate` construction). trace:STORY-554
-    let candidates = collect_backlog_candidates(&store, &queued_ids);
+    // No type opt-in here: the auto-groom path moves work onto the queue, and a
+    // knowledge-class record is never queueable work. trace:BUG-784 | ai:claude
+    let candidates = collect_backlog_candidates(&store, &queued_ids, None);
     let mut items: Vec<PickableItem> = Vec::with_capacity(candidates.len());
     // id → req, so we can resolve the would-groom set back to requirements for
     // the enqueue write without re-scanning the store.
@@ -1439,9 +1460,75 @@ mod tests {
         };
         let mut queued = HashSet::new();
         queued.insert(approved_queued.id);
-        let got = collect_backlog_candidates(&store, &queued);
+        let got = collect_backlog_candidates(&store, &queued, None);
         assert_eq!(got.len(), 1, "only the Approved-unqueued spec is in scope");
         assert_eq!(got[0].id, approved_unqueued.id);
+    }
+
+    /// BUG-784: a repo whose store carries accepted ADRs / visions / terms /
+    /// principles (all sitting at `Approved`, exactly like blessed work) must
+    /// yield ZERO of them as backlog candidates — they are authored, not
+    /// implemented. Naming one via `--type` opts that type back in.
+    // trace:BUG-784 | ai:claude
+    #[test]
+    fn collect_backlog_candidates_omits_knowledge_class_types_unless_asked() {
+        let adr = req_fixture(
+            "ADR-1",
+            RequirementType::Decision,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &[],
+        );
+        let vision = req_fixture(
+            "VIS-1",
+            RequirementType::Vision,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &[],
+        );
+        let term = req_fixture(
+            "TERM-1",
+            RequirementType::Term,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &[],
+        );
+        let principle = req_fixture(
+            "PRIN-1",
+            RequirementType::Principle,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &[],
+        );
+        let work = req_fixture(
+            "TASK-1",
+            RequirementType::Task,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &[],
+        );
+        let store = aida_core::RequirementsStore {
+            requirements: vec![adr, vision, term, principle, work.clone()],
+            ..Default::default()
+        };
+        let queued = HashSet::new();
+
+        let got = collect_backlog_candidates(&store, &queued, None);
+        assert_eq!(
+            got.len(),
+            1,
+            "only the work spec is a candidate; got {:?}",
+            got.iter().map(display_id).collect::<Vec<_>>()
+        );
+        assert_eq!(got[0].id, work.id);
+
+        // The opt-back-in: ask for decisions and the ADR (only) reappears.
+        let got = collect_backlog_candidates(&store, &queued, Some(&RequirementType::Decision));
+        let ids: Vec<&str> = got.iter().map(display_id).collect();
+        assert!(ids.contains(&"ADR-1"), "explicit --type opts the ADR in");
+        assert!(!ids.contains(&"VIS-1"), "other knowledge types stay out");
+        assert!(!ids.contains(&"TERM-1"), "other knowledge types stay out");
+        assert!(!ids.contains(&"PRIN-1"), "other knowledge types stay out");
     }
 
     #[test]

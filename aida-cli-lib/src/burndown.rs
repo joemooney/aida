@@ -70,6 +70,12 @@ pub(crate) struct SpecClassifyInput<'a> {
     pub tag_filter: Option<&'a str>,
     /// Optional `batch:<name>` tag filter (matched case-insensitively).
     pub batch_tag: Option<&'a str>,
+    /// Optional explicit requirement-type filter, pre-normalized by the caller
+    /// to the same lowercased `Debug` form as `req_type` (e.g. `changerequest`,
+    /// `nonfunctional`). When set it REPLACES the default work-item type-class
+    /// filter, so asking for a knowledge-class type by name opts it back in.
+    // trace:BUG-784 | ai:claude
+    pub type_filter: Option<&'a str>,
     pub disp: &'a str,
     pub req_type: &'a str,
     pub has_unsatisfied_blocker: bool,
@@ -78,16 +84,36 @@ pub(crate) struct SpecClassifyInput<'a> {
 
 /// Classify ONE spec for the burndown selector. The filter order is load-bearing
 /// and mirrors the historical inline loop EXACTLY:
-///   archived → deferred → status → tag → batch → supervised → candidate.
+///   archived → deferred → type → status → tag → batch → supervised → candidate.
 /// The `supervised` check sits AFTER the status/tag/batch filters (BUG-551), so a
 /// Done/Completed supervised spec fails the status guard and is `Skip`ped before
-/// it can reach the supervised bucket. trace:TASK-803 trace:BUG-551 trace:BUG-537
+/// it can reach the supervised bucket. The type-class filter (BUG-784) sits at
+/// the FRONT, beside the other "out of scope entirely" guards, so a
+/// knowledge-class record can't reach the supervised bucket either.
+// trace:TASK-803 trace:BUG-551 trace:BUG-537 trace:BUG-784
 pub(crate) fn classify_spec(input: &SpecClassifyInput) -> SpecDisposition {
     if input.archived {
         return SpecDisposition::Skip;
     }
     if input.deferred {
         return SpecDisposition::Skip;
+    }
+    // BUG-784: an accepted ADR / a vision / a term / a principle sits at
+    // `Approved` just like blessed work does, so without a type-class filter the
+    // selector offers knowledge-class records as implementable candidates. An
+    // explicit `--type` REPLACES this default (that is how you opt one back in).
+    // trace:BUG-784 | ai:claude
+    match input.type_filter {
+        Some(want) => {
+            if !input.req_type.trim().eq_ignore_ascii_case(want.trim()) {
+                return SpecDisposition::Skip;
+            }
+        }
+        None => {
+            if !aida_core::lifecycle::is_work_item_type_str(input.req_type) {
+                return SpecDisposition::Skip;
+            }
+        }
     }
     if input.status_norm != input.want_status {
         return SpecDisposition::Skip;
@@ -2174,6 +2200,7 @@ mod tests {
             tags: &tags,
             tag_filter,
             batch_tag,
+            type_filter: None,
             disp: "TASK-1",
             req_type: "task",
             has_unsatisfied_blocker: false,
@@ -2482,6 +2509,133 @@ mod tests {
         );
     }
 
+    /// BUG-784: an accepted ADR sits at `Approved` exactly like blessed work,
+    /// so without a type-class filter the selector offered it as an
+    /// implementable candidate. A repo full of ADRs / visions / terms /
+    /// principles must yield ZERO candidates.
+    // trace:BUG-784 | ai:claude
+    #[test]
+    fn knowledge_class_types_are_never_candidates_by_default() {
+        for ty in ["decision", "vision", "term", "principle"] {
+            let d = classify_spec(&SpecClassifyInput {
+                archived: false,
+                deferred: false,
+                status_norm: "approved",
+                want_status: "approved",
+                tags: &[],
+                tag_filter: None,
+                batch_tag: None,
+                type_filter: None,
+                disp: "ADR-1",
+                req_type: ty,
+                has_unsatisfied_blocker: false,
+                has_pending_decision: false,
+            });
+            assert_eq!(d, SpecDisposition::Skip, "{ty} must not be a candidate");
+        }
+    }
+
+    /// BUG-784: a knowledge-class record tagged `supervised` must be dropped
+    /// outright, not bucketed for keyboard pickup — the type filter sits ahead
+    /// of the supervised bucket for exactly this reason.
+    // trace:BUG-784 | ai:claude
+    #[test]
+    fn knowledge_class_type_does_not_reach_the_supervised_bucket() {
+        let tags = vec!["supervised".to_string()];
+        let d = classify_spec(&SpecClassifyInput {
+            archived: false,
+            deferred: false,
+            status_norm: "approved",
+            want_status: "approved",
+            tags: &tags,
+            tag_filter: None,
+            batch_tag: None,
+            type_filter: None,
+            disp: "ADR-2",
+            req_type: "decision",
+            has_unsatisfied_blocker: false,
+            has_pending_decision: false,
+        });
+        assert_eq!(d, SpecDisposition::Skip);
+    }
+
+    /// BUG-784: naming the type explicitly is the opt-back-in, and it narrows
+    /// the view to that type (a work spec falls out of a `--type decision` run).
+    // trace:BUG-784 | ai:claude
+    #[test]
+    fn explicit_type_filter_opts_a_knowledge_class_type_back_in() {
+        let case = |req_type: &str, want_type: Option<&str>| {
+            classify_spec(&SpecClassifyInput {
+                archived: false,
+                deferred: false,
+                status_norm: "approved",
+                want_status: "approved",
+                tags: &[],
+                tag_filter: None,
+                batch_tag: None,
+                type_filter: want_type,
+                disp: "X-1",
+                req_type,
+                has_unsatisfied_blocker: false,
+                has_pending_decision: false,
+            })
+        };
+        assert!(matches!(
+            case("decision", Some("decision")),
+            SpecDisposition::Candidate(_)
+        ));
+        assert_eq!(case("task", Some("decision")), SpecDisposition::Skip);
+        assert!(matches!(
+            case("task", Some("task")),
+            SpecDisposition::Candidate(_)
+        ));
+    }
+
+    /// BUG-784: every non-knowledge type keeps flowing through, including the
+    /// multi-word ones whose normalized token is a single word.
+    // trace:BUG-784 | ai:claude
+    #[test]
+    fn work_types_are_unaffected_by_the_type_class_filter() {
+        for ty in [
+            "functional",
+            "nonfunctional",
+            "system",
+            "user",
+            "changerequest",
+            "bug",
+            "epic",
+            "story",
+            "task",
+            "spike",
+            "sprint",
+            "folder",
+            "meta",
+            "constraint",
+            "doc",
+            // An unknown token is never silently dropped.
+            "somefuturetype",
+        ] {
+            let d = classify_spec(&SpecClassifyInput {
+                archived: false,
+                deferred: false,
+                status_norm: "approved",
+                want_status: "approved",
+                tags: &[],
+                tag_filter: None,
+                batch_tag: None,
+                type_filter: None,
+                disp: "X-1",
+                req_type: ty,
+                has_unsatisfied_blocker: false,
+                has_pending_decision: false,
+            });
+            assert!(
+                matches!(d, SpecDisposition::Candidate(_)),
+                "{ty} should still be a candidate, got {d:?}"
+            );
+        }
+    }
+
     #[test]
     fn classify_plain_matching_spec_is_candidate_carrying_probed_fields() {
         let tags = vec!["papercut".to_string()];
@@ -2493,6 +2647,7 @@ mod tests {
             tags: &tags,
             tag_filter: None,
             batch_tag: None,
+            type_filter: None,
             disp: "TASK-9",
             req_type: "task",
             has_unsatisfied_blocker: true,
