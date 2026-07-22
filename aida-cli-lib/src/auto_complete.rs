@@ -3852,6 +3852,45 @@ pub(crate) trait SingleBranchDriver {
     }
 }
 
+/// What the per-member checkpoint of a `--single-branch` drain should do between
+/// two members.
+// trace:TASK-1137 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CheckpointAction {
+    /// Ask the operator to validate the increment that just landed on the shared
+    /// branch before the next member stacks commits on top of it.
+    Prompt,
+    /// Continue without asking — there is no human at the keyboard to answer.
+    AutoContinue,
+}
+
+/// Decide whether the per-member checkpoint pauses or auto-continues.
+///
+/// The single-branch drain is the one shape where a bad member poisons every
+/// member after it: later members commit ON TOP of earlier ones on the SAME
+/// branch, with no reset and no per-member merge. So whenever a human is
+/// actually there to answer, the checkpoint pauses and lets them inspect the
+/// increment before the next builds on it — that includes the plain interactive
+/// drain, `--zen` (the operator is at the keyboard; this is a substantive
+/// validation gate, not one of the mechanical confirmations zen waves through),
+/// and `--no-human=reviewer-only` (only the reviewer phase is headless).
+///
+/// It auto-continues in exactly the two cases where a prompt would hang forever
+/// with nobody to answer it: `--no-human=both` (fully headless — the implementer
+/// runs headless too), and any run without a terminal on both stdin and stdout.
+/// That non-TTY guard is the load-bearing one: it holds even if a future caller
+/// forgets to thread the autonomy mode through.
+// trace:TASK-1137 | ai:claude
+pub(crate) fn single_branch_checkpoint_action(
+    no_human: Option<NoHumanMode>,
+    interactive: bool,
+) -> CheckpointAction {
+    if no_human == Some(NoHumanMode::Both) || !interactive {
+        return CheckpointAction::AutoContinue;
+    }
+    CheckpointAction::Prompt
+}
+
 /// Drive a single-branch coupled-sequential drain: loop members in queue order,
 /// running each through Implementer+CI and committing in place on ONE shared
 /// branch, then run the cluster Reviewer/Merge ONCE → ONE PR. HALT on the first
@@ -8389,6 +8428,166 @@ mod tests {
         assert_eq!(m.branch_commits, vec!["A"]);
         assert_eq!(r.stopped_at.as_deref(), Some("B"));
         assert_eq!(m.cluster_finishes, 0);
+    }
+
+    // --- Per-member checkpoint: zen pauses / headless continues (TASK-1137) --
+
+    /// Fake driver whose checkpoint routes through the SAME
+    /// [`single_branch_checkpoint_action`] decision the real driver uses, so the
+    /// zen-pauses / headless-continues behavior is exercised through the real
+    /// drain loop without ever touching stdin. `operator_answer` stands in for
+    /// what a human would type at the prompt.
+    // trace:TASK-1137 | ai:claude
+    struct CheckpointFake {
+        queue: Vec<String>,
+        branch_commits: Vec<String>,
+        cluster_finishes: usize,
+        /// The drain's headless mode (`None` = a human is driving).
+        no_human: Option<NoHumanMode>,
+        /// Whether the process has an answerable terminal.
+        interactive: bool,
+        /// What the operator would answer AT a prompt — `false` stops the drain.
+        operator_answer: bool,
+        /// How many times the checkpoint actually prompted. Must be 0 whenever
+        /// the run is headless: a prompt there would hang forever.
+        prompts: usize,
+    }
+
+    impl CheckpointFake {
+        fn new(members: &[&str], no_human: Option<NoHumanMode>, interactive: bool) -> Self {
+            Self {
+                queue: members.iter().map(|s| s.to_string()).collect(),
+                branch_commits: Vec::new(),
+                cluster_finishes: 0,
+                no_human,
+                interactive,
+                operator_answer: true,
+                prompts: 0,
+            }
+        }
+        /// The operator declines at the first checkpoint.
+        fn operator_declines(mut self) -> Self {
+            self.operator_answer = false;
+            self
+        }
+    }
+
+    impl SingleBranchDriver for CheckpointFake {
+        fn next_head(&mut self) -> Option<String> {
+            self.queue.first().cloned()
+        }
+        fn run_member_through_ci(&mut self, spec: &str) -> OrchestrationResult {
+            self.branch_commits.push(spec.to_string());
+            self.queue.retain(|s| s != spec);
+            OrchestrationResult::ok()
+        }
+        fn run_cluster_finish(&mut self, _members: &[String]) -> OrchestrationResult {
+            self.cluster_finishes += 1;
+            OrchestrationResult::ok()
+        }
+        fn checkpoint_between_members(&mut self, _prev: &str, _next: &str) -> bool {
+            match single_branch_checkpoint_action(self.no_human, self.interactive) {
+                CheckpointAction::AutoContinue => true,
+                CheckpointAction::Prompt => {
+                    self.prompts += 1;
+                    self.operator_answer
+                }
+            }
+        }
+    }
+
+    /// `--zen` (a human at the keyboard, no headless mode) PAUSES between
+    /// members: the operator is asked before the next member stacks commits on
+    /// the shared branch, and declining parks the drain cleanly with prior
+    /// commits intact and no cluster PR.
+    // trace:TASK-1137 | ai:claude
+    #[test]
+    fn checkpoint_zen_pauses_between_members() {
+        let mut d = CheckpointFake::new(&["A", "B", "C"], None, true).operator_declines();
+        let r = drain_batch_single_branch(&mut d, None);
+        // The operator WAS asked, exactly once — before B stacked on A.
+        assert_eq!(d.prompts, 1);
+        assert_eq!(r.outcome, SingleBranchOutcome::Paused);
+        // Clean stop: A's commit is kept, B/C never ran, no PR opened.
+        assert_eq!(r.exit_code, 0);
+        assert_eq!(d.branch_commits, vec!["A"]);
+        assert_eq!(r.stopped_at.as_deref(), Some("B"));
+        assert_eq!(d.cluster_finishes, 0);
+        assert!(r.cluster_members.is_empty());
+    }
+
+    /// A `--zen` run whose operator keeps saying yes is asked at every member
+    /// boundary and still reaches the ONE cluster PR.
+    // trace:TASK-1137 | ai:claude
+    #[test]
+    fn checkpoint_zen_prompts_each_boundary_then_clusters() {
+        let mut d = CheckpointFake::new(&["A", "B", "C"], None, true);
+        let r = drain_batch_single_branch(&mut d, None);
+        // Two boundaries for three members — never before the first.
+        assert_eq!(d.prompts, 2);
+        assert_eq!(r.outcome, SingleBranchOutcome::Clustered);
+        assert_eq!(d.branch_commits, vec!["A", "B", "C"]);
+        assert_eq!(d.cluster_finishes, 1);
+    }
+
+    /// `--no-human=both` AUTO-CONTINUES: the checkpoint never prompts, so a
+    /// fully headless drain cannot block forever on a question nobody can
+    /// answer — even though this operator would have declined.
+    // trace:TASK-1137 | ai:claude
+    #[test]
+    fn checkpoint_headless_both_auto_continues() {
+        let mut d = CheckpointFake::new(&["A", "B", "C"], Some(NoHumanMode::Both), false)
+            .operator_declines();
+        let r = drain_batch_single_branch(&mut d, None);
+        // NOT ONE prompt — the whole point of the headless branch.
+        assert_eq!(d.prompts, 0);
+        assert_eq!(r.outcome, SingleBranchOutcome::Clustered);
+        assert_eq!(d.branch_commits, vec!["A", "B", "C"]);
+        assert_eq!(d.cluster_finishes, 1);
+    }
+
+    /// The no-TTY guard is independent of the autonomy flags: a drain piped into
+    /// a script has nobody to answer, so it auto-continues even with no headless
+    /// mode set.
+    // trace:TASK-1137 | ai:claude
+    #[test]
+    fn checkpoint_without_a_terminal_auto_continues() {
+        let mut d = CheckpointFake::new(&["A", "B"], None, false).operator_declines();
+        let r = drain_batch_single_branch(&mut d, None);
+        assert_eq!(d.prompts, 0);
+        assert_eq!(r.outcome, SingleBranchOutcome::Clustered);
+        assert_eq!(d.branch_commits, vec!["A", "B"]);
+    }
+
+    /// The decision table itself: only `--no-human=both` or a missing terminal
+    /// auto-continue; every human-present mode prompts.
+    // trace:TASK-1137 | ai:claude
+    #[test]
+    fn checkpoint_action_table() {
+        // Human at the keyboard (plain interactive drain, or `--zen`) → pause.
+        assert_eq!(
+            single_branch_checkpoint_action(None, true),
+            CheckpointAction::Prompt
+        );
+        // `--no-human=reviewer-only` still has a human driving the implementer.
+        assert_eq!(
+            single_branch_checkpoint_action(Some(NoHumanMode::ReviewerOnly), true),
+            CheckpointAction::Prompt
+        );
+        // Fully headless → never ask.
+        assert_eq!(
+            single_branch_checkpoint_action(Some(NoHumanMode::Both), true),
+            CheckpointAction::AutoContinue
+        );
+        // No terminal → never ask, whatever the flags say.
+        assert_eq!(
+            single_branch_checkpoint_action(None, false),
+            CheckpointAction::AutoContinue
+        );
+        assert_eq!(
+            single_branch_checkpoint_action(Some(NoHumanMode::ReviewerOnly), false),
+            CheckpointAction::AutoContinue
+        );
     }
 
     /// An empty batch drives nothing — no branch, no cluster PR, clean exit.
