@@ -259,6 +259,8 @@ mod worktree;
 mod worktree_lease;
 // trace:STORY-711 | ai:claude — advisor-directed worktree lock (`aida lock`), slice 1.
 mod worktree_lock;
+// trace:TASK-1178 | ai:claude — warn-only commit-boundary worktree-scope guard.
+mod worktree_scope_gate;
 mod zen;
 // trace:STORY-721 | ai:claude — `aida zen <spec>` autonomous implement+ship drive.
 mod zen_drive;

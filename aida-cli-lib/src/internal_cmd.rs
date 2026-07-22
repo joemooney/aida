@@ -4,7 +4,10 @@
 //! Extracted verbatim from `main.rs` (SPIKE-78, pure-movement refactor).
 
 use crate::cli;
-use crate::{advisor_code_gate, build_sha_short, find_project_root, locking_gate, rule_violation};
+use crate::{
+    advisor_code_gate, build_sha_short, find_project_root, locking_gate, rule_violation,
+    worktree_scope_gate,
+};
 use anyhow::Result;
 
 // trace:STORY-684 | ai:claude
@@ -47,6 +50,19 @@ pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<
             let root =
                 find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
             locking_gate::enforce_at_commit(&root)
+        }
+        // Called by the git pre-commit hook: the DETECT-not-prevent isolation
+        // check (TASK-1178). A worktree-scoped session that commits paths
+        // outside its session worktree — the "agent edited the shared main
+        // checkout by mistake" failure — gets a warning naming the stray paths.
+        // Warn-only by construction: `enforce_at_commit` always returns Ok, so
+        // this never aborts a commit, and it is silent for an in-worktree
+        // commit or a session that isn't worktree-scoped.
+        // trace:TASK-1178 | ai:claude
+        cli::InternalCommand::WorktreeScopeGate => {
+            let root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            worktree_scope_gate::enforce_at_commit(&root)
         }
     }
 }

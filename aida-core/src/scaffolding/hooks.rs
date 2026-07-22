@@ -304,4 +304,28 @@ mod tests {
             );
         }
     }
+
+    // The worktree-scope guard has to reach a project through `aida init`'s
+    // hook scaffolding, not just exist as a binary subcommand — a downstream
+    // repo never types `aida internal ...` by hand. Pin BOTH halves of its
+    // contract into the scaffolded pre-commit body: it is invoked, and it is
+    // invoked warn-only (`|| true`), so no future edit can quietly turn an
+    // advisory isolation check into a commit blocker.
+    // trace:TASK-1178 | ai:claude
+    #[test]
+    fn pre_commit_hook_scaffolds_the_warn_only_worktree_scope_guard() {
+        let scaffolder = Scaffolder::new(
+            std::path::PathBuf::from("/nonexistent-scaffolder-root"),
+            ScaffoldConfig::default(),
+        );
+        let body = scaffolder.generate_pre_commit_hook();
+        assert!(
+            body.contains("internal worktree-scope-gate"),
+            "scaffolded pre-commit hook must invoke the worktree-scope guard"
+        );
+        assert!(
+            body.contains("internal worktree-scope-gate || true"),
+            "the worktree-scope guard must be invoked warn-only (`|| true`), never as a gate"
+        );
+    }
 }
