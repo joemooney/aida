@@ -8,8 +8,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:12:06.439806600Z
-modified_at: 2026-07-22T04:12:11.392492497Z
+modified_at: 2026-07-22T04:16:24.502770699Z
 req_type: Bug
 tags:
 - aida:worktree dx followup:TASK-1160 from-dogfood
+- batch:papercuts-0721
 execution_mode: drive
