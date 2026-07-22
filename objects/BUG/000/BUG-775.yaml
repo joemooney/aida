@@ -23,12 +23,12 @@ description: |-
   1. Record review verdicts as first-class state (not just a comment), and refuse 'queue done' / the merge step when the latest verdict for the spec is RequestChanges unless the branch tip has moved past the sha the verdict names.
   2. Make the branch-commits-ahead gate work without origin/main - compare against the local default branch. A gate that silently does not fire is worse than no gate.
   3. Surface the latest review verdict in the pickup prompt so an implementer cannot miss it.
-status: InProgress
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:07:48.363850380Z
-modified_at: 2026-07-21T16:33:36.264032904Z
+modified_at: 2026-07-22T02:21:13.975486664Z
 req_type: Bug
 tags:
 - queue
