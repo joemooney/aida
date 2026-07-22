@@ -17,12 +17,12 @@ description: |-
   - Files carry a scaffold-checksum marker (like the memory pack) so edit-detection works.
   - No --force needed; safe in the dev repo (respect the BUG-718 symlink hazard — refresh must not overwrite through symlinks).
   - Docs: the parity story in the codex/antigravity setup docs.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:19.252304096Z
-modified_at: 2026-07-22T06:19:11.709321842Z
+modified_at: 2026-07-22T06:29:30.103660179Z
 req_type: Task
 tags:
 - aida:init scaffold cross-vendor codex parity from-operator
@@ -67,8 +67,24 @@ comments:
   created_at: 2026-07-22T06:17:56.417413956Z
   modified_at: 2026-07-22T06:17:56.417413956Z
   session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
+history:
+- id: 019f8883-d971-7362-b7ad-36c662b1999c
+  author: aida-auto-bump
+  timestamp: 2026-07-22T06:29:30.097359354Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8883-d977-7280-ba20-bdac4d1caf6f
+  timestamp: 2026-07-22T06:29:30.103659502Z
+  agent: aida
+  commit_sha: f70a86d40e934b9b02e36d63cb4bf85d7f7e71bc
+  summary: Completed via merge f70a86d4
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T06:19:11.709321842Z
   implemented_by: joe
+  completed_at: 2026-07-22T06:29:30.097199961Z
+  completion_sha: f70a86d40e934b9b02e36d63cb4bf85d7f7e71bc
