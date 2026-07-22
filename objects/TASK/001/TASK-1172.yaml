@@ -8,8 +8,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:08:15.784325728Z
-modified_at: 2026-07-22T06:08:19.720893826Z
+modified_at: 2026-07-22T06:20:19.320697945Z
 req_type: Task
 tags:
 - aida:burndown ordering dx from-operator
+comments:
+- id: 019f887b-71f8-78f0-9d63-5b6f9c6dc7c8
+  author: joe
+  content: |-
+    Operator refinement 2026-07-21: input-order is a LEGITIMATE mode, not merely a fallback — make BOTH first-class config values, and reconsider the DEFAULT.
+
+    Revised recommendation (advisor): default to INPUT/QUEUE order (= current behavior, zero surprise, operator controls the sequence explicitly), with PRIORITY as an explicit opt-in — `[burndown] order = input` (default) | `priority`, plus a per-run `--order priority|input` flag. Rationale: a silent priority-reorder overrides a deliberately-sequenced queue, which is worse than the convenience it buys; the operator who wants important-first opts in per-run or per-project. This INVERTS the earlier draft (which defaulted to priority) — the operator's second look is right: predictability > cleverness when they conflict.
+
+    Dependencies still gate in both modes (blocked specs skip); serialize-groups still sequence same-file members in both. The only thing the mode changes is the sort of the UNBLOCKED ready set: input=added_at order (current), priority=high>med>low with added_at tiebreak.
+    Acceptance update: default run is input-order (unchanged current behavior — no regression); `--order priority` (or the config) fans high-pri first; both honor dependencies + serialize-groups; test both sorts.
+  created_at: 2026-07-22T06:20:19.320697945Z
+  modified_at: 2026-07-22T06:20:19.320697945Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
