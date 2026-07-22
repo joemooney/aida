@@ -38405,5 +38405,13 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 3590
+- id: 019f8a4c-7480-7813-8595-de7667b38d6c
+  target_id: 019f88d7-2f74-7f93-8831-f413080a0063
+  author: aida
+  node_id: '1'
+  lamport: 3591
+  timestamp: 2026-07-22T14:48:14.208074608Z
+  kind: !SetDescription
+    description: "TASK-1172 shipped [burndown] order = priority|queue, where the pre-existing (pre-TASK-1172) behavior was actually ready.sort() = lexical spec-ID order, NOT insertion order. So the current queue value restores ID order, which the spec mislabeled as input order.\n\nOPERATOR DECISION (2026-07-22, binding acceptance):\n1. \"input order\" means ADDED_AT — the true order specs were queued (insertion order). This does NOT exist today and must be IMPLEMENTED.\n2. The DEFAULT stays PRIORITY (bare aida burndown run fans high-priority first) — do NOT flip the default.\n\nScope:\n- Implement true added_at ordering: sort the unblocked ready set by each spec's queue-entry added_at timestamp (ascending). Rename/redefine the opt-out so [burndown] order = queue (and --order queue) means TRUE insertion order, not id order. If a distinct deterministic-id mode is still wanted, expose it as order = id; otherwise drop it. Pick the minimal truthful surface: prefer order = priority (default) | queue (=added_at insertion). \n- Make added_at the stable TIEBREAK within PRIORITY mode too (equal-priority specs break ties by insertion order, not id order) — so the default is deterministic AND intuitive.\n- Fix all docs (the config doc-string, admin-guide, work-autonomy) to describe queue as true queue-insertion order.\n- Dependencies still gate; serialize-groups still sequence; only the sort of the unblocked ready set changes.\n\nAcceptance:\n- [burndown] order = queue (or --order queue) drains the unblocked ready set in the order specs were queued (added_at ascending), verified by queueing B then A (A has the lexically-smaller id) and asserting B drains first.\n- Default (no order set) fans by priority, with added_at (not id) as the tiebreak for equal priority.\n- Docs describe queue accurately; no reference to input order that actually means id order.\n- Unit tests: added_at sort; priority-with-added_at-tiebreak; a lexically-later id queued earlier drains earlier under queue mode.\nMode drive."
+clock: 3591
 node_id: '1'
