@@ -8,13 +8,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-18T13:33:18.936174326Z
-modified_at: 2026-06-18T15:39:11.356316190Z
+modified_at: 2026-07-22T05:11:52.169083883Z
 req_type: Bug
 tags:
 - from-advisor
 - papercut
 - parent:EPIC-49
 - reliability
+comments:
+- id: 019f883c-c669-7951-89d8-5b32cbf2a288
+  author: joe
+  content: Commit d39b5f9b1 references this requirement
+  created_at: 2026-07-22T05:11:52.169083883Z
+  modified_at: 2026-07-22T05:11:52.169083883Z
+  session_id: aa203fa9-212b-47f8-83f3-3367f40d467d
 history:
 - id: 019edb62-e277-7820-bfa9-b777fc1cf345
   author: aida-auto-bump
