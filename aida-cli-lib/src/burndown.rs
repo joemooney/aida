@@ -4182,6 +4182,10 @@ pub(crate) struct ResidualPr {
     pub number: u64,
     pub spec: String,
     pub title: String,
+    /// The PR's head branch — the key the launcher's Rust CI wait
+    /// ([`crate::wait_for_ci_terminal`]) probes on.
+    // trace:TASK-1169 | ai:claude
+    pub branch: String,
 }
 
 /// The residual work a drain left behind when its headless session exited:
@@ -4208,6 +4212,13 @@ impl ResidualWork {
 pub(crate) struct WaveSpecFacts {
     pub status_norm: String,
     pub tags: Vec<String>,
+    /// TASK-1169: the spec's `execution_mode` makes its merge supervised
+    /// (BUG-727 — anything but `drain`, or unset). Its PR is deliberately left
+    /// open for a human, so it is NOT stranded work: without this, the
+    /// launcher would relaunch agent turns for a PR that every merge gate is
+    /// designed to refuse.
+    // trace:TASK-1169 | ai:claude
+    pub supervised: bool,
 }
 
 /// Does `haystack` contain `spec` (e.g. `BUG-723`) as a whole token —
@@ -4255,6 +4266,9 @@ pub(crate) fn match_wave_prs(
             f.tags
                 .iter()
                 .any(|t| t.trim().eq_ignore_ascii_case("review:draft-only"))
+                // TASK-1169: a supervised-merge spec (BUG-727) is held for a
+                // human by design — never stranded work.
+                || f.supervised
                 || matches!(
                     f.status_norm.as_str(),
                     "needsattention" | "completed" | "rejected"
@@ -4274,6 +4288,7 @@ pub(crate) fn match_wave_prs(
                 number: *number,
                 spec: spec.clone(),
                 title: title.clone(),
+                branch: head_branch.clone(),
             });
         }
     }
@@ -4387,6 +4402,191 @@ pub(crate) fn render_drain_handoff(residual: &ResidualWork) -> String {
     s
 }
 
+// ── TASK-1169: launcher-owned integration waits ─────────────────────────────
+//
+// BUG-755 made the launcher RELAUNCH a continuation turn when a session exited
+// with residual work. That is recovery, not architecture: the CI/merge wait
+// still lived inside an agent turn, where it is structurally unable to hold.
+// A headless turn reaps its background tasks at turn end (the harness
+// background-wait ceiling), and the foreground alternative is capped at ~10
+// minutes per tool call — so neither agent-side shape can hold a 30-minute
+// cross-platform CI run.
+//
+// ADR-21: the wait belongs to the LAUNCHER — the long-lived Rust process that
+// already holds the drain lock. It blocks on `wait_for_ci_terminal` (TASK-968's
+// re-arming idle timer + absolute ceiling), merges the green-and-clean PRs
+// itself, and only relaunches an agent turn for work that genuinely needs an
+// LLM (unstarted specs, conflicts, red CI). No harness ceiling applies to a
+// Rust process, and waiting costs zero tokens.
+//
+// ADR-22: the ceiling the launcher sets on its children is bounded + generous +
+// never zero, and hitting any bound PARKS the spec (EPIC-28 punt-and-continue)
+// instead of silently terminating it. The pure halves — the ceiling resolver
+// and the per-PR action gate — live here so both are exhaustively unit-testable
+// without a forge, a store, or a 30-second poll. trace:TASK-1169 | ai:claude
+
+/// The harness env var bounding how long a headless session waits for its
+/// background tasks at turn end before reaping them. AIDA sets this on every
+/// headless child it spawns so a hand-typed launch and a daemonized one behave
+/// identically (the 2026-07-18 limp incident was exactly that divergence).
+// trace:TASK-1169 | ai:claude
+pub(crate) const BG_WAIT_CEILING_ENV: &str = "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS";
+
+/// Operator override for the value AIDA sets.
+pub(crate) const BG_WAIT_CEILING_OVERRIDE_ENV: &str = "AIDA_BURNDOWN_BG_WAIT_CEILING_MS";
+
+/// Default ceiling: 45 minutes — worst-case cross-platform CI plus margin, so
+/// it never bites normal operation but a genuinely wedged task still surfaces.
+pub(crate) const DEFAULT_BG_WAIT_CEILING_MS: u64 = 2_700_000;
+
+/// Floor: 1 minute. Clamping UP is what retires the `=0` (wait-forever)
+/// stopgap — a real ceiling that rarely fires beats no ceiling at all, so no
+/// env value or config key can re-create wait-forever.
+pub(crate) const MIN_BG_WAIT_CEILING_MS: u64 = 60_000;
+
+/// Resolve the background-wait ceiling AIDA sets on a headless child:
+/// `AIDA_BURNDOWN_BG_WAIT_CEILING_MS` → `[burndown] bg_wait_ceiling_ms` →
+/// [`DEFAULT_BG_WAIT_CEILING_MS`], then clamped to [`MIN_BG_WAIT_CEILING_MS`].
+/// An unparseable override is ignored (fall through) rather than fatal — a
+/// typo'd env must not wedge a drain. `0` from either source clamps to the
+/// floor, which is the point: wait-forever is not reachable by configuration.
+// trace:TASK-1169 | ai:claude
+pub(crate) fn resolve_bg_wait_ceiling_ms(
+    override_env: Option<&str>,
+    configured: Option<u64>,
+) -> u64 {
+    let chosen = override_env
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
+        .or(configured)
+        .unwrap_or(DEFAULT_BG_WAIT_CEILING_MS);
+    chosen.max(MIN_BG_WAIT_CEILING_MS)
+}
+
+/// The already-probed facts the launcher's per-PR gate decides on. Every field
+/// is a normalized signal so the decision stays pure — the messy `gh`/store
+/// probing lives at the boundary in `lib.rs`.
+// trace:TASK-1169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WavePrFacts {
+    /// `Some(label)` when the spec's `execution_mode` makes its merge
+    /// supervised (BUG-727) — anything but `drain`, or unset (fail safe).
+    pub supervision_label: Option<String>,
+    /// `Some(reason)` when the CI wait ended on a BOUND rather than a verdict
+    /// (idle-stall or absolute ceiling).
+    pub wait_expired: Option<String>,
+    pub ci: crate::integrate::CiState,
+    pub request_changes: bool,
+    pub mergeable: crate::integrate::MergeableState,
+}
+
+/// What the launcher does with one open wave PR after its CI wait returns.
+// trace:TASK-1169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum WavePrAction {
+    /// Clean — squash-merge it, then `aida pull` for the Done→Completed bump.
+    Merge,
+    /// Deliberately held for a human/advisor; NOT a defect, NOT parked. The
+    /// string is the human-facing reason.
+    Hold(String),
+    /// Park the spec `NeedsAttention` with this reason and continue the drain
+    /// (EPIC-28 punt-and-continue). The PR is left open and untouched.
+    Park(String),
+}
+
+/// The pure per-PR gate. Order encodes the safety priority:
+///   1. supervised merge — a non-`drain` execution_mode is a human's explicit
+///      "not automatically" (BUG-727); hold, never park (nothing is wrong).
+///   2. the wait hit a bound — park with the recorded reason (ADR-22's
+///      punt-not-abort: the PR stays open, the work is never terminated).
+///   3. otherwise delegate to the proven pre-merge gate
+///      ([`crate::integrate::classify_integration_action`]) so RequestChanges /
+///      CI-red / conflict all keep the exact semantics `aida integrate` uses —
+///      one gate, not a second opinion.
+/// A `WaitCi` from that gate means CI was still non-terminal after the bounded
+/// wait already returned, so it becomes a park, never an infinite re-wait.
+// trace:TASK-1169 | ai:claude
+pub(crate) fn wave_pr_action(f: &WavePrFacts) -> WavePrAction {
+    if let Some(label) = &f.supervision_label {
+        return WavePrAction::Hold(format!(
+            "merge is supervised ({label}) — left open for human/advisor review"
+        ));
+    }
+    if let Some(reason) = &f.wait_expired {
+        return WavePrAction::Park(format!(
+            "the integration wait ended without a CI verdict: {reason} — PR left open, nothing terminated"
+        ));
+    }
+    let state = crate::integrate::PrIntegrationState {
+        ci: f.ci,
+        request_changes_pending: f.request_changes,
+        mergeable: f.mergeable,
+    };
+    match crate::integrate::classify_integration_action(&state) {
+        crate::integrate::IntegrationAction::Merge => WavePrAction::Merge,
+        crate::integrate::IntegrationAction::WaitCi => WavePrAction::Park(
+            "CI never reached a terminal state within the bounded wait — PR left open".to_string(),
+        ),
+        crate::integrate::IntegrationAction::Park(reason) => {
+            WavePrAction::Park(reason.message().to_string())
+        }
+    }
+}
+
+/// What the launcher's integration leg did to one wave PR — the report row.
+// trace:TASK-1169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct IntegrationOutcome {
+    pub pr: u64,
+    pub spec: String,
+    pub action: WavePrAction,
+    /// `false` when the action was `Merge` but the merge call itself failed
+    /// (the spec is parked in that case too, with the forge's error).
+    pub succeeded: bool,
+}
+
+/// Render the launcher's integration-leg report. Every row names the PR, its
+/// spec, and what happened — so an operator reading a drain's tail can see
+/// exactly which PRs merged, which are held, and which parked, without
+/// inferring it from an agent's prose.
+// trace:TASK-1169 | ai:claude
+pub(crate) fn render_integration_report(rows: &[IntegrationOutcome]) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+    let merged = rows
+        .iter()
+        .filter(|r| r.succeeded && matches!(r.action, WavePrAction::Merge))
+        .count();
+    let held = rows
+        .iter()
+        .filter(|r| matches!(r.action, WavePrAction::Hold(_)))
+        .count();
+    let parked = rows.len() - merged - held;
+    let mut s = format!(
+        "\nIntegration (launcher-owned CI wait): {} merged, {} held, {} parked\n",
+        merged, held, parked
+    );
+    for row in rows {
+        let (glyph, detail) = match (&row.action, row.succeeded) {
+            (WavePrAction::Merge, true) => (
+                "merged",
+                "squash-merged; `aida pull` bumped the spec".to_string(),
+            ),
+            (WavePrAction::Merge, false) => (
+                "PARKED",
+                "the merge call failed — parked for triage".to_string(),
+            ),
+            (WavePrAction::Hold(why), _) => ("held", why.clone()),
+            (WavePrAction::Park(why), _) => ("PARKED", why.clone()),
+        };
+        s.push_str(&format!(
+            "  #{} ({}) {} — {}\n",
+            row.pr, row.spec, glyph, detail
+        ));
+    }
+    s
+}
+
 #[cfg(test)]
 mod bug_755_residual_tests {
     use super::*;
@@ -4396,6 +4596,9 @@ mod bug_755_residual_tests {
         WaveSpecFacts {
             status_norm: status.to_string(),
             tags: tags.iter().map(|t| t.to_string()).collect(),
+            // TASK-1169: these BUG-755 cases predate the supervised gate;
+            // drain-mode (unsupervised) keeps their expectations unchanged.
+            supervised: false,
         }
     }
 
@@ -4498,6 +4701,7 @@ mod bug_755_residual_tests {
                 number: 1506,
                 spec: "BUG-723".to_string(),
                 title: "fix".to_string(),
+                branch: "bug-723-fix".to_string(),
             }],
             unstarted: vec!["TASK-1098".to_string(), "TASK-1146".to_string()],
         };
@@ -4531,6 +4735,7 @@ mod bug_755_residual_tests {
                 number: 1507,
                 spec: "BUG-734".to_string(),
                 title: "fix(z)".to_string(),
+                branch: "bug-734-fix".to_string(),
             }],
             unstarted: vec!["TASK-937".to_string()],
         };

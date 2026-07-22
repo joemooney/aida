@@ -183,7 +183,18 @@ and the PR is silently orphaned. Never promise one — poll in the FOREGROUND
 (`gh pr checks <n>`) and never end your turn while a wave PR is non-terminal or
 blessed specs remain unstarted.** (The `aida burndown run` launcher relaunches a
 continuation turn if a session exits with residual work — but that safety net is
-recovery, not license to end the turn early.) A
+recovery, not license to end the turn early.)
+
+**A wait longer than your foreground budget is the LAUNCHER's job, not yours
+(TASK-1169).** A foreground poll is capped at about ten minutes per call, so a
+slow cross-platform run cannot be covered by one. Keep polling in the
+foreground while you are working the wave — that is still the fast path — but
+if a PR's CI genuinely outlasts your turn, **do not background it and do not
+claim a watch**: end the turn having said plainly which PRs are still
+non-terminal. The launcher then blocks on their CI in Rust (no ten-minute cap,
+no turn-end reaper), merges the clean ones, holds supervised ones, and parks
+anything else `NeedsAttention` with a finding. Never invent a background watch
+to bridge the gap — the launcher already covers it, truthfully. A
 PR's CI lags the implementer's push by minutes, so the LAST wave's PRs are
 routinely still running when their implementer returns; treating "checks
 pending" as "skip it" silently orphans the final PR (observed 2×: #852, #864

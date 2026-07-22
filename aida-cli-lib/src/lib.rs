@@ -41634,9 +41634,62 @@ fn read_burndown_verbose_config(project_root: &std::path::Path) -> (Option<bool>
     (project, global)
 }
 
+/// TASK-1169 / ADR-22: read `[burndown] bg_wait_ceiling_ms` from one config
+/// path. Project config wins over the machine-global one; both are optional.
+// trace:TASK-1169 | ai:claude
+fn read_bg_wait_ceiling_from_config_path(path: &std::path::Path) -> Option<u64> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let value = toml::from_str::<toml::Value>(&content).ok()?;
+    value
+        .get("burndown")
+        .and_then(|section| section.get("bg_wait_ceiling_ms"))
+        .and_then(|v| v.as_integer())
+        .and_then(|n| u64::try_from(n).ok())
+}
+
+/// TASK-1169 / ADR-22: the bounded background-wait ceiling (ms) AIDA sets on
+/// every headless child it spawns. Env override → project config → global
+/// config → default, clamped to a non-zero floor so wait-forever (the retired
+/// `=0` stopgap) is unreachable. Never fails: an unreadable config or a
+/// unresolvable project root falls through to the default.
+// trace:TASK-1169 | ai:claude
+pub(crate) fn resolved_bg_wait_ceiling_ms(project_root: Option<&std::path::Path>) -> u64 {
+    let configured = project_root
+        .and_then(|root| {
+            read_bg_wait_ceiling_from_config_path(&root.join(".aida").join("config.toml"))
+        })
+        .or_else(|| {
+            aida_home_dir().and_then(|home| {
+                read_bg_wait_ceiling_from_config_path(&home.join(".aida/config.toml"))
+            })
+        });
+    let override_env = std::env::var(burndown::BG_WAIT_CEILING_OVERRIDE_ENV).ok();
+    burndown::resolve_bg_wait_ceiling_ms(override_env.as_deref(), configured)
+}
+
+/// TASK-1169 / ADR-22: the `(key, value)` a headless spawn site sets so the
+/// child's turn-end background-wait ceiling is AIDA's bounded value rather than
+/// whatever the ambient shell happened to carry. Applied CENTRALLY (every
+/// headless spawn in `session.rs`) and at both burndown launch sites, so a
+/// hand-typed `aida burndown run` and a daemonized one are identical — the
+/// divergence that produced the 2026-07-18 limp incident.
+// trace:TASK-1169 | ai:claude
+pub(crate) fn bg_wait_ceiling_env(
+    project_root: Option<&std::path::Path>,
+) -> (&'static str, String) {
+    (
+        burndown::BG_WAIT_CEILING_ENV,
+        resolved_bg_wait_ceiling_ms(project_root).to_string(),
+    )
+}
+
 #[cfg(test)]
 #[path = "tests/burndown_run_tests.rs"]
 mod burndown_run_tests;
+
+#[cfg(test)]
+#[path = "tests/task1169_integration_wait_tests.rs"]
+mod task1169_integration_wait_tests;
 
 /// STORY-545: `aida burndown run` — kick off and walk away. Preflights the
 /// advisor-blessed ready set (the same gate `plan` shows), then launches a
@@ -41883,6 +41936,15 @@ fn handle_burndown_run(
     let base_prompt = prompt.clone();
     let mut current_prompt = prompt.clone();
     let mut rounds_used = 0usize;
+    // TASK-1169 / ADR-22: resolved ONCE for the whole drain so every relaunch
+    // round carries the identical ceiling. trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = bg_wait_ceiling_env(Some(&project_root));
+    println!(
+        "  {} background-wait ceiling for this drain: {}m (override: {})",
+        "→".green(),
+        ceiling_value.parse::<u64>().unwrap_or_default() / 60_000,
+        burndown::BG_WAIT_CEILING_OVERRIDE_ENV.dimmed(),
+    );
     loop {
         // Propagate the drain's exit code either way so scripts can branch on
         // success/parked (the skill exits non-zero when it shelves work,
@@ -41907,6 +41969,12 @@ fn handle_burndown_run(
                 // check detects its own launcher and self-deadlocks. This flag
                 // tells the `/aida-burndown` skill to trust the lock and fan out.
                 .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+                // TASK-1169 / ADR-22: the LAUNCHER sets the bounded background-wait
+                // ceiling, so a hand-typed launch behaves identically to a
+                // daemonized one (the 2026-07-18 limp came from exactly that
+                // divergence) and the retired `=0` stopgap can't leak in from the
+                // ambient shell. trace:TASK-1169 | ai:claude
+                .env(ceiling_key, &ceiling_value)
                 .status()
                 .map_err(|e| {
                     anyhow::anyhow!(
@@ -41920,8 +41988,28 @@ fn handle_burndown_run(
         let code = status_code.code().unwrap_or(1);
         // A `--max` cap makes "blessed specs remain unstarted" an EXPECTED stop,
         // so the unstarted probe is skipped; open wave PRs must still drain.
-        let residual =
+        let mut residual =
             probe_burndown_residual(&project_root, status, tag, batch, &ready, max.is_some());
+        // TASK-1169 / ADR-21: the launcher integrates the open wave PRs ITSELF
+        // — a Rust CI wait with no harness ceiling and no 10-minute tool cap —
+        // BEFORE deciding whether another agent turn is even needed. Run on a
+        // deliberate non-zero stop too: one spec shelving is no reason to
+        // strand another spec's green PR. The residual is then RE-PROBED so the
+        // follow-up decision sees the post-integration world (merged PRs gone,
+        // parked specs excluded). trace:TASK-1169 | ai:claude
+        if !residual.unmerged_prs.is_empty() {
+            let rows = integrate_wave_prs(&project_root, &residual);
+            if !rows.is_empty() {
+                residual = probe_burndown_residual(
+                    &project_root,
+                    status,
+                    tag,
+                    batch,
+                    &ready,
+                    max.is_some(),
+                );
+            }
+        }
         match burndown::drain_followup(code, residual.is_empty(), rounds_used, MAX_RESUME_ROUNDS) {
             burndown::DrainFollowup::Complete => {
                 if code == 0 {
@@ -42019,6 +42107,10 @@ fn probe_burndown_residual(
                     burndown::WaveSpecFacts {
                         status_norm: norm(&req.status.to_string()),
                         tags: req.tags.iter().cloned().collect(),
+                        // TASK-1169: a non-`drain` execution_mode holds the
+                        // merge for a human (BUG-727) — deliberate, not
+                        // stranded. trace:TASK-1169 | ai:claude
+                        supervised: pr_ship::merge_requires_supervision(req.execution_mode),
                     },
                 );
             }
@@ -42035,6 +42127,369 @@ fn probe_burndown_residual(
         unmerged_prs: burndown::match_wave_prs(&scope, &open, &facts),
         unstarted,
     }
+}
+
+/// TASK-1169 / ADR-21: the launcher's OWN integration leg — the impure half of
+/// the ratified design's primary item.
+///
+/// For every open wave PR the drain session left behind, this blocks IN RUST on
+/// [`wait_for_ci_terminal`] (TASK-968's re-arming idle timer + absolute
+/// ceiling), then decides via the pure [`burndown::wave_pr_action`] gate:
+/// squash-merge the clean ones (+ `aida pull` for the Done→Completed bump),
+/// HOLD the supervised ones (BUG-727), and PARK the rest `NeedsAttention` with
+/// a recorded reason + a finding — never terminate, never close a PR.
+///
+/// Why the launcher and not the agent: a headless turn reaps its background
+/// tasks at turn end and its foreground tool calls are capped at ~10 minutes,
+/// so neither agent-side shape can hold a 30-minute cross-platform CI run. This
+/// process has no such bound, costs no tokens while it waits, and already holds
+/// the drain lock.
+///
+/// Every leg is best-effort per PR: one PR's probe/merge failure parks that PR
+/// and moves to the next (EPIC-28 punt-and-continue), never aborting the drain.
+// trace:TASK-1169 | ai:claude
+fn integrate_wave_prs(
+    project_root: &std::path::Path,
+    residual: &burndown::ResidualWork,
+) -> Vec<burndown::IntegrationOutcome> {
+    let mut rows: Vec<burndown::IntegrationOutcome> = Vec::new();
+    if residual.unmerged_prs.is_empty() {
+        return rows;
+    }
+    println!(
+        "\n  {} integrating {} open wave PR(s) in the launcher — CI waits run here, \
+         not in an agent turn",
+        crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
+        residual.unmerged_prs.len(),
+    );
+
+    for pr in &residual.unmerged_prs {
+        println!(
+            "  {} PR-{} ({}) — waiting for CI to reach a terminal state",
+            crate::glyph(crate::glyphs::Glyph::InFlight).yellow(),
+            pr.number,
+            pr.spec.cyan(),
+        );
+
+        // BUG-727: a spec whose execution_mode is anything but `drain` (or is
+        // unset — fail safe) must never be auto-merged. Checked FIRST so a
+        // supervised PR doesn't even consume a CI wait.
+        let supervision_label = wave_pr_supervision_label(project_root, &pr.spec);
+
+        // The bounded foreground wait. `NoSignal` carrying a bound message is
+        // the "wait expired" case ADR-22 requires us to PARK, not abort.
+        let (ci, wait_expired) = if supervision_label.is_some() {
+            (integrate::CiState::None, None)
+        } else {
+            match wait_for_ci_terminal(Some(project_root), &pr.branch) {
+                CiProbe::Green { .. } => (integrate::CiState::Passing, None),
+                CiProbe::Red { failed_summary, .. } => {
+                    // A red verdict is not an expired wait — it belongs in the
+                    // gate as `Failing`, with the detail surfaced in the log.
+                    eprintln!("    {} {}", "·".dimmed(), failed_summary.dimmed());
+                    (integrate::CiState::Failing, None)
+                }
+                CiProbe::PrNoChecks { .. } => (integrate::CiState::None, None),
+                CiProbe::InProgress { .. } => (
+                    integrate::CiState::Running,
+                    Some("CI was still in progress when the wait returned".to_string()),
+                ),
+                CiProbe::NoSignal(reason) => {
+                    // A bound (idle-stall / absolute ceiling) is a park; any
+                    // other no-signal (no gh, no PR, network blip) is not — it
+                    // degrades to "no CI signal" and the merge gate decides.
+                    if reason.contains("ceiling") || reason.contains("idle") {
+                        (integrate::CiState::Running, Some(reason))
+                    } else {
+                        eprintln!("    {} no CI signal: {}", "·".dimmed(), reason.dimmed());
+                        (integrate::CiState::None, None)
+                    }
+                }
+            }
+        };
+
+        // Review + mergeability, from the forge and the local verdict file —
+        // either RequestChanges is a hard stop (never merge over a reviewer).
+        let (forge_request_changes, mergeable) = wave_pr_review_facts(project_root, pr.number);
+        let local_request_changes = local_verdict_blocks_merge(project_root, pr.number);
+
+        let action = burndown::wave_pr_action(&burndown::WavePrFacts {
+            supervision_label,
+            wait_expired,
+            ci,
+            request_changes: forge_request_changes || local_request_changes,
+            mergeable,
+        });
+
+        let succeeded = match &action {
+            burndown::WavePrAction::Merge => merge_wave_pr(project_root, pr),
+            burndown::WavePrAction::Hold(why) => {
+                println!(
+                    "  {} PR-{} held — {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr.number,
+                    why
+                );
+                true
+            }
+            burndown::WavePrAction::Park(why) => {
+                park_wave_pr(project_root, pr, why);
+                true
+            }
+        };
+        // A merge that was gated clean but failed at the forge is itself a
+        // park — the work must never be left un-recorded.
+        if matches!(action, burndown::WavePrAction::Merge) && !succeeded {
+            park_wave_pr(
+                project_root,
+                pr,
+                "the squash-merge call failed at the forge — PR left open for triage",
+            );
+        }
+        rows.push(burndown::IntegrationOutcome {
+            pr: pr.number,
+            spec: pr.spec.clone(),
+            action,
+            succeeded,
+        });
+    }
+    print!("{}", burndown::render_integration_report(&rows));
+    rows
+}
+
+/// TASK-1169: the BUG-727 supervised-merge gate for one wave spec — `Some(label)`
+/// when its `execution_mode` makes the merge supervised (anything but `drain`,
+/// or unset). A spec the store can't resolve is treated as NOT supervised, the
+/// same tolerance the orchestrator's `merge_supervision_hold` uses, so a missing
+/// store never wedges the leg.
+// trace:TASK-1169 | ai:claude
+fn wave_pr_supervision_label(project_root: &std::path::Path, spec: &str) -> Option<String> {
+    let store = load_store_for_lookup(project_root)?;
+    let want = spec.to_ascii_uppercase();
+    let req = store.requirements.iter().find(|r| {
+        r.spec_id
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case(&want))
+            .unwrap_or(false)
+            || r.agreed_id
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&want))
+                .unwrap_or(false)
+    })?;
+    if pr_ship::merge_requires_supervision(req.execution_mode) {
+        Some(pr_ship::supervision_mode_label(req.execution_mode))
+    } else {
+        None
+    }
+}
+
+/// TASK-1169: probe one PR's review decision + mergeability from the forge.
+/// Degrades to `(false, Unknown)` on any probe failure — "couldn't tell" must
+/// not manufacture a RequestChanges, and `Unknown` mergeability is handled
+/// safely by the gate (the forge refuses an unmergeable merge; it never
+/// corrupts).
+// trace:TASK-1169 | ai:claude
+fn wave_pr_review_facts(
+    project_root: &std::path::Path,
+    pr_number: u64,
+) -> (bool, integrate::MergeableState) {
+    let change_ref = forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: String::new(),
+        base: String::new(),
+        title: None,
+    };
+    match forge::forge_for(project_root).change_status(&change_ref) {
+        Ok(status) => (
+            status.review == forge::ReviewDecision::ChangesRequested,
+            if status.mergeable {
+                integrate::MergeableState::Mergeable
+            } else {
+                // `gh` reports non-mergeable for both a real conflict and a
+                // not-yet-computed state; the gate treats Unknown optimistically
+                // and the forge still refuses a dirty merge, so this degrade is
+                // safe in both directions.
+                integrate::MergeableState::Unknown
+            },
+        ),
+        Err(_) => (false, integrate::MergeableState::Unknown),
+    }
+}
+
+/// TASK-1169: does a local `.aida/review-verdicts/PR-N.json` block the merge?
+/// True for a RequestChanges/Rejected verdict or a reviewer escalation — the
+/// launcher must never merge over a reviewer any more than the orchestrator
+/// does. A missing/unparseable file is NOT a block (the wave may simply not
+/// have used the delegated reviewer).
+// trace:TASK-1169 | ai:claude
+fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64) -> bool {
+    let path = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(format!("PR-{pr_number}.json"));
+    if !path.exists() {
+        return false;
+    }
+    match read_verdict_file(&path) {
+        Ok(auto_complete::ReviewerOutcome::Verdict(v)) => {
+            !matches!(v, auto_complete::Verdict::Approved)
+        }
+        Ok(auto_complete::ReviewerOutcome::EscalatedToHuman { .. }) => true,
+        Err(_) => false,
+    }
+}
+
+/// TASK-1169: squash-merge one gated-clean wave PR, then run `aida pull` so the
+/// merge-driven Done→Completed auto-bump fires. `--delete-branch` is
+/// deliberately NOT set: the implementer's worktree still holds the branch, so
+/// the forge-side delete's local cleanup grumbles and (in the agent's `&&`
+/// chain) used to swallow the pull leg — worktree pruning owns branch deletion
+/// (BUG-758). Returns whether the merge itself succeeded.
+// trace:TASK-1169 | ai:claude
+fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> bool {
+    let mut sink = network_retry::StderrSink;
+    let change_ref = forge::ChangeRef {
+        id: pr.number,
+        url: String::new(),
+        branch: pr.branch.clone(),
+        base: String::new(),
+        title: None,
+    };
+    let opts = forge::MergeOptions {
+        method: forge::MergeMethod::Squash,
+        squash_subject: None,
+        delete_branch: false,
+    };
+    match forge::forge_for(project_root).merge_change(&change_ref, &opts, &mut sink) {
+        Ok(_) => {
+            println!(
+                "  {} merged PR-{} ({})",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                pr.number,
+                pr.spec.cyan(),
+            );
+            // The auto-bump: `aida pull` promotes the spec Done → Completed
+            // when the referencing commit lands on main. Its own step, never
+            // chained, so a grumble in the merge cleanup can't drop it.
+            let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+            let pulled = std::process::Command::new(aida)
+                .current_dir(project_root)
+                .arg("pull")
+                .status();
+            if !matches!(&pulled, Ok(s) if s.success()) {
+                eprintln!(
+                    "    {} `aida pull` did not succeed after merging PR-{} — the spec may still \
+                     read Done; recover with `aida db reconcile-status --spec {}`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    pr.number,
+                    pr.spec,
+                );
+            }
+            true
+        }
+        Err(e) => {
+            eprintln!(
+                "  {} merging PR-{} failed: {e:#}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                pr.number,
+            );
+            false
+        }
+    }
+}
+
+/// TASK-1169 / ADR-22: park one wave spec `NeedsAttention` with a recorded
+/// reason and file a finding — the punt-not-abort safety item. The PR is left
+/// OPEN and untouched; nothing is terminated and no uncommitted work is
+/// orphaned without a record. Both writes are best-effort: a store or finding
+/// failure is reported, never fatal, so one bad park can't stop the drain.
+// trace:TASK-1169 | ai:claude
+fn park_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr, why: &str) {
+    println!(
+        "  {} PR-{} ({}) parked — {}",
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+        pr.number,
+        pr.spec.cyan(),
+        why,
+    );
+    let detail = format!("PR-{} ({}): {}", pr.number, pr.title, why);
+    match shelve_spec_on_failure(
+        project_root,
+        &pr.spec,
+        "integrate",
+        4,
+        "integration-wait",
+        &detail,
+        "review the PR, then re-run `aida burndown run` (or merge it by hand once it is green)",
+    ) {
+        Ok(Some(_)) => {}
+        Ok(None) => eprintln!(
+            "    {} {} could not be parked (already terminal or not in the store) — it is \
+             reported in the handoff instead",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            pr.spec,
+        ),
+        Err(e) => eprintln!(
+            "    {} could not park {}: {e:#}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            pr.spec,
+        ),
+    }
+    if let Err(e) = file_integration_wait_finding(project_root, pr, why) {
+        eprintln!(
+            "    {} could not file the integration finding for PR-{}: {e:#}",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            pr.number,
+        );
+    }
+}
+
+/// TASK-1169 / ADR-22: file the parked-integration finding so an expired or
+/// refused wave integration lands in the triage surface the operator already
+/// sweeps (`aida findings list`) rather than only in a drain's scrollback.
+/// Mirrors `file_reviewer_verdict_unavailable_finding`'s shape.
+// trace:TASK-1169 | ai:claude
+fn file_integration_wait_finding(
+    project_root: &std::path::Path,
+    pr: &burndown::ResidualPr,
+    why: &str,
+) -> anyhow::Result<()> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        anyhow::bail!("no distributed store found");
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let title = format!("Wave integration parked for {} (PR {})", pr.spec, pr.number);
+    let note = format!(
+        "The burndown launcher's integration wait did not merge this PR: {why}\n\n\
+         The PR is still OPEN and nothing was terminated. Triage it, then merge by hand \
+         or re-run `aida burndown run`."
+    );
+    let mut req = aida_core::Requirement::new(title, note);
+    req.req_type = aida_core::RequirementType::Task;
+    req.status = aida_core::RequirementStatus::Draft;
+    req.owner = get_default_author();
+    req.tags.insert(format!("from-review:PR-{}", pr.number));
+    req.tags.insert("kind:IntegrationWaitParked".to_string());
+    req.tags.insert("severity:major".to_string());
+    req.tags.insert("aida:burndown".to_string());
+
+    let store = backend.update_atomically(|store| {
+        let type_prefix = store.get_type_prefix(&req.req_type);
+        store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
+    })?;
+    let written = store
+        .requirements
+        .last()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
+    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+    record_role_activity(written.spec_id.as_deref().unwrap_or("?"), "findings-add");
+    Ok(())
 }
 
 /// TASK-804 (facet a of STORY-604): build the argv (after the `claude` program
@@ -42622,6 +43077,9 @@ fn render_burndown_status_json(
 fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitStatus> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // TASK-1169 / ADR-22: same bounded ceiling the quiet launch sets.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = bg_wait_ceiling_env(Some(&project_root));
     // Time-prefixed id so logs sort chronologically and are easy to tail; the
     // short uuid suffix disambiguates two drains started in the same second.
     let drain_id = format!(
@@ -42664,6 +43122,10 @@ fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitSt
         // BUG-607: the launcher holds the exclusive drain lock — the agent must
         // trust it and not self-detect a "competing" drain (see the quiet path).
         .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+        // TASK-1169 / ADR-22: identical bounded ceiling to the quiet path —
+        // `--verbose` adds visibility, never a behaviour fork.
+        // trace:TASK-1169 | ai:claude
+        .env(ceiling_key, ceiling_value)
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -71659,6 +72121,8 @@ impl RealPhaseDriver {
         let seeded = crate::intake::seeded_advise_prompt_for_vendor(&self.project_root, is_claude);
         let (program, advisor_args) =
             session::advisor_tier_program_and_args(vendor, is_fork, &seeded, &advisor_uuid);
+        // trace:TASK-1169 | ai:claude
+        let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let status = std::process::Command::new(&program)
             .current_dir(&self.project_root)
             .args(advisor_args)
@@ -71667,6 +72131,10 @@ impl RealPhaseDriver {
             .env(punt::RESPONSE_FILE_ENV, response_path)
             // TASK-586: the advisor tier runs as the advisor role.
             .env("AIDA_SESSION_ROLE", "advisor")
+            // TASK-1169 / ADR-22: bounded, launcher-set background-wait ceiling
+            // — every headless child, not just the burndown ones.
+            // trace:TASK-1169 | ai:claude
+            .env(ceiling_key, ceiling_value)
             .stdout(std::process::Stdio::from(log))
             .status()
             .map_err(|e| {
@@ -73836,10 +74304,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
         let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false);
+        // trace:TASK-1169 | ai:claude
+        let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let status = std::process::Command::new(&program)
             .current_dir(&worktree)
             .args(fix_args)
             .env("AIDA_HEADLESS", "1")
+            // TASK-1169 / ADR-22: bounded, launcher-set background-wait ceiling.
+            .env(ceiling_key, ceiling_value)
             .stdout(std::process::Stdio::from(log))
             .status();
         tee.stop();
