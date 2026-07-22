@@ -38,9 +38,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:08:56.039024178Z
-modified_at: 2026-07-22T04:47:10.088399453Z
+modified_at: 2026-07-22T04:47:11.186767419Z
 req_type: Bug
 tags:
+- batch:papercuts-0721
 - dx
 - error-handling
 - session
