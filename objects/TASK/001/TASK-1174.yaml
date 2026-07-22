@@ -1,0 +1,19 @@
+id: 019f88d6-f903-7042-9223-41e164413603
+spec_id: TASK-1174
+agreed_id: TASK-1174
+title: 'eval-channel wrapper: add zsh coverage (TASK-1171 tests drive bash only)'
+description: |-
+  TASK-1171 shipped the marker-delimited eval channel and its 7 integration tests drive the real SHELL_HELPERS through a real bash with a stub aida on PATH. The wrapper is also installed into ~/.zshrc (aida dev shell-init --install supports both), but NO test exercises it under zsh.
+
+  The constructs used are POSIX-compatible parameter expansion with nested quotes inside ${var%%"$pat"*} plus `local`, which zsh handles — so this is a coverage gap, not a known break. Verified 2026-07-22 that the current operator machine has no zsh installed and a /bin/bash login shell, so there is no live exposure today; this is for the first zsh user.
+
+  Acceptance: the eval-channel wrapper tests run under zsh as well as bash when zsh is present on the runner, and are skipped cleanly when it is not; a divergence in block-slicing between the two shells fails the suite rather than surfacing as a broken shell for a zsh user.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-22T08:00:17.667720855Z
+modified_at: 2026-07-22T08:00:17.667720855Z
+req_type: Task
+tags:
+- dx shell testing followup:TASK-1171 from-drain
