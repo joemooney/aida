@@ -837,7 +837,7 @@ fn heal_doctor_stale_remote_branch(
 
 // The classification verdict for one agent-managed worktree. trace:TASK-878
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum AgentWorktreeVerdict {
+pub(crate) enum AgentWorktreeVerdict {
     /// Verified merged AND clean AND no unique unmerged commits → safe to GC.
     Removable(String),
     /// Dirty, carrying unmerged work, or no merge signal → keep, flag operator.
@@ -849,21 +849,21 @@ enum AgentWorktreeVerdict {
 /// the classification pure makes the squash-aware safety model unit-testable
 // without git or a forge. trace:TASK-878
 #[derive(Debug, Clone)]
-struct AgentWorktreeFacts {
+pub(crate) struct AgentWorktreeFacts {
     /// True when the worktree has uncommitted changes (tracked or staged dirt,
     /// or untracked files). A dirty worktree is NEVER removed — clean != no work,
     /// and dirty is unambiguously "has work".
-    dirty: bool,
+    pub(crate) dirty: bool,
     /// True when the branch HEAD is an ancestor of origin/main (fully merged —
     /// covers fast-forward / non-squash merges; implies zero unique commits).
-    ancestor_of_main: bool,
+    pub(crate) ancestor_of_main: bool,
     /// True when the forge reports a MERGED PR for this branch (covers squash
     /// merges, where the branch tip keeps a different SHA but the work shipped).
-    pr_merged: bool,
+    pub(crate) pr_merged: bool,
     /// Count of commits on the branch not reachable from origin/main. Zero means
     /// nothing unique is at risk; non-zero with no ancestor signal means the
     /// branch carries unique unmerged work that must be KEPT.
-    unique_unmerged_commits: u32,
+    pub(crate) unique_unmerged_commits: u32,
 }
 
 /// Pure squash-aware classification of one agent-managed worktree. No git/forge
@@ -871,7 +871,7 @@ struct AgentWorktreeFacts {
 /// model: a dirty worktree is always kept; removal needs a positive merged
 /// signal AND zero unique unmerged commits; otherwise the worktree is kept and
 // flagged. trace:TASK-878 | ai:claude
-fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
+pub(crate) fn classify_agent_worktree(facts: &AgentWorktreeFacts) -> AgentWorktreeVerdict {
     // KEEP first — uncommitted work is unambiguously "has work". Clean != no
     // work, but dirty is definitely work; never delete it.
     if facts.dirty {

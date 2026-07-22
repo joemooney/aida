@@ -125,6 +125,25 @@ Flags: `--wait-ci` (block until green), `--skip-ci` (today's behavior), `--force
 
 The CI-red case is where the **resume capability** earns its keep — the warning links forward to the resume verb.
 
+### When nobody is there to end the session: `aida session reap`
+
+`aida session end` assumes a human (or the agent's own harness) is still around to run it. A **headless** agent isn't: `claude -p` / `codex exec` exits the moment its work lands, and because a session can never tear down its own worktree — it *is* the live cwd — the worktree, the lease, and the branch are left behind. At every spec boundary that costs a human three commands.
+
+`aida session reap` is the supervisor pass that closes it. A session is reaped — worktree removed, lease released, branch deleted — only when all three of these hold:
+
+| Signal | Where it is read from |
+|---|---|
+| spec is **Done or Completed** | the spec's status in the store (the agent already reported finished via `aida queue done` / the merge auto-bump) |
+| branch is **merged** | git ancestry against the default branch, or a merged PR for the squash case — with zero unique unmerged commits |
+| process has **EXITED** | the lease's recorded pids + the live-process probe, the same liveness `aida ps` renders |
+
+Two boundaries make this safe rather than clever:
+
+- **It reads state, never scrollback.** Completion is never inferred from what a terminal printed. Acting on "the agent looks done" is the same fragility class as acting on unreliable session-state signals, one layer up.
+- **It never closes a live agent.** A finished session whose process is still *running* fails the predicate and is left completely untouched — removing a live agent's working directory is exactly the `(deleted)`-cwd leak `session end` already refuses. It reaps on a later pass, once the process exits on its own. Detect-and-leave, never terminate.
+
+Everything else the worktree GC refuses, the reap refuses too: dirty worktrees, locked worktrees, and branches carrying unique unmerged commits are never removed (the reap runs the very same classifier). `--dry-run` previews, `--json` reports, and the pass also runs automatically after an AIDA-managed merge lands so the common autonomous path needs no manual step at all.
+
 ---
 
 ## Transition 4→5→6: Resume preserves Claude context
