@@ -19,12 +19,12 @@ description: |-
   1. Detect that the owning session's process is gone and treat the lease as stale - either auto-reap it, or offer a '--take-over' that is explicitly safe when the worktree has no uncommitted changes.
   2. Have the error report whether the worktree is clean, so 'work there is lost unless committed' is an evaluable statement rather than a warning the user cannot act on.
   3. Make '--force-claim' (which exists and is suggested by a DIFFERENT error path for the InProgress-without-lease case) also cover the stale-lease case, so there is one recovery verb instead of three.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:08:25.171027028Z
-modified_at: 2026-07-22T02:59:00.139961372Z
+modified_at: 2026-07-22T03:12:31.791257959Z
 req_type: Bug
 tags:
 - lease
@@ -37,8 +37,24 @@ comments:
   created_at: 2026-07-22T02:58:28.023543268Z
   modified_at: 2026-07-22T02:58:28.023543268Z
   session_id: d7909c1f-6457-4cf7-b374-59df8ef5424b
+history:
+- id: 019f87cf-8428-7913-8c8e-3ea09606c701
+  author: aida-auto-bump
+  timestamp: 2026-07-22T03:12:31.784700965Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f87cf-842f-7e82-86c5-ca11c0ca0fd2
+  timestamp: 2026-07-22T03:12:31.791256591Z
+  agent: aida
+  commit_sha: 5a2b13c296a9e8555afd2226dd8579223efb27b7
+  summary: Completed via merge 5a2b13c2
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T02:59:00.139961372Z
   implemented_by: joe
+  completed_at: 2026-07-22T03:12:31.784598261Z
+  completion_sha: 5a2b13c296a9e8555afd2226dd8579223efb27b7
