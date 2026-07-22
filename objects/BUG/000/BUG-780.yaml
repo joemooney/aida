@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:12:06.439806600Z
-modified_at: 2026-07-22T04:19:08.110087932Z
+modified_at: 2026-07-22T04:45:08.577701058Z
 req_type: Bug
 tags:
 - aida:worktree dx followup:TASK-1160 from-dogfood
@@ -20,4 +20,10 @@ comments:
   created_at: 2026-07-22T04:17:29.487054658Z
   modified_at: 2026-07-22T04:17:29.487054658Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f8824-4e61-79b2-9101-352d589da0a1
+  author: joe
+  content: Commit 56bb4ed28 references this requirement
+  created_at: 2026-07-22T04:45:08.577701058Z
+  modified_at: 2026-07-22T04:45:08.577701058Z
+  session_id: aa203fa9-212b-47f8-83f3-3367f40d467d
 execution_mode: drive
