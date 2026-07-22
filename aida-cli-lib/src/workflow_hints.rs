@@ -356,6 +356,48 @@ pub enum QueueDoneGateDiagnose {
     },
 }
 
+/// The resolved answer to "how far is this branch ahead of the default
+/// branch?" — a tri-state, because the gate must distinguish "nothing to
+/// compare" from "the comparison could not be made".
+///
+/// The old shape was `Option<u32>`, which collapsed both into `None`; the
+/// gate then warned and continued, so on a repo with no `origin` remote it
+/// never fired at all. A gate that silently does not fire is worse than no
+/// gate — the silence reads as approval.
+// trace:BUG-775 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitsAhead {
+    /// The branch IS the default branch. Comparing it to itself is
+    /// meaningless, so the gate deliberately no-ops.
+    OnDefaultBranch,
+    /// The branch is this many commits ahead of the default branch.
+    Ahead(u32),
+    /// The comparison could not be made. `.0` names why, for the message.
+    Unknown(String),
+}
+
+/// Refusal text for the case where the branch-vs-default-branch comparison
+/// could not be made. Pure so the wording is unit-testable.
+// trace:BUG-775 | ai:claude
+pub fn commits_ahead_unresolved_lines(display_id: &str, branch: &str, reason: &str) -> Vec<String> {
+    vec![
+        format!(
+            "error: aida queue done refused (exit 1) — could not compare branch `{branch}` \
+             against the default branch ({reason})."
+        ),
+        "This check is what stops finished-but-unshipped work from being marked done. \
+         It cannot answer here, and a check that cannot answer must not wave work through."
+            .to_string(),
+        "Fix the repository state (create or fetch the default branch — e.g. `git fetch origin`, \
+         or make sure a local `main`/`master` exists), then re-run."
+            .to_string(),
+        format!(
+            "Override when you know the work shipped another way: \
+             `aida queue done {display_id} --skip-pr-check`."
+        ),
+    ]
+}
+
 /// TASK-500: which precondition could not be resolved, so the gate skipped.
 /// One variant per `if let`/`match` arm in the original inline tree, so a
 /// test can assert the right warning fires for each failure mode.
@@ -366,9 +408,13 @@ pub enum SkipReason {
     ProjectRootNotFound,
     /// The current branch couldn't be read at the project root.
     BranchUndetectable,
-    /// `rev-list` against `origin/main` failed (and the branch wasn't the
-    /// intentional `main`/`HEAD` no-op skip), so commits-ahead is unknown.
-    CommitsAheadFailed,
+    // BUG-775: `CommitsAheadFailed` used to live here — an unresolvable
+    // branch-vs-default-branch comparison SKIPPED the gate with a warning.
+    // On a repo with no `origin` remote that meant the gate never fired at
+    // all, and a branch whose review had been rejected was marked done with
+    // nothing objecting. That case is now a refusal (`CommitsAhead::Unknown`
+    // → `Refuse`), so there is no skip reason for it.
+    // trace:BUG-775 | ai:claude
     /// The forge change-lookup couldn't confirm PR state (`gh` missing /
     /// unauthenticated / unreachable). The gate proceeds, but warns first.
     GhUnknown,
@@ -382,9 +428,11 @@ pub enum SkipReason {
 /// Resolution order (each step can short-circuit to a `SilentSkip`):
 ///   1. `project_root` — `Err` → `SilentSkip { ProjectRootNotFound }`.
 ///   2. `branch_at_root` — `None` → `SilentSkip { BranchUndetectable }`.
-///   3. `commits_ahead_of_main` — `None` for a non-`main`/`HEAD` branch →
-///      `SilentSkip { CommitsAheadFailed }`. `None` for `main`/`HEAD` is the
-///      intentional no-op skip and yields `Proceed` silently.
+///   3. `commits_ahead_of_main` — `CommitsAhead::Unknown` → `Refuse` (BUG-775:
+///      an unresolvable comparison used to warn-and-continue, which is how a
+///      repo with no `origin` remote got no gate at all).
+///      `CommitsAhead::OnDefaultBranch` is the intentional no-op and yields
+///      `Proceed` silently.
 ///   4. commits-ahead `== 0` → `Proceed` (nothing to ship).
 ///   5. otherwise look up the PR via `pr_lookup_for_branch`:
 ///      - `PrState::Unknown` → `SilentSkip { GhUnknown }` (warn, then the
@@ -401,7 +449,7 @@ pub fn queue_done_precheck_diagnose(
     display_id: &str,
     project_root: anyhow::Result<PathBuf>,
     branch_at_root: impl FnOnce(&Path) -> Option<String>,
-    commits_ahead_of_main: impl FnOnce(&Path, &str) -> Option<u32>,
+    commits_ahead_of_main: impl FnOnce(&Path, &str) -> CommitsAhead,
     pr_lookup_for_branch: impl FnOnce(&Path, &str) -> PrState,
 ) -> QueueDoneGateDiagnose {
     let project_root = match project_root {
@@ -434,26 +482,22 @@ pub fn queue_done_precheck_diagnose(
         Some(branch) => branch,
     };
 
-    let commits_ahead = commits_ahead_of_main(&project_root, &branch);
-    // `commits_ahead` is None when the branch is `main`/`HEAD` (intentional
-    // skip — proceed silently) OR when rev-list itself failed (warn).
-    if commits_ahead.is_none() {
-        if branch != "main" && branch != "HEAD" {
-            return QueueDoneGateDiagnose::SilentSkip {
-                reason: SkipReason::CommitsAheadFailed,
-                warning_line: format!(
-                    "{} queue-done PR-check skipped: branch_commits_ahead_main \
-                     returned None for branch `{}` (rev-list failed or origin/main \
-                     unresolved). Gate did not fire.",
-                    "warning:".yellow().bold(),
-                    branch
-                ),
-            };
+    // BUG-775: the three outcomes are now distinct. Being ON the default
+    // branch is a deliberate no-op; an UNRESOLVABLE comparison is a refusal,
+    // not a warning — that silent skip is what let a rejected branch be
+    // marked done on a repo with no `origin` remote.
+    // trace:BUG-775 | ai:claude
+    let commits_ahead = match commits_ahead_of_main(&project_root, &branch) {
+        CommitsAhead::OnDefaultBranch => return QueueDoneGateDiagnose::Proceed,
+        CommitsAhead::Unknown(reason) => {
+            return QueueDoneGateDiagnose::Refuse(commits_ahead_unresolved_lines(
+                display_id, &branch, &reason,
+            ));
         }
-        return QueueDoneGateDiagnose::Proceed;
-    }
+        CommitsAhead::Ahead(n) => n,
+    };
 
-    if commits_ahead.unwrap_or(0) == 0 {
+    if commits_ahead == 0 {
         return QueueDoneGateDiagnose::Proceed;
     }
 
@@ -469,7 +513,7 @@ pub fn queue_done_precheck_diagnose(
         };
     }
 
-    match queue_done_precheck_error(display_id, commits_ahead, pr_state) {
+    match queue_done_precheck_error(display_id, Some(commits_ahead), pr_state) {
         Some(lines) => QueueDoneGateDiagnose::Refuse(lines),
         None => QueueDoneGateDiagnose::Proceed,
     }
@@ -1067,40 +1111,40 @@ mod tests {
         }
     }
 
-    // SkipReason::CommitsAheadFailed — rev-list failed on a real branch.
+    // BUG-775: an unresolvable commits-ahead comparison REFUSES. It used to
+    // warn and continue, which is how a repo with no `origin` remote ended up
+    // with no gate at all.
     #[test]
-    fn diagnose_skips_when_commits_ahead_failed() {
+    fn diagnose_refuses_when_commits_ahead_unresolvable() {
         let result = queue_done_precheck_diagnose(
             "BUG-249",
             root_ok(),
             |_| Some("feature-x".to_string()),
-            |_, _| None,
+            |_, _| CommitsAhead::Unknown("rev-list failed".to_string()),
             |_, _| panic!("pr lookup must not run when commits-ahead is unknown"),
         );
         match result {
-            QueueDoneGateDiagnose::SilentSkip {
-                reason,
-                warning_line,
-            } => {
-                assert_eq!(reason, SkipReason::CommitsAheadFailed);
-                assert!(warning_line.contains("branch_commits_ahead_main"));
-                assert!(warning_line.contains("feature-x"));
+            QueueDoneGateDiagnose::Refuse(lines) => {
+                let joined = lines.join("\n");
+                assert!(joined.contains("refused"), "{joined}");
+                assert!(joined.contains("feature-x"), "{joined}");
+                assert!(joined.contains("rev-list failed"), "{joined}");
             }
-            other => panic!("expected SilentSkip(CommitsAheadFailed), got {other:?}"),
+            other => panic!("expected Refuse, got {other:?}"),
         }
     }
 
-    // commits-ahead None on `main`/`HEAD` is the intentional no-op skip:
-    // proceed silently, NOT a CommitsAheadFailed warning.
+    // Being ON the default branch stays the intentional no-op: proceed
+    // silently, whatever that branch is called.
     #[test]
-    fn diagnose_proceeds_silently_on_main_branch() {
-        for branch in ["main", "HEAD"] {
+    fn diagnose_proceeds_silently_on_default_branch() {
+        for branch in ["main", "master", "HEAD"] {
             let result = queue_done_precheck_diagnose(
                 "BUG-249",
                 root_ok(),
                 |_| Some(branch.to_string()),
-                |_, _| None,
-                |_, _| panic!("pr lookup must not run on main/HEAD"),
+                |_, _| CommitsAhead::OnDefaultBranch,
+                |_, _| panic!("pr lookup must not run on the default branch"),
             );
             assert_eq!(
                 result,
@@ -1118,7 +1162,7 @@ mod tests {
             "BUG-249",
             root_ok(),
             |_| Some("feature-x".to_string()),
-            |_, _| Some(2),
+            |_, _| CommitsAhead::Ahead(2),
             |_, _| PrState::Unknown,
         );
         match result {
@@ -1141,7 +1185,7 @@ mod tests {
             "BUG-249",
             root_ok(),
             |_| Some("feature-x".to_string()),
-            |_, _| Some(1),
+            |_, _| CommitsAhead::Ahead(1),
             |_, _| PrState::Absent,
         );
         match result {
@@ -1164,7 +1208,7 @@ mod tests {
             "BUG-249",
             root_ok(),
             |_| Some("feature-x".to_string()),
-            |_, _| Some(3),
+            |_, _| CommitsAhead::Ahead(3),
             |_, _| PrState::Open(42),
         );
         assert_eq!(result, QueueDoneGateDiagnose::Proceed);
@@ -1178,7 +1222,7 @@ mod tests {
             "BUG-249",
             root_ok(),
             |_| Some("feature-x".to_string()),
-            |_, _| Some(0),
+            |_, _| CommitsAhead::Ahead(0),
             |_, _| panic!("pr lookup must not run when nothing is ahead"),
         );
         assert_eq!(result, QueueDoneGateDiagnose::Proceed);
