@@ -19,6 +19,12 @@
 //! | Completed   | green               | ✓     |
 //! | Rejected    | red                 | ✗     |
 //! | NeedsAttention | magenta (bold)   | ⚠     |
+//! | Accepted    | green               | ☑     |
+//!
+//! `Accepted` is a DISPLAY-only label (BUG-781): a decision spec's stored
+//! `Approved` is that class's terminal state, so it renders as `Accepted` via
+//! [`display_status_for_type`] rather than wearing the cyan "cleared to start"
+//! badge a task wears.
 //!
 //! `colored` auto-degrades to plain text under `NO_COLOR` / a non-TTY, so the
 //! NO_COLOR acceptance criterion holds for free. Glyphs are plain Unicode and
@@ -64,6 +70,8 @@ pub(crate) fn status_glyph_for_profile(
         "completed" => Glyph::Check,
         "rejected" => Glyph::Cross,
         "needsattention" => Glyph::Blocked,
+        // trace:BUG-781 | ai:claude — the decision-class terminal label.
+        "accepted" => Glyph::Accepted,
         // Unmapped/custom statuses get the neutral bullet (also profile-aware).
         _ => Glyph::Neutral,
     };
@@ -101,6 +109,8 @@ fn status_glyph_literal(status: &str) -> &'static str {
         "rejected" => "✗",
         // STORY-332: a punted spec — paused mid-work, awaiting triage.
         "needsattention" => "⚠",
+        // trace:BUG-781 | ai:claude — a ratified decision: checked and closed.
+        "accepted" => "☑",
         _ => "·",
     }
 }
@@ -127,9 +137,35 @@ pub(crate) fn paint_status(text: &str, status: &str) -> ColoredString {
         // STORY-332: bold magenta — a colour no other status uses, so a
         // punted spec visibly pops out of a list as "decide something here".
         "needsattention" => text.magenta().bold(),
+        // BUG-781: a ratified decision is terminal, so it paints in the closed
+        // green family — never the cyan `Approved` wears on a task that has yet
+        // to be started. trace:BUG-781 | ai:claude
+        "accepted" => text.green(),
         // History rows can carry a synthetic "(deleted)" status.
         "(deleted)" => text.red().dimmed(),
         _ => text.normal(),
+    }
+}
+
+/// The label a status should DISPLAY as for a given requirement type.
+///
+/// Identity for every type but one: a `decision` spec (an ADR) records
+/// acceptance as `Approved`, which for that class is the TERMINAL state — the
+/// same badge a task wears BEFORE anyone starts it. Rendering the stored word
+/// verbatim made every ratified ADR read as pending work ("when will these
+/// complete?"), so the decision class displays `Accepted` instead. Nothing is
+/// rewritten on disk: this is a display-layer relabel, and `Approved` remains
+/// the stored status (with `accepted` already an accepted input alias).
+///
+/// The returned label doubles as the palette key — pass it to
+/// [`paint_status`] / [`status_cell`] / [`status_badge`] and the accepted arm
+/// (green, ☑) selects itself.
+// trace:BUG-781 | ai:claude
+pub(crate) fn display_status_for_type<'a>(req_type: &str, status: &'a str) -> &'a str {
+    if aida_core::lifecycle::is_accepted_decision(req_type, status) {
+        "Accepted"
+    } else {
+        status
     }
 }
 
@@ -335,6 +371,58 @@ mod tests {
         ] {
             assert_eq!(g.chars().count(), 1, "flow glyph must be one column: {g:?}");
         }
+    }
+
+    // BUG-781: an accepted decision relabels to the terminal `Accepted`, and
+    // the relabelled string drives the palette — checked glyph, closed-green
+    // colour — so a ratified ADR can never be mistaken for a task that is
+    // merely cleared to start. Every other (type, status) pair is untouched.
+    // trace:BUG-781 | ai:claude
+    #[test]
+    fn accepted_decision_relabels_and_repaints() {
+        // The relabel itself, tolerant of the spellings the cache hands in.
+        assert_eq!(display_status_for_type("Decision", "Approved"), "Accepted");
+        assert_eq!(display_status_for_type("decision", "approved"), "Accepted");
+        // A proposed ADR is still open — untouched.
+        assert_eq!(display_status_for_type("Decision", "Draft"), "Draft");
+        // A work spec at Approved keeps the "cleared to start" reading.
+        for t in ["Task", "Story", "Bug", "Epic", "Functional"] {
+            assert_eq!(
+                display_status_for_type(t, "Approved"),
+                "Approved",
+                "{t} @ Approved must not relabel"
+            );
+        }
+
+        // The relabelled string selects the terminal palette.
+        assert_eq!(status_glyph_literal("Accepted"), "☑");
+        let painted = paint_status("Accepted", "Accepted");
+        assert_eq!(painted.fgcolor, Some(colored::Color::Green));
+        // ...and it is visibly NOT the cyan an un-started Approved wears.
+        let approved = paint_status("Approved", "Approved");
+        assert_eq!(approved.fgcolor, Some(colored::Color::Cyan));
+
+        // The badge a decision-aware caller renders carries both signals.
+        colored::control::set_override(false);
+        let badge = status_badge(display_status_for_type("Decision", "Approved"));
+        colored::control::unset_override();
+        assert_eq!(badge, "☑ Accepted", "badge: {badge:?}");
+    }
+
+    // BUG-781: the accepted glyph honours the EPIC-45 profile like every other
+    // status marker — ASCII terminals get a curated fallback, not a mojibake
+    // box. trace:BUG-781 | ai:claude
+    #[test]
+    fn accepted_glyph_is_profile_aware() {
+        use crate::glyphs::GlyphProfile;
+        assert_eq!(
+            status_glyph_for_profile("Accepted", GlyphProfile::Unicode),
+            "☑"
+        );
+        assert_eq!(
+            status_glyph_for_profile("Accepted", GlyphProfile::Ascii),
+            "[+]"
+        );
     }
 
     #[test]

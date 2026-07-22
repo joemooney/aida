@@ -330,7 +330,7 @@ The `RequirementType` enum (`aida-core/src/models.rs`) is the canonical source �
   - `principle` (`PRIN-N`) — constitution clause / non-negotiable principle governing how the project is built (stateless)
   - `vision` (`VIS-N`) — vision / target outcome: what we're building, for whom, by when (stateful)
   - `constraint` (`CON-N`) — external or technical constraint: regulation, dependency, deadline (stateful)
-  - `decision` (`ADR-N`) — Architecture Decision Record: a recorded decision + its rationale (stateful: proposed / accepted / superseded / deprecated; in AIDA statuses `draft` = proposed and `approved` = accepted — the advisor records acceptance with `aida edit ADR-N --status approved`, and `--status accepted` is an input alias for it)
+  - `decision` (`ADR-N`) — Architecture Decision Record: a recorded decision + its rationale (stateful: proposed / accepted / superseded / deprecated; in AIDA statuses `draft` = proposed and `approved` = accepted — the advisor records acceptance with `aida edit ADR-N --status approved`, and `--status accepted` is an input alias for it). An accepted ADR is **terminal**: it renders as `☑ Accepted` (not the task-style `▸ Approved`) and the default open lens drops it from `aida list` and the `aida status` open tally — no manual archive needed. `aida list --all` / `--type decision` / any explicit `--status` still show it. trace:BUG-781
   - `term` (`TERM-N`) — glossary term / ubiquitous-language anchor (stateless)
 - **Living docs**: `doc` (EPIC-24 — narrative explanation linked to other specs via `aida doc add --about <ID>`)
 

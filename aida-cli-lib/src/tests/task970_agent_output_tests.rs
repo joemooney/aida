@@ -442,14 +442,16 @@ fn reopen_guard_error_names_force_on_first_line() {
 // alone.
 #[test]
 fn empty_list_hint_only_fires_when_nothing_hidden() {
-    let line = empty_list_hint_line(0, 0, 0).expect("fresh repo → create hint");
+    let line = empty_list_hint_line(0, 0, 0, 0).expect("fresh repo → create hint");
     assert!(line.contains("aida add --title"));
     assert!(line.contains("Nothing here yet"));
 
     // Any hidden bucket suppresses the create hint.
-    assert!(empty_list_hint_line(3, 0, 0).is_none());
-    assert!(empty_list_hint_line(0, 5, 0).is_none());
-    assert!(empty_list_hint_line(0, 0, 2).is_none());
+    assert!(empty_list_hint_line(3, 0, 0, 0).is_none());
+    assert!(empty_list_hint_line(0, 5, 0, 0).is_none());
+    assert!(empty_list_hint_line(0, 0, 2, 0).is_none());
+    // BUG-781: a project whose only rows are accepted ADRs is NOT a fresh repo.
+    assert!(empty_list_hint_line(0, 0, 0, 4).is_none());
 }
 
 #[test]
