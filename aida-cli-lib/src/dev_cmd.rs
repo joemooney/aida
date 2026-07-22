@@ -654,6 +654,9 @@ fn handle_dev_activate(
         BinarySelectionReason::RecencyFallback => " (recency fallback)",
         BinarySelectionReason::OnlyOne => "",
     };
+    // trace:TASK-1171 | ai:claude — from here to the end of the function,
+    // stdout is shell code the wrapper evals; mark it as such.
+    let _eval = crate::shell_eval::EvalBlock::open();
     println!(
         "# aida dev activate — using {} build at {}{}{}",
         profile,
@@ -739,6 +742,8 @@ fn handle_dev_activate(
 }
 
 fn handle_dev_deactivate() -> Result<()> {
+    // trace:TASK-1171 | ai:claude
+    let _eval = crate::shell_eval::EvalBlock::open();
     println!("# aida dev deactivate — restoring PATH and splicing dev prefix out of PS1");
     println!("if [ -n \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
     println!("    export PATH=\"$AIDA_DEV_PREV_PATH\"");
@@ -940,6 +945,7 @@ fn handle_dev_status() -> Result<()> {
         "⇄".cyan(),
         "↻".yellow()
     );
+    print_shell_wrapper_status();
 
     // Also report which `aida` actually wins on PATH right now.
     if let Ok(out) = std::process::Command::new("which").arg("aida").output() {
@@ -950,16 +956,95 @@ fn handle_dev_status() -> Result<()> {
     }
     Ok(())
 }
+
+/// The three states a caller's shell wrapper can be in, from the binary's point
+/// of view. Surfaced by `aida dev status` so an upgrade that outran the
+/// installed wrapper is visible instead of merely degrading quietly.
+// trace:TASK-1171 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WrapperState {
+    /// No `aida()` wrapper is sourced in this shell.
+    Absent,
+    /// A wrapper is sourced, but it predates the dedicated eval channel.
+    Stale,
+    /// A wrapper is sourced and speaks the current protocol.
+    Current,
+}
+
+/// Pure classification over the shell's `AIDA_SHELL_WRAPPER` capability marker
+/// (`None` when unset) and whether the on-disk helpers file already carries the
+/// current protocol. Pure so the reporting is testable without a real shell.
+// trace:TASK-1171 | ai:claude
+pub(crate) fn classify_wrapper(marker: Option<&str>) -> WrapperState {
+    match marker {
+        None => WrapperState::Absent,
+        Some(m) if crate::shell_eval::marker_speaks_eval_block(Some(m)) => WrapperState::Current,
+        Some(_) => WrapperState::Stale,
+    }
+}
+
+/// Does the helpers file installed at `path` already carry the current
+/// protocol? `false` for a missing/unreadable file — the caller only uses this
+/// to decide whether re-running `--install` would actually change anything.
+// trace:TASK-1171 | ai:claude
+fn installed_helpers_are_current(path: &std::path::Path) -> bool {
+    std::fs::read_to_string(path)
+        .map(|body| body.contains(crate::shell_eval::EVAL_BLOCK_CAP))
+        .unwrap_or(false)
+}
+
+/// Report the wrapper's protocol state, and — when this shell's wrapper is
+/// stale — whether a re-install is still pending or just a new shell is needed.
+// trace:TASK-1171 | ai:claude
+fn print_shell_wrapper_status() {
+    let state = classify_wrapper(std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref());
+    let helpers_current = dirs::home_dir()
+        .map(|h| h.join(".aida").join("shell-init.sh"))
+        .map(|p| installed_helpers_are_current(&p))
+        .unwrap_or(false);
+    match state {
+        WrapperState::Current => {
+            println!("Shell wrapper: {}", "current".green());
+        }
+        WrapperState::Stale if helpers_current => {
+            println!(
+                "Shell wrapper: {} — the installed helpers are already up to date; open a new shell (or re-source them) to pick them up.",
+                "stale in this shell".yellow()
+            );
+        }
+        WrapperState::Stale => {
+            println!(
+                "Shell wrapper: {} — run `{}`, then open a new shell.",
+                "stale".yellow(),
+                "aida dev shell-init --install".cyan()
+            );
+            println!(
+                "               {}",
+                "(everything still works; the shell-modifying verbs just use the older contract)"
+                    .dimmed()
+            );
+        }
+        WrapperState::Absent => {
+            println!(
+                "Shell wrapper: {} — install with `{}` so `role enter` / `dev activate` / `worktree enter` mutate this shell.",
+                "not installed".yellow(),
+                "aida dev shell-init --install".cyan()
+            );
+        }
+    }
+}
 /// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
 /// function — pyenv/rbenv style. For most subcommands it just delegates to
 /// the binary. For the handful of eval-only subcommands (dev activate, dev
 /// deactivate, role enter, role end, role add, worktree enter — those that
 /// need to mutate the calling shell, e.g. cd into a new worktree), it wraps
-/// them in `eval "$(command aida ...)"` so they actually take effect in the
-/// user's shell instead of getting lost in the subprocess. The eval fires
-/// ONLY when the command exited 0 — a failing command's stdout is its error
-/// text, not shell code, and eval'ing it hides the real message behind
-/// `command not found` noise.
+/// them in an eval so they actually take effect in the user's shell instead of
+/// getting lost in the subprocess.
+///
+/// What gets eval'd is the marker-delimited block described in
+/// [`crate::shell_eval`] — never bare stdout — so a subcommand that both
+/// mutates the shell AND prints prose cannot leak the prose into the eval. The
+/// eval additionally fires only on exit 0.
 ///
 /// Use `command aida ...` to bypass the wrapper and invoke the binary
 /// directly (e.g., for scripting where you want raw stdout).
@@ -967,6 +1052,7 @@ fn handle_dev_status() -> Result<()> {
 // (the marker hooks are pure shell — worth exercising, not just eyeballing).
 // trace:BUG-780 | ai:claude
 // trace:BUG-779 | ai:claude
+// trace:TASK-1171 | ai:claude
 pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 #
 # Most `aida` subcommands run as plain commands. The few that need to
@@ -981,7 +1067,13 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # (`aida role enter <role>`); printing `eval "$(...)"` would double-eval and
 # lose the effect. The value lists the auto-evaled verb groups for any future
 # wrapper-aware decisions.
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale'
+#
+# The trailing `eval-block` capability says this wrapper understands the
+# DEDICATED EVAL CHANNEL below: shell code arrives inside a marker-delimited
+# block, so ordinary stdout is never an eval candidate. A binary that does not
+# see this token keeps emitting the legacy bare payload, so upgrading the binary
+# under an older wrapper changes nothing. (trace:TASK-1171)
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block'
 
 aida() {
     # Take the first two positional words verbatim — that's enough to
@@ -989,27 +1081,64 @@ aida() {
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
         "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter"|"worktree exit")
-            # session start/end split output: stderr for human messages
-            # (status, prompts), stdout for the shell-modifying lines
-            # (`export AIDA_SESSION_ID=...` / `unset AIDA_SESSION_ID`).
-            # Capturing stdout leaves stderr passing straight through to the
-            # user, and stdin still reaches the binary for prompts.
+            # These subcommands mutate the CALLING shell, so their shell code
+            # has to be eval'd here rather than run in the subprocess. Human
+            # messages (status, prompts) go to stderr, which passes straight
+            # through; stdin still reaches the binary for prompts.
             #
-            # Eval ONLY on success. When the command FAILS, stdout carries its
-            # human-readable error text (the capture makes stdout a pipe, which
-            # is what routes the message there), not shell code — eval'ing that
-            # turned every failure into a burst of `command not found` and hid
-            # the real message. Print it to stderr instead and propagate the
-            # status so callers can branch on it. (trace:BUG-779)
-            local _aida_out _aida_rc
+            # DEDICATED CHANNEL (trace:TASK-1171). The binary wraps its shell
+            # payload in `#aida:eval:begin` / `#aida:eval:end` markers. We slice
+            # that block out and eval ONLY it — anything else on stdout is prose
+            # and gets printed. That makes it structurally impossible for a
+            # subcommand's human output to be eval'd, which is the class of bug
+            # that turned a failed `session end` into three `command not found`
+            # lines. Both markers are shell comments, so an older wrapper (or a
+            # hand-rolled `eval "$(aida …)"`) that evals the lot is inert.
+            #
+            # No markers in the output = an OLDER BINARY that predates the
+            # channel: fall back to the legacy "all of stdout is shell" reading
+            # so a new wrapper keeps driving an old aida.
+            #
+            # Eval still happens ONLY on exit 0 — belt and braces, and it keeps
+            # a half-emitted payload from a failing command out of the shell.
+            # A failure's output is printed to stderr with the markers stripped,
+            # and the status propagates so callers can branch on it.
+            # (trace:BUG-779)
+            local _aida_out _aida_rc _aida_pre _aida_post _aida_eval _aida_rest _aida_part
+            local _aida_b='#aida:eval:begin'
+            local _aida_e='#aida:eval:end'
+            local _aida_nl='
+'
             _aida_out=$(command aida "$@")
             _aida_rc=$?
+            case "$_aida_out" in
+                *"$_aida_b"*)
+                    _aida_pre="${_aida_out%%"$_aida_b"*}"
+                    _aida_rest="${_aida_out#*"$_aida_b"}"
+                    _aida_eval="${_aida_rest%%"$_aida_e"*}"
+                    _aida_post="${_aida_rest#*"$_aida_e"}"
+                    # Drop the newlines that abutted the markers so the prose
+                    # doesn't gain blank lines it never had.
+                    _aida_pre="${_aida_pre%"$_aida_nl"}"
+                    _aida_eval="${_aida_eval#"$_aida_nl"}"
+                    _aida_eval="${_aida_eval%"$_aida_nl"}"
+                    _aida_post="${_aida_post#"$_aida_nl"}"
+                    ;;
+                *)
+                    _aida_pre=''
+                    _aida_eval="$_aida_out"
+                    _aida_post=''
+                    ;;
+            esac
             if [ "$_aida_rc" -eq 0 ]; then
-                eval "$_aida_out"
+                [ -n "$_aida_pre" ] && printf '%s\n' "$_aida_pre"
+                [ -n "$_aida_eval" ] && eval "$_aida_eval"
+                [ -n "$_aida_post" ] && printf '%s\n' "$_aida_post"
+                return 0
             else
-                if [ -n "$_aida_out" ]; then
-                    printf '%s\n' "$_aida_out" >&2
-                fi
+                for _aida_part in "$_aida_pre" "$_aida_eval" "$_aida_post"; do
+                    [ -n "$_aida_part" ] && printf '%s\n' "$_aida_part" >&2
+                done
                 return "$_aida_rc"
             fi
             ;;
@@ -1391,6 +1520,17 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
             "{}\n{}{}\n",
             HELPERS_BEGIN_MARKER, helpers_body, HELPERS_END_MARKER
         );
+        // Preview is stdout (paste-able); the staleness verdict is a note, so
+        // it goes to stderr and never contaminates a paste.
+        // trace:TASK-1171 | ai:claude
+        if classify_wrapper(std::env::var("AIDA_SHELL_WRAPPER").ok().as_deref())
+            == WrapperState::Stale
+        {
+            eprintln!(
+                "{}: the wrapper sourced in THIS shell is older than the one above — re-run with `--install`, then open a new shell.",
+                "Note".yellow()
+            );
+        }
         return Ok(());
     }
 

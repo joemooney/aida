@@ -296,6 +296,14 @@ fn emit_role_enter_eval(
     // `aida dev shell-init --install` automatically eval's our stdout for
     // role enter / dev activate / etc., so direct invocation Just Works in
     // an interactive shell. Scripts can still pipe to `eval "$(...)"`.
+    //
+    // TASK-1171: everything this function prints is SHELL, so the whole body
+    // sits inside one marked block. (The human lines below are deliberately
+    // still `echo '…'` INSIDE the payload rather than plain stdout — a wrapper
+    // that predates the dedicated channel evals whole stdout, so moving them
+    // out would break on exactly the shells this negotiation protects.)
+    // trace:TASK-1171 | ai:claude
+    let _eval = crate::shell_eval::EvalBlock::open();
     let cwd = state
         .working_directory
         .as_deref()
@@ -527,6 +535,8 @@ fn handle_role_current(check: bool) -> Result<()> {
 fn handle_role_end() -> Result<()> {
     // Use a uniquely-named env var rather than `local` so the eval works
     // both at the shell top level and inside a wrapper function.
+    // trace:TASK-1171 | ai:claude
+    let _eval = crate::shell_eval::EvalBlock::open();
     println!("# aida role end");
     println!("__AIDA_ROLE_END_PREV=\"${{AIDA_SESSION_ROLE:-}}\"");
     // Strip ALL `(role:NAME) ` prefixes from PS1 — same rationale as the

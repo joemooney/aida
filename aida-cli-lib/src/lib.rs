@@ -215,6 +215,9 @@ mod server_cmd;
 mod session;
 mod session_manifest;
 mod session_misc_cmd;
+// trace:TASK-1171 | ai:claude — the dedicated marker-delimited channel the
+// `aida()` wrapper evals, so ordinary stdout is never an eval candidate.
+mod shell_eval;
 // trace:STORY-627 | ai:claude — per-repo solo-loop lock + liveness sentinel.
 mod solo_lock;
 mod stacks;
@@ -25120,6 +25123,8 @@ fn session_start(
             if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
                 // Wrapped in eval — point the caller's shell at the existing
                 // session rather than failing the re-entry.
+                // trace:TASK-1171 | ai:claude
+                let _eval = crate::shell_eval::EvalBlock::open();
                 println!("export AIDA_SESSION_ID='{}'", existing.id);
             }
             return Ok(());
@@ -26061,6 +26066,8 @@ fn session_start(
 
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         // Wrapped in eval — emit the env modification.
+        // trace:TASK-1171 | ai:claude
+        let _eval = crate::shell_eval::EvalBlock::open();
         println!("export AIDA_SESSION_ID='{}'", id);
     }
     Ok(())
@@ -29061,6 +29068,11 @@ fn session_end_explicit_target(
 #[path = "tests/bug_779_wrapper_eval_tests.rs"]
 mod bug_779_wrapper_eval_tests;
 
+// trace:TASK-1171 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1171_eval_channel_tests.rs"]
+mod task_1171_eval_channel_tests;
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn session_end(
@@ -29834,6 +29846,9 @@ fn session_end(
     // worktree (and for direct (non-wrapped) invocation, since stdout
     // is a TTY then). trace:TASK-68 | ai:claude
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        // trace:TASK-1171 | ai:claude — stdout inside this scope is shell code
+        // (the interleaved `eprintln!` below is stderr, so it stays prose).
+        let _eval = crate::shell_eval::EvalBlock::open();
         println!("unset AIDA_SESSION_ID");
         // BUG-483: only emit a `cd` out when we actually removed the worktree.
         // When a peer lease shares it we left it standing, so the shell's cwd
@@ -48172,10 +48187,15 @@ fn handle_worktree_enter(
             .ok()
             .map(|root| lease_path(&root, id))
     });
-    print!(
-        "{}",
-        enter_shell_payload(&out.path, &out.focus, lease_file.as_deref())
-    );
+    // trace:TASK-1171 | ai:claude — everything printed while this guard is
+    // alive is SHELL CODE, marked as such for the wrapper.
+    {
+        let _eval = crate::shell_eval::EvalBlock::open();
+        print!(
+            "{}",
+            enter_shell_payload(&out.path, &out.focus, lease_file.as_deref())
+        );
+    }
     Ok(())
 }
 
@@ -48356,10 +48376,14 @@ fn handle_worktree_exit() -> Result<()> {
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
         );
     }
-    print!(
-        "{}",
-        crate::worktree::exit_shell_payload(&main_root, &extra_unsets)
-    );
+    // trace:TASK-1171 | ai:claude
+    {
+        let _eval = crate::shell_eval::EvalBlock::open();
+        print!(
+            "{}",
+            crate::worktree::exit_shell_payload(&main_root, &extra_unsets)
+        );
+    }
     Ok(())
 }
 
@@ -48444,7 +48468,11 @@ fn worktree_exit_from_outside(
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
         );
     }
-    print!("{}", crate::worktree::session_clear_payload(&extra_unsets));
+    // trace:TASK-1171 | ai:claude
+    {
+        let _eval = crate::shell_eval::EvalBlock::open();
+        print!("{}", crate::worktree::session_clear_payload(&extra_unsets));
+    }
     Ok(())
 }
 
@@ -48575,11 +48603,9 @@ fn wrapper_marker_has_worktree_cap(marker: Option<&str>) -> bool {
 /// Generalized capability probe over the comma-separated `AIDA_SHELL_WRAPPER`
 /// marker: is `cap` advertised as an auto-evaled verb group? Whole-token,
 /// case-insensitive compare — a substring of another token never counts.
-// trace:BUG-654 trace:TASK-1160 | ai:claude
+// trace:BUG-654 trace:TASK-1160 trace:TASK-1171 | ai:claude
 fn wrapper_marker_has_cap(marker: Option<&str>, cap: &str) -> bool {
-    marker
-        .map(|caps| caps.split(',').any(|c| c.trim().eq_ignore_ascii_case(cap)))
-        .unwrap_or(false)
+    crate::shell_eval::marker_has_cap(marker, cap)
 }
 
 /// The single shell line `aida worktree enter` emits on stdout for the `aida()`
