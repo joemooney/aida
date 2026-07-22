@@ -38595,5 +38595,53 @@ operations:
   timestamp: 2026-07-22T16:05:32.330618430Z
   kind: !SetStatus
     status: In Progress
-clock: 3607
+- id: 019f8aa5-a1ce-7461-92ce-06b43c23b966
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3608
+  timestamp: 2026-07-22T16:25:38.510491534Z
+  kind: !AddTag
+    tag: docs:impacted
+- id: 019f8aa5-a26e-7223-9b0c-83133c4faaa9
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3609
+  timestamp: 2026-07-22T16:25:38.670252675Z
+  kind: !AddTag
+    tag: aida:burndown
+- id: 019f8aa5-a33c-7683-a103-3573fd14131d
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3610
+  timestamp: 2026-07-22T16:25:38.876662477Z
+  kind: !AddTag
+    tag: modeling
+- id: 019f8aa5-a407-7832-9591-113677b13739
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3611
+  timestamp: 2026-07-22T16:25:39.079887241Z
+  kind: !AddTag
+    tag: aida:backlog
+- id: 019f8aa5-a4fb-78c0-b6ef-d852b00a5301
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3612
+  timestamp: 2026-07-22T16:25:39.323887474Z
+  kind: !AddTag
+    tag: from-downstream:quizdom
+- id: 019f8aa5-a631-7452-a2bf-9faf0740665d
+  target_id: 019f8a54-6f71-7bb2-a06c-9e0eadd88131
+  author: aida
+  node_id: '1'
+  lamport: 3613
+  timestamp: 2026-07-22T16:25:39.633825146Z
+  kind: !RemoveTag
+    tag: aida:burndown aida:backlog modeling from-downstream:quizdom
+clock: 3613
 node_id: '1'
