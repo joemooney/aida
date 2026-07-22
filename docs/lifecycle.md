@@ -554,6 +554,35 @@ changing the queue entry.
   spawns one). Findings from a headless reviewer surface via
   `aida findings list`.
 
+**A verdict is state, not prose — and it gates `queue done`.** A "changes
+requested" written only as a comment cannot be enforced: the incident behind
+this rule was a reviewer rejecting a specific commit, and a later session
+merging that exact commit and marking the spec Done with nothing objecting.
+So a verdict is recorded as a per-spec record (`.aida/review-verdicts/<SPEC>.json`)
+carrying the verdict word, **the commit the review examined**, and a timestamp:
+
+- `aida review <SPEC>` stamps the reviewed commit onto the verdict the
+  reviewer writes; `aida review record <SPEC> --verdict request-changes
+  [--sha <commit>] [--summary "…"]` records one by hand (an advisor reviewing
+  a local branch, a review that happened outside a reviewer session).
+- `aida review verdict <SPEC> [--json]` reads it back.
+- `aida queue done <SPEC>` **refuses** while the latest verdict is
+  request-changes/rejected and the branch tip has not moved past the commit
+  that verdict named — and also refuses when it cannot establish whether the
+  branch moved (no recorded commit, unreadable tip). Once real commits land on
+  top, the gate opens by itself. `--force` overrides and prints the verdict it
+  is overriding; `aida review record <SPEC> --verdict approved` clears it.
+- A branch amended/rebased since the review (the reviewed commit is no longer
+  in its history) proceeds with a loud warning rather than a refusal.
+- `aida queue next` shows the latest verdict, so an implementer picking the
+  spec back up cannot miss it.
+
+Related: the branch-vs-default-branch check behind `queue done` resolves the
+**local** default branch (`main` or `master`) when there is no `origin` remote,
+and refuses rather than warning when it cannot produce an answer at all — a
+gate that silently does not fire reads as approval.
+trace:BUG-775
+
 ### Merged
 
 The PR squashed onto `main`. This is AIDA's default meaning of **"shipped"** —

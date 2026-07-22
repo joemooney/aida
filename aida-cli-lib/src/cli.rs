@@ -638,6 +638,50 @@ pub enum ReviewCommand {
         #[clap(long, short = 'o', value_name = "PATH")]
         output: Option<PathBuf>,
     },
+
+    /// Record a review verdict for a spec as first-class state.
+    ///
+    /// A verdict written only as prose (a comment saying "changes
+    /// requested at commit abc123") cannot be enforced. Recording it here
+    /// stores the verdict, the commit the review examined, and the time —
+    /// and `aida queue done` then REFUSES to mark the spec done while the
+    /// branch still sits at that commit.
+    ///
+    /// Record `--verdict approved` after a follow-up review to clear it.
+    // trace:BUG-775 | ai:claude
+    Record {
+        /// Spec the verdict applies to (e.g. TASK-5).
+        spec: String,
+
+        /// The verdict: approved, request-changes, or rejected.
+        #[clap(long, value_name = "VERDICT")]
+        verdict: String,
+
+        /// Commit the review examined. Defaults to the branch tip
+        /// (current HEAD) at the time of recording.
+        #[clap(long, value_name = "SHA")]
+        sha: Option<String>,
+
+        /// Branch the review examined. Defaults to the checked-out branch.
+        #[clap(long, value_name = "BRANCH")]
+        branch: Option<String>,
+
+        /// One-line rationale stored with the verdict and shown wherever
+        /// the verdict surfaces.
+        #[clap(long, value_name = "TEXT")]
+        summary: Option<String>,
+    },
+
+    /// Show the recorded review verdict for a spec, if any.
+    // trace:BUG-775 | ai:claude
+    Verdict {
+        /// Spec to look up.
+        spec: String,
+
+        /// Emit the raw record as JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Per-scope disposition / triage lease commands (the intake gate).

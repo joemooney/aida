@@ -194,6 +194,8 @@ mod report_cmd;
 // trace:STORY-568 | ai:claude — pure core of the research/spike dispatch lane.
 mod research;
 mod reviewer_summary;
+// trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
+mod review_verdict;
 mod role_cmd;
 mod rules_cmd;
 mod rules_sync;
@@ -25983,35 +25985,158 @@ mod bug_734_empty_worktree_probe_tests;
 ///     `None` on any git failure so callers can degrade silently.
 ///     trace:STORY-106 | ai:claude
 fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32> {
-    if branch == "main" || branch == "HEAD" {
-        return None;
+    match branch_commits_ahead_default(repo, branch) {
+        workflow_hints::CommitsAhead::Ahead(n) => Some(n),
+        _ => None,
     }
-    let rev_parse = |refname: &str| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo)
-            .args(["rev-parse", "--verify", "--quiet", refname])
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .filter(|s| !s.is_empty())
+}
+
+/// Count how many commits `branch` is ahead of the repo's DEFAULT branch, and
+/// say WHY when the answer can't be produced.
+///
+/// The `Option<u32>` wrapper above collapses "on the default branch",
+/// "no default branch ref anywhere", and "rev-list failed" into one `None`,
+/// which is fine for a hint but fatal for a gate: a gate that can't tell
+/// "nothing to compare" from "comparison impossible" ends up waving work
+/// through. `aida queue done` uses this richer form.
+///
+/// Two fixes over the old `origin/main`-or-`main` probe:
+///   - the default branch is resolved with the same order the rest of the CLI
+///     uses (`origin/HEAD` → `init.defaultBranch` → `main`/`master`, remote
+///     ref preferred, LOCAL ref accepted) — so a repo with NO origin remote,
+///     or one whose default branch is `master`, still gets a real answer.
+///     Local-merge workflows live in exactly those repos.
+///   - being *on* the default branch is a distinct, named outcome rather than
+///     an unresolvable one.
+// trace:BUG-775 | ai:claude
+fn branch_commits_ahead_default(
+    repo: &std::path::Path,
+    branch: &str,
+) -> workflow_hints::CommitsAhead {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return workflow_hints::CommitsAhead::Unknown(
+            "no default branch could be resolved in this repository — \
+             neither origin/HEAD, init.defaultBranch, main, nor master exists"
+                .to_string(),
+        );
     };
-    let main_ref = rev_parse("origin/main")
-        .map(|_| "origin/main")
-        .or_else(|| rev_parse("main").map(|_| "main"))?;
-    let range = format!("{}..{}", main_ref, branch);
+    // `origin/main` → `main`: compare NAMES so a branch checked out locally
+    // is recognised as the default branch even when the resolved ref is the
+    // remote-tracking form.
+    let default_name = default_ref
+        .strip_prefix("origin/")
+        .unwrap_or(&default_ref)
+        .to_string();
+    if branch == "HEAD" || branch.eq_ignore_ascii_case(&default_name) || branch == default_ref {
+        return workflow_hints::CommitsAhead::OnDefaultBranch;
+    }
+    let range = format!("{}..{}", default_ref, branch);
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
         .args(["rev-list", "--count", &range])
+        .output();
+    let out = match out {
+        Ok(o) if o.status.success() => o,
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            return workflow_hints::CommitsAhead::Unknown(format!(
+                "`git rev-list --count {range}` failed{}",
+                if err.is_empty() {
+                    String::new()
+                } else {
+                    format!(": {err}")
+                }
+            ));
+        }
+        Err(e) => {
+            return workflow_hints::CommitsAhead::Unknown(format!("could not run git: {e}"));
+        }
+    };
+    match String::from_utf8_lossy(&out.stdout).trim().parse::<u32>() {
+        Ok(n) => workflow_hints::CommitsAhead::Ahead(n),
+        Err(_) => workflow_hints::CommitsAhead::Unknown(format!(
+            "`git rev-list --count {range}` returned no count"
+        )),
+    }
+}
+
+/// Full object name for `rev` in `repo`, or `None` when it doesn't resolve to
+/// a commit here (unknown sha, sha from another clone, garbage input).
+/// Expanding both sides is what lets a short sha recorded in a review verdict
+/// be compared with a branch tip.
+// trace:BUG-775 | ai:claude
+fn resolve_commit_sha(repo: &std::path::Path, rev: &str) -> Option<String> {
+    let rev = rev.trim();
+    if rev.is_empty() {
+        return None;
+    }
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{rev}^{{commit}}"),
+        ])
         .output()
         .ok()?;
     if !out.status.success() {
         return None;
     }
-    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
+
+/// `git merge-base --is-ancestor <ancestor> <descendant>` as a tri-state:
+/// `Some(true)` / `Some(false)` for the two clean answers, `None` when the
+/// probe itself could not run.
+// trace:BUG-775 | ai:claude
+fn is_ancestor_commit(repo: &std::path::Path, ancestor: &str, descendant: &str) -> Option<bool> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["merge-base", "--is-ancestor", ancestor, descendant])
+        .output()
+        .ok()?;
+    match out.status.code() {
+        Some(0) => Some(true),
+        Some(1) => Some(false),
+        _ => None,
+    }
+}
+
+/// Where the tip of `branch` (or HEAD when `branch` is `None`) sits relative
+/// to the commit a review verdict named. All the git I/O for the review gate
+/// lives here; the decision itself is the pure
+/// `review_verdict::classify_tip_relation`.
+// trace:BUG-775 | ai:claude
+fn verdict_tip_relation(
+    repo: &std::path::Path,
+    branch: Option<&str>,
+    reviewed_sha: Option<&str>,
+) -> review_verdict::TipRelation {
+    let Some(reviewed_raw) = reviewed_sha else {
+        return review_verdict::TipRelation::Unknown;
+    };
+    let reviewed = resolve_commit_sha(repo, reviewed_raw);
+    let tip = resolve_commit_sha(repo, branch.unwrap_or("HEAD"))
+        .or_else(|| resolve_commit_sha(repo, "HEAD"));
+    let ancestry = match (reviewed.as_deref(), tip.as_deref()) {
+        (Some(a), Some(b)) => is_ancestor_commit(repo, a, b),
+        _ => None,
+    };
+    review_verdict::classify_tip_relation(reviewed.as_deref(), tip.as_deref(), ancestry)
+}
+
+#[cfg(test)]
+#[path = "tests/bug_775_commits_ahead_tests.rs"]
+mod bug_775_commits_ahead_tests;
 
 /// TASK-99: count how many commits the local `base_ref` is BEHIND
 /// `origin/main` — i.e. commits on origin that the base hasn't yet
@@ -63650,6 +63775,28 @@ fn handle_review_spec(
         .ok()
         .and_then(|body| reviewer_summary::parse_verdict_file(&body));
 
+    // BUG-775: stamp WHICH COMMIT this review looked at (and when) onto the
+    // verdict record. The reviewer skill writes the verdict word; only AIDA
+    // knows the branch tip it was pointed at. Without that sha "has the branch
+    // moved since the review?" is unanswerable, and the `queue done` gate has
+    // to fail closed. Best-effort — never blocks presenting the verdict.
+    // trace:BUG-775 | ai:claude
+    if let Some(v) = verdict.as_ref() {
+        let reviewed_branch = linkage.branch.clone();
+        let reviewed_sha =
+            resolve_commit_sha(project_root, reviewed_branch.as_deref().unwrap_or("HEAD"))
+                .or_else(|| resolve_commit_sha(project_root, "HEAD"));
+        let _ = review_verdict::record_verdict(
+            project_root,
+            &spec_id,
+            Some(&v.verdict),
+            reviewed_sha.as_deref(),
+            reviewed_branch.as_deref(),
+            v.summary.as_deref(),
+            "aida review",
+        );
+    }
+
     println!();
     let recommended = match &verdict {
         Some(v) => {
@@ -63792,6 +63939,128 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
                 crate::glyph(crate::glyphs::Glyph::Check),
                 out_path.display()
             );
+            Ok(())
+        }
+        // trace:BUG-775 | ai:claude
+        ReviewCommand::Record {
+            spec,
+            verdict,
+            sha,
+            branch,
+            summary,
+        } => handle_review_record(
+            spec,
+            verdict,
+            sha.as_deref(),
+            branch.as_deref(),
+            summary.as_deref(),
+        ),
+        // trace:BUG-775 | ai:claude
+        ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+    }
+}
+
+/// `aida review record` — write the spec's review verdict as state a gate can
+/// read. The recorded commit defaults to the branch tip, which is what makes
+/// "has the branch moved since the review?" answerable later.
+// trace:BUG-775 | ai:claude
+fn handle_review_record(
+    spec: &str,
+    verdict: &str,
+    sha: Option<&str>,
+    branch: Option<&str>,
+    summary: Option<&str>,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+    let kind = review_verdict::VerdictKind::parse(verdict);
+    if kind == review_verdict::VerdictKind::Other {
+        anyhow::bail!(
+            "unrecognised verdict `{verdict}` — use one of: approved, request-changes, rejected"
+        );
+    }
+    let branch = branch
+        .map(str::to_string)
+        .or_else(|| current_branch_at(&project_root));
+    let resolved_sha = sha
+        .map(str::to_string)
+        .or_else(|| resolve_commit_sha(&project_root, branch.as_deref().unwrap_or("HEAD")))
+        .or_else(|| resolve_commit_sha(&project_root, "HEAD"));
+    if resolved_sha.is_none() {
+        eprintln!(
+            "{} no commit could be resolved for this review — record it with `--sha <commit>` \
+             so a later `aida queue done` can tell whether the branch moved on.",
+            "warning:".yellow().bold()
+        );
+    }
+    let path = review_verdict::record_verdict(
+        &project_root,
+        spec,
+        Some(verdict),
+        resolved_sha.as_deref(),
+        branch.as_deref(),
+        summary,
+        "aida review record",
+    )
+    .with_context(|| "could not write the review verdict")?;
+    println!(
+        "{} recorded {} for {}{}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        kind.label().bold(),
+        spec.to_ascii_uppercase().cyan(),
+        resolved_sha
+            .as_deref()
+            .map(|s| format!(" against {}", review_verdict::short_sha(s)))
+            .unwrap_or_default()
+    );
+    if kind.blocks_done() {
+        println!(
+            "  {} `aida queue done {}` will refuse until the branch moves past that commit.",
+            crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+            spec.to_ascii_uppercase()
+        );
+    }
+    println!(
+        "  {} {}",
+        "record:".dimmed(),
+        path.display().to_string().dimmed()
+    );
+    Ok(())
+}
+
+/// `aida review verdict <SPEC>` — read the recorded verdict back.
+// trace:BUG-775 | ai:claude
+fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let path = review_verdict::verdict_path(&project_root, spec);
+    match review_verdict::read_recorded_verdict(&project_root, spec) {
+        Some(v) => {
+            if json {
+                let body = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+                println!("{}", body.trim());
+            } else {
+                println!(
+                    "{} {}",
+                    format!("{}:", spec.to_ascii_uppercase()).bold(),
+                    review_verdict::verdict_notice_line(&v)
+                );
+                println!(
+                    "  {} {}",
+                    "record:".dimmed(),
+                    path.display().to_string().dimmed()
+                );
+            }
+            Ok(())
+        }
+        None => {
+            if json {
+                println!("null");
+            } else {
+                println!(
+                    "{} no review verdict recorded for {}.",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    spec.to_ascii_uppercase()
+                );
+            }
             Ok(())
         }
     }

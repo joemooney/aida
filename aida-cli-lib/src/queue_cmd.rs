@@ -3623,6 +3623,29 @@ pub(crate) fn handle_queue_command(
                     if let Some(ref note) = entry.note {
                         println!("  Note: {}", note.italic());
                     }
+                    // BUG-775: the last review's verdict, front and centre.
+                    // An implementer picking this spec up must not have to go
+                    // hunting through comments to learn a reviewer already
+                    // rejected the branch — that is how a rejected commit got
+                    // merged and marked done. trace:BUG-775 | ai:claude
+                    if let Ok(root) = find_project_root() {
+                        if let Some(v) = review_verdict::read_recorded_verdict_any(
+                            &root,
+                            &[&display_id_owned, spec_id],
+                        ) {
+                            let line = review_verdict::verdict_notice_line(&v);
+                            if v.kind.blocks_done() {
+                                println!("  {} {}", "Review verdict:".bold(), line.yellow().bold());
+                                println!(
+                                    "  {} address it and commit — `aida queue done` will refuse \
+                                     while the branch sits at the reviewed commit.",
+                                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+                                );
+                            } else {
+                                println!("  {} {}", "Review verdict:".bold(), line);
+                            }
+                        }
+                    }
                     if !description.is_empty() {
                         println!();
                         println!("{}", "Description (first 10 lines):".dimmed());
@@ -3727,7 +3750,9 @@ pub(crate) fn handle_queue_command(
                     display_id,
                     find_project_root(),
                     |root| current_branch_at(root),
-                    |root, branch| branch_commits_ahead_main(root, branch),
+                    // BUG-775: the tri-state form — the gate must be able to
+                    // tell "on the default branch" from "comparison failed".
+                    |root, branch| branch_commits_ahead_default(root, branch),
                     |root, branch| match change_lookup_for_branch(root, branch) {
                         crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
                         crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
@@ -3770,6 +3795,39 @@ pub(crate) fn handle_queue_command(
                     display_id,
                     flag
                 );
+            }
+
+            // BUG-775 Guard: refuse when the LAST review of this spec asked
+            // for changes and the branch has not moved past the commit that
+            // review examined. A reviewer's "changes requested" used to live
+            // only in prose (a comment); the next session merged the exact
+            // rejected commit and marked the spec Done with nothing objecting.
+            // Now the verdict is state, and this reads it back.
+            // `--force` overrides — loudly, naming the verdict it overrides.
+            // trace:BUG-775 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                match evaluate_review_verdict_gate(&project_root, display_id, spec_id) {
+                    (review_verdict::VerdictGate::Refuse(lines), _) if !*force => {
+                        for line in &lines {
+                            eprintln!("{}", line);
+                        }
+                        std::process::exit(1);
+                    }
+                    (review_verdict::VerdictGate::Warn(lines), _) => {
+                        for line in &lines {
+                            eprintln!("{}", line);
+                        }
+                    }
+                    (review_verdict::VerdictGate::Refuse(_), Some(v)) => {
+                        eprintln!(
+                            "{} --force: overriding the recorded review verdict for {} ({}).",
+                            "warning:".yellow().bold(),
+                            display_id,
+                            review_verdict::verdict_notice_line(&v)
+                        );
+                    }
+                    _ => {}
+                }
             }
 
             // STORY-469 Guard 1: validate trailer spec-IDs before flipping the
@@ -9891,4 +9949,51 @@ pub(crate) fn recover_action_label(action: queue_recover::RecoverAction) -> &'st
         A::WipCommitPark => "commit WIP and park for resumption",
         A::EndAndRequeue => "end the lease and re-queue",
     }
+}
+
+/// Resolve the review-verdict gate for a spec about to be marked done.
+///
+/// Reads the recorded verdict (under either id form the caller holds), then —
+/// only when that verdict actually blocks — asks git where the branch tip sits
+/// relative to the commit the review examined. Returns the decision plus the
+/// verdict it was based on, so the caller can name it when `--force`
+/// overrides. All policy lives in the pure `review_verdict` functions; this is
+/// just the wiring.
+// trace:BUG-775 | ai:claude
+pub(crate) fn evaluate_review_verdict_gate(
+    project_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+) -> (
+    review_verdict::VerdictGate,
+    Option<review_verdict::RecordedVerdict>,
+) {
+    // The verdict may have been recorded in the PRIMARY checkout (where a
+    // reviewer runs) while `queue done` runs in an implementer worktree.
+    // `.aida/` is per-checkout runtime state, so look in both; the reviewed
+    // sha itself resolves either way because worktrees share the object
+    // store. trace:BUG-775 | ai:claude
+    let primary_root = main_worktree_root_from(project_root);
+    let verdict = review_verdict::read_recorded_verdict_any(project_root, &[display_id, spec_id])
+        .or_else(|| {
+            (primary_root != project_root)
+                .then(|| {
+                    review_verdict::read_recorded_verdict_any(&primary_root, &[display_id, spec_id])
+                })
+                .flatten()
+        });
+    let Some(verdict) = verdict else {
+        return (review_verdict::VerdictGate::Proceed, None);
+    };
+    if !verdict.kind.blocks_done() {
+        return (review_verdict::VerdictGate::Proceed, Some(verdict));
+    }
+    let branch = current_branch_at(project_root);
+    let relation = verdict_tip_relation(
+        project_root,
+        branch.as_deref(),
+        verdict.reviewed_sha.as_deref(),
+    );
+    let gate = review_verdict::queue_done_verdict_gate(display_id, Some(&verdict), relation);
+    (gate, Some(verdict))
 }
