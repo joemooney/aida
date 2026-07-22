@@ -8,12 +8,12 @@ description: |-
   The constructs used are POSIX-compatible parameter expansion with nested quotes inside ${var%%"$pat"*} plus `local`, which zsh handles — so this is a coverage gap, not a known break. Verified 2026-07-22 that the current operator machine has no zsh installed and a /bin/bash login shell, so there is no live exposure today; this is for the first zsh user.
 
   Acceptance: the eval-channel wrapper tests run under zsh as well as bash when zsh is present on the runner, and are skipped cleanly when it is not; a divergence in block-slicing between the two shells fails the suite rather than surfacing as a broken shell for a zsh user.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T08:00:17.667720855Z
-modified_at: 2026-07-22T15:26:37.266334619Z
+modified_at: 2026-07-22T16:05:32.277653702Z
 req_type: Task
 tags:
 - dx shell testing followup:TASK-1171 from-drain
