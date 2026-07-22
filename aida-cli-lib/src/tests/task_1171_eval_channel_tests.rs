@@ -8,41 +8,18 @@
 //! the structural fix, and — just as importantly — the version-skew contract in
 //! both directions, since an operator upgrading the binary keeps the old
 //! wrapper sourced in every shell they are already standing in.
+//!
+//! TASK-1174: every shell-driving test here runs over the SHELL MATRIX
+//! (`wrapper_shells()`) rather than hardcoding bash, because the wrapper is
+//! installed into `~/.zshrc` too. zsh joins the matrix when the runner has it
+//! and is cleanly skipped when it does not; a block-slicing divergence between
+//! the shells fails the suite here instead of shipping as a broken shell.
 // trace:TASK-1171 | ai:claude
+// trace:TASK-1174 | ai:claude
 
 use crate::dev_cmd::{classify_wrapper, WrapperState};
 use crate::shell_eval::{EVAL_BEGIN, EVAL_BLOCK_CAP, EVAL_END};
-
-/// Drive the real `SHELL_HELPERS` wrapper through bash with a stub `aida` on
-/// PATH. `stub` is the body of the fake binary; `body` runs after the helpers
-/// are sourced. Returns (stdout, stderr, exit code).
-// trace:TASK-1171 | ai:claude
-fn run_wrapper(stub: &str, body: &str) -> (String, String, Option<i32>) {
-    let dir = tempfile::tempdir().unwrap();
-    let bin = dir.path().join("aida");
-    std::fs::write(&bin, stub).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    let script = format!(
-        "PATH='{path}':\"$PATH\"\nexport PATH\n{helpers}\n{body}\n",
-        path = dir.path().display(),
-        helpers = crate::dev_cmd::SHELL_HELPERS,
-        body = body,
-    );
-    let out = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(&script)
-        .output()
-        .expect("bash available");
-    (
-        String::from_utf8_lossy(&out.stdout).to_string(),
-        String::from_utf8_lossy(&out.stderr).to_string(),
-        out.status.code(),
-    )
-}
+use crate::shell_wrapper_harness::{run_wrapper_in, wrapper_shells};
 
 // ── the acceptance case: prose AND an eval directive from one subcommand ─────
 
@@ -55,45 +32,37 @@ fn run_wrapper(stub: &str, body: &str) -> (String, String, Option<i32>) {
 // trace:TASK-1171 | ai:claude
 #[test]
 fn prose_on_stdout_is_displayed_never_evaled() {
-    let stub = format!(
-        "#!/usr/bin/env bash\n\
-         printf 'Entered worktree for TASK-1171\\n'\n\
-         printf 'resume it later with `aida worktree enter`\\n'\n\
-         printf '%s\\n' '{begin}'\n\
-         printf 'export AIDA_TASK1171_MARKER=applied\\n'\n\
-         printf '%s\\n' '{end}'\n\
-         exit 0\n",
-        begin = EVAL_BEGIN,
-        end = EVAL_END,
-    );
-    let (stdout, stderr, _) = run_wrapper(
-        &stub,
-        "aida worktree enter TASK-1171\n\
-         echo \"rc:$?\"\n\
-         echo \"marker:${AIDA_TASK1171_MARKER-unset}\"",
-    );
+    for &shell in wrapper_shells() {
+        let (stdout, stderr, _) = run_wrapper_in(
+            shell,
+            &prose_and_payload_stub(),
+            "aida worktree enter TASK-1171\n\
+             echo \"rc:$?\"\n\
+             echo \"marker:${AIDA_TASK1171_MARKER-unset}\"",
+        );
 
-    assert!(
-        stdout.contains("Entered worktree for TASK-1171"),
-        "prose must be displayed on stdout:\n{stdout}\nstderr:\n{stderr}"
-    );
-    assert!(
-        stdout.contains("resume it later with `aida worktree enter`"),
-        "prose must be displayed VERBATIM, backticks and all:\n{stdout}"
-    );
-    assert!(
-        stdout.contains("marker:applied"),
-        "the marked block must still mutate the shell:\n{stdout}\nstderr:\n{stderr}"
-    );
-    assert!(
-        !stderr.contains("command not found"),
-        "prose must never be eval'd:\n{stderr}"
-    );
-    assert!(
-        !stdout.contains(EVAL_BEGIN) && !stdout.contains(EVAL_END),
-        "the markers are protocol, not output:\n{stdout}"
-    );
-    assert!(stdout.contains("rc:0"), "{stdout}");
+        assert!(
+            stdout.contains("Entered worktree for TASK-1171"),
+            "[{shell}] prose must be displayed on stdout:\n{stdout}\nstderr:\n{stderr}"
+        );
+        assert!(
+            stdout.contains("resume it later with `aida worktree enter`"),
+            "[{shell}] prose must be displayed VERBATIM, backticks and all:\n{stdout}"
+        );
+        assert!(
+            stdout.contains("marker:applied"),
+            "[{shell}] the marked block must still mutate the shell:\n{stdout}\nstderr:\n{stderr}"
+        );
+        assert!(
+            !stderr.contains("command not found"),
+            "[{shell}] prose must never be eval'd:\n{stderr}"
+        );
+        assert!(
+            !stdout.contains(EVAL_BEGIN) && !stdout.contains(EVAL_END),
+            "[{shell}] the markers are protocol, not output:\n{stdout}"
+        );
+        assert!(stdout.contains("rc:0"), "[{shell}] {stdout}");
+    }
 }
 
 /// Prose AFTER the block is displayed too — the wrapper must not silently
@@ -101,26 +70,19 @@ fn prose_on_stdout_is_displayed_never_evaled() {
 // trace:TASK-1171 | ai:claude
 #[test]
 fn prose_after_the_block_is_displayed() {
-    let stub = format!(
-        "#!/usr/bin/env bash\n\
-         printf '%s\\n' '{begin}'\n\
-         printf 'export AIDA_TASK1171_TAIL=set\\n'\n\
-         printf '%s\\n' '{end}'\n\
-         printf 'Next: aida session end\\n'\n\
-         exit 0\n",
-        begin = EVAL_BEGIN,
-        end = EVAL_END,
-    );
-    let (stdout, stderr, _) = run_wrapper(
-        &stub,
-        "aida role enter advisor\necho \"tail:${AIDA_TASK1171_TAIL-unset}\"",
-    );
+    for &shell in wrapper_shells() {
+        let (stdout, stderr, _) = run_wrapper_in(
+            shell,
+            &trailing_prose_stub(),
+            "aida role enter advisor\necho \"tail:${AIDA_TASK1171_TAIL-unset}\"",
+        );
 
-    assert!(
-        stdout.contains("Next: aida session end"),
-        "trailing prose must be displayed:\n{stdout}\nstderr:\n{stderr}"
-    );
-    assert!(stdout.contains("tail:set"), "{stdout}");
+        assert!(
+            stdout.contains("Next: aida session end"),
+            "[{shell}] trailing prose must be displayed:\n{stdout}\nstderr:\n{stderr}"
+        );
+        assert!(stdout.contains("tail:set"), "[{shell}] {stdout}");
+    }
 }
 
 /// A failing subcommand still reports on stderr and propagates its status — and
@@ -129,37 +91,33 @@ fn prose_after_the_block_is_displayed() {
 // trace:TASK-1171 | ai:claude
 #[test]
 fn failure_reports_on_stderr_with_markers_stripped() {
-    let stub = format!(
-        "#!/usr/bin/env bash\n\
-         printf 'error: \"No lease found for branch `019f8357`\"\\n'\n\
-         printf '%s\\n' '{begin}'\n\
-         printf 'export AIDA_TASK1171_SHOULD_NOT_APPLY=1\\n'\n\
-         printf '%s\\n' '{end}'\n\
-         exit 1\n",
-        begin = EVAL_BEGIN,
-        end = EVAL_END,
-    );
-    let (stdout, stderr, _) = run_wrapper(
-        &stub,
-        "aida session end 019f8357 --yes\n\
-         echo \"rc:$?\"\n\
-         echo \"leaked:${AIDA_TASK1171_SHOULD_NOT_APPLY-unset}\"",
-    );
+    for &shell in wrapper_shells() {
+        let (stdout, stderr, _) = run_wrapper_in(
+            shell,
+            &failing_stub(),
+            "aida session end 019f8357 --yes\n\
+             echo \"rc:$?\"\n\
+             echo \"leaked:${AIDA_TASK1171_SHOULD_NOT_APPLY-unset}\"",
+        );
 
-    assert!(stdout.contains("rc:1"), "status propagates:\n{stdout}");
-    assert!(
-        stderr.contains("No lease found for branch"),
-        "the real error reaches the operator:\n{stderr}"
-    );
-    assert!(
-        !stderr.contains(EVAL_BEGIN) && !stderr.contains(EVAL_END),
-        "markers must not surface in the error report:\n{stderr}"
-    );
-    assert!(
-        stdout.contains("leaked:unset"),
-        "a failing command's payload must not be applied:\n{stdout}"
-    );
-    assert!(!stderr.contains("command not found"), "{stderr}");
+        assert!(
+            stdout.contains("rc:1"),
+            "[{shell}] status propagates:\n{stdout}"
+        );
+        assert!(
+            stderr.contains("No lease found for branch"),
+            "[{shell}] the real error reaches the operator:\n{stderr}"
+        );
+        assert!(
+            !stderr.contains(EVAL_BEGIN) && !stderr.contains(EVAL_END),
+            "[{shell}] markers must not surface in the error report:\n{stderr}"
+        );
+        assert!(
+            stdout.contains("leaked:unset"),
+            "[{shell}] a failing command's payload must not be applied:\n{stdout}"
+        );
+        assert!(!stderr.contains("command not found"), "[{shell}] {stderr}");
+    }
 }
 
 // ── version skew ─────────────────────────────────────────────────────────────
@@ -170,22 +128,21 @@ fn failure_reports_on_stderr_with_markers_stripped() {
 // trace:TASK-1171 | ai:claude
 #[test]
 fn unmarked_payload_from_an_older_binary_still_evals() {
-    let stub = "#!/usr/bin/env bash\n\
-                echo \"# aida dev activate\"\n\
-                echo \"export AIDA_TASK1171_LEGACY=applied\"\n\
-                exit 0\n";
-    let (stdout, stderr, _) = run_wrapper(
-        stub,
-        "aida dev activate\n\
-         echo \"rc:$?\"\n\
-         echo \"legacy:${AIDA_TASK1171_LEGACY-unset}\"",
-    );
+    for &shell in wrapper_shells() {
+        let (stdout, stderr, _) = run_wrapper_in(
+            shell,
+            LEGACY_STUB,
+            "aida dev activate\n\
+             echo \"rc:$?\"\n\
+             echo \"legacy:${AIDA_TASK1171_LEGACY-unset}\"",
+        );
 
-    assert!(
-        stdout.contains("legacy:applied"),
-        "an older binary's bare payload must still be eval'd:\n{stdout}\nstderr:\n{stderr}"
-    );
-    assert!(stdout.contains("rc:0"), "{stdout}");
+        assert!(
+            stdout.contains("legacy:applied"),
+            "[{shell}] an older binary's bare payload must still be eval'd:\n{stdout}\nstderr:\n{stderr}"
+        );
+        assert!(stdout.contains("rc:0"), "[{shell}] {stdout}");
+    }
 }
 
 /// OLD wrapper + NEW binary. The binary only emits markers when the wrapper
@@ -253,3 +210,149 @@ fn wrapper_shell_and_rust_constants_agree() {
          will keep emitting the legacy bare payload to it: {advertised}"
     );
 }
+
+// ── TASK-1174: bash and zsh must not diverge ─────────────────────────────────
+
+/// The matrix contract itself. bash is always exercised; zsh is exercised
+/// exactly when the machine can run it, and its absence is a SKIP rather than
+/// a failure — the operator machine has no zsh, and CI runners may not either.
+// trace:TASK-1174 | ai:claude
+#[test]
+fn shell_matrix_always_covers_bash_and_skips_a_missing_zsh() {
+    let shells = wrapper_shells();
+    assert!(
+        shells.contains(&"bash"),
+        "bash coverage is not optional: {shells:?}"
+    );
+
+    let zsh_runs = std::process::Command::new("zsh")
+        .args(["-f", "-c", "exit 0"])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false);
+    assert_eq!(
+        shells.contains(&"zsh"),
+        zsh_runs,
+        "zsh must join the matrix exactly when it is installed (installed={zsh_runs}): {shells:?}"
+    );
+}
+
+/// The divergence gate. The wrapper's block-slicing is pure parameter
+/// expansion, and bash and zsh do not always agree on it. Run the same stub
+/// through every available shell and demand byte-identical stdout/stderr/status
+/// — so a zsh-only slicing difference fails HERE rather than in a zsh user's
+/// terminal.
+// trace:TASK-1174 | ai:claude
+#[test]
+fn block_slicing_agrees_across_shells() {
+    let cases: [(&str, String, &str); 4] = [
+        (
+            "prose around a payload",
+            prose_and_payload_stub(),
+            "aida worktree enter TASK-1174\n\
+             echo \"rc:$?\"\n\
+             echo \"marker:${AIDA_TASK1171_MARKER-unset}\"",
+        ),
+        (
+            "payload then prose",
+            trailing_prose_stub(),
+            "aida role enter advisor\necho \"tail:${AIDA_TASK1171_TAIL-unset}\"",
+        ),
+        (
+            "failure with a payload",
+            failing_stub(),
+            "aida session end 019f8357 --yes\n\
+             echo \"rc:$?\"\n\
+             echo \"leaked:${AIDA_TASK1171_SHOULD_NOT_APPLY-unset}\"",
+        ),
+        (
+            "unmarked legacy payload",
+            LEGACY_STUB.to_string(),
+            "aida dev activate\n\
+             echo \"rc:$?\"\n\
+             echo \"legacy:${AIDA_TASK1171_LEGACY-unset}\"",
+        ),
+    ];
+
+    for (label, stub, body) in &cases {
+        let baseline = run_wrapper_in("bash", stub, body);
+        for &shell in wrapper_shells() {
+            if shell == "bash" {
+                continue;
+            }
+            let actual = run_wrapper_in(shell, stub, body);
+            assert_eq!(
+                actual.0, baseline.0,
+                "[{label}] {shell} sliced stdout differently than bash\n\
+                 {shell}:\n{}\nbash:\n{}",
+                actual.0, baseline.0
+            );
+            assert_eq!(
+                actual.1, baseline.1,
+                "[{label}] {shell} routed stderr differently than bash\n\
+                 {shell}:\n{}\nbash:\n{}",
+                actual.1, baseline.1
+            );
+            assert_eq!(
+                actual.2, baseline.2,
+                "[{label}] {shell} returned a different status than bash"
+            );
+        }
+    }
+}
+
+// ── stubs shared by the matrix ───────────────────────────────────────────────
+
+/// A subcommand that prints hostile prose (backticks, bare words) AND emits a
+/// marked payload.
+// trace:TASK-1174 | ai:claude
+fn prose_and_payload_stub() -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         printf 'Entered worktree for TASK-1171\\n'\n\
+         printf 'resume it later with `aida worktree enter`\\n'\n\
+         printf '%s\\n' '{begin}'\n\
+         printf 'export AIDA_TASK1171_MARKER=applied\\n'\n\
+         printf '%s\\n' '{end}'\n\
+         exit 0\n",
+        begin = EVAL_BEGIN,
+        end = EVAL_END,
+    )
+}
+
+/// A subcommand whose prose TRAILS the payload.
+// trace:TASK-1174 | ai:claude
+fn trailing_prose_stub() -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         printf '%s\\n' '{begin}'\n\
+         printf 'export AIDA_TASK1171_TAIL=set\\n'\n\
+         printf '%s\\n' '{end}'\n\
+         printf 'Next: aida session end\\n'\n\
+         exit 0\n",
+        begin = EVAL_BEGIN,
+        end = EVAL_END,
+    )
+}
+
+/// A FAILING subcommand that still emitted a payload.
+// trace:TASK-1174 | ai:claude
+fn failing_stub() -> String {
+    format!(
+        "#!/usr/bin/env bash\n\
+         printf 'error: \"No lease found for branch `019f8357`\"\\n'\n\
+         printf '%s\\n' '{begin}'\n\
+         printf 'export AIDA_TASK1171_SHOULD_NOT_APPLY=1\\n'\n\
+         printf '%s\\n' '{end}'\n\
+         exit 1\n",
+        begin = EVAL_BEGIN,
+        end = EVAL_END,
+    )
+}
+
+/// A pre-channel binary: a bare payload with no markers at all.
+// trace:TASK-1174 | ai:claude
+const LEGACY_STUB: &str = "#!/usr/bin/env bash\n\
+                           echo \"# aida dev activate\"\n\
+                           echo \"export AIDA_TASK1171_LEGACY=applied\"\n\
+                           exit 0\n";

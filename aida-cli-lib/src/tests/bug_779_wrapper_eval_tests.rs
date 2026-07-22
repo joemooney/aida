@@ -60,32 +60,13 @@ fn explicit_session_end_target_is_reported() {
 /// PATH, so the eval-vs-error decision is exercised as shell rather than
 /// eyeballed. `stub` is the body of the fake binary; `body` runs after the
 /// helpers are sourced.
+///
+/// These assertions are about the exit-code discipline, which is shell-agnostic
+/// — the multi-shell matrix (bash + zsh) lives with the eval-channel tests.
 // trace:BUG-779 | ai:claude
+// trace:TASK-1174 | ai:claude
 fn run_wrapper(stub: &str, body: &str) -> (String, String, Option<i32>) {
-    let dir = tempfile::tempdir().unwrap();
-    let bin = dir.path().join("aida");
-    std::fs::write(&bin, stub).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-    let script = format!(
-        "PATH='{path}':\"$PATH\"\nexport PATH\n{helpers}\n{body}\n",
-        path = dir.path().display(),
-        helpers = crate::dev_cmd::SHELL_HELPERS,
-        body = body,
-    );
-    let out = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(&script)
-        .output()
-        .expect("bash available");
-    (
-        String::from_utf8_lossy(&out.stdout).to_string(),
-        String::from_utf8_lossy(&out.stderr).to_string(),
-        out.status.code(),
-    )
+    crate::shell_wrapper_harness::run_wrapper_in("bash", stub, body)
 }
 
 /// The regression itself: a failing `session end` whose error text lands on
