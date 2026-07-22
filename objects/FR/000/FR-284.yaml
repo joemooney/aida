@@ -2,13 +2,39 @@ id: 019f7b89-13cc-7453-ba1d-d322d88992de
 spec_id: FR-284
 agreed_id: FR-284
 title: 'Spec-boundary handoff: session reap + chained next-spec launch (no human at every boundary)'
-description: 'Mirrored from quizdom TASK-3 (VIS-2 dogfood finding, 2026-05-31, EPIC-9 -> STORY-48 handoff). A scoped implementer session, when done with its spec, cannot (1) tear down its own worktree (it is the live cwd — session end correctly refuses) nor (2) pick up the next spec from within (scope binding forbids — scope-bleed failure mode). So every spec boundary needs a human: exit agent -> external ''aida session end <id>'' -> ''aida agent new --spec <next>''. Candidates: (a) ''aida session reap'' supervisor pass removing worktrees whose branch is merged AND whose process exited; (b) chained handoff — on clean completion, reap + auto-launch the next queued spec in a fresh worktree; (c) at minimum ''aida session handoff'' that prints/executes the reap+next-start steps. Related but narrower, already shipped: BUG-694 (mcp-claim GC), TASK-878 (worktree GC).'
+description: |-
+  Mirrored from quizdom TASK-3 (VIS-2 dogfood finding, 2026-05-31, EPIC-9 -> STORY-48 handoff). A scoped implementer session, when done with its spec, cannot (1) tear down its own worktree (it is the live cwd — session end correctly refuses) nor (2) pick up the next spec from within (scope binding forbids — scope-bleed failure mode). So every spec boundary needs a human: exit agent -> external 'aida session end <id>' -> 'aida agent new --spec <next>'. Candidates: (a) 'aida session reap' supervisor pass removing worktrees whose branch is merged AND whose process exited; (b) chained handoff — on clean completion, reap + auto-launch the next queued spec in a fresh worktree; (c) at minimum 'aida session handoff' that prints/executes the reap+next-start steps. Related but narrower, already shipped: BUG-694 (mcp-claim GC), TASK-878 (worktree GC).
+
+  RATIFIED DESIGN (operator + advisor, 2026-07-22) - binding acceptance. Two kinds of "done" session need OPPOSITE handling:
+  - HEADLESS agents (claude -p / codex exec) EXIT when done, leaving an orphaned worktree+lease -> pure cleanup, nothing to talk to. aida worktree gc already does most of this.
+  - INTERACTIVE agents (human-launched claude in a worktree) sit idle at the prompt after finishing -> the genuinely-open case.
+
+  CORE PRINCIPLE: reap on SUBSTRATE STATE, never scrape the terminal, never force-kill a live session. Terminal-scraping for "completion" is the same fragility class as the 2026-07 liveness-bug family (BUG-741/752/763/778 - acting on unreliable session-state signals) one layer up. The agent already reports done through AIDA (queue done, PR opened, exit sentinel, spec -> Done); that is the signal.
+
+  Reapable predicate: spec is Done/Completed AND branch is merged AND process has EXITED. This handles both cases correctly with no scraping and no killing:
+  - headless (already exited) -> all true -> reap.
+  - interactive (alive, holding the cwd) -> "process exited" is FALSE -> NOT reaped (cannot remove a live cwd - the (deleted)-cwd leak session end correctly refuses).
+
+  Three pieces (decomposable into slices):
+  1. REAP - substrate-state-driven supervisor pass removing finished+merged+EXITED session worktrees/leases. Extend aida worktree gc; builds on the weekend liveness work (reliable process-exited detection). [drive-safe first slice]
+  2. NOTIFY - a live interactive session whose spec is Done gets a "you are free to exit; the worktree will be reaped when you do" message via the EXISTING mailbox/brief channel. No scraping, no kill. [drive-safe]
+  3. CHAIN - after reap, optionally auto-launch the next queued spec (aida session next / supervisor loop). [more orchestration - guided]
+
+  HARD BOUNDARY: AIDA may REAP dead sessions and NOTIFY live ones; it must NEVER force-close a live interactive process (SIGKILL / terminal injection). Closing a live session is the operator's / harness's job. Detect-and-notify, never terminate.
+
+  Acceptance:
+  - A finished+merged HEADLESS session (process exited) is reaped by the supervisor pass: worktree removed, lease deleted, branch cleaned - no manual step.
+  - A finished INTERACTIVE session (process alive) is NOT reaped; instead it receives a mailbox/brief "spec done, safe to exit" notice, and IS reaped on the next pass once its process exits.
+  - No code path scrapes terminal contents to infer completion; the reapable predicate reads only substrate state (spec status + branch-merged + process-liveness).
+  - No code path force-kills a live agent process.
+  - Reap decisions reuse the aida worktree gc safety checks (never remove a dirty or unmerged-unique-commit worktree).
+  - (Chain slice) after a reap, a supervisor can launch the next queued spec; behind an explicit opt-in.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
-modified_at: 2026-07-20T04:46:52.740995263Z
+modified_at: 2026-07-22T15:06:55.887653905Z
 req_type: Functional
 deferred: true
 deferred_at: 2026-07-20T04:46:52.740995263Z
