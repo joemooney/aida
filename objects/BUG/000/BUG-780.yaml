@@ -8,9 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:12:06.439806600Z
-modified_at: 2026-07-22T04:16:24.502770699Z
+modified_at: 2026-07-22T04:17:29.487054658Z
 req_type: Bug
 tags:
 - aida:worktree dx followup:TASK-1160 from-dogfood
 - batch:papercuts-0721
+comments:
+- id: 019f880a-fd8f-7023-a38e-a017fe3818d8
+  author: joe
+  content: 'CORRECTED root cause (verified against worktree.rs 2026-07-21): the (wt:<focus>) marker is a SPLICED PS1 STRING recorded in AIDA_WT_PS1_PREFIX — NOT a dynamic read of AIDA_SESSION_ID (my original description was wrong; ''unset AIDA_SESSION_ID'' does nothing to it, confirmed by operator). worktree exit DOES contain the correct strip logic — the while-loop at worktree.rs:~128 that removes every ''(wt:...) '' token from PS1 (same pattern as role-end / dev-deactivate prefix strips). The ONLY bug is that this strip is gated behind the cwd ''are you inside a scoped worktree'' check: cd out first (or have the session ended externally) and exit returns ''nothing to step out of'' and never emits the strip block. FIX (narrowed): decouple the PS1-strip from the cwd gate — ''aida worktree exit'' should emit the strip whenever PS1 contains a (wt:...) token OR AIDA_WT_PS1_PREFIX is set, from ANY cwd; the cd-back-to-main step stays cwd-conditional but the marker strip does not. Immediate operator workaround: PS1=\"\${PS1//(wt:TASK-1169) /}\" or a new shell. Acceptance unchanged but the mechanism is: strip keys on AIDA_WT_PS1_PREFIX/PS1-contains-token, not cwd.'
+  created_at: 2026-07-22T04:17:29.487054658Z
+  modified_at: 2026-07-22T04:17:29.487054658Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
