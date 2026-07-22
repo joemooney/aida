@@ -1772,6 +1772,14 @@ pub enum BurndownCommand {
         /// Only specs in this batch (matches the `batch:<name>` tag).
         #[clap(long)]
         batch: Option<String>,
+        /// Only specs of this requirement type (e.g. task, story, bug, doc).
+        /// The plan otherwise considers WORK types only — the knowledge-class
+        /// records (decision, vision, term, principle) are authored, not
+        /// implemented, so they are never offered as drain candidates unless
+        /// you name one here.
+        // trace:BUG-784 | ai:claude
+        #[clap(long, value_name = "TYPE")]
+        r#type: Option<String>,
         /// Curation view: show approved + pickable specs that are NOT yet
         /// queued — the advisor's "what could I bless next" aid. Read-only;
         /// never auto-queues. (The default view's ready set requires queue

@@ -7676,7 +7676,7 @@ fn handle_advisor_dashboard(
 
     // --- Burndown readiness (reuses the exact `aida burndown plan` resolver)
     let (ready, awaiting_signoff, _serialize_held, parked, _supervised, _titles) =
-        resolve_burndown_sets("approved", None, None).unwrap_or_else(|_| {
+        resolve_burndown_sets("approved", None, None, None).unwrap_or_else(|_| {
             (
                 Vec::new(),
                 Vec::new(),
@@ -41788,12 +41788,20 @@ fn handle_burndown_command(cmd: &crate::cli::BurndownCommand) -> Result<()> {
             status,
             tag,
             batch,
+            r#type,
             candidates,
             order,
             json,
         } => {
             install_burndown_order_override(order.as_ref())?;
-            handle_burndown_plan(status, tag.as_deref(), batch.as_deref(), *candidates, *json)
+            handle_burndown_plan(
+                status,
+                tag.as_deref(),
+                batch.as_deref(),
+                r#type.as_deref(),
+                *candidates,
+                *json,
+            )
         }
         crate::cli::BurndownCommand::Explain { json } => handle_burndown_explain(*json),
         crate::cli::BurndownCommand::Run {
@@ -42081,7 +42089,7 @@ fn handle_burndown_run(
     // later wave; the runner never acts on them THIS wave, so they are not part
     // of the "nothing blessed" report below.
     let (ready, awaiting_signoff, _serialize_held, parked, _supervised, _titles) =
-        resolve_burndown_sets(status, tag, batch)?;
+        resolve_burndown_sets(status, tag, batch, None)?;
 
     println!(
         "{} burndown run",
@@ -42371,7 +42379,7 @@ fn probe_burndown_residual(
     let unstarted: Vec<String> = if spec_capped {
         Vec::new()
     } else {
-        resolve_burndown_sets(status, tag, batch)
+        resolve_burndown_sets(status, tag, batch, None)
             .map(|(ready, ..)| ready)
             .unwrap_or_default()
     };
@@ -50487,7 +50495,18 @@ fn resolve_burndown_sets(
     status: &str,
     tag: Option<&str>,
     batch: Option<&str>,
+    type_filter: Option<&str>,
 ) -> Result<BurndownSets> {
+    // BUG-784: normalize an explicit `--type` to the same lowercased `Debug`
+    // form the per-spec `req_type` carries, so `--type non-functional` and
+    // `--type adr` both compare cleanly. With no `--type`, the selector applies
+    // the default work-item type-class filter instead (knowledge-class records —
+    // decision / vision / term / principle — are authored, not implemented, and
+    // must never be offered as drain candidates). trace:BUG-784 | ai:claude
+    let type_filter_norm: Option<String> = match type_filter {
+        Some(raw) => Some(format!("{:?}", parse_requirement_type(raw)?).to_ascii_lowercase()),
+        None => None,
+    };
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     let store = load_store_for_lookup(&project_root).ok_or_else(|| {
@@ -50584,6 +50603,8 @@ fn resolve_burndown_sets(
             tags: &tags,
             tag_filter: tag,
             batch_tag: batch_tag.as_deref(),
+            // trace:BUG-784 | ai:claude
+            type_filter: type_filter_norm.as_deref(),
             disp: &disp,
             req_type: &req_type,
             has_unsatisfied_blocker,
@@ -50678,11 +50699,13 @@ fn handle_burndown_plan(
     status: &str,
     tag: Option<&str>,
     batch: Option<&str>,
+    // trace:BUG-784 | ai:claude
+    type_filter: Option<&str>,
     candidates_view: bool,
     json: bool,
 ) -> Result<()> {
     let (ready, awaiting_signoff, serialize_held, parked, supervised, titles) =
-        resolve_burndown_sets(status, tag, batch)?;
+        resolve_burndown_sets(status, tag, batch, type_filter)?;
 
     // trace:BUG-532 — render the spec's (truncated) title beside its id so the
     // plan reads as a scannable decision surface, via the shared
