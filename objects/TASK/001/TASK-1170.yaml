@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:19.252304096Z
-modified_at: 2026-07-22T05:42:31.407205581Z
+modified_at: 2026-07-22T06:17:56.417413956Z
 req_type: Task
 tags:
 - aida:init scaffold cross-vendor codex parity from-operator
@@ -61,4 +61,10 @@ comments:
   created_at: 2026-07-22T04:03:53.925649113Z
   modified_at: 2026-07-22T04:03:53.925649113Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f8879-43c1-7193-8622-2fc5a7a22227
+  author: joe
+  content: Commit 65c818169 references this requirement
+  created_at: 2026-07-22T06:17:56.417413956Z
+  modified_at: 2026-07-22T06:17:56.417413956Z
+  session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
 execution_mode: drive
