@@ -1,0 +1,15 @@
+{
+  "id": "b2b49a6d-b0f6-4664-983e-b64913920fd3",
+  "thread_id": "b2b49a6d-b0f6-4664-983e-b64913920fd3",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1784697799123,
+  "body": "Burn-down complete (--status approved --batch papercuts-0721). Ready set drained to empty; nothing parked, nothing awaiting sign-off, no serialize holds.\n\nCompleted:\n- BUG-778 https://github.com/joemooney/aida/pull/1583 — aida ps now reads a hand-entered worktree (worktree enter, agent-launch pending) as awaiting-agent instead of \"process dead\" + the dangerous \"aida queue work <spec>\" re-dispatch hint. Genuinely-dead leases still flag after the grace window.\n- BUG-780 https://github.com/joemooney/aida/pull/1584 — aida worktree exit now clears AIDA_SESSION_ID + the (wt:) PS1 marker from ANY cwd, and a dangling session id no longer renders a live marker.\n- BUG-779 https://github.com/joemooney/aida/pull/1585 — the aida() shell wrapper now evals its payload ONLY on exit 0; failing eval-list subcommands exit non-zero and their real error text goes to stderr instead of becoming \"command not found\" noise.\n\nCaveats / verifications worth noting:\n- All three PRs passed full PR CI (Linux) before merge. The post-merge integrated-main check was a COMPILE check only (cargo build -p aida-cli), per the burndown gate — not a full test run against integrated main.\n- BUG-779 changes the shell wrapper text. Operators must re-run `aida dev shell-init --install` or open a new shell to pick up the eval-on-success-only behavior; existing shells keep the old buggy wrapper. Worth a heads-up to anyone mid-session.\n- BUG-779's suggested half 3 (emit shell code on a separate channel or behind an explicit --shell/--print-eval flag, so human-readable output is never an eval candidate) was deliberately NOT built — it is a redesign, not a papercut fix. Flagged as a follow-up in the PR body; file it as a spec if you want it.\n- Waves ran 2 + 1 (BUG-779 was not yet in the ready set when wave 1 launched; it appeared on re-resolve).\n\nHeld / awaiting sign-off: none.\nLeft for manual merge: none — every PR this drain opened reached a terminal CI verdict and was merged.\nParked (with reason): none.\n\nWorktrees not pruned: none of mine — all three implementer worktrees + branches were removed local and remote. Unrelated pre-existing state noted for your awareness (NOT touched by this drain): three locked .claude/worktrees/agent-* worktrees at d9f9eceb8 from earlier sessions, plus a dirty working tree in the main checkout (deleted .claude/scheduled_tasks.lock, untracked burndown_20260718_211601) that pre-dated this drain.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
