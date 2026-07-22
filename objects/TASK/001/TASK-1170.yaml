@@ -22,8 +22,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:19.252304096Z
-modified_at: 2026-07-22T03:25:23.517289107Z
+modified_at: 2026-07-22T04:01:27.607496913Z
 req_type: Task
 tags:
 - aida:init scaffold cross-vendor codex parity from-operator
+comments:
+- id: 019f87fc-5037-7b11-95a8-0fe44138dc5d
+  author: joe
+  content: |-
+    SHARPENED per operator design discussion 2026-07-21 — the fix is UNIFICATION, not a new --refresh path:
+
+    The convergent-upgrade mechanism ALREADY EXISTS as `aida scaffold upgrade` ('category-aware upgrades ... instead of apply --force's blast-radius'). The real problem is fragmentation across THREE mechanisms for one concept:
+      - memories → `aida init --refresh` (overlay-unedited)
+      - skills/commands/hooks → `aida scaffold upgrade` (category-aware)
+      - codex prompts → `aida scaffold codex-prompts` (regenerate, but 'never overwrites without --force') + they live GLOBAL in ~/.codex/prompts/, outside the project-scoped scaffold surface
+    The operator (rightly) shouldn't have to know which command covers which pack.
+
+    Operator's conceptual correction (adopt it): 'won't overwrite existing' is WEAK idempotency (skip-if-present). The right model is CONVERGENT idempotency — repeated runs converge files to the current templates, upgrading stale ones, preserving user edits (checksum/marker-based, as the memory pack already does). Convergent-upgrade should be the DEFAULT, not gated behind --force.
+
+    Target design:
+    - `aida scaffold upgrade` becomes THE one verb: convergently upgrades ALL packs — skills, commands, hooks, memories, codex prompts (~/.codex/prompts/), antigravity — category-aware, edit-preserving, no --force for the routine upgrade. --force stays only for 'overwrite my edits too'.
+    - `aida init --refresh` becomes a thin alias/subset of it (or is folded in).
+    - codex prompts stop being --force-gated for a routine refresh and are reached even though they're global (~/.codex/), not project-local.
+    - Respect BUG-718: never overwrite through the dev-repo .claude symlinks.
+    Acceptance additions: one command brings ALL vendor packs current with preserved edits; running it twice is a no-op (true convergent idempotency); ~/.codex/prompts/aida-guided-implement.md reaches current after it; init --refresh and scaffold upgrade do not diverge in behavior.
+  created_at: 2026-07-22T04:01:27.607496913Z
+  modified_at: 2026-07-22T04:01:27.607496913Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
