@@ -3,12 +3,12 @@ spec_id: TASK-1176
 agreed_id: TASK-1176
 title: no terminal 'superseded'/'accepted' state for decision (ADR) specs — adopted-then-replaced ADRs must masquerade as rejected
 description: 'Verified against main sha a7cd68909 2026-07-22: RequirementStatus enum (models.rs:12) = Draft/Approved/Planned/InProgress/Done/Completed/Rejected/NeedsAttention — NO superseded or deprecated, despite the decision-type doc-comment (models.rs:713) describing the ADR lifecycle as ''proposed/accepted/superseded/deprecated''. So an ADR that was adopted and later replaced has no honest state: downstream (quizdom) shipped status=rejected + superseded-by:ADR-N tag + an explanatory comment, which reads in listings identical to a DECLINED decision — a decision followed for months looks the same as one turned down. Related to the decision-lifecycle work (BUG-751 gave approved=accepted; BUG-781 dropped accepted decisions from the open lens) but neither adds superseded. Fix: add a superseded (and likely deprecated) terminal state for decision-class specs, with a superseded-by relationship; render distinctly. Acceptance: an ADR can be marked superseded (by another ADR), rendered as terminal-but-adopted (not rejected), excluded from open/candidate surfaces; the superseded-by link is first-class. Downstream: quizdom.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T14:57:00.903963318Z
-modified_at: 2026-07-22T18:51:34.969284387Z
+modified_at: 2026-07-22T19:01:47.480399799Z
 req_type: Task
 tags:
 - aida:lifecycle decision modeling from-downstream:quizdom followup:BUG-751
@@ -25,8 +25,24 @@ comments:
       - Let `aida why` on a superseded spec name its successor as the next action
   created_at: 2026-07-22T18:51:35.176699967Z
   modified_at: 2026-07-22T18:51:35.176699967Z
+history:
+- id: 019f8b34-9752-7150-b455-5b0e2c7a6934
+  author: aida-auto-bump
+  timestamp: 2026-07-22T19:01:47.474065813Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8b34-9758-7f23-8ce2-17921e4b963c
+  timestamp: 2026-07-22T19:01:47.480399217Z
+  agent: aida
+  commit_sha: 2bc63f5d2cf1575fdc1cb66181beea7032d16139
+  summary: Completed via merge 2bc63f5d
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T18:51:33.387156769Z
   implemented_by: joe
+  completed_at: 2026-07-22T19:01:47.473959045Z
+  completion_sha: 2bc63f5d2cf1575fdc1cb66181beea7032d16139
