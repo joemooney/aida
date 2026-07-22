@@ -13,7 +13,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T08:00:17.667720855Z
-modified_at: 2026-07-22T08:00:17.667720855Z
+modified_at: 2026-07-22T15:26:37.266334619Z
 req_type: Task
 tags:
 - dx shell testing followup:TASK-1171 from-drain
+execution_mode: drive
