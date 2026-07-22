@@ -19,19 +19,35 @@ description: |-
   SECONDARY: the 'queue work' error message is actively misleading. It blames a lost lease when the real cause is that the item is in another user's queue file. It should distinguish 'not in YOUR queue but queued by <user>' from 'genuinely unqueued'.
 
   SUGGESTED FIX: make --for <role> write to a role-scoped queue that any holder of that role reads, or have queue list/work fall back to scanning all queue files for entries whose for_role matches the caller's active role.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:07:17.182780649Z
-modified_at: 2026-07-22T03:00:45.071163708Z
+modified_at: 2026-07-22T03:12:49.177412239Z
 req_type: Bug
 tags:
 - multi-user
 - queue
 - routing
+history:
+- id: 019f87cf-c812-7253-a95a-e5db7f0e7872
+  author: aida-auto-bump
+  timestamp: 2026-07-22T03:12:49.170701619Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f87cf-c819-79a0-9a05-372a8a928788
+  timestamp: 2026-07-22T03:12:49.177410456Z
+  agent: aida
+  commit_sha: 39490ce538d77fc6bb9aa95767e009938a3c2403
+  summary: Completed via merge 39490ce5
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T03:00:45.071163708Z
   implemented_by: joe
+  completed_at: 2026-07-22T03:12:49.170582156Z
+  completion_sha: 39490ce538d77fc6bb9aa95767e009938a3c2403
