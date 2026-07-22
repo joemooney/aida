@@ -17,12 +17,12 @@ description: |-
   - A wait that exceeds the bounded ceiling parks the spec NeedsAttention with a recorded reason, never silently terminates; no uncommitted work is orphaned without a punt record.
   - Regression: a wave with a >600s CI simulated does not lose its work.
   This is drain-loop surgery (reflexive, keystone-ish) — GUIDED/keyboard, not a headless drain of itself.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T06:18:09.864131796Z
-modified_at: 2026-07-22T03:52:30.975545225Z
+modified_at: 2026-07-22T04:06:45.054244691Z
 req_type: Task
 tags:
 - aida:burndown orchestration reliability followup:BUG-755 from-operator
@@ -31,8 +31,24 @@ relationships:
   target_id: 019f7824-a2cf-76d1-93d8-6f850ed9a6fc
   created_at: 2026-07-21T06:18:38.084800154Z
   created_by: joe
+history:
+- id: 019f8801-2837-76b2-a363-745469b6ccfd
+  author: aida-auto-bump
+  timestamp: 2026-07-22T04:06:45.047892352Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8801-283e-7a31-8f78-29a3ef068606
+  timestamp: 2026-07-22T04:06:45.054243971Z
+  agent: implementer
+  commit_sha: ff61320833ff18b3a3e12776e1fcd91bcc8f6be6
+  summary: Completed via merge ff613208
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T03:52:30.975545225Z
   implemented_by: joe
+  completed_at: 2026-07-22T04:06:45.047778116Z
+  completion_sha: ff61320833ff18b3a3e12776e1fcd91bcc8f6be6
