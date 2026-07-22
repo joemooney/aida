@@ -17,12 +17,12 @@ description: |
   - Nothing is destroyed on timeout and no uncommitted work is orphaned without a record.
   - aida findings list is the triage surface for expired waits.
   - Rejected: a hardcoded const (no escape hatch for a slower forge); deriving the ceiling from ci_idle_timeout DEFAULT_CI_ABSOLUTE_SECS (couples two knobs that may want to move independently); parking without filing a finding (the timeout would miss the sweep the operator already runs).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:26:12.265182876Z
-modified_at: 2026-07-22T03:26:12.265182876Z
+modified_at: 2026-07-22T03:26:25.514004200Z
 req_type: Decision
 tags:
 - aida:burndown orchestration reliability adr:task-1169
