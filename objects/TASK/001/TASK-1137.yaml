@@ -3,12 +3,12 @@ spec_id: TASK-1137
 agreed_id: TASK-1137
 title: '**TASK (checkpoint):** per-member `--zen` pause / `--no-human=both` auto-continue hook. ~40 LOC'
 description: ''
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:42.536952431Z
-modified_at: 2026-07-22T07:13:14.105552687Z
+modified_at: 2026-07-22T07:23:33.118728608Z
 req_type: Task
 tags:
 - autonomy-machinery
@@ -40,8 +40,24 @@ comments:
   created_at: 2026-07-22T07:12:40.702289349Z
   modified_at: 2026-07-22T07:12:40.702289349Z
   session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
+history:
+- id: 019f88b5-5578-7bc1-b7af-4889e924d4fe
+  author: aida-auto-bump
+  timestamp: 2026-07-22T07:23:33.112341199Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f88b5-557e-7492-9324-cc567ae23922
+  timestamp: 2026-07-22T07:23:33.118727518Z
+  agent: aida
+  commit_sha: bfa206da771656c44e03479b97dced33aaf27f11
+  summary: Completed via merge bfa206da
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T07:13:14.105552687Z
   implemented_by: joe
+  completed_at: 2026-07-22T07:23:33.112224070Z
+  completion_sha: bfa206da771656c44e03479b97dced33aaf27f11
