@@ -15,12 +15,12 @@ description: |
   - The BUG-755 relaunch loop stays as the recovery net for the agent-needing residual, but is no longer the mechanism by which PRs get merged.
   - Rejected alternative A -- skill-level chunked foreground polls -- stays prompt-enforced, so an LLM can still choose a background task; rejected as not structural.
   - Rejected alternative B -- both skill and launcher -- would give two code paths that can merge the same PR and needs an idempotent merge guard for no added safety once the Rust leg exists.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:49.316925720Z
-modified_at: 2026-07-22T03:25:49.316925720Z
+modified_at: 2026-07-22T03:26:24.065759185Z
 req_type: Decision
 tags:
 - aida:burndown orchestration adr:task-1169
