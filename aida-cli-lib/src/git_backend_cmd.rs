@@ -1113,36 +1113,53 @@ pub(crate) fn handle_git_backend_command(
                 (in_flight, blocked, queued)
             };
 
+            // BUG-783: the archived + deferred view-tier nudges are OFF by
+            // default — an explicit open-work request doesn't need reminding on
+            // every invocation that the other two tiers exist. `[list]
+            // show_hidden_hints = true` in `.aida/config.toml` opts back in.
+            // The lens hints (closed / accepted decisions) are unaffected.
+            // trace:BUG-783 | ai:claude
+            let show_view_tier_hints = find_project_root()
+                .ok()
+                .map(|root| read_list_show_hidden_hints(&root))
+                .unwrap_or(false);
+            // The two tier counts are each an extra cache query. With the nudges
+            // suppressed the only remaining consumer is the BUG-684 empty-state
+            // signpost (which must not tell a filtered-empty project to file its
+            // first spec), so on the hot non-empty path we skip both queries.
+            let need_tier_counts = show_view_tier_hints || reqs.is_empty();
+
             // STORY-441: count of archived rows that would have surfaced if
             // `--all` was set. Cheap second query, used only to render the
             // "(N archived hidden — pass --all …)" footer hint. Skipped when
             // the user explicitly asked for archived or all rows.
             // trace:STORY-441 | ai:claude
-            let archived_hidden_count =
-                if matches!(archive, aida_core::ArchiveFilter::NonArchivedOnly) {
-                    let archived_filter = aida_core::ListFilter {
-                        archive: aida_core::ArchiveFilter::ArchivedOnly,
-                        ..filter.clone()
-                    };
-                    backend.list_summaries(&archived_filter)?.len()
-                } else {
-                    0
+            let archived_hidden_count = if need_tier_counts
+                && matches!(archive, aida_core::ArchiveFilter::NonArchivedOnly)
+            {
+                let archived_filter = aida_core::ListFilter {
+                    archive: aida_core::ArchiveFilter::ArchivedOnly,
+                    ..filter.clone()
                 };
+                backend.list_summaries(&archived_filter)?.len()
+            } else {
+                0
+            };
 
             // STORY-584: parallel count of deferred rows hidden from the default
             // view, used to render the "(N deferred hidden — pass --deferred …)"
             // footer nudge so the primed shelf stays discoverable.
             // trace:STORY-584 | ai:claude
-            let deferred_hidden_count = if matches!(defer, aida_core::DeferFilter::NonDeferredOnly)
-            {
-                let deferred_filter = aida_core::ListFilter {
-                    defer: aida_core::DeferFilter::DeferredOnly,
-                    ..filter.clone()
+            let deferred_hidden_count =
+                if need_tier_counts && matches!(defer, aida_core::DeferFilter::NonDeferredOnly) {
+                    let deferred_filter = aida_core::ListFilter {
+                        defer: aida_core::DeferFilter::DeferredOnly,
+                        ..filter.clone()
+                    };
+                    backend.list_summaries(&deferred_filter)?.len()
+                } else {
+                    0
                 };
-                backend.list_summaries(&deferred_filter)?.len()
-            } else {
-                0
-            };
 
             // STORY-723: count of closed (done/completed/rejected) rows the
             // default OPEN lens is now hiding, so the discoverability footer can
@@ -1168,44 +1185,14 @@ pub(crate) fn handle_git_backend_command(
             // 2-space-indented line only when rows on that axis were hidden.
             // trace:STORY-441 trace:STORY-584 trace:STORY-723 | ai:claude
             let print_hidden_hints = || {
-                if closed_hidden_count > 0 {
-                    println!(
-                        "{}",
-                        format!(
-                            "  ({closed_hidden_count} closed hidden — open lens; pass --all or `--status closed` to see them)"
-                        )
-                        .dimmed()
-                    );
-                }
-                if archived_hidden_count > 0 {
-                    println!(
-                        "{}",
-                        format!(
-                            "  ({archived_hidden_count} archived hidden — pass --all or --archived to see them)"
-                        )
-                        .dimmed()
-                    );
-                }
-                if deferred_hidden_count > 0 {
-                    println!(
-                        "{}",
-                        format!(
-                            "  ({deferred_hidden_count} deferred hidden — pass --all or --deferred to see them)"
-                        )
-                        .dimmed()
-                    );
-                }
-                // BUG-781: accepted (terminal) decisions are hidden by the open
-                // lens — say so, and name the flag that brings them back.
-                if accepted_decisions_hidden > 0 {
-                    println!(
-                        "{}",
-                        format!(
-                            "  ({accepted_decisions_hidden} accepted decision{} hidden — pass --all or --type decision to see them)",
-                            if accepted_decisions_hidden == 1 { "" } else { "s" }
-                        )
-                        .dimmed()
-                    );
+                for line in list_hidden_hint_lines(
+                    show_view_tier_hints,
+                    closed_hidden_count,
+                    archived_hidden_count,
+                    deferred_hidden_count,
+                    accepted_decisions_hidden,
+                ) {
+                    println!("{}", line.dimmed());
                 }
             };
 

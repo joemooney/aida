@@ -863,6 +863,68 @@ fn empty_list_hint_line(
     }
 }
 
+/// BUG-783: build the `aida list` footer hint lines, in render order.
+///
+/// Two families live here and they are NOT the same thing:
+///
+/// * **Lens hints** — closed rows and accepted (terminal) decisions the default
+///   OPEN lens drops. These explain why a spec the user KNOWS exists is absent
+///   from the rows they just asked for, so they always print.
+/// * **View-tier hints** — the archived and deferred tiers. On an explicit
+///   open-work request these are noise: the operator asked for open work and
+///   does not need reminding on every invocation that the other two tiers
+///   exist. Suppressed unless `[list] show_hidden_hints = true` opts back in.
+///
+/// The tiers stay reachable either way — `--archived`, `--deferred` and `--all`
+/// are unaffected (they clear the default lens entirely, so nothing is hidden
+/// and no hint applies), and each prints its own row count.
+///
+/// Returns undecorated lines (2-space indented); the caller dims and prints.
+/// Pure so the "default view is quiet" contract is unit-testable without a
+/// cache DB or a terminal.
+// trace:BUG-783 | ai:claude
+fn list_hidden_hint_lines(
+    show_view_tier_hints: bool,
+    closed_hidden: usize,
+    archived_hidden: usize,
+    deferred_hidden: usize,
+    accepted_decisions_hidden: usize,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    // STORY-723: the open lens hides closed history — say so.
+    if closed_hidden > 0 {
+        lines.push(format!(
+            "  ({closed_hidden} closed hidden — open lens; pass --all or `--status closed` to see them)"
+        ));
+    }
+    // STORY-441 / STORY-584: the archived + deferred view tiers. Opt-in.
+    if show_view_tier_hints {
+        if archived_hidden > 0 {
+            lines.push(format!(
+                "  ({archived_hidden} archived hidden — pass --all or --archived to see them)"
+            ));
+        }
+        if deferred_hidden > 0 {
+            lines.push(format!(
+                "  ({deferred_hidden} deferred hidden — pass --all or --deferred to see them)"
+            ));
+        }
+    }
+    // BUG-781: accepted (terminal) decisions are hidden by the open lens — say
+    // so, and name the flag that brings them back.
+    if accepted_decisions_hidden > 0 {
+        lines.push(format!(
+            "  ({accepted_decisions_hidden} accepted decision{} hidden — pass --all or --type decision to see them)",
+            if accepted_decisions_hidden == 1 { "" } else { "s" }
+        ));
+    }
+    lines
+}
+
+#[cfg(test)]
+#[path = "tests/bug_783_list_hidden_hints_tests.rs"]
+mod bug_783_list_hidden_hints_tests;
+
 fn agent_error_summary_help(msg: &str) -> (&str, Option<String>) {
     let first = msg.lines().next().unwrap_or("").trim();
     let summary = first
@@ -12547,6 +12609,29 @@ fn read_archive_auto_after_days(project_root: &std::path::Path) -> Option<u64> {
     } else {
         Some(days)
     }
+}
+
+/// BUG-783: read `[list] show_hidden_hints` from `.aida/config.toml`. Governs
+/// whether the default `aida list` view footers the archived / deferred
+/// view-tier counts ("(138 archived hidden — pass --all or --archived to see
+/// them)"). Default is `false` — on an explicit open-work request those lines
+/// are pure noise on every single invocation, and the tiers stay one flag away
+/// (`--archived` / `--deferred` / `--all`). Set the key to `true` to bring the
+/// nudges back. Missing config file / key / unparseable TOML → the default.
+// trace:BUG-783 | ai:claude
+fn read_list_show_hidden_hints(project_root: &std::path::Path) -> bool {
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(&path) else {
+        return false;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return false;
+    };
+    value
+        .get("list")
+        .and_then(|t| t.get("show_hidden_hints"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
 }
 
 /// STORY-717: read `[focus] out_of_scope` from `.aida/config.toml`. Governs the
