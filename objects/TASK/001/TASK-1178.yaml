@@ -3,17 +3,33 @@ spec_id: TASK-1178
 agreed_id: TASK-1178
 title: pre-commit guard warns when a scoped session's commit touches paths outside its worktree (detect-not-prevent)
 description: 'Quizdom #8: an agent in a scoped session landed edits in the shared main checkout (wrong cwd/abs path) instead of its worktree. AIDA cannot PREVENT file writes (harness/git-worktree concern), but it can DETECT: a pre-commit guard (git hook, scaffolded) that, when a scoped session (AIDA_SESSION_ID set, worktree lease present) commits, warns if the commit touches paths resolving OUTSIDE the session worktree. Warn-only (does not block); does not attempt harness-level enforcement. Recurrence of the isolation-discipline family. Acceptance: a scoped-session commit touching out-of-worktree paths emits a clear warning naming the stray paths; an in-worktree commit is silent; non-scoped sessions unaffected; the guard is scaffolded by aida init hooks; unit/integration test the path-scoping check. Mode drive.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:33:49.261420645Z
-modified_at: 2026-07-22T16:35:20.765461378Z
+modified_at: 2026-07-22T16:45:53.826136898Z
 req_type: Task
 tags:
 - aida:session isolation guard from-downstream:quizdom
+history:
+- id: 019f8ab8-2d1b-74f2-8873-d0c06c70e691
+  author: aida-auto-bump
+  timestamp: 2026-07-22T16:45:53.819660291Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8ab8-2d22-7442-9326-da26adfe41e9
+  timestamp: 2026-07-22T16:45:53.826136215Z
+  agent: aida
+  commit_sha: a9c1333cde8849a888855a97b5d9a79b95541307
+  summary: Completed via merge a9c1333c
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T16:35:20.765461378Z
   implemented_by: joe
+  completed_at: 2026-07-22T16:45:53.819573191Z
+  completion_sha: a9c1333cde8849a888855a97b5d9a79b95541307
