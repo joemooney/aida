@@ -153,6 +153,24 @@ elif command -v aida >/dev/null 2>&1; then
     printf 'pre-commit: locking-gate skipped — no aida on PATH or in target/ supports it (stale/old build); not blocking the commit.\n' >&2
 fi
 
+# 2d. Worktree-scope guard (TASK-1178) — DETECT, do not prevent. An agent in a
+# worktree-scoped session can still write into the SHARED main checkout (stale
+# cwd, an absolute path from an earlier session, a tool run from the wrong
+# directory). AIDA cannot stop the write — that is a harness/filesystem concern
+# — but the commit boundary is where the mistake becomes visible, so this gate
+# WARNS, naming the staged paths that resolve outside the session worktree.
+# Unlike 2b/2c this is warn-only: the binary always exits 0, and the `|| true`
+# below makes that structural, so a scope warning can never abort a commit (a
+# hard block here would just push agents to --no-verify, which also skips every
+# gate above). Silent for an in-worktree commit and for any session that is not
+# worktree-scoped. Same BUG-651 robust binary resolution; no "skipped" notice on
+# an old binary — an advisory check should not add noise when it cannot run.
+# trace:TASK-1178
+__aida_scope_gate_bin=$(__aida_resolve_gate_bin worktree-scope-gate)
+if [ -n "$__aida_scope_gate_bin" ]; then
+    "$__aida_scope_gate_bin" internal worktree-scope-gate || true
+fi
+
 # 3. Auto-fmt staged Rust files before commit so cargo fmt --check (in CI)
 # never catches drift after a local commit lands.
 # Emergency skip: pass --no-verify to git commit.

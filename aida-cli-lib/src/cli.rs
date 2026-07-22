@@ -104,6 +104,15 @@ pub enum InternalCommand {
     /// the default `off` posture.
     // trace:TASK-1140 | ai:claude
     LockingGate,
+
+    /// Warn when a worktree-scoped session's commit touches paths outside its
+    /// session worktree. Called by the scaffolded git pre-commit hook so the
+    /// check binds any vendor's commit, not just Claude. Warn-only: it names
+    /// the stray paths on stderr and always exits 0, so it can never abort a
+    /// commit. Silent for a commit inside the session worktree and for a
+    /// session that is not worktree-scoped.
+    // trace:TASK-1178 | ai:claude
+    WorktreeScopeGate,
 }
 
 #[derive(Subcommand, Debug)]

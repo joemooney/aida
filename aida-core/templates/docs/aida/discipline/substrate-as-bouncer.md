@@ -104,9 +104,53 @@ discipline fails.
 
 ---
 
+## Detect, Don't Prevent: The Worktree-Scope Guard
+
+Not every invariant *can* be a bouncer, and pretending otherwise ships a gate
+that lies.
+
+An agent working in a **scoped session** — its own git worktree, taken via
+`aida worktree enter`, `aida session start`, or an orchestrator fan-out — can
+still write files into the shared main checkout: a stale `cd`, an absolute path
+copied out of an earlier session, a tool run from the wrong working directory.
+Where a harness writes bytes is a filesystem and agent-harness concern; a
+requirements tool has no seam to stop it.
+
+So the pre-commit hook does the next best thing — it makes the mistake
+**visible** at the one moment the work becomes durable. When a worktree-scoped
+session commits, the guard compares every staged path against the session's
+worktree and warns, naming the strays:
+
+```
+⚠ worktree scope: this commit touches 3 path(s) OUTSIDE your session worktree.
+  session worktree: /home/u/work/wt-epic-12
+  committing from:  /home/u/work/main
+    - aida-cli/src/main.rs
+    …
+  Warn-only — the commit is proceeding.
+```
+
+Three properties keep it honest:
+
+- **Warn-only, structurally.** The gate always exits 0 and the hook invokes it
+  with `|| true`. A hard block here would be wrong twice: the check is heuristic
+  (a session may legitimately commit elsewhere), and blocking would push agents
+  to `--no-verify`, which also skips every *real* gate above it in the same hook.
+- **Silent when correct.** A commit made inside the session worktree prints
+  nothing, so the warning stays a signal rather than background noise.
+- **Invisible to everyone else.** No session, or a session with no worktree
+  behind it, and the guard is a no-op — non-scoped work sees no behaviour change.
+
+The habit to take from this: when you cannot gate an invariant, **still put a
+detector at the boundary where violating it becomes permanent**. A loud, precise
+warning at commit time beats a rule in a document nobody re-reads.
+
+---
+
 ## Summary of Bouncer Habits
 
 When writing code or designing workflows under AIDA:
 - **Do not write a rule when you can write a bouncer**.
+- **When you cannot write a bouncer, write a detector** at the boundary where the mistake becomes permanent — and keep it warn-only so it never trains anyone to bypass the real gates.
 - **Make bouncers loud and informative**: They must explain the rationale and point to the discipline document.
 - **Provide explicit escape hatches**: Keep control with the human developer while keeping the defaults safe.
