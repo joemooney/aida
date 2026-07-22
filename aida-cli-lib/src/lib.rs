@@ -67807,6 +67807,15 @@ struct RealSingleBranchDriver<'a> {
     /// Members announced/driven so far, in order — drives the plan output and is
     /// the witness that the head advances exactly once per member.
     driven: Vec<String>,
+    /// The repo the shared branch lives in — where the ONE cluster PR opens.
+    /// `None` when the main worktree could not be resolved (the cluster step
+    /// then prints its plan instead of opening anything).
+    // trace:TASK-1136 | ai:claude
+    project_root: Option<std::path::PathBuf>,
+    /// The number of the ONE cluster PR once it opened. `None` when nothing was
+    /// on the branch to open a PR for.
+    // trace:TASK-1136 | ai:claude
+    cluster_pr: Option<u64>,
 }
 
 impl auto_complete::SingleBranchDriver for RealSingleBranchDriver<'_> {
@@ -67854,18 +67863,131 @@ impl auto_complete::SingleBranchDriver for RealSingleBranchDriver<'_> {
     }
 
     fn run_cluster_finish(&mut self, members: &[String]) -> auto_complete::OrchestrationResult {
+        // ONE pull request for the whole cluster. Its title carries EVERY
+        // member id in the trailing group the squash subject preserves, and its
+        // body lists them under `## Covers` — so the single merge completes all
+        // N through the ordinary Done→Completed scan rather than crediting only
+        // whichever id reached the subject. trace:TASK-1136 | ai:claude
+        let title = pr_ship::cluster_pr_title(&self.batch_name, members);
+        let body = pr_ship::cluster_pr_body(&self.batch_name, &self.shared_branch, members);
         if !self.json {
             eprintln!(
-                "  {} cluster: open ONE PR from {} linking {} member{} → review + merge once \
-                 (the merge auto-bumps every member Done→Completed)",
+                "  {} cluster: ONE PR from {} linking {} member{} → review + merge once \
+                 (the one merge completes every linked member)",
                 crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),
                 self.shared_branch.cyan(),
                 members.len(),
                 if members.len() == 1 { "" } else { "s" },
             );
+            for (i, id) in members.iter().enumerate() {
+                eprintln!("     {:>2}. {}", i + 1, id.bold());
+            }
         }
-        auto_complete::OrchestrationResult::ok()
+        // Nothing accumulated on the shared branch yet (the per-member
+        // Implementer+CI spawn is the supervised follow-on) means there is
+        // nothing to open a PR for — surface the exact cluster PR that WILL be
+        // opened instead of failing the wrap-up on an empty branch.
+        let ready = self
+            .project_root
+            .as_deref()
+            .map(|root| shared_branch_has_cluster_commits(root, &self.shared_branch))
+            .unwrap_or(false);
+        if !ready {
+            if !self.json {
+                eprintln!(
+                    "     {} {} {}",
+                    "title:".dimmed(),
+                    title,
+                    "(opens once the members' commits are on the branch)".dimmed(),
+                );
+            }
+            return auto_complete::OrchestrationResult::ok();
+        }
+        let root = self
+            .project_root
+            .clone()
+            .expect("ready implies a resolved project root");
+        match open_cluster_pr(&root, &self.shared_branch, &title, &body) {
+            Ok(number) => {
+                self.cluster_pr = Some(number);
+                auto_complete::OrchestrationResult::ok()
+            }
+            Err(e) => {
+                eprintln!(
+                    "{} could not open the cluster pull request: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    e
+                );
+                auto_complete::OrchestrationResult::failed(auto_complete::Phase::Merge)
+            }
+        }
     }
+}
+
+/// True when the shared single-branch drain branch exists locally AND carries
+/// commits the default branch does not — i.e. there is a real cluster to open a
+/// pull request for. A plan-mode run (no member actually spawned) leaves the
+/// branch absent or empty, and opening a PR then would fail with "no commits
+/// between".
+// trace:TASK-1136 | ai:claude
+fn shared_branch_has_cluster_commits(project_root: &std::path::Path, branch: &str) -> bool {
+    let local_exists = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !local_exists {
+        return false;
+    }
+    let base = crate::forge::default_branch_of(project_root);
+    branch_ahead_of(project_root, branch, &format!("origin/{base}"))
+        .or_else(|| branch_ahead_of(project_root, branch, &base))
+        .is_some_and(|ahead| ahead > 0)
+}
+
+/// Push the shared branch and open the ONE cluster pull request through the
+/// forge — the same `open_change` path a per-spec PR rides, differing only in
+/// that the title/body name every member instead of one. Returns the change
+/// number.
+// trace:TASK-1136 | ai:claude
+fn open_cluster_pr(
+    project_root: &std::path::Path,
+    branch: &str,
+    title: &str,
+    body: &str,
+) -> Result<u64> {
+    let push = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["push", "-u", "origin", branch])
+        .status()
+        .context("could not invoke `git push`")?;
+    if !push.success() {
+        anyhow::bail!("`git push -u origin {branch}` failed — investigate before retrying");
+    }
+    let change = crate::forge::forge_for(project_root)
+        .open_change(crate::forge::OpenChange {
+            branch: branch.to_string(),
+            base: crate::forge::default_branch_of(project_root),
+            title: title.to_string(),
+            body: body.to_string(),
+            draft: false,
+        })
+        .context("could not open the cluster pull request")?;
+    if change.id == 0 {
+        anyhow::bail!(
+            "the cluster pull request opened but no number was found in its output: {}",
+            change.url
+        );
+    }
+    Ok(change.id)
 }
 
 /// Entry point for `aida queue work --batch NAME --auto-complete --single-branch`
@@ -67953,8 +68075,11 @@ fn handle_auto_complete_single_branch(
         json,
         shared_branch: shared_branch.clone(),
         driven: Vec::new(),
+        project_root: drain_root.clone(),
+        cluster_pr: None,
     };
     let result = auto_complete::drain_batch_single_branch(&mut driver, max);
+    let cluster_pr = driver.cluster_pr;
 
     if !json {
         eprintln!();
@@ -67971,13 +68096,25 @@ fn handle_auto_complete_single_branch(
                     },
                     shared_branch.cyan(),
                 );
-                // The autonomous Implementer+CI spawn on the shared worktree is
-                // the reliability-critical keystone path — drive it supervised.
-                eprintln!(
-                    "  {} drive the coupled set on the shared branch supervised \
-                     (`--zen`), then open the one cluster PR for review + merge",
-                    "→".cyan(),
-                );
+                match cluster_pr {
+                    // The one PR is open and links every member; its merge
+                    // completes all of them in a single pass. trace:TASK-1136
+                    Some(n) => eprintln!(
+                        "  {} cluster pull request #{} links every member — review + merge it \
+                         once and all {} complete together",
+                        "→".cyan(),
+                        n,
+                        result.cluster_members.len(),
+                    ),
+                    // The autonomous Implementer+CI spawn on the shared worktree
+                    // is the reliability-critical keystone path — drive it
+                    // supervised, then the cluster PR opens over its commits.
+                    None => eprintln!(
+                        "  {} drive the coupled set on the shared branch supervised \
+                         (`--zen`); the one cluster PR then opens over its commits",
+                        "→".cyan(),
+                    ),
+                }
             }
             auto_complete::SingleBranchOutcome::Halted(_) => {
                 eprintln!(

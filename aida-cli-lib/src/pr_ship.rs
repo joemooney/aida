@@ -719,6 +719,117 @@ pub fn supervised_merge_holds(
         .collect()
 }
 
+// ============================================================================
+// Cluster PR — the terminal handoff of a coupled single-branch drain
+//
+// A `--single-branch` drain accumulates EVERY batch member's commits on ONE
+// shared branch and then opens ONE pull request for the whole cluster. Two
+// things must hold for that one PR to be honest:
+//
+//   1. a reviewer opening it can see the whole cluster — every member id is
+//      named, in drain order, with the shared branch it landed on;
+//   2. merging it completes EVERY member, not just the one whose id happens to
+//      reach the squash subject.
+//
+// (2) is why the title carries the ids rather than only the body. The merge
+// path already derives its squash subject from the PR title
+// (`derive_squash_subject` → `squash_subject_with_spec_ids`), and the
+// `aida pull` Done→Completed scan harvests every id from a trailing
+// `(ID ID ID)` group on that subject. So a title that ends in the full member
+// group makes the multi-spec bump fall out of the existing single-spec
+// machinery — no parallel completion path. The body's `## Covers` list is the
+// second belt: it repeats one `(SPEC-ID)` per line in exactly the shape the
+// referenced-id extractor recognizes, so a squash body carrying the PR body
+// credits the same set.
+// ============================================================================
+
+/// Trailing `(ID ID ID)` group naming every member of a cluster, in drain
+/// order — the exact shape the Done→Completed scan harvests. Empty when there
+/// are no members.
+// trace:TASK-1136 | ai:claude
+fn cluster_spec_id_group(members: &[String]) -> String {
+    let ids: Vec<&str> = members
+        .iter()
+        .map(|m| m.trim())
+        .filter(|m| !m.is_empty())
+        .collect();
+    if ids.is_empty() {
+        return String::new();
+    }
+    format!("({})", ids.join(" "))
+}
+
+/// A batch name is free-form and may itself be spec-id-shaped (`epic-54`).
+/// Dropped verbatim into a PR title it would be harvested as a *shipped* spec by
+/// the broad title/branch/body sweep the squash-subject repair runs, and the
+/// cluster merge would then falsely complete it alongside the real members.
+/// Neutralize the shape (`epic-54` → `epic_54`) while keeping the name legible;
+/// names that can't parse as an id are left exactly as written.
+// trace:TASK-1136 | ai:claude
+fn cluster_scope_token(batch_name: &str) -> String {
+    if extract_spec_ids_from_text(batch_name).is_empty() {
+        batch_name.to_string()
+    } else {
+        batch_name.replace('-', "_")
+    }
+}
+
+/// Title for the ONE cluster PR a `--single-branch` drain opens. Conventional
+/// AIDA commit shape, ending in the trailing spec-id group that names EVERY
+/// member — so the squash subject the merge writes onto the default branch
+/// carries all of them and the auto-bump completes all of them.
+// trace:TASK-1136 | ai:claude
+pub fn cluster_pr_title(batch_name: &str, members: &[String]) -> String {
+    let n = members.iter().filter(|m| !m.trim().is_empty()).count();
+    let base = format!(
+        "[AI:claude] feat({}): coupled cluster — {} member{} on one branch",
+        cluster_scope_token(batch_name),
+        n,
+        if n == 1 { "" } else { "s" }
+    );
+    let group = cluster_spec_id_group(members);
+    if group.is_empty() {
+        base
+    } else {
+        format!("{base} {group}")
+    }
+}
+
+/// Body for the ONE cluster PR: what the mode did, then a `## Covers` list with
+/// one member per line ending in its own `(SPEC-ID)` so every member is both
+/// human-visible to the reviewer and machine-harvestable by the completion
+/// scan. Members are listed in drain order — the order their commits stack on
+/// the shared branch.
+// trace:TASK-1136 | ai:claude
+pub fn cluster_pr_body(batch_name: &str, branch: &str, members: &[String]) -> String {
+    let ids: Vec<&str> = members
+        .iter()
+        .map(|m| m.trim())
+        .filter(|m| !m.is_empty())
+        .collect();
+    let mut out = String::new();
+    out.push_str(&format!(
+        "Coupled single-branch drain of `batch:{batch_name}`. Every member below was \
+         implemented and CI'd in order, committing in place on `{branch}` — no \
+         per-member merge to the default branch — so this ONE pull request carries \
+         the whole cluster.\n\n"
+    ));
+    out.push_str("## Covers\n\n");
+    if ids.is_empty() {
+        out.push_str("_No members landed on the branch._\n");
+    } else {
+        for (i, id) in ids.iter().enumerate() {
+            out.push_str(&format!("- member {} ({})\n", i + 1, id));
+        }
+    }
+    out.push_str(
+        "\nMerging this pull request completes every member above: its squash subject \
+         names all of them, so the post-merge scan bumps each from Done to Completed \
+         in one pass.\n",
+    );
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1443,5 +1554,144 @@ mod tests {
     fn recovery_hint_pull_mentions_reconcile() {
         let h = recovery_hint(&ShipStep::Pull, Some(1));
         assert!(h.contains("aida db reconcile-status"), "{h}");
+    }
+
+    // --- Cluster PR (coupled single-branch drain) --------------------------
+    // trace:TASK-1136 | ai:claude
+
+    fn cluster_members() -> Vec<String> {
+        vec![
+            "TASK-1134".to_string(),
+            "TASK-1135".to_string(),
+            "TASK-1138".to_string(),
+        ]
+    }
+
+    /// The ONE cluster PR's title names EVERY member, in drain order, in the
+    /// trailing spec-id group the completion scan reads.
+    #[test]
+    fn cluster_pr_title_names_every_member_in_drain_order() {
+        let title = cluster_pr_title("tui-redesign", &cluster_members());
+        assert!(
+            title.ends_with("(TASK-1134 TASK-1135 TASK-1138)"),
+            "{title}"
+        );
+        assert!(title.contains("3 members"), "{title}");
+        assert_eq!(
+            extract_trailing_spec_ids_from_subject(&title),
+            cluster_members()
+        );
+    }
+
+    /// One member is still a cluster of one — singular wording, same shape.
+    #[test]
+    fn cluster_pr_title_handles_single_member() {
+        let title = cluster_pr_title("solo", &["BUG-777".to_string()]);
+        assert!(title.contains("1 member on one branch"), "{title}");
+        assert!(title.ends_with("(BUG-777)"), "{title}");
+    }
+
+    /// A halted drain that committed nothing yields a title with no trailing
+    /// group rather than an empty `()` the id parsers would choke on.
+    #[test]
+    fn cluster_pr_title_with_no_members_has_no_empty_group() {
+        let title = cluster_pr_title("empty", &[]);
+        assert!(!title.contains("()"), "{title}");
+        assert!(extract_trailing_spec_ids_from_subject(&title).is_empty());
+    }
+
+    /// The body's `## Covers` list gives the reviewer the whole cluster and the
+    /// shared branch it landed on.
+    #[test]
+    fn cluster_pr_body_covers_every_member_and_names_the_branch() {
+        let body = cluster_pr_body(
+            "tui-redesign",
+            "single-branch/tui-redesign-abc1234",
+            &cluster_members(),
+        );
+        assert!(body.contains("## Covers"), "{body}");
+        assert!(
+            body.contains("single-branch/tui-redesign-abc1234"),
+            "{body}"
+        );
+        for (i, id) in cluster_members().iter().enumerate() {
+            assert!(
+                body.contains(&format!("- member {} ({})", i + 1, id)),
+                "{body}"
+            );
+        }
+    }
+
+    /// THE load-bearing round-trip: the cluster PR title → the squash subject
+    /// the merge writes onto the default branch → the `aida pull`
+    /// Done→Completed scan. Every member must come back out, not just the
+    /// first. This is what makes ONE cluster merge complete ALL N specs
+    /// through the existing single-spec auto-bump machinery.
+    #[test]
+    fn cluster_pr_title_round_trips_all_members_through_the_completion_scan() {
+        let members = cluster_members();
+        let branch = "single-branch/tui-redesign-abc1234";
+        let title = cluster_pr_title("tui-redesign", &members);
+        let subject = derive_squash_subject(&title, branch, "", "")
+            .expect("cluster title yields a squash subject");
+        // GitHub appends its `(#N)` suffix to the landed squash commit.
+        let landed = format!("{subject} (#1590)");
+        assert_eq!(crate::extract_spec_ids_from_commit(&landed), members);
+    }
+
+    /// Second belt: when the squash body carries the PR body, the `## Covers`
+    /// list credits the same member set through the referenced-id extractor
+    /// (the path a squash-merged umbrella PR's folded specs already ride).
+    #[test]
+    fn cluster_pr_body_covers_list_is_harvestable_by_the_referenced_id_scan() {
+        let members = cluster_members();
+        let title = cluster_pr_title("tui-redesign", &members);
+        let body = cluster_pr_body("tui-redesign", "single-branch/x", &members);
+        // A squash commit: subject line, blank line, then the body.
+        let commit = format!("{title}\n\n{body}");
+        let mut seen = crate::extract_spec_ids_from_commit(&commit);
+        seen.extend(crate::extract_referenced_spec_ids_from_commit(&commit));
+        for id in &members {
+            assert!(seen.contains(id), "{id} missing from {seen:?}");
+        }
+    }
+
+    /// A spec-id-shaped batch name (`epic-54`) must NOT be mined as a shipped
+    /// spec — otherwise the cluster merge would falsely complete it alongside
+    /// the real members. The scope is neutralized; only the members survive the
+    /// squash-subject id sweep.
+    #[test]
+    fn cluster_pr_title_does_not_leak_a_spec_id_shaped_batch_name() {
+        let members = cluster_members();
+        let title = cluster_pr_title("epic-54", &members);
+        assert!(title.contains("feat(epic_54)"), "{title}");
+        // The broad sweep the squash-subject repair runs sees ONLY the members.
+        assert_eq!(extract_spec_ids_from_text(&title), members);
+        let subject = derive_squash_subject(&title, "single-branch/epic-54-abc1234", "", "")
+            .expect("cluster title yields a squash subject");
+        assert_eq!(
+            crate::extract_spec_ids_from_commit(&format!("{subject} (#1590)")),
+            members
+        );
+    }
+
+    /// A batch name that cannot parse as a spec id is left exactly as written.
+    #[test]
+    fn cluster_pr_title_keeps_an_ordinary_batch_name_verbatim() {
+        let title = cluster_pr_title("tui-redesign", &cluster_members());
+        assert!(title.contains("feat(tui-redesign)"), "{title}");
+    }
+
+    /// A cluster title must not lose members when the merge path re-derives the
+    /// subject from the branch name instead (branch names carry no ids), and
+    /// must not duplicate ids when it re-appends.
+    #[test]
+    fn cluster_squash_subject_is_idempotent() {
+        let members = cluster_members();
+        let title = cluster_pr_title("tui-redesign", &members);
+        let once = squash_subject_with_spec_ids(&title, &members);
+        let twice = squash_subject_with_spec_ids(&once, &members);
+        assert_eq!(once, title);
+        assert_eq!(twice, title);
     }
 }
