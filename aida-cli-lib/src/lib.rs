@@ -29107,6 +29107,12 @@ fn session_end_explicit_target(
         .map(str::to_string)
 }
 
+// The shell matrix (bash + zsh-when-present) the wrapper tests below drive.
+// trace:TASK-1174 | ai:claude
+#[cfg(test)]
+#[path = "tests/shell_wrapper_harness.rs"]
+mod shell_wrapper_harness;
+
 #[cfg(test)]
 #[path = "tests/bug_779_wrapper_eval_tests.rs"]
 mod bug_779_wrapper_eval_tests;
