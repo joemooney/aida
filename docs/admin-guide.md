@@ -124,7 +124,8 @@ aida burndown run  --order queue    # drain oldest-queued first for this run
 ```
 
 Ordering is anchored on queue-insertion time, never on how a spec id happens to
-spell: `TASK-9` queued before `TASK-1` drains first. Specs with no readable queue
+spell: a spec whose id sorts *later* alphabetically drains first if it was queued
+first. Specs with no readable queue
 entry sort last, and the display id is the final tiebreak, so a wave is
 reproducible across runs.
 
