@@ -28721,6 +28721,51 @@ fn non_tty_skips_ci_probe(
 #[path = "tests/bug422_ci_probe_tests.rs"]
 mod bug422_ci_probe_tests;
 
+/// What `aida session end`'s confirmation gate should do.
+// trace:BUG-776 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionEndConfirm {
+    /// `--yes` / `--force` supplied — end the session without asking.
+    Skip,
+    /// Real TTY, no skip flag — ask `Continue? [y/N]`.
+    Prompt,
+    /// No TTY and no skip flag — nobody can answer. Fail loudly instead of
+    /// no-op'ing: a silent exit that leaves the lease behind looks like the
+    /// command ran and is how leases get orphaned.
+    RefuseNonInteractive,
+}
+
+/// Pure decision for the confirmation gate, so the "never silently no-op"
+/// contract is unit-testable.
+// trace:BUG-776 | ai:claude
+fn session_end_confirm_action(yes: bool, force: bool, stdin_is_tty: bool) -> SessionEndConfirm {
+    if yes || force {
+        SessionEndConfirm::Skip
+    } else if stdin_is_tty {
+        SessionEndConfirm::Prompt
+    } else {
+        SessionEndConfirm::RefuseNonInteractive
+    }
+}
+
+/// The refusal text for [`SessionEndConfirm::RefuseNonInteractive`]. Names
+/// the surviving lease explicitly so the caller can't read the exit as "it
+/// ran".
+// trace:BUG-776 | ai:claude
+fn session_end_confirm_refusal(session_id: &str, lease_path: &std::path::Path) -> String {
+    format!(
+        "session {} was NOT ended — confirmation is required and stdin is not a terminal, \
+         so nobody can answer the prompt. The lease at {} is still held. \
+         Re-run with `--yes` (or `--force`) to confirm non-interactively.",
+        session_id,
+        lease_path.display()
+    )
+}
+
+#[cfg(test)]
+#[path = "tests/bug776_session_end_confirm_tests.rs"]
+mod bug776_session_end_confirm_tests;
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn session_end(
@@ -28950,22 +28995,28 @@ fn session_end(
     // aborted — blocking unattended cleanup. Now: prompt only on a real TTY
     // without a skip flag; non-TTY without `--yes`/`--force` fails with a
     // clear, actionable error instead of a silent "Aborted."
-    if !yes && !force {
-        use std::io::Write;
-        if !std::io::stdin().is_terminal() {
-            anyhow::bail!(
-                "ending session {} needs confirmation, but stdin is not a terminal — \
-                 re-run with `--yes` (or `--force`) to confirm non-interactively",
-                target.id
-            );
+    // BUG-776: route the gate through a pure decision fn, and make the
+    // non-interactive refusal say the session was NOT ended and the lease
+    // survives — the preamble above otherwise reads like the teardown ran.
+    // trace:BUG-776 | ai:claude
+    match session_end_confirm_action(yes, force, std::io::stdin().is_terminal()) {
+        SessionEndConfirm::Skip => {}
+        SessionEndConfirm::RefuseNonInteractive => {
+            anyhow::bail!(session_end_confirm_refusal(
+                &target.id,
+                &lease_path(&project_root, &target.id)
+            ));
         }
-        eprint!("\nContinue? [y/N] ");
-        std::io::stderr().flush()?;
-        let mut ans = String::new();
-        std::io::stdin().read_line(&mut ans)?;
-        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            eprintln!("Aborted.");
-            return Ok(());
+        SessionEndConfirm::Prompt => {
+            use std::io::Write;
+            eprint!("\nContinue? [y/N] ");
+            std::io::stderr().flush()?;
+            let mut ans = String::new();
+            std::io::stdin().read_line(&mut ans)?;
+            if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+                eprintln!("Aborted — session {} is still open.", target.id);
+                return Ok(());
+            }
         }
     }
 
@@ -29438,7 +29489,11 @@ fn session_end(
         outcome.status,
         AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
     ) {
-        if let Some(pr_n) = outcome.pr_number {
+        // BUG-776: never render the `PR #0 next: ...` chain. A synthetic id-0
+        // change ref names no reviewable PR, so every step of the hint
+        // (`aida queue work PR-0`, merge PR-0) points at nothing.
+        // trace:BUG-776 | ai:claude
+        if let Some(pr_n) = outcome.pr_number.filter(|n| *n > 0) {
             workflow_hints::after_session_end_with_pr(
                 Some(&project_root),
                 pr_n,
@@ -32191,6 +32246,54 @@ fn is_review_session_branch(branch: &str) -> bool {
     })
 }
 
+/// Which pre-flight condition, if any, says "do NOT file a review story".
+///
+/// The auto-file used to run unconditionally, so a repo with no `origin`
+/// remote produced a `Review PR-0: ` story with an empty subject covering
+/// no specs — on EVERY `aida session end`. Three conditions gate it now,
+/// each of them meaning "there is no reviewable change here":
+///
+/// - no `origin` remote — a local-only project has nothing to open a PR
+///   against (the same `has_remote(.., "origin")` condition `aida db sync
+///   --pull` uses to skip its pull),
+/// - the resolved change id is `0` — the pure-git provider's synthetic
+///   "the branch IS the change" ref, i.e. the forge has no PR concept,
+/// - the story would cover no specs — no `(REQ-ID)` trailers anywhere in
+///   the PR's commit range, so the reviewer story carries no linkage.
+///
+/// Pure so the policy is unit-testable without a git repo or a forge.
+/// `pr_number` / `covered_specs` are `None` at the call sites that run
+/// before those facts are known.
+// trace:BUG-776 | ai:claude
+fn auto_queue_skip_reason(
+    has_origin_remote: bool,
+    pr_number: Option<u64>,
+    covered_specs: Option<usize>,
+) -> Option<String> {
+    if !has_origin_remote {
+        return Some(
+            "auto-queue: no `origin` remote (local-only project) — no PR can exist, so no reviewer story was filed"
+                .to_string(),
+        );
+    }
+    if pr_number == Some(0) {
+        return Some(
+            "auto-queue: this forge has no pull-request concept (synthetic change id 0) — no reviewer story was filed"
+                .to_string(),
+        );
+    }
+    if let (Some(n), Some(0)) = (pr_number, covered_specs) {
+        return Some(format!(
+            "auto-queue: PR #{n} carries no `(REQ-ID)` trailers in its commit range — no reviewer story was filed (add a trailer, then re-run `aida pr auto-queue-review`)"
+        ));
+    }
+    None
+}
+
+#[cfg(test)]
+#[path = "tests/bug776_auto_queue_gate_tests.rs"]
+mod bug776_auto_queue_gate_tests;
+
 /// Where the auto-queue was triggered from. Used purely for the
 /// description blurb on the filed review story (so a reviewer reading
 /// it later can tell "the /aida-pr skill filed me at PR-create time"
@@ -32258,6 +32361,20 @@ fn try_auto_queue_pr_review(
         ));
     }
 
+    // BUG-776: a repo with no `origin` remote cannot have a PR, but the
+    // pure-git forge provider still answers `change_for_branch` with a
+    // synthetic id-0 ChangeRef — which used to mint a `Review PR-0: ` story
+    // covering no specs on every single `aida session end`. Gate the whole
+    // path on the same remote check `aida db sync --pull` uses before it
+    // even talks to the forge. trace:BUG-776 | ai:claude
+    if let Some(reason) = auto_queue_skip_reason(
+        aida_core::git_ops::has_remote(project_root, "origin"),
+        None,
+        None,
+    ) {
+        return AutoQueueOutcome::skipped_by_design(reason);
+    }
+
     // STORY-516: forge-routed. Reconstruct OpenPrInfo from the ChangeRef so the
     // downstream pr.number/url/title uses stay unchanged. trace:STORY-516 | ai:claude
     let pr = match change_lookup_for_branch(project_root, branch) {
@@ -32291,6 +32408,14 @@ fn try_auto_queue_pr_review(
             ));
         }
     };
+    // BUG-776: a remote that is not a PR-speaking forge (bare git server,
+    // GitLab-over-plain-git) resolves to the synthetic id-0 ChangeRef. There
+    // is no PR #0 to review — skip before the base/head probe so we don't
+    // also emit its "couldn't resolve PR base/head" warning.
+    // trace:BUG-776 | ai:claude
+    if let Some(reason) = auto_queue_skip_reason(true, Some(pr.number), None) {
+        return AutoQueueOutcome::skipped_by_design(reason);
+    }
     if pr_review_story_already_exists(project_root, pr.number) {
         return AutoQueueOutcome::already_exists(format!(
             "PR #{} already has a `Review PR-{}` story queued — skipping",
@@ -32326,6 +32451,14 @@ fn try_auto_queue_pr_review(
     // disjoint across the range. trace:BUG-85 | ai:claude
     referenced_ids.retain(|r| !spec_ids.iter().any(|d| d.eq_ignore_ascii_case(r)));
 
+    // BUG-776: a story that covers no specs is unlinked noise in the reviewer
+    // queue — the reviewer has nothing to check acceptance against, and the
+    // row has to be dequeued and rejected by hand. Skip it and say why, so the
+    // fix ("add a `(REQ-ID)` trailer") is obvious. trace:BUG-776 | ai:claude
+    if let Some(reason) = auto_queue_skip_reason(true, Some(pr.number), Some(spec_ids.len())) {
+        return AutoQueueOutcome::skipped_by_design(reason);
+    }
+
     let session_short: &str = &session_id[..session_id.len().min(8)];
     let mut desc = String::new();
     desc.push_str(&format!(
@@ -32337,6 +32470,9 @@ fn try_auto_queue_pr_review(
     desc.push_str(&format!("- PR: <{}>\n", pr.url));
     desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
     if spec_ids.is_empty() {
+        // BUG-776 gates this branch off — a zero-coverage story is no longer
+        // filed at all. Kept as a defensive fallback so relaxing the gate
+        // can't ship a story with an empty body. trace:BUG-776 | ai:claude
         desc.push_str(
             "No `(REQ-ID)` trailers were found in the PR's commit range — review against the PR title/body and link specs after the fact via `aida rel add <this> <spec> --type implements`.\n\n",
         );
