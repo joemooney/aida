@@ -23,20 +23,36 @@ description: |-
   1. Record review verdicts as first-class state (not just a comment), and refuse 'queue done' / the merge step when the latest verdict for the spec is RequestChanges unless the branch tip has moved past the sha the verdict names.
   2. Make the branch-commits-ahead gate work without origin/main - compare against the local default branch. A gate that silently does not fire is worse than no gate.
   3. Surface the latest review verdict in the pickup prompt so an implementer cannot miss it.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:07:48.363850380Z
-modified_at: 2026-07-22T03:03:26.247860258Z
+modified_at: 2026-07-22T03:12:49.745272889Z
 req_type: Bug
 tags:
 - queue
 - review
 - safety
 - workflow
+history:
+- id: 019f87cf-ca42-7f23-af75-cf5c3fda152a
+  author: aida-auto-bump
+  timestamp: 2026-07-22T03:12:49.730713007Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f87cf-ca51-74f3-9e21-e482780e6b24
+  timestamp: 2026-07-22T03:12:49.745271540Z
+  agent: aida
+  commit_sha: dafb6167d6407b2ab6b464de78346668459c455b
+  summary: Completed via merge dafb6167
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T03:03:26.247860258Z
   implemented_by: joe
+  completed_at: 2026-07-22T03:12:49.170582156Z
+  completion_sha: dafb6167d6407b2ab6b464de78346668459c455b
