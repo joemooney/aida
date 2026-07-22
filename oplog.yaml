@@ -38108,5 +38108,13 @@ operations:
   timestamp: 2026-07-22T05:26:11.318858844Z
   kind: !AddTag
     tag: drive-authorized-cluster
-clock: 3558
+- id: 019f8849-e74a-7602-918e-b82211f2aba6
+  target_id: 019f57c0-d2e8-7861-8ac9-a4936c92aea5
+  author: aida
+  node_id: '1'
+  lamport: 3559
+  timestamp: 2026-07-22T05:26:12.554505490Z
+  kind: !RemoveTag
+    tag: supervised-keystone
+clock: 3559
 node_id: '1'
