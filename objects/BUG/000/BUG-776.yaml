@@ -19,10 +19,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:08:03.015211493Z
-modified_at: 2026-07-22T02:24:46.727979139Z
+modified_at: 2026-07-22T02:50:31.874741047Z
 req_type: Bug
 tags:
 - no-remote
 - noise
 - session
+comments:
+- id: 019f87bb-6042-7f20-a100-8017cd674f0b
+  author: joe
+  content: Commit b5586e28c references this requirement
+  created_at: 2026-07-22T02:50:31.874741047Z
+  modified_at: 2026-07-22T02:50:31.874741047Z
+  session_id: d7909c1f-6457-4cf7-b374-59df8ef5424b
 execution_mode: drive
