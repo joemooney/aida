@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T02:27:37.514912096Z
-modified_at: 2026-07-22T02:21:54.684437080Z
+modified_at: 2026-07-22T02:25:54.046048427Z
 req_type: Task
 tags:
 - zen-ready
@@ -28,4 +28,10 @@ comments:
   created_at: 2026-07-21T05:25:01.277866803Z
   modified_at: 2026-07-21T05:25:01.277866803Z
   session_id: 3656084c-e702-4335-8721-954ca99bc265
+- id: 019f87a4-d37e-7222-8edc-4ef021d27fae
+  author: joe
+  content: 'Parked out of the autonomous burn-down. This spec flips the solo-loop DEFAULT groom step to --autopilot, i.e. it is a change to the autonomy machinery itself, and its own title names the precondition: "once the envelope is proven in supervised use". Shipping an autonomy-default flip through an unattended drain both violates the burndown guardrail (autonomy-machinery changes ship supervised) and short-circuits the spec its own precondition. Deferring with that precondition as the revisit trigger; it wants a keyboard session against TASK-0429 evidence. | ai:claude'
+  created_at: 2026-07-22T02:25:54.046048427Z
+  modified_at: 2026-07-22T02:25:54.046048427Z
+  session_id: d7909c1f-6457-4cf7-b374-59df8ef5424b
 execution_mode: drive
