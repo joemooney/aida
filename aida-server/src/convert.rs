@@ -38,6 +38,8 @@ pub fn status_to_proto(status: &CoreStatus) -> proto::RequirementStatus {
         CoreStatus::Done => proto::RequirementStatus::Done,
         CoreStatus::Completed => proto::RequirementStatus::Completed,
         CoreStatus::Rejected => proto::RequirementStatus::Rejected,
+        // trace:TASK-1176 | ai:claude
+        CoreStatus::Superseded => proto::RequirementStatus::Superseded,
         CoreStatus::NeedsAttention => proto::RequirementStatus::NeedsAttention,
     }
 }
@@ -51,6 +53,8 @@ pub fn proto_to_status(status: proto::RequirementStatus) -> CoreStatus {
         proto::RequirementStatus::Done => CoreStatus::Done,
         proto::RequirementStatus::Completed => CoreStatus::Completed,
         proto::RequirementStatus::Rejected => CoreStatus::Rejected,
+        // trace:TASK-1176 | ai:claude
+        proto::RequirementStatus::Superseded => CoreStatus::Superseded,
         proto::RequirementStatus::NeedsAttention => CoreStatus::NeedsAttention,
         proto::RequirementStatus::Unspecified => CoreStatus::Draft,
     }
@@ -146,6 +150,12 @@ pub fn rel_type_to_proto(rel_type: &CoreRelType) -> (proto::RelationshipType, St
         // side. trace:STORY-333 | ai:claude
         CoreRelType::BlockedBy => (proto::RelationshipType::Custom, "blocked-by".to_string()),
         CoreRelType::Blocks => (proto::RelationshipType::Custom, "blocks".to_string()),
+        // TASK-1176: same precedent — the proto has no dedicated supersede
+        // variants, so wire them as Custom-with-name; `RelationshipType::from_str`
+        // maps the strings back to the typed variants on receive.
+        // trace:TASK-1176 | ai:claude
+        CoreRelType::SupersededBy => (proto::RelationshipType::Custom, "superseded-by".to_string()),
+        CoreRelType::Supersedes => (proto::RelationshipType::Custom, "supersedes".to_string()),
         CoreRelType::Custom(name) => (proto::RelationshipType::Custom, name.clone()),
     }
 }

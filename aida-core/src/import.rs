@@ -388,6 +388,8 @@ pub fn parse_requirement_status(s: &str) -> Option<RequirementStatus> {
         "Done" => Some(RequirementStatus::Done),
         "Completed" => Some(RequirementStatus::Completed),
         "Rejected" => Some(RequirementStatus::Rejected),
+        // trace:TASK-1176 | ai:claude
+        "Superseded" => Some(RequirementStatus::Superseded),
         "NeedsAttention" | "Needs Attention" => Some(RequirementStatus::NeedsAttention),
         _ => None,
     }

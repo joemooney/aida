@@ -116,6 +116,9 @@ pub fn edge_weight(rel_type: &RelationshipType) -> u32 {
         RelationshipType::BlockedBy | RelationshipType::Blocks => 3,
         RelationshipType::Parent | RelationshipType::Child => 2,
         RelationshipType::Verifies | RelationshipType::VerifiedBy => 1,
+        // trace:TASK-1176 | ai:claude — a supersede edge is real lineage
+        // (which spec now governs), weighted like a parent/child link.
+        RelationshipType::SupersededBy | RelationshipType::Supersedes => 2,
         RelationshipType::References => 1,
         RelationshipType::Duplicate => 0,
         RelationshipType::Custom(_) => 1,
@@ -2050,6 +2053,8 @@ fn tally_status_str(r: &mut crate::graph_walk::StatusRollup, status: &str) {
         "InProgress" => r.in_progress += 1,
         "NeedsAttention" => r.shelved += 1,
         "Rejected" => r.rejected += 1,
+        // trace:TASK-1176 | ai:claude
+        "Superseded" => r.superseded += 1,
         // Draft / Approved / Planned / any custom status → not yet started.
         _ => r.remaining += 1,
     }
@@ -4983,5 +4988,75 @@ mod tests {
             header.starts_with(b"SQLite format 3\0"),
             "the healthy cache file was not clobbered by a lock event"
         );
+    }
+
+    /// TASK-1176: the `Superseded` status round-trips through BOTH persistence
+    /// layers — the git-canonical YAML (serde, the writer of record) and the
+    /// SQLite read-projection — and stays reachable by a `--status superseded`
+    /// filter afterwards.
+    ///
+    /// A new enum variant that serializes but does not survive the cache
+    /// projection would make every superseded spec invisible to the cache-backed
+    /// surfaces (`aida list` / `search` / `status`) while still sitting on disk.
+    // trace:TASK-1176 | ai:claude
+    #[test]
+    fn superseded_round_trips_through_yaml_and_cache() {
+        // ── YAML leg: the orphan-branch writer of record ──────────────────
+        let mut superseded = sample_req("ADR-3", "the replaced decision");
+        superseded.req_type = RequirementType::Decision;
+        superseded.status = RequirementStatus::Superseded;
+        let yaml = serde_yaml::to_string(&superseded).unwrap();
+        assert!(
+            yaml.contains("Superseded"),
+            "status must serialize by name: {yaml}"
+        );
+        let superseded: Requirement = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(superseded.status, RequirementStatus::Superseded);
+        assert!(
+            superseded.custom_status.is_none(),
+            "a canonical status must never land in custom_status"
+        );
+
+        // ── Cache leg: the derived read-projection ────────────────────────
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+        let mut rejected = sample_req("ADR-4", "the declined decision");
+        rejected.req_type = RequirementType::Decision;
+        rejected.status = RequirementStatus::Rejected;
+
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([superseded, rejected]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let everything = ListFilter {
+            archive: ArchiveFilter::Both,
+            defer: DeferFilter::Both,
+            ..Default::default()
+        };
+        let rows = cache.list_summaries(&everything).unwrap();
+        let projected = rows
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some("ADR-3"))
+            .expect("the superseded spec must project into the cache");
+        assert_eq!(
+            projected.status,
+            RequirementStatus::Superseded.cache_key(),
+            "the cache stores the canonical cache-key form"
+        );
+
+        // ...and the status filter finds it — WITHOUT sweeping up the rejected
+        // sibling, which is the whole point of a distinct state.
+        for spelling in ["superseded", "Superseded", "SUPERSEDED"] {
+            let hits = cache
+                .list_summaries(&ListFilter {
+                    status: Some(spelling.to_string()),
+                    archive: ArchiveFilter::Both,
+                    defer: DeferFilter::Both,
+                    ..Default::default()
+                })
+                .unwrap();
+            let ids: Vec<&str> = hits.iter().filter_map(|r| r.spec_id.as_deref()).collect();
+            assert_eq!(ids, vec!["ADR-3"], "--status {spelling}");
+        }
     }
 }

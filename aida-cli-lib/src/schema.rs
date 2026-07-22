@@ -499,7 +499,9 @@ const REQUIREMENT_FIELD_DOCS: &[FieldDoc] = &[
         description:
             "Lifecycle state (draft→approved→planned→in-progress→done→completed). Draft is \
              the default; Approved/Planned are advisor-gated; Done is set by `aida queue done`; \
-             Completed is merge-driven (auto-bumped by `aida pull`).",
+             Completed is merge-driven (auto-bumped by `aida pull`). Terminal off-ramps: \
+             Rejected (declined) and Superseded (adopted, then replaced — pair with \
+             `--superseded-by`).",
     },
     FieldDoc {
         name: "priority",
@@ -1335,6 +1337,8 @@ mod tests {
                 "done",
                 "completed",
                 "rejected",
+                // trace:TASK-1176 | ai:claude — adopted-then-replaced terminal.
+                "superseded",
                 "needs-attention",
             ]
         );
@@ -1375,6 +1379,9 @@ mod tests {
                 "references",
                 "blocked-by",
                 "blocks",
+                // trace:TASK-1176 | ai:claude — the supersede lineage pair.
+                "superseded-by",
+                "supersedes",
             ]
         );
     }

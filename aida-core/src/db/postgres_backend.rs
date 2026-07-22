@@ -244,6 +244,8 @@ impl PostgresBackend {
             RequirementStatus::Done => "Done",
             RequirementStatus::Completed => "Completed",
             RequirementStatus::Rejected => "Rejected",
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded => "Superseded",
             RequirementStatus::NeedsAttention => "Needs Attention",
         }
     }
@@ -258,6 +260,8 @@ impl PostgresBackend {
             "Done" => RequirementStatus::Done,
             "Completed" => RequirementStatus::Completed,
             "Rejected" => RequirementStatus::Rejected,
+            // trace:TASK-1176 | ai:claude
+            "Superseded" => RequirementStatus::Superseded,
             "Needs Attention" => RequirementStatus::NeedsAttention,
             _ => RequirementStatus::Draft,
         }

@@ -52,6 +52,10 @@ pub enum State {
     Completed,
     Released,
     Rejected,
+    /// Adopted, then replaced by a successor spec. Terminal like `Rejected`,
+    /// but the opposite meaning: followed-then-handed-off, not declined.
+    // trace:TASK-1176 | ai:claude
+    Superseded,
     NeedsAttention,
 }
 
@@ -79,6 +83,8 @@ impl State {
             RS::Done => Some(State::Done),
             RS::Completed => Some(State::Completed),
             RS::Rejected => Some(State::Rejected),
+            // trace:TASK-1176 | ai:claude
+            RS::Superseded => Some(State::Superseded),
             RS::NeedsAttention => Some(State::NeedsAttention),
         }
     }
@@ -97,6 +103,8 @@ impl State {
             RS::Done => State::Done,
             RS::Completed => State::Completed,
             RS::Rejected => State::Rejected,
+            // trace:TASK-1176 | ai:claude
+            RS::Superseded => State::Superseded,
             RS::NeedsAttention => State::NeedsAttention,
         }
     }
@@ -113,6 +121,8 @@ impl State {
             State::Completed => "Completed",
             State::Released => "Released",
             State::Rejected => "Rejected",
+            // trace:TASK-1176 | ai:claude
+            State::Superseded => "Superseded",
             State::NeedsAttention => "NeedsAttention",
         }
     }
@@ -123,9 +133,12 @@ impl State {
     fn entry_trigger(self) -> Option<TriggerKind> {
         match self {
             State::Start => None,
-            State::Draft | State::Approved | State::Planned | State::Rejected => {
-                Some(TriggerKind::Cli)
-            }
+            // trace:TASK-1176 | ai:claude — superseding is a deliberate CLI act.
+            State::Draft
+            | State::Approved
+            | State::Planned
+            | State::Rejected
+            | State::Superseded => Some(TriggerKind::Cli),
             State::InProgress | State::NeedsAttention => Some(TriggerKind::Llm),
             State::Done | State::Completed | State::Released => Some(TriggerKind::Git),
         }
@@ -236,13 +249,20 @@ pub fn git_merge_completes(from: State) -> bool {
 // ────────────────────────────────────────────────────────────────────
 
 impl State {
-    /// A *terminal* status — the closed long-tail (`Completed` / `Rejected`)
-    /// past which no further pipeline transition fires. The single source for
-    /// "is this work closed?"; the CLI's `is_terminal_status` routes through
-    /// this so the archive invariant (`archived ⇒ terminal ∧ ¬queued`) and the
-    /// diagram read the same definition. trace:TASK-741 | ai:claude
+    /// A *terminal* status — the closed long-tail (`Completed` / `Rejected` /
+    /// `Superseded`) past which no further pipeline transition fires. The
+    /// single source for "is this work closed?"; the CLI's `is_terminal_status`
+    /// routes through this so the archive invariant
+    /// (`archived ⇒ terminal ∧ ¬queued`) and the diagram read the same
+    /// definition.
+    ///
+    /// `Superseded` is terminal *and adopted* — the spec was followed and then
+    /// handed off to a successor. It closes exactly like `Rejected` for every
+    /// gate that asks "is this still open?", and differs only in what it MEANS
+    /// (and therefore how it renders).
+    // trace:TASK-741 trace:TASK-1176 | ai:claude
     pub fn is_terminal(self) -> bool {
-        matches!(self, State::Completed | State::Rejected)
+        matches!(self, State::Completed | State::Rejected | State::Superseded)
     }
 }
 
@@ -483,6 +503,14 @@ impl LifecycleModel {
                 t(Draft, Rejected, "aida edit --status rejected"),
                 t(Approved, Rejected, "aida edit --status rejected"),
                 t(Done, InProgress, "reviewer RequestChanges"),
+                // trace:TASK-1176 | ai:claude — adopted-then-replaced. The ADR
+                // case: an accepted decision (`Approved` IS accepted for the
+                // decision class) that a successor spec now governs.
+                t(
+                    Approved,
+                    Superseded,
+                    "aida edit --status superseded --superseded-by",
+                ),
             ],
         }
     }
@@ -542,7 +570,13 @@ impl LifecycleModel {
 
         // Terminal `--> [*]` edges for the end states, in the committed order.
         out.push('\n');
-        for term in [State::Released, State::Rejected, State::Completed] {
+        // trace:TASK-1176 | ai:claude — Superseded is a terminal end state too.
+        for term in [
+            State::Released,
+            State::Rejected,
+            State::Completed,
+            State::Superseded,
+        ] {
             out.push_str(&format!("    {} --> [*]\n", term.label()));
         }
 
@@ -589,6 +623,8 @@ impl LifecycleModel {
             Completed,
             Released,
             Rejected,
+            // trace:TASK-1176 | ai:claude
+            Superseded,
             NeedsAttention,
         ]
     }
@@ -843,7 +879,9 @@ mod tests {
         assert!(body.contains("[*] --> Draft"));
         assert!(body.contains("Done --> Completed: merge auto-bump (aida pull)"));
         assert!(body.contains("Completed --> [*]"));
-        assert!(body.contains("class Draft,Approved,Planned,Rejected cli"));
+        // trace:TASK-1176 | ai:claude — Superseded is a CLI-entered state.
+        assert!(body.contains("class Draft,Approved,Planned,Rejected,Superseded cli"));
+        assert!(body.contains("Superseded --> [*]"));
     }
 
     #[test]

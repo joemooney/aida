@@ -42,9 +42,11 @@ use uuid::Uuid;
 ///    `Blocked` status variant; `NeedsAttention` is its closest analogue.)
 /// 6. **Only remaining (Draft/Approved/Planned) children, none in progress** ->
 ///    `Draft` — queued but not started.
-/// 7. **Only Rejected children** (every other bucket empty) -> `None`: we do not
-///    auto-reject an epic. The caller keeps the epic's stored status so a human
-///    can make that call (and `--force` recovery still works).
+/// 7. **Only resolved-but-unshipped children** — Rejected and/or Superseded,
+///    every other bucket empty -> `None`: we do not auto-reject an epic. The
+///    caller keeps the epic's stored status so a human can make that call (and
+///    `--force` recovery still works).
+//     trace:TASK-1176 | ai:claude
 ///
 /// Returns `None` only in case (7); every other case yields a derived status.
 // trace:BUG-626 | ai:claude
@@ -59,7 +61,13 @@ pub fn derive_epic_status_from_rollup(r: &StatusRollup) -> Option<RequirementSta
     // reach Completed/Done. Before this, a completed+rejected mix fell through
     // to the `any_finished` arm and derived InProgress forever — no child
     // transition could ever move it again. trace:BUG-764 | ai:claude
-    let unrejected = r.total - r.rejected;
+    //
+    // TASK-1176: a SUPERSEDED child is resolved for exactly the same reason —
+    // it was adopted and then handed off to a successor, and can never
+    // transition again. Excluding it keeps a superseded child from pinning its
+    // epic in a perpetual In Progress the same way a rejected one used to.
+    // trace:TASK-1176 | ai:claude
+    let unrejected = r.total - r.rejected - r.superseded;
 
     // (2) Every non-rejected child Completed.
     if unrejected > 0 && r.completed == unrejected {
@@ -100,14 +108,14 @@ pub fn derive_epic_status_from_rollup(r: &StatusRollup) -> Option<RequirementSta
 /// Is `status` a status a human force-closes an epic INTO — a resolved end
 /// state no further child transition should reopen?
 ///
-/// `Completed` and `Rejected` are the two terminal statuses. `Done` is NOT one:
-/// it is a routine derived value ("finished on a branch, not all merged"), so
-/// treating it as sticky would freeze epics mid-flight.
-// trace:BUG-768 | ai:claude
+/// `Completed`, `Rejected` and `Superseded` are the terminal statuses. `Done`
+/// is NOT one: it is a routine derived value ("finished on a branch, not all
+/// merged"), so treating it as sticky would freeze epics mid-flight.
+// trace:BUG-768 trace:TASK-1176 | ai:claude
 pub fn is_terminal_epic_status(status: &RequirementStatus) -> bool {
     matches!(
         status,
-        RequirementStatus::Completed | RequirementStatus::Rejected
+        RequirementStatus::Completed | RequirementStatus::Rejected | RequirementStatus::Superseded
     )
 }
 
@@ -181,6 +189,35 @@ mod tests {
             remaining,
             shelved,
             rejected,
+            // trace:TASK-1176 | ai:claude — the superseded bucket has its own
+            // helper below so every pre-existing case reads unchanged.
+            superseded: 0,
+        }
+    }
+
+    /// TASK-1176: a rollup that also carries superseded children — the bucket
+    /// `rollup()` pins to zero.
+    // trace:TASK-1176 | ai:claude
+    #[allow(clippy::too_many_arguments)]
+    fn rollup_with_superseded(
+        total: usize,
+        completed: usize,
+        done: usize,
+        in_progress: usize,
+        remaining: usize,
+        shelved: usize,
+        rejected: usize,
+        superseded: usize,
+    ) -> StatusRollup {
+        StatusRollup {
+            total,
+            completed,
+            done,
+            in_progress,
+            remaining,
+            shelved,
+            rejected,
+            superseded,
         }
     }
 
@@ -345,6 +382,54 @@ mod tests {
         assert_eq!(
             derive_epic_status_from_rollup(&rollup(2, 0, 0, 1, 0, 0, 1)),
             Some(RequirementStatus::InProgress)
+        );
+    }
+
+    // TASK-1176: a SUPERSEDED child is resolved for exactly the reason a
+    // rejected one is — it can never transition again — so the epic rollup
+    // must exclude it from the open denominator. Without this, one superseded
+    // child would pin a fully-delivered epic at InProgress forever, the same
+    // stuck state BUG-764 fixed for rejected children.
+    // trace:TASK-1176 | ai:claude
+    #[test]
+    fn superseded_child_is_resolved_in_the_epic_rollup() {
+        // total=3, completed=2, superseded=1 — zero open children => Completed.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_superseded(3, 2, 0, 0, 0, 0, 0, 1)),
+            Some(RequirementStatus::Completed)
+        );
+        // Same shape with a Done (unmerged) child => Done, not InProgress.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_superseded(3, 1, 1, 0, 0, 0, 0, 1)),
+            Some(RequirementStatus::Done)
+        );
+        // Rejected AND superseded siblings both drop out of the denominator.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_superseded(4, 2, 0, 0, 0, 0, 1, 1)),
+            Some(RequirementStatus::Completed)
+        );
+    }
+
+    // TASK-1176 guard: excluding superseded children must NOT close an epic
+    // that still carries genuinely open work — the mirror of the BUG-764 guard.
+    // trace:TASK-1176 | ai:claude
+    #[test]
+    fn superseded_child_does_not_mask_open_work() {
+        // completed + superseded + one still-queued child => InProgress.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_superseded(3, 1, 0, 0, 1, 0, 0, 1)),
+            Some(RequirementStatus::InProgress)
+        );
+        // superseded + queued only (nothing finished, nothing moving) => Draft.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_superseded(2, 0, 0, 0, 1, 0, 0, 1)),
+            Some(RequirementStatus::Draft)
+        );
+        // ONLY superseded children — like the only-rejected case, don't guess:
+        // the caller keeps the stored status.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_superseded(2, 0, 0, 0, 0, 0, 0, 2)),
+            None
         );
     }
 

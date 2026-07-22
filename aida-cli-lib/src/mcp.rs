@@ -5530,6 +5530,8 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
         "done" => Some(RequirementStatus::Done),
         "completed" => Some(RequirementStatus::Completed),
         "rejected" => Some(RequirementStatus::Rejected),
+        // trace:TASK-1176 | ai:claude — mirrors the CLI's status set.
+        "superseded" => Some(RequirementStatus::Superseded),
         "needsattention" => Some(RequirementStatus::NeedsAttention),
         _ => None,
     }
@@ -5733,6 +5735,10 @@ fn parse_mcp_relationship_type(s: &str) -> Result<RelationshipType, String> {
             RelationshipType::BlockedBy
         }
         "blocks" => RelationshipType::Blocks,
+        // trace:TASK-1176 | ai:claude — the supersede lineage pair.
+        "superseded-by" | "superseded_by" | "supersededby" | "replaced-by" | "replaced_by"
+        | "replacedby" => RelationshipType::SupersededBy,
+        "supersedes" | "replaces" => RelationshipType::Supersedes,
         custom => RelationshipType::Custom(custom.to_string()),
     })
 }
@@ -6240,7 +6246,8 @@ pub fn tool_descriptors() -> Value {
                     "status": {
                         "type": "string",
                         "description": "Filter by the current status of the requirement.",
-                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"],
+                        // trace:TASK-1176 | ai:claude — mirrors the CLI status set.
+                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected", "superseded"],
                         "example": "in-progress"
                     },
                     "type": {
@@ -6463,8 +6470,9 @@ pub fn tool_descriptors() -> Value {
                     },
                     "status": {
                         "type": "string",
-                        "description": "New status to transition the requirement into. approved/planned (advisor triage) and completed (merge-driven) are refused via MCP.",
-                        "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected", "needs-attention"],
+                        "description": "New status to transition the requirement into. approved/planned (advisor triage) and completed (merge-driven) are refused via MCP. `superseded` records an adopted-then-replaced spec — pair it with an `add_relationship` of type `superseded-by` naming the successor.",
+                        // trace:TASK-1176 | ai:claude — mirrors the CLI status set.
+                        "enum": ["draft", "approved", "planned", "in-progress", "done", "completed", "rejected", "superseded", "needs-attention"],
                         "example": "in-progress"
                     },
                     "priority": {
@@ -6539,7 +6547,8 @@ pub fn tool_descriptors() -> Value {
                     "status": {
                         "type": "string",
                         "description": "Restrict results to this status.",
-                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"],
+                        // trace:TASK-1176 | ai:claude — mirrors the CLI status set.
+                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected", "superseded"],
                         "example": "in-progress"
                     },
                     "archived": {
@@ -6602,7 +6611,8 @@ pub fn tool_descriptors() -> Value {
                     },
                     "relationship_type": {
                         "type": "string",
-                        "description": "Relationship type to add. Built-ins: parent, child, duplicate, verifies, verified-by, references, blocked-by, blocks. Aliases: depends-on → blocked-by; related / relates-to → references. Non-empty custom names are accepted for CLI parity.",
+                        // trace:TASK-1176 | ai:claude — supersede lineage added.
+                        "description": "Relationship type to add. Built-ins: parent, child, duplicate, verifies, verified-by, references, blocked-by, blocks, superseded-by, supersedes. Aliases: depends-on → blocked-by; related / relates-to → references; replaced-by → superseded-by; replaces → supersedes. Non-empty custom names are accepted for CLI parity.",
                         "example": "blocked-by"
                     },
                     "target_spec_id": {
@@ -7388,7 +7398,8 @@ fn queue_tool_descriptors() -> Value {
                     "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to rework.", "example": "STORY-42" },
                     "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
                     "for": { "type": "string", "description": "Override the routing role (default: active role).", "example": "implementer" },
-                    "status": { "type": "string", "description": "Override the smart target status.", "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected"], "example": "in-progress" },
+                    // trace:TASK-1176 | ai:claude — mirrors the CLI status set.
+                    "status": { "type": "string", "description": "Override the smart target status.", "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected", "superseded"], "example": "in-progress" },
                     "reason": { "type": "string", "description": "Capture a comment on the spec at rework time (audit trail).", "example": "reviewer requested changes" },
                     "force": { "type": "boolean", "description": "Bypass the terminal-status and already-in-progress guards.", "example": true }
                 },

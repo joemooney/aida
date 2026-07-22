@@ -25,6 +25,10 @@ enum RequirementStatus {
     // STORY-332: work was in progress but is paused — an autonomous agent
     // punted a design-fork it could not safely resolve; awaits triage.
     REQUIREMENT_STATUS_NEEDS_ATTENTION = 8;
+    // TASK-1176: adopted, then replaced by a successor spec. Terminal like
+    // REJECTED, but the opposite meaning — followed-then-handed-off, not
+    // declined. The successor is a typed superseded-by relationship.
+    REQUIREMENT_STATUS_SUPERSEDED = 9;
 }
 
 // Requirement priority enum

@@ -117,6 +117,12 @@ pub(crate) enum Glyph {
     /// A checked box, deliberately distinct from [`Glyph::Check`] (✓, merged
     /// work) so a decided ADR does not read as a shipped task.
     Accepted,
+    // trace:TASK-1176 | ai:claude
+    /// Superseded (⊡) — adopted, then replaced by a successor spec. In the same
+    /// box family as [`Glyph::Accepted`] (☑) because the spec WAS adopted, but
+    /// with the check replaced by a dot: closed, and no longer the live copy.
+    /// Deliberately not [`Glyph::Cross`] (✗) — that reads "declined".
+    Superseded,
 }
 
 impl Glyph {
@@ -151,6 +157,8 @@ impl Glyph {
             Glyph::Awaiting => "⦿",
             Glyph::IncomingMail => "📨",
             Glyph::Accepted => "☑",
+            // trace:TASK-1176 | ai:claude
+            Glyph::Superseded => "⊡",
         }
     }
 
@@ -185,6 +193,8 @@ impl Glyph {
             Glyph::Awaiting => "(*)",
             Glyph::IncomingMail => "[@]",
             Glyph::Accepted => "[+]",
+            // trace:TASK-1176 | ai:claude
+            Glyph::Superseded => "[=]",
         }
     }
 
@@ -229,6 +239,8 @@ impl Glyph {
             Glyph::Awaiting => "awaiting",
             Glyph::IncomingMail => "incoming_mail",
             Glyph::Accepted => "accepted",
+            // trace:TASK-1176 | ai:claude
+            Glyph::Superseded => "superseded",
         }
     }
 
@@ -248,7 +260,7 @@ impl Glyph {
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    pub(crate) const ALL: [Glyph; 27] = [
+    pub(crate) const ALL: [Glyph; 28] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -276,6 +288,8 @@ impl Glyph {
         Glyph::Awaiting,
         Glyph::IncomingMail,
         Glyph::Accepted,
+        // trace:TASK-1176 | ai:claude
+        Glyph::Superseded,
     ];
 }
 

@@ -21,6 +21,23 @@ pub enum RequirementStatus {
     Done,
     Completed,
     Rejected,
+    /// Adopted, then REPLACED by a later spec — terminal, but the opposite of
+    /// `Rejected`. `Rejected` means *declined* (we looked and said no);
+    /// `Superseded` means *followed, then handed off* (we did this, and a newer
+    /// spec now governs). The canonical case is an ADR that was accepted and
+    /// later replaced by a successor ADR: before this state it had to
+    /// masquerade as `Rejected` + a `superseded-by:ADR-N` string tag, so a
+    /// decision followed for months rendered identically to one turned down.
+    ///
+    /// The successor is recorded as a first-class typed edge
+    /// ([`RelationshipType::SupersededBy`] with its reciprocal
+    /// [`RelationshipType::Supersedes`]), not a tag — see
+    /// `aida edit <ID> --status superseded --superseded-by <NEW-ID>`.
+    ///
+    /// Terminal like `Completed` / `Rejected`: excluded from the default open
+    /// lens, the `aida status` open tally, and every candidate/ready surface.
+    // trace:TASK-1176 | ai:claude
+    Superseded,
     /// Work was in progress but is now paused — an autonomous agent hit a
     /// design-fork it could not safely resolve and punted (`aida punt` /
     /// `/aida-punt`) instead of guessing. A human or advisor must decide
@@ -41,6 +58,8 @@ impl fmt::Display for RequirementStatus {
             RequirementStatus::Done => write!(f, "Done"),
             RequirementStatus::Completed => write!(f, "Completed"),
             RequirementStatus::Rejected => write!(f, "Rejected"),
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded => write!(f, "Superseded"),
             RequirementStatus::NeedsAttention => write!(f, "Needs Attention"),
         }
     }
@@ -65,6 +84,8 @@ impl RequirementStatus {
             "done" => Some(RequirementStatus::Done),
             "completed" => Some(RequirementStatus::Completed),
             "rejected" => Some(RequirementStatus::Rejected),
+            // trace:TASK-1176 | ai:claude
+            "superseded" => Some(RequirementStatus::Superseded),
             "needsattention" => Some(RequirementStatus::NeedsAttention),
             _ => None,
         }
@@ -95,6 +116,8 @@ impl RequirementStatus {
             RequirementStatus::Done => "Done",
             RequirementStatus::Completed => "Completed",
             RequirementStatus::Rejected => "Rejected",
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded => "Superseded",
             RequirementStatus::NeedsAttention => "NeedsAttention",
         }
     }
@@ -114,12 +137,16 @@ impl RequirementStatus {
     /// The terminal ("closed") lifecycle statuses: a spec that is finished or
     /// abandoned. The `closed` list alias expands to these. `Done` is terminal
     /// here (work finished on a branch) — it sits with Completed / Rejected on
-    /// the "no longer open" side. trace:TASK-0415
-    pub fn closed_statuses() -> [RequirementStatus; 3] {
+    /// the "no longer open" side. `Superseded` joins them: adopted, then
+    /// replaced by a successor spec — closed, just not declined.
+    // trace:TASK-0415 trace:TASK-1176 | ai:claude
+    pub fn closed_statuses() -> [RequirementStatus; 4] {
         [
             RequirementStatus::Done,
             RequirementStatus::Completed,
             RequirementStatus::Rejected,
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded,
         ]
     }
 
@@ -931,6 +958,17 @@ pub enum RelationshipType {
     /// This requirement blocks the target (inverse of `BlockedBy`).
     /// trace:STORY-333 | ai:claude
     Blocks,
+    /// This requirement was REPLACED BY the target — the successor now
+    /// governs. Written together with [`RequirementStatus::Superseded`] on the
+    /// source, and the reciprocal [`RelationshipType::Supersedes`] on the
+    /// target, by `aida edit <ID> --superseded-by <NEW-ID>`. A typed edge, not
+    /// a `superseded-by:ADR-N` string tag, so `aida graph` / `query_graph` can
+    /// walk it.
+    // trace:TASK-1176 | ai:claude
+    SupersededBy,
+    /// This requirement REPLACES the target (inverse of `SupersededBy`).
+    // trace:TASK-1176 | ai:claude
+    Supersedes,
     /// Custom relationship type with user-defined name
     Custom(String),
 }
@@ -946,6 +984,9 @@ impl fmt::Display for RelationshipType {
             RelationshipType::References => write!(f, "references"),
             RelationshipType::BlockedBy => write!(f, "blocked-by"),
             RelationshipType::Blocks => write!(f, "blocks"),
+            // trace:TASK-1176 | ai:claude
+            RelationshipType::SupersededBy => write!(f, "superseded-by"),
+            RelationshipType::Supersedes => write!(f, "supersedes"),
             RelationshipType::Custom(name) => write!(f, "{}", name),
         }
     }
@@ -1037,6 +1078,11 @@ impl RelationshipType {
             "references" => RelationshipType::References,
             "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
             "blocks" => RelationshipType::Blocks,
+            // trace:TASK-1176 | ai:claude
+            "superseded-by" | "superseded_by" | "supersededby" | "replaced-by" => {
+                RelationshipType::SupersededBy
+            }
+            "supersedes" | "replaces" => RelationshipType::Supersedes,
             _ => RelationshipType::Custom(s.to_string()),
         }
     }
@@ -1051,6 +1097,9 @@ impl RelationshipType {
             RelationshipType::Duplicate => Some(RelationshipType::Duplicate),
             RelationshipType::BlockedBy => Some(RelationshipType::Blocks),
             RelationshipType::Blocks => Some(RelationshipType::BlockedBy),
+            // trace:TASK-1176 | ai:claude
+            RelationshipType::SupersededBy => Some(RelationshipType::Supersedes),
+            RelationshipType::Supersedes => Some(RelationshipType::SupersededBy),
             RelationshipType::References => None,
             RelationshipType::Custom(_) => None,
         }
@@ -1067,6 +1116,9 @@ impl RelationshipType {
             RelationshipType::References => "references".to_string(),
             RelationshipType::BlockedBy => "blocked_by".to_string(),
             RelationshipType::Blocks => "blocks".to_string(),
+            // trace:TASK-1176 | ai:claude
+            RelationshipType::SupersededBy => "superseded_by".to_string(),
+            RelationshipType::Supersedes => "supersedes".to_string(),
             RelationshipType::Custom(name) => name.clone(),
         }
     }
@@ -4404,6 +4456,11 @@ impl Requirement {
                 self.status = RequirementStatus::Rejected;
                 self.custom_status = None;
             }
+            // trace:TASK-1176 | ai:claude
+            "superseded" => {
+                self.status = RequirementStatus::Superseded;
+                self.custom_status = None;
+            }
             "needsattention" => {
                 self.status = RequirementStatus::NeedsAttention;
                 self.custom_status = None;
@@ -7575,6 +7632,56 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         );
     }
 
+    /// TASK-1176: the supersede lineage is a FIRST-CLASS typed edge, not a
+    /// `superseded-by:ADR-N` string tag. It must survive the canonical string
+    /// round-trip (a regression would silently downgrade it to
+    /// `Custom("superseded-by")`, which the graph traversals do not follow) and
+    /// carry a known inverse so both endpoints stay walkable.
+    // trace:TASK-1176 | ai:claude
+    #[test]
+    fn relationship_type_superseded_by_is_typed_and_has_an_inverse() {
+        let parsed = RelationshipType::from_str("superseded-by");
+        assert_eq!(parsed, RelationshipType::SupersededBy);
+        assert_eq!(parsed.to_string(), "superseded-by");
+        for alias in [
+            "superseded_by",
+            "supersededby",
+            "SUPERSEDED-BY",
+            "replaced-by",
+        ] {
+            assert_eq!(
+                RelationshipType::from_str(alias),
+                RelationshipType::SupersededBy,
+                "{alias} must land on the typed variant, not Custom"
+            );
+        }
+        assert_eq!(
+            RelationshipType::from_str("supersedes"),
+            RelationshipType::Supersedes
+        );
+        assert_eq!(RelationshipType::Supersedes.to_string(), "supersedes");
+        assert_eq!(
+            RelationshipType::from_str("replaces"),
+            RelationshipType::Supersedes
+        );
+
+        // The pair is a true inverse in both directions.
+        assert_eq!(
+            RelationshipType::SupersededBy.inverse(),
+            Some(RelationshipType::Supersedes)
+        );
+        assert_eq!(
+            RelationshipType::Supersedes.inverse(),
+            Some(RelationshipType::SupersededBy)
+        );
+
+        // ...and it survives serde (the on-disk YAML edge), rather than
+        // deserializing into the forward-compatible `Custom` bucket.
+        let yaml = serde_yaml::to_string(&RelationshipType::SupersededBy).unwrap();
+        let back: RelationshipType = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(back, RelationshipType::SupersededBy, "yaml: {yaml}");
+    }
+
     /// STORY-333: `human_only` defaults to `false` on a fresh Requirement and
     /// serializes absent (skip_serializing_if), so existing specs round-trip
     /// unchanged through yaml.
@@ -7822,7 +7929,8 @@ completion_sha: 0123456789abcdef0123456789abcdef01234567
         for alias in &["closed", "CLOSED", "Closed"] {
             assert_eq!(
                 RequirementStatus::expand_filter_token(alias),
-                Some(vec!["Done", "Completed", "Rejected"]),
+                // trace:TASK-1176 | ai:claude — Superseded joined the closed set.
+                Some(vec!["Done", "Completed", "Rejected", "Superseded"]),
                 "{:?} should expand to the closed set",
                 alias
             );

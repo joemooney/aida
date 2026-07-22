@@ -3498,6 +3498,8 @@ pub(crate) fn handle_git_backend_command(
             remove_tag,
             blocked_by,
             remove_blocked_by,
+            // trace:TASK-1176 | ai:claude
+            superseded_by,
             add_ref,
             remove_ref,
             strict,
@@ -3530,6 +3532,24 @@ pub(crate) fn handle_git_backend_command(
                 resolved_id = resolved;
             }
             let id = &resolved_id;
+
+            // TASK-1176: naming the successor IS the supersede move — recording
+            // a superseded-by edge without also flipping the status would leave
+            // the two halves able to disagree (exactly the drift the string-tag
+            // workaround suffered). So `--superseded-by <ID>` implies
+            // `--status superseded`. An EXPLICIT `--status` still wins, so a
+            // recovery edit (`--status approved --superseded-by X`) stays
+            // expressible. trace:TASK-1176 | ai:claude
+            let implied_status: Option<String> = if superseded_by.is_some() && status.is_none() {
+                Some("superseded".to_string())
+            } else {
+                None
+            };
+            let status: &Option<String> = if implied_status.is_some() {
+                &implied_status
+            } else {
+                status
+            };
 
             // BUG-599: a malformed id is a typo, not an on-disk parse failure
             // — friendly format hint instead of the bare "Invalid spec_id
@@ -3667,6 +3687,8 @@ pub(crate) fn handle_git_backend_command(
                 && remove_tag.is_empty()
                 && blocked_by.is_empty()
                 && remove_blocked_by.is_empty()
+                // trace:TASK-1176 | ai:claude
+                && superseded_by.is_none()
                 && add_ref.is_empty()
                 && remove_ref.is_empty()
                 && !*human_only
@@ -4236,8 +4258,49 @@ pub(crate) fn handle_git_backend_command(
                         );
                     }
                 }
-            } else if blocked_by.is_empty() && remove_blocked_by.is_empty() {
+            } else if blocked_by.is_empty()
+                && remove_blocked_by.is_empty()
+                // trace:TASK-1176 | ai:claude
+                && superseded_by.is_none()
+            {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
+            }
+
+            // TASK-1176: record the supersede lineage AFTER the scalar save,
+            // for the same reason the blocked-by block below does — the helper
+            // re-reads the persisted spec, so writing the edge first would be
+            // clobbered by the status save. trace:TASK-1176 | ai:claude
+            if let Some(successor) = superseded_by {
+                let edit_spec = req.spec_id.as_deref().unwrap_or(id).to_string();
+                match crate::add_superseded_by_edge(&backend, &edit_spec, successor) {
+                    Ok(disp) => println!("  Superseded by: {}", disp.cyan()),
+                    Err(e) => eprintln!(
+                        "  {} could not record superseded-by {}: {}",
+                        "Warning:".yellow().bold(),
+                        successor,
+                        e
+                    ),
+                }
+            } else if matches!(req.status, RequirementStatus::Superseded)
+                && !req.relationships.iter().any(|r| {
+                    matches!(
+                        r.rel_type,
+                        aida_core::models::RelationshipType::SupersededBy
+                    )
+                })
+            {
+                // TASK-1176: "superseded" without a named successor is a
+                // half-recorded move — the state says something replaced this,
+                // but nothing says WHAT. Nudge rather than refuse: the successor
+                // may not be filed yet. trace:TASK-1176 | ai:claude
+                eprintln!(
+                    "{}",
+                    format!(
+                        "  Note: no successor recorded — add one with `aida edit {} --superseded-by <SPEC-ID>`.",
+                        req.spec_id.as_deref().unwrap_or(id)
+                    )
+                    .dimmed()
+                );
             }
 
             // STORY-446: apply blocked-by edge add/remove AFTER any scalar edit
@@ -4896,6 +4959,13 @@ pub(crate) fn handle_git_backend_command(
                 // trace:STORY-333 | ai:claude
                 "blocked-by" | "blocked_by" | "blockedby" => RelationshipType::BlockedBy,
                 "blocks" => RelationshipType::Blocks,
+                // TASK-1176: the supersede lineage pair — first-class, so
+                // `aida graph`/`query_graph` can walk "what replaced this".
+                // trace:TASK-1176 | ai:claude
+                "superseded-by" | "superseded_by" | "supersededby" => {
+                    RelationshipType::SupersededBy
+                }
+                "supersedes" => RelationshipType::Supersedes,
                 other => RelationshipType::Custom(other.to_string()),
             };
 

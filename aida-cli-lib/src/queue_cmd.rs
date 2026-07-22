@@ -5223,6 +5223,11 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
         RequirementStatus::Done => Some(RequirementStatus::InProgress),
         RequirementStatus::Completed => Some(RequirementStatus::InProgress),
         RequirementStatus::Rejected => Some(RequirementStatus::Approved),
+        // TASK-1176: a superseded spec was handed off to a successor — the
+        // rework target is that successor, not this record. Refuse to guess a
+        // status for it; the caller's --force + explicit --status still works.
+        // trace:TASK-1176 | ai:claude
+        RequirementStatus::Superseded => None,
         // STORY-332: reworking a punted spec resumes the paused work.
         RequirementStatus::NeedsAttention => Some(RequirementStatus::InProgress),
     }
@@ -6522,6 +6527,13 @@ pub(crate) fn format_queue_work_not_queued_error(
         ),
         RequirementStatus::Rejected => format!(
             "`{display_id}` is Rejected. Pick a different spec, or re-open with `aida edit {display_id} --status approved --force`."
+        ),
+        // trace:TASK-1176 | ai:claude — superseded is terminal-but-adopted:
+        // the work moved to a successor spec, so point at the successor rather
+        // than offering a re-open the way Rejected does.
+        RequirementStatus::Superseded => format!(
+            "`{display_id}` is Superseded — it was adopted and then replaced by a later spec.\n  \
+             Find the successor with `aida show {display_id}` (the superseded-by link) and work that instead."
         ),
         // STORY-332: a punted spec is paused awaiting triage — it should be
         // resolved by a human/advisor, not silently re-queued.
