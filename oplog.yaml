@@ -38124,5 +38124,13 @@ operations:
   timestamp: 2026-07-22T05:26:13.793646311Z
   kind: !AddTag
     tag: drive-authorized-cluster
-clock: 3560
+- id: 019f884b-bcd1-7f00-8f23-c9e68ee0bfa8
+  target_id: 019f57c0-a4ee-7350-b656-6f5ebb4a188d
+  author: aida
+  node_id: '1'
+  lamport: 3561
+  timestamp: 2026-07-22T05:28:12.753636114Z
+  kind: !AddTag
+    tag: serialize:single-branch-drain
+clock: 3561
 node_id: '1'
