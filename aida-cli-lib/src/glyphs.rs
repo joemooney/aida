@@ -111,6 +111,12 @@ pub(crate) enum Glyph {
     /// Incoming mail / unread-message marker (📨) — the per-turn unread-mail
     /// notice. Distinct from [`Glyph::Mailbox`] (✉, the generic mailbox).
     IncomingMail,
+    // trace:BUG-781 | ai:claude
+    /// Ratified / accepted (☑) — the terminal state of a decision (ADR) spec,
+    /// where `Approved` means ACCEPTED rather than "cleared to start work".
+    /// A checked box, deliberately distinct from [`Glyph::Check`] (✓, merged
+    /// work) so a decided ADR does not read as a shipped task.
+    Accepted,
 }
 
 impl Glyph {
@@ -144,6 +150,7 @@ impl Glyph {
             Glyph::InfoAlt => "ℹ",
             Glyph::Awaiting => "⦿",
             Glyph::IncomingMail => "📨",
+            Glyph::Accepted => "☑",
         }
     }
 
@@ -177,6 +184,7 @@ impl Glyph {
             Glyph::InfoAlt => "i",
             Glyph::Awaiting => "(*)",
             Glyph::IncomingMail => "[@]",
+            Glyph::Accepted => "[+]",
         }
     }
 
@@ -220,6 +228,7 @@ impl Glyph {
             Glyph::InfoAlt => "info_alt",
             Glyph::Awaiting => "awaiting",
             Glyph::IncomingMail => "incoming_mail",
+            Glyph::Accepted => "accepted",
         }
     }
 
@@ -239,7 +248,7 @@ impl Glyph {
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    pub(crate) const ALL: [Glyph; 26] = [
+    pub(crate) const ALL: [Glyph; 27] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -266,6 +275,7 @@ impl Glyph {
         Glyph::InfoAlt,
         Glyph::Awaiting,
         Glyph::IncomingMail,
+        Glyph::Accepted,
     ];
 }
 

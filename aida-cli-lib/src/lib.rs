@@ -841,12 +841,21 @@ fn review_may_launch_reviewer(stdin_is_tty: bool, stdout_is_tty: bool) -> bool {
 /// hidden-hints already point at `--all`. Pure, so the empty-state decision is
 /// unit-testable without the surrounding render machinery.
 // trace:BUG-684 | ai:claude
+// BUG-781: the accepted-decision axis counts as "hidden behind a filter" too —
+// a project whose only remaining specs are ratified ADRs is not a fresh repo,
+// so it must not be told to file its first spec.
+// trace:BUG-781 | ai:claude
 fn empty_list_hint_line(
     closed_hidden: usize,
     archived_hidden: usize,
     deferred_hidden: usize,
+    accepted_decisions_hidden: usize,
 ) -> Option<&'static str> {
-    if closed_hidden == 0 && archived_hidden == 0 && deferred_hidden == 0 {
+    if closed_hidden == 0
+        && archived_hidden == 0
+        && deferred_hidden == 0
+        && accepted_decisions_hidden == 0
+    {
         Some("Nothing here yet — file your first spec: aida add --title \"...\"")
     } else {
         None
@@ -1013,7 +1022,13 @@ fn toon_list_cell(
             .unwrap_or("")
             .to_string(),
         "title" => r.title.clone(),
-        "status" => toon_status_token(&r.status),
+        // BUG-781: the agent surface reports the TERMINAL truth for an accepted
+        // decision — `accepted`, the recognized ADR verb — not the `approved`
+        // token that reads as "cleared to start". trace:BUG-781 | ai:claude
+        "status" => toon_status_token(crate::status_display::display_status_for_type(
+            &r.req_type,
+            &r.status,
+        )),
         "type" => r.req_type.to_ascii_lowercase(),
         "priority" => r.priority.to_ascii_lowercase(),
         "feature" => r.feature.clone(),
@@ -1154,7 +1169,14 @@ where
                 format!("{:<width$}", row[c], width = widths[c])
             };
             let cell = match f.as_str() {
-                "status" => status_display::paint_status(&padded, &req.status).to_string(),
+                // BUG-781: paint on the DISPLAY label, so an accepted decision
+                // gets the terminal green rather than the un-started cyan.
+                // trace:BUG-781 | ai:claude
+                "status" => status_display::paint_status(
+                    &padded,
+                    status_display::display_status_for_type(&req.req_type, &req.status),
+                )
+                .to_string(),
                 "id" => padded.bold().to_string(),
                 _ => padded,
             };
@@ -58830,9 +58852,14 @@ fn fast_status_counts<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) ->
             continue;
         }
         c.total += 1;
+        // BUG-781: an accepted decision (a `decision` spec at `Approved`) is
+        // that class's TERMINAL state, so it must not inflate the open backlog
+        // the same way a not-yet-started task at Approved does — the identical
+        // rule the default `aida list` lens applies. trace:BUG-781 | ai:claude
         let terminal = status.eq_ignore_ascii_case("completed")
             || status.eq_ignore_ascii_case("rejected")
-            || status.eq_ignore_ascii_case("released");
+            || status.eq_ignore_ascii_case("released")
+            || aida_core::lifecycle::is_accepted_decision(req_type, status);
         if !terminal {
             c.open += 1;
         }
@@ -59139,6 +59166,41 @@ fn queue_row_actionable(status: &str, archived: i64, deferred: i64, blocked: i64
 fn list_default_open_lens(has_status: bool, all: bool, archived: bool, deferred: bool) -> bool {
     !has_status && !all && !archived && !deferred
 }
+
+/// BUG-781: drop the ACCEPTED (terminal) decision rows from a listing under the
+/// default open lens, returning how many were hidden.
+///
+/// For a `decision` spec (an ADR) the stored `Approved` means ACCEPTED — the
+/// end of that class's lifecycle (draft = proposed, approved = accepted) — not
+/// the "cleared to start" that `Approved` means for a task. Left in the open
+/// lens, every ratified ADR reads as work that never finishes, and the only way
+/// out was a manual `aida archive`. This is the sibling of the TASK-773
+/// standing-artifact pass: same lens, same "an explicit ask overrides it" rule.
+///
+/// Escapes, all preserved by the caller's two gates: an explicit `--status`,
+/// `--all`, `--archived` or `--deferred` clears `default_open_lens`, and
+/// `--type decision` sets `asked_for_decision_type`. Nothing is written — the
+/// stored status and the archive flag are untouched.
+///
+/// Pure (takes the row vector, not a backend) so the lens is unit-testable
+/// without a cache DB.
+// trace:BUG-781 | ai:claude
+fn hide_accepted_decisions(
+    reqs: &mut Vec<aida_core::RequirementSummary>,
+    default_open_lens: bool,
+    asked_for_decision_type: bool,
+) -> usize {
+    if !default_open_lens || asked_for_decision_type {
+        return 0;
+    }
+    let before = reqs.len();
+    reqs.retain(|r| !aida_core::lifecycle::is_accepted_decision(&r.req_type, &r.status));
+    before - reqs.len()
+}
+
+#[cfg(test)]
+#[path = "tests/bug_781_accepted_decision_lens_tests.rs"]
+mod bug_781_accepted_decision_lens_tests;
 
 /// STORY-723: the denominator label for the agent `aida list` `count: N of M`
 /// header — `open` under the default actionable lens (so it reconciles with the

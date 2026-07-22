@@ -986,6 +986,25 @@ pub(crate) fn handle_git_backend_command(
                 reqs.retain(|r| !is_standing_artifact_type(&r.req_type));
             }
 
+            // BUG-781: a decision spec (an ADR) sitting at `Approved` is
+            // ACCEPTED — that class's TERMINAL state — so it belongs with the
+            // closed rows the default open lens already hides, not in the open
+            // backlog forever waiting on a manual archive. Applied only under
+            // the same default open lens STORY-723 established: an explicit
+            // `--status`, `--all`, `--archived`, `--deferred`, or a `--type
+            // decision` ask all keep accepted ADRs visible. Sibling of the
+            // TASK-773 standing-artifact pass above; the count feeds the footer
+            // hint so the hidden rows stay one flag away. trace:BUG-781
+            let user_asked_for_decision_type = r#type
+                .as_deref()
+                .map(|t| t.eq_ignore_ascii_case("decision"))
+                .unwrap_or(false);
+            let accepted_decisions_hidden = crate::hide_accepted_decisions(
+                &mut reqs,
+                default_open_lens,
+                user_asked_for_decision_type,
+            );
+
             // TASK-900: cap the result at the first N rows AFTER the sort
             // (list_summaries already ordered by --sort; default is
             // recency-first) and after the parent / meta / standing-type
@@ -1176,6 +1195,18 @@ pub(crate) fn handle_git_backend_command(
                         .dimmed()
                     );
                 }
+                // BUG-781: accepted (terminal) decisions are hidden by the open
+                // lens — say so, and name the flag that brings them back.
+                if accepted_decisions_hidden > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({accepted_decisions_hidden} accepted decision{} hidden — pass --all or --type decision to see them)",
+                            if accepted_decisions_hidden == 1 { "" } else { "s" }
+                        )
+                        .dimmed()
+                    );
+                }
             };
 
             // BUG-684: a truly empty listing dead-ends the FIRST command a new
@@ -1190,6 +1221,7 @@ pub(crate) fn handle_git_backend_command(
                     closed_hidden_count,
                     archived_hidden_count,
                     deferred_hidden_count,
+                    accepted_decisions_hidden,
                 ) {
                     println!(
                         "{} {}",
@@ -1299,6 +1331,13 @@ pub(crate) fn handle_git_backend_command(
                 if closed_hidden_count > 0 {
                     println!(
                         "note: {closed_hidden_count} closed hidden (open lens) — `aida list --all` or `--status closed`"
+                    );
+                }
+                // BUG-781: same for the terminal (accepted) decisions the open
+                // lens drops — an agent must not conclude they were deleted.
+                if accepted_decisions_hidden > 0 {
+                    println!(
+                        "note: {accepted_decisions_hidden} accepted decisions hidden (terminal) — `aida list --type decision`"
                     );
                 }
                 // TASK-974 (AXI #9): trailing next-step block — drill into a row
@@ -1459,7 +1498,13 @@ pub(crate) fn handle_git_backend_command(
                             .as_deref()
                             .or(summary.spec_id.as_deref())
                             .unwrap_or("???");
-                        let status_badge = status_display::status_badge(&summary.status);
+                        // BUG-781: an accepted ADR badges as terminal `Accepted`,
+                        // not the task-style `Approved`. trace:BUG-781
+                        let status_badge =
+                            status_display::status_badge(status_display::display_status_for_type(
+                                &summary.req_type,
+                                &summary.status,
+                            ));
                         let glyph = if is_last { "└─" } else { "├─" };
                         let pad = " ".repeat(id_col_width.saturating_sub(display_id.len()));
                         let tag_set: std::collections::HashSet<String> =
@@ -1542,13 +1587,17 @@ pub(crate) fn handle_git_backend_command(
                         status_display::flow_glyph(in_flight, blocked, queued)
                     )
                 };
-                let render_status = |status: &str| -> String {
+                // BUG-781: the Status column renders the TYPE-AWARE label, so an
+                // accepted decision reads `☑ Accepted` (terminal) instead of the
+                // `▸ Approved` a not-yet-started task wears. trace:BUG-781
+                let render_status = |r: &aida_core::RequirementSummary| -> String {
+                    let label = status_display::display_status_for_type(&r.req_type, &r.status);
                     if *no_glyph {
                         // 13 cols = the glyph(1)+space(1)+11-label width the
                         // glyph cell occupies, so columns line up either way.
-                        status_display::status_cell_no_glyph(status, 13)
+                        status_display::status_cell_no_glyph(label, 13)
                     } else {
-                        status_display::status_cell(status, 11)
+                        status_display::status_cell(label, 11)
                     }
                 };
                 // STORY-639: append a compact ` @user` marker to the Title cell
@@ -1602,7 +1651,7 @@ pub(crate) fn handle_git_backend_command(
                         // trace:TASK-269 | ai:claude
                         // TASK-315: glyph + colour in the Status column (cell is
                         // 13 visible cols: glyph + space + 11-wide label).
-                        let status_cell = render_status(&req.status);
+                        let status_cell = render_status(req);
                         let flow = flow_prefix(req);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
@@ -1655,7 +1704,7 @@ pub(crate) fn handle_git_backend_command(
                         // keeps the column aligned. trace:TASK-269 | ai:claude
                         // TASK-315: glyph + colour in the Status column (cell is
                         // 13 visible cols: glyph + space + 11-wide label).
-                        let status_cell = render_status(&req.status);
+                        let status_cell = render_status(req);
                         let flow = flow_prefix(req);
                         if *show_tags {
                             let title_cell = truncate(&req.title, title_max);
@@ -3019,7 +3068,14 @@ pub(crate) fn handle_git_backend_command(
                     // catches it; the same value is reprinted at the foot
                     // of the output below. trace:TASK-269 | ai:claude
                     // BUG-626: derived rollup status for epics. trace:BUG-626
-                    let status = effective_status_str.clone();
+                    // BUG-781: for a decision spec, the stored `Approved` IS
+                    // ACCEPTED — the terminal state — so display it that way
+                    // here and in the reprint at the foot. trace:BUG-781
+                    let status = status_display::display_status_for_type(
+                        &format!("{:?}", req.req_type),
+                        &effective_status_str,
+                    )
+                    .to_string();
                     println!(
                         "{}: {}",
                         "Status".bold(),
@@ -4550,9 +4606,14 @@ pub(crate) fn handle_git_backend_command(
                         .as_deref()
                         .or(req.spec_id.as_deref())
                         .unwrap_or("?");
+                    // BUG-781: same type-aware label the list table uses, so a
+                    // ratified ADR reads `Accepted` here too. trace:BUG-781
                     println!(
                         "{:<14} {:<12} {:<10} {}",
-                        display_id, req.req_type, req.status, req.title,
+                        display_id,
+                        req.req_type,
+                        status_display::display_status_for_type(&req.req_type, &req.status),
+                        req.title,
                     );
                 }
                 println!("\n{} results", results.len());

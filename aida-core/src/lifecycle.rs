@@ -329,8 +329,33 @@ pub fn archive_invariant_block(status: State, queued: bool) -> Option<ArchiveBlo
 /// (approval is forbidden for them), so they keep the work-spec rule.
 // trace:BUG-761 | ai:claude
 pub fn status_is_closed_for_type(req_type: &crate::models::RequirementType, status: State) -> bool {
-    status.is_terminal()
-        || (*req_type == crate::models::RequirementType::Decision && status == State::Approved)
+    status.is_terminal() || is_accepted_decision_typed(req_type, status)
+}
+
+/// The accepted-decision half of [`status_is_closed_for_type`], on its own: a
+/// `decision` spec sitting at `Approved` — the ADR lifecycle's ACCEPTED, and
+/// therefore terminal, state.
+// trace:BUG-781 | ai:claude
+pub fn is_accepted_decision_typed(
+    req_type: &crate::models::RequirementType,
+    status: State,
+) -> bool {
+    *req_type == crate::models::RequirementType::Decision && status == State::Approved
+}
+
+/// String form of [`is_accepted_decision_typed`], for the read-projection
+/// surfaces (the SQLite cache's `RequirementSummary`, the status tallies) that
+/// carry `req_type` / `status` as display strings rather than typed enums.
+///
+/// Both spellings the cache emits are accepted: matching is trimmed and
+/// case-insensitive, so `"Decision"` / `"decision"` and `"Approved"` /
+/// `"approved"` all resolve. Kept beside the typed predicate so the "an
+/// accepted ADR is terminal" rule has ONE definition that the archive gate, the
+/// default list lens, and the open-work counts all read.
+// trace:BUG-781 | ai:claude
+pub fn is_accepted_decision(req_type: &str, status: &str) -> bool {
+    req_type.trim().eq_ignore_ascii_case("decision")
+        && status.trim().eq_ignore_ascii_case("approved")
 }
 
 /// Type-aware form of [`archive_invariant_block`]: identical queued-axis
@@ -950,6 +975,52 @@ mod tests {
                 );
             }
         }
+    }
+
+    // BUG-781: the string form of the accepted-decision predicate must agree
+    // with the typed form for EVERY (type, state) pair — the cache-backed list
+    // lens and the open-work tallies read strings, the archive gate reads
+    // enums, and they must never disagree about whether an ADR is terminal.
+    // trace:BUG-781 | ai:claude
+    #[test]
+    fn is_accepted_decision_string_form_matches_typed_form() {
+        use crate::models::RequirementType as T;
+        use State::*;
+        let types = [
+            T::Decision,
+            T::Task,
+            T::Story,
+            T::Bug,
+            T::Epic,
+            T::Principle,
+            T::Term,
+            T::Vision,
+        ];
+        let states = [
+            Draft,
+            Approved,
+            Planned,
+            InProgress,
+            Done,
+            Completed,
+            Rejected,
+            NeedsAttention,
+        ];
+        for t in types {
+            for s in states {
+                assert_eq!(
+                    is_accepted_decision(&format!("{t:?}"), &format!("{s:?}")),
+                    is_accepted_decision_typed(&t, s),
+                    "string/typed disagreement at {t:?} @ {s:?}"
+                );
+            }
+        }
+        // Only the accepted ADR is true, and the match tolerates the spellings
+        // the cache and the CLI hand in.
+        assert!(is_accepted_decision("decision", "approved"));
+        assert!(is_accepted_decision("Decision", " Approved "));
+        assert!(!is_accepted_decision("decision", "draft"));
+        assert!(!is_accepted_decision("task", "approved"));
     }
 
     #[test]
