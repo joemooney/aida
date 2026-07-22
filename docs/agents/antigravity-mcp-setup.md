@@ -205,6 +205,27 @@ As an **Experimental-tier** agent (per STORY-408):
 - **Architecture-impacting changes** (e.g. altering CLI protocols, files under `.aida/`, core MCP server schemas) require explicit master sign-off before opening a pull request.
 - Both text envelopes and Path B `structuredContent` are emitted on success (STORY-399); parse either, but text remains the back-compat floor.
 
+## Keeping the Antigravity Skill Pack Current
+
+`.antigravity/skills/` is scaffolded by `aida init` and is then skip-existing,
+so a later fix to a skill template never reaches a project that already has the
+file. The delivery path is an **edit-preserving refresh** — the same one that
+keeps Claude's skills/commands, `.codex/skills/` and `~/.codex/prompts` level
+with the binary:
+
+```bash
+aida scaffold refresh          # every installed pack, in one pass
+aida init --refresh            # same refresh, as part of a re-init
+```
+
+A skill file whose body still hashes to the scaffold checksum it was written
+with is overlaid with the current template. A file you edited, a file with no
+scaffold marker, and a symlinked destination are all left exactly as they are,
+and a pack you never installed is never created. No `--force` is needed, and
+nothing you wrote is overwritten. Cross-vendor parity is therefore a property
+of one mechanism rather than a per-vendor chore: fixing a skill master delivers
+to Claude, Codex and Antigravity the same way.
+
 ## Current Known Constraints
 
 - `structuredContent` is emitted on success (Path B, STORY-399) alongside the text envelope.

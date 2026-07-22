@@ -458,6 +458,18 @@ pub(crate) fn handle_scaffold_command(
             }
         }
 
+        // trace:TASK-1170 | ai:claude
+        ScaffoldCommand::Refresh { project_root, dest } => {
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            if !root.exists() {
+                anyhow::bail!("Project root does not exist: {}", root.display());
+            }
+            let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref());
+            crate::scaffold_refresh::print_refresh_summary(&packs);
+        }
+
         ScaffoldCommand::Upgrade {
             project_root,
             dry_run,

@@ -205,6 +205,7 @@ mod rules_cmd;
 mod rules_sync;
 mod sandbox_cmd;
 mod scaffold_cmd;
+mod scaffold_refresh;
 // trace:STORY-262 | ai:claude
 mod schedule;
 mod schedule_cmd;
@@ -2022,6 +2023,15 @@ fn run() -> Result<()> {
             if let Err(e) = scaffold_memory_pack(*refresh, focus.as_deref()) {
                 eprintln!("  {} starter memory pack skipped: {}", "Note:".dimmed(), e);
             }
+        }
+        // TASK-1170: --refresh is not memory-pack-only any more. The same
+        // edit-preserving overlay now converges every installed agent pack
+        // (Claude skills/commands, Codex skills, Antigravity skills, and the
+        // machine-global Codex custom prompts) onto this binary's templates,
+        // so a template fix reaches a non-Claude agent without --force.
+        if *refresh {
+            let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
+            scaffold_refresh::print_refresh_summary(&packs);
         }
         // TASK-859: surface a small curated set of high-value config knobs that
         // are otherwise silent defaults (telemetry opt-out today) and offer to
