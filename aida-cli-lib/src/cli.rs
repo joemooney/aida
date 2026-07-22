@@ -8320,7 +8320,12 @@ pub enum Command {
     /// lines; `--json` passes the raw stream-json events through instead. A
     /// session with no log (an interactive one streams to its terminal, not to
     /// a file) is reported plainly, not as an error.
+    ///
+    /// Each line is stamped with the time of the event behind it, in local
+    /// time, so the gaps between lines show the pacing; `--no-timestamp` drops
+    /// the prefix.
     // trace:TASK-1167 | ai:claude
+    // trace:TASK-1173 | ai:claude
     #[clap(verbatim_doc_comment)]
     Tail {
         /// A session id from `aida ps`, a spec id, a drain id, or `drain` for
@@ -8345,6 +8350,10 @@ pub enum Command {
         /// Interleave tool invocations with the assistant text.
         #[clap(long)]
         with_tools: bool,
+        /// Drop the leading `[HH:MM:SS]` event time from each line.
+        // trace:TASK-1173 | ai:claude
+        #[clap(long)]
+        no_timestamp: bool,
     },
 
     /// The integrator seat at a glance — a read-only throughput view (writes

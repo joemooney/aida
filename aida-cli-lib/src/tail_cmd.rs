@@ -57,6 +57,9 @@ pub struct TailOptions {
     pub with_tools: bool,
     /// Colorize (auto-disabled off a TTY / under `NO_COLOR`).
     pub color: bool,
+    /// Drop the per-line `[HH:MM:SS]` event-time prefix (clean copy-paste).
+    // trace:TASK-1173 | ai:claude
+    pub no_timestamp: bool,
 }
 
 /// One running session, projected from the session lease to what the resolver
@@ -485,6 +488,12 @@ pub fn handle_tail(
                 include_user: false,
                 color: opts.color,
                 since: since_cutoff,
+                // On by default here: without a clock the stream reads as one
+                // undifferentiated flow, so "is it moving or stalled?" is
+                // unanswerable. `--json` is a raw passthrough and never
+                // rendered, so the flag is moot on that path.
+                // trace:TASK-1173 | ai:claude
+                timestamps: !opts.no_timestamp,
             };
             let stream_opts = StreamOpts {
                 follow: !opts.no_follow,
