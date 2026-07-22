@@ -17,12 +17,12 @@ description: |-
   - A wait that exceeds the bounded ceiling parks the spec NeedsAttention with a recorded reason, never silently terminates; no uncommitted work is orphaned without a punt record.
   - Regression: a wave with a >600s CI simulated does not lose its work.
   This is drain-loop surgery (reflexive, keystone-ish) — GUIDED/keyboard, not a headless drain of itself.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T06:18:09.864131796Z
-modified_at: 2026-07-21T06:18:38.894715103Z
+modified_at: 2026-07-22T03:20:19.026192644Z
 req_type: Task
 tags:
 - aida:burndown orchestration reliability followup:BUG-755 from-operator
