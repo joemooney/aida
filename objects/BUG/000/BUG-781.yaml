@@ -3,17 +3,33 @@ spec_id: BUG-781
 agreed_id: BUG-781
 title: accepted decisions render as Approved in the open list and do not auto-leave the default view (reads as pending work)
 description: '2026-07-21: operator saw ADR-21/ADR-22 in a list as Approved and asked "when will these complete?" - because for a DECISION, approved=accepted is the TERMINAL state (BUG-751 convention: draft=proposed, approved=accepted), but the list renders the same Approved badge a TASK wears BEFORE it is worked, and accepted decisions stay in the default open lens until manually archived. So every accepted ADR looks like incomplete work. BUG-761 fixed the archive GATE (archive an approved decision without --force) but not this: accepted decisions still render an ambiguous Approved and require a manual archive to leave the open view. Fix: for decision-class specs, render the accepted state distinctly (Accepted / checked glyph, not the task Approved) AND exclude accepted decisions from the DEFAULT open list the way completed specs are (they are terminal), or auto-archive on acceptance. Same for stateless knowledge classes whose open presence is noise (principle/term). Acceptance: an accepted ADR does not appear in default aida list (or renders as Accepted, clearly terminal); list --all / --type decision still shows it; no manual archive needed to keep the open list honest. Mode drive.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:38:19.890297076Z
-modified_at: 2026-07-22T06:12:45.426845015Z
+modified_at: 2026-07-22T06:23:29.326071443Z
 req_type: Bug
 tags:
 - aida:list decision lifecycle dx batch:papercuts-0721 followup:BUG-761 from-dogfood
+history:
+- id: 019f887e-5827-7432-b9ae-296068c1d13a
+  author: aida-auto-bump
+  timestamp: 2026-07-22T06:23:29.319623689Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f887e-582e-7642-8bbd-2b9e6bab3787
+  timestamp: 2026-07-22T06:23:29.326070026Z
+  agent: aida
+  commit_sha: eabd19668a5642bdd8ded87e8ccc6f385a2a344f
+  summary: Completed via merge eabd1966
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T06:12:45.426845015Z
   implemented_by: joe
+  completed_at: 2026-07-22T06:23:29.319519719Z
+  completion_sha: eabd19668a5642bdd8ded87e8ccc6f385a2a344f
