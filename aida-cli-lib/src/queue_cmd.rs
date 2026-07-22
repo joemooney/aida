@@ -826,6 +826,18 @@ pub(crate) fn handle_queue_command(
         } => {
             let user_id = get_user(user);
 
+            // Read-side cross-user fallback: a `--for <role>` routing lands in
+            // the ROUTING user's queue file, so reading only our own file hid
+            // work a peer handed us. Resolve the role of interest once here
+            // (explicit `--for` wins, else the active session role) and pass it
+            // to every read below; `None` keeps the historical own-file-only
+            // view. No storage semantics change — see the module docs.
+            // trace:BUG-774 | ai:claude
+            let queue_fallback_role = queue_role_fallback::fallback_role(
+                role.as_deref(),
+                queue_role_fallback::session_role_env().as_deref(),
+            );
+
             // TASK-1052: opportunistic queue self-heal. Before rendering, prune
             // dead routed entries (archived/Completed/Rejected targets) from the
             // local queue so the underlying file self-heals on read, not just
@@ -894,7 +906,12 @@ pub(crate) fn handle_queue_command(
                 let raw = if *global {
                     Vec::new()
                 } else {
-                    storage.queue_list(&user_id, *include_completed)?
+                    queue_role_fallback::queue_list_with_role_fallback(
+                        storage,
+                        &user_id,
+                        queue_fallback_role.as_deref(),
+                        *include_completed,
+                    )?
                 };
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
@@ -911,7 +928,12 @@ pub(crate) fn handle_queue_command(
                 let raw = if *global {
                     Vec::new()
                 } else {
-                    storage.queue_list(&user_id, *include_completed)?
+                    queue_role_fallback::queue_list_with_role_fallback(
+                        storage,
+                        &user_id,
+                        queue_fallback_role.as_deref(),
+                        *include_completed,
+                    )?
                 };
                 let backend = advance_backend(store_path)?;
                 let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
@@ -995,7 +1017,12 @@ pub(crate) fn handle_queue_command(
             let raw_entries = if *global {
                 Vec::new()
             } else {
-                storage.queue_list(&user_id, *include_completed)?
+                queue_role_fallback::queue_list_with_role_fallback(
+                    storage,
+                    &user_id,
+                    queue_fallback_role.as_deref(),
+                    *include_completed,
+                )?
             };
             let store = storage.load()?;
 
@@ -1599,14 +1626,23 @@ pub(crate) fn handle_queue_command(
                             } else {
                                 String::new()
                             };
+                            // Same borrowed-work attribution as the flat view.
+                            // trace:BUG-774 | ai:claude
+                            let routed_chip =
+                                queue_role_fallback::routed_by_other_user(entry, &user_id)
+                                    .map(|owner| {
+                                        format!("  {}", format!("[queued by @{}]", owner).magenta())
+                                    })
+                                    .unwrap_or_default();
                             println!(
-                                "  {} {}{}  {}  [{}]{}{}",
+                                "  {} {}{}  {}  [{}]{}{}{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
                                 title_owned,
                                 status_badge,
                                 archived_chip,
+                                routed_chip,
                                 tag_chip,
                             );
                         };
@@ -1745,8 +1781,20 @@ pub(crate) fn handle_queue_command(
                     if req.map(|r| r.archived).unwrap_or(false) {
                         print!("  {}", "[ARCHIVED]".red().bold());
                     }
-                    if entry.added_by != user_id {
-                        print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                    // An entry surfaced out of ANOTHER user's queue file is
+                    // borrowed work — say whose queue it came from so it is
+                    // never mistaken for something this shell queued. The
+                    // `(from @…)` added-by chip would repeat the same name, so
+                    // this chip replaces it. trace:BUG-774 | ai:claude
+                    match queue_role_fallback::routed_by_other_user(entry, &user_id) {
+                        Some(owner) => {
+                            print!("  {}", format!("[queued by @{}]", owner).magenta());
+                        }
+                        None => {
+                            if entry.added_by != user_id {
+                                print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                            }
+                        }
                     }
                     // STORY-57: inline routing tags. Show for: only when the
                     // user isn't already filtering on a specific role (avoids
@@ -5904,7 +5952,21 @@ pub(crate) fn resolve_queue_work_plan(
     // mutating nothing. trace:TASK-1053 | ai:claude
     dry_run: bool,
 ) -> Result<QueueWorkPlan> {
-    let mut entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    // A `--for <role>` routing lands in the ROUTING user's queue file, so a
+    // pickup that read only our own file could not work a spec a peer routed
+    // to our role. Widen the read to the active role's cross-user routings;
+    // with no active role this is the historical own-file-only read.
+    // trace:BUG-774 | ai:claude
+    let work_fallback_role = queue_role_fallback::fallback_role(
+        None,
+        queue_role_fallback::session_role_env().as_deref(),
+    );
+    let mut entries = queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        work_fallback_role.as_deref(),
+        /* include_completed */ false,
+    )?;
     let store = storage.load()?;
 
     if let Some(arg_str) = arg {
@@ -5942,7 +6004,12 @@ pub(crate) fn resolve_queue_work_plan(
                     println!("queued {} for role:{}", display_id, role);
                     // Reload entries to include the auto-queued entry.
                     // trace:TASK-547 | ai:antigravity
-                    entries = storage.queue_list(user_id, /* include_completed */ false)?;
+                    entries = queue_role_fallback::queue_list_with_role_fallback(
+                        storage,
+                        user_id,
+                        work_fallback_role.as_deref(),
+                        /* include_completed */ false,
+                    )?;
                 }
             }
         }
@@ -6319,6 +6386,19 @@ pub(crate) fn resolve_queue_work_plan(
             .as_deref()
             .or(anchor_req.spec_id.as_deref())
             .unwrap_or(&anchor_id_upper);
+        // Before guessing at a lost lease, check whether the spec is simply
+        // sitting in ANOTHER user's queue file (the routing user's, not ours).
+        // "Not in YOUR queue" and "not queued at all" are different states and
+        // the old message conflated them. trace:BUG-774 | ai:claude
+        let elsewhere =
+            queue_role_fallback::queued_by_other_users(storage, user_id, &anchor_req.id);
+        if !elsewhere.is_empty() {
+            anyhow::bail!(queue_role_fallback::format_queued_by_other_user_error(
+                display_id,
+                &elsewhere,
+                role.as_deref(),
+            ));
+        }
         anyhow::bail!(format_queue_work_not_queued_error(
             display_id,
             anchor_req,
@@ -6406,9 +6486,12 @@ pub(crate) fn format_queue_work_not_queued_error(
             "`{display_id}` isn't queued. Status is Planned (still in planning).\n  \
              To work it: `aida edit {display_id} --status approved` then `aida queue add {display_id} --for {role_display}`"
         ),
+        // No queue file — yours or anyone else's — holds this spec (the caller
+        // checks the cross-user case first), so a lost lease is the honest
+        // remaining explanation. trace:BUG-774 | ai:claude
         RequirementStatus::InProgress => format!(
-            "`{display_id}` isn't queued, but status is In Progress.\n  \
-             The lease may have been lost. Inspect with `aida queue list --all`.\n  \
+            "`{display_id}` is genuinely unqueued (no user's queue holds it), but status is In Progress.\n  \
+             The lease may have been lost. Inspect with `aida queue list --all` or `aida queue list --all-users`.\n  \
              To re-queue: `aida queue add {display_id} --for {role_display}`"
         ),
         // The suggested command must run verbatim for *any* Done spec —

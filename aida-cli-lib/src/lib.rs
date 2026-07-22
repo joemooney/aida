@@ -183,6 +183,9 @@ mod ship;
 // trace:STORY-384 | ai:claude — pure recovery-action decision for `queue recover`.
 mod punt;
 mod queue_recover;
+// Read-side fallback so a `--for <role>` routing written into one user's queue
+// file is visible to whoever actually wears that role. trace:BUG-774 | ai:claude
+mod queue_role_fallback;
 mod rebase_cmd;
 mod record_cmd;
 mod rel_def_cmd;
@@ -21399,7 +21402,11 @@ fn queue_head_line(project_root: &std::path::Path, role: Option<&str>) -> Option
     let storage = Storage::new(project_root.join(".aida-store"));
     let store = storage.load().ok()?;
     let user_id = current_user_id(None);
-    let mut entries = storage.queue_list(&user_id, false).ok()?;
+    // Role-routed work a peer queued lives in the PEER's file; fold it in so
+    // the role-context snapshot's queue head matches `aida queue list`.
+    // trace:BUG-774 | ai:claude
+    let mut entries =
+        queue_role_fallback::queue_list_with_role_fallback(&storage, &user_id, role, false).ok()?;
     entries.sort_by_key(|entry| entry.position);
     let head = entries.into_iter().find(|entry| match role {
         Some(role) => entry.for_role.as_deref() == Some(role),
@@ -36060,8 +36067,15 @@ fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Optio
         .join("registry/queues")
         .join(format!("{}.yaml", user));
 
-    let content = std::fs::read_to_string(&queue_path).ok()?;
-    let entries: Vec<serde_yaml::Value> = serde_yaml::from_str(&content).ok()?;
+    // An absent own-queue file is zero own items, NOT "unknown" — a peer may
+    // still have routed work to this role, and bailing here would hide it.
+    // A file that exists but won't parse stays `None` (a real read failure).
+    // trace:BUG-774 | ai:claude
+    let entries: Vec<serde_yaml::Value> = match std::fs::read_to_string(&queue_path) {
+        Ok(content) if content.trim().is_empty() => Vec::new(),
+        Ok(content) => serde_yaml::from_str(&content).ok()?,
+        Err(_) => Vec::new(),
+    };
 
     let count = match role {
         Some(want) => entries
@@ -36075,7 +36089,63 @@ fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Optio
             .count(),
         None => entries.len(),
     };
-    Some(count)
+    // A `--for <role>` routing written by a PEER lands in that peer's queue
+    // file, so a depth read scoped to our own file under-counted the work
+    // actually routed to us — the meter disagreed with `aida queue list`.
+    // Add the sibling files' entries routed to this role. Read-only; the
+    // stored keys are untouched and identity folds through the shared
+    // canonical helper. trace:BUG-774 | ai:claude
+    let cross_user = match role {
+        Some(want) => cross_user_role_routed_depth(&store_path, &user, want),
+        None => 0,
+    };
+    Some(count + cross_user)
+}
+
+/// Count entries routed to `role` that live in OTHER users' queue files.
+/// Best-effort + allocation-light (the same raw-YAML read the own-file depth
+/// uses); an unreadable sibling file contributes zero rather than failing the
+/// meter.
+// trace:BUG-774 | ai:claude
+fn cross_user_role_routed_depth(
+    store_path: &std::path::Path,
+    self_user: &str,
+    role: &str,
+) -> usize {
+    let dir = store_path.join("registry/queues");
+    let Ok(read) = std::fs::read_dir(&dir) else {
+        return 0;
+    };
+    let me = aida_core::node::canonical_user_id(self_user);
+    let mut total = 0usize;
+    for entry in read.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if aida_core::node::canonical_user_id(stem) == me {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(rows) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
+            continue;
+        };
+        total += rows
+            .iter()
+            .filter(|e| {
+                e.get("for_role")
+                    .and_then(serde_yaml::Value::as_str)
+                    .map(|r| r == role)
+                    .unwrap_or(false)
+            })
+            .count();
+    }
+    total
 }
 
 /// TASK-244: read `[statusline] role_mismatch_warning` from
@@ -55029,7 +55099,16 @@ fn collect_queue_snapshot(
 ) -> (Vec<QueueRow>, usize) {
     use aida_core::DatabaseBackend;
     let user_id = current_user_id(None);
-    let entries = backend.queue_list(&user_id, false).unwrap_or_default();
+    // Include the work peers routed to this role — it lives in THEIR queue
+    // file, so an own-file-only read made the snapshot disagree with what is
+    // actually routed to us. trace:BUG-774 | ai:claude
+    let entries = match role {
+        Some(r) => {
+            queue_role_fallback::queue_list_with_role_fallback(backend, &user_id, Some(r), false)
+                .unwrap_or_default()
+        }
+        None => backend.queue_list(&user_id, false).unwrap_or_default(),
+    };
 
     // TASK-490: an at-keyboard operator's first question is "what is being
     // worked on right now?" — surface in-progress queue items unconditionally,
@@ -58317,34 +58396,64 @@ fn role_queue_actionable(
     let queue_path = store_path
         .join("registry/queues")
         .join(format!("{}.yaml", user));
-    let Ok(content) = std::fs::read_to_string(&queue_path) else {
-        return Vec::new();
-    };
-    let Ok(entries) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
-        return Vec::new();
-    };
+    // Own file first (its ordering is this shell's own intent), then every
+    // sibling file — a `--for <role>` routing written by a peer lands in the
+    // PEER's queue file, and reading only our own hid it. Same role predicate
+    // either way; nothing is written back. trace:BUG-774 | ai:claude
+    let mut queue_files: Vec<std::path::PathBuf> = vec![queue_path.clone()];
+    if let Ok(read) = std::fs::read_dir(store_path.join("registry/queues")) {
+        let me = aida_core::node::canonical_user_id(&user);
+        let mut siblings: Vec<std::path::PathBuf> = read
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("yaml"))
+            .filter(|p| {
+                p.file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(|stem| aida_core::node::canonical_user_id(stem) != me)
+                    .unwrap_or(false)
+            })
+            .collect();
+        siblings.sort();
+        queue_files.extend(siblings);
+    }
     // Mirror read_queue_depth's role filter, then order by queue position.
-    let mut role_entries: Vec<(i64, String)> = entries
-        .iter()
-        .filter(|e| {
-            e.get("for_role")
-                .and_then(serde_yaml::Value::as_str)
-                .map(|r| r == role)
-                .unwrap_or(false)
-        })
-        .filter_map(|e| {
-            let pos = e
-                .get("position")
-                .and_then(serde_yaml::Value::as_i64)
-                .unwrap_or(0);
-            let id = e
-                .get("requirement_id")
-                .and_then(serde_yaml::Value::as_str)?
-                .to_string();
-            Some((pos, id))
-        })
-        .collect();
-    role_entries.sort_by_key(|(pos, _)| *pos);
+    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut role_entries: Vec<(i64, String)> = Vec::new();
+    for path in &queue_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let Ok(entries) = serde_yaml::from_str::<Vec<serde_yaml::Value>>(&content) else {
+            continue;
+        };
+        let mut from_file: Vec<(i64, String)> = entries
+            .iter()
+            .filter(|e| {
+                e.get("for_role")
+                    .and_then(serde_yaml::Value::as_str)
+                    .map(|r| r == role)
+                    .unwrap_or(false)
+            })
+            .filter_map(|e| {
+                let pos = e
+                    .get("position")
+                    .and_then(serde_yaml::Value::as_i64)
+                    .unwrap_or(0);
+                let id = e
+                    .get("requirement_id")
+                    .and_then(serde_yaml::Value::as_str)?
+                    .to_string();
+                Some((pos, id))
+            })
+            .collect();
+        from_file.sort_by_key(|(pos, _)| *pos);
+        for (pos, id) in from_file {
+            if seen_ids.insert(id.clone()) {
+                role_entries.push((pos, id));
+            }
+        }
+    }
     // Resolve id + title + liveness fields from the read-only cache (no full
     // store load), keyed by the requirement UUID the queue entry carries, and
     // KEEP only the actionable ones.
