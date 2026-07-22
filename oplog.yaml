@@ -37938,5 +37938,47 @@ operations:
   timestamp: 2026-07-22T04:06:45.100831432Z
   kind: !SetStatus
     status: Completed
-clock: 3542
+- id: 019f8803-2c0f-7b93-b98e-afa7bd2d3063
+  target_id: 019f8803-27e7-7501-9a60-0cead0bdddc7
+  author: aida
+  node_id: '1'
+  lamport: 3543
+  timestamp: 2026-07-22T04:08:57.103629850Z
+  kind: !Create
+    title: aida shell wrapper evals error output, turning any failure into 'command not found' noise
+    description: |-
+      REPRO (aida 0.14.0, interactive bash with the shell function installed by 'aida dev activate'):
+
+        $ aida session end 019f8357 --yes
+        019f8357: command not found
+        error:: command not found
+        help:: command not found
+
+      The real output, seen only by bypassing the wrapper with 'command aida':
+
+        $ command aida session end 019f8357 --yes
+        error: "No lease found for branch `019f8357` — run `aida session leases` to see active leases"
+        help: aida session leases
+
+      CAUSE: the 'aida' shell function evals stdout for a fixed list of subcommands that emit shell code:
+
+        case "$_aida_cmd" in
+          "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end"|"worktree enter")
+            eval "$(command aida "$@")" ;;
+
+      When the command FAILS, its human-readable error text is eval'd as shell, so every line becomes a bogus command. The user sees three 'command not found' lines and no indication of what actually went wrong — in this case a stale lease id, which is trivially fixable once visible.
+
+      COMPOUNDING BUG: 'aida session end <bad-id>' exits 0 on this error. So even a wrapper that guarded with 'if out=$(command aida "$@"); then eval "$out"; fi' would still eval the error text. The exit code must be non-zero on failure.
+
+      SUGGESTED FIX (needs both halves):
+      1. Make failing paths of the eval-list subcommands exit non-zero. 'No lease found' is an error, not a success.
+      2. Make the wrapper capture output, eval ONLY on exit 0, and print the output to stderr otherwise:
+           if _aida_out=$(command aida "$@"); then eval "$_aida_out"; else printf '%s\n' "$_aida_out" >&2; return 1; fi
+      3. Consider emitting shell code on a separate channel (or behind an explicit --shell/--print-eval flag) so human-readable output is never a candidate for eval.
+
+      IMPACT: every failure of role enter / session start / session end / worktree enter is currently invisible to an interactive user, replaced by misleading 'command not found' errors. Observed live while trying to release a stale lease.
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 3543
 node_id: '1'
