@@ -1,0 +1,14 @@
+id: 019f8a54-7de7-7081-adc9-3ddf92b0ba7d
+spec_id: TASK-1176
+agreed_id: TASK-1176
+title: no terminal 'superseded'/'accepted' state for decision (ADR) specs — adopted-then-replaced ADRs must masquerade as rejected
+description: 'Verified against main sha a7cd68909 2026-07-22: RequirementStatus enum (models.rs:12) = Draft/Approved/Planned/InProgress/Done/Completed/Rejected/NeedsAttention — NO superseded or deprecated, despite the decision-type doc-comment (models.rs:713) describing the ADR lifecycle as ''proposed/accepted/superseded/deprecated''. So an ADR that was adopted and later replaced has no honest state: downstream (quizdom) shipped status=rejected + superseded-by:ADR-N tag + an explanatory comment, which reads in listings identical to a DECLINED decision — a decision followed for months looks the same as one turned down. Related to the decision-lifecycle work (BUG-751 gave approved=accepted; BUG-781 dropped accepted decisions from the open lens) but neither adds superseded. Fix: add a superseded (and likely deprecated) terminal state for decision-class specs, with a superseded-by relationship; render distinctly. Acceptance: an ADR can be marked superseded (by another ADR), rendered as terminal-but-adopted (not rejected), excluded from open/candidate surfaces; the superseded-by link is first-class. Downstream: quizdom.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-22T14:57:00.903963318Z
+modified_at: 2026-07-22T14:57:00.903963318Z
+req_type: Task
+tags:
+- aida:lifecycle decision modeling from-downstream:quizdom followup:BUG-751
