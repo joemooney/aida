@@ -1,0 +1,14 @@
+id: 019f8877-4e99-7931-8919-21b0c647bc19
+spec_id: TASK-1173
+agreed_id: TASK-1173
+title: 'aida tail: prefix each streamed line with its real per-event timestamp (local time), so drain pacing is visible'
+description: 'Operator 2026-07-21: aida tail drain streams lines with no timestamps, so you cannot gauge progress/pacing over time (is it moving or stalled?). Operator proposed a floor — stamp everything with invocation time — but verified the burndown stream-json events ALREADY carry a real per-event ''timestamp'' field, so we can do strictly better: prefix each rendered line with its OWN event timestamp, in the operator''s LOCAL timezone (standing pref: display local, store UTC), e.g. ''[23:14:07] ...''. The gaps between real timestamps are the pacing signal. Fallback: for an event with no timestamp, use arrival wall-clock; the uniform-invocation-time idea is the degenerate last resort, not needed given real timestamps exist. Keep it terse (HH:MM:SS, not full date) since a tail is same-session. Optional: a --no-timestamp flag for clean copy-paste. Acceptance: aida tail (drain/session/spec) prefixes each line with its event-time in local tz; a large gap between two lines is visibly a large time gap; --no-timestamp opts out; events lacking a timestamp fall back to arrival time, never a wrong-but-confident stamp. Mode drive.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-22T06:15:48.121041917Z
+modified_at: 2026-07-22T06:15:48.121041917Z
+req_type: Task
+tags:
+- aida:tail dx observability batch:papercuts-0721 followup:TASK-1167 from-operator
