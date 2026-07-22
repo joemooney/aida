@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:33:35.758247256Z
-modified_at: 2026-07-22T16:45:28.376069559Z
+modified_at: 2026-07-22T16:45:29.853221842Z
 req_type: Task
 tags:
 - aida:worktree session-lifecycle from-downstream:quizdom slice-of:FR-284
@@ -16,6 +16,17 @@ relationships:
 - rel_type: Child
   target_id: 019f7b89-13cc-7453-ba1d-d322d88992de
   created_at: 2026-07-22T15:33:39.933201982Z
+comments:
+- id: 019f8ab7-d04a-7420-89f5-d719042532c0
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-07-22-task-1177-session-reap.md
+    filed 0 task(s)
+    declined 2:
+      - NOTIFY slice (FR-284): a live interactive session whose spec is Done gets a
+      - CHAIN slice (FR-284): after a reap, optionally launch the next queued spec
+  created_at: 2026-07-22T16:45:30.058508647Z
+  modified_at: 2026-07-22T16:45:30.058508647Z
 execution_mode: drive
 implementation_info:
   implemented: true
