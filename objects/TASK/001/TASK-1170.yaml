@@ -1,7 +1,7 @@
 id: 019f87db-3a14-7ce2-ad79-27e90f98f126
 spec_id: TASK-1170
 agreed_id: TASK-1170
-title: aida init --refresh only covers the memory pack — extend it to skill/command/codex+antigravity prompt packs so template fixes (BUG-731/TASK-1162) reach existing installs without --force
+title: 'Unify scaffold upgrade: one convergent-idempotent verb upgrades ALL agent packs (skills/commands/hooks/memories/codex/antigravity), edit-preserving, no --force'
 description: |-
   Operator ask 2026-07-21: 'I need codex to have the same/similar skill set.' Root gap: codex's ~/.codex/prompts/aida-guided-implement.md is the stale Jul-7 version (0 $ARGUMENTS placeholders, still references AskUserQuestion) — so codex didn't recognize /aida-guided-implement TASK-1169. The CONTENT fixes shipped (BUG-731 rewrote the codex prompt pack for arg-substitution + vendor-neutral language; TASK-1162 wired guided vendor parity) but there is NO WAY to deliver them to an existing install: `aida init --agent codex` is idempotent (won't overwrite existing files), and `aida init --refresh` covers ONLY the memory pack. The only refresh path is `--force` (overwrites everything incl. user edits; also unsafe in the dev repo per BUG-718).
 
@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:19.252304096Z
-modified_at: 2026-07-22T04:01:27.607496913Z
+modified_at: 2026-07-22T04:01:28.477543975Z
 req_type: Task
 tags:
 - aida:init scaffold cross-vendor codex parity from-operator

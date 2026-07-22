@@ -37922,5 +37922,13 @@ operations:
   timestamp: 2026-07-22T03:26:25.563628711Z
   kind: !SetStatus
     status: Approved
-clock: 3540
+- id: 019f87fc-53ce-7a00-ba73-83e3d220d5cb
+  target_id: 019f87db-3a14-7ce2-ad79-27e90f98f126
+  author: aida
+  node_id: '1'
+  lamport: 3541
+  timestamp: 2026-07-22T04:01:28.526651417Z
+  kind: !SetTitle
+    title: 'Unify scaffold upgrade: one convergent-idempotent verb upgrades ALL agent packs (skills/commands/hooks/memories/codex/antigravity), edit-preserving, no --force'
+clock: 3541
 node_id: '1'
