@@ -360,7 +360,10 @@ fn scan_scaffold_drift(
                     "~/.codex/prompts is stale — {} prompt(s) drifted from the current source templates",
                     drifted_prompts.len()
                 ),
-                action: "aida scaffold codex-prompts --force".to_string(),
+                // TASK-1170: the edit-preserving refresh is the safe delivery
+                // path — --force is no longer needed to pick up a fix, and it
+                // would take your own edits with it.
+                action: "aida scaffold refresh".to_string(),
                 safe_heal: false,
             });
         }

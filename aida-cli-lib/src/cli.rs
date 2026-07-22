@@ -500,6 +500,30 @@ pub enum ScaffoldCommand {
         force: bool,
     },
 
+    /// Bring every installed agent pack level with this binary's templates,
+    /// preserving your edits.
+    ///
+    /// Covers Claude skills and commands, Codex skills, Antigravity skills,
+    /// and the machine-global Codex custom prompts in `~/.codex/prompts`.
+    /// A pack file whose body still matches the scaffold checksum it was
+    /// written with is overlaid with the current template; one you have
+    /// edited, one with no scaffold marker, and one that is a symlink are
+    /// left exactly as they are. Packs you never installed are not created.
+    ///
+    /// This is the no-`--force` delivery path for a template fix — the same
+    /// contract `aida init --with-memories --refresh` has for memories.
+    // trace:TASK-1170 | ai:claude
+    Refresh {
+        /// Project root directory (defaults to current directory)
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Codex custom-prompt directory to refresh (defaults to
+        /// ~/.codex/prompts). Matches `scaffold codex-prompts --dest`.
+        #[clap(long)]
+        dest: Option<PathBuf>,
+    },
+
     /// Apply category-aware upgrades to scaffolded files. The right
     /// follow-up to `scaffold status` reporting drift — does the right
     /// thing per file category instead of `apply --force`'s blast-radius.
@@ -9921,10 +9945,12 @@ pub enum Command {
         #[clap(long)]
         with_memories: bool,
 
-        /// Refresh the starter memory pack: overlay updated versions of
-        /// pack files you have not edited, leaving your own edits intact.
-        /// Implies --with-memories.
-        // trace:STORY-255 | ai:claude
+        /// Refresh every installed pack — starter memories, agent skills and
+        /// commands, and the Codex custom prompts: overlay updated versions
+        /// of the files you have not edited, leaving your own edits intact.
+        /// Implies --with-memories. No --force needed, and nothing you wrote
+        /// is overwritten.
+        // trace:STORY-255 trace:TASK-1170 | ai:claude
         #[clap(long)]
         refresh: bool,
 

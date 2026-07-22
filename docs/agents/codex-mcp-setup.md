@@ -268,6 +268,46 @@ Use `aida pr ship` as the finish line for bounded direct-publish work. Current w
 
 Before relying on the wrapper in a new environment, read the five-bug arc that hardened it: SPEC-410, BUG-339, BUG-344, BUG-345, plus TASK-458 for the original wrapper.
 
+## Keeping the Codex Prompt Pack Current
+
+`~/.codex/prompts/` is written once by `aida scaffold codex-prompts` (or, on a
+codex-first machine, by the first `aida init`) and is then **skip-existing** —
+so a later fix to a command template never reaches a machine that already has
+the prompt installed. That is a delivery problem, not a content problem: a
+prompt authored months ago keeps driving Codex sessions.
+
+The delivery path is an **edit-preserving refresh**, the same contract the
+starter memory pack has always had:
+
+```bash
+aida scaffold refresh          # every installed pack, this project + ~/.codex/prompts
+aida init --refresh            # same refresh, as part of a re-init
+```
+
+Refresh covers `.claude/skills/`, `.claude/commands/`, `.codex/skills/`,
+`.antigravity/skills/` and `~/.codex/prompts/` in one pass, and it is safe by
+construction:
+
+- a pack file whose body still hashes to the scaffold checksum it was written
+  with is **overlaid** with the current template;
+- a file you have **edited** is kept verbatim — the checksum no longer matches,
+  so AIDA knows it is yours;
+- a file with **no scaffold marker** is kept verbatim;
+- a **symlinked** destination is never written through (the AIDA dev repo links
+  its scaffold files at the template masters; following one would corrupt the
+  source of truth);
+- a pack you never installed is **not created** — refresh converges what is
+  there, it does not expand your setup.
+
+`--force` is no longer the only way to pick up a template fix, and refresh never
+overwrites your own edits.
+
+Prompt files now carry an `AIDA Generated: v… | checksum:…` marker so that
+edit-detection works. A prompt deployed by an older binary predates the marker;
+the first refresh brings it current and saves the previous copy alongside as
+`<name>.md.aida-bak`, after which it is precisely tracked. `aida doctor
+--category scaffold-drift` reports which deployed prompts are stale.
+
 ## Current Known Constraints
 
 - `structuredContent` is emitted on success (Path B, STORY-399) alongside the text envelope; parse either.

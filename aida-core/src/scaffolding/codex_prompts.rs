@@ -161,6 +161,25 @@ pub fn render_codex_command_prompt(name: &str, args: &str) -> Option<String> {
     Some(convert_command_to_codex_prompt(body).replace("$ARGUMENTS", args))
 }
 
+/// The on-disk form of one Codex custom prompt: the converted body stamped
+/// with the same `AIDA Generated: v… | checksum:…` header every other
+/// scaffolded file carries. The marker is what makes the edit-preserving
+/// `aida init --refresh` / `aida scaffold refresh` pass able to tell a
+/// pristine prompt (safe to overlay with a fixed template) from one the user
+/// has edited (never overwritten) — before it, the only way to deliver a
+/// template fix to an existing `~/.codex/prompts` was `--force`.
+///
+/// The header is an HTML comment, so it is invisible in rendered markdown and
+/// inert as prompt text. The *inline* rendering used to launch a session
+/// directly (`render_codex_command_prompt`) deliberately does NOT carry it.
+// trace:TASK-1170 | ai:claude
+pub fn codex_prompt_file_content(name: &str, converted_body: &str) -> String {
+    crate::scaffolding::wrap_with_aida_header(
+        std::path::Path::new(&format!("{name}.md")),
+        converted_body,
+    )
+}
+
 /// The expected Codex custom-prompt set as `(name, body)` pairs — the same
 /// portable enumeration `scaffold_codex_prompts` writes, but pure (no I/O).
 /// Lets a drift check (e.g. `aida doctor --category scaffold-drift`, TASK-1124)
@@ -188,7 +207,8 @@ pub fn expected_codex_prompts() -> Vec<(String, String)> {
         let body = EMBEDDED_TEMPLATES
             .get(*key)
             .expect("key came from the same map");
-        out.push((name, convert_command_to_codex_prompt(body)));
+        let content = codex_prompt_file_content(&name, &convert_command_to_codex_prompt(body));
+        out.push((name, content));
     }
     out
 }
@@ -223,10 +243,16 @@ pub fn scaffold_codex_prompts(dest_dir: &Path, force: bool) -> Result<CodexPromp
             outcome.skipped_existing.push(name);
             continue;
         }
+        // BUG-718: never write through a symlink — a downstream project may
+        // link its prompt at a source-of-truth master. trace:TASK-1170
+        if crate::scaffolding::symlink_target(&dest).is_some() {
+            outcome.skipped_existing.push(name);
+            continue;
+        }
         let body = EMBEDDED_TEMPLATES
             .get(*key)
             .expect("key came from the same map");
-        let prompt = convert_command_to_codex_prompt(body);
+        let prompt = codex_prompt_file_content(&name, &convert_command_to_codex_prompt(body));
         std::fs::write(&dest, prompt)
             .with_context(|| format!("writing codex prompt {}", dest.display()))?;
         outcome.written.push(name);
@@ -355,6 +381,42 @@ mod tests {
         let mut got: Vec<&String> = written.written.iter().collect();
         got.sort();
         assert_eq!(want, got, "expected set must match the written set");
+    }
+
+    // trace:TASK-1170 — every written prompt carries the scaffold-checksum
+    // marker, so `aida init --refresh` / `aida scaffold refresh` can tell a
+    // pristine prompt from one the user edited and deliver template fixes
+    // without --force. The inline launch rendering stays marker-free.
+    #[test]
+    fn written_prompts_carry_a_refreshable_scaffold_marker() {
+        use crate::scaffolding::refresh::{refresh_disposition, RefreshDisposition};
+
+        let tmp = tempfile::tempdir().unwrap();
+        scaffold_codex_prompts(tmp.path(), false).unwrap();
+        let deployed =
+            std::fs::read_to_string(tmp.path().join("aida-guided-implement.md")).unwrap();
+        assert!(
+            deployed.starts_with("<!-- AIDA Generated: v"),
+            "prompt must carry the scaffold marker: {}",
+            &deployed[..deployed.len().min(120)]
+        );
+        assert_eq!(
+            refresh_disposition(&deployed),
+            RefreshDisposition::Pristine,
+            "a freshly-written prompt must read as pristine"
+        );
+        // The acceptance case: the guided prompt is arg-substitutable and
+        // vendor-neutral once delivered.
+        assert!(deployed.contains("$ARGUMENTS"), "{deployed}");
+        assert!(!deployed.contains("AskUserQuestion"), "{deployed}");
+
+        // A user edit flips it to Edited so refresh keeps their version.
+        let edited = deployed.replace("$ARGUMENTS", "$ARGUMENTS (my note)");
+        assert_eq!(refresh_disposition(&edited), RefreshDisposition::Edited);
+
+        // The inline launch rendering must NOT carry the file marker.
+        let inline = render_codex_command_prompt("aida-guided-implement", "TASK-9").unwrap();
+        assert!(!inline.contains("AIDA Generated:"), "{inline}");
     }
 
     #[test]

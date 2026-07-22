@@ -17,6 +17,7 @@ pub mod codex_prompts;
 mod hooks;
 mod managed_merge;
 pub mod mcp_translate;
+pub mod refresh;
 mod settings;
 
 pub use aida_md::{aida_md_matches, extract_aida_block};
@@ -239,6 +240,14 @@ pub fn symlink_target(path: &Path) -> Option<PathBuf> {
         }
         _ => None,
     }
+}
+
+/// Normalize CRLF/CR line endings to LF. Scaffold files are written with LF;
+/// a Windows checkout (or an editor that rewrote the file) must not read as a
+/// user edit just because the newlines changed.
+// trace:TASK-1170 | ai:claude
+pub(crate) fn normalize_lf(s: &str) -> String {
+    s.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 /// Compute a simple checksum for content (first 8 chars of hex-encoded hash)

@@ -42,6 +42,8 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 **Codex parity.** `aida scaffold codex-prompts` writes the AIDA command set as Codex CLI custom prompts (default `~/.codex/prompts`) so `/aida-...` works inside a Codex session — generated from the same embedded masters as `.claude/commands/`; Claude-only commands are excluded with a stated reason; existing files are never overwritten without `--force`.
 
+**Keeping every agent pack current.** `aida scaffold refresh` (equivalently `aida init --refresh`) brings every *installed* pack level with the binary's embedded templates — `.claude/skills/`, `.claude/commands/`, `.codex/skills/`, `.antigravity/skills/` and `~/.codex/prompts/` — while preserving your edits. A pack file whose body still hashes to the scaffold checksum it was written with is overlaid; a file you edited, a file with no scaffold marker, and a symlinked destination are left exactly as they are; a pack you never installed is not created. This is the no-`--force` delivery path for a template fix, and it is the same contract the starter memory pack has always had — so a fix to a command master reaches Claude, Codex and Antigravity through one mechanism instead of one per vendor.
+
 ### `aida config`
 
 **One line** — set the project's ID scheme (prefix format, numbering, digits) and a couple of user-level preferences.
