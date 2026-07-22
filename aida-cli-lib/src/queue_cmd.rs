@@ -7443,6 +7443,88 @@ pub(crate) fn handle_queue_work(
                 }
             }
 
+            // BUG-777: the BUG-307 gate above keeps a lease "Live" while its
+            // file mtime is inside the staleness window even when the owning
+            // process is demonstrably dead — correct for a SILENT sweep (a
+            // freshly-minted lease whose shell hasn't wired up yet must not be
+            // swept out from under itself), wrong as the last word for an
+            // operator who is staring at an orphan. So before refusing, re-ask
+            // using the SAME liveness verdict `aida ps` / `aida status <spec>`
+            // render (● live / ⚠ STALE) plus the lease's recorded pids, and:
+            //   * `--force-claim` releases a lease whose owner is verifiably
+            //     gone AND whose worktree is clean — ONE recovery verb, the
+            //     same flag the InProgress-without-lease path already names;
+            //   * a dead owner with a DIRTY worktree still refuses, naming
+            //     what is uncommitted and where (never silently discarded);
+            //   * a genuinely live lease is never reaped, --force-claim or not.
+            // Every refusal below states the worktree's clean/dirty state so
+            // "work there is lost unless committed" is evaluable in place.
+            // trace:BUG-777 | ai:claude
+            let recovery = stale_lease_recovery_for_lease(&conflict);
+            let short_conflict_id = conflict.id[..conflict.id.len().min(8)].to_string();
+            match &recovery.verdict {
+                StaleLeaseRecovery::ReclaimableClean { worktree_missing } if force_claim => {
+                    eprintln!(
+                        "  {} released orphaned lease {} ({})",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        short_conflict_id.yellow(),
+                        if *worktree_missing {
+                            "owning session gone, worktree already removed".dimmed()
+                        } else {
+                            "owning session gone, worktree clean".dimmed()
+                        }
+                    );
+                    let _ = force_cleanup_lease(&project_root_for_conflict, &conflict);
+                    remaining -= 1;
+                    if remaining == 0 {
+                        anyhow::bail!(
+                            "lease-recovery sweep gave up after 16 iterations on scope `{}` — \
+                             the lease store may be corrupt; inspect `.aida/sessions/`",
+                            plan.scope
+                        );
+                    }
+                    continue;
+                }
+                StaleLeaseRecovery::StaleDirty { dirty_entries } => {
+                    // Safety floor: uncommitted work is never discarded on a
+                    // recovery flag's say-so. Name it so the operator can act.
+                    anyhow::bail!(
+                        "scope `{}` is held by lease {} ({}) whose owning session is no longer \
+                         running, but its worktree at {} still has {} uncommitted change(s) — \
+                         refusing so that work is not discarded (--force-claim does NOT \
+                         override this). Uncommitted: {}. To keep the work: \
+                         `aida queue work {} --resume` re-attaches to that worktree, or commit \
+                         /stash it there. To discard it: `aida session end {} --force`, then \
+                         re-run.",
+                        plan.scope,
+                        short_conflict_id,
+                        conflict.role.as_deref().unwrap_or("(unset)"),
+                        conflict.worktree_path.display(),
+                        dirty_entries,
+                        recovery.dirty_sample(),
+                        plan.scope,
+                        short_conflict_id
+                    );
+                }
+                StaleLeaseRecovery::ReclaimableClean { .. } if !steal => {
+                    anyhow::bail!(
+                        "scope `{}` is held by lease {} ({}, worktree: {}) whose owning session \
+                         is no longer running — the lease is orphaned and its {}. \
+                         Recovery: `aida queue work {} --force-claim` releases the dead lease \
+                         and takes the scope.",
+                        plan.scope,
+                        short_conflict_id,
+                        conflict.role.as_deref().unwrap_or("(unset)"),
+                        conflict.worktree_path.display(),
+                        recovery.worktree_state_phrase(),
+                        plan.scope
+                    );
+                }
+                // ReclaimableClean + --steal, Live, UnknownLiveness → fall
+                // through to the existing --steal / refuse logic below.
+                _ => {}
+            }
+
             if !steal {
                 // TASK-402 (friction #4): the lease is live (the auto-release
                 // sweep above handles dormant/orphaned leases). Warn that
@@ -7450,17 +7532,35 @@ pub(crate) fn handle_queue_work(
                 // there is unfinished work in that worktree, `--resume` (which
                 // re-attaches in place) is the work-preserving path, not
                 // `--steal`. trace:TASK-402 | ai:claude
+                //
+                // BUG-777: append the worktree's clean/dirty state (and, when
+                // --force-claim was passed at a lease we could not prove dead,
+                // why it did not apply) so the destructive-option warning is
+                // something the operator can evaluate without leaving the
+                // shell. trace:BUG-777 | ai:claude
+                let force_claim_note = if force_claim {
+                    match recovery.verdict {
+                        StaleLeaseRecovery::Live =>
+                            " `--force-claim` does not apply: a live process still backs this lease.",
+                        _ =>
+                            " `--force-claim` does not apply: this lease records no process-liveness signal, so it cannot be proven dead.",
+                    }
+                } else {
+                    ""
+                };
                 anyhow::bail!(
-                    "scope `{}` is owned by lease {} ({}, worktree: {}) — \
+                    "scope `{}` is owned by lease {} ({}, worktree: {} — {}) — \
                      to take over: `--steal` ends that session and removes its \
                      worktree (work there is lost unless committed), \
                      or `--resume` re-attaches to it in place (keeps the worktree), \
-                     or `aida session end {}` manually.",
+                     or `aida session end {}` manually.{}",
                     plan.scope,
-                    &conflict.id[..conflict.id.len().min(8)],
+                    short_conflict_id,
                     conflict.role.as_deref().unwrap_or("(unset)"),
                     conflict.worktree_path.display(),
-                    &conflict.id[..conflict.id.len().min(8)]
+                    recovery.worktree_state_phrase(),
+                    short_conflict_id,
+                    force_claim_note
                 );
             }
             eprintln!(
