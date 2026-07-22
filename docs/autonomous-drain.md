@@ -168,6 +168,46 @@ carries this (BUG-233):
 | `AIDA_REVIEW_VERDICT_FILE=<path>` | orchestrator → reviewer child only | absolute path the reviewer writes its verdict JSON to |
 | `AIDA_PUNT_SIGNAL_FILE=<path>` | orchestrator → implementer child only | absolute path `aida punt` drops a signal file at, so the orchestrator detects a punt and parks the spec instead of reporting a phantom no-PR failure (STORY-276) |
 | `AIDA_EXIT_SENTINEL=<path>` | orchestrator → every phase child | file the skill `touch`es as its last action so the orchestrator reaps the idle REPL (TASK-329) |
+| `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=<ms>` | AIDA → every headless child | the bounded turn-end background-wait ceiling, set by the LAUNCHER so a hand-typed launch behaves identically to a daemonized one (TASK-1169) |
+
+### Integration waits belong to the launcher, not to an agent turn (TASK-1169)
+
+A headless `claude -p` session reaps its background tasks when the turn ends,
+so a "background merge watch" a drain promises dies with the session — that was
+BUG-755, which stranded three PRs open and unwatched. The obvious repair —
+block in the *foreground* instead — does not hold either: a foreground tool
+call is capped at about ten minutes, and a cross-platform CI run is longer than
+that. **Neither agent-side shape can hold a long integration wait.**
+
+So the wait moved out of the agent entirely. After each headless session exits,
+`aida burndown run` — the long-lived process that already holds the drain lock
+— probes the open wave PRs and integrates them **itself, in Rust**:
+
+1. Blocks on each PR's CI using the same re-arming idle timer + absolute ceiling
+   the orchestrator uses (`AIDA_WORKER_CI_IDLE` / `AIDA_WORKER_CI_ABSOLUTE`).
+2. Squash-merges the clean ones and runs `aida pull` so the Done → Completed
+   auto-bump fires. Every existing gate still applies: a `RequestChanges`
+   review, red CI, or a merge conflict is never merged over, and a spec whose
+   `execution_mode` is not `drain` is **held** for a human (BUG-727).
+3. Parks anything else `NeedsAttention` with a recorded reason and files a
+   finding — the PR is left **open** and untouched. Nothing is terminated and
+   no work is orphaned without a record.
+4. Only then relaunches an agent turn, and only for work that genuinely needs
+   one: blessed specs still unstarted.
+
+Two consequences worth knowing. The harness background-wait ceiling is now
+irrelevant to whether integration completes — it is defense-in-depth, not the
+mechanism. And waiting costs **zero tokens**: a Rust poll loop replaced an LLM
+turn spent watching CI.
+
+The ceiling AIDA sets is bounded and generous (45 min by default), never the
+old `=0` wait-forever stopgap: a real ceiling that rarely fires beats no
+ceiling, because wait-forever means a genuinely wedged task hangs the drain
+until someone notices. Tune it with `[burndown] bg_wait_ceiling_ms` or
+`AIDA_BURNDOWN_BG_WAIT_CEILING_MS`; values below the floor clamp up.
+
+Triage what parked with `aida findings list` (the rows are tagged
+`kind:IntegrationWaitParked`).
 
 **Why a token, not a bare flag.** `AIDA_AUTO_COMPLETE=1` alone is
 unverifiable: a child cannot tell a legitimate orchestrator parent from a

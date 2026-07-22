@@ -843,9 +843,15 @@ pub fn spawn_vendor_headless(
         );
     }
     let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
+    // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
+    // ourselves rather than inheriting whatever the ambient shell carried, so
+    // every headless phase behaves identically whoever launched it.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
     let status = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .status()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -1921,9 +1927,14 @@ pub fn exec_claude_headless(
         );
     }
     let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
+    // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
+    // path is the `--no-human` phase-1 implementer, which must not diverge.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
     let mut child = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .spawn()
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -2124,10 +2135,15 @@ pub fn spawn_claude_headless_resume(
         cwd,
         claude_headless_resume_args_with_posture(prompt, session_id, contained),
     )?;
+    // TASK-1169 / ADR-22: the resume path is a headless child too — same
+    // bounded ceiling, so a resumed drain can't diverge from a fresh one.
+    // trace:TASK-1169 | ai:claude
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
     let status = Command::new(program)
         .current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .status()
         .context("failed to spawn claude")?;
