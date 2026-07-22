@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:25:19.252304096Z
-modified_at: 2026-07-22T04:01:28.477543975Z
+modified_at: 2026-07-22T04:03:53.925649113Z
 req_type: Task
 tags:
 - aida:init scaffold cross-vendor codex parity from-operator
@@ -48,5 +48,17 @@ comments:
     Acceptance additions: one command brings ALL vendor packs current with preserved edits; running it twice is a no-op (true convergent idempotency); ~/.codex/prompts/aida-guided-implement.md reaches current after it; init --refresh and scaffold upgrade do not diverge in behavior.
   created_at: 2026-07-22T04:01:27.607496913Z
   modified_at: 2026-07-22T04:01:27.607496913Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
+- id: 019f87fe-8bc5-7c90-8979-e158f88f7269
+  author: joe
+  content: |-
+    ADDITIONAL behavior (operator, 2026-07-21): make `aida init` the discoverable front door to the unified upgrade. When `aida init` runs on an ALREADY-initialized project (.aida/config.toml + orphan store already present), it should detect that state and OFFER the convergent scaffold upgrade instead of no-op'ing or erroring:
+    - At a TTY: detect already-init'd, run `aida scaffold status` internally, and if drift exists prompt 'This project is already initialized. N scaffold files are behind the current templates — upgrade now (preserving your edits)? [Y/n]'. Y → run the unified `scaffold upgrade`.
+    - Non-interactive / scripted: `aida init` on an init'd project prints the drift summary + the exact `aida scaffold upgrade` command (don't auto-mutate without a TTY confirm or an explicit `--upgrade`/`--refresh` flag).
+    - `aida init --upgrade` (or the existing `--refresh`, folded in) = run the upgrade directly, no fresh-init steps.
+    Net: a user reaches for `aida init` for BOTH 'set up' and 'bring current' — 'does what we want without having to think too much'. The already-init'd path never re-bootstraps (no duplicate orphan branch / META reseed); it routes purely to the convergent upgrade.
+    Acceptance additions: `aida init` on an init'd project with drift offers/points to the upgrade (never silently no-ops); with no drift it reports 'already current'; it never re-runs bootstrap steps on an existing store; --upgrade runs it headless.
+  created_at: 2026-07-22T04:03:53.925649113Z
+  modified_at: 2026-07-22T04:03:53.925649113Z
   session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: drive
