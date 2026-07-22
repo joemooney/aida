@@ -10,7 +10,7 @@
 //! trace:TASK-398
 
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use colored::Colorize;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -300,6 +300,9 @@ pub fn handle_tail(project_root: &Path, opts: &TailOptions) -> Result<()> {
         include_user: opts.include_user,
         color: opts.color,
         since: since_cutoff,
+        // The filename-driven legacy tailer keeps its unstamped shape; the
+        // id-driven `aida tail` is where the clock lives. trace:TASK-1173
+        timestamps: false,
     };
     eprintln!(
         "{} {}",
@@ -366,6 +369,11 @@ pub struct FormatOpts {
     pub include_user: bool,
     pub color: bool,
     pub since: Option<DateTime<Utc>>,
+    /// Prefix each rendered line with the time of the event that produced it.
+    /// Off by default so the filename-driven `aida headless tail` keeps its
+    /// existing shape; the id-driven `aida tail` turns it on.
+    // trace:TASK-1173 | ai:claude
+    pub timestamps: bool,
 }
 
 impl Default for FormatOpts {
@@ -376,8 +384,30 @@ impl Default for FormatOpts {
             include_user: false,
             color: true,
             since: None,
+            timestamps: false,
         }
     }
+}
+
+/// The clock prefix for one event, in the operator's LOCAL zone.
+///
+/// A stream-json event carries its own RFC-3339 (UTC) `timestamp`; that is the
+/// truth we want, because the *gaps between consecutive stamps are the pacing
+/// signal* — the whole point of showing them. Only when an event carries no
+/// usable timestamp do we fall back to `arrival` (the wall-clock moment the
+/// line was rendered), which is approximate but never a wrong-but-confident
+/// claim about when the event happened.
+///
+/// Terse `HH:MM:SS` on purpose: a tail is a same-session view, so the date
+/// would be constant noise. Local zone comes from the host — never a hardcoded
+/// offset — while the log on disk stays UTC.
+// trace:TASK-1173 | ai:claude
+pub fn event_stamp(event_ts: Option<&str>, arrival: DateTime<Local>) -> String {
+    let when = event_ts
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Local))
+        .unwrap_or(arrival);
+    when.format("%H:%M:%S").to_string()
 }
 
 /// Outcome of formatting a single JSONL line.
@@ -427,36 +457,37 @@ pub fn format_line(line: &str, opts: &FormatOpts) -> FormatResult {
                 .get("message")
                 .and_then(|m| m.get("content"))
                 .and_then(|c| c.as_array());
-            let Some(content) = content else {
-                return out;
-            };
-            for block in content {
-                let block_type = block.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                match block_type {
-                    "text" if !opts.tools_only => {
-                        if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
-                            let trimmed = text.trim_end();
-                            if !trimmed.is_empty() {
-                                out.lines.push(if opts.color {
-                                    trimmed.normal().to_string()
-                                } else {
-                                    trimmed.to_string()
-                                });
-                                out.lines.push(String::new());
+            // `if let` rather than an early `return`: every exit has to reach
+            // the timestamp-prefix pass at the bottom. trace:TASK-1173
+            if let Some(content) = content {
+                for block in content {
+                    let block_type = block.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    match block_type {
+                        "text" if !opts.tools_only => {
+                            if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
+                                let trimmed = text.trim_end();
+                                if !trimmed.is_empty() {
+                                    out.lines.push(if opts.color {
+                                        trimmed.normal().to_string()
+                                    } else {
+                                        trimmed.to_string()
+                                    });
+                                    out.lines.push(String::new());
+                                }
                             }
                         }
+                        "tool_use" if opts.with_tools => {
+                            let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                            let preview = preview_tool_input(block.get("input"));
+                            let line = format!("[{}] {}", name, preview);
+                            out.lines.push(if opts.color {
+                                line.cyan().to_string()
+                            } else {
+                                line
+                            });
+                        }
+                        _ => {}
                     }
-                    "tool_use" if opts.with_tools => {
-                        let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("?");
-                        let preview = preview_tool_input(block.get("input"));
-                        let line = format!("[{}] {}", name, preview);
-                        out.lines.push(if opts.color {
-                            line.cyan().to_string()
-                        } else {
-                            line
-                        });
-                    }
-                    _ => {}
                 }
             }
         }
@@ -500,6 +531,32 @@ pub fn format_line(line: &str, opts: &FormatOpts) -> FormatResult {
         }
         _ => {}
     }
+
+    // Stamp every rendered line with the time of the event behind it, so a long
+    // pause between two lines READS as a long pause instead of looking like an
+    // uninterrupted flow. Arrival time is the fallback for an event with no
+    // usable timestamp of its own. The blank spacer after a text block stays
+    // blank — stamping it would double the noise for no signal.
+    // trace:TASK-1173 | ai:claude
+    if opts.timestamps && !out.lines.is_empty() {
+        let stamp = event_stamp(
+            parsed.get("timestamp").and_then(|v| v.as_str()),
+            Local::now(),
+        );
+        let prefix = format!("[{stamp}] ");
+        let prefix = if opts.color {
+            prefix.dimmed().to_string()
+        } else {
+            prefix
+        };
+        for line in out.lines.iter_mut() {
+            if line.is_empty() {
+                continue;
+            }
+            line.insert_str(0, &prefix);
+        }
+    }
+
     out
 }
 
@@ -1091,6 +1148,140 @@ mod tests {
         opts.since = Some(Utc::now());
         let res = format_line(line, &opts);
         assert!(res.lines.iter().any(|l| l == "keep me"));
+    }
+
+    // --- TASK-1173: per-event local-time prefixes -------------------------
+    //
+    // Time is an INPUT to `event_stamp`, not an ambient read, so these assert
+    // exact values without pinning a wall-clock instant that would rot.
+
+    /// A fixed arrival moment for the fallback cases. Anchored to an absolute
+    /// instant (not a local wall-clock triple) so no DST transition can make it
+    /// ambiguous or nonexistent in the host's zone.
+    fn fixed_arrival() -> DateTime<Local> {
+        DateTime::parse_from_rfc3339("2026-07-21T04:05:06Z")
+            .unwrap()
+            .with_timezone(&Local)
+    }
+
+    fn local_hms(rfc3339: &str) -> String {
+        DateTime::parse_from_rfc3339(rfc3339)
+            .unwrap()
+            .with_timezone(&Local)
+            .format("%H:%M:%S")
+            .to_string()
+    }
+
+    #[test]
+    fn event_stamp_uses_the_events_own_time() {
+        // Same instant, expressed as UTC on the wire; the render is local, so
+        // derive the expectation through chrono rather than hardcoding an
+        // offset — this has to pass in any TZ.
+        let ts = "2026-07-21T23:14:07.512Z";
+        let stamped = event_stamp(Some(ts), fixed_arrival());
+        assert_eq!(stamped, local_hms(ts));
+        // ...and specifically NOT the arrival time: the event's own clock wins.
+        assert_ne!(stamped, fixed_arrival().format("%H:%M:%S").to_string());
+    }
+
+    #[test]
+    fn event_stamp_falls_back_to_arrival_without_a_timestamp() {
+        let arrival = fixed_arrival();
+        assert_eq!(
+            event_stamp(None, arrival),
+            arrival.format("%H:%M:%S").to_string()
+        );
+    }
+
+    #[test]
+    fn event_stamp_falls_back_to_arrival_on_an_unparseable_timestamp() {
+        // Never a wrong-but-confident stamp: garbage on the wire degrades to
+        // arrival, not to a guess.
+        let arrival = fixed_arrival();
+        assert_eq!(
+            event_stamp(Some("not-a-timestamp"), arrival),
+            arrival.format("%H:%M:%S").to_string()
+        );
+    }
+
+    #[test]
+    fn event_stamp_gap_between_events_is_the_real_gap() {
+        // The pacing signal: five minutes on the wire reads as five minutes.
+        let first = event_stamp(Some("2026-07-21T23:14:07Z"), fixed_arrival());
+        let later = event_stamp(Some("2026-07-21T23:19:07Z"), fixed_arrival());
+        assert_ne!(first, later);
+        let mins = |s: &str| s[3..5].parse::<i32>().unwrap();
+        assert_eq!((mins(&later) - mins(&first)).rem_euclid(60), 5);
+    }
+
+    #[test]
+    fn format_line_prefixes_with_the_events_own_time() {
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]},"timestamp":"2026-07-21T23:14:07.512Z"}"#;
+        let expected = DateTime::parse_from_rfc3339("2026-07-21T23:14:07.512Z")
+            .unwrap()
+            .with_timezone(&Local)
+            .format("%H:%M:%S")
+            .to_string();
+        let mut opts = opts_default();
+        opts.color = false;
+        opts.timestamps = true;
+        let res = format_line(line, &opts);
+        assert_eq!(res.lines[0], format!("[{expected}] hello"));
+    }
+
+    #[test]
+    fn format_line_leaves_the_spacer_line_blank() {
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]},"timestamp":"2026-07-21T23:14:07.512Z"}"#;
+        let mut opts = opts_default();
+        opts.color = false;
+        opts.timestamps = true;
+        let res = format_line(line, &opts);
+        assert_eq!(res.lines.len(), 2);
+        assert_eq!(res.lines[1], "");
+    }
+
+    #[test]
+    fn format_line_without_an_event_timestamp_stamps_arrival() {
+        // No `timestamp` on the wire → arrival wall-clock. Asserted by SHAPE
+        // (and that it is a real, parseable clock time) rather than against a
+        // captured `now`, which would race the second boundary.
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}"#;
+        let mut opts = opts_default();
+        opts.color = false;
+        opts.timestamps = true;
+        let res = format_line(line, &opts);
+        let rendered = &res.lines[0];
+        assert!(rendered.ends_with(" hello"), "{rendered}");
+        let stamp = &rendered[1..rendered.find(']').expect("a closing bracket")];
+        assert!(
+            chrono::NaiveTime::parse_from_str(stamp, "%H:%M:%S").is_ok(),
+            "{stamp} is not a clock time"
+        );
+    }
+
+    #[test]
+    fn format_line_emits_no_prefix_when_timestamps_are_off() {
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]},"timestamp":"2026-07-21T23:14:07.512Z"}"#;
+        let mut opts = opts_default();
+        opts.color = false;
+        let res = format_line(line, &opts);
+        assert_eq!(res.lines[0], "hello");
+    }
+
+    #[test]
+    fn format_line_stamps_tool_lines_too() {
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]},"timestamp":"2026-07-21T23:14:07.512Z"}"#;
+        let expected = DateTime::parse_from_rfc3339("2026-07-21T23:14:07.512Z")
+            .unwrap()
+            .with_timezone(&Local)
+            .format("%H:%M:%S")
+            .to_string();
+        let mut opts = opts_default();
+        opts.color = false;
+        opts.with_tools = true;
+        opts.timestamps = true;
+        let res = format_line(line, &opts);
+        assert_eq!(res.lines[0], format!("[{expected}] [Bash] ls"));
     }
 
     #[test]

@@ -2361,6 +2361,7 @@ fn run() -> Result<()> {
         since,
         no_follow,
         with_tools,
+        no_timestamp,
     } = &cli.command
     {
         let project_root = find_main_worktree_root()
@@ -2390,6 +2391,8 @@ fn run() -> Result<()> {
             with_tools: *with_tools,
             color: std::io::IsTerminal::is_terminal(&std::io::stdout())
                 && std::env::var_os("NO_COLOR").is_none(),
+            // trace:TASK-1173 | ai:claude
+            no_timestamp: *no_timestamp,
         };
         return tail_cmd::handle_tail(&project_root, sessions, &opts);
     }
