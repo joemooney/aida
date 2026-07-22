@@ -168,6 +168,21 @@ That's it. You described a change in one line and the next time you looked, it w
 
 Start at the top, where a sentence is all it takes. Slide down the list as the rhythm gets familiar and you want more of the trip in your own hands. The power was always there — now the front door is a single thought you can type.
 
+## Driving one spec, supervising the loop, or walking away
+
+The tables above are about *autonomy* — how much AIDA does unattended. There's a second axis that trips people up: **how much you stay in the loop across a *sequence* of specs.** These are the four honest answers, from most hands-on to least:
+
+| Your mode | Run | What you do | What it costs you |
+|---|---|---|---|
+| **Drive one spec by hand** | `aida queue work <spec>` | You sit in the worktree, implement (or watch an agent), then finish it. | You do this once *per spec* — and every spec boundary is manual: exit, close the session, launch the next. |
+| **Supervise the whole loop** | `/aida-solo` | *This* session becomes both advisor and integrator and runs groom → implement → integrate, spec after spec, with your live judgment — keystones parked for you. | Your attention, but none of the plumbing: no copy-paste between seats, no exit-and-relaunch. |
+| **Walk away from a batch** | `aida burndown run` | Nothing. It fans out, ships, and loops until the ready set is drained. | You give up per-spec review (you read the PRs after). |
+| **Ship one thing unattended** | `aida zen <spec>` | Nothing. One spec, headless, to a gated merge. | Same — no review mid-flight; good for a single obvious change. |
+
+**The anti-pattern this fixes.** If your rhythm is *"work a spec in an interactive `aida queue work` session → paste the results to an advisor → exit → paste the advisor's next commands → launch the next `queue work`"*, you are **hand-executing the supervised loop.** That copy-paste-and-relaunch dance is exactly what `/aida-solo` collapses into one warm session: the advisor and the implementer are the *same* context (nothing to paste), and it walks to the next spec on its own (nothing to relaunch). You keep the judgment; you drop the juggling.
+
+**So which?** Reach for **`aida queue work`** only when you genuinely want to hand-drive *one* spec in isolation. The moment you're doing it *repeatedly with an advisor in between*, switch to **`/aida-solo`**. Go to **`aida burndown run`** when a batch is routine enough to not watch, and **`aida zen`** for a single fire-and-forget change. `zen` is *not* the fix for a too-manual `queue work` loop — it removes the very judgment you were reaching for; `/aida-solo` is.
+
 ---
 
 **What changed lately?** See [`whats-new-2026-06.md`](whats-new-2026-06.md) for the June 2026 round of refinements — organized by who benefits (human, agent, cockpit).
