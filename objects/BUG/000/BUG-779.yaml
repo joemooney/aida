@@ -38,7 +38,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:08:56.039024178Z
-modified_at: 2026-07-22T05:11:31.184364503Z
+modified_at: 2026-07-22T05:11:53.026108674Z
 req_type: Bug
 tags:
 - batch:papercuts-0721
@@ -46,4 +46,11 @@ tags:
 - error-handling
 - session
 - shell
+comments:
+- id: 019f883c-c9c2-7e73-8326-a9e3586ba462
+  author: joe
+  content: Commit d39b5f9b1 references this requirement
+  created_at: 2026-07-22T05:11:53.026108674Z
+  modified_at: 2026-07-22T05:11:53.026108674Z
+  session_id: aa203fa9-212b-47f8-83f3-3367f40d467d
 execution_mode: drive
