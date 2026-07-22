@@ -37980,5 +37980,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 3543
+- id: 019f8806-179c-7cf0-a418-e952c4c5f411
+  target_id: 019f8806-0fa7-7a12-8e0e-d5ce38d1b543
+  author: aida
+  node_id: '1'
+  lamport: 3544
+  timestamp: 2026-07-22T04:12:08.476699196Z
+  kind: !Create
+    title: aida worktree exit is cwd-gated but the (wt:) PS1 marker is session-env-based — exit refuses ('nothing to step out of') while the marker persists after cd-out or external session-end
+    description: '2026-07-21, right after TASK-1160 shipped: operator''s shell shows (wt:TASK-1169) marker (driven by AIDA_SESSION_ID). They cd''d from the worktree to the main checkout, then ran ''aida worktree exit'' → ''✓ Not inside a scoped worktree — nothing to step out of'', and the marker STILL shows. Root: the (wt:) PS1 marker keys on AIDA_SESSION_ID being set, but ''worktree exit'' decides there''s nothing to do based on CWD (are you physically in a scoped worktree dir). The two desync: cd out manually (or have the session ended externally, as happened here — advisor ran session end) and the marker persists with no way to clear it via worktree exit — the operator must know to ''unset AIDA_SESSION_ID'' by hand. Fix: ''aida worktree exit'' should clear the session env + marker whenever the shell carries AIDA_SESSION_ID (emit the unset via the wrapper-eval), independent of cwd — if you''re carrying a worktree session, exit ends your carrying of it wherever you stand. Also: when the underlying session/lease no longer exists (ended externally), the marker should not show a live (wt:) — detect a dangling AIDA_SESSION_ID. Acceptance: with AIDA_SESSION_ID set, ''aida worktree exit'' from ANY cwd unsets it + clears the marker; a dangling session id (lease gone) doesn''t render a live (wt:) marker; worktree exit from inside the worktree still cd''s out AND unsets. Mode drive.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3544
 node_id: '1'
