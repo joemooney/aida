@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-12T19:14:15.521635453Z
-modified_at: 2026-07-22T02:21:53.842428728Z
+modified_at: 2026-07-22T02:25:50.612229649Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -34,4 +34,10 @@ comments:
   created_at: 2026-07-21T05:24:53.715212572Z
   modified_at: 2026-07-21T05:24:53.715212572Z
   session_id: 3656084c-e702-4335-8721-954ca99bc265
+- id: 019f87a4-c614-7591-a4d1-79c6de897cf9
+  author: joe
+  content: 'OBE — already delivered. Verified against code, not docs: the single-branch batch engine ships as handle_auto_complete_single_branch (aida-cli-lib/src/queue_cmd.rs:4647, dispatched at :4633), landed under TASK-1003 / SPIKE-70. Sibling docs task TASK-1139 and the blessing task TASK-1138 are already Completed. Closing rather than re-implementing. Filing note: this spec arrived with a title truncated mid-sentence and an empty description, which is why it survived to the ready set — the burndown gate cannot detect an unimplementable filing. | ai:claude'
+  created_at: 2026-07-22T02:25:50.612229649Z
+  modified_at: 2026-07-22T02:25:50.612229649Z
+  session_id: d7909c1f-6457-4cf7-b374-59df8ef5424b
 execution_mode: drive
