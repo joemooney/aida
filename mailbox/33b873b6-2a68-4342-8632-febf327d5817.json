@@ -1,0 +1,15 @@
+{
+  "id": "33b873b6-2a68-4342-8632-febf327d5817",
+  "thread_id": "33b873b6-2a68-4342-8632-febf327d5817",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1784747193997,
+  "body": "Burn-down complete (--status approved). Ready set drained in one wave.\n\nCompleted: TASK-1176 — https://github.com/joemooney/aida/pull/1600\n  Adds a terminal `Superseded` status for decision-class specs, so an adopted-then-replaced ADR no longer has to masquerade as Rejected. Superseded-by is a first-class typed edge (SupersededBy/Supersedes), not a string tag. +1349/-51 across 30 files: models.rs, lifecycle.rs, rollup.rs, cache.rs, mcp.rs, schema.rs, proto, TUI store, docs (CLAUDE.md, README, docs/lifecycle.md, lifecycle-vocabulary.md), plan at docs/plans/2026-07-22-task-1176-superseded-decision-state.md.\n\nCaveats / verifications worth noting:\n- PR CI green (Build ubuntu-latest, 9m33s). Cross-platform is NOT covered by PR CI — this change touches the serialized status enum and the proto, so it is worth watching tonight's cross-platform nightly before a release cut.\n- The post-merge integrated-main check was a compile check only (cargo build -p aida-cli, green), per the BUG-496 gate. The full test suite was run by the implementer pre-merge, not re-run against integrated main.\n- I reviewed the diff for the specific hazard of a catch-all `_ =>` arm silently mis-bucketing the new variant. Explicit arms are present in lifecycle.rs, rollup.rs and the cache tally; the epic rollup now subtracts superseded alongside rejected (so a superseded child cannot pin its epic In Progress forever) and is_terminal_epic_status includes it. This is a diff read, not an independent audit of every match site in the workspace.\n- Whether to also add `deprecated` was a scope call delegated to the implementer — check the PR body for which way it went and whether it left a Followups bullet.\n- Rebuilt target/release afterwards (make build-fast) so the daily-driver binary is not behind HEAD.\n\nAwaiting your sign-off (pickable but NOT queued — I did not act on these): VIS-1, TASK-1164, FR-284.\n\nLeft for manual merge: none.\n\nParked (with reason):\n- TASK-735, TASK-751 — tagged deferred:on-demand\n- TASK-749 — tagged deferred:future-rbac\n- TASK-892 — tagged deferred:until-projects-toml-consumed\n- STORY-687, STORY-688 — tagged deferred:cockpit-phase2\n- EPIC-44 — epic, needs decomposing into bounded specs first\n\nWorktrees not pruned: none from this drain (agent-a6fd14970169baa82 removed, branch deleted local+remote). Unrelated pre-existing state you may want to sweep separately: three locked agent worktrees at d9f9eceb8 (agent-a942df7439695a8aa, agent-ab76dad2f2712ef43, agent-ada058a96e1aba25f) and 25 stale session leases reported by `aida session leases`.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
