@@ -8,7 +8,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:08:15.784325728Z
-modified_at: 2026-07-22T06:08:15.784325728Z
+modified_at: 2026-07-22T06:08:19.720893826Z
 req_type: Task
 tags:
 - aida:burndown ordering dx from-operator
+execution_mode: drive
