@@ -1,0 +1,14 @@
+id: 019f8a76-a713-7240-a502-6b909157349e
+spec_id: BUG-785
+agreed_id: BUG-785
+title: 'queue list --batch ignores filter / queue work --batch over-strict (quizdom #1 — UNVERIFIED, likely misdiagnosed mechanism)'
+description: 'Quizdom #1 (2026-07-19, aida sha 0b0555a8): queue list --batch A returned B''s items; queue work --batch B failed ''no queued items tagged batch:B'' while show confirmed the tag. UNVERIFIED on current main (a7cd68909) — no covering spec found, and the mechanism may be misdiagnosed: ''filter ignored on list'' + ''over-strict on work'' could be a queue-scope/user-id issue (batch tag on the SPEC vs the QUEUE ENTRY, or a $USER mismatch, BUG-89 family) rather than the batch filter. Needs a clean repro on current main to know which. Revisit trigger records that. Do NOT implement a fix until the mechanism is confirmed.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-22T15:34:19.667769905Z
+modified_at: 2026-07-22T15:34:19.667769905Z
+req_type: Bug
+tags:
+- aida:queue needs-repro-verification from-downstream:quizdom
