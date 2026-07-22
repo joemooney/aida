@@ -101,6 +101,7 @@ fn file_zen_review_brief_short_circuits() {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     };
 
     // Handoff disabled → None, no side effects.

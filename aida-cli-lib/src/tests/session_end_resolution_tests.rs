@@ -24,6 +24,7 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 

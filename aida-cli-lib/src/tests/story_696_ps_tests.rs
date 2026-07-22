@@ -24,6 +24,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 
@@ -270,14 +271,25 @@ fn harness_lease_without_pid_signal_predicate() {
 #[test]
 fn ps_orphan_verdict_matrix() {
     // No lease backing an In-Progress flag → orphaned, flag-only.
-    assert_eq!(ps_orphan_verdict(None), Some(false));
+    assert_eq!(ps_orphan_verdict(None, false), Some(false));
     // Live lease → genuinely running, not orphaned.
-    assert_eq!(ps_orphan_verdict(Some(LeaseState::Live)), None);
+    assert_eq!(ps_orphan_verdict(Some(LeaseState::Live), false), None);
     // Dead lease → orphaned, crashed session.
-    assert_eq!(ps_orphan_verdict(Some(LeaseState::Stale)), Some(true));
+    assert_eq!(
+        ps_orphan_verdict(Some(LeaseState::Stale), false),
+        Some(true)
+    );
     // Dormant (no live process) → also orphaned: the flag is not
     // liveness-backed.
-    assert_eq!(ps_orphan_verdict(Some(LeaseState::Dormant)), Some(true));
+    assert_eq!(
+        ps_orphan_verdict(Some(LeaseState::Dormant), false),
+        Some(true)
+    );
+    // BUG-778: a hand-entered worktree awaiting its agent launch is NOT an
+    // orphan at any lease state — the operator is the missing worker.
+    // trace:BUG-778 | ai:claude
+    assert_eq!(ps_orphan_verdict(Some(LeaseState::Dormant), true), None);
+    assert_eq!(ps_orphan_verdict(Some(LeaseState::Stale), true), None);
 }
 
 // Rollup / stateless types are excluded from the orphan pass — an
@@ -1098,4 +1110,210 @@ fn ps_over_wide_cell_wraps_instead_of_ellipsizing() {
     let (head, rest) = ps_wrap_cell(wide, 6);
     let rest = rest.expect("wraps");
     assert_eq!(format!("{head}{rest}"), wide);
+}
+
+// ── BUG-778: a hand-entered worktree is not a crashed agent ──────────────
+
+/// The reported false positive, end to end. `aida worktree enter <SPEC>` takes
+/// the implementer lease and launches NO agent; for the seconds before the
+/// operator starts one, `aida ps` painted the row "stalled … process dead" AND
+/// listed the spec under "Orphaned In-Progress specs" with the hint
+/// `aida queue work <SPEC>` — which would have dispatched a second session onto
+/// a spec being worked by hand. It must read as awaiting-agent, carry no
+/// re-dispatch hint, and not appear as an orphan.
+// trace:BUG-778 | ai:claude
+#[test]
+fn ps_freshly_hand_entered_spec_reads_awaiting_agent_not_orphaned() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join("task-1169");
+    std::fs::create_dir_all(&wt).unwrap();
+    let now = chrono::Utc::now();
+    let mut l = ps_lease("l-entered", "TASK-1169", wt);
+    l.branch = "task-1169-launcher".into();
+    // 30 seconds ago — exactly the reported window.
+    l.manual_enter_at = Some(now - chrono::Duration::seconds(30));
+
+    let specs = vec![RunningWorkSpec {
+        disp: "TASK-1169".into(),
+        agreed_id: Some("TASK-1169".into()),
+        spec_id: Some("TASK-1169".into()),
+        title: "launcher-owned integration waits".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+
+    let (rows, orphans) = build_running_work(
+        &specs,
+        &[l],
+        &[],
+        now,
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+    );
+
+    assert_eq!(rows.len(), 1);
+    let d = rows[0].dispatch.as_ref().unwrap();
+    assert_eq!(
+        d.state,
+        dispatch_health_ps::DispatchState::AwaitingAgent,
+        "a worktree entered by hand 30s ago is awaiting its agent, not dead"
+    );
+    let hint = d.hint.as_deref().expect("awaiting-agent explains itself");
+    assert!(hint.contains("entered by hand"), "{hint}");
+    assert!(!hint.contains("process dead"), "{hint}");
+    assert!(!hint.contains("dead process"), "{hint}");
+    assert!(
+        !hint.contains("aida queue work"),
+        "the re-dispatch hint would race the operator: {hint}"
+    );
+    assert!(
+        orphans.is_empty(),
+        "a hand-entered spec must not be listed as orphaned: {:?}",
+        orphans.iter().map(|o| &o.spec).collect::<Vec<_>>()
+    );
+}
+
+/// The grace window is bounded, and it is scoped to hand-entered leases only:
+/// past the window the entered worktree ages into STALLED, and an
+/// orchestrator-spawned lease whose agent genuinely died still flags
+/// immediately with its unchanged resume hint.
+// trace:BUG-778 | ai:claude
+#[test]
+fn ps_dead_agent_lease_still_flags_stalled_after_the_grace_window() {
+    let tmp = tempfile::tempdir().unwrap();
+    let now = chrono::Utc::now();
+    let grace = dispatch_health_ps::DEFAULT_AWAITING_AGENT_GRACE_SECS as i64;
+
+    // (a) hand-entered, but nothing ever launched — past the window.
+    let wt_a = tmp.path().join("story-9");
+    std::fs::create_dir_all(&wt_a).unwrap();
+    let mut entered = ps_lease("l-entered-old", "STORY-9", wt_a);
+    entered.branch = "story-9-widget".into();
+    entered.started_at = now - chrono::Duration::seconds(grace + 60);
+    entered.manual_enter_at = Some(now - chrono::Duration::seconds(grace + 60));
+
+    // (b) orchestrator-spawned lease, agent dead, no hand-enter stamp.
+    let wt_b = tmp.path().join("story-10");
+    std::fs::create_dir_all(&wt_b).unwrap();
+    let mut spawned = ps_lease("l-spawned", "STORY-10", wt_b);
+    spawned.branch = "story-10-widget".into();
+    spawned.started_at = now - chrono::Duration::seconds(grace + 60);
+
+    let specs = vec![
+        RunningWorkSpec {
+            disp: "STORY-9".into(),
+            agreed_id: Some("STORY-9".into()),
+            spec_id: Some("STORY-9".into()),
+            title: "hand-entered, never launched".into(),
+            in_progress: true,
+            orphan_excluded_type: false,
+        },
+        RunningWorkSpec {
+            disp: "STORY-10".into(),
+            agreed_id: Some("STORY-10".into()),
+            spec_id: Some("STORY-10".into()),
+            title: "agent died".into(),
+            in_progress: true,
+            orphan_excluded_type: false,
+        },
+    ];
+
+    let (rows, orphans) = build_running_work(
+        &specs,
+        &[entered, spawned],
+        &[],
+        now,
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+    );
+
+    let entered_row = rows.iter().find(|r| r.lease.id == "l-entered-old").unwrap();
+    let entered_dispatch = entered_row.dispatch.as_ref().unwrap();
+    assert_eq!(
+        entered_dispatch.state,
+        dispatch_health_ps::DispatchState::Stalled,
+        "the grace window expires — an entered worktree nobody worked still surfaces"
+    );
+    // …but even then it never gets the racing re-dispatch verb.
+    let entered_hint = entered_dispatch.hint.as_deref().unwrap();
+    assert!(!entered_hint.contains("aida queue work"), "{entered_hint}");
+
+    let spawned_row = rows.iter().find(|r| r.lease.id == "l-spawned").unwrap();
+    let spawned_dispatch = spawned_row.dispatch.as_ref().unwrap();
+    assert_eq!(
+        spawned_dispatch.state,
+        dispatch_health_ps::DispatchState::Stalled,
+        "a genuinely dead agent lease is unchanged by the hand-enter carve-out"
+    );
+    let spawned_hint = spawned_dispatch.hint.as_deref().unwrap();
+    assert!(
+        spawned_hint.contains("aida queue work STORY-10"),
+        "the ordinary resume hint survives: {spawned_hint}"
+    );
+
+    // Both are orphans again once the hand-enter grace lapses.
+    let orphaned: Vec<&str> = orphans.iter().map(|o| o.spec.as_str()).collect();
+    assert!(orphaned.contains(&"STORY-9"), "{orphaned:?}");
+    assert!(orphaned.contains(&"STORY-10"), "{orphaned:?}");
+}
+
+/// The pure provenance read: seconds since the hand-over, `None` for an
+/// orchestrator-spawned lease, clamped at 0 under clock skew.
+// trace:BUG-778 | ai:claude
+#[test]
+fn ps_manual_enter_secs_reads_the_handover_stamp() {
+    let now = chrono::Utc::now();
+    let l = ps_lease("l", "STORY-1", std::path::PathBuf::from("/x"));
+    assert_eq!(ps_manual_enter_secs(&l, now), None);
+
+    let mut entered = l.clone();
+    entered.manual_enter_at = Some(now - chrono::Duration::seconds(45));
+    assert_eq!(ps_manual_enter_secs(&entered, now), Some(45));
+
+    // A future stamp (clock skew across hosts) clamps to "just handed over".
+    let mut skewed = l.clone();
+    skewed.manual_enter_at = Some(now + chrono::Duration::seconds(90));
+    assert_eq!(ps_manual_enter_secs(&skewed, now), Some(0));
+}
+
+/// The writer `aida worktree enter|add` calls: the stamp must survive the TOML
+/// round-trip back into `SessionLease`, and — because it patches a single key
+/// rather than reserializing the struct — must preserve lease keys this crate's
+/// model doesn't carry (STORY-711 writes `authorized_by` the same way).
+// trace:BUG-778 | ai:claude
+#[test]
+fn mark_lease_manual_enter_round_trips_and_preserves_foreign_keys() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(leases_dir(root)).unwrap();
+    let lease = ps_lease("l-stamp", "STORY-3", root.join("wt"));
+    let path = lease_path(root, &lease.id);
+    let mut body = toml::to_string_pretty(&lease).unwrap();
+    // A key `SessionLease` does not model — the round-trip hazard.
+    body.push_str("\nauthorized_by = \"advisor-a\"\n");
+    std::fs::write(&path, body).unwrap();
+
+    mark_lease_manual_enter(root, &lease.id).expect("stamping a real lease succeeds");
+
+    let back: SessionLease = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let stamped = back
+        .manual_enter_at
+        .expect("the hand-over stamp survives the round-trip");
+    assert!(
+        ps_manual_enter_secs(&back, chrono::Utc::now()).unwrap() < 60,
+        "the stamp reads as fresh: {stamped}"
+    );
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("authorized_by"),
+        "a foreign key must not be dropped by the patch"
+    );
+
+    // Re-entering refreshes rather than duplicating.
+    mark_lease_manual_enter(root, &lease.id).expect("re-enter is idempotent");
+    let again: SessionLease = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(again.manual_enter_at.unwrap() >= stamped);
 }

@@ -27,6 +27,7 @@ fn session_lease_at(worktree: &std::path::Path) -> SessionLease {
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 

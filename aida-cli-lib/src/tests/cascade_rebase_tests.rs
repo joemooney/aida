@@ -93,6 +93,7 @@ fn write_fake_lease(project_root: &std::path::Path, branch: &str, worktree: &std
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     };
     std::fs::write(
         leases.join(format!("{}.toml", lease.id)),

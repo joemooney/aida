@@ -25,6 +25,7 @@ fn lease_for_status(scope: &str, worktree_path: std::path::PathBuf) -> SessionLe
         parent_branch_sha: None,
         review_verb: false,
         claim_verb: false,
+        manual_enter_at: None,
     }
 }
 
