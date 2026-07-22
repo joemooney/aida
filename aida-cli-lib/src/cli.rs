@@ -1316,6 +1316,41 @@ pub enum SessionCommand {
         #[clap(long, short = 'y')]
         yes: bool,
     },
+
+    /// Reap sessions that have genuinely FINISHED — remove the worktree,
+    /// release the lease, and delete the branch, in one pass, so a headless
+    /// agent that exited when its work landed doesn't leave a stranded
+    /// worktree behind for someone to clean up by hand.
+    ///
+    /// A session is reaped only when ALL of these hold: its spec is Done or
+    /// Completed, its branch is merged (an ancestor of the default branch, or
+    /// a merged PR for the squash case, with zero unique unmerged commits),
+    /// and its process has EXITED. Everything else is reported and left
+    /// exactly as it is.
+    ///
+    /// Reads substrate state only — spec status, branch-merged-ness, process
+    /// liveness. It never inspects terminal output to guess whether an agent
+    /// is finished, and it NEVER closes a running agent: a session whose
+    /// process is still alive owns its worktree as its cwd, so it is skipped
+    /// and reaped on a later pass once it exits on its own. Dirty worktrees,
+    /// locked worktrees, and branches carrying unique unmerged commits are
+    /// never removed — the same safety checks `aida worktree gc` applies.
+    // trace:TASK-1177 | ai:claude
+    Reap {
+        /// Show what would be reaped and what is left in place without
+        /// touching anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation and reap immediately after printing the
+        /// candidate list.
+        #[clap(long, short = 'y')]
+        yes: bool,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 // `session forget` (single-target .jsonl removal) and `session wakeup`

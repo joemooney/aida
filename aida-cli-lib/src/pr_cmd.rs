@@ -1847,6 +1847,25 @@ pub(crate) fn pr_ship_handler(
     // landed PR into a failed ship.
     // trace:TASK-1145 | ai:codex
     if merged_this_run {
+        // TASK-1177: reap first — a session whose spec is now finished, whose
+        // branch just merged, and whose process has already exited is torn down
+        // whole (worktree + lease + branch) instead of leaving a stranded
+        // worktree for a human to clean up at the spec boundary. A session that
+        // is still RUNNING is left completely alone; it reaps on a later pass
+        // once it exits on its own. Quiet on the common no-op, and best-effort:
+        // reaping must never turn a landed PR into a failed ship.
+        // trace:TASK-1177 | ai:claude
+        if let Err(e) = crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
+            dry_run: false,
+            yes: true,
+            json: false,
+            quiet_when_empty: true,
+        }) {
+            eprintln!(
+                "  {} post-merge session reap failed or was partially applied: {e:#}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+        }
         eprintln!("  step 6: pruning verified merged agent worktrees");
         if let Err(e) = doctor_cmd::run_merged_agent_worktree_gc(
             /* yes */ true, /* force */ true, /* json */ false,

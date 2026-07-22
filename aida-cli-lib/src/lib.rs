@@ -215,6 +215,9 @@ mod server_cmd;
 mod session;
 mod session_manifest;
 mod session_misc_cmd;
+// trace:TASK-1177 | ai:claude — the substrate-state reap pass for sessions
+// whose spec is finished, branch merged, and process exited.
+mod session_reap;
 // trace:TASK-1171 | ai:claude — the dedicated marker-delimited channel the
 // `aida()` wrapper evals, so ordinary stdout is never an eval candidate.
 mod shell_eval;
@@ -19111,6 +19114,15 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             escalations,
         } => session_prune(*days, *dry_run, *yes, *orphans, *escalations),
         SessionCommand::Gc { dry_run, yes } => session_gc(*dry_run, *yes),
+        // trace:TASK-1177 | ai:claude
+        SessionCommand::Reap { dry_run, yes, json } => {
+            session_reap::run_session_reap(session_reap::ReapOptions {
+                dry_run: *dry_run,
+                yes: *yes,
+                json: *json,
+                quiet_when_empty: false,
+            })
+        }
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
     }
 }
