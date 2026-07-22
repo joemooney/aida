@@ -4758,6 +4758,10 @@ pub(crate) fn handle_queue_command(
                         *json,
                         role.as_deref(),
                         *max,
+                        // TASK-1137: the per-member checkpoint pauses for a
+                        // human at the keyboard and auto-continues when the
+                        // drain is fully headless. trace:TASK-1137 | ai:claude
+                        no_human_mode,
                     );
                 }
                 // TASK-1005 / SPIKE-70: `--sequential` NAMES + guards the existing

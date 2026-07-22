@@ -67861,6 +67861,15 @@ struct RealSingleBranchDriver<'a> {
     /// on the branch to open a PR for.
     // trace:TASK-1136 | ai:claude
     cluster_pr: Option<u64>,
+    /// The drain's headless mode, if any — decides whether the per-member
+    /// checkpoint pauses for the operator or auto-continues.
+    // trace:TASK-1137 | ai:claude
+    no_human: Option<auto_complete::NoHumanMode>,
+    /// Whether this process can actually ask a question and get an answer (a
+    /// terminal on BOTH stdin and stdout). Captured once at construction so the
+    /// checkpoint never blocks on a prompt nobody can answer.
+    // trace:TASK-1137 | ai:claude
+    interactive: bool,
 }
 
 impl auto_complete::SingleBranchDriver for RealSingleBranchDriver<'_> {
@@ -67967,6 +67976,64 @@ impl auto_complete::SingleBranchDriver for RealSingleBranchDriver<'_> {
             }
         }
     }
+
+    /// Per-member checkpoint. In a single-branch drain each member commits ON
+    /// TOP of the last one, so a bad increment poisons everything after it —
+    /// with a human at the keyboard we stop and let them inspect what just
+    /// landed before the next member stacks on it; fully headless we continue,
+    /// because a prompt with nobody to answer it would hang the drain forever.
+    // trace:TASK-1137 | ai:claude
+    fn checkpoint_between_members(&mut self, prev: &str, next: &str) -> bool {
+        match auto_complete::single_branch_checkpoint_action(self.no_human, self.interactive) {
+            auto_complete::CheckpointAction::AutoContinue => {
+                if !self.json {
+                    eprintln!(
+                        "  {} checkpoint: {} landed on {} — continuing with {} (nobody at the \
+                         keyboard to review it)",
+                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                        prev.bold(),
+                        self.shared_branch.cyan(),
+                        next.bold(),
+                    );
+                }
+                true
+            }
+            auto_complete::CheckpointAction::Prompt => {
+                eprintln!();
+                eprintln!(
+                    "  {} checkpoint: {} landed on {} ({} member{} on the branch so far)",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    prev.bold(),
+                    self.shared_branch.cyan(),
+                    self.driven.len(),
+                    if self.driven.len() == 1 { "" } else { "s" },
+                );
+                eprintln!(
+                    "     {} inspect it now — {} commits on top of it and later members \
+                     inherit anything wrong with it",
+                    "→".dimmed(),
+                    next.bold(),
+                );
+                // Declining is a CLEAN stop: the engine parks the drain with
+                // every prior member's commit intact on the shared branch. A
+                // read failure is treated the same way — never proceed to stack
+                // more work on an increment nobody consented to.
+                match prompt_yes_no(&format!("  Continue with {next}? [Y/n] "), true) {
+                    Ok(go) => {
+                        if !go {
+                            eprintln!(
+                                "  {} stopping here — the branch keeps every member committed \
+                                 so far",
+                                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                            );
+                        }
+                        go
+                    }
+                    Err(_) => false,
+                }
+            }
+        }
+    }
 }
 
 /// True when the shared single-branch drain branch exists locally AND carries
@@ -68050,6 +68117,10 @@ fn handle_auto_complete_single_branch(
     json: bool,
     role: Option<&str>,
     max: Option<usize>,
+    // TASK-1137: decides the per-member checkpoint — a human at the keyboard
+    // validates each increment before the next stacks on it; a fully headless
+    // drain continues without asking. trace:TASK-1137 | ai:claude
+    no_human: Option<auto_complete::NoHumanMode>,
 ) -> ! {
     // Resolve the coupled member set up front so the plan is concrete.
     let members = match resolve_batch_members(storage, user_id, batch_name, role) {
@@ -68122,6 +68193,12 @@ fn handle_auto_complete_single_branch(
         driven: Vec::new(),
         project_root: drain_root.clone(),
         cluster_pr: None,
+        no_human,
+        // A prompt needs a terminal on BOTH ends to be answerable — and `--json`
+        // opts out too, since the prompt writes to stdout and would corrupt the
+        // machine-readable stream its consumer is parsing.
+        // trace:TASK-1137 | ai:claude
+        interactive: !json && std::io::stdin().is_terminal() && std::io::stdout().is_terminal(),
     };
     let result = auto_complete::drain_batch_single_branch(&mut driver, max);
     let cluster_pr = driver.cluster_pr;
@@ -68169,6 +68246,25 @@ fn handle_auto_complete_single_branch(
                     result.stopped_at.as_deref().unwrap_or("?"),
                     result.committed.len(),
                     if result.committed.len() == 1 { "" } else { "s" },
+                );
+            }
+            // The per-member checkpoint stopped the drain — a clean exit, not a
+            // failure. Prior members stay committed on the shared branch; the
+            // same command resumes from the next member. trace:TASK-1137
+            auto_complete::SingleBranchOutcome::Paused => {
+                eprintln!(
+                    "{} paused before {} — {} member{} committed on {} (no cluster pull \
+                     request yet)",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan().bold(),
+                    result.stopped_at.as_deref().unwrap_or("the next member"),
+                    result.committed.len(),
+                    if result.committed.len() == 1 { "" } else { "s" },
+                    shared_branch.cyan(),
+                );
+                eprintln!(
+                    "  {} re-run the same command to pick up from there once you are happy \
+                     with what landed",
+                    "→".cyan(),
                 );
             }
             other => {
