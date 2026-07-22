@@ -33,12 +33,12 @@ description: |-
   3. Consider emitting shell code on a separate channel (or behind an explicit --shell/--print-eval flag) so human-readable output is never a candidate for eval.
 
   IMPACT: every failure of role enter / session start / session end / worktree enter is currently invisible to an interactive user, replaced by misleading 'command not found' errors. Observed live while trying to release a stale lease.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T04:08:56.039024178Z
-modified_at: 2026-07-22T04:47:12.971291086Z
+modified_at: 2026-07-22T05:11:31.184364503Z
 req_type: Bug
 tags:
 - batch:papercuts-0721
