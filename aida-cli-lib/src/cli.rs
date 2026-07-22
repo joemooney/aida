@@ -4907,10 +4907,14 @@ pub enum QueueCommand {
         #[clap(long)]
         steal: bool,
         /// Claim a spec whose status is ambiguous: already In Progress with
-        /// no local lease, or Needs Attention after an autonomous punt. This
-        /// mirrors `aida session start --force-claim`; terminal statuses and
-        /// Draft still refuse.
+        /// no local lease, or Needs Attention after an autonomous punt. Also
+        /// the one recovery verb for an ORPHANED lease — a lease whose owning
+        /// session has exited is released and the scope taken, but only when
+        /// that session's process is verifiably gone AND its worktree is
+        /// clean. A live session, or an orphan holding uncommitted work, still
+        /// refuses. Terminal statuses and Draft still refuse.
         // trace:TASK-559 | ai:codex
+        // trace:BUG-777 | ai:claude
         #[clap(long)]
         force_claim: bool,
         /// Override the focus-scope drift guard: start work on a

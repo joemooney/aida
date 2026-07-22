@@ -465,6 +465,102 @@ pub fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool
 }
 
 // ============================================================================
+// Orphaned-lease recovery classifier (BUG-777).
+// ============================================================================
+
+/// Can a same-scope lease conflict be recovered from without a human hand-
+/// clearing it? Layered directly on the SAME [`LeaseState`] verdict `aida ps`
+/// and `aida status <spec>` render (● live / ⚠ STALE) plus the lease's own
+/// recorded pids — deliberately NOT a second, divergent liveness notion.
+///
+/// The safety floor the variants encode: only a lease whose owning process is
+/// **verifiably** gone AND whose worktree holds no uncommitted work may be
+/// reclaimed without a prompt. Everything else refuses.
+// trace:BUG-777 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StaleLeaseRecovery {
+    /// A process demonstrably backs this lease — never reclaimable, no matter
+    /// what recovery flag the caller passed.
+    Live,
+    /// The owning process is verifiably gone and its worktree is clean (or no
+    /// longer exists) — safe to release and take the scope.
+    ReclaimableClean {
+        /// The worktree directory is gone entirely: nothing at all to lose.
+        worktree_missing: bool,
+    },
+    /// The owning process is verifiably gone but its worktree carries
+    /// uncommitted work. Refuse — releasing would strand (and `--steal` would
+    /// destroy) changes the operator has never seen.
+    StaleDirty {
+        /// `git status --porcelain` entry count in the orphaned worktree.
+        dirty_entries: usize,
+    },
+    /// No process-liveness signal was ever recorded on this lease, so death
+    /// cannot be *proven*. Refuse rather than guess (BUG-752: a harness
+    /// worktree runs inside its parent's process, so "no claude in the
+    /// worktree" is not evidence of death).
+    UnknownLiveness,
+}
+
+/// Is the session that minted this lease verifiably gone?
+///
+/// `Some(true)` — every pid the lease recorded is absent from the process
+/// table. `Some(false)` — at least one is still alive. `None` — the lease
+/// recorded no pid at all, so liveness is *undeterminable* and the caller must
+/// not treat absence of evidence as evidence of death.
+///
+/// `pid_alive` is injected so the matrix is unit-testable without spawning or
+/// killing real processes; production callers pass [`pid_is_alive`].
+// trace:BUG-777 | ai:claude
+pub fn lease_owner_process_gone(
+    active_pid: Option<u32>,
+    creator_pid: Option<u32>,
+    pid_alive: impl Fn(u32) -> bool,
+) -> Option<bool> {
+    let pids: Vec<u32> = [active_pid, creator_pid].into_iter().flatten().collect();
+    if pids.is_empty() {
+        return None;
+    }
+    Some(!pids.into_iter().any(pid_alive))
+}
+
+/// Pure recovery verdict for one same-scope lease conflict.
+///
+/// `lease_state` is the verdict [`lease_state_for`] already produced (the one
+/// `aida ps` prints), `owner_process_gone` the tri-state from
+/// [`lease_owner_process_gone`], and the worktree pair the `git status`
+/// reading. Deliberately does NOT consult the lease-file mtime: an mtime clock
+/// is the right guard for *silent* auto-release (a freshly-minted lease whose
+/// shell hasn't wired up yet must not be swept), but for an explicit,
+/// operator-typed recovery verb PID-death is the authoritative signal — the
+/// same call [`crate::liveness`]'s consumers make on drain resume.
+// trace:BUG-777 | ai:claude
+pub fn classify_stale_lease_recovery(
+    lease_state: LeaseState,
+    owner_process_gone: Option<bool>,
+    worktree_exists: bool,
+    worktree_dirty_count: usize,
+) -> StaleLeaseRecovery {
+    // Either liveness signal saying "alive" pins the lease as live. `aida ps`
+    // showing ● live is sufficient on its own (a live claude in the worktree
+    // with no recorded pid still means someone is working there).
+    if lease_state == LeaseState::Live || owner_process_gone == Some(false) {
+        return StaleLeaseRecovery::Live;
+    }
+    if owner_process_gone != Some(true) {
+        return StaleLeaseRecovery::UnknownLiveness;
+    }
+    if worktree_exists && worktree_dirty_count > 0 {
+        return StaleLeaseRecovery::StaleDirty {
+            dirty_entries: worktree_dirty_count,
+        };
+    }
+    StaleLeaseRecovery::ReclaimableClean {
+        worktree_missing: !worktree_exists,
+    }
+}
+
+// ============================================================================
 // In-process spec-liveness map (BUG-677): the TUI's replacement for shelling
 // out to `aida ps --json`.
 // ============================================================================
@@ -1061,5 +1157,102 @@ started_at = "2026-01-01T00:00:00Z"
 "#;
         let l: SessionLeaseLite = toml::from_str(old_toml).unwrap();
         assert_eq!(l.authorized_by, None);
+    }
+
+    // ---- BUG-777: orphaned-lease recovery matrix ---------------------------
+
+    /// Every recorded pid absent from the process table → verifiably gone.
+    #[test]
+    fn owner_gone_when_every_recorded_pid_is_dead() {
+        let gone = lease_owner_process_gone(Some(11), Some(22), |_| false);
+        assert_eq!(gone, Some(true));
+    }
+
+    /// One surviving pid is enough to say the session is still around.
+    #[test]
+    fn owner_not_gone_when_any_recorded_pid_is_alive() {
+        let gone = lease_owner_process_gone(Some(11), Some(22), |p| p == 22);
+        assert_eq!(gone, Some(false));
+    }
+
+    /// No pid recorded at all → undeterminable, never "gone".
+    #[test]
+    fn owner_liveness_undeterminable_without_any_recorded_pid() {
+        let gone = lease_owner_process_gone(None, None, |_| true);
+        assert_eq!(gone, None);
+    }
+
+    /// (a) The canonical repro: the owning session exited, its worktree has no
+    /// uncommitted changes → reclaimable, which is what lets one recovery verb
+    /// take the scope.
+    #[test]
+    fn stale_lease_with_dead_owner_and_clean_worktree_is_reclaimable() {
+        let v = classify_stale_lease_recovery(
+            LeaseState::Stale,
+            /* owner_process_gone */ Some(true),
+            /* worktree_exists */ true,
+            /* dirty */ 0,
+        );
+        assert_eq!(
+            v,
+            StaleLeaseRecovery::ReclaimableClean {
+                worktree_missing: false
+            }
+        );
+    }
+
+    /// A `Dormant` lease (worktree present, no live claude, <24h) whose pid is
+    /// demonstrably dead is equally reclaimable — the mtime/age clock guards
+    /// silent sweeps, not the explicit recovery verb.
+    #[test]
+    fn dormant_lease_with_dead_owner_and_clean_worktree_is_reclaimable() {
+        let v = classify_stale_lease_recovery(LeaseState::Dormant, Some(true), true, 0);
+        assert_eq!(
+            v,
+            StaleLeaseRecovery::ReclaimableClean {
+                worktree_missing: false
+            }
+        );
+    }
+
+    /// Worktree gone entirely — nothing to lose, flagged so the message can say so.
+    #[test]
+    fn stale_lease_with_missing_worktree_reports_worktree_missing() {
+        let v = classify_stale_lease_recovery(LeaseState::Stale, Some(true), false, 0);
+        assert_eq!(
+            v,
+            StaleLeaseRecovery::ReclaimableClean {
+                worktree_missing: true
+            }
+        );
+    }
+
+    /// (b) A live lease is NEVER reapable, even with a clean worktree.
+    #[test]
+    fn live_lease_is_never_reclaimable() {
+        let v = classify_stale_lease_recovery(LeaseState::Live, Some(true), true, 0);
+        assert_eq!(v, StaleLeaseRecovery::Live);
+    }
+
+    /// …and a live *pid* pins it too, even when the worktree probe said stale.
+    #[test]
+    fn live_owner_pid_pins_lease_as_live_despite_stale_worktree_verdict() {
+        let v = classify_stale_lease_recovery(LeaseState::Stale, Some(false), true, 0);
+        assert_eq!(v, StaleLeaseRecovery::Live);
+    }
+
+    /// (c) A stale lease whose worktree holds uncommitted work refuses, and
+    /// carries the count so the caller can name what is at risk.
+    #[test]
+    fn stale_lease_with_dirty_worktree_refuses_with_the_entry_count() {
+        let v = classify_stale_lease_recovery(LeaseState::Stale, Some(true), true, 3);
+        assert_eq!(v, StaleLeaseRecovery::StaleDirty { dirty_entries: 3 });
+    }
+
+    /// Absence of a pid signal is not evidence of death — refuse rather than guess.
+    #[test]
+    fn lease_without_pid_signal_is_undetermined_not_reclaimable() {
+        let v = classify_stale_lease_recovery(LeaseState::Dormant, None, true, 0);
+        assert_eq!(v, StaleLeaseRecovery::UnknownLiveness);
     }
 }

@@ -175,7 +175,8 @@ mod process_probe;
 // `classify_lease_state` etc. keep resolving for every existing call site.
 // trace:BUG-677 | ai:claude
 pub(crate) use aida_core::liveness::{
-    classify_lease_state, classify_spec_liveness, LeaseState, SpecLiveness,
+    classify_lease_state, classify_spec_liveness, classify_stale_lease_recovery,
+    lease_owner_process_gone, LeaseState, SpecLiveness, StaleLeaseRecovery,
 };
 mod prompts;
 mod ship;
@@ -73876,6 +73877,87 @@ fn auto_release_decision_for_lease(
     )
 }
 
+/// BUG-777: the recovery picture for one same-scope lease conflict — the
+/// verdict plus the evidence a refusal message needs to be *evaluable*
+/// ("work there is lost unless committed" is useless if the operator has to
+/// go run `git status` in that worktree to find out whether it applies).
+// trace:BUG-777 | ai:claude
+#[derive(Debug, Clone)]
+struct StaleLeaseRecoveryReport {
+    verdict: StaleLeaseRecovery,
+    /// `git status --porcelain` lines in the lease's worktree — empty when the
+    /// tree is clean, missing, or the lease is worktree-less (advisory lock).
+    dirty: Vec<String>,
+    worktree_exists: bool,
+}
+
+impl StaleLeaseRecoveryReport {
+    /// One human clause describing what is (or is not) at risk in the
+    /// conflicting lease's worktree — the fix for "work there is lost unless
+    /// committed", which the operator previously could not assess.
+    // trace:BUG-777 | ai:claude
+    fn worktree_state_phrase(&self) -> String {
+        if !self.worktree_exists {
+            return "worktree GONE (nothing to lose)".to_string();
+        }
+        if self.dirty.is_empty() {
+            return "worktree CLEAN (no uncommitted changes)".to_string();
+        }
+        format!(
+            "worktree DIRTY ({} uncommitted change(s))",
+            self.dirty.len()
+        )
+    }
+
+    /// A short, bounded rendering of the uncommitted entries so a refusal can
+    /// name exactly what is unsaved rather than just counting it.
+    // trace:BUG-777 | ai:claude
+    fn dirty_sample(&self) -> String {
+        const MAX: usize = 5;
+        let shown: Vec<&str> = self.dirty.iter().take(MAX).map(|s| s.trim()).collect();
+        if self.dirty.len() > MAX {
+            format!("{}, … (+{} more)", shown.join("; "), self.dirty.len() - MAX)
+        } else {
+            shown.join("; ")
+        }
+    }
+}
+
+/// BUG-777: gather the recovery picture for a blocking lease.
+///
+/// Liveness comes from [`lease_state_for`] — the SAME classifier `aida ps` and
+/// `aida status <spec>` render as `● live` / `⚠ STALE` — plus the lease's own
+/// recorded pids, so this surface can never disagree with what the operator
+/// just saw in `aida ps`. The dirty/clean reading is the same
+/// `git status --porcelain` probe the BUG-307 auto-release gate uses.
+// trace:BUG-777 | ai:claude
+fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLeaseRecoveryReport {
+    let live = process_probe::probe_live_claude_sessions();
+    let lease_state = lease_state_for(lease, &live, chrono::Utc::now());
+    let owner_gone = lease_owner_process_gone(
+        lease.active_pid,
+        lease.creator_pid,
+        process_probe::pid_is_alive,
+    );
+    // A worktree-less advisory lease (review / claim verb, or the TASK-474
+    // empty-path MCP claim) has no tree to inspect — treat it as "missing",
+    // which is exactly right: there is no uncommitted work to strand.
+    let worktree_exists =
+        !lease.worktree_path.as_os_str().is_empty() && lease.worktree_path.exists();
+    let dirty = if worktree_exists {
+        worktree_dirty_entries(&lease.worktree_path)
+    } else {
+        Vec::new()
+    };
+    let verdict =
+        classify_stale_lease_recovery(lease_state, owner_gone, worktree_exists, dirty.len());
+    StaleLeaseRecoveryReport {
+        verdict,
+        dirty,
+        worktree_exists,
+    }
+}
+
 /// BUG-438: on `--resume-drain`, proactively release the crashed orchestrator's
 /// lease(s) on `scope` whose creator process is dead — *independent of the
 /// staleness clock*. The time-based auto-release ([`auto_release_decision_for_lease`])
@@ -74343,3 +74425,11 @@ mod task_1056_batched_git_fanout_tests;
 #[cfg(test)]
 #[path = "tests/story_698_test_plan_capture_tests.rs"]
 mod story_698_test_plan_capture_tests;
+
+// BUG-777: recovering a lease left behind by an already-exited session — the
+// verifiably-gone + clean-worktree reclaim, the never-reap-a-live-lease floor,
+// and the clean/dirty reporting that makes the refusal evaluable.
+// trace:BUG-777 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_777_stale_lease_recovery_tests.rs"]
+mod bug_777_stale_lease_recovery_tests;
