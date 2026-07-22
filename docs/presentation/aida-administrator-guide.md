@@ -119,6 +119,7 @@ The **queue** is keyed off the **shell's user id**, not the node id. Resolution 
 | `[orchestrator]` | `auto_release_dormant_leases`, `stale_lease_threshold_minutes` |
 | `[advisor]` | `calibration_mode` (off/on), fork settings for the headless advisor tier |
 | `[archive]` | `auto_after_days` — opt-in auto-archive sweep on pull |
+| `[list]` | `show_hidden_hints` — footer the archived/deferred hidden-count nudges on the default `aida list` view (default `false` = quiet) |
 | `[ultraplan]` | `mode` (never / on-demand / suggested), `suggest_threshold` (`spec-thinness` default, or legacy `acceptance-bullets>N`) — whether pickup nudges `aida ultraplan` for under-specified specs (design-less, not just long) |
 | `[telemetry]` | `enabled` — local usage log on/off |
 | `[drain]` | `gh_verify_retries`, `no_progress_minutes`, `phase_ceiling_minutes`, `ci_auto_fix` (N in-drain fix cycles on red CI before shelve; also arms the merge-conflict rebase; default 0 = off) |

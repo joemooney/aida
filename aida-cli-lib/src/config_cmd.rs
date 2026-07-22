@@ -445,6 +445,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "disabled",
         edit: EditSafety::Integer { min: 7, max: 365 },
     },
+    // --- [list]. trace:BUG-783 ---
+    KnobSpec {
+        section: "list",
+        key: "show_hidden_hints",
+        doc: "Footer the archived/deferred hidden-count nudges on the default `aida list` view (off = quiet).",
+        default: "off",
+        edit: EditSafety::Bool { default: false },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -983,6 +991,26 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             header: "[archive]".to_string(),
             rows: vec![PolicyRow {
                 key: "auto_after_days",
+                value,
+                source,
+            }],
+        }
+    });
+
+    // --- List view-tier hints. trace:BUG-783 (no env) ---
+    sections.push({
+        let configured =
+            config_lookup(cfg.as_ref(), "list", "show_hidden_hints").and_then(|v| v.as_bool());
+        let (value, source) = match configured {
+            Some(true) => ("shown".to_string(), PolicySource::ProjectConfig),
+            Some(false) => ("suppressed".to_string(), PolicySource::ProjectConfig),
+            None => ("suppressed (default)".to_string(), PolicySource::Default),
+        };
+        PolicySection {
+            section: "list",
+            header: "[list]".to_string(),
+            rows: vec![PolicyRow {
+                key: "show_hidden_hints",
                 value,
                 source,
             }],

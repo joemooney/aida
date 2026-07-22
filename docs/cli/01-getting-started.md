@@ -70,7 +70,7 @@ The commands you touch on day one and then every day after: `init` once, then `a
 - `--parent <ID>` — "what's still open under this EPIC" — composes with the other filters, the everyday rollup query.
 - `--no-scope` — bypass your role's scope filter. Needed when a subsystem-scoped role is hiding specs you actually want to see.
 
-**Gotchas.** Archived ≠ a status — it's a *view flag* orthogonal to status, so a freshly-Completed spec is still visible (not archived) until someone archives it. If a queued spec is mysteriously absent from `list`, check whether it got archived (it'll still show in `queue list`, which ignores the archive flag — that split surprises people).
+**Gotchas.** Archived ≠ a status — it's a *view flag* orthogonal to status, so a freshly-Completed spec is still visible (not archived) until someone archives it. If a queued spec is mysteriously absent from `list`, check whether it got archived (it'll still show in `queue list`, which ignores the archive flag — that split surprises people). Also note the default view says **nothing** about how many archived or deferred specs it is hiding — you asked for open work, so you get open work. The tiers are always one flag away (`--archived`, `--deferred`, `--all`, each of which prints its own count); if you want the running hidden-count footer back on every listing, set `[list] show_hidden_hints = true` in `.aida/config.toml`.
 
 **Chains with** — you `list` to find an ID, then `show` it, `edit` it, or `queue work` it.
 
