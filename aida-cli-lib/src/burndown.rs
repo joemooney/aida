@@ -253,28 +253,33 @@ pub(crate) fn split_by_signoff(
 
 /// How the drain orders the unblocked ready set before a wave is fanned.
 ///
-/// Historically the set was fanned in the order it was collected, so a
-/// high-priority bug queued after a low-priority chore drained second. The
-/// default is now [`ReadyOrder::Priority`]; [`ReadyOrder::Queue`] is the opt-out
-/// for operators who want strict manual sequencing.
+/// [`ReadyOrder::Priority`] (the default) fans high-priority work first;
+/// [`ReadyOrder::Queue`] is the opt-out for operators who want the set drained
+/// in the order they queued it. Both are anchored on the same substrate fact —
+/// each spec's queue-entry `added_at` timestamp — so ordering is a real,
+/// observable property of the queue rather than an artifact of spec-id spelling.
 // trace:TASK-1172 | ai:claude
+// trace:TASK-1175 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum ReadyOrder {
-    /// High before medium before low, incoming order as the stable tiebreak.
+    /// High before medium before low, queue-insertion order as the tiebreak.
     #[default]
     Priority,
-    /// Strict incoming (queue) order — no priority reordering at all.
+    /// Queue-insertion order — oldest `added_at` first, no priority reordering.
     Queue,
 }
 
 /// Parse a `[burndown] order` config value. Unknown values return `None` so the
 /// caller falls through to the default rather than failing a drain over a typo.
+///
+/// `input` is a silently-accepted back-compat alias for `queue`: a machine that
+/// set it before TASK-1175 keeps working, and it is now truthful — the set IS
+/// fanned in the order the specs went in.
 // trace:TASK-1172 | ai:claude
+// trace:TASK-1175 | ai:claude
 pub(crate) fn parse_ready_order(raw: &str) -> Option<ReadyOrder> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "priority" => Some(ReadyOrder::Priority),
-        // `input` is accepted as a synonym: the pre-TASK-1172 behavior was
-        // literally "fan in input order".
         "queue" | "input" => Some(ReadyOrder::Queue),
         _ => None,
     }
@@ -292,36 +297,69 @@ fn priority_rank(priority: &str) -> u8 {
     }
 }
 
-/// TASK-1172: order the ALREADY-COMPUTED ready set by priority. Deliberately a
-/// pure, **stable** sort over display ids so it composes with the machinery on
-/// either side of it rather than duplicating any of it:
+/// Insertion-order sort key for one ready spec: its queue-entry `added_at`.
+///
+/// A ready spec is by construction a queued spec (queue membership IS the
+/// advisor sign-off, STORY-546), so the timestamp is normally present. A spec
+/// whose entry we could not read sorts LAST rather than jumping the queue with
+/// an invented "epoch" position, and the display id is the final tiebreak so
+/// two entries stamped in the same millisecond still order deterministically.
+// trace:TASK-1175 | ai:claude
+fn insertion_key<'a>(
+    id: &'a str,
+    added_at_by_id: &std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>,
+) -> (bool, Option<chrono::DateTime<chrono::Utc>>, &'a str) {
+    let at = added_at_by_id.get(id).copied();
+    (at.is_none(), at, id)
+}
+
+/// Order the ALREADY-COMPUTED ready set. Deliberately a pure, total sort over
+/// display ids so it composes with the machinery on either side of it rather
+/// than duplicating any of it:
 ///   - dependencies still gate — a blocked spec never reached this set (it was
 ///     parked by [`classify`] upstream), so no priority can promote it;
 ///   - the `serialize:<group>` collapse still sequences same-file members —
 ///     it runs downstream over this reordered set, so the group claim simply
-///     goes to the highest-priority member of the group;
-///   - the caller's incoming order is the stable tiebreak — equal-priority
-///     specs keep the order they arrived in.
-/// [`ReadyOrder::Queue`] returns the input untouched.
+///     goes to the winning member under whichever order is in force;
+///   - the sort is total and deterministic on its own inputs, so the wave is
+///     reproducible across runs without the caller pre-sorting anything.
+///
+/// [`ReadyOrder::Queue`] sorts purely by queue-insertion time (`added_at`
+/// ascending). [`ReadyOrder::Priority`] (the default) sorts by priority band
+/// first and breaks ties by that same insertion time — so equal-priority specs
+/// drain in the order they were queued, NOT in lexical spec-id order (which is
+/// an accident of spelling, not a fact about the work).
 // trace:TASK-1172 | ai:claude
-pub(crate) fn sort_ready_by_priority(
+// trace:TASK-1175 | ai:claude
+pub(crate) fn sort_ready(
     ready: Vec<String>,
     priority_by_id: &std::collections::HashMap<String, String>,
+    added_at_by_id: &std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>,
     order: ReadyOrder,
 ) -> Vec<String> {
-    if order == ReadyOrder::Queue {
-        return ready;
-    }
     let mut out = ready;
-    // `sort_by_key` is a stable sort: equal ranks keep their relative order.
-    out.sort_by_key(|id| {
-        priority_rank(
-            priority_by_id
-                .get(id)
-                .map(String::as_str)
-                .unwrap_or("medium"),
-        )
-    });
+    match order {
+        ReadyOrder::Queue => {
+            out.sort_by(|a, b| {
+                insertion_key(a, added_at_by_id).cmp(&insertion_key(b, added_at_by_id))
+            });
+        }
+        ReadyOrder::Priority => {
+            out.sort_by(|a, b| {
+                let rank = |id: &String| {
+                    priority_rank(
+                        priority_by_id
+                            .get(id)
+                            .map(String::as_str)
+                            .unwrap_or("medium"),
+                    )
+                };
+                rank(a).cmp(&rank(b)).then_with(|| {
+                    insertion_key(a, added_at_by_id).cmp(&insertion_key(b, added_at_by_id))
+                })
+            });
+        }
+    }
     out
 }
 
@@ -2628,8 +2666,10 @@ mod tests {
         );
     }
 
-    // TASK-1172: the ready-set ordering sort. A pure, stable sort over the
-    // already-computed ready ids — priority first, incoming order as tiebreak.
+    // TASK-1172 / TASK-1175: the ready-set ordering sort. A pure, total sort
+    // over the already-computed ready ids — priority band first (default), with
+    // queue-insertion time (`added_at`) as the tiebreak, or insertion time alone
+    // under `order = queue`.
     fn prios(pairs: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
         pairs
             .iter()
@@ -2639,6 +2679,26 @@ mod tests {
 
     fn ids(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    // `added_at` fixtures as "seconds after an arbitrary epoch" — the numbers
+    // only have to be ordered relative to each other. trace:TASK-1175
+    fn queued_at(
+        pairs: &[(&str, i64)],
+    ) -> std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> {
+        pairs
+            .iter()
+            .map(|(id, secs)| {
+                (
+                    id.to_string(),
+                    chrono::DateTime::from_timestamp(1_750_000_000 + secs, 0).unwrap(),
+                )
+            })
+            .collect()
+    }
+
+    fn no_added_at() -> std::collections::HashMap<String, chrono::DateTime<chrono::Utc>> {
+        std::collections::HashMap::new()
     }
 
     #[test]
@@ -2651,20 +2711,104 @@ mod tests {
             ("BUG-9", "High"),
             ("TASK-3", "Medium"),
         ]);
+        let q = queued_at(&[
+            ("TASK-1", 10),
+            ("TASK-2", 20),
+            ("BUG-9", 30),
+            ("TASK-3", 40),
+        ]);
         assert_eq!(
-            sort_ready_by_priority(ready, &p, ReadyOrder::Priority),
+            sort_ready(ready, &p, &q, ReadyOrder::Priority),
             ids(&["BUG-9", "TASK-2", "TASK-3", "TASK-1"])
         );
     }
 
+    // TASK-1175 acceptance: `order = queue` drains in the order specs were
+    // QUEUED — a lexically-later id queued earlier goes first.
     #[test]
-    fn equal_priority_keeps_incoming_queue_order_as_the_stable_tiebreak() {
-        let ready = ids(&["TASK-7", "TASK-2", "TASK-5"]);
-        let p = prios(&[("TASK-7", "High"), ("TASK-2", "High"), ("TASK-5", "High")]);
-        // Same band → untouched, so queue/`added_at` order decides.
+    fn queue_order_drains_by_added_at_not_spec_id() {
+        // "TASK-9" is lexically LATER than "TASK-1"/"TASK-2" but was queued
+        // FIRST, so it must drain first.
+        let ready = ids(&["TASK-1", "TASK-2", "TASK-9"]);
+        let p = prios(&[("TASK-1", "High"), ("TASK-2", "High"), ("TASK-9", "Low")]);
+        let q = queued_at(&[("TASK-9", 5), ("TASK-2", 15), ("TASK-1", 25)]);
         assert_eq!(
-            sort_ready_by_priority(ready.clone(), &p, ReadyOrder::Priority),
-            ready
+            sort_ready(ready, &p, &q, ReadyOrder::Queue),
+            ids(&["TASK-9", "TASK-2", "TASK-1"]),
+            "queue order is insertion order, and priority must not reorder it"
+        );
+    }
+
+    #[test]
+    fn queue_order_is_independent_of_the_incoming_vec_order() {
+        // Same set, shuffled on the way in → same drained order out. The sort is
+        // a fact about the queue, not about how the caller happened to collect.
+        let p = prios(&[("B-2", "Medium"), ("A-1", "Medium"), ("C-3", "Medium")]);
+        let q = queued_at(&[("C-3", 1), ("A-1", 2), ("B-2", 3)]);
+        let expected = ids(&["C-3", "A-1", "B-2"]);
+        assert_eq!(
+            sort_ready(ids(&["A-1", "B-2", "C-3"]), &p, &q, ReadyOrder::Queue),
+            expected
+        );
+        assert_eq!(
+            sort_ready(ids(&["B-2", "C-3", "A-1"]), &p, &q, ReadyOrder::Queue),
+            expected
+        );
+    }
+
+    // TASK-1175 acceptance: within a priority band the tiebreak is `added_at`,
+    // NOT lexical spec-id order.
+    #[test]
+    fn equal_priority_breaks_ties_by_queue_insertion_time_not_id() {
+        // Incoming id order and lexical id order both say TASK-2 < TASK-5 <
+        // TASK-7; insertion order says the opposite. Insertion order wins.
+        let ready = ids(&["TASK-2", "TASK-5", "TASK-7"]);
+        let p = prios(&[("TASK-7", "High"), ("TASK-2", "High"), ("TASK-5", "High")]);
+        let q = queued_at(&[("TASK-7", 100), ("TASK-5", 200), ("TASK-2", 300)]);
+        assert_eq!(
+            sort_ready(ready, &p, &q, ReadyOrder::Priority),
+            ids(&["TASK-7", "TASK-5", "TASK-2"])
+        );
+    }
+
+    #[test]
+    fn priority_still_beats_insertion_time() {
+        // The default must NOT become "queue order" by the back door: a
+        // high-priority spec queued last still leads the wave.
+        let ready = ids(&["TASK-1", "TASK-2", "BUG-9"]);
+        let p = prios(&[
+            ("TASK-1", "Medium"),
+            ("TASK-2", "Medium"),
+            ("BUG-9", "High"),
+        ]);
+        let q = queued_at(&[("TASK-1", 1), ("TASK-2", 2), ("BUG-9", 999)]);
+        assert_eq!(
+            sort_ready(ready, &p, &q, ReadyOrder::Priority),
+            ids(&["BUG-9", "TASK-1", "TASK-2"])
+        );
+    }
+
+    #[test]
+    fn a_spec_with_no_added_at_sorts_last_and_stays_deterministic() {
+        // An unreadable/absent queue entry must not jump the wave with an
+        // invented epoch position, and equal keys fall back to the display id.
+        let ready = ids(&["Z-1", "A-2", "M-3"]);
+        let p = prios(&[("Z-1", "Medium"), ("A-2", "Medium"), ("M-3", "Medium")]);
+        let q = queued_at(&[("M-3", 7)]);
+        assert_eq!(
+            sort_ready(ready, &p, &q, ReadyOrder::Queue),
+            ids(&["M-3", "A-2", "Z-1"])
+        );
+        // With NO timestamps at all the order is the id order — a total,
+        // reproducible fallback rather than whatever the caller collected.
+        assert_eq!(
+            sort_ready(
+                ids(&["Z-1", "A-2", "M-3"]),
+                &p,
+                &no_added_at(),
+                ReadyOrder::Queue
+            ),
+            ids(&["A-2", "M-3", "Z-1"])
         );
     }
 
@@ -2673,19 +2817,10 @@ mod tests {
         let ready = ids(&["A", "B", "C", "D"]);
         // B has no entry at all; C carries a value from outside the taxonomy.
         let p = prios(&[("A", "low"), ("C", "urgent"), ("D", "high")]);
+        let q = queued_at(&[("A", 1), ("B", 2), ("C", 3), ("D", 4)]);
         assert_eq!(
-            sort_ready_by_priority(ready, &p, ReadyOrder::Priority),
+            sort_ready(ready, &p, &q, ReadyOrder::Priority),
             ids(&["D", "B", "C", "A"])
-        );
-    }
-
-    #[test]
-    fn queue_order_opt_out_returns_the_set_untouched() {
-        let ready = ids(&["TASK-1", "BUG-9", "TASK-3"]);
-        let p = prios(&[("TASK-1", "Low"), ("BUG-9", "High"), ("TASK-3", "Medium")]);
-        assert_eq!(
-            sort_ready_by_priority(ready.clone(), &p, ReadyOrder::Queue),
-            ready
         );
     }
 
@@ -2696,7 +2831,8 @@ mod tests {
         // group member per wave — and it is the high-priority one.
         let ready = ids(&["TASK-1", "TASK-2", "TASK-3"]);
         let p = prios(&[("TASK-1", "Low"), ("TASK-2", "Medium"), ("TASK-3", "High")]);
-        let sorted = sort_ready_by_priority(ready, &p, ReadyOrder::Priority);
+        let q = queued_at(&[("TASK-1", 1), ("TASK-2", 2), ("TASK-3", 3)]);
+        let sorted = sort_ready(ready, &p, &q, ReadyOrder::Priority);
         let mut groups: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
         groups.insert("TASK-1".to_string(), vec!["core".to_string()]);
@@ -2711,11 +2847,33 @@ mod tests {
     }
 
     #[test]
+    fn queue_order_lets_the_earliest_queued_member_claim_a_serialize_group() {
+        // Under `order = queue` the group claim goes to the member queued
+        // first, regardless of priority or id.
+        let ready = ids(&["TASK-1", "TASK-9"]);
+        let p = prios(&[("TASK-1", "High"), ("TASK-9", "Low")]);
+        let q = queued_at(&[("TASK-9", 1), ("TASK-1", 2)]);
+        let sorted = sort_ready(ready, &p, &q, ReadyOrder::Queue);
+        let mut groups: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        groups.insert("TASK-1".to_string(), vec!["core".to_string()]);
+        groups.insert("TASK-9".to_string(), vec!["core".to_string()]);
+        let (kept, held) = collapse_serialize_groups(sorted, &groups);
+        assert_eq!(kept, ids(&["TASK-9"]));
+        assert_eq!(held.len(), 1);
+        assert_eq!(held[0].spec, "TASK-1");
+    }
+
+    #[test]
     fn ready_order_parses_config_values_and_rejects_typos() {
         assert_eq!(parse_ready_order("priority"), Some(ReadyOrder::Priority));
         assert_eq!(parse_ready_order("  QUEUE "), Some(ReadyOrder::Queue));
+        // Back-compat alias — still accepted, and now truthful.
         assert_eq!(parse_ready_order("input"), Some(ReadyOrder::Queue));
         assert_eq!(parse_ready_order("prioritise"), None);
+        // Dropped rather than shipped as a third mode: id order is an accident
+        // of spelling, not a schedule. trace:TASK-1175
+        assert_eq!(parse_ready_order("id"), None);
         assert_eq!(ReadyOrder::default(), ReadyOrder::Priority);
     }
 
