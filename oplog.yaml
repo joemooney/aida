@@ -37856,5 +37856,29 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 3536
+- id: 019f87db-b47c-78b0-9987-4180b7fc9fd3
+  target_id: 019f87db-af84-7e80-acf8-5ee973e2393d
+  author: aida
+  node_id: '1'
+  lamport: 3537
+  timestamp: 2026-07-22T03:25:50.588229508Z
+  kind: !Create
+    title: burndown integration waits are launcher-owned Rust, not agent-turn work
+    description: |
+      Decision (operator, 2026-07-21, guided implementation of TASK-1169): the load-bearing CI-wait and merge for an autonomous burndown drain belong to the LAUNCHER process (Rust), not to the headless agent turn.
+
+      Context: the /aida-burndown drain is a headless claude -p session. Its turn-end reaps background tasks (the harness CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS reaper), so a promised background CI watch dies with the turn (BUG-755). The obvious alternative -- have the agent block in the FOREGROUND -- is capped by the harness at 600s per Bash call, so a 30-minute cross-platform CI run cannot be covered by a single foreground call either. Both agent-side options are therefore structurally unable to hold a long integration wait.
+
+      Decision: after each headless session exit, the launcher (handle_burndown_run, the long-lived process already holding the drain lock) blocks IN RUST on each open wave PR using the existing wait_for_ci_terminal primitive (TASK-968 re-arming idle timer + absolute ceiling), merges the green-and-mergeable ones through Forge::merge_change followed by aida pull for the Done to Completed auto-bump, and relaunches an agent continuation turn ONLY for work that genuinely needs an LLM: unstarted blessed specs, merge conflicts, red CI.
+
+      Consequences:
+      - The harness background-wait ceiling becomes irrelevant to the integration path at any value, which is the acceptance criterion for part 1 of the ratified design.
+      - Waiting costs zero tokens: a Rust poll loop replaces an LLM turn spent watching CI.
+      - The BUG-755 relaunch loop stays as the recovery net for the agent-needing residual, but is no longer the mechanism by which PRs get merged.
+      - Rejected alternative A -- skill-level chunked foreground polls -- stays prompt-enforced, so an LLM can still choose a background task; rejected as not structural.
+      - Rejected alternative B -- both skill and launcher -- would give two code paths that can merge the same PR and needs an idempotent merge guard for no added safety once the Rust leg exists.
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3537
 node_id: '1'
