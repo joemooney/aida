@@ -251,6 +251,80 @@ pub(crate) fn split_by_signoff(
     pickable.into_iter().partition(|id| queued.contains(id))
 }
 
+/// How the drain orders the unblocked ready set before a wave is fanned.
+///
+/// Historically the set was fanned in the order it was collected, so a
+/// high-priority bug queued after a low-priority chore drained second. The
+/// default is now [`ReadyOrder::Priority`]; [`ReadyOrder::Queue`] is the opt-out
+/// for operators who want strict manual sequencing.
+// trace:TASK-1172 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ReadyOrder {
+    /// High before medium before low, incoming order as the stable tiebreak.
+    #[default]
+    Priority,
+    /// Strict incoming (queue) order — no priority reordering at all.
+    Queue,
+}
+
+/// Parse a `[burndown] order` config value. Unknown values return `None` so the
+/// caller falls through to the default rather than failing a drain over a typo.
+// trace:TASK-1172 | ai:claude
+pub(crate) fn parse_ready_order(raw: &str) -> Option<ReadyOrder> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "priority" => Some(ReadyOrder::Priority),
+        // `input` is accepted as a synonym: the pre-TASK-1172 behavior was
+        // literally "fan in input order".
+        "queue" | "input" => Some(ReadyOrder::Queue),
+        _ => None,
+    }
+}
+
+/// Sort key for one priority label — lower sorts (drains) first. An absent or
+/// unrecognized label ranks with `medium`, so an odd value neither jumps the
+/// wave nor sinks below explicitly low-priority work.
+// trace:TASK-1172 | ai:claude
+fn priority_rank(priority: &str) -> u8 {
+    match priority.trim().to_ascii_lowercase().as_str() {
+        "high" => 0,
+        "low" => 2,
+        _ => 1,
+    }
+}
+
+/// TASK-1172: order the ALREADY-COMPUTED ready set by priority. Deliberately a
+/// pure, **stable** sort over display ids so it composes with the machinery on
+/// either side of it rather than duplicating any of it:
+///   - dependencies still gate — a blocked spec never reached this set (it was
+///     parked by [`classify`] upstream), so no priority can promote it;
+///   - the `serialize:<group>` collapse still sequences same-file members —
+///     it runs downstream over this reordered set, so the group claim simply
+///     goes to the highest-priority member of the group;
+///   - the caller's incoming order is the stable tiebreak — equal-priority
+///     specs keep the order they arrived in.
+/// [`ReadyOrder::Queue`] returns the input untouched.
+// trace:TASK-1172 | ai:claude
+pub(crate) fn sort_ready_by_priority(
+    ready: Vec<String>,
+    priority_by_id: &std::collections::HashMap<String, String>,
+    order: ReadyOrder,
+) -> Vec<String> {
+    if order == ReadyOrder::Queue {
+        return ready;
+    }
+    let mut out = ready;
+    // `sort_by_key` is a stable sort: equal ranks keep their relative order.
+    out.sort_by_key(|id| {
+        priority_rank(
+            priority_by_id
+                .get(id)
+                .map(String::as_str)
+                .unwrap_or("medium"),
+        )
+    });
+    out
+}
+
 /// Extract the `serialize:<group>` group names from a spec's tags (case-
 /// insensitive prefix, lowercased group key). A spec may belong to several
 /// serialize groups; each is returned. trace:STORY-614
@@ -2552,6 +2626,97 @@ mod tests {
             parked.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
             vec!["B".to_string(), "C".to_string()]
         );
+    }
+
+    // TASK-1172: the ready-set ordering sort. A pure, stable sort over the
+    // already-computed ready ids — priority first, incoming order as tiebreak.
+    fn prios(pairs: &[(&str, &str)]) -> std::collections::HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(id, p)| (id.to_string(), p.to_string()))
+            .collect()
+    }
+
+    fn ids(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn ready_set_fans_high_priority_first_regardless_of_queue_position() {
+        // A high-priority bug queued LAST still drains first.
+        let ready = ids(&["TASK-1", "TASK-2", "BUG-9", "TASK-3"]);
+        let p = prios(&[
+            ("TASK-1", "Low"),
+            ("TASK-2", "Medium"),
+            ("BUG-9", "High"),
+            ("TASK-3", "Medium"),
+        ]);
+        assert_eq!(
+            sort_ready_by_priority(ready, &p, ReadyOrder::Priority),
+            ids(&["BUG-9", "TASK-2", "TASK-3", "TASK-1"])
+        );
+    }
+
+    #[test]
+    fn equal_priority_keeps_incoming_queue_order_as_the_stable_tiebreak() {
+        let ready = ids(&["TASK-7", "TASK-2", "TASK-5"]);
+        let p = prios(&[("TASK-7", "High"), ("TASK-2", "High"), ("TASK-5", "High")]);
+        // Same band → untouched, so queue/`added_at` order decides.
+        assert_eq!(
+            sort_ready_by_priority(ready.clone(), &p, ReadyOrder::Priority),
+            ready
+        );
+    }
+
+    #[test]
+    fn unknown_or_missing_priority_ranks_with_medium() {
+        let ready = ids(&["A", "B", "C", "D"]);
+        // B has no entry at all; C carries a value from outside the taxonomy.
+        let p = prios(&[("A", "low"), ("C", "urgent"), ("D", "high")]);
+        assert_eq!(
+            sort_ready_by_priority(ready, &p, ReadyOrder::Priority),
+            ids(&["D", "B", "C", "A"])
+        );
+    }
+
+    #[test]
+    fn queue_order_opt_out_returns_the_set_untouched() {
+        let ready = ids(&["TASK-1", "BUG-9", "TASK-3"]);
+        let p = prios(&[("TASK-1", "Low"), ("BUG-9", "High"), ("TASK-3", "Medium")]);
+        assert_eq!(
+            sort_ready_by_priority(ready.clone(), &p, ReadyOrder::Queue),
+            ready
+        );
+    }
+
+    #[test]
+    fn priority_order_still_lets_serialize_groups_sequence_members() {
+        // Two members of one serialize group + an unrelated spec. Priority
+        // reorders the set; the downstream collapse still admits exactly one
+        // group member per wave — and it is the high-priority one.
+        let ready = ids(&["TASK-1", "TASK-2", "TASK-3"]);
+        let p = prios(&[("TASK-1", "Low"), ("TASK-2", "Medium"), ("TASK-3", "High")]);
+        let sorted = sort_ready_by_priority(ready, &p, ReadyOrder::Priority);
+        let mut groups: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        groups.insert("TASK-1".to_string(), vec!["core".to_string()]);
+        groups.insert("TASK-3".to_string(), vec!["core".to_string()]);
+        groups.insert("TASK-2".to_string(), vec![]);
+        let (kept, held) = collapse_serialize_groups(sorted, &groups);
+        assert_eq!(kept, ids(&["TASK-3", "TASK-2"]));
+        assert_eq!(held.len(), 1);
+        assert_eq!(held[0].spec, "TASK-1");
+        assert_eq!(held[0].held_by, "TASK-3");
+        assert_eq!(held[0].group, "core");
+    }
+
+    #[test]
+    fn ready_order_parses_config_values_and_rejects_typos() {
+        assert_eq!(parse_ready_order("priority"), Some(ReadyOrder::Priority));
+        assert_eq!(parse_ready_order("  QUEUE "), Some(ReadyOrder::Queue));
+        assert_eq!(parse_ready_order("input"), Some(ReadyOrder::Queue));
+        assert_eq!(parse_ready_order("prioritise"), None);
+        assert_eq!(ReadyOrder::default(), ReadyOrder::Priority);
     }
 
     // STORY-544: the human-facing presentation helpers — plain-language

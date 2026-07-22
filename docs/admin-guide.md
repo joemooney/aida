@@ -93,6 +93,30 @@ The built-in default remains `false` for script compatibility. Resolution is
 `--verbose` > `--quiet` > project `.aida/config.toml` > user
 `~/.aida/config.toml` > built-in `false`.
 
+### Burndown Ready-Set Ordering (`[burndown] order`)
+
+Each wave of a drain fans the unblocked ready set **highest priority first**
+(high > medium > low), so a high-priority bug queued after a low-priority chore
+still drains first. Equal-priority specs keep the order they were already in, so
+ordering is deterministic across runs.
+
+To restore strict queue order — explicit manual sequencing, no priority
+reordering — set:
+
+```toml
+[burndown]
+order = "queue"
+```
+
+Valid values are `priority` (default) and `queue`; an unrecognized value falls
+back to the default rather than failing the drain. Resolution is project
+`.aida/config.toml` > user `~/.aida/config.toml` > built-in `priority`.
+
+Ordering is *only* ordering. It never changes what is eligible: a spec blocked
+by an unsatisfied `BlockedBy` edge still waits regardless of its priority, and
+`serialize:<group>` members are still sequenced one per wave (the group claim
+simply goes to the highest-priority member).
+
 ### Feature Configuration
 
 Features organize requirements into logical groups. Each feature has:

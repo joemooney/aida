@@ -41720,6 +41720,34 @@ fn read_burndown_verbose_config(project_root: &std::path::Path) -> (Option<bool>
     (project, global)
 }
 
+/// TASK-1172: read `[burndown] order` from one config path. An unreadable file,
+/// a missing key, or an unrecognized value all yield `None` so the caller falls
+/// through to the next source (and ultimately the default).
+// trace:TASK-1172 | ai:claude
+fn read_burndown_order_from_config_path(path: &std::path::Path) -> Option<burndown::ReadyOrder> {
+    let content = std::fs::read_to_string(path).ok()?;
+    let value = toml::from_str::<toml::Value>(&content).ok()?;
+    value
+        .get("burndown")
+        .and_then(|section| section.get("order"))
+        .and_then(|v| v.as_str())
+        .and_then(burndown::parse_ready_order)
+}
+
+/// TASK-1172: how the drain orders its ready set. Project config → machine-global
+/// config → the `priority` default. Never fails: a missing or malformed config
+/// simply keeps the default ordering.
+// trace:TASK-1172 | ai:claude
+fn resolved_burndown_ready_order(project_root: &std::path::Path) -> burndown::ReadyOrder {
+    read_burndown_order_from_config_path(&project_root.join(".aida").join("config.toml"))
+        .or_else(|| {
+            aida_home_dir().and_then(|home| {
+                read_burndown_order_from_config_path(&home.join(".aida/config.toml"))
+            })
+        })
+        .unwrap_or_default()
+}
+
 /// TASK-1169 / ADR-22: read `[burndown] bg_wait_ceiling_ms` from one config
 /// path. Project config wins over the machine-global one; both are optional.
 // trace:TASK-1169 | ai:claude
@@ -50307,6 +50335,10 @@ fn resolve_burndown_sets(
     let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     // STORY-610: supervised specs collected for the keyboard-pickup section.
     let mut supervised: Vec<String> = Vec::new();
+    // TASK-1172: display-id → priority label, populated from this same scan so
+    // the ready set can be ordered by priority without a second store read.
+    let mut priority_by_id: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     for req in &store.requirements {
         // TASK-803: the per-spec filter/bucket decision now lives in the pure,
         // unit-tested `burndown::classify_spec`. The caller computes the probed
@@ -50363,6 +50395,8 @@ fn resolve_burndown_sets(
                     queued_disp.insert(disp.clone());
                 }
                 titles.insert(disp.clone(), req.title.clone());
+                // trace:TASK-1172 | ai:claude
+                priority_by_id.insert(disp.clone(), req.priority.to_string());
                 candidates.push(candidate);
             }
         }
@@ -50394,6 +50428,17 @@ fn resolve_burndown_sets(
     // sign-off" told both the drain runner and the operator that a human gate
     // was missing when nothing was pending. trace:STORY-614 trace:TASK-149 | ai:claude
     ready.sort();
+
+    // TASK-1172: order the wave by priority BEFORE it is fanned, so a
+    // high-priority spec queued after a low-priority one still drains first.
+    // A pure, stable sort layered on the deterministic id order above: equal
+    // priorities keep that order, so the serialize claim below stays stable
+    // across runs. Dependencies are unaffected — a blocked spec never entered
+    // this set. `[burndown] order = queue` restores strict queue order.
+    // trace:TASK-1172 | ai:claude
+    let ready_order = resolved_burndown_ready_order(&project_root);
+    ready = burndown::sort_ready_by_priority(ready, &priority_by_id, ready_order);
+
     let (kept_ready, serialize_held) = burndown::collapse_serialize_groups(ready, &groups_by_id);
     ready = kept_ready;
     supervised.sort();
