@@ -1,14 +1,14 @@
 id: 019f8870-67a8-7262-a5eb-3247b343318c
 spec_id: TASK-1172
 agreed_id: TASK-1172
-title: burndown drains the ready set in queue/input order, not priority order — a high-priority spec queued after a low one waits its turn
+title: 'burndown ready-set ordering: input-order (default) vs priority, first-class config + --order flag'
 description: 'Operator design observation 2026-07-21: aida burndown run fans the pickable ready set in INPUT/QUEUE order (burndown.rs: ''partition candidates preserving input order''), so priority is ignored — a high-priority bug queued after a low-priority task drains second. Two things already work as the operator hoped: (a) mid-run queue additions ARE picked up (the loop re-reads aida burndown plan each wave), and (b) dependencies ARE respected (the pickability gate excludes blocked-by specs until unblocked). The gap is ordering. Fix: sort the unblocked ready set by priority (high > medium > low) with queue-order/added_at as the stable tiebreak, BEFORE fanning the wave — dependencies still gate (blocked specs skip regardless of priority), serialize-groups still sequence same-file members. Keep it a pure sort on the already-computed ready_ids so it composes with the existing pickability/serialize machinery. Consider a config/flag to fall back to strict queue-order for operators who want explicit manual sequencing ([burndown] order = priority|queue, default priority). Acceptance: with a high-pri and a low-pri spec both ready+unblocked, the high-pri fans first regardless of queue insertion order; blocked specs still wait; a config opt-out restores queue-order; unit test the sort on a mixed-priority ready set. Mode drive.'
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:08:15.784325728Z
-modified_at: 2026-07-22T06:20:19.320697945Z
+modified_at: 2026-07-22T06:20:20.267584642Z
 req_type: Task
 tags:
 - aida:burndown ordering dx from-operator
