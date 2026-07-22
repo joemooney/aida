@@ -8,8 +8,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-11T18:53:07.702142832Z
-modified_at: 2026-07-21T16:33:22.401729192Z
+modified_at: 2026-07-22T04:46:46.217932974Z
 req_type: Task
 tags:
 - batch:operator-0719
+comments:
+- id: 019f8825-cbc9-7901-a5eb-84d2b8b9666b
+  author: joe
+  content: 'Completed 2026-07-21: half 1 (recovery-ref deletion) verified already done; half 2 (re-protect gitlab main) done via GitLab UI — main protected, Maintainers merge+push, force-push OFF (operator screenshot).'
+  created_at: 2026-07-22T04:46:46.217932974Z
+  modified_at: 2026-07-22T04:46:46.217932974Z
+  session_id: f19ce985-2893-406f-959d-2e5fc9fcd46b
 execution_mode: operator
