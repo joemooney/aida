@@ -38016,5 +38016,17 @@ operations:
   timestamp: 2026-07-22T04:19:08.158864928Z
   kind: !SetStatus
     status: In Progress
-clock: 3547
+- id: 019f881e-1677-7b52-8cdc-34f883afac28
+  target_id: 019f881e-11f2-73d1-bff7-dc8012245f2e
+  author: aida
+  node_id: '1'
+  lamport: 3548
+  timestamp: 2026-07-22T04:38:21.047738501Z
+  kind: !Create
+    title: accepted decisions render as Approved in the open list and do not auto-leave the default view (reads as pending work)
+    description: '2026-07-21: operator saw ADR-21/ADR-22 in a list as Approved and asked "when will these complete?" - because for a DECISION, approved=accepted is the TERMINAL state (BUG-751 convention: draft=proposed, approved=accepted), but the list renders the same Approved badge a TASK wears BEFORE it is worked, and accepted decisions stay in the default open lens until manually archived. So every accepted ADR looks like incomplete work. BUG-761 fixed the archive GATE (archive an approved decision without --force) but not this: accepted decisions still render an ambiguous Approved and require a manual archive to leave the open view. Fix: for decision-class specs, render the accepted state distinctly (Accepted / checked glyph, not the task Approved) AND exclude accepted decisions from the DEFAULT open list the way completed specs are (they are terminal), or auto-archive on acceptance. Same for stateless knowledge classes whose open presence is noise (principle/term). Acceptance: an accepted ADR does not appear in default aida list (or renders as Accepted, clearly terminal); list --all / --type decision still shows it; no manual archive needed to keep the open list honest. Mode drive.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3548
 node_id: '1'
