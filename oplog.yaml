@@ -38176,5 +38176,17 @@ operations:
   timestamp: 2026-07-22T05:42:31.479445355Z
   kind: !SetStatus
     status: In Progress
-clock: 3566
+- id: 019f8866-798c-7183-b831-263f67379992
+  target_id: 019f8866-74ae-7253-9049-2bd4f769c878
+  author: aida
+  node_id: '1'
+  lamport: 3567
+  timestamp: 2026-07-22T05:57:25.004059575Z
+  kind: !Create
+    title: aida tail on a fan-out subagent session dead-ends with 'no live log' — should redirect to 'aida tail drain' (the parent that carries the stream)
+    description: '2026-07-21: operator ran aida tail on three fan-out sessions (harness-worktree general-purpose, from a running burndown) and got ''No live log ... an interactive session streams to its terminal, not to a file'' for each. Correct that they have no individual log (Agent-tool subagents stream into the drain parent''s context), but the message is a dead-end: the thing to tail IS available — the running drain''s --verbose stream (aida tail drain) shows exactly these fan-outs'' activity. Fix: when aida tail resolves a session that is a fan-out subagent of a LIVE drain (generic harness-worktree lease, no own log, a drain lock is held), redirect: ''this is a fan-out worker of the running drain — its output streams into the drain: aida tail drain''. Detect via the drain lock + the session being a harness-worktree general-purpose lease with no log. Acceptance: aida tail <fanout-session> during a live drain points at ''aida tail drain'' instead of the generic no-log message; a genuinely logless non-drain session keeps the current message; unit test the redirect branch. Mode drive.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3567
 node_id: '1'
