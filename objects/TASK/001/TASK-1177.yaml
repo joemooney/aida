@@ -3,12 +3,12 @@ spec_id: TASK-1177
 agreed_id: TASK-1177
 title: 'Reap slice (FR-284 child): supervisor reaps finished+merged+EXITED sessions on substrate state'
 description: 'First drive-safe slice of FR-284''s ratified design. Extend the aida worktree gc / a supervisor pass to reap sessions whose reapable predicate is true: spec is Done/Completed AND branch is merged AND process has EXITED. Handles headless sessions (already exited) automatically; a live interactive session (process alive) is NOT reaped (cannot remove a live cwd). NO terminal scraping (read substrate state only: spec status + branch-merged + process-liveness, the latter from the shipped liveness detection). NO force-kill. Reuse aida worktree gc safety checks (never remove dirty / unmerged-unique-commit worktrees). NOTIFY + CHAIN slices stay in the parent FR-284 (guided). Acceptance: a finished+merged headless session (process exited) is reaped by the pass (worktree removed, lease deleted, branch cleaned) with no manual step; a finished session whose process is still alive is left untouched; no code path scrapes terminals or force-kills; gc safety checks honored. Mode drive.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:33:35.758247256Z
-modified_at: 2026-07-22T16:04:37.278693728Z
+modified_at: 2026-07-22T16:45:28.376069559Z
 req_type: Task
 tags:
 - aida:worktree session-lifecycle from-downstream:quizdom slice-of:FR-284
@@ -17,3 +17,7 @@ relationships:
   target_id: 019f7b89-13cc-7453-ba1d-d322d88992de
   created_at: 2026-07-22T15:33:39.933201982Z
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-22T16:45:28.376069559Z
+  implemented_by: joe
