@@ -3,12 +3,12 @@ spec_id: BUG-783
 agreed_id: BUG-783
 title: aida list prints verbose 'N archived hidden / N deferred hidden' hint lines on every default/open view — noise for a daily driver
 description: '2026-07-21 operator: aida list open (and the default list) footers with two lines — ''(138 archived hidden — pass --all or --archived to see them)'' + ''(41 deferred hidden — pass --all or --deferred to see them)''. On an EXPLICIT open request these are pure noise: the operator asked for open work, doesn''t need reminding every invocation that archived/deferred tiers exist, and the counts are discoverable via aida status + the flags. Fix (configurable-policy): suppress the archived+deferred hidden-hint lines by default on the open/default list view; keep them discoverable via --help and available behind a config (e.g. [list] show_hidden_hints = false default) or show at most a single terse line only when it changes. Do NOT suppress the actual --archived/--deferred/--all output. Acceptance: bare aida list / aida list open prints no archived/deferred hidden-count footer by default; --all/--archived/--deferred still work; the counts remain available (aida status or a flag); no loss of discoverability in --help. Mode drive.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T06:03:42.698777313Z
-modified_at: 2026-07-22T07:15:41.881107175Z
+modified_at: 2026-07-22T07:16:10.143434780Z
 req_type: Bug
 tags:
 - aida:list dx noise batch:papercuts-0721 from-dogfood
@@ -20,3 +20,7 @@ comments:
   modified_at: 2026-07-22T07:15:41.881107175Z
   session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-22T07:16:10.143434780Z
+  implemented_by: joe
