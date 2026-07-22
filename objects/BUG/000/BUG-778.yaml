@@ -3,14 +3,18 @@ spec_id: BUG-778
 agreed_id: BUG-778
 title: 'aida ps misreads a manually-entered worktree (worktree enter, agent not yet launched) as ''stalled: process dead'' + suggests re-dispatch'
 description: '2026-07-21: operator ran ''aida worktree enter TASK-1169'' (which by design takes the implementer lease + worktree but launches NO agent — the operator then launches claude themselves). In the ~30s between enter and launching claude, aida ps shows the lease as ''◐ dormant / ⚠ stalled: no branch/dirty movement... process dead'' and lists it under ''Orphaned In-Progress specs (no live session backing the flag)'', with hint ''resume/rebrief: aida queue work TASK-1169''. Verified healthy: worktree exists, lease 019f87d6 valid, spec In Progress, operator simply hadn''t launched the agent yet. The hint is DANGEROUS — ''aida queue work TASK-1169'' would re-dispatch a spec the operator entered to work BY HAND (competing session). Root: ps can''t distinguish ''entered-by-hand, agent-launch-pending'' from ''agent died''. Fix: a lease created by ''worktree enter'' (no agent spawn, no recorded pid, freshly created) should read as ''entered — launch your agent'' / ''awaiting agent'', NOT ''process dead / resume''; only flag stalled after a grace period AND when an agent was expected. Distinguish manual-enter leases (mark them) from orchestrator-spawned ones. Same dangerous-hint family as BUG-765/772. Acceptance: a just-''worktree enter''d spec reads as awaiting-agent for a grace window, no ''process dead'' + no re-dispatch hint; a genuinely-dead agent lease still flags after grace; unit test both. Mode drive.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T03:22:40.905724674Z
-modified_at: 2026-07-22T04:43:53.003194788Z
+modified_at: 2026-07-22T04:45:16.857757595Z
 req_type: Bug
 tags:
 - aida:ps liveness aida:worktree followup:BUG-763 from-dogfood
 - batch:papercuts-0721
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-22T04:45:16.857757595Z
+  implemented_by: joe
