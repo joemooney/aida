@@ -3,12 +3,12 @@ spec_id: BUG-784
 agreed_id: BUG-784
 title: burndown plan --candidates and backlog list offer non-work types (decision/vision/term) as blessable candidates
 description: 'Verified against main sha a7cd68909 2026-07-22: burndown.rs and backlog.rs candidate/ready paths filter on status (approved+pickable, decision-FREE meaning no human-decision-required) but have NO work-item type-class filter — grep for RequirementType::Decision/Vision/Term/Principle in those paths returns nothing. So accepted ADR-* and VIS-* records are offered as implementable candidates. BUG-781 (this weekend) only dropped accepted decisions from the ''aida list'' OPEN LENS, not the burndown/backlog candidate surfaces. Downstream (quizdom) confirmed it reproduces on any repo with ADRs even with zero domain data (13 candidates, all ADR-*/VIS-*). Fix: exclude non-work types (decision/vision/term/principle) from burndown plan --candidates + backlog list by default, or add a work-item type-class filter. Acceptance: burndown plan --candidates and backlog list omit decision/vision/term/principle by default; a --type or --include flag opts them back in; unit test a repo with ADRs shows zero ADR candidates. Downstream: quizdom.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T14:56:57.201489076Z
-modified_at: 2026-07-22T16:26:18.772513Z
+modified_at: 2026-07-22T16:36:36.931436514Z
 req_type: Bug
 tags:
 - aida:backlog
@@ -16,8 +16,24 @@ tags:
 - docs:impacted
 - from-downstream:quizdom
 - modeling
+history:
+- id: 019f8aaf-adbc-7a60-bde8-e360d8885f1e
+  author: aida-auto-bump
+  timestamp: 2026-07-22T16:36:36.924989451Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8aaf-adc3-7fc0-92f5-91961ec4f4d7
+  timestamp: 2026-07-22T16:36:36.931435988Z
+  agent: aida
+  commit_sha: 364b502bc0cf67e8594d03ccc78eeac9d0ffa2f6
+  summary: Completed via merge 364b502b
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-07-22T16:26:18.772513Z
   implemented_by: joe
+  completed_at: 2026-07-22T16:36:36.924898031Z
+  completion_sha: 364b502bc0cf67e8594d03ccc78eeac9d0ffa2f6
