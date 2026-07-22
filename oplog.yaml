@@ -38156,5 +38156,17 @@ operations:
   timestamp: 2026-07-22T05:32:27.466716929Z
   kind: !SetStatus
     status: In Progress
-clock: 3564
+- id: 019f8854-a846-78a0-9e3e-520f8594bdaa
+  target_id: 019f8854-a476-7623-a9ce-35e7fda61d2a
+  author: aida
+  node_id: '1'
+  lamport: 3565
+  timestamp: 2026-07-22T05:37:57.318576452Z
+  kind: !Create
+    title: 'aida wrapper eval hardening (BUG-779 half 3): emit eval-able shell on a dedicated channel or behind --print-eval, so human output is never an eval candidate'
+    description: 'BUG-779 fixed the symptom (aida() wrapper evals payload only on exit 0). Half 3 is the root-cause-robust fix the drain deliberately deferred: instead of relying on exit-code discipline, emit the eval-able shell code on a DEDICATED channel (a marker-delimited block, a separate fd, or behind an explicit --print-eval/--shell flag) so ordinary human-facing stdout is NEVER a candidate for eval. Then a subcommand that both mutates the shell AND prints human output cannot leak its prose into the eval. Redesign of the shell-init contract, not a papercut. Acceptance: the wrapper evals ONLY the explicitly-marked eval block; any human stdout from an eval-list subcommand is displayed, never evaled; existing auto-eval verbs (role enter/end, dev activate/deactivate, worktree enter/exit) still mutate the shell; regression covering a subcommand that prints prose + emits an eval directive. Mode drive.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3565
 node_id: '1'
