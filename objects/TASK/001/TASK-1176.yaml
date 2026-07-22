@@ -8,10 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T14:57:00.903963318Z
-modified_at: 2026-07-22T18:51:33.387156769Z
+modified_at: 2026-07-22T18:51:34.969284387Z
 req_type: Task
 tags:
 - aida:lifecycle decision modeling from-downstream:quizdom followup:BUG-751
+comments:
+- id: 019f8b2b-3f88-7751-b9c9-ac2add7f1204
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-07-22-task-1176-superseded-decision-state.md
+    filed 0 task(s)
+    declined 4:
+      - Add a `deprecated` terminal-or-not state for specs discouraged without a named successor
+      - Teach `aida archive --older-than` to include superseded in its default status csv
+      - Add a dedicated `aida graph <ID> --superseded-by` traversal mode
+      - Let `aida why` on a superseded spec name its successor as the next action
+  created_at: 2026-07-22T18:51:35.176699967Z
+  modified_at: 2026-07-22T18:51:35.176699967Z
 execution_mode: drive
 implementation_info:
   implemented: true
