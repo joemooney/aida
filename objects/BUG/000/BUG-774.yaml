@@ -19,15 +19,19 @@ description: |-
   SECONDARY: the 'queue work' error message is actively misleading. It blames a lost lease when the real cause is that the item is in another user's queue file. It should distinguish 'not in YOUR queue but queued by <user>' from 'genuinely unqueued'.
 
   SUGGESTED FIX: make --for <role> write to a role-scoped queue that any holder of that role reads, or have queue list/work fall back to scanning all queue files for entries whose for_role matches the caller's active role.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-21T16:07:17.182780649Z
-modified_at: 2026-07-22T02:24:04.876692072Z
+modified_at: 2026-07-22T03:00:45.071163708Z
 req_type: Bug
 tags:
 - multi-user
 - queue
 - routing
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-22T03:00:45.071163708Z
+  implemented_by: joe
