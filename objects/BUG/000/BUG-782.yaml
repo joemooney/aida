@@ -3,12 +3,12 @@ spec_id: BUG-782
 agreed_id: BUG-782
 title: aida tail on a fan-out subagent session dead-ends with 'no live log' — should redirect to 'aida tail drain' (the parent that carries the stream)
 description: '2026-07-21: operator ran aida tail on three fan-out sessions (harness-worktree general-purpose, from a running burndown) and got ''No live log ... an interactive session streams to its terminal, not to a file'' for each. Correct that they have no individual log (Agent-tool subagents stream into the drain parent''s context), but the message is a dead-end: the thing to tail IS available — the running drain''s --verbose stream (aida tail drain) shows exactly these fan-outs'' activity. Fix: when aida tail resolves a session that is a fan-out subagent of a LIVE drain (generic harness-worktree lease, no own log, a drain lock is held), redirect: ''this is a fan-out worker of the running drain — its output streams into the drain: aida tail drain''. Detect via the drain lock + the session being a harness-worktree general-purpose lease with no log. Acceptance: aida tail <fanout-session> during a live drain points at ''aida tail drain'' instead of the generic no-log message; a genuinely logless non-drain session keeps the current message; unit test the redirect branch. Mode drive.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T05:57:23.758928648Z
-modified_at: 2026-07-22T07:03:33.941595926Z
+modified_at: 2026-07-22T07:04:08.540524305Z
 req_type: Bug
 tags:
 - aida:tail dx observability batch:papercuts-0721 followup:TASK-1167 from-dogfood
@@ -21,3 +21,7 @@ comments:
   modified_at: 2026-07-22T07:03:33.941595926Z
   session_id: 385ba98e-4edb-4dbc-92fb-8ba44185b1c4
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-22T07:04:08.540524305Z
+  implemented_by: joe
