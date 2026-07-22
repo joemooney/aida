@@ -8,7 +8,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T05:57:23.758928648Z
-modified_at: 2026-07-22T05:57:23.758928648Z
+modified_at: 2026-07-22T05:57:29.898811524Z
 req_type: Bug
 tags:
 - aida:tail dx observability batch:papercuts-0721 followup:TASK-1167 from-dogfood
+execution_mode: drive
