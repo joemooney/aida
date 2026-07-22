@@ -8,7 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-22T15:34:45.174321949Z
-modified_at: 2026-07-22T15:34:45.174321949Z
+modified_at: 2026-07-22T15:34:54.701548254Z
 req_type: Bug
 tags:
 - aida:review needs-repro-verification from-downstream:quizdom
+deferred: true
+deferred_at: 2026-07-22T15:34:54.701548254Z
+deferred_until: the repro is re-run on current main (a7cd68909+) and still fails — then file a real, mechanism-confirmed spec
