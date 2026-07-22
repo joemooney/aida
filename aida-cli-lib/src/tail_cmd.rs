@@ -22,7 +22,11 @@
 //!   4. A spec id — the newest log belonging to that spec.
 //!
 //! Nothing running with no log is NOT an error: an interactive session writes
-//! no JSONL, so we say so and exit clean.
+//! no JSONL, so we say so and exit clean. One logless shape is special, though:
+//! a fan-out worker of a LIVE drain (an Agent-tool subagent, which streams into
+//! its parent's context rather than to a file). "No log" is true there but a
+//! dead end — the stream the operator wants exists, it is the drain's. That case
+//! redirects instead of shrugging. trace:BUG-782
 //!
 //! trace:TASK-1167
 
@@ -93,6 +97,11 @@ pub struct TailIndex {
     pub headless: Vec<LogEntry>,
     /// Live + recorded session leases.
     pub sessions: Vec<SessionRef>,
+    /// Is a drain holding this repo's drain lock right now? The "is there a
+    /// parent stream carrying this worker?" input to the fan-out redirect —
+    /// gathered here so the resolution itself stays pure.
+    // trace:BUG-782 | ai:claude
+    pub drain_live: bool,
 }
 
 /// What a selector resolved to.
@@ -105,6 +114,13 @@ pub enum Resolution {
     /// interactive session, or a drain that never ran verbose. Reported
     /// cleanly, not as an error.
     NoLog { what: String, hint: String },
+    /// The selector named a fan-out worker of the drain running right now: an
+    /// Agent-tool subagent whose output streams into the drain's context, not
+    /// to a file of its own. Not an error and not a dead end — a pointer at the
+    /// stream that does carry it. `drain` is the log `aida tail drain` would
+    /// pick, or `None` when the live drain is writing no log at all.
+    // trace:BUG-782 | ai:claude
+    FanoutOfDrain { what: String, drain: Option<String> },
     /// The selector matched nothing.
     NotFound { message: String },
 }
@@ -180,7 +196,7 @@ pub fn resolve(index: &TailIndex, selector: Option<&str>) -> Resolution {
         .iter()
         .find(|s| s.scope.to_uppercase() == sel_upper)
     {
-        return no_log_for_session(s);
+        return no_log_for_session(index, s);
     }
 
     Resolution::NotFound {
@@ -265,7 +281,7 @@ fn resolve_session(index: &TailIndex, session: &SessionRef) -> Resolution {
             label: format!("{} · {}", session.id, log_label(entry)),
         };
     }
-    no_log_for_session(session)
+    no_log_for_session(index, session)
 }
 
 /// The newest headless log belonging to `session`, if any.
@@ -293,17 +309,60 @@ pub fn session_log<'a>(index: &'a TailIndex, session: &SessionRef) -> Option<&'a
     None
 }
 
-fn no_log_for_session(session: &SessionRef) -> Resolution {
+fn no_log_for_session(index: &TailIndex, session: &SessionRef) -> Resolution {
     let seat = session
         .role
         .as_deref()
         .filter(|r| !r.is_empty())
         .map(|r| format!(", {r}"))
         .unwrap_or_default();
+    let what = format!("{} ({}{})", session.id, session.scope, seat);
+    // A logless harness lease while a drain holds the lock is not the
+    // interactive case — it is one of that drain's fan-out workers, and the
+    // drain's own stream carries it. Say so instead of dead-ending.
+    // trace:BUG-782 | ai:claude
+    if index.drain_live && is_fanout_worker(session) {
+        return Resolution::FanoutOfDrain {
+            what,
+            drain: index.drains.first().map(|d| d.id.clone()),
+        };
+    }
     Resolution::NoLog {
-        what: format!("{} ({}{})", session.id, session.scope, seat),
+        what,
         hint: "that session is running without a log — an interactive session streams to its terminal, not to a file. `aida ps` shows its worktree and pid.".to_string(),
     }
+}
+
+/// The harness's fallback `agent_type` for an Agent-tool subagent, which the
+/// SubagentStart lease writer records in the lease's role slot.
+// trace:BUG-782 | ai:claude
+const HARNESS_AGENT_TYPE: &str = "general-purpose";
+
+/// Branch-name prefix the Agent-tool harness gives its isolation worktrees.
+// trace:BUG-782 | ai:claude
+const HARNESS_BRANCH_PREFIX: &str = "worktree-agent-";
+
+/// Does this lease have the shape the Agent-tool harness mints for a fan-out
+/// subagent? Any one of three independent markers is conclusive: the generic
+/// `harness-worktree` scope (the worktree's branch carried no SPEC-ID), the
+/// harness's fallback agent type in the role slot, or a harness-named branch. A
+/// spec-scoped fan-out shows only the latter two, so all three are checked.
+///
+/// Only ever consulted for a session with NO log of its own, so a headless
+/// implementer (which writes one) can never be swept in here.
+// trace:BUG-782 | ai:claude
+fn is_fanout_worker(session: &SessionRef) -> bool {
+    session
+        .scope
+        .eq_ignore_ascii_case(crate::worktree_lease::HARNESS_WORKTREE_SCOPE)
+        || session
+            .role
+            .as_deref()
+            .is_some_and(|r| r.eq_ignore_ascii_case(HARNESS_AGENT_TYPE))
+        || session
+            .branch
+            .to_lowercase()
+            .starts_with(HARNESS_BRANCH_PREFIX)
 }
 
 /// Does this log belong to `spec`? Matches the spec parsed out of the filename,
@@ -346,7 +405,8 @@ fn log_label(entry: &LogEntry) -> String {
 // Gathering
 // ---------------------------------------------------------------------------
 
-/// Read the drain logs, the headless logs, and the session leases.
+/// Read the drain logs, the headless logs, the session leases, and whether a
+/// drain currently holds the lock.
 // trace:TASK-1167 | ai:claude
 pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex {
     TailIndex {
@@ -354,6 +414,13 @@ pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex 
         headless: headless_tail::discover_logs(&project_root.join(".aida").join("headless-logs"))
             .unwrap_or_default(),
         sessions,
+        // The same pid-corroborated read `aida drain status` uses, so a crashed
+        // drain's leftover lock never fakes a live parent stream.
+        // trace:BUG-782 | ai:claude
+        drain_live: matches!(
+            crate::drain_lock::probe_lock(project_root),
+            crate::drain_lock::LockStatus::Running(_)
+        ),
     }
 }
 
@@ -435,6 +502,22 @@ pub fn handle_tail(
         Resolution::NoLog { what, hint } => {
             println!("No live log for {what}.");
             println!("{hint}");
+            Ok(())
+        }
+        // A redirect, not a failure — the operator asked a reasonable question
+        // and gets the stream that answers it, so this exits 0 like `NoLog`.
+        // trace:BUG-782 | ai:claude
+        Resolution::FanoutOfDrain { what, drain } => {
+            let info = crate::glyph(crate::glyphs::Glyph::Info);
+            let arrow = crate::glyph(crate::glyphs::Glyph::SubArrow);
+            println!("{info} {what} is a fan-out worker of the drain running here.");
+            println!("Its output streams into the drain, not into a log of its own.");
+            match drain {
+                Some(id) => println!("{arrow} tail the stream that carries it: `aida tail drain` (currently {id})"),
+                None => println!(
+                    "{arrow} that drain is writing no log — a drain only streams to one when it runs with verbose output, so its live output is in the terminal it was launched from."
+                ),
+            }
             Ok(())
         }
         Resolution::NotFound { message } => bail!(message),

@@ -50,6 +50,20 @@ fn index() -> TailIndex {
             session("aabbccdd1122", "TASK-1167", "task-1167"),
             session("eeff00113344", "TASK-999", "task-999"),
         ],
+        drain_live: false,
+    }
+}
+
+// A lease the Agent-tool harness minted for a fan-out subagent: the generic
+// `harness-worktree` scope, the harness's fallback agent type in the role slot,
+// and no log of its own.
+// trace:BUG-782 | ai:claude
+fn fanout_session(id: &str) -> SessionRef {
+    SessionRef {
+        id: id.to_string(),
+        scope: "harness-worktree".to_string(),
+        branch: "main".to_string(),
+        role: Some("general-purpose".to_string()),
     }
 }
 
@@ -214,6 +228,80 @@ fn blank_selector_is_treated_as_no_selector() {
 #[test]
 fn discover_drain_logs_is_empty_for_a_missing_directory() {
     assert!(discover_drain_logs(Path::new("/definitely/not/a/real/dir")).is_empty());
+}
+
+// --- BUG-782: fan-out worker of a live drain redirects to the drain's stream ---
+
+#[test]
+fn fanout_worker_of_a_live_drain_is_pointed_at_the_drain_stream() {
+    let mut idx = index();
+    idx.drain_live = true;
+    idx.sessions.push(fanout_session("1122334455aa"));
+    match resolve(&idx, Some("1122334455aa")) {
+        Resolution::FanoutOfDrain { what, drain } => {
+            assert!(what.contains("1122334455aa"), "{what}");
+            assert_eq!(drain.as_deref(), Some("20260721T064452Z-019f836b"));
+        }
+        other => panic!("expected FanoutOfDrain, got {other:?}"),
+    }
+}
+
+#[test]
+fn fanout_worker_with_no_live_drain_keeps_the_plain_no_log_message() {
+    let mut idx = index();
+    idx.drain_live = false;
+    idx.sessions.push(fanout_session("1122334455aa"));
+    match resolve(&idx, Some("1122334455aa")) {
+        Resolution::NoLog { hint, .. } => {
+            assert!(hint.contains("interactive session"), "{hint}");
+        }
+        other => panic!("expected NoLog, got {other:?}"),
+    }
+}
+
+#[test]
+fn logless_non_harness_session_during_a_live_drain_keeps_the_no_log_message() {
+    // The operator's own interactive seat, leased while a drain happens to be
+    // running: still not a fan-out worker, so it must not be redirected.
+    let mut idx = index();
+    idx.drain_live = true;
+    match resolve(&idx, Some("eeff00113344")) {
+        Resolution::NoLog { hint, .. } => {
+            assert!(hint.contains("interactive session"), "{hint}");
+        }
+        other => panic!("expected NoLog, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_spec_scoped_fanout_worker_is_recognized_by_its_harness_branch() {
+    let mut idx = index();
+    idx.drain_live = true;
+    idx.sessions.push(SessionRef {
+        id: "99aabbccddee".to_string(),
+        scope: "TASK-4242".to_string(),
+        branch: "worktree-agent-77f2".to_string(),
+        role: Some("implementer".to_string()),
+    });
+    // Reached by spec id as well as by session id — both land on the redirect.
+    for sel in ["99aabbccddee", "TASK-4242"] {
+        match resolve(&idx, Some(sel)) {
+            Resolution::FanoutOfDrain { .. } => {}
+            other => panic!("expected FanoutOfDrain for `{sel}`, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn fanout_worker_of_a_live_drain_that_writes_no_log_says_so() {
+    let mut idx = index();
+    idx.drains.clear();
+    idx.drain_live = true;
+    idx.sessions.push(fanout_session("1122334455aa"));
+    match resolve(&idx, Some("1122334455aa")) {
+        Resolution::FanoutOfDrain { drain, .. } => assert!(drain.is_none()),
+        other => panic!("expected FanoutOfDrain, got {other:?}"),
+    }
 }
 
 #[test]
