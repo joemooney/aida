@@ -38551,5 +38551,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 3602
+- id: 019f8a77-118f-72d2-9b53-b64eb2eaec05
+  target_id: 019f8a77-0ab6-7213-be2a-9977f64b8d09
+  author: aida
+  node_id: '1'
+  lamport: 3603
+  timestamp: 2026-07-22T15:34:46.927721109Z
+  kind: !Create
+    title: 'reviewer bails on epic+child backing PR (quizdom #4 — likely fixed by BUG-440, UNVERIFIED)'
+    description: 'Quizdom #4 (2026-07-19): headless reviewer failed ''PR-N has multiple backing specs: EPIC-X, STORY-Y'' then drain advanced without merging. LIKELY FIXED: BUG-440 reviewer-path logic (lib.rs:64118) drops the epic and keeps the delivered story; present in current main. But BUG-440 shipped at PR #468 (predates the observation), so either it didn''t cover this PR shape or the observed build lacked it — the error string still exists as a fallback. UNVERIFIED — needs the exact epic+child drain re-run. NOTE: the original quizdom note guessed BUG-412; the relevant fix is BUG-440.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3603
 node_id: '1'
