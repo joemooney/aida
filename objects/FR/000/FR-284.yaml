@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
-modified_at: 2026-07-23T01:38:52.266624422Z
+modified_at: 2026-07-23T01:38:53.608182397Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -51,6 +51,15 @@ comments:
   created_at: 2026-07-23T01:21:45.979298122Z
   modified_at: 2026-07-23T01:21:45.979298122Z
   session_id: 019f8c806510
+- id: 019f8ca0-26f6-71c2-bb99-4cd4abf61932
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-07-22-fr-284-session-notify.md
+    filed 0 task(s)
+    declined 1:
+      - **TASK-1179 (CHAIN):** after a reap, suggest (opt-in: execute) the next-queued-spec handoff
+  created_at: 2026-07-23T01:38:53.814750298Z
+  modified_at: 2026-07-23T01:38:53.814750298Z
 execution_mode: guided
 implementation_info:
   implemented: true
