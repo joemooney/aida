@@ -17,10 +17,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-23T01:21:12.765614598Z
-modified_at: 2026-07-23T01:21:24.035343618Z
+modified_at: 2026-07-23T04:04:42.926292010Z
 req_type: Decision
 relationships:
 - rel_type: References
   target_id: 019f7b89-13cc-7453-ba1d-d322d88992de
   created_at: 2026-07-23T01:21:21.974918476Z
   created_by: joe
+archived: true
+archived_at: 2026-07-23T04:04:42.926292010Z
