@@ -86,6 +86,32 @@ pub(crate) struct ReapFacts {
     pub worktree: AgentWorktreeFacts,
 }
 
+/// Should this finished-but-still-live session be NOTIFIED that it is safe to
+/// exit? True in exactly the interactive near-miss the NOTIFY slice speaks to:
+/// a session that would be reapable *were its process not still running* —
+/// clean, unlocked, spec finished, branch merged (the shared classifier's
+/// `Removable` verdict) — but whose process is ALIVE, so the reap pass correctly
+/// leaves it in place (it owns its worktree as its cwd; AIDA never force-closes
+/// it). The message tells the human/agent at that prompt "your spec merged, you
+/// are free to exit; the worktree reaps on the next pass once you do."
+///
+/// Pure over the same pre-gathered facts as [`classify_session_reap`], for the
+/// same reason: the whole matrix is unit-testable without a repo or a process.
+/// The scan gates this on the session actually holding a worktree (an advisory,
+/// worktree-less lease has nothing to exit for).
+// trace:FR-284 | ai:claude
+pub(crate) fn session_should_notify(facts: &ReapFacts) -> bool {
+    !facts.worktree.dirty
+        && !facts.locked
+        && facts.spec_finished
+        // The load-bearing distinction from a reap: the process is STILL ALIVE.
+        && !facts.process_exited
+        && matches!(
+            classify_agent_worktree(&facts.worktree),
+            AgentWorktreeVerdict::Removable(_)
+        )
+}
+
 /// The reapable predicate. Removal requires ALL of: clean worktree, unlocked,
 /// process exited, spec finished, and the worktree-GC classifier's own
 /// `Removable` verdict (positive merge signal + zero unique unmerged commits).
@@ -203,12 +229,40 @@ pub(crate) struct ReapRow {
     pub outcome: Option<String>,
 }
 
+/// One finished-but-live session the pass will NOTIFY (FR-284 NOTIFY slice). A
+/// session in this list is also present in `skipped` (its process is alive, so
+/// it is not reapable) — this is the subset worth telling "you are free to exit".
+// trace:FR-284 | ai:claude
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct NotifyRow {
+    /// Lease id (the session id `aida ps` prints).
+    pub session: String,
+    /// The lease's scope — the finished spec.
+    pub scope: String,
+    /// Lease owner (git identity captured at session-start), recorded for the
+    /// report; the mailbox recipient is resolved at write time.
+    pub owner: String,
+    /// Worktree the live session sits in.
+    pub worktree: String,
+    /// Branch the worktree is on.
+    pub branch: String,
+    /// What the execution leg did — `Some("notified …")` / `Some("already
+    /// notified …")`, or `None` on a scan-only / dry run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+}
+
 /// The machine-readable pass result.
 // trace:TASK-1177 | ai:claude
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub(crate) struct ReapReport {
     pub reapable: Vec<ReapRow>,
     pub skipped: Vec<ReapRow>,
+    /// Finished sessions whose process is still alive — left in place, but told
+    /// (once) via a mailbox FYI that their spec merged and they may exit.
+    // trace:FR-284 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notifiable: Vec<NotifyRow>,
 }
 
 /// Resolve every lease's scope to a spec status in ONE store open, so the pass
@@ -384,6 +438,24 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             spec_finished,
             outcome: None,
         };
+        // FR-284 NOTIFY: a finished + merged session whose process is STILL
+        // ALIVE is the interactive near-miss — not reapable (it owns its cwd),
+        // but worth telling "your spec merged, safe to exit". Gated on the
+        // session actually holding a worktree; an advisory lease has nothing to
+        // exit for. This session is also in `skipped` (its verdict is a Skip on
+        // the liveness boundary); `notifiable` is the subset we message.
+        // trace:FR-284 | ai:claude
+        if has_worktree && session_should_notify(&facts) {
+            report.notifiable.push(NotifyRow {
+                session: lease.id.clone(),
+                scope: lease.scope.clone(),
+                owner: lease.owner.clone(),
+                worktree: lease.worktree_path.display().to_string(),
+                branch: lease.branch.clone(),
+                outcome: None,
+            });
+        }
+
         match verdict {
             ReapVerdict::Reap(_) => report.reapable.push(row),
             ReapVerdict::Skip(_) => report.skipped.push(row),
@@ -392,6 +464,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
 
     report.reapable.sort_by(|a, b| a.scope.cmp(&b.scope));
     report.skipped.sort_by(|a, b| a.scope.cmp(&b.scope));
+    report.notifiable.sort_by(|a, b| a.scope.cmp(&b.scope));
     report
 }
 
@@ -473,6 +546,107 @@ fn reap_one(project_root: &std::path::Path, lease: &SessionLease) -> String {
     }
 }
 
+/// The once-per-session sentinel for the FR-284 NOTIFY slice. A file per lease
+/// under `.aida/session-notices/` (runtime per-clone state, gitignored by the
+/// deny-by-default `.aida/*` rule — no new allow-list entry needed) records that
+/// the "safe to exit" FYI was already sent, so the notice fires once rather than
+/// on every merge / every reap pass. Its content is the spec id it was sent for,
+/// so the rare case of a worktree lease reused for a *different* spec re-notifies.
+// trace:FR-284 | ai:claude
+fn session_notice_path(project_root: &std::path::Path, lease_id: &str) -> std::path::PathBuf {
+    // Lease ids are 12-char hex, but neutralize path separators defensively so a
+    // crafted id can never escape the notices dir.
+    let safe: String = lease_id
+        .chars()
+        .map(|c| {
+            if c == '/' || c == '\\' || c == '.' {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    project_root
+        .join(".aida")
+        .join("session-notices")
+        .join(safe)
+}
+
+/// FR-284 NOTIFY: tell each finished-but-still-live session, once, that its spec
+/// merged and it is safe to exit. Delivery is a mailbox FYI (intent = `fyi`,
+/// "surface only, no action") addressed to the operator handle — the same
+/// `current_user_id` the per-turn `aida awaiting` notice reads its OWN inbox as,
+/// so the message lands in the live session's headline on its next prompt turn
+/// (ADR-23). Idempotent via the per-session sentinel: a session already notified
+/// for this spec is skipped. Best-effort — a mailbox write failure degrades to a
+/// skip, never bubbling up to fail a reap pass or a landed PR.
+///
+/// Records the outcome on each row and returns the count actually sent this
+/// pass (a fresh notice, not an already-sent one). Never touches the live
+/// process: this is detect-and-NOTIFY, the same boundary the reap holds.
+// trace:FR-284 | ai:claude
+fn notify_finished_live_sessions(project_root: &std::path::Path, rows: &mut [NotifyRow]) -> usize {
+    if rows.is_empty() {
+        return 0;
+    }
+    // The recipient the target session's `aida awaiting` headline reads as. In
+    // the common single-operator, same-machine case the reaper and the target
+    // share this handle; cross-user sessions on one host (rare) would route to
+    // the reaper's inbox instead — an acceptable, non-destructive miss.
+    let recipient = current_user_id(None);
+    let mut sent = 0usize;
+    for row in rows.iter_mut() {
+        let sentinel = session_notice_path(project_root, &row.session);
+        // Already notified for THIS spec? Leave it — the notice fires once.
+        if std::fs::read_to_string(&sentinel)
+            .map(|prev| prev.trim() == row.scope.trim())
+            .unwrap_or(false)
+        {
+            row.outcome = Some(format!("already notified — spec {}", row.scope));
+            continue;
+        }
+        let now = chrono::Utc::now().timestamp_millis();
+        let id = uuid::Uuid::new_v4().to_string();
+        let body = format!(
+            "Spec {spec} has merged and its branch is finished — you are free to exit this \
+             session whenever you like. Its worktree ({wt}) will be reaped automatically once \
+             your process exits (the post-merge pass, or `aida session reap`). Nothing here \
+             needs you; this is an FYI, no action required.",
+            spec = row.scope,
+            wt = row.worktree,
+        );
+        let msg = aida_core::mailbox::Message {
+            id: id.clone(),
+            thread_id: id,
+            from: "aida-session-reap".to_string(),
+            to: aida_core::mailbox::Recipient::Agent(recipient.clone()),
+            timestamp: now,
+            in_reply_to: None,
+            body,
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+        };
+        if let Err(e) = mailbox_store::write_message(project_root, &msg) {
+            row.outcome = Some(format!("notify failed — {e}"));
+            continue;
+        }
+        // Drop the sentinel only after the message landed, so a write failure
+        // retries next pass rather than silently swallowing the notice.
+        if let Some(parent) = sentinel.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&sentinel, row.scope.trim());
+        row.outcome = Some(format!(
+            "notified {} — spec {} safe to exit",
+            recipient, row.scope
+        ));
+        sent += 1;
+    }
+    sent
+}
+
 /// Options for one reap pass.
 // trace:TASK-1177 | ai:claude
 #[derive(Debug, Clone, Copy, Default)]
@@ -507,9 +681,59 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
         return Ok(());
     }
 
+    // FR-284 NOTIFY: before any reap decision, tell each finished-but-still-live
+    // session (once) that its spec merged and it is safe to exit. Non-destructive
+    // and best-effort, so it runs on every real pass regardless of --yes / TTY;
+    // --dry-run only reports what WOULD be sent. This is detect-and-notify — the
+    // live process is never touched. trace:FR-284 | ai:claude
+    let notified = if opts.dry_run {
+        0
+    } else {
+        notify_finished_live_sessions(&project_root, &mut report.notifiable)
+    };
+
     // The post-merge hook asks for silence on the common no-op, so a pass that
     // found nothing to reap prints nothing at all for it.
     let stay_silent = opts.quiet_when_empty && report.reapable.is_empty();
+
+    // A freshly-sent notice is a real action worth a line even under
+    // `quiet_when_empty`; an already-notified session stays quiet there to avoid
+    // repeating on every merge. On --dry-run the notify preview rides the same
+    // verbose gate as the rest of the report.
+    if !opts.json && !report.notifiable.is_empty() {
+        if opts.dry_run {
+            if !stay_silent {
+                println!(
+                    "Would notify {} finished-but-live session(s) they are safe to exit:",
+                    report.notifiable.len()
+                );
+                for row in &report.notifiable {
+                    println!(
+                        "  {} {} — spec merged, safe to exit",
+                        "notify".cyan(),
+                        row.scope.cyan()
+                    );
+                }
+            }
+        } else if notified > 0 || !opts.quiet_when_empty {
+            for row in &report.notifiable {
+                let Some(outcome) = &row.outcome else {
+                    continue;
+                };
+                let fresh = outcome.starts_with("notified");
+                if fresh || !opts.quiet_when_empty {
+                    let marker = if fresh {
+                        crate::glyph(crate::glyphs::Glyph::Mailbox)
+                            .green()
+                            .to_string()
+                    } else {
+                        "·".dimmed().to_string()
+                    };
+                    println!("  {marker} {} — {outcome}", row.scope.cyan());
+                }
+            }
+        }
+    }
     if !opts.json && !stay_silent {
         // Only the NEAR-MISSES are named: a session whose spec is finished but
         // that something else held back is worth a line. An ordinary in-flight
@@ -621,3 +845,9 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/task_1177_session_reap_tests.rs"]
 mod task_1177_session_reap_tests;
+
+// The NOTIFY predicate matrix (finished-but-still-live → safe-to-exit notice).
+// trace:FR-284 | ai:claude
+#[cfg(test)]
+#[path = "tests/fr_284_session_notify_tests.rs"]
+mod fr_284_session_notify_tests;
