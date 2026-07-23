@@ -1,0 +1,11 @@
+scope = "FR-284"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 3158355
+agent = "implementer"
+started_at = "2026-07-23T01:04:09.089370244+00:00"
+heartbeat_at = "2026-07-23T01:04:09.089370244+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
