@@ -209,6 +209,11 @@ pub(crate) struct ReapRow {
 pub(crate) struct ReapReport {
     pub reapable: Vec<ReapRow>,
     pub skipped: Vec<ReapRow>,
+    /// CHAIN slice (TASK-1179): the next queued spec's display id, set only
+    /// after the pass actually reaped ≥1 session AND a next spec is queued.
+    /// Suggest-only — the operator runs the launch; the reap pass never spawns.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_up: Option<String>,
 }
 
 /// Resolve every lease's scope to a spec status in ONE store open, so the pass
@@ -488,6 +493,61 @@ pub(crate) struct ReapOptions {
     pub quiet_when_empty: bool,
 }
 
+// CHAIN slice (FR-284 child, per ADR-24): after a reap actually removes a
+// finished session, SUGGEST the next-spec handoff — the exact command(s) the
+// operator would run to launch the next queued spec in a fresh worktree. The
+// first increment is detect-and-SUGGEST only: the reap pass never auto-spawns a
+// process. Auto-launch behind a `--chain` flag and a config-gated
+// off/suggest/launch policy are later increments once the suggest form is
+// proven. This mirrors the parent FR-284's "detect-and-notify, never terminate"
+// philosophy on the launch side: detect-and-suggest, never auto-launch.
+// trace:TASK-1179 | ai:claude
+
+/// Format the "Next up" handoff block naming the exact launch commands for
+/// `next_spec` in a fresh worktree. Pure so the suggest-block emission is
+/// unit-testable without a queue or a process. The spec id IS the operand the
+/// operator must type, so it is intentionally part of this command hint (like
+/// `aida queue next` / `aida ps`), not opaque noise.
+// trace:TASK-1179 | ai:claude
+pub(crate) fn format_next_up_suggestion(next_spec: &str) -> String {
+    format!(
+        "\nNext up: {spec} is queued. Launch it in a fresh worktree:\n    \
+         aida worktree enter {spec}          # take the lease + cd into a ready worktree, or\n    \
+         aida agent new claude --spec {spec}   # launch an agent on it\n  \
+         (suggestion only — no session was started.)",
+        spec = next_spec
+    )
+}
+
+/// Decide the handoff suggestion after a reap pass. Suggest-only (ADR-24):
+/// returns the "Next up" block ONLY when the pass actually reaped ≥1 session
+/// AND a next spec is queued — otherwise `None`, so nothing extra is printed.
+/// Pure so all three cases (emit / nothing-reaped / empty-queue) are testable
+/// without a store or a live process.
+// trace:TASK-1179 | ai:claude
+pub(crate) fn next_up_suggestion(reaped_count: usize, next_spec: Option<&str>) -> Option<String> {
+    match (reaped_count, next_spec) {
+        // Nothing was reaped, or the queue holds no next spec → no handoff.
+        (0, _) | (_, None) => None,
+        (_, Some(spec)) => Some(format_next_up_suggestion(spec)),
+    }
+}
+
+/// Resolve the next queued spec the operator would launch after a reap — the
+/// drivable head of the (active role's) queue in the same pickup order
+/// `aida queue next` uses. Reuses the existing head resolver rather than
+/// reinventing it; returns `None` on any read failure or an empty/undrivable
+/// queue (a suggestion is best-effort and must never fail the reap pass).
+// trace:TASK-1179 | ai:claude
+fn resolve_next_queued_spec(project_root: &std::path::Path) -> Option<String> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let user_id = current_user_id(None);
+    let candidates = crate::queue_cmd::auto_complete_head_candidates(&storage, &user_id).ok()?;
+    crate::queue_cmd::pick_auto_complete_head(&candidates)
+        .ok()
+        .map(|(spec, _skipped)| spec)
+}
+
 /// `aida session reap` — the supervisor pass. Scans every session lease,
 /// reports the verdict for each, and reaps the ones the predicate proved
 /// finished. Never prompts when there is nothing to confirm; without `--yes`
@@ -610,6 +670,32 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
         row.outcome = Some(outcome);
     }
 
+    // CHAIN slice (TASK-1179): a reap actually finished a session, so the next
+    // spec boundary is open. If there is a next queued spec, SUGGEST the launch
+    // — never spawn it. Counts only rows that genuinely reaped (a lease that
+    // vanished mid-pass, or a worktree that turned dirty, did not).
+    let reaped_count = report
+        .reapable
+        .iter()
+        .filter(|r| {
+            r.outcome
+                .as_deref()
+                .map(|o| o.starts_with("reaped"))
+                .unwrap_or(false)
+        })
+        .count();
+    let next_spec = if reaped_count >= 1 {
+        resolve_next_queued_spec(&project_root)
+    } else {
+        None
+    };
+    if let Some(block) = next_up_suggestion(reaped_count, next_spec.as_deref()) {
+        report.next_up = next_spec;
+        if !opts.json {
+            println!("{block}");
+        }
+    }
+
     if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     }
@@ -621,3 +707,9 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/task_1177_session_reap_tests.rs"]
 mod task_1177_session_reap_tests;
+
+// The CHAIN-slice suggest-block emission + no-op cases.
+// trace:TASK-1179 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1179_chain_suggest_tests.rs"]
+mod task_1179_chain_suggest_tests;
