@@ -700,6 +700,13 @@ pub(crate) fn handle_git_backend_command(
                 (Some(s), None) | (None, Some(s)) => Some(s.to_string()),
                 (None, None) => None,
             };
+            // BUG-788: capture whether this is the explicit `open` shortcut
+            // BEFORE `raw_status` is expanded into the canonical status set —
+            // once expanded, `open` is indistinguishable from a hand-typed
+            // `draft,approved,...` list. The explicit `open` verb must share the
+            // bare-list default lens's accepted-decision exclusion (BUG-781), so
+            // `aida list` and `aida list open` agree. trace:BUG-788 | ai:claude
+            let explicit_open_alias = crate::status_spec_is_open_alias(raw_status.as_deref());
             let status: Option<String> = match raw_status {
                 Some(spec) => {
                     let expanded = aida_core::RequirementStatus::expand_filter_spec(&spec)
@@ -999,9 +1006,22 @@ pub(crate) fn handle_git_backend_command(
                 .as_deref()
                 .map(|t| t.eq_ignore_ascii_case("decision"))
                 .unwrap_or(false);
+            // BUG-788: the explicit `open` shortcut sets a status filter, which
+            // clears `default_open_lens` — but it is the SAME work view as bare
+            // `aida list`, so it must hide accepted (terminal) ADRs identically.
+            // Fold the two into one lens so the verbs agree; `--type decision`
+            // and `--all` still keep accepted ADRs visible (both bypass this).
+            // trace:BUG-788 | ai:claude
+            let open_work_lens = crate::list_applies_open_work_lens(
+                default_open_lens,
+                explicit_open_alias,
+                *all,
+                *archived,
+                *deferred,
+            );
             let accepted_decisions_hidden = crate::hide_accepted_decisions(
                 &mut reqs,
-                default_open_lens,
+                open_work_lens,
                 user_asked_for_decision_type,
             );
 
