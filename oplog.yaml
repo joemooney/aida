@@ -38715,5 +38715,28 @@ operations:
   timestamp: 2026-07-22T19:01:47.527835606Z
   kind: !SetStatus
     status: Completed
-clock: 3622
+- id: 019f8c8f-b401-77a2-a3e1-1637f9e38098
+  target_id: 019f8c8f-aeba-7490-b9db-592da265363d
+  author: aida
+  node_id: '1'
+  lamport: 3623
+  timestamp: 2026-07-23T01:20:55.809401380Z
+  kind: !Create
+    title: FR-284 NOTIFY delivers via a mailbox FYI to the lease owner, deduped per session
+    description: |-
+      Fork decided in the FR-284 guided session (operator + advisor, 2026-07-22).
+
+      DECISION: the 'your spec merged, safe to exit, this worktree reaps when you do' notice for a live interactive session is delivered as a mailbox Message (intent = fyi) addressed to the lease owner, written from the same reap scan that already identifies the near-miss (spec finished + branch merged + process ALIVE). It rides the EXISTING per-turn 'aida awaiting' unread-mail notice the session sees on its next prompt turn.
+
+      WHY: the ratified FR-284 design says NOTIFY goes 'via the existing mailbox/brief channel', and the mailbox already folds into the per-turn awaiting notice, so no new surface is added. intent = fyi is exactly 'surface only, no action expected' (mail_disposition returns Surface for fyi), which is the correct semantics for a permission-to-leave notice, as opposed to a brief (which means 'here is work to pick up' - a category mismatch).
+
+      REJECTED: (b) a bespoke .aida/session-notice worktree-local sentinel - cleaner targeting but a new surface the design did not name; (c) a brief + .pending - wrong semantics (work handoff, not FYI).
+
+      IDEMPOTENCY: a once-per-session sentinel keyed on lease id + spec keeps the notice from re-firing on every merge / every reap pass. The notice is written once when the near-miss is first observed.
+
+      HARD BOUNDARY carried from the parent: this is detect-and-NOTIFY only. A live session is never scraped, never force-closed; the notice is the only action taken on it, and it is reaped normally on a later pass once it exits on its own.
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 3623
 node_id: '1'
