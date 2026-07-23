@@ -29,12 +29,12 @@ description: |-
   - No code path force-kills a live agent process.
   - Reap decisions reuse the aida worktree gc safety checks (never remove a dirty or unmerged-unique-commit worktree).
   - (Chain slice) after a reap, a supervisor can launch the next queued spec; behind an explicit opt-in.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
-modified_at: 2026-07-23T01:21:45.979298122Z
+modified_at: 2026-07-23T01:38:52.266624422Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -52,3 +52,7 @@ comments:
   modified_at: 2026-07-23T01:21:45.979298122Z
   session_id: 019f8c806510
 execution_mode: guided
+implementation_info:
+  implemented: true
+  implemented_at: 2026-07-23T01:38:52.266624422Z
+  implemented_by: joe
