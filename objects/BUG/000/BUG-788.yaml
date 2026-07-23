@@ -3,12 +3,12 @@ spec_id: BUG-788
 agreed_id: BUG-788
 title: aida list open shows accepted decisions while bare aida list hides them — the 'open' shortcut bypasses BUG-781's accepted-is-terminal exclusion
 description: 'Verified against main sha 2bc63f5d2 2026-07-22: bare ''aida list'' correctly hides accepted decision specs (''note: 2 accepted decisions hidden (terminal)'') per BUG-781, but ''aida list open'' (the explicit open shortcut) STILL lists them (ADR-23, ADR-24, both status=approved=accepted). Root: the ''open'' shortcut filters on STATUS-terminality (approved is not a terminal status) and bypasses the decision-class ''accepted = terminal'' exclusion BUG-781 added to the DEFAULT lens. The two verbs disagree about whether an accepted ADR is open work. Fix: apply the same accepted-decision (and other terminal knowledge-class) exclusion in the ''open'' shortcut path so ''aida list'' and ''aida list open'' agree; --type decision / --all still show them. Acceptance: aida list open omits accepted decisions exactly as bare aida list does; --type decision still lists them; unit test both verbs return the same open set w.r.t. accepted ADRs. NOTE: no aida list adr alias needed — aida list --type decision is the existing ADR view. Mode drive.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-23T04:00:58.967034764Z
-modified_at: 2026-07-23T04:01:03.760706839Z
+modified_at: 2026-07-23T04:15:41.163161532Z
 req_type: Bug
 tags:
 - aida:list decision lifecycle batch:papercuts-0721 followup:BUG-781 from-dogfood
