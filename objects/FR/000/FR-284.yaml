@@ -29,12 +29,12 @@ description: |-
   - No code path force-kills a live agent process.
   - Reap decisions reuse the aida worktree gc safety checks (never remove a dirty or unmerged-unique-commit worktree).
   - (Chain slice) after a reap, a supervisor can launch the next queued spec; behind an explicit opt-in.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
-modified_at: 2026-07-23T01:38:53.608182397Z
+modified_at: 2026-07-23T04:38:03.538236714Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -60,8 +60,24 @@ comments:
       - **TASK-1179 (CHAIN):** after a reap, suggest (opt-in: execute) the next-queued-spec handoff
   created_at: 2026-07-23T01:38:53.814750298Z
   modified_at: 2026-07-23T01:38:53.814750298Z
+history:
+- id: 019f8d44-2e0a-7200-96a4-82e70a66f2b9
+  author: aida-auto-bump
+  timestamp: 2026-07-23T04:38:03.530300262Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 019f8d44-2e12-7721-9859-f11067f6630f
+  timestamp: 2026-07-23T04:38:03.538236057Z
+  agent: implementer
+  commit_sha: b8563c4006942f04fdde86331c2d171ed5379a33
+  summary: Completed via merge b8563c40
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-07-23T01:38:52.266624422Z
   implemented_by: joe
+  completed_at: 2026-07-23T04:38:02.798745218Z
+  completion_sha: b8563c4006942f04fdde86331c2d171ed5379a33
