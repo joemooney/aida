@@ -34,7 +34,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-19T18:00:08.908232587Z
-modified_at: 2026-07-23T01:21:44.246087658Z
+modified_at: 2026-07-23T01:21:45.979298122Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -44,4 +44,11 @@ relationships:
   target_id: 019f8c90-443e-76a2-96dc-5e6eb444be59
   created_at: 2026-07-23T01:21:44.246085003Z
   created_by: joe
+comments:
+- id: 019f8c90-77fb-7d50-918d-b07ee4811580
+  author: joe
+  content: 'Guided session scope decision (operator, 2026-07-22): this PR implements the NOTIFY slice only (see ADR-23). CHAIN is filed as child TASK-1179 carrying the ADR-24 print/suggest posture. REAP (TASK-1177) already shipped. With NOTIFY landed, FR-284''s remaining acceptance criteria (interactive session gets a safe-to-exit notice; no scraping; no force-kill; reaped on next pass once it exits) are all satisfied; the CHAIN acceptance bullet moves to TASK-1179.'
+  created_at: 2026-07-23T01:21:45.979298122Z
+  modified_at: 2026-07-23T01:21:45.979298122Z
+  session_id: 019f8c806510
 execution_mode: guided
