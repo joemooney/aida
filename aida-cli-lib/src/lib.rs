@@ -59579,6 +59579,47 @@ fn list_default_open_lens(has_status: bool, all: bool, archived: bool, deferred:
     !has_status && !all && !archived && !deferred
 }
 
+/// BUG-788: is the requested status filter the explicit `open` alias
+/// (`aida list open` / `aida list --status open`)? The `open` shortcut is a
+/// second spelling of the bare-list default open lens, so it must share that
+/// lens's decision-class exclusion (BUG-781: an accepted ADR is terminal). Bare
+/// list clears the status axis and takes the default lens; the explicit `open`
+/// shortcut instead SETS the status axis (to the open set), which turns the
+/// default lens OFF — so without this the two verbs disagreed about whether an
+/// accepted ADR is open work. Matches only the lone `open` token
+/// (case-insensitive); a mixed spec like `open,closed` is a deliberately wider
+/// ask and keeps the terminals visible. Pure so it's unit-testable.
+// trace:BUG-788 | ai:claude
+fn status_spec_is_open_alias(raw_status: Option<&str>) -> bool {
+    match raw_status {
+        Some(spec) => {
+            let mut tokens = spec.split(',').map(str::trim).filter(|t| !t.is_empty());
+            matches!((tokens.next(), tokens.next()),
+                (Some(only), None) if only.eq_ignore_ascii_case("open"))
+        }
+        None => false,
+    }
+}
+
+/// BUG-788: should the open-work accepted-decision lens apply? True under the
+/// bare-list default open lens (STORY-723) OR the explicit `open` shortcut, so
+/// `aida list` and `aida list open` hide accepted ADRs identically. The explicit
+/// shortcut still yields to any view-widening flag (`--all` / `--archived` /
+/// `--deferred`) — BUG-781's guarantee that `--all` shows accepted ADRs holds
+/// for `aida list open --all` too (`default_open_lens` already bakes in that
+/// yield for the bare-list arm). Pure so the agreement between the two verbs is
+/// unit-testable without a cache DB.
+// trace:BUG-788 | ai:claude
+fn list_applies_open_work_lens(
+    default_open_lens: bool,
+    explicit_open_alias: bool,
+    all: bool,
+    archived: bool,
+    deferred: bool,
+) -> bool {
+    default_open_lens || (explicit_open_alias && !all && !archived && !deferred)
+}
+
 /// BUG-781: drop the ACCEPTED (terminal) decision rows from a listing under the
 /// default open lens, returning how many were hidden.
 ///
@@ -59613,6 +59654,11 @@ fn hide_accepted_decisions(
 #[cfg(test)]
 #[path = "tests/bug_781_accepted_decision_lens_tests.rs"]
 mod bug_781_accepted_decision_lens_tests;
+
+// trace:BUG-788 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_788_open_shortcut_accepted_decision_tests.rs"]
+mod bug_788_open_shortcut_accepted_decision_tests;
 
 // trace:TASK-1176 | ai:claude
 #[cfg(test)]
