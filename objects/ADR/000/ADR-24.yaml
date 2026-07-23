@@ -1,0 +1,21 @@
+id: 019f8c8f-f63d-7b80-a595-b7b19c8d4ff8
+spec_id: ADR-24
+agreed_id: ADR-24
+title: FR-284 CHAIN first increment is print/suggest handoff, never auto-launch
+description: |-
+  Fork decided in the FR-284 guided session (operator + advisor, 2026-07-22).
+
+  DECISION: when the CHAIN slice ships (as a follow-up child of FR-284, not in this PR), its first increment does the ratified design's stated MINIMUM - after a reap, print (or on an explicit opt-in, execute) the next-spec handoff steps (aida agent new --spec NEXT in a fresh worktree). Detect-and-suggest; the operator runs the launch. Auto-spawn behind a --chain flag, and a config-gated off/suggest/launch policy, are later increments once the suggest form is proven.
+
+  WHY: this mirrors the parent's core philosophy ('detect-and-notify, never terminate') on the launch side - detect-and-suggest, do not auto-spawn a process unattended in the first cut. Consistent with the standing guidance that keystone / autonomy process-launching ships bounded and human-in-the-loop first, then earns broader autonomy.
+
+  REJECTED for the first increment: (b) auto-launch behind --chain from the start - larger unattended blast radius before the pattern is proven; (c) config-gated policy - ships all three behaviours incl. auto-launch at once, adds config surface prematurely.
+
+  SCOPE NOTE: this PR implements NOTIFY only. CHAIN is filed as a follow-up child TASK carrying this posture.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-07-23T01:21:12.765614598Z
+modified_at: 2026-07-23T01:21:12.765614598Z
+req_type: Decision
