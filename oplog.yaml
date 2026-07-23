@@ -38775,5 +38775,17 @@ operations:
   timestamp: 2026-07-23T01:21:24.086225312Z
   kind: !SetStatus
     status: Approved
-clock: 3626
+- id: 019f8c90-4901-7262-b8f3-404453177941
+  target_id: 019f8c90-443e-76a2-96dc-5e6eb444be59
+  author: aida
+  node_id: '1'
+  lamport: 3627
+  timestamp: 2026-07-23T01:21:33.953648264Z
+  kind: !Create
+    title: 'CHAIN slice (FR-284 child): suggest next-spec handoff after a reap'
+    description: 'Third slice of FR-284 (after REAP=TASK-1177 shipped and NOTIFY ships in the FR-284 guided PR). Per ADR-24: first increment is detect-and-SUGGEST, never auto-launch. After the reap pass removes a finished session, print (and on an explicit opt-in, execute) the next-queued-spec handoff steps - aida agent new --spec NEXT in a fresh worktree. The operator runs the launch. Auto-spawn behind a --chain flag and a config-gated off/suggest/launch policy are later increments once the suggest form is proven. Mirrors the parent''s detect-and-notify-never-terminate philosophy on the launch side. Mode guided (process-launching = keyboard, not unattended headless).'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 3627
 node_id: '1'
