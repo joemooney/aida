@@ -1,0 +1,15 @@
+{
+  "id": "8416d2ed-5577-4bb4-ac91-a7c5ea7a24d0",
+  "thread_id": "8416d2ed-5577-4bb4-ac91-a7c5ea7a24d0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1784782239175,
+  "body": "Burn-down complete (--status approved).\n\nCompleted:\n  BUG-788  fix(list): 'aida list open' now applies the accepted-decision/terminal-knowledge exclusion so it agrees with bare 'aida list'  — PR #1602\n  TASK-1179  feat(session): reap pass now SUGGESTS the next-queued-spec launch command (suggest-only per ADR-24, no auto-spawn)  — PR #1603\n\nCaveats / verifications worth noting:\n  - Both PRs green on Linux Build; integrated-main verify was a compile check (cargo build -p aida-cli), not a full test run.\n  - TASK-1179's PR #1603 conflicted with origin/main in session_reap.rs (FR-284 NOTIFY slice had landed touching the same ReapReport struct). Implementer resolved additively — ReapReport now carries both notifiable (FR-284) and next_up (TASK-1179); both test modules registered. Re-verified build+test+fmt green before merge.\n  - FR-284 also auto-bumped to Completed during my first pull (sibling implementer's NOTIFY work merged separately — not part of this drain).\n\nHeld / awaiting sign-off: TASK-1164 (pickable but NOT queued — needs advisor 'aida queue add' to bless).\n\nLeft for manual merge: none (both wave PRs merged).\n\nParked (gate): TASK-735, TASK-751 (deferred:on-demand); TASK-749 (deferred:future-rbac); TASK-892 (deferred:until-projects-toml-consumed); EPIC-44 (epic — decompose first); STORY-687, STORY-688 (deferred:cockpit-phase2).\n\nWorktrees not pruned: none — both implementer worktrees + branches (local+remote) reclaimed.",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false
+}
