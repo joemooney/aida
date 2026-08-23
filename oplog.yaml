@@ -38847,5 +38847,52 @@ operations:
   timestamp: 2026-07-23T04:49:51.454979676Z
   kind: !SetStatus
     status: Completed
-clock: 3634
+- id: 01a03035-dcfd-7993-94a7-f43b62846430
+  target_id: 01a03035-b0ab-7eb0-8282-3b440fe932f8
+  author: aida
+  node_id: '1'
+  lamport: 3635
+  timestamp: 2026-08-23T20:00:31.485039153Z
+  kind: !Create
+    title: 'aida init: bootstrap a project from nothing (create dir + scaffold + remote) in one ordered command'
+    description: |-
+      There is no supported path from "nothing" to "an initialized AIDA project". `aida init` assumes the
+      caller is already standing inside a directory; `--git-init` covers "this folder is not a repo yet",
+      but nothing creates the directory, scaffolds the language project, creates the remote, or pushes.
+
+      Today a new project requires a hand-run sequence (mkdir, cargo/uv/npm scaffold, git init, first
+      commit, gh repo create, push main, push aida-store, aida init) whose ORDERING is load-bearing and
+      currently documented nowhere except scripts/aida-demo.sh and operator memory.
+
+      WHY THE ORDERING MATTERS (the real motivation, not convenience):
+      `aida init` creates the orphan `aida-store` branch. The two obvious naive sequences both fail:
+        - `gh repo create --add-readme` then `aida init`  -> remote holds a commit the clone does not,
+          so the user reconciles divergent history on day one.
+        - `aida init` then `gh repo create`               -> two branches now need pushing; pushing them
+          in the wrong order, or forgetting `aida-store` entirely, is a silent failure that surfaces
+          much later as a missing store on a second clone.
+      This is exactly the substrate-as-bouncer case: guarantee the invariant with a programmatic gate,
+      not a paragraph in a doc that readers skip.
+
+      SURFACE DECISION (settled with the operator 2026-08-23):
+      Extend `aida init` -- do NOT take the top-level verb `aida new`. `new` is short, memorable, and has
+      higher-value future claims (new spec, new agent, new role); spending it on project bootstrap is a
+      bad trade. Exact flag spelling is open: `aida init --create <name>` is the straw man.
+
+      SCOPE BOUNDARY (hold this line):
+      AIDA owns the SEQUENCE and its ordering. AIDA does NOT own language templates. Language scaffolding
+      delegates to the native tool -- cargo new / uv init / npm create. The moment AIDA ships its own
+      Rust/Python/Node templates it owns keeping them current forever: long tail, low value, and it
+      fattens the visible surface, which cuts directly against the Trojan-horse positioning in CLAUDE.md.
+      Remote creation stays opt-in (--github / --gitlab) and should route through the EPIC-35 forge
+      abstraction rather than adding another direct `gh` call site.
+
+      ACCEPTANCE CRITERIA: deliberately not yet written. This spec was filed from live friction while
+      bootstrapping the aida-hub project on 2026-08-23. The sequence is being hand-executed now and the
+      exact commands run will be captured back here as the acceptance criteria, so the command is
+      specified from a sequence that was actually walked rather than one that was imagined.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3635
 node_id: '1'
