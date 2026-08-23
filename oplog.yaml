@@ -38894,5 +38894,51 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3635
+- id: 01a03042-363a-7832-b67c-32b51f379d1d
+  target_id: 01a03042-2f76-7703-a8ae-19bbda7c9fc6
+  author: aida
+  node_id: '1'
+  lamport: 3636
+  timestamp: 2026-08-23T20:14:00.762858678Z
+  kind: !Create
+    title: aida init pushes the store branch but silently leaves its own scaffold commit unpushed on main
+    description: |-
+      On a genuinely-new first `aida init`, the command:
+        - creates a commit on the code branch ("chore: scaffold AIDA") -- by design; --commit-scaffold
+          is documented as affecting CLONES of already-initialized projects, "no effect on a
+          genuinely-new first init"
+        - creates the orphan store branch and PUSHES it, reporting: "Done pushed orphan branch to
+          origin/aida-store"
+        - leaves the code-branch scaffold commit UNPUSHED, and says nothing about it
+
+      The asymmetry is the defect, not the non-push itself. Declining to push a user's code branch
+      unprompted is a defensible safe default. But init reports a successful push in its output while
+      silently leaving a second commit stranded, so the reasonable reading of "AIDA initialized ✓" plus
+      "pushed orphan branch" is "everything is pushed". It is not.
+
+      OBSERVED 2026-08-23 while bootstrapping a new project (aida-hub) with an up-to-date dev build:
+        $ gh repo create ... --source=. --push     # main pushed, in sync
+        $ aida init                                # reports: pushed orphan branch to origin/aida-store
+        $ git log --oneline @{u}..HEAD
+        89b7f79 chore: scaffold AIDA               # <- stranded, no mention anywhere in init output
+
+      WHY IT MATTERS: a second clone taken at that moment gets the store but NOT the scaffolding --
+      CLAUDE.md, .mcp.json, .claude/skills/, docs/aida/discipline/. The project looks half-initialized
+      on the other machine, and the cause (a local-only commit on the first machine) is several steps
+      removed from the symptom.
+
+      FIX OPTIONS (pick at implementation):
+        a) push the code branch too when init created the commit and an upstream already exists
+        b) keep the safe default, but print an explicit next-step line naming the unpushed commit
+        c) prompt at a TTY, print the hint headless
+
+      Option (b) is the smallest honest fix. Whatever is chosen, init must not report a push in a way
+      that implies the code branch is also synced.
+
+      RELATED: STORY-780 (bootstrap a project from nothing in one ordered command) -- this was trap 4 of
+      4 found while walking that sequence by hand, and is the one piece independently shippable now.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3636
 node_id: '1'
