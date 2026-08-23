@@ -43,10 +43,59 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-23T20:00:20.139796022Z
-modified_at: 2026-08-23T20:00:20.139796022Z
+modified_at: 2026-08-23T20:13:27.081259661Z
 req_type: Story
 tags:
 - aida:init
 - first-run
 - onboarding
 - papercut
+comments:
+- id: 01a03041-b2a9-7543-a615-f1c7f145123b
+  author: joe
+  content: |-
+    LIVED SEQUENCE — captured while bootstrapping aida-hub, 2026-08-23. This is the walked path, not
+    an imagined one; it should become the acceptance criteria.
+
+    THE ORDERING THAT WORKS (no divergence, no missing store):
+      1. scaffold the language project into a new dir   (delegate: cargo/uv/npm)
+      2. git init -b main
+      3. first commit
+      4. gh repo create --private --source=. --remote=origin --push    <- remote created AFTER local
+         history exists. This is the key move: nothing to reconcile, because the remote is born from
+         the local repo rather than seeded with its own README commit.
+      5. aida init            <- creates the orphan store AND auto-pushes origin/aida-store
+      6. git push origin main <- REQUIRED: see finding 4 below
+
+    FOUR TRAPS HIT, each one a requirement:
+
+    1. LANGUAGE SCAFFOLDERS MAY BE TTY-ONLY WIZARDS.
+       `cargo leptos new --git leptos-rs/start-axum --name aida-hub` fails with "IO error: not a
+       terminal" when stdin is not a TTY. So "delegate to the native tool" is not sufficient on its
+       own -- the delegation needs a non-interactive path, and must fail loudly rather than hang.
+       Workaround used: clone the template repo directly, strip .git, resolve the cargo-generate
+       placeholders ({{project-name}}, {{crate_name}}) and liquid conditionals by hand.
+
+    2. PORT COLLISION IS A REAL STEP, NOT A DETAIL.
+       The template defaulted to site-addr 127.0.0.1:3000, already claimed by another app in the
+       machine-global registry, and reload-port 3001, claimed by a sibling project. Silent collision
+       at first run. A bootstrap that scaffolds a web project should check the registry and claim a
+       free port as part of the sequence.
+
+    3. TEMPLATE LICENSES SILENTLY BECOME YOUR LICENSE.
+       The template shipped an Unlicense (public-domain dedication). Copied verbatim, that declares
+       the NEW project public domain -- almost certainly not intended, and easy to miss. Bootstrap
+       should drop or explicitly re-ask for the license rather than inherit one.
+
+    4. `aida init` PUSHES THE STORE BUT NOT MAIN — an asymmetry that strands work.
+       init creates a "chore: scaffold AIDA" commit on main and pushes origin/aida-store, but leaves
+       that main commit UNPUSHED. The user is left believing the push completed (the output reports
+       the store push and nothing about main). A second clone at that moment gets the store but not
+       the scaffolding. Either push both, or say plainly that main still needs pushing.
+       NOTE: this one is independently fixable TODAY, ahead of the larger bootstrap command.
+
+    SURFACE (settled 2026-08-23): fold into `aida init`; do NOT claim the top-level verb `aida new`,
+    which has higher-value future uses (new spec / agent / role).
+  created_at: 2026-08-23T20:13:27.081259661Z
+  modified_at: 2026-08-23T20:13:27.081259661Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
