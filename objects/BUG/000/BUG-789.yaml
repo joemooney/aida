@@ -37,12 +37,12 @@ description: |-
 
   RELATED: STORY-780 (bootstrap a project from nothing in one ordered command) -- this was trap 4 of
   4 found while walking that sequence by hand, and is the one piece independently shippable now.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-23T20:13:59.030746760Z
-modified_at: 2026-08-24T02:53:39.156297882Z
+modified_at: 2026-08-24T02:54:16.912066541Z
 req_type: Bug
 tags:
 - aida:init
@@ -54,3 +54,21 @@ relationships:
   target_id: 01a03035-b0ab-7eb0-8282-3b440fe932f8
   created_at: 2026-08-23T20:14:16.683408415Z
   created_by: joe
+history:
+- id: 01a031b0-aac6-7f93-a2cb-9d3695c4ce35
+  author: aida-auto-bump
+  timestamp: 2026-08-24T02:54:16.774415597Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a031b0-ab50-7441-a287-748a6b692047
+  timestamp: 2026-08-24T02:54:16.912061887Z
+  agent: aida
+  commit_sha: 9addf65b781a021aea9bc804da737298bbf5d4c4
+  summary: Completed via merge 9addf65b
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-24T02:54:16.774293411Z
+  completion_sha: 9addf65b781a021aea9bc804da737298bbf5d4c4
