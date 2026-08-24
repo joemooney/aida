@@ -228,6 +228,52 @@ fn partition_scaffold_paths_by_gitignore(
 /// `Ok(true)` when a commit was made (so the caller can dedup the onboarding
 /// "commit scaffolding" task), `Ok(false)` otherwise. Best-effort: a git
 // failure here is a soft note, not a fatal init error. trace:TASK-631 | ai:claude
+/// Whether init's own scaffold commit is stranded on the code branch, and what
+/// to say about it.
+///
+/// BUG-789: init pushes the orphan store and reports that push, then makes the
+/// `chore: scaffold AIDA` commit on the code branch and does NOT push it. The
+/// non-push is a defensible safe default — pushing a user's code branch
+/// unprompted, possibly onto a shared trunk, is not init's call. Reporting a
+/// push while silently stranding a second commit is not defensible: the
+/// reasonable reading of "AIDA initialized ✓" plus "pushed orphan branch" is
+/// "everything is pushed", and a second clone taken at that moment gets the
+/// store but none of the scaffolding.
+///
+/// Note the ordering that makes this bite on EVERY path, not just the one that
+/// prompted the report: the scaffold commit is created after the push block
+/// runs, so even the push-to-create case (which does push the code branch, for
+/// unrelated default-branch reasons — BUG-559) still leaves it behind.
+///
+/// Pure so the wording is testable without a repository.
+// trace:BUG-789 | ai:claude
+fn unpushed_scaffold_note(
+    branch: &str,
+    has_origin: bool,
+    remote_branch_known: bool,
+    ahead: u32,
+) -> Option<String> {
+    // No remote at all: nothing to push to, so nothing to say.
+    if !has_origin {
+        return None;
+    }
+    let tail =
+        format!("run `git push -u origin {branch}` so a second clone gets the scaffolding too");
+    if !remote_branch_known {
+        return Some(format!(
+            "`{branch}` has not been pushed yet (the orphan store has) — {tail}."
+        ));
+    }
+    if ahead == 0 {
+        return None;
+    }
+    Some(format!(
+        "{ahead} commit{} on `{branch}` {} not pushed, including the scaffolding — {tail}.",
+        if ahead == 1 { "" } else { "s" },
+        if ahead == 1 { "is" } else { "are" },
+    ))
+}
+
 fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     use aida_core::git_ops;
 
@@ -824,6 +870,25 @@ fn complete_init_scaffolding(
         commit_init_scaffolding(root).unwrap_or(false)
     };
 
+    // BUG-789: having just made a commit on the code branch, say plainly
+    // whether it is pushed. Local refs only — no network on the init path.
+    if scaffolding_committed {
+        use aida_core::git_ops;
+        if let Ok(branch) = git_ops::current_branch(root) {
+            let has_origin = git_ops::has_remote(root, "origin");
+            let remote_ref = format!("origin/{branch}");
+            let ab = git_ops::ahead_behind(root, &branch, &remote_ref);
+            if let Some(note) = unpushed_scaffold_note(
+                &branch,
+                has_origin,
+                ab.is_some(),
+                ab.map(|(a, _)| a).unwrap_or(0),
+            ) {
+                println!("  {} {}", "Note:".yellow().bold(), note);
+            }
+        }
+    }
+
     // trace:TASK-510 | ai:antigravity
     // DEDUP (TASK-631): when init committed the scaffolding itself, skip
     // enqueuing the "Commit AIDA scaffolding" onboarding task — the first
@@ -1137,6 +1202,58 @@ mod task_631_init_self_commit_tests {
                 "staged path {p} is not in the init allow-list"
             );
         }
+    }
+
+    // BUG-789: init reports the orphan-store push, then makes a second commit
+    // on the code branch and does not push it. These pin the wording that stops
+    // "AIDA initialized ✓" reading as "everything is pushed".
+    // trace:BUG-789 | ai:claude
+    #[test]
+    fn no_origin_means_nothing_to_say_about_pushing() {
+        assert_eq!(unpushed_scaffold_note("main", false, false, 3), None);
+    }
+
+    #[test]
+    fn an_in_sync_branch_says_nothing() {
+        assert_eq!(unpushed_scaffold_note("main", true, true, 0), None);
+    }
+
+    #[test]
+    fn an_ahead_branch_names_the_count_and_the_command() {
+        let n = unpushed_scaffold_note("main", true, true, 1).expect("should warn");
+        assert!(n.contains("1 commit on `main` is not pushed"), "got: {n}");
+        assert!(
+            n.contains("git push -u origin main"),
+            "must give the exact command: {n}"
+        );
+        assert!(
+            n.contains("scaffolding"),
+            "must say what is being stranded: {n}"
+        );
+    }
+
+    #[test]
+    fn plural_reads_correctly() {
+        let n = unpushed_scaffold_note("main", true, true, 4).unwrap();
+        assert!(n.contains("4 commits on `main` are not pushed"), "got: {n}");
+    }
+
+    #[test]
+    fn a_never_pushed_branch_is_reported_even_though_ahead_is_unknown() {
+        // origin exists but origin/<branch> does not resolve locally, so
+        // ahead/behind is unanswerable. That is still "unpushed", and the
+        // earlier version of this check silently said nothing.
+        let n = unpushed_scaffold_note("main", true, false, 0).expect("should warn");
+        assert!(n.contains("has not been pushed yet"), "got: {n}");
+        assert!(n.contains("git push -u origin main"), "got: {n}");
+    }
+
+    #[test]
+    fn the_branch_name_is_never_assumed_to_be_main() {
+        let n = unpushed_scaffold_note("trunk", true, true, 2).unwrap();
+        assert!(n.contains("`trunk`"), "got: {n}");
+        assert!(n.contains("git push -u origin trunk"), "got: {n}");
+        assert!(!n.contains("main"), "must not hardcode main: {n}");
     }
 
     #[test]
