@@ -36,12 +36,12 @@ description: |-
     - activating with a stale build prints one line naming the marker and the fix
     - the line reaches the terminal through the auto-evaling shell wrapper (i.e. it is on stderr)
     - the alternate profile is named correctly (debug <-> release), never hardcoded
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T05:30:00.133452112Z
-modified_at: 2026-08-25T05:30:00.133452112Z
+modified_at: 2026-08-25T05:30:08.705268762Z
 req_type: Task
 tags:
 - aida:dev
