@@ -90,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T06:42:21.886721474Z
+modified_at: 2026-08-25T06:42:22.910759080Z
 req_type: Story
 tags:
 - aida:doctor
@@ -145,3 +145,9 @@ comments:
   created_at: 2026-08-25T06:34:39.887427176Z
   modified_at: 2026-08-25T06:34:39.887427176Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a037a7-dc3e-7142-8fc9-7fbad078b6e9
+  author: joe
+  content: 'Corrected 2026-08-24: the field list under ''Proposed shape'' originally named ''owner'' and ''lifecycle stage'', neither of which exists in the consumer. Replaced with the real set verified against aida-hub''s Annotation struct (why, liveness, next, classification, display_name) plus the incoming ''description'' from aida-hub STORY-15. Also added the subset-not-migration point: ''next'' is personal state and should stay machine-local.'
+  created_at: 2026-08-25T06:42:22.910759080Z
+  modified_at: 2026-08-25T06:42:22.910759080Z
+  session_id: ad63fa6f-6858-4163-aa31-d1a8d392e121
