@@ -36,14 +36,32 @@ description: |-
     - activating with a stale build prints one line naming the marker and the fix
     - the line reaches the terminal through the auto-evaling shell wrapper (i.e. it is on stderr)
     - the alternate profile is named correctly (debug <-> release), never hardcoded
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T05:30:00.133452112Z
-modified_at: 2026-08-25T05:48:50.829019489Z
+modified_at: 2026-08-25T05:48:56.448038386Z
 req_type: Task
 tags:
 - aida:dev
 - onboarding
 - papercut
+history:
+- id: 01a03776-eefa-7872-9388-05f95e02d9e8
+  author: aida-auto-bump
+  timestamp: 2026-08-25T05:48:56.442402132Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a03776-ef00-7e80-839d-94cc15c958fb
+  timestamp: 2026-08-25T05:48:56.448037673Z
+  agent: aida
+  commit_sha: 3573611c771b78c50ee6c08a42bddca7d0c8cdfe
+  summary: Completed via merge 3573611c
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-25T05:48:56.442297772Z
+  completion_sha: 3573611c771b78c50ee6c08a42bddca7d0c8cdfe
