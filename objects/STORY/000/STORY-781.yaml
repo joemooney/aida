@@ -85,12 +85,12 @@ description: |-
   - [ ] A malformed manifest is reported clearly and does not break any command.
   - [ ] `aida doctor` reports presence, parseability and staleness.
   - [ ] The schema is readable by a consumer that is not AIDA.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T06:42:22.910759080Z
+modified_at: 2026-08-25T07:03:59.604625672Z
 req_type: Story
 tags:
 - aida:doctor

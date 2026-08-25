@@ -39358,5 +39358,13 @@ operations:
       - [ ] A malformed manifest is reported clearly and does not break any command.
       - [ ] `aida doctor` reports presence, parseability and staleness.
       - [ ] The schema is readable by a consumer that is not AIDA.
-clock: 3648
+- id: 01a037bb-a5a7-71c3-990f-be8373bb3195
+  target_id: 01a0379d-2608-7bc0-829d-6092d78e55c8
+  author: aida
+  node_id: '1'
+  lamport: 3649
+  timestamp: 2026-08-25T07:03:59.655973304Z
+  kind: !SetStatus
+    status: Done
+clock: 3649
 node_id: '1'
