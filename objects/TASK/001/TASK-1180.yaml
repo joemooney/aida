@@ -1,0 +1,49 @@
+id: 01a03765-9845-7990-b2e3-f6333c1af18f
+spec_id: TASK-1180
+agreed_id: TASK-1180
+title: 'aida dev activate: explain the prompt marker it just installed'
+description: |-
+  `aida dev activate` injects a marker into the shell prompt and never says what it means.
+
+  The prompt becomes e.g. `(aida-release⇄)`. The glyph legend exists -- `aida dev status` prints
+  "PS1 marker: empty current, ⇄ activate matching other build, ↻ rebuild" -- but nothing connects the
+  glyph in front of you to the command that explains it. An operator hit exactly this and had to ask.
+
+  WHY ACTIVATE IS THE RIGHT PLACE, and `aida status` is not:
+    - the marker only exists in development mode, so it belongs behind `aida dev`, not on the
+      everyone-sees-it project surface
+    - `aida status` was deliberately slimmed by STORY-707 (heavy diagnostics moved to `aida doctor`);
+      adding dev-build trivia reverses that
+    - activate is the MOMENT the glyph appears in the prompt, which is when the explanation is worth
+      reading
+
+  NOT A GENERIC LEGEND. Print the marker that is ACTUALLY being shown, plus its remedy, so the line is
+  actionable rather than a lookup table:
+
+      ⇄  this build is behind HEAD but the other profile matches — `aida dev activate <other>`
+      ↻  no build matches HEAD — `make build-fast`
+
+  SILENT WHEN THE MARKER IS EMPTY. A current build has nothing to explain, and activate is otherwise
+  a quiet command; it must not grow noise for the common case.
+
+  MECHANISM: stderr, matching the convention the shell wrapper already documents and this handler
+  already uses ("# dev activate: delegating to the in-repo build at ..."). stdout is captured and
+  eval'd by the `aida()` wrapper, so prose there is invisible -- which is exactly why the existing
+  `#`-comment header never reached anyone.
+
+  ACCEPTANCE:
+    - activating with a build that matches HEAD prints nothing extra
+    - activating with a stale build prints one line naming the marker and the fix
+    - the line reaches the terminal through the auto-evaling shell wrapper (i.e. it is on stderr)
+    - the alternate profile is named correctly (debug <-> release), never hardcoded
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-25T05:30:00.133452112Z
+modified_at: 2026-08-25T05:30:00.133452112Z
+req_type: Task
+tags:
+- aida:dev
+- onboarding
+- papercut
