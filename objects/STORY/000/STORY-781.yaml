@@ -2,7 +2,7 @@ id: 01a0379d-2608-7bc0-829d-6092d78e55c8
 spec_id: STORY-781
 agreed_id: STORY-781
 title: Standard checked-in project manifest — .aida/project.toml scaffolded by init
-description: |
+description: |-
   AIDA scaffolds a project's requirements substrate, its skills and its agent
   config — but there is no standard, checked-in place for a project to say what
   it IS. Description, why it exists, liveness, lifecycle stage and owner are
@@ -69,7 +69,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T06:34:39.887427176Z
+modified_at: 2026-08-25T06:41:54.900250192Z
 req_type: Story
 tags:
 - aida:doctor

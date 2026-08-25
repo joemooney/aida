@@ -39199,5 +39199,74 @@ operations:
   timestamp: 2026-08-25T06:34:38.906492745Z
   kind: !SetStatus
     status: In Progress
-clock: 3646
+- id: 01a037a7-6f07-7fa0-af95-5adfc1315f2f
+  target_id: 01a0379d-2608-7bc0-829d-6092d78e55c8
+  author: aida
+  node_id: '1'
+  lamport: 3647
+  timestamp: 2026-08-25T06:41:54.951241809Z
+  kind: !SetDescription
+    description: |-
+      AIDA scaffolds a project's requirements substrate, its skills and its agent
+      config — but there is no standard, checked-in place for a project to say what
+      it IS. Description, why it exists, liveness, lifecycle stage and owner are
+      either absent, or duplicated ad-hoc into whatever consumer needs them.
+
+      The immediate consumer is `aida-hub`, a catalogue that scans ~104 local
+      repositories and answers "what is this, is it alive, how do I run it". Today
+      the non-derivable half of that lives in a machine-local
+      `~/.config/aida-hub/annotations.toml`, keyed by absolute path. That has two
+      weaknesses a standard fixes:
+
+      1. **Machine-local.** Clone the repo elsewhere and the notes are gone.
+      2. **Absolute-path keys.** Move or rename the directory and the entry orphans.
+
+      ## Why AIDA owns this, not the consumer
+
+      Decided 2026-08-24 with the project owner.
+
+      If `aida-hub` defined its own manifest format, every project would have to
+      adopt aida-hub specifically in order to be well-described. AIDA is already the
+      thing that bootstraps projects — `aida init` is a command these repositories
+      already run — so the standard rides in on adoption that is already happening,
+      and any future consumer (a TUI, a phone client, a `curl` one-liner) reads the
+      same file.
+
+      The consumer stays strictly READ-ONLY. This mirrors the stance aida-hub
+      already takes toward `~/.ports`: the port manager writes it, aida-hub reads it.
+
+      ## Proposed shape
+
+      - A checked-in manifest, e.g. `.aida/project.toml`, carrying the facts a scan
+        cannot derive: description, why it exists, liveness, lifecycle stage, owner,
+        and any classification the author wants to assert.
+      - `aida init` scaffolds it, pre-filled from what is already knowable
+        (directory name, README lead, remote) rather than as an empty form — an
+        empty form is how a metadata standard goes stale in a week.
+      - `aida doctor` checks it: present, parseable, and not obviously stale.
+      - Schema documented so a non-AIDA consumer can read it without reverse
+        engineering.
+
+      Consider whether this belongs as a sibling of STORY-780 (`aida init`
+      bootstrapping a project from nothing) — the manifest is arguably part of what
+      that bootstrap should be writing.
+
+      ## DOWNSTREAM CONSUMER
+
+      `aida-hub` STORY-21 ("Read the AIDA-owned per-repo project manifest") is
+      blocked on this story. It covers the reader side only and cannot ship before
+      this schema is agreed. Cross-repo: that spec lives in the `aida-hub` store,
+      not this one.
+
+      ## Acceptance
+
+      - [ ] The manifest location and schema are defined and documented.
+      - [ ] `aida init` writes one, pre-filled from derivable facts rather than blank.
+      - [ ] `aida init --refresh` does not overwrite a human's edits, consistent with
+            how scaffolded discipline docs already behave.
+      - [ ] A project without a manifest keeps working; nothing about it regresses.
+      - [ ] A malformed manifest is reported clearly and does not break any command.
+      - [ ] `aida doctor` reports presence, parseability and staleness.
+      - [ ] The schema is readable by a consumer that is not AIDA.
+clock: 3647
 node_id: '1'
