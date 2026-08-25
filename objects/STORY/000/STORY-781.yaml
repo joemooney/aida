@@ -90,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T07:03:59.604625672Z
+modified_at: 2026-08-25T07:04:00.863427712Z
 req_type: Story
 tags:
 - aida:doctor
@@ -151,3 +151,56 @@ comments:
   created_at: 2026-08-25T06:42:22.910759080Z
   modified_at: 2026-08-25T06:42:22.910759080Z
   session_id: ad63fa6f-6858-4163-aa31-d1a8d392e121
+- id: 01a037bb-aa5f-7f52-9cff-0012e4fc7bab
+  author: joe
+  content: |-
+    IMPLEMENTED — PR #1606, not merged (left for review per instruction).
+
+    TWO DESIGN CORRECTIONS MADE DURING IMPLEMENTATION, both worth recording because they changed the
+    shape of the standard rather than just the code.
+
+    1. `liveness` and `stage` are NOT closed enums. They started as closed serde enums, which meant one
+       unrecognised value made the ENTIRE manifest unreadable -- losing description, why and everything
+       else with it -- and would have broken every existing reader the moment a later schema added a
+       value. That is "reject" where the contract for every reader of this format is "degrade". They now
+       preserve an unknown value verbatim, the rest of the file parses normally, and `aida doctor`
+       reports it as `project-manifest-unrecognised-value`, including the possibility that the file
+       simply came from a newer aida. AIDA does not get to exempt itself from the rule its own docs
+       impose on other readers.
+
+    2. `classification` stays FREE TEXT, and the docs now state the downstream consequence explicitly:
+       a consumer with a closed category set WILL meet values outside it, and must fall back to its own
+       inference rather than coerce the value into its nearest category or reject the manifest. Closing
+       the set here would only move the problem -- it would make every consumer whose vocabulary differs
+       from AIDA's wrong instead.
+
+    THE TRAP THAT WOULD HAVE SILENTLY DEFEATED THE WHOLE FEATURE: `.aida/` is deny-by-default (BUG-73),
+    so a tracked file there needs an explicit `!` allow-line -- but that allow-list lives inside a
+    gitignore block only written when `.aida/*` is ABSENT. An already-initialized project would never
+    have received a newly-added line, and its manifest would have been invisible to git forever with no
+    error anywhere. The allow-line is therefore its own idempotent append, tested against a .gitignore
+    shaped exactly as an older init left it. This is the difference between the manifest reaching every
+    existing repository and reaching none of them.
+
+    ACCEPTANCE, all met:
+      - location and schema defined and documented ......... docs/project-manifest.md
+      - init writes one, pre-filled not blank ............... name/description/repository derived
+      - --refresh does not overwrite edits .................. create-if-absent, --force regenerates
+      - a project without one keeps working ................. absence produces NO doctor finding
+      - a malformed one is reported and breaks nothing ...... `load` returns a state, not a Result
+      - doctor reports presence/parseability/staleness ...... category `project-manifest`
+      - readable by a non-AIDA consumer ..................... reader contract documented
+
+    48 new tests. 874 core + 4338 cli-lib pass, fmt clean, zero clippy::correctness.
+
+    A pre-existing gitignore fixture asserting "all six blocks present -> no append" failed; that
+    failure was EVIDENCE the upgrade path works. Updated to seven and added a test pinning it.
+
+    DOWNSTREAM: aida-hub STORY-21 (reader side) is now unblocked -- the schema is agreed and documented.
+    Nothing was implemented in that repo. Cross-repo linkage remains prose-only; see BUG-790.
+
+    STORY-780 relationship unchanged: when it is implemented it should call
+    `ensure_project_manifest_scaffold` rather than writing its own copy.
+  created_at: 2026-08-25T07:04:00.863427712Z
+  modified_at: 2026-08-25T07:04:00.863427712Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
