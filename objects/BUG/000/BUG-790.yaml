@@ -1,0 +1,89 @@
+id: 01a0379f-0ac6-7941-b441-e0224b3ebbf8
+spec_id: BUG-790
+agreed_id: BUG-790
+title: aida rel add silently binds a foreign spec ID to a colliding local requirement
+description: |
+  `aida rel add` validates the target ID against the LOCAL store only. In a
+  multi-repo AIDA setup, an agent linking to a spec in a sibling repo's store
+  gets one of two outcomes, and the bad one is silent:
+
+  - Target ID does not exist locally → correct error, exit 1. Fine.
+  - Target ID **collides** with an unrelated local spec → the edge is created,
+    reported as success, and points at the WRONG requirement. No warning.
+
+  The second case produces a false edge in the requirements graph — the one
+  artifact whose entire value depends on being true. `docs/aida/discipline/`
+  already names this failure class: a trace or link "on code that has nothing to
+  do with" its target "is misinformation that compounds".
+
+  ## Observed 2026-08-24
+
+  Filing STORY-781 in this repo with a downstream consumer in the `aida-hub`
+  store:
+
+  ```
+  $ aida rel add --from STORY-781 --to STORY-21 --type references
+  Added relationship: STORY-781 --[References]--> STORY-21
+  ```
+
+  Intended target: aida-hub's STORY-21, "Read the AIDA-owned per-repo project
+  manifest". Actual target: **this** repo's STORY-21, "Push AIDA Changes to
+  GitLab" — status **rejected**, feature 199-GitLab, unrelated in every respect.
+
+  Caught only because the success line was manually verified against
+  `aida show STORY-21`. An agent trusting the success message would have left
+  the false edge in place.
+
+  Reverted with `aida rel remove`; the cross-repo link is now recorded as prose
+  in both stores' comments instead.
+
+  ## Repro
+
+  1. Two repos, each with its own AIDA store.
+  2. Pick a SPEC-ID that exists in both — trivially likely, since IDs are
+     allocated per-store from low numbers.
+  3. From repo A, `aida rel add --from <local> --to <that ID> --type references`.
+  4. Success is reported. `aida show` reveals it bound to repo A's own spec.
+
+  ## A secondary signal that was available and unused
+
+  The edge ran from an **approved** spec to a **rejected** one. That is
+  suspicious on its face and would have caught this specific instance. Note that
+  `aida rel add --type child` ALREADY guards terminal-status targets (it refuses,
+  with `--force-parent` as the override), so the precedent for a terminal-status
+  check exists — it is simply not applied to other relationship types.
+
+  ## Possible directions (not prescriptive)
+
+  - Warn when an edge targets a spec in a terminal status, mirroring the
+    existing `--type child` guard.
+  - A syntax for cross-store references (`<repo>#<ID>`, or a URI), even if it
+    only stores prose and does not resolve — an explicit unresolvable reference
+    beats a silently wrong one.
+  - Confirm-on-ambiguity when the target's feature/type/status make it an
+    implausible partner for the source.
+
+  The core requirement is only that a cross-store reference must not be able to
+  masquerade as a resolved local edge.
+
+  ## Acceptance
+
+  - [ ] A relationship whose target was meant for another store cannot be
+        created as a silently-wrong local edge.
+  - [ ] Where the tool cannot know the intent, it surfaces the ambiguity rather
+        than resolving it silently.
+  - [ ] Existing single-repo linking behaviour is unchanged; the nonexistent-ID
+        error path (exit 1) still works.
+  - [ ] Whatever is chosen is documented, so agents know how to express a
+        cross-repo reference.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-25T06:32:44.998110510Z
+modified_at: 2026-08-25T06:32:44.998110510Z
+req_type: Bug
+tags:
+- aida:rel
+- data-integrity
+- multi-repo
