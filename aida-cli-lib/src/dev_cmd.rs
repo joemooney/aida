@@ -534,6 +534,43 @@ pub(crate) fn ps1_staleness_token(
     }
 }
 
+/// One-line explanation of the prompt marker `aida dev activate` just installed.
+///
+/// `aida dev activate` puts a marker in the shell prompt and, before this,
+/// never said what it meant. The legend does exist — `aida dev status` prints
+/// it — but nothing connected the glyph in front of you to the command that
+/// explains it, so the first encounter was a guess.
+///
+/// Deliberately NOT a generic legend: it names the marker actually being shown
+/// and the remedy for that one, so the line is actionable rather than a lookup
+/// table. Empty marker returns `None` — a current build has nothing to explain,
+/// and activate must stay quiet in the common case.
+///
+/// Pure so the wording is testable without a repository or a shell.
+// trace:TASK-1180 | ai:claude
+pub(crate) fn activate_marker_hint(marker: &str, other_profile: Option<&str>) -> Option<String> {
+    match marker {
+        "⇄" => {
+            // Only reachable when the OTHER profile matched HEAD, so it is
+            // present; fall back to the bare verb rather than printing
+            // "activate None" if that ever stops holding.
+            let switch = match other_profile {
+                Some(p) => format!("`aida dev activate {p}`"),
+                None => "`aida dev activate`".to_string(),
+            };
+            Some(format!(
+                "prompt marker ⇄ — this build is behind HEAD, but the {} build matches; {} to switch (no rebuild)",
+                other_profile.unwrap_or("other"),
+                switch
+            ))
+        }
+        "↻" => Some(
+            "prompt marker ↻ — no build matches HEAD; `make build-fast` to rebuild".to_string(),
+        ),
+        _ => None,
+    }
+}
+
 fn handle_dev_ps1() -> Result<()> {
     let repo = match std::env::var("AIDA_DEV_REPO") {
         Ok(p) => std::path::PathBuf::from(p),
@@ -668,6 +705,31 @@ fn handle_dev_activate(
         },
         reason_chip,
     );
+    // TASK-1180: say what the prompt marker we are about to install means.
+    // stderr, because stdout is captured and eval'd by the `aida()` wrapper —
+    // which is exactly why the `#` header above never reached anyone.
+    {
+        let other_profile = match profile {
+            "debug" => Some("release"),
+            "release" => Some("debug"),
+            _ => None,
+        };
+        let active_sha = binary_embedded_sha(&bin_dir.join("aida"));
+        let head = current_branch_head_sha_direct(&repo);
+        let other_sha = other_profile
+            .map(|p| repo.join(format!("target/{p}/aida")))
+            .filter(|p| p.exists())
+            .and_then(|p| binary_embedded_sha(&p));
+        let marker = ps1_staleness_token(
+            active_sha.as_deref().unwrap_or(""),
+            head.as_deref(),
+            other_sha.as_deref(),
+        );
+        if let Some(hint) = activate_marker_hint(marker, other_profile) {
+            eprintln!("# {hint}");
+        }
+    }
+
     println!("export AIDA_DEV_REPO='{}'", repo.display());
     println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
     println!("export AIDA_DEV_PROFILE='{}'", profile);

@@ -334,6 +334,78 @@ fn ps1_token_flip_when_other_build_matches_head() {
     );
 }
 
+// ---- TASK-1180: activate explains the marker it just installed ----
+
+#[test]
+fn activate_says_nothing_when_the_build_is_current() {
+    // The common case. Activate is otherwise a quiet command and must not grow
+    // noise for a build that has nothing wrong with it.
+    assert_eq!(
+        crate::dev_cmd::activate_marker_hint("", Some("debug")),
+        None
+    );
+}
+
+#[test]
+fn activate_hint_for_flip_names_the_other_profile_and_the_command() {
+    let h = crate::dev_cmd::activate_marker_hint("⇄", Some("debug")).expect("should hint");
+    assert!(h.contains('⇄'), "must name the marker actually shown: {h}");
+    assert!(
+        h.contains("debug build matches"),
+        "must name the other profile: {h}"
+    );
+    assert!(
+        h.contains("`aida dev activate debug`"),
+        "must give the command: {h}"
+    );
+    assert!(
+        h.contains("no rebuild"),
+        "the point of ⇄ is that a rebuild is unnecessary: {h}"
+    );
+}
+
+#[test]
+fn activate_hint_for_flip_names_release_when_that_is_the_other_profile() {
+    // The alternate profile must never be hardcoded.
+    let h = crate::dev_cmd::activate_marker_hint("⇄", Some("release")).unwrap();
+    assert!(h.contains("release build matches"), "{h}");
+    assert!(h.contains("`aida dev activate release`"), "{h}");
+    assert!(
+        !h.contains("debug"),
+        "must not mention the wrong profile: {h}"
+    );
+}
+
+#[test]
+fn activate_hint_for_rebuild_gives_the_build_command() {
+    let h = crate::dev_cmd::activate_marker_hint("↻", Some("debug")).expect("should hint");
+    assert!(h.contains('↻'), "{h}");
+    assert!(h.contains("no build matches HEAD"), "{h}");
+    assert!(h.contains("make build-fast"), "must give the remedy: {h}");
+    // Nothing to flip to, so it must not offer a switch.
+    assert!(
+        !h.contains("activate debug"),
+        "↻ means neither build is usable: {h}"
+    );
+}
+
+#[test]
+fn a_flip_hint_without_a_known_other_profile_still_reads() {
+    // Not reachable today (⇄ implies the other build matched), but the wording
+    // must not degrade to "activate None" if that ever changes.
+    let h = crate::dev_cmd::activate_marker_hint("⇄", None).unwrap();
+    assert!(!h.contains("None"), "{h}");
+    assert!(h.contains("`aida dev activate`"), "{h}");
+}
+
+#[test]
+fn an_unknown_marker_is_silent_rather_than_guessing() {
+    assert_eq!(
+        crate::dev_cmd::activate_marker_hint("?", Some("debug")),
+        None
+    );
+}
+
 #[test]
 fn ps1_token_rebuild_when_no_build_matches_head() {
     assert_eq!(
