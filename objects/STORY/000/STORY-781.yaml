@@ -34,8 +34,29 @@ description: |-
   ## Proposed shape
 
   - A checked-in manifest, e.g. `.aida/project.toml`, carrying the facts a scan
-    cannot derive: description, why it exists, liveness, lifecycle stage, owner,
-    and any classification the author wants to assert.
+    cannot derive. The field set is grounded in aida-hub's actual `Annotation`
+    struct (`src/store/annotations.rs`), verified 2026-08-24 — it is NOT a
+    speculative wishlist:
+
+    | Field | Meaning | In the checked-in manifest? |
+    | --- | --- | --- |
+    | `description` | what it is | **yes** — shared truth |
+    | `why` | why it exists | **yes** — shared truth |
+    | `classification` | author's assertion, overrides the scanner's guess | **yes** |
+    | `display_name` | replaces the directory name | **yes** |
+    | `liveness` | alive / parked / abandoned | **probably** — see below |
+    | `next` | what I was in the middle of | **no** — personal, machine-local |
+
+    `description` does not exist yet: it arrives with aida-hub STORY-15, which
+    splits it from `why` (the two are currently conflated by a README fallback).
+    The schema must treat them as SEPARATE fields — conflating them here would
+    bake in the exact defect that story exists to remove.
+
+    **The manifest is a SUBSET, not a migration.** `next` is in-progress personal
+    state and should stay machine-local. `liveness` is arguable: a shared "this is
+    abandoned" helps any reader, but "parked" is often a personal posture. Decide
+    this partition explicitly rather than moving every annotation field across by
+    default.
   - `aida init` scaffolds it, pre-filled from what is already knowable
     (directory name, README lead, remote) rather than as an empty form — an
     empty form is how a metadata standard goes stale in a week.
@@ -69,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T06:41:54.900250192Z
+modified_at: 2026-08-25T06:42:21.886721474Z
 req_type: Story
 tags:
 - aida:doctor
