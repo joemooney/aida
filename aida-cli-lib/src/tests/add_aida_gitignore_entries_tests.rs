@@ -22,27 +22,53 @@ fn creates_gitignore_with_both_blocks() {
     );
 }
 
-/// Existing .gitignore that already covers ALL six blocks (store,
-/// runtime, CLAUDE.local.md, rules/aida-specs/, docs/plans/_draft/,
-/// settings.local.json) → no write, returns Ok(false). The third block
-/// (CLAUDE.local.md) was added in commit bf50e7c0 for TASK-572. The fourth
-/// (.claude/rules/aida-specs/) was added by SPIKE-31. The fifth
-/// (docs/plans/_draft/) by TASK-383. The sixth (settings.local.json) by
-// BUG-484.
-// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 trace:BUG-484 | ai:claude
+/// Existing .gitignore that already covers ALL SEVEN blocks (store,
+/// runtime, project-manifest allow-line, CLAUDE.local.md,
+/// rules/aida-specs/, docs/plans/_draft/, settings.local.json) → no write,
+/// returns Ok(false). The third block (CLAUDE.local.md) was added in commit
+/// bf50e7c0 for TASK-572. The fourth (.claude/rules/aida-specs/) by SPIKE-31.
+/// The fifth (docs/plans/_draft/) by TASK-383. The sixth
+/// (settings.local.json) by BUG-484. The seventh (!.aida/project.toml) by
+/// STORY-781 — note it must be its OWN block rather than a line inside the
+/// runtime block, because that block is only written when `.aida/*` is
+/// absent, so an already-initialized project would never receive it.
+// trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 trace:BUG-484
+// trace:STORY-781 | ai:claude
 #[test]
 fn idempotent_when_both_blocks_present() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join(".gitignore");
-    let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
+    let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
     std::fs::write(&path, original).unwrap();
     let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
     assert!(
         !updated,
-        "all six blocks already present → expected no append"
+        "all seven blocks already present → expected no append"
     );
     let content = std::fs::read_to_string(&path).unwrap();
     assert_eq!(content, original);
+}
+
+/// .gitignore lacking only the project-manifest allow-line → that block is
+/// appended. This is the upgrade path for every project initialized before
+/// STORY-781: without it the manifest is silently gitignored and never
+/// reaches a second clone.
+// trace:STORY-781 | ai:claude
+#[test]
+fn appends_project_manifest_allow_line_when_missing() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join(".gitignore");
+    let original = "target/\n.aida-store/\n.aida-store\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
+    std::fs::write(&path, original).unwrap();
+    let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+    assert!(updated, "missing allow-line → expected append");
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(content.contains("!.aida/project.toml"), "{content}");
+    assert_eq!(
+        content.matches(".aida/*").count(),
+        1,
+        "must not re-append the runtime deny block:\n{content}"
+    );
 }
 
 /// .gitignore lacking only the settings.local.json block → that block is
@@ -51,7 +77,7 @@ fn idempotent_when_both_blocks_present() {
 fn appends_settings_local_when_missing() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join(".gitignore");
-    let original = "target/\n.aida-store/\n.aida-store\n.aida/*\n!.aida/config.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n";
+    let original = "target/\n.aida-store/\n.aida-store\n.aida/*\n!.aida/config.toml\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n";
     std::fs::write(&path, original).unwrap();
     let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
     assert!(

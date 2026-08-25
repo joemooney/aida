@@ -90,6 +90,7 @@ pub mod git_ops;
 pub mod graph_walk;
 pub mod import;
 pub mod integrations;
+pub mod project_manifest;
 // trace:TASK-737 | ai:claude
 pub mod lifecycle;
 // Shared /proc process-liveness probe + lease/spec liveness classifiers, lifted

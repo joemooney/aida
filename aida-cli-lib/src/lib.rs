@@ -9030,6 +9030,36 @@ fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Resul
 /// this scaffold, a fresh project's first `release.sh minor` would hit the
 /// missing-file warning path (TASK-126 origin).
 // trace:TASK-126 | ai:claude
+/// Scaffold `.aida/project.toml` — the checked-in statement of what this
+/// project IS — pre-filled from what is already knowable.
+///
+/// Idempotent in the same way the discipline pack and ecosystem-watch
+/// scaffolds are: an existing file is left ALONE unless `force`. That is what
+/// satisfies "`aida init --refresh` must not overwrite human edits" — the
+/// manifest has no canonical master to overlay (unlike skills or memories,
+/// whose refresh contract compares a checksum against an embedded template),
+/// so the honest behaviour is simply never to rewrite it. Returns whether a
+/// file was written.
+///
+/// PRE-FILLED, NEVER A BLANK FORM. Name, description and repository come from
+/// the directory, the README and `origin`, so the file is worth something the
+/// moment it exists even if nobody ever edits it. An empty form is exactly how
+/// a metadata standard goes stale in a week.
+// trace:STORY-781 | ai:claude
+fn ensure_project_manifest_scaffold(root: &std::path::Path, force: bool) -> Result<bool> {
+    use aida_core::project_manifest as pm;
+    let dest = root.join(pm::MANIFEST_REL_PATH);
+    if dest.exists() && !force {
+        return Ok(false);
+    }
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let facts = pm::derive_facts(root);
+    std::fs::write(&dest, pm::render(&facts))?;
+    Ok(true)
+}
+
 fn ensure_ecosystem_watch_scaffold(root: &std::path::Path, force: bool) -> Result<bool> {
     let dir = root.join("docs").join("competitive-analysis");
     let dest = dir.join("ecosystem-watch.md");
@@ -9615,6 +9645,22 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          # any <skill>.local.md file; the whole team should pick them up on\n\
          # `git pull`. See docs/extending-skills.md. trace:STORY-305 | ai:claude\n";
 
+    // trace:STORY-781 | ai:claude — the project manifest is a TRACKED
+    // project-config file under .aida/, so the deny-by-default `.aida/*` rule
+    // needs an explicit allow-line or the manifest is silently gitignored and
+    // never checked in — which would defeat the entire point of a manifest
+    // that travels with the repository.
+    //
+    // This is deliberately a SEPARATE append rather than another line inside
+    // `runtime_entry`: that block is only written when `.aida/*` is absent, so
+    // an already-initialized project would never receive a newly-added
+    // allow-line. Every existing repo needs this on its next `aida init`.
+    let project_manifest_entry =
+        "\n# The AIDA project manifest is checked in: it describes what this\n\
+         # project IS (description, why it exists, liveness, stage, owner) and\n\
+         # is meant to travel with the repository. trace:STORY-781 | ai:claude\n\
+         !.aida/project.toml\n";
+
     // trace:TASK-572 | ai:claude — CLAUDE.local.md is per-machine,
     // gitignored. Pattern mirrors CLAUDE.md but personal notes are
     // never team-shared. Comment block explains the convention so
@@ -9660,9 +9706,10 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
         std::fs::write(
             &gitignore_path,
             format!(
-                "{}{}{}{}{}{}",
+                "{}{}{}{}{}{}{}",
                 store_entry,
                 runtime_entry,
+                project_manifest_entry,
                 claude_local_entry,
                 rules_sync_entry,
                 plans_draft_entry,
@@ -9683,6 +9730,18 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
     }
     if !has_aida_runtime_deny_pattern(&content) {
         file.write_all(runtime_entry.as_bytes())?;
+        wrote = true;
+    }
+    // trace:STORY-781 — same idempotency pattern: match the bare path so an
+    // operator-added variant doesn't produce a duplicate. Appended even when
+    // the runtime block already exists, which is the whole point.
+    if !content.lines().any(|line| {
+        line.trim()
+            .trim_start_matches('!')
+            .trim_end_matches('/')
+            .ends_with(".aida/project.toml")
+    }) {
+        file.write_all(project_manifest_entry.as_bytes())?;
         wrote = true;
     }
     // trace:TASK-572 | ai:claude — only append if not already covered.
@@ -18051,6 +18110,9 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "agent-worktrees"
         | "worktree-gc"
         | "agent-worktree-gc" => "merged-agent-worktrees",
+        // STORY-781: the checked-in `.aida/project.toml`. trace:STORY-781
+        "project-manifest" | "project-manifests" | "manifest" | "manifests"
+        | "project-metadata" => "project-manifest",
         "stale-reviewer" | "stale-reviewer-lease" | "stale-reviewer-leases" => {
             "stale-reviewer-leases"
         }
@@ -76455,6 +76517,10 @@ fn truncate_str(s: &str, max: usize) -> String {
 #[cfg(test)]
 #[path = "tests/story_255_discipline_pack_tests.rs"]
 mod story_255_discipline_pack_tests;
+
+#[cfg(test)]
+#[path = "tests/story_781_project_manifest_tests.rs"]
+mod story_781_project_manifest_tests;
 
 /// STORY-127: unit tests for the Scope-B runtime anti-pattern detector
 /// predicates. Each predicate is pure over its inputs so the warning
