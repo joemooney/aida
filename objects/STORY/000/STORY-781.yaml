@@ -69,7 +69,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T06:31:07.955219460Z
+modified_at: 2026-08-25T06:31:13.918936580Z
 req_type: Story
 tags:
 - aida:doctor
@@ -81,3 +81,10 @@ relationships:
   target_id: 01a03035-b0ab-7eb0-8282-3b440fe932f8
   created_at: 2026-08-25T06:30:51.139152191Z
   created_by: joe
+comments:
+- id: 01a0379d-a6fe-7373-819b-6207974f5a8d
+  author: joe
+  content: 'Downstream consumer is aida-hub STORY-21 (''Read the AIDA-owned per-repo project manifest''), which is blocked on this spec. CROSS-REPO: that spec lives in the aida-hub store, not this one. A graph edge is NOT possible — spec IDs are per-store, and ''aida rel add --to STORY-21'' from here silently binds to this repo''s own rejected STORY-21 (Push AIDA Changes to GitLab). Keep the link as prose in both descriptions.'
+  created_at: 2026-08-25T06:31:13.918936580Z
+  modified_at: 2026-08-25T06:31:13.918936580Z
+  session_id: ad63fa6f-6858-4163-aa31-d1a8d392e121
