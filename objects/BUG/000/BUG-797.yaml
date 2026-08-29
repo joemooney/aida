@@ -48,7 +48,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T21:12:49.445860917Z
-modified_at: 2026-08-29T21:13:44.328910294Z
+modified_at: 2026-08-29T21:14:54.296073616Z
 req_type: Bug
 tags:
 - codex drain reviewer prompt-parity
@@ -56,3 +56,10 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T21:12:54.230096141Z
+comments:
+- id: 01a04f60-1dd8-7953-92eb-0cc443a2beab
+  author: joe
+  content: 'HANDSHAKE-ARTIFACT SWEEP (acceptance item): checked every .aida/ path mandated in the skill masters against the command bodies the codex pack renders from. Result: CLEAN — the verdict file was the unique case. .aida/punts.jsonl and .aida/agent-briefs/ are written by CLI verbs (aida punt / brief commands), portable by definition; .aida/review/*.txt and .aida/complexity-calibration/ are working-notes or fields inside the verdict file itself, not separately-polled artifacts; .aida/sessions|salvage|fleet-watch are runtime state owned by the binary. The class was ''artifact the MODEL hand-writes that the orchestrator polls'' — population: 1, fixed here.'
+  created_at: 2026-08-29T21:14:54.296073616Z
+  modified_at: 2026-08-29T21:14:54.296073616Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
