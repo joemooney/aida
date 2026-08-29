@@ -39541,5 +39541,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3653
+- id: 01a04eec-0c73-77f2-b086-67ca3653bc67
+  target_id: 01a04eec-078f-7b33-af61-4bf16edd9fc3
+  author: aida
+  node_id: '1'
+  lamport: 3654
+  timestamp: 2026-08-29T19:08:07.667803566Z
+  kind: !Create
+    title: SPEC-ID leaks into the --no-human acknowledgement warning text
+    description: |-
+      Found during the STORY-762 claude-less validation run (2026-07-07), recorded as a papercut, never
+      filed on its own.
+
+      The `--no-human` acknowledgement warning text leaks a trace SPEC-ID into user-facing output. That
+      violates the rule in docs/user-facing-text-conventions.md: SPEC-IDs are breadcrumbs for someone
+      holding the requirement graph; to a user they are opaque noise. They belong in commits, code
+      comments, plans and spec text -- not in CLI stdout/stderr, banners, hints or --help.
+
+      Small, but worth fixing precisely because it is the class of leak the pre-commit hook cannot catch:
+      the hook guards `///` doc comments (which clap pulls into --help), not runtime message strings.
+
+      ACCEPTANCE:
+      - [ ] The no-human ack warning carries no SPEC-ID.
+      - [ ] The trace marker stays in the source as a plain `//` comment so provenance is not lost.
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3654
 node_id: '1'
