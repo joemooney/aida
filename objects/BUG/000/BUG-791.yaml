@@ -1,0 +1,31 @@
+id: 01a04eeb-eee5-7151-87b7-d53b97bf318d
+spec_id: BUG-791
+agreed_id: BUG-791
+title: session end --force still prompts on a non-TTY, blocking headless lease cleanup
+description: |-
+  Found during the STORY-762 claude-less validation run (2026-07-07) and recorded there as a papercut,
+  never filed on its own.
+
+  `aida session end --force` still prompts `Continue? [y/N]` on a non-TTY. Headless lease cleanup is
+  therefore blocked unless the caller pipes `y`, which no headless orchestrator phase does. The
+  practical effect on a codex-mandated machine is stranded leases after headless drains -- exactly the
+  state `aida session reap` and the liveness surfaces then have to clean up after.
+
+  `--force` on a non-interactive stream should not need a second confirmation: the flag IS the
+  confirmation, and there is nobody there to answer. Compare the established pattern elsewhere in the
+  CLI, where a non-TTY plus an explicit flag proceeds and a non-TTY WITHOUT the flag refuses.
+
+  ACCEPTANCE:
+  - [ ] `aida session end --force` with stdin not a TTY completes without prompting.
+  - [ ] Interactive `--force` behaviour is unchanged (or deliberately reconsidered, not accidentally).
+  - [ ] Without `--force` on a non-TTY, the command still refuses rather than silently proceeding --
+        the fix must not turn a guard into a footgun.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:08:00.101996416Z
+modified_at: 2026-08-29T19:08:00.101996416Z
+req_type: Bug
+tags:
+- codex headless papercut
