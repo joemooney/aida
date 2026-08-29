@@ -48,7 +48,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T21:12:49.445860917Z
-modified_at: 2026-08-29T23:11:00.267821967Z
+modified_at: 2026-08-29T23:37:23.779872421Z
 req_type: Bug
 tags:
 - codex drain reviewer prompt-parity
@@ -62,6 +62,12 @@ comments:
   content: 'HANDSHAKE-ARTIFACT SWEEP (acceptance item): checked every .aida/ path mandated in the skill masters against the command bodies the codex pack renders from. Result: CLEAN — the verdict file was the unique case. .aida/punts.jsonl and .aida/agent-briefs/ are written by CLI verbs (aida punt / brief commands), portable by definition; .aida/review/*.txt and .aida/complexity-calibration/ are working-notes or fields inside the verdict file itself, not separately-polled artifacts; .aida/sessions|salvage|fleet-watch are runtime state owned by the binary. The class was ''artifact the MODEL hand-writes that the orchestrator polls'' — population: 1, fixed here.'
   created_at: 2026-08-29T21:14:54.296073616Z
   modified_at: 2026-08-29T21:14:54.296073616Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04fe2-9243-7da0-88c8-e4e660e5ccd6
+  author: joe
+  content: 'Follow-up: the prompt-content fix here is necessary but NOT sufficient — the second drive shelved identically because codex exec never expands /aida-review at all; the model got the literal slash string. Launch-boundary inline rendering is BUG-798. This spec''s E2E acceptance transfers there.'
+  created_at: 2026-08-29T23:37:23.779872421Z
+  modified_at: 2026-08-29T23:37:23.779872421Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a04fca-68a5-73f1-9ed9-3d75f70dccb5
