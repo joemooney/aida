@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T21:03:45.157603203Z
-modified_at: 2026-08-29T21:12:29.168738619Z
+modified_at: 2026-08-29T21:13:09.320298951Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,4 +35,10 @@ comments:
   content: Review completed substantively (request-changes; P1 recorded on BUG-790) but the session wrote no verdict file — the codex /aida-review prompt lacks the .aida/review-verdicts/PR-N.json handshake step. See BUG-796.
   created_at: 2026-08-29T21:12:29.168738619Z
   modified_at: 2026-08-29T21:12:29.168738619Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04f5e-83c8-7e92-8641-626ca96f8eda
+  author: joe
+  content: 'Correction: the verdict-file parity bug is BUG-797 (not 796).'
+  created_at: 2026-08-29T21:13:09.320298951Z
+  modified_at: 2026-08-29T21:13:09.320298951Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
