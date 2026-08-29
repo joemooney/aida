@@ -69,3 +69,7 @@ feature: Uncategorized
 created_at: 2026-08-29T19:09:08.522810131Z
 modified_at: 2026-08-29T19:09:08.522810131Z
 req_type: Decision
+relationships:
+- rel_type: Child
+  target_id: 01a04eec-7fa5-7a61-b99f-69d0bc137b69
+  created_at: 2026-08-29T19:09:10.548499662Z
