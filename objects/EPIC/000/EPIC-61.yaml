@@ -1,0 +1,63 @@
+id: 01a04eec-7fa5-7a61-b99f-69d0bc137b69
+spec_id: EPIC-61
+agreed_id: EPIC-61
+title: AI-lift measurement over the commit corpus that already exists
+description: |
+  An organization needs evidence about whether AI assistance is helping. The
+  usual answer is a 6-12 month instrumentation program that produces a number
+  nobody trusts.
+
+  AIDA is in an unusual position: **the evidence already exists**, as a byproduct
+  of a traceability convention rather than a measurement program. Measured in
+  this repository on 2026-08-29:
+
+  | Asset | State | Source |
+  | --- | --- | --- |
+  | AI authorship per commit | **1927 of 2696 commits (71.5%)** | `[AI:tool]` commit trailer |
+  | Tool attribution | 4 tools, incl. multi-tool (`codex+claude`) | same |
+  | Spec cycle time | `created_at` / `modified_at` / `history` | `.aida-store/objects/*.yaml` |
+  | Rework linkage | BUG specs `Reference` the spec they follow | store relationships |
+  | Human CLI usage | 1685 invocations, 32 command shapes | `~/.aida/usage.jsonl` |
+
+  The dataset is credible PRECISELY BECAUSE nobody was scoring it. That is the
+  asset, and ADR (see child) exists to keep it that way.
+
+  ## The gap this epic closes
+
+  `aida metrics agent-lift` already exists and is framed as "proving coordination
+  value" — but it reads `~/.aida/auto-complete.jsonl` (the autonomous-drain log)
+  and returns zeros where no drains have run. The 1927-commit corpus is **not
+  read by the reporting layer built to report on it**.
+
+  This epic adds a reader over data that is already collected. No new
+  instrumentation, no daemon, no behavior change, no network.
+
+  ## What this epic does NOT do
+
+  It does not compute a currency figure. Reporting flow and quality and letting
+  finance apply its own cost model is defensible; volunteering "$X saved" is
+  where these programs lose credibility.
+
+  It does not lead with "% of code written by AI". That is a COST proxy dressed
+  as a VALUE proxy, is trivially gameable, and invites "so cut headcount by 71%?"
+  — a question this data cannot answer.
+
+  ## The portable unit is the convention, not the toolchain
+
+  The data exists wherever the COMMIT TRAILER is followed. A team can adopt
+  `[AI:tool] type(scope): description (REQ-ID)` in an afternoon with a commit-msg
+  hook, get an immediate traceability benefit, and have the metrics fall out
+  later for free. That — not AIDA adoption, not aida-hub adoption — is the
+  low-cost, low-risk entry point, and the docs should say so plainly.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:08:37.157188032Z
+modified_at: 2026-08-29T19:08:37.157188032Z
+req_type: Epic
+tags:
+- adoption
+- ai-lift
+- aida:metrics
+- reporting
