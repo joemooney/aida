@@ -46772,6 +46772,89 @@ fn resolve_spec_from_markdown(root: &std::path::Path, id: &str) -> Option<Resolv
     None
 }
 
+/// STORY-785: what `git blame` knows about the last commit to touch a line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BlameOrigin {
+    short_sha: String,
+    /// Committer date, `YYYY-MM-DD`.
+    date: String,
+    subject: String,
+    /// Full message, for trailer/trace extraction.
+    message: String,
+}
+
+/// STORY-785: extract SPEC-IDs from a commit message — the `(ABC-123)` trailer
+/// form the commit convention requires, plus `trace:ABC-123` markers in the
+/// body. Uppercase-id-with-digits only, so a lowercase `(scope)` and a
+/// `(#123)` PR suffix can never false-positive. Pure, so the scope-vs-id
+/// boundary is unit-testable.
+// trace:STORY-785 | ai:claude
+fn spec_ids_from_commit_message(msg: &str) -> Vec<String> {
+    let re_trailer = regex::Regex::new(r"\(([A-Z]{2,}-[0-9][0-9-]*)\)").expect("valid regex");
+    let re_trace = regex::Regex::new(r"trace:([A-Za-z]{2,}-[0-9][0-9-]*)").expect("valid regex");
+    let mut ids: Vec<String> = Vec::new();
+    for c in re_trailer.captures_iter(msg) {
+        let id = c[1].to_ascii_uppercase();
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    for c in re_trace.captures_iter(msg) {
+        let id = c[1].to_ascii_uppercase();
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    ids
+}
+
+/// STORY-785: blame one line and return its last-touch commit.
+///
+/// `cwd` is where git runs (the directory the user invoked from, so relative
+/// paths resolve exactly as the `fs::read` that preceded this did). Returns
+/// `None` for an uncommitted line (all-zero sha), a file outside a repo, or
+/// any git error — every miss falls back to the existing "not linked yet"
+/// message, so this can only ever ADD answers, never new failure modes.
+// trace:STORY-785 | ai:claude
+fn blame_line_origin(cwd: &std::path::Path, path_str: &str, line: usize) -> Option<BlameOrigin> {
+    let out = std::process::Command::new("git")
+        .current_dir(cwd)
+        .args([
+            "blame",
+            "-L",
+            &format!("{line},{line}"),
+            "--porcelain",
+            "--",
+            path_str,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let sha = text.split_whitespace().next()?.to_string();
+    if sha.is_empty() || sha.bytes().all(|b| b == b'0') {
+        return None; // uncommitted line
+    }
+    let show = std::process::Command::new("git")
+        .current_dir(cwd)
+        .args(["show", "-s", "--format=%h%x00%cs%x00%s%x00%B", &sha])
+        .output()
+        .ok()?;
+    if !show.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&show.stdout);
+    let mut parts = s.splitn(4, '\0');
+    Some(BlameOrigin {
+        short_sha: parts.next()?.trim().to_string(),
+        date: parts.next()?.trim().to_string(),
+        subject: parts.next()?.trim().to_string(),
+        message: parts.next().unwrap_or("").to_string(),
+    })
+}
+
 /// STORY-754: `aida why <file>[:<line>]` — answer "why does this CODE exist?"
 /// from the nearest `trace:SPEC-ID` comment, resolved to the spec's intent.
 /// AIDA's one genuine edge over a plain LLM wiki: code↔decision linkage, felt
@@ -46813,6 +46896,27 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
                 let id = c[1].to_ascii_uppercase();
                 if !ids.contains(&id) {
                     ids.push(id);
+                }
+            }
+        }
+    }
+
+    // STORY-785: no trace comment at/above the line — fall back to git blame.
+    // The last commit to touch the line carries the `(SPEC-ID)` trailer the
+    // commit convention requires, so the repository usually knows the answer
+    // even where nobody wrote an annotation. Trace comments stay authoritative
+    // when present: this runs ONLY on a miss, and the provenance difference
+    // (intentional statement vs circumstantial last-touch) is surfaced in both
+    // output shapes rather than blended away.
+    let mut via_blame: Option<BlameOrigin> = None;
+    if ids.is_empty() {
+        if let (Some(ln), Ok(cwd)) = (line_no, std::env::current_dir()) {
+            if let Some(origin) = blame_line_origin(&cwd, path_str, ln) {
+                let blame_ids = spec_ids_from_commit_message(&origin.message);
+                if !blame_ids.is_empty() {
+                    ids = blame_ids;
+                    anchor = Some(ln);
+                    via_blame = Some(origin);
                 }
             }
         }
@@ -46894,6 +46998,12 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "file": path_str, "line": anchor, "traces": traces,
+                // STORY-785: how the ids were found — an intentional trace
+                // comment, or the line's last-touch commit.
+                "resolved_via": if via_blame.is_some() { "blame" } else { "trace" },
+                "commit": via_blame.as_ref().map(|o| serde_json::json!({
+                    "sha": o.short_sha, "date": o.date, "subject": o.subject,
+                })),
             }))?
         );
         return Ok(());
@@ -46906,6 +47016,22 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
         loc.bold()
     );
     println!();
+    // STORY-785: blame provenance is circumstantial, not an intentional trace
+    // comment — say so, and name the commit, so the reader can judge it.
+    if let Some(o) = &via_blame {
+        println!(
+            "  {} commit {} {} — {}",
+            "via".dimmed(),
+            o.short_sha.yellow(),
+            format!("({})", o.date).dimmed(),
+            o.subject.dimmed()
+        );
+        println!(
+            "  {}",
+            "no trace comment here; answered from the last commit to touch this line".dimmed()
+        );
+        println!();
+    }
     for id in &ids {
         match resolve(id) {
             Some(it) => {
