@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:06.415843028Z
-modified_at: 2026-08-29T19:08:06.415843028Z
+modified_at: 2026-08-29T19:56:23.354806993Z
 req_type: Bug
 tags:
 - codex papercut user-facing-text
@@ -30,3 +30,10 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T19:08:08.580134648Z
+comments:
+- id: 01a04f18-3bba-7ea0-a403-cf22cb39137e
+  author: joe
+  content: 'DUPLICATE of BUG-703 (completed): the SPEC-ID was already removed from the no-human ack warning (the code now carries a comment citing BUG-703 at the exact site). Same stale-runbook filing error as BUG-791.'
+  created_at: 2026-08-29T19:56:23.354806993Z
+  modified_at: 2026-08-29T19:56:23.354806993Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
