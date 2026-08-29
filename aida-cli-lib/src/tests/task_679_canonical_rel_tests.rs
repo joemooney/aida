@@ -1,4 +1,7 @@
-use super::{effective_display_status, is_terminal_status, rel_should_write_inverse};
+use super::{
+    effective_display_status, is_terminal_status, parse_cross_store_spec_ref,
+    rel_add_terminal_target_warning, rel_should_write_inverse,
+};
 use aida_core::models::{
     RelationshipType, Requirement, RequirementStatus, RequirementType, RequirementsStore,
 };
@@ -79,6 +82,38 @@ fn rel_add_dedups_repeated_edges() {
         .filter(|r| r.rel_type == RelationshipType::Parent && r.target_id == cid)
         .count();
     assert_eq!(count, 1, "only one Parent edge after a repeat");
+}
+
+#[test]
+fn explicit_cross_store_spec_refs_are_detected() {
+    assert_eq!(
+        parse_cross_store_spec_ref("aida-hub#STORY-21"),
+        Some(("aida-hub", "STORY-21"))
+    );
+    assert_eq!(
+        parse_cross_store_spec_ref(" sibling/repo # TASK-12-4 "),
+        Some(("sibling/repo", "TASK-12-4"))
+    );
+    assert_eq!(parse_cross_store_spec_ref("STORY-21"), None);
+    assert_eq!(parse_cross_store_spec_ref("aida-hub#story-21"), None);
+    assert_eq!(parse_cross_store_spec_ref("aida-hub#not-a-spec"), None);
+    assert_eq!(parse_cross_store_spec_ref("#STORY-21"), None);
+}
+
+#[test]
+fn rel_add_warns_when_target_resolves_to_terminal_local_spec() {
+    let mut target = Requirement::new("Push AIDA Changes to GitLab".into(), "desc".into());
+    target.spec_id = Some("STORY-21".into());
+    target.status = RequirementStatus::Rejected;
+
+    let warning = rel_add_terminal_target_warning("STORY-781", "STORY-21", &target)
+        .expect("terminal targets should warn");
+    assert!(warning.contains("target STORY-21 resolved in this local AIDA store"));
+    assert!(warning.contains("STORY-21 (Rejected) \"Push AIDA Changes to GitLab\""));
+    assert!(warning.contains("Cross-store reference: <repo>#STORY-21"));
+
+    target.status = RequirementStatus::Approved;
+    assert!(rel_add_terminal_target_warning("STORY-781", "STORY-21", &target).is_none());
 }
 
 // BUG-628: the rel-add completed-parent guard must read the EFFECTIVE

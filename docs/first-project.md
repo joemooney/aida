@@ -174,6 +174,16 @@ small and typed: `parent`, `child`, `references`, `duplicate`, `verifies`,
 `verified-by`. BUG-1 `references` STORY-3 because the empty-file crash lives in
 the persistence story's code.
 
+`aida rel add` creates local graph edges only. For a spec in another AIDA store,
+record an explicit prose pointer instead:
+
+```
+$ aida comment add BUG-1 "Cross-store reference: sibling-repo#STORY-21"
+```
+
+That keeps the local graph from silently binding `STORY-21` to an unrelated
+requirement if both stores happen to use the same ID. <!-- trace:BUG-790 -->
+
 ---
 
 ## Step 4 — See the graph

@@ -4959,6 +4959,25 @@ pub(crate) fn handle_git_backend_command(
                 .as_deref()
                 .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
+
+            // BUG-790: relationship edges are UUID-local to this store. Treat an
+            // explicit `repo#SPEC-ID` as a foreign reference and refuse before
+            // local lookup can bind a colliding SPEC-ID to the wrong node.
+            // trace:BUG-790 | ai:codex
+            if let Some((repo, spec)) = parse_cross_store_spec_ref(to) {
+                anyhow::bail!(
+                    "`aida rel add` cannot create cross-store relationship edges ({repo}#{spec}). \
+                     Record the foreign reference as prose instead, e.g. \
+                     `aida comment add {from} \"Cross-store reference: {repo}#{spec}\"`."
+                );
+            }
+            if let Some((repo, spec)) = parse_cross_store_spec_ref(from) {
+                anyhow::bail!(
+                    "`aida rel add` cannot use a foreign source requirement ({repo}#{spec}). \
+                     Run the command in that store, or record the foreign reference as prose."
+                );
+            }
+
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
                 .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
@@ -4966,6 +4985,10 @@ pub(crate) fn handle_git_backend_command(
             let to_req = backend
                 .get_requirement_by_spec_id(to)?
                 .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
+
+            if let Some(warning) = rel_add_terminal_target_warning(from, to, &to_req) {
+                eprintln!("{}", warning.yellow().bold());
+            }
 
             let rel_type = match r#type.to_lowercase().as_str() {
                 "parent" => RelationshipType::Parent,

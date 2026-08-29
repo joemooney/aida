@@ -81,6 +81,23 @@ fn add_relationship(
     // Load requirements
     let mut store = storage.load()?;
 
+    // BUG-790: legacy relationships are local UUID edges too; reject explicit
+    // foreign references before a colliding local SPEC-ID can be resolved.
+    // trace:BUG-790 | ai:codex
+    if let Some((repo, spec)) = parse_cross_store_spec_ref(to_str) {
+        anyhow::bail!(
+            "`aida rel add` cannot create cross-store relationship edges ({repo}#{spec}). \
+             Record the foreign reference as prose instead, e.g. \
+             `aida comment add {from_str} \"Cross-store reference: {repo}#{spec}\"`."
+        );
+    }
+    if let Some((repo, spec)) = parse_cross_store_spec_ref(from_str) {
+        anyhow::bail!(
+            "`aida rel add` cannot use a foreign source requirement ({repo}#{spec}). \
+             Run the command in that store, or record the foreign reference as prose."
+        );
+    }
+
     // Parse source and target IDs
     let from_id = parse_requirement_id(from_str, &store)?;
     let to_id = parse_requirement_id(to_str, &store)?;
@@ -103,6 +120,10 @@ fn add_relationship(
     let from_title = from_req.title.clone();
     let to_spec = to_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
     let to_title = to_req.title.clone();
+
+    if let Some(warning) = rel_add_terminal_target_warning(from_str, to_str, to_req) {
+        eprintln!("{}", warning.yellow().bold());
+    }
 
     // BUG-64: terminal-status guard on the parent end of a parent/child
     // edge. Same logic as the git-canonical path. trace:BUG-64 | ai:claude

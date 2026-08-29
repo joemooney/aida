@@ -197,6 +197,9 @@ aida comment add TASK-1 "Needs OAuth2 support"
 # Add a relationship
 aida rel add --from TASK-2 --to TASK-1 --type references
 
+# Cross-store spec references are prose, not local graph edges
+aida comment add TASK-2 "Cross-store reference: sibling-repo#STORY-21"
+
 # Delete
 aida del TASK-3 --yes
 ```
@@ -285,6 +288,7 @@ aida github labels --create-missing
 | `aida search "keyword"` | Cache-backed FTS5 search |
 | `aida comment add FR-1-001 "..."` | Add a comment (content is positional) |
 | `aida rel add --from FR-1-002 --to FR-1-001 --type references` | Add relationship |
+| `aida comment add FR-1-002 "Cross-store reference: repo#FR-9"` | Record a foreign-store spec reference |
 | `aida del FR-1-001 --yes` | Delete a requirement |
 | `aida cache status` | Compare cache HEAD vs git HEAD |
 | `aida cache rebuild` | Force-rebuild cache from git store |

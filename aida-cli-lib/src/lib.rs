@@ -60799,6 +60799,63 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
+// BUG-790: `aida rel add` resolves IDs only inside the current store. An
+// explicit cross-store spelling must not fall through to local lookup, where a
+// colliding local SPEC-ID can create a false edge. Keep this pure so both the
+// CLI guard and the documentation examples stay testable without a store.
+// trace:BUG-790 | ai:codex
+fn parse_cross_store_spec_ref(raw: &str) -> Option<(&str, &str)> {
+    let (repo, spec) = raw.trim().split_once('#')?;
+    let repo = repo.trim();
+    let spec = spec.trim();
+    if repo.is_empty() || spec.is_empty() || !looks_like_spec_id_token(spec) {
+        return None;
+    }
+    Some((repo, spec))
+}
+
+// AIDA spec IDs are `TYPE-N` or `TYPE-NODE-N`, where TYPE is uppercase ASCII
+// letters in canonical stores. This intentionally stays narrower than every
+// historical free-form identifier so the cross-store guard only fires on an
+// explicit foreign-spec spelling, not arbitrary `#` text. trace:BUG-790
+fn looks_like_spec_id_token(spec: &str) -> bool {
+    let mut parts = spec.split('-');
+    let Some(prefix) = parts.next() else {
+        return false;
+    };
+    if prefix.len() < 2 || !prefix.bytes().all(|b| b.is_ascii_uppercase()) {
+        return false;
+    }
+    let nums: Vec<&str> = parts.collect();
+    if !(nums.len() == 1 || nums.len() == 2) {
+        return false;
+    }
+    nums.iter()
+        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+}
+
+// BUG-790: terminal targets are the cheap ambiguity signal that would have
+// exposed the original cross-store collision. This is a warning, not a hard
+// block, because single-repo back-links to closed specs are legitimate; the
+// important invariant is that a suspicious local resolution is no longer
+// silent. trace:BUG-790 | ai:codex
+fn rel_add_terminal_target_warning(
+    from_arg: &str,
+    to_arg: &str,
+    target: &aida_core::models::Requirement,
+) -> Option<String> {
+    if !is_terminal_status(&target.status) {
+        return None;
+    }
+    let target_id = target.spec_id.as_deref().unwrap_or(to_arg);
+    Some(format!(
+        "warning: target {to_arg} resolved in this local AIDA store as {target_id} ({}) \"{}\". \
+         If you meant a spec from another store, do not use `aida rel add`; record it as prose, \
+         for example: `aida comment add {from_arg} \"Cross-store reference: <repo>#{to_arg}\"`.",
+        target.status, target.title
+    ))
+}
+
 // TASK-928 (SPIKE-71 source-side fix): a `parent:<SPEC-ID>` tag must
 // materialize the REAL bidirectional parent/child edge, not just sit on the
 // spec as an opaque string. The canonical `--parent` flag already writes the
