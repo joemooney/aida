@@ -1,0 +1,56 @@
+id: 01a04eeb-5496-7a43-8318-491ee2ce16e6
+spec_id: TASK-1181
+agreed_id: TASK-1181
+title: 'Port AIDA''s hooks to Codex: scaffold .codex/hooks.json and make the handlers vendor-neutral'
+description: |-
+  AIDA wires seven Claude Code hook events and scaffolds NOTHING equivalent for Codex, so a
+  codex-mandated machine silently loses the ambient layer that makes the substrate feel alive.
+
+  VERIFIED 2026-08-29 (not taken from the inventory on trust):
+    - `codex features list` reports `hooks  stable  true` -- on by default
+    - Codex hook config lives at project `.codex/hooks.json` (also `~/.codex/hooks.json`,
+      `config.toml` variants), same matcher/hooks/hookSpecificOutput/permissionDecision shape
+    - Codex covers all seven events AIDA uses: PreToolUse, PostToolUse, SessionStart,
+      UserPromptSubmit, Stop, SubagentStart, SubagentStop
+    - handler type `command` is supported, which is the only type AIDA uses
+    - `.codex/` does not exist in this repo; no codex hook scaffolding exists anywhere in the tree
+
+  WHAT IS LOST TODAY ON CODEX: the per-turn "Awaiting you" mail notice, the advisor code guard,
+  session and role context at SessionStart, git guardrails, commit-format validation at PreToolUse,
+  commit tracking at PostToolUse, subagent start/stop accounting, and the Stop-event capture nudge.
+  Git hooks (commit-msg, pre-commit, prepare-commit-msg) are NOT affected -- they are git-level and
+  vendor-independent, so commit-format and trace-marker enforcement keep working.
+
+  APPROACH -- ONE SET OF SCRIPTS, TWO WIRINGS. Do NOT fork the hook scripts per vendor. An audit of
+  all 14 shipped hooks found 8 already vendor-neutral and the rest shallowly coupled:
+    - `CLAUDE_PROJECT_DIR` in 4 scripts -> add a fallback chain; `aida-mail-notice.sh` already has one
+      (`${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-$PWD}}`), so follow that established shape
+    - `aida-advisor-code-guard.sh` has a path allowlist containing `*/.claude/*` -> must also allow
+      `*/.codex/*`, or the guard fires on the agent's own config directory
+    - `aida-git-guardrails.sh` and the guard's other `.claude` references are COMMENTS only
+  Forking would double every future hook fix and guarantee drift; the refresh mechanism (TASK-1170)
+  already delivers one embedded master to several destinations, which is the pattern to reuse.
+
+  ONE HOOK CANNOT PORT: `aida-capture-prompt.sh` reads Claude's transcript at
+  `~/.claude/projects/<encoded>/<session>.jsonl`. Codex keeps its session state elsewhere entirely
+  (`~/.codex/history.jsonl`, `logs_*.sqlite`). It must DEGRADE SILENTLY on Codex -- no error, no
+  noise -- and a Codex-native capture nudge is a separate question, not this task.
+
+  ACCEPTANCE:
+  - [ ] `aida init` scaffolds `.codex/hooks.json` wiring the same events to the same handlers.
+  - [ ] Hook scripts resolve the project root without depending on a Claude-only variable, and keep
+        working unchanged under Claude.
+  - [ ] The advisor code guard treats `.codex/` exactly as it treats `.claude/`.
+  - [ ] `aida-capture-prompt.sh` exits cleanly when no Claude transcript exists.
+  - [ ] `aida scaffold refresh` covers the codex hook pack, edit-preserving, per TASK-1170.
+  - [ ] `.codex/hooks.json` is TRACKED -- it is team-shared config, not per-clone runtime state.
+  - [ ] A project with no `.codex/` keeps working identically; nothing regresses for Claude users.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:07:20.598452738Z
+modified_at: 2026-08-29T19:07:20.598452738Z
+req_type: Task
+tags:
+- codex aida:init hooks
