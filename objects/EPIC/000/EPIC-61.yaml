@@ -54,7 +54,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:37.157188032Z
-modified_at: 2026-08-29T19:08:37.157188032Z
+modified_at: 2026-08-29T19:10:31.399339836Z
 req_type: Epic
 tags:
 - adoption
@@ -74,3 +74,10 @@ relationships:
 - rel_type: Parent
   target_id: 01a04eed-a96a-79d3-92ed-6b750ff558ea
   created_at: 2026-08-29T19:09:55.435445708Z
+comments:
+- id: 01a04eee-3de7-7e53-98fb-f6034cd88027
+  author: joe
+  content: 'Downstream: aida-hub carries a cross-repo rollup story, filed as DRAFT and deliberately gated on this epic proving useful first. CROSS-REPO — it lives in the aida-hub store; no graph edge possible (BUG-790).'
+  created_at: 2026-08-29T19:10:31.399339836Z
+  modified_at: 2026-08-29T19:10:31.399339836Z
+  session_id: ad63fa6f-6858-4163-aa31-d1a8d392e121
