@@ -1,0 +1,42 @@
+id: 01a04eeb-7263-7113-84b1-f577a9bc63d6
+spec_id: TASK-1182
+agreed_id: TASK-1182
+title: Execute the codex validation runbook on the real codex-mandated work machine
+description: |-
+  STORY-762 closed with an explicit, honest ceiling:
+
+    "REMAINING for full acceptance: repeat on the real work machine."
+    "The genuine codex-mandated work machine is not reachable from the dev host, so simulation is the
+     acceptance ceiling here."
+
+  As of 2026-08-29 that machine is available and is now the operator's daily driver. This is the
+  single highest-value item in the epic and it is the ONE thing that cannot be done from the dev host:
+  the work machine has a different Codex version, sandbox policy, auth mode, network posture and
+  possibly enterprise-managed hook trust (`requirements.toml` [hooks], which bypasses the `/hooks`
+  trust prompt). Every other item in this epic is inference until this run happens.
+
+  SETUP:
+    1. `~/.aida/agents.toml` -> [agents] vendor = "codex"
+    2. `aida init` in a real project
+    3. work as normal for a day
+
+  WHAT TO CAPTURE -- friction, not just failures. The previous run's most valuable output was its
+  friction list (non-TTY prompts, role authority, ack env vars), none of which were crashes:
+    - anything that errors, prompts unexpectedly, or hangs
+    - anything that silently does nothing where Claude would have acted
+    - whether the MCP server is discoverable (the previous run's live probe FAILED to find the project
+      `.codex/config.toml` mcp_servers registration; the CLI-as-primary-surface mitigation held)
+    - whether enterprise hook trust blocks the scaffolded hooks
+    - whether the sandbox policy permits the launches AIDA makes
+
+  Attach results as a comment here, and file anything that cannot degrade gracefully as its own bug
+  rather than leaving it as prose. That is how the last run produced BUG-704/705/706.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:07:28.227419728Z
+modified_at: 2026-08-29T19:07:28.227419728Z
+req_type: Task
+tags:
+- codex validation operator-action
