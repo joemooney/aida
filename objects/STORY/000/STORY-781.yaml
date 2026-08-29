@@ -90,7 +90,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-29T19:54:13.097153073Z
+modified_at: 2026-08-29T19:55:20.989922574Z
 req_type: Story
 tags:
 - aida:doctor
@@ -203,6 +203,12 @@ comments:
     `ensure_project_manifest_scaffold` rather than writing its own copy.
   created_at: 2026-08-25T07:04:00.863427712Z
   modified_at: 2026-08-25T07:04:00.863427712Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04f17-481d-7b93-928b-bfea48079d28
+  author: joe
+  content: 'PROCESS NOTE (2026-08-29): the ''open a PR; do not merge'' instruction was bypassed by accident. The TASK-1181 branch was cut while HEAD was still on story-781-project-manifest, so PR #1607''s squash carried this spec''s full diff onto main and the trailer auto-bumped it to Completed. Work was complete and CI-green (twice) at that point; PR #1606 closed as vestigial with its diff preserved for after-the-fact review. Lesson applied: always return to a fresh main before cutting a branch — parking a session on a feature branch turns the next branch cut into a smuggling run.'
+  created_at: 2026-08-29T19:55:20.989922574Z
+  modified_at: 2026-08-29T19:55:20.989922574Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a04f16-3ee3-7911-ae8c-7019d3a02015
