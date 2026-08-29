@@ -1,0 +1,56 @@
+id: 01a04eed-8a15-7163-a450-49a066db5ffb
+spec_id: STORY-784
+agreed_id: STORY-784
+title: Cycle time and rework rate segmented by AI involvement
+description: |
+  Coverage (STORY-783) says how much AI is being used. It says nothing about
+  whether that helped. This story adds the two numbers that do.
+
+  Frame these as FLOW AND QUALITY metrics, not AI metrics. Lead time and change
+  failure rate are measures leadership may already accept; showing AI's effect
+  inside a framework they trust is far more credible than an AI-specific
+  scorecard, and it avoids the "prove the ROI" trap by reporting flow and letting
+  finance apply its own cost model.
+
+  ## The two numbers
+
+  **1. Cycle time** — `created_at` → completion, per spec, segmented by whether
+  the commits that closed it carried an AI trailer. Already computable: the store
+  carries `created_at`, `modified_at` and a `history` array (e.g. BUG-789 ran
+  2026-08-23T20:13 → 2026-08-24T02:54, ~6.7h).
+
+  **2. Rework rate** — BUG specs that `Reference` a previously-completed spec,
+  segmented the same way. AIDA already records these links, so this needs no new
+  data.
+
+  Rework is the number that MATTERS most. The standing objection to AI-assisted
+  development is "it writes fast and breaks things." This answers that
+  empirically, in either direction — and a result showing AI-assisted work
+  reworks MORE is a valid, publishable finding, not a failure of the metric.
+
+  ## Methodology cautions to state in the output
+
+  - **Correlation, not causation.** Harder specs may attract different tooling.
+    Do not imply the AI caused the difference.
+  - **Segment comparability.** If AI-assisted and unassisted work differ
+    systematically in type or size, the comparison is confounded. Report segment
+    sizes alongside the numbers so a reader can judge.
+  - **Survivorship.** Abandoned or rejected specs must not be silently dropped
+    from cycle time; that biases toward whatever finished.
+
+  ## Acceptance
+
+  - [ ] Cycle time is computed from the store and segmented by AI involvement.
+  - [ ] Rework rate is computed from existing BUG→spec references, same segments.
+  - [ ] Segment sizes are reported with every comparison.
+  - [ ] Specs that never completed are handled explicitly, not dropped silently.
+  - [ ] Output states the correlation-not-causation caveat rather than leaving a
+        reader to infer it.
+  - [ ] Aggregate-only, per ADR-25.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:09:45.365389315Z
+modified_at: 2026-08-29T19:09:45.365389315Z
+req_type: Story
