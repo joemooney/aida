@@ -40488,5 +40488,55 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3690
+- id: 01a04fe2-7e28-7060-864f-a4ebc70f495c
+  target_id: 01a04fe2-7956-7580-a717-f299eedadc63
+  author: aida
+  node_id: '1'
+  lamport: 3691
+  timestamp: 2026-08-29T23:37:18.632652909Z
+  kind: !Create
+    title: codex exec does not expand /aida-* prompts — drain phases send literal slash-commands; inline-render at the launch boundary
+    description: |-
+      BUG-797's prompt fix was necessary but NOT sufficient — the fixed prompt never reaches the model,
+      because the drain sends codex a LITERAL slash-command string that codex exec does not expand.
+
+      PROVEN by the second shelf (2026-08-29, PR #1612 review round, session 01a04fdbb6e4). The reviewer
+      transcript shows the model reasoning about its own instruction: "this repo has a specific
+      review-verdict handshake, but not a separate executable /aida-review to run here" — it received the
+      raw string `/aida-review --pr 1612`, could not expand it, and reconstructed the workflow by
+      SEARCHING THE REPO. It performed a competent review and still ended without writing the verdict
+      file. Phase 3 shelved again, identically to round 1.
+
+      MECHANISM: `derive_queue_work_prompt` produces `/aida-review --pr N` / `/aida-pickup SPEC` for every
+      vendor; on Claude, `claude -p "/aida-..."` expands skills (SPIKE-51), so this works. On Codex the
+      custom prompts live in ~/.codex/prompts and are a TUI affordance — `codex exec` passes the string to
+      the model as text. Phase-1 implementers survive because /aida-pickup's intent is discoverable from
+      context; the reviewer's handshake contract is not, twice proven.
+
+      THE ESTABLISHED FIX PATTERN ALREADY EXISTS: guided mode (TASK-1162, `guided_session_launch`)
+      inline-renders the codex body via `render_codex_command_prompt` instead of passing the slash string.
+      The drain phases never got the same treatment.
+
+      FIX at the one choke point, `compose_headless_command` (session.rs) — its own doc comment says it is
+      "the ONE place both the spawn path and the exec path build the command, so a vendor knob can never
+      route one and miss the other again". When vendor == Codex and the prompt is `/aida-<name> [args]`:
+        - expand via render_codex_command_prompt(name, args)
+        - the ORIGINAL invocation string (with its arguments, e.g. `--pr 1612`) must remain visible in
+          the final prompt even when the body has no $ARGUMENTS placeholder — the PR number reaching the
+          model is load-bearing
+        - a command outside the portable set (render returns None) falls through to the raw string —
+          degraded exactly as today, never worse
+        - Claude path byte-identical
+
+      ACCEPTANCE:
+      - [ ] Codex phase-3 prompt contains the verdict-file handshake AND the PR number.
+      - [ ] Codex phase-1 prompt is the expanded pickup body with the spec id.
+      - [ ] Non-slash prompts and Claude launches are unchanged (tests pin both).
+      - [ ] Nonportable slash commands fall through raw.
+      - [ ] E2E: a codex drain review completes phase 3 with a verdict file (the third drive of BUG-790
+            is the test).
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3691
 node_id: '1'
