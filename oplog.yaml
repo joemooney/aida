@@ -40413,5 +40413,31 @@ operations:
   timestamp: 2026-08-29T23:11:19.586593788Z
   kind: !SetStatus
     status: Approved
-clock: 3687
+- id: 01a04fdb-6d24-78e2-8831-7bbf70c5fbd1
+  target_id: 01a04fdb-6603-7a83-9888-b6770f752c7b
+  author: aida
+  node_id: '1'
+  lamport: 3688
+  timestamp: 2026-08-29T23:29:35.524356565Z
+  kind: !Create
+    title: 'Review PR-1612: [AI:codex] fix(rel): surface cross-store relationship ambiguity (BUG-790)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a04fca`) for branch `bug-790-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1612>
+      - Branch: `bug-790-2` → `main`
+
+      ## Covers
+
+      - BUG-790
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1612` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3688
 node_id: '1'
