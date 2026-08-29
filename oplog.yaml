@@ -39878,5 +39878,62 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 3661
+- id: 01a04f05-cf46-7cc2-a68a-8b5d8954fa63
+  target_id: 01a04f05-c831-79f2-9071-5e61bb87fcaa
+  author: aida
+  node_id: '1'
+  lamport: 3662
+  timestamp: 2026-08-29T19:36:15.942692518Z
+  kind: !Create
+    title: Scaffolded .codex/config.toml carries project_trust_level, making Codex silently ignore the whole file
+    description: |-
+      AIDA's scaffolded `.codex/config.toml` contains `project_trust_level = "trusted"` at the top level.
+      Codex treats that project config as unusable and SILENTLY IGNORES THE WHOLE FILE — no error, no
+      warning, no diagnostic. Everything AIDA registers in it is therefore dead.
+
+      REPRODUCED 2026-08-29, codex-cli 0.144.6, three-way A/B in one throwaway project:
+
+        .codex/config.toml exactly as `aida init` writes it .... project hook did NOT fire
+        same file with `project_trust_level` line removed ...... hook FIRED
+        file removed entirely ................................. hook FIRED
+
+      `codex exec --json` emits no config error in any case. The failure is completely silent, which is
+      why it survived a full validation run.
+
+      THIS ALMOST CERTAINLY EXPLAINS A KNOWN OPEN FAILURE. The STORY-762 claude-less validation run
+      recorded: "MCP: live probe FAILED -- codex exec did not discover the project .codex/config.toml
+      mcp_servers registration." Same file, same silent-ignore. If so, AIDA's Codex MCP registration has
+      never worked on any project, and the finding was mis-attributed to MCP translation rather than to
+      the config file being discarded wholesale.
+
+      WHY THE KEY IS WRONG, not just unlucky: Codex records project trust MACHINE-GLOBALLY, keyed by
+      path -- `~/.codex/config.toml` on this machine holds several `[projects."<path>"] trust_level =
+      "trusted"` entries. Trust is a per-machine decision about a checkout, so it cannot live in a file
+      that travels inside the repository; a repo that could assert its own trustworthiness would be a
+      trivial supply-chain vector, which is exactly why Claude Code keeps the analogous MCP pre-approval
+      in the gitignored `.claude/settings.local.json` (BUG-484). AIDA scaffolded the Codex analog into the
+      TRACKED project file, which is both ineffective and the wrong security posture.
+
+      IMPACT: every Codex-facing thing AIDA registers in that file is silently inert -- the MCP server
+      registration and (as of TASK-1181) the project hook wiring. On a codex-mandated machine that is most
+      of AIDA's ambient integration.
+
+      FIX:
+      - Remove `project_trust_level` from the scaffolded project config.
+      - Do not relocate it into the repo under another name. If AIDA wants to offer pre-trust, it belongs
+        in the machine-global `~/.codex/config.toml` under `[projects."<abs path>"]`, written per-machine
+        by an explicit opt-in verb -- never scaffolded into a shared repo.
+      - Say so in the file's comment, which currently advertises the key as "the Codex analog of the
+        enabledMcpjsonServers pre-approval AIDA writes for Claude Code". That comparison is what led the
+        key into the wrong file: the Claude analog is gitignored precisely because it is a trust grant.
+
+      ACCEPTANCE:
+      - [ ] A freshly scaffolded project's `.codex/config.toml` is honoured by Codex (project hooks fire).
+      - [ ] Re-test the MCP registration probe that failed in the STORY-762 run; record the result there.
+      - [ ] A regression test asserts the scaffolded project config carries no machine-trust key.
+      - [ ] Existing projects are repaired on their next `aida init` / `scaffold refresh`, not left broken.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3662
 node_id: '1'
