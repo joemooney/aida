@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:32:44.998110510Z
-modified_at: 2026-08-29T23:54:54.836588792Z
+modified_at: 2026-08-29T23:54:55.834762933Z
 req_type: Bug
 tags:
 - aida:rel
@@ -141,6 +141,12 @@ comments:
   content: 'Advisor unpark 2026-08-29 16:12: the phase-3 blocker (BUG-797, codex verdict-file handshake) is fixed and deployed. Re-driving. Implementer: address the recorded P1 (extend the ambiguity surface to non-terminal local collision targets) ON THE EXISTING PR #1610 BRANCH bug-790 — do not open a second PR.'
   created_at: 2026-08-29T23:11:20.719732080Z
   modified_at: 2026-08-29T23:11:20.719732080Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04ff2-9fda-7741-8eb6-0d2a43ce0063
+  author: joe
+  content: 'Advisor unpark #2 (2026-08-29 16:55): BUG-799 (launch-boundary inline rendering) merged — the reviewer will now actually receive the /aida-review body including the verdict-file handshake. PR #1612 already contains the complete fix incl. the P1; this third drive is the E2E acceptance for BUG-797+BUG-799. Implementer phase should recognize the existing open PR.'
+  created_at: 2026-08-29T23:54:55.834762933Z
+  modified_at: 2026-08-29T23:54:55.834762933Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 implementation_info:
   implemented: true
