@@ -1,0 +1,71 @@
+id: 01a04eec-fa2a-7283-868c-600e90686c42
+spec_id: ADR-25
+agreed_id: ADR-25
+title: Aggregate-only reporting — the Goodhart constraint that protects the dataset
+description: |
+  Decided 2026-08-29, before any measurement work ships. Recorded FIRST because
+  it is the constraint most likely to be quietly reversed under pressure later,
+  and reversing it is not recoverable.
+
+  ## The constraint
+
+  **Reporting is aggregate-only. Never per-developer. Never an input to
+  performance review.**
+
+  ## Why — the dataset destroys itself otherwise
+
+  The `[AI:tool]` trailer is accurate today for exactly one reason: **nothing
+  depends on it.** It is a traceability convention, so there is no reason to
+  write anything but the truth.
+
+  The moment it becomes a KPI input, its accuracy dies — people tag toward
+  whatever the incentive rewards, in whichever direction it points. Under
+  "AI adoption is good" the trailer over-reports; under "AI code is risky" it
+  under-reports. Either way the 71.5% coverage measured on 2026-08-29 stops
+  meaning what it means today, and the historical baseline becomes the only
+  honest data that will ever exist.
+
+  This is Goodhart's law operating on a VOLUNTARY HONESTY CONVENTION, which is a
+  far more fragile substrate than an automated counter. The measurement would
+  consume the thing it measures.
+
+  ## What this rules out
+
+  - Per-developer AI-usage statistics, published or internal.
+  - Any path from these metrics to individual performance assessment.
+  - Leaderboards, rankings, or per-author breakdowns in any report.
+
+  ## What remains allowed
+
+  - Repo-level and team-level aggregates.
+  - Time series over the whole corpus.
+  - Comparisons between repositories or periods.
+
+  If a report cannot be attributed to an individual, there is little reason to
+  game it, and the convention keeps telling the truth.
+
+  ## Second constraint: the monitoring line
+
+  `~/.aida/usage.jsonl` is per-developer command history. On one person's machine
+  that is a personal tool; aggregated across an organization it is workforce
+  monitoring, with works-council and GDPR implications in some jurisdictions.
+
+  The usage-log leg stays **opt-in** (AIDA already supports
+  `[telemetry] enabled = false` / `AIDA_TELEMETRY=0`), and org reporting should
+  prefer the commit corpus — which is already-published shared history — over
+  personal command logs.
+
+  ## Acceptance
+
+  - [ ] No shipped report exposes a per-developer breakdown.
+  - [ ] The aggregate-only rule is stated in the metrics documentation, with the
+        reason, so a future maintainer knows it is load-bearing and not stylistic.
+  - [ ] The usage-log leg remains opt-in and is not required for the headline
+        metrics.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:09:08.522810131Z
+modified_at: 2026-08-29T19:09:08.522810131Z
+req_type: Decision
