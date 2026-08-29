@@ -21,15 +21,15 @@ description: |-
   a native Codex primitive or is orchestrated by AIDA spawning N `codex exec` processes over N
   worktrees -- which is close to what the drain already does per phase.
 
-  Sequence this AFTER the work-machine validation run: how much this matters depends on whether the
-  operator's mandated environment permits parallel agent launches and what its sandbox policy allows.
-  Building a fan-out the work machine forbids would be wasted.
+  Sequence this AFTER the mandated-environment validation run (TASK-1182): how much this matters
+  depends on whether that environment permits parallel agent launches and what its sandbox policy
+  allows. Building a fan-out the environment forbids would be wasted.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:12.883065035Z
-modified_at: 2026-08-29T19:08:12.883065035Z
+modified_at: 2026-08-29T19:45:07.838088634Z
 req_type: Story
 tags:
 - codex orchestrator drain

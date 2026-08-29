@@ -40022,5 +40022,34 @@ operations:
 
       Attach results as a comment here, and file anything that cannot degrade gracefully as its own bug
       rather than leaving it as prose. That is how the last run produced BUG-704/705/706.
-clock: 3665
+- id: 01a04f0d-ed30-78a2-98c6-a7a1cd147d4a
+  target_id: 01a04eec-20d3-77b0-bea1-76de9c9a9f3e
+  author: aida
+  node_id: '1'
+  lamport: 3666
+  timestamp: 2026-08-29T19:45:07.888866920Z
+  kind: !SetDescription
+    description: |-
+      `/aida-burndown` -- the empirically-working autonomous drain -- fans out worktree-isolated
+      implementer subagents through Claude Code's Task tool. On Codex that mechanism does not exist, so the
+      highest-leverage autonomous surface AIDA has is Claude-only.
+
+      Codex has its own multi-agent surface (assessed in SPIKE-24 "Codex CLI -- architecture overview +
+      AGENTS.md bilingual scaffolding + NATIVE MULTI-AGENT SURFACE"). It was surveyed and never wired.
+
+      Relevant existing decisions, which should shape rather than be re-litigated:
+        - ride the native within-vendor mechanism; AIDA owns only what must be cross-vendor durable
+        - vendor specifics belong BEHIND the adapter at the EXECUTION layer, never in coordination
+        - the drain already generalises its headless spawn (`spawn_vendor_headless`, STORY-683), so the
+          per-phase launch is solved; what is not solved is the FAN-OUT shape
+
+      DELIBERATELY NOT SPECIFIED HERE. Start from SPIKE-24's findings and the current Codex CLI (which has
+      moved since: `codex exec`, plugins, app-server, remote-control), and decide whether the fan-out rides
+      a native Codex primitive or is orchestrated by AIDA spawning N `codex exec` processes over N
+      worktrees -- which is close to what the drain already does per phase.
+
+      Sequence this AFTER the mandated-environment validation run (TASK-1182): how much this matters
+      depends on whether that environment permits parallel agent launches and what its sandbox policy
+      allows. Building a fan-out the environment forbids would be wasted.
+clock: 3666
 node_id: '1'
