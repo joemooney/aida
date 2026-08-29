@@ -795,6 +795,40 @@ pub fn spawn_claude_headless(
 /// program, and routes the binary through the `AIDA_AGENT_CMD` mock resolver
 /// (TASK-1081) before wrapping.
 // trace:BUG-705 STORY-683 STORY-612 TASK-1081 | ai:claude
+/// BUG-799: expand an `/aida-<name> [args]` slash-command into the rendered
+/// Codex prompt body — because `codex exec` does NOT expand custom prompts the
+/// way an interactive `/name` invocation does, and the way `claude -p` expands
+/// skills (SPIKE-51). Without this, every drain phase on Codex handed the
+/// model a literal slash string; the model reconstructed the workflow by
+/// searching the repo, and contracts that are not discoverable from context —
+/// the reviewer's verdict-file handshake — were dropped. Proven twice on live
+/// drains (PR #1610, PR #1612) before this fix.
+///
+/// The ORIGINAL invocation line is appended under the body whenever it carries
+/// arguments the substitution may not have placed (a body with no
+/// `$ARGUMENTS` placeholder would otherwise silently eat `--pr 1612`, and the
+/// PR number reaching the model is load-bearing).
+///
+/// `None` — caller keeps the raw prompt — for non-slash prompts, non-aida
+/// commands, and the non-portable set: degraded exactly as today, never worse.
+// trace:BUG-799 | ai:claude
+pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
+    let rest = prompt.strip_prefix('/')?;
+    let (name, args) = match rest.split_once(char::is_whitespace) {
+        Some((n, a)) => (n, a.trim()),
+        None => (rest, ""),
+    };
+    if !name.starts_with("aida-") {
+        return None;
+    }
+    let body = aida_core::scaffolding::codex_prompts::render_codex_command_prompt(name, args)?;
+    if args.is_empty() || body.contains(args) {
+        Some(body)
+    } else {
+        Some(format!("{body}\n\n---\nInvocation: {prompt}"))
+    }
+}
+
 pub(crate) fn compose_headless_command(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -802,10 +836,20 @@ pub(crate) fn compose_headless_command(
     contained: bool,
 ) -> Result<(String, Vec<String>)> {
     let worktree = headless_worktree_root();
+    // BUG-799: Codex gets slash-commands inline-rendered; Claude expands its
+    // own skills, so its path is byte-identical to before.
+    let effective_prompt: std::borrow::Cow<'_, str> = if vendor == HeadlessVendor::Codex {
+        match codex_inline_prompt(prompt) {
+            Some(expanded) => std::borrow::Cow::Owned(expanded),
+            None => std::borrow::Cow::Borrowed(prompt),
+        }
+    } else {
+        std::borrow::Cow::Borrowed(prompt)
+    };
     os_wrapped_program_and_args(
         &worktree,
         &resolve_agent_program(vendor.program()),
-        headless_vendor_args(vendor, prompt, session_id, contained),
+        headless_vendor_args(vendor, &effective_prompt, session_id, contained),
     )
 }
 
@@ -4091,6 +4135,67 @@ mod tests {
     /// the `--no-human` phase-1 exec path build from, so the exec site can
     /// never silently miss the vendor again.
     // trace:BUG-705 | ai:claude
+    #[test]
+    // ── BUG-799: codex slash-command inline rendering ──
+    #[test]
+    fn codex_review_slash_command_expands_to_the_handshake_bearing_body() {
+        let p = codex_inline_prompt("/aida-review --pr 1612").expect("portable command expands");
+        assert!(
+            p.contains(".aida/review-verdicts/PR-N.json"),
+            "the verdict-file handshake must reach the model"
+        );
+        assert!(
+            p.contains("1612"),
+            "the PR number is load-bearing and must survive expansion"
+        );
+        assert!(!p.starts_with('/'), "must be a body, not a slash string");
+    }
+
+    #[test]
+    fn codex_pickup_slash_command_expands_with_its_spec_id() {
+        let p = codex_inline_prompt("/aida-pickup BUG-790").expect("portable command expands");
+        assert!(p.contains("BUG-790"), "the spec id must survive expansion");
+    }
+
+    #[test]
+    fn non_slash_and_non_aida_prompts_pass_through_untouched() {
+        assert_eq!(codex_inline_prompt("do a thing"), None);
+        assert_eq!(codex_inline_prompt("/help"), None);
+        assert_eq!(codex_inline_prompt("review the PR /aida-review"), None);
+    }
+
+    #[test]
+    fn nonportable_commands_fall_through_raw() {
+        // aida-advise is orchestrator-internal and excluded from the portable
+        // set; expansion must decline rather than panic or invent a body.
+        assert_eq!(codex_inline_prompt("/aida-advise PUNT-1"), None);
+    }
+
+    #[test]
+    fn codex_phase_argv_carries_the_expanded_body_and_claude_is_unchanged() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let (_, args) =
+            compose_headless_command(HeadlessVendor::Codex, "/aida-review --pr 7", "sid", false)
+                .unwrap();
+        let joined = args.join(" ");
+        assert!(
+            joined.contains("review-verdicts"),
+            "codex argv must carry the rendered body: {joined}"
+        );
+        assert!(
+            !args.iter().any(|a| a == "/aida-review --pr 7"),
+            "the literal slash string must be gone"
+        );
+
+        let (_, cargs) =
+            compose_headless_command(HeadlessVendor::Claude, "/aida-review --pr 7", "sid", false)
+                .unwrap();
+        assert!(
+            cargs.contains(&"/aida-review --pr 7".to_string()),
+            "claude expands its own skills — its path must be byte-identical"
+        );
+    }
+
     #[test]
     fn compose_headless_command_routes_per_vendor() {
         let _env = AgentCmdEnvGuard::acquire();
