@@ -41,12 +41,30 @@ description: |-
   - [ ] Trailer extraction is a pure function with tests covering scope-vs-id, multiple ids,
         trace: markers in body, and merge-squash subjects like "title (SPEC-1) (#123)".
   - [ ] `docs/` mention of `aida why` updated to state the two-tier resolution and its provenance.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:58:23.474341539Z
-modified_at: 2026-08-29T20:17:37.891362033Z
+modified_at: 2026-08-29T20:17:56.684688969Z
 req_type: Story
 tags:
 - northstar code-decision aida:why
+history:
+- id: 01a04f2b-f7c6-72c2-8d9e-fafc008aabac
+  author: aida-auto-bump
+  timestamp: 2026-08-29T20:17:56.678842851Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a04f2b-f7cc-7db3-b272-21c3dd4f2127
+  timestamp: 2026-08-29T20:17:56.684687811Z
+  agent: aida
+  commit_sha: 9741aeeb35b7063faace44531fae5941db8237d2
+  summary: Completed via merge 9741aeeb
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-29T20:17:56.678720387Z
+  completion_sha: 9741aeeb35b7063faace44531fae5941db8237d2
