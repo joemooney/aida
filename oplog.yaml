@@ -39978,5 +39978,49 @@ operations:
       remainder is upstream-gated. Leave it deferred.
 
       RELATED: EPIC-0419 (migration readiness) is the predecessor and is effectively complete.
-clock: 3663
+- id: 01a04f0d-b71e-7b53-8f78-817a2ffdbf15
+  target_id: 01a04eeb-7263-7113-84b1-f577a9bc63d6
+  author: aida
+  node_id: '1'
+  lamport: 3664
+  timestamp: 2026-08-29T19:44:54.046801313Z
+  kind: !SetTitle
+    title: Execute the codex validation runbook in a genuinely codex-mandated environment
+- id: 01a04f0d-b774-76a2-8a02-e612522c99f0
+  target_id: 01a04eeb-7263-7113-84b1-f577a9bc63d6
+  author: aida
+  node_id: '1'
+  lamport: 3665
+  timestamp: 2026-08-29T19:44:54.132926455Z
+  kind: !SetDescription
+    description: |-
+      STORY-762 closed with an explicit, honest ceiling:
+
+        "REMAINING for full acceptance: repeat in a genuinely codex-mandated environment."
+        "No such environment was reachable from the dev host, so simulation is the acceptance ceiling."
+
+      That ceiling has lifted. This is the single highest-value item in the epic and the ONE thing that
+      cannot be done from the dev host: a mandated-environment host has a different Codex version, sandbox
+      policy, auth mode, network posture and possibly enterprise-managed hook trust (`requirements.toml`
+      [hooks], which bypasses the `/hooks` trust prompt). Every other item in this epic is inference until
+      this run happens.
+
+      SETUP:
+        1. `~/.aida/agents.toml` -> [agents] vendor = "codex"
+        2. `aida init` in a real project (must include the BUG-793 fix, or the project config -- MCP
+           registration and hook wiring alike -- is silently discarded)
+        3. work as normal for a day
+
+      WHAT TO CAPTURE -- friction, not just failures. The previous run's most valuable output was its
+      friction list (non-TTY prompts, role authority, ack env vars), none of which were crashes:
+        - anything that errors, prompts unexpectedly, or hangs
+        - anything that silently does nothing where Claude would have acted
+        - whether the MCP server is discoverable (the previous run's live probe FAILED; BUG-793 is the
+          likely root cause and this is the re-test)
+        - whether enterprise-managed hook trust blocks the scaffolded hooks
+        - whether the sandbox policy permits the launches AIDA makes
+
+      Attach results as a comment here, and file anything that cannot degrade gracefully as its own bug
+      rather than leaving it as prose. That is how the last run produced BUG-704/705/706.
+clock: 3665
 node_id: '1'
