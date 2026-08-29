@@ -43,12 +43,12 @@ description: |-
   - [ ] Regression test pins it.
   - [ ] Handshake-artifact sweep across the codex prompt pack recorded on this spec (found/clean).
   - [ ] A codex-reviewed drain phase 3 completes end to end (re-drive of PR #1610 is the natural test).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T21:12:49.445860917Z
-modified_at: 2026-08-29T23:10:56.831584736Z
+modified_at: 2026-08-29T23:11:00.267821967Z
 req_type: Bug
 tags:
 - codex drain reviewer prompt-parity
@@ -63,3 +63,21 @@ comments:
   created_at: 2026-08-29T21:14:54.296073616Z
   modified_at: 2026-08-29T21:14:54.296073616Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a04fca-68a5-73f1-9ed9-3d75f70dccb5
+  author: aida-auto-bump
+  timestamp: 2026-08-29T23:11:00.261914060Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a04fca-68ab-7d50-9f50-475335698a86
+  timestamp: 2026-08-29T23:11:00.267821225Z
+  agent: aida
+  commit_sha: 26c9db045ff0c490052c8f28f4aa0cb6956079ba
+  summary: Completed via merge 26c9db04
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-29T23:11:00.261769795Z
+  completion_sha: 26c9db045ff0c490052c8f28f4aa0cb6956079ba
