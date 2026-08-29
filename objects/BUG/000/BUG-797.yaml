@@ -1,0 +1,54 @@
+id: 01a04f5e-3625-7f21-81c6-402e28a005aa
+spec_id: BUG-797
+agreed_id: BUG-797
+title: codex /aida-review prompt drops the verdict-file handshake — every codex drain review shelves at phase 3
+description: |-
+  Every headless codex review "fails" at phase 3 even when the review succeeds — because the
+  codex-rendered /aida-review prompt dropped the verdict-file contract.
+
+  OBSERVED LIVE 2026-08-29, first codex-reviewed drain on this repo (PR #1610 / BUG-790): the codex
+  reviewer produced a correct, evidence-backed request-changes verdict as prose — and the orchestrator
+  reported "the reviewer session produced no verdict file — the review did not complete", shelved the
+  spec NeedsAttention, and the drain stopped. The verdict existed only in the transcript.
+
+  ROOT CAUSE, confirmed by diffing the two prompt renderings:
+    - master skill (templates/skills/aida-review.md): ".aida/review-verdicts/PR-N.json" is "the FIRST
+      irreversible step" — the phase-3 → phase-4 handshake artifact the orchestrator polls
+      (auto_complete.rs reads exactly this path).
+    - codex rendering (~/.codex/prompts/aida-review.md): ZERO occurrences of review-verdicts. The
+      prompt asks for checklist verdicts and a consolidated PR comment — the human-facing projection
+      — with the machine handshake entirely absent.
+
+  The codex prompts are rendered from the COMMAND masters (short bodies), not the full skills; on
+  Claude the command is a pointer and the skill carries the mechanics, on Codex the rendered command
+  body IS the whole prompt. BUG-731 fixed this class for $ARGUMENTS and claude-native tool refs; the
+  verdict-file mechanic was missed because nothing exercised a codex reviewer phase until today.
+
+  IMPACT: codex-vendor autonomous drains cannot pass phase 3, ever. On a codex-mandated machine that
+  is the whole --auto-complete lifecycle broken at the same spot every time — each item does a full
+  implement + CI + review and then shelves. Highest-severity open item in EPIC-60.
+
+  FIX SHAPE:
+    - The verdict-file handshake must survive into the codex rendering. Prefer fixing the SOURCE
+      (command master carries the handshake step; accurate for Claude too since the skill already
+      mandates it) over special-casing the converter.
+    - A regression test must pin `review-verdicts/PR-` present in the RENDERED codex aida-review
+      prompt — the BUG-731 test family is the home.
+    - Sweep the other rendered prompts for the same class: any orchestrator-handshake artifact
+      (verdict files, punt records, findings) that a skill mandates but its codex rendering omits.
+
+  ACCEPTANCE:
+  - [ ] Rendered codex aida-review prompt instructs writing .aida/review-verdicts/PR-N.json BEFORE
+        the PR comment (the BUG-280 ordering), including the verdict field vocabulary.
+  - [ ] Regression test pins it.
+  - [ ] Handshake-artifact sweep across the codex prompt pack recorded on this spec (found/clean).
+  - [ ] A codex-reviewed drain phase 3 completes end to end (re-drive of PR #1610 is the natural test).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T21:12:49.445860917Z
+modified_at: 2026-08-29T21:12:49.445860917Z
+req_type: Bug
+tags:
+- codex drain reviewer prompt-parity
