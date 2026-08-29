@@ -1,0 +1,54 @@
+id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
+spec_id: EPIC-60
+agreed_id: EPIC-60
+title: 'Codex as a first-class daily driver: parity in practice, not just migration readiness'
+description: |-
+  The bar has changed. EPIC-0419 was scoped as MIGRATION READINESS -- can a project move to Codex if it
+  has to. As of 2026-08-29 the operator's workplace has mandated Codex and prohibited Claude, so Codex
+  is now the DAILY DRIVER on a machine AIDA must work on every day. Readiness is not the same bar as
+  parity-in-practice.
+
+  WHAT IS ALREADY TRUE (verified 2026-08-29, not assumed):
+    - codex-cli 0.144.6 installed; `hooks` feature is stable and enabled by default
+    - the aida MCP server is registered and enabled in `codex mcp list`
+    - `[agents] vendor = "codex"` resolves on every launch surface, including fresh drain/pool
+      worktrees (BUG-704 fixed via the tracked .aida/config.toml fallback)
+    - core reads (status/list/queue/awaiting) pass with `claude` stripped from PATH
+    - headless drains route to `codex exec` (STORY-683); codex prompt pack ships (STORY-763);
+      codex statusline variant ships (TASK-0413); `aida agent new codex` exists
+    - a full implement -> CI -> merge -> auto-bump lifecycle was validated end to end with a real
+      codex implementer in a claude-less environment (STORY-762, 5m09s)
+
+  So this epic is NOT a rewrite. It is the last mile: the surfaces that were assessed as portable but
+  never shipped, the findings the validation run left open, and the one thing that could not be done
+  from the dev host.
+
+  SCOPE:
+    1. Hooks. TASK-0421's inventory concluded all seven hook events AIDA wires exist in Codex and its
+       command-type handlers "port directly". That was an assessment; nothing was shipped. AIDA
+       scaffolds no .codex/ hooks at all, so a Codex machine silently loses the per-turn awaiting
+       notice, the advisor code guard, session/role context, commit tracking and the capture nudge.
+       Git hooks (commit-msg, pre-commit) are unaffected -- they are git-level.
+    2. Execute the validation runbook on the REAL codex-mandated machine. STORY-762 closed with
+       "the genuine codex-mandated work machine is not reachable from the dev host, so simulation is
+       the acceptance ceiling here." That ceiling has lifted. Only the operator can do this, and it
+       will find more than any amount of inference from the dev host.
+    3. The papercuts that validation run left open.
+    4. Subagent fan-out parity -- /aida-burndown fans out worktree-isolated implementers through
+       Claude's Task tool; Codex has its own multi-agent surface (SPIKE-24) that is not wired.
+
+  EXPLICIT NON-GOAL: the command-backed status line's native wiring. TASK-0421 found it is the one
+  hard Claude-Code dependency AIDA carries, it is observability rather than correctness, and the
+  remainder is upstream-gated. Leave it deferred.
+
+  RELATED: EPIC-0419 (migration readiness) is the predecessor and is effectively complete -- its only
+  open child is external positioning. This epic supersedes its intent without superseding the epic.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:06:45.483941259Z
+modified_at: 2026-08-29T19:06:45.483941259Z
+req_type: Epic
+tags:
+- codex vendor-parity
