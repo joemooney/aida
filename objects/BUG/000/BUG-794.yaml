@@ -1,0 +1,29 @@
+id: 01a04f38-dc6b-7c23-a306-23c2ac2e87ce
+spec_id: BUG-794
+agreed_id: BUG-794
+title: aida init --agent should be a strict scaffold allow-list
+description: |-
+  Current AIDA 0.14 behavior: running aida init --agent codex avoids .claude/ but still scaffolds .antigravity/. For compliance-sensitive environments, --agent must behave as a strict allow-list: an agent surface should not be scaffolded unless explicitly selected.
+
+  Observed from aida-tutor onboarding work on 2026-08-29: seeded scratch repo + aida init --agent codex created .codex/ and .antigravity/, with no .claude/. The no-.claude behavior solves one common policy constraint, but the flag name and help imply selected agent profiles, not selected-plus-other profiles.
+
+  Primary callers: enterprise developer prohibited from using specific agent tools; onboarding/tutor flows that generate a compliance-safe init command; non-interactive project bootstrap scripts.
+
+  Acceptance:
+  - aida init --agent codex scaffolds Codex-facing surfaces only and does not scaffold Claude or Antigravity surfaces.
+  - aida init --agent claude scaffolds Claude-facing surfaces only and does not scaffold Codex or Antigravity surfaces.
+  - AIDA supports an explicit way to select multiple agent profiles, or documents and implements the existing both behavior as a precise compatibility shorthand.
+  - Help text and scaffold status/apply behavior match the allow-list semantics.
+  - A regression test verifies no unselected agent directories/files are created.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T20:32:01.643411704Z
+modified_at: 2026-08-29T20:32:01.643411704Z
+req_type: Bug
+tags:
+- agents
+- compliance
+- init
+- scaffold
