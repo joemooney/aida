@@ -1,0 +1,52 @@
+id: 01a04f1a-10f2-7591-956d-30769c5258ca
+spec_id: STORY-785
+agreed_id: STORY-785
+title: 'aida why <file:line>: git-blame trailer fallback — answer from the last-touch commit when no trace comment exists'
+description: |-
+  `aida why <file:line>` answers "why does this code exist?" only where a `trace:SPEC-ID` comment
+  sits at or above the line. Everywhere else it says "this code isn't linked to a spec yet" -- even
+  when the repository knows the answer, because the commit that last shaped that line carries the
+  `(SPEC-ID)` trailer the commit convention has required all along.
+
+  Observed concretely (2026-08-29): `aida why aida-core/src/scaffolding/mcp_translate.rs:140` -- a
+  line whose commit trailer names BUG-793 -- resolved instead to the nearest trace comment 112 lines
+  up and answered with TASK-1046. Nearest-comment is right when a comment exists; silence (or a wrong
+  neighbour) is the answer everywhere else.
+
+  THE SLICE: when no trace comment is found at/above the requested line, fall back to
+  `git blame -L <line>,<line> --line-porcelain` -> commit -> extract `(SPEC-ID)` trailers from the
+  commit message -> resolve through the existing store/markdown chain. Coverage widens from
+  "annotated lines" to "every line whose last-touch commit followed the convention" -- in this repo
+  that is nearly every line, with zero new annotation burden. This is the champion-product move on
+  the code<->decision moat: point at ANY line, get the decision.
+
+  PROVENANCE IS PART OF THE CONTRACT. A trace comment is an intentional statement; blame is
+  circumstantial (the last commit to touch a line may be a rename or fmt sweep). The output must say
+  which it is -- e.g. "via commit abc1234 (2026-07-22)" -- and the JSON gains "source": "trace" |
+  "blame". A guess presented as a fact is how a tool starts lying.
+
+  BOUNDARIES:
+  - Blame fallback needs a line number; bare-file mode keeps its current whole-file trace scan.
+  - An uncommitted line (blame sha all-zeros) falls through to the existing "not linked yet" hint.
+  - SPEC-ID extraction matches the commit convention's trailer form `(ABC-123)` -- uppercase id with
+    digits -- so a lowercase `(scope)` can never false-positive. Also honor `trace:ID` markers in the
+    commit body ([AI:...] bodies carry them).
+  - Outside a git repo, or if git errors: exact current behavior, no new failure mode.
+
+  ACCEPTANCE:
+  - [ ] A line with no trace comment but a trailered last-touch commit resolves to that spec, with
+        commit-sha provenance shown in human output and "source":"blame" in JSON.
+  - [ ] A line with a trace comment behaves exactly as today ("source":"trace").
+  - [ ] Uncommitted/untracked lines and non-repo files keep today's message.
+  - [ ] Trailer extraction is a pure function with tests covering scope-vs-id, multiple ids,
+        trace: markers in body, and merge-squash subjects like "title (SPEC-1) (#123)".
+  - [ ] `docs/` mention of `aida why` updated to state the two-tier resolution and its provenance.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T19:58:23.474341539Z
+modified_at: 2026-08-29T19:58:23.474341539Z
+req_type: Story
+tags:
+- northstar code-decision aida:why
