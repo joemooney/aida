@@ -1,0 +1,51 @@
+id: 01a04f46-bc22-7433-a9be-fcd432bb88ba
+spec_id: BUG-795
+agreed_id: BUG-795
+title: 'queue work --auto-complete: items routed --for implementer are un-drainable and every error hides the way out'
+description: |-
+  Observed live 2026-08-29 while starting a routine 4-item drain: items routed `--for implementer`
+  are un-drainable — every role hits a wall, and no error names the way out. Three attempts:
+
+  1. Advisor session, `aida queue work --auto-complete --no-human=both`:
+       error: "queue is empty for advisor; nothing to drive"
+     The queue held 4 items — in the implementer role-queue. The error reports empty without
+     mentioning that other role queues have work (the data is one lookup away).
+
+  2. Implementer session, same command:
+       error: "starting an autonomous drain needs the `advisor` role"
+     So the role whose queue holds the items may not start the drain that would drain them.
+
+  3. Advisor session with `--role implementer` — whose help text reads "Override the inferred role.
+     Without this, the role is derived from the queue items'":
+       error: "queue is empty for advisor; nothing to drive"
+     The override did not change which role-queue the pull consulted (or the pull path ignores it).
+
+  Net: advisor can't pull them, implementer can't start, and the documented override doesn't route.
+  The operator's recovery was to re-route all items back to the advisor queue — which works, but
+  means `--for implementer` routing and `--auto-complete` draining are mutually exclusive in
+  practice, silently.
+
+  DESIRED (pick at implementation, smallest honest fix first):
+    a) "queue is empty for <role>" MUST name non-empty sibling role queues when any exist:
+       "queue is empty for advisor — 4 item(s) are routed for:implementer; re-run with
+       `--role implementer` or re-route them". Costs one lookup, kills the dead-end.
+    b) Make `--role <NAME>` actually govern the queue-pull in --auto-complete mode, or error
+       loudly that it doesn't apply there. A flag that is accepted and ignored is the worst shape.
+    c) Reconcile the advisor-starts / role-queue-pulls model in docs/autonomous-drain.md — if the
+       intended pattern is "drain always eats the advisor queue; --for routing is for interactive
+       pickup only", say that where the drain is documented.
+
+  ACCEPTANCE:
+  - [ ] The empty-queue error names sibling role queues holding items, with the exact recovery command.
+  - [ ] `--role` on `queue work --auto-complete` either works or is rejected with an explanation.
+  - [ ] docs/autonomous-drain.md states which queue a drain consumes and how --for routing interacts.
+  - [ ] A test pins the error text for the items-exist-elsewhere case.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-29T20:47:10.882565761Z
+modified_at: 2026-08-29T20:47:10.882565761Z
+req_type: Bug
+tags:
+- aida:queue drain ux papercut
