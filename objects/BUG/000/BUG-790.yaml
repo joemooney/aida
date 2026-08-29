@@ -76,12 +76,12 @@ description: |
         error path (exit 1) still works.
   - [ ] Whatever is chosen is documented, so agents know how to express a
         cross-repo reference.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:32:44.998110510Z
-modified_at: 2026-08-29T21:13:07.902861394Z
+modified_at: 2026-08-29T23:11:19.534416887Z
 req_type: Bug
 tags:
 - aida:rel
@@ -132,11 +132,3 @@ comments:
   created_at: 2026-08-29T21:13:07.902861394Z
   modified_at: 2026-08-29T21:13:07.902861394Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: no-verdict
-  detail: the reviewer session produced no verdict file — the review did not complete
-  recovery_hint: 'The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1610 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-08-29T21:10:13.242369543Z
