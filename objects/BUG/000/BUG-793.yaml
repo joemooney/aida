@@ -48,12 +48,12 @@ description: |-
   - [ ] Re-test the MCP registration probe that failed in the STORY-762 run; record the result there.
   - [ ] A regression test asserts the scaffolded project config carries no machine-trust key.
   - [ ] Existing projects are repaired on their next `aida init` / `scaffold refresh`, not left broken.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:36:14.129284858Z
-modified_at: 2026-08-29T19:54:06.015040699Z
+modified_at: 2026-08-29T19:54:12.516369161Z
 req_type: Bug
 tags:
 - codex aida:init mcp hooks
@@ -61,3 +61,21 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T19:36:16.617644614Z
+history:
+- id: 01a04f16-3c31-7e53-8a02-859fbe221c51
+  author: aida-auto-bump
+  timestamp: 2026-08-29T19:54:12.401252360Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a04f16-3ca4-7573-a216-34adc605d081
+  timestamp: 2026-08-29T19:54:12.516367761Z
+  agent: aida
+  commit_sha: ca476470f0bec3562096bd7f018ec03754080434
+  summary: Completed via merge ca476470
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-29T19:54:12.401092537Z
+  completion_sha: ca476470f0bec3562096bd7f018ec03754080434
