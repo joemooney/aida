@@ -40570,5 +40570,17 @@ operations:
   timestamp: 2026-08-29T23:54:54.890187010Z
   kind: !SetStatus
     status: Approved
-clock: 3695
+- id: 01a04ff4-bc4d-7e51-8ea4-2503546f744e
+  target_id: 01a04ff4-b8a7-70a1-8878-a4dd21465d74
+  author: aida
+  node_id: '1'
+  lamport: 3696
+  timestamp: 2026-08-29T23:57:14.189149047Z
+  kind: !Create
+    title: codex sessions repeatedly mis-invoke named tests (test name passed to the wrong binary) — 3 occurrences across independent sessions
+    description: 'Observed three times on 2026-08-29, each in a DIFFERENT headless codex session (two reviewers, one implementer): the model passes a cargo test NAME as an argument to a non-cargo invocation, e.g. ''error: unexpected argument rel_add_warns_when_target_resolves_to_terminal_local_spec found'' / ''...mcp_add_relationship_warns_on_open_to_terminal_non_hierarchy_target found''. Each session self-recovers, but it costs a wasted cycle every time and is systematic, not random. Likely cause: the review/test-plan prompt text lists bare test names without the invocation shape, and codex reaches for the nearest binary. FIX SHAPE: wherever prompts or generated review checklists name tests, name the COMMAND (''cargo test -p <crate> <name>''), not the bare identifier — probably in the aida review prompt generator and/or the converted codex prompt bodies. Low priority: self-recovering, but three-for-three means every codex session pays it.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3696
 node_id: '1'
