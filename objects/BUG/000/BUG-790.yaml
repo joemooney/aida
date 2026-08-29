@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:32:44.998110510Z
-modified_at: 2026-08-29T23:11:19.534416887Z
+modified_at: 2026-08-29T23:11:20.719732080Z
 req_type: Bug
 tags:
 - aida:rel
@@ -131,4 +131,10 @@ comments:
   content: 'Correction: the verdict-file parity bug referenced above is BUG-797 (not 796).'
   created_at: 2026-08-29T21:13:07.902861394Z
   modified_at: 2026-08-29T21:13:07.902861394Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04fca-b88f-7103-bc0d-6e8a69d29e31
+  author: joe
+  content: 'Advisor unpark 2026-08-29 16:12: the phase-3 blocker (BUG-797, codex verdict-file handshake) is fixed and deployed. Re-driving. Implementer: address the recorded P1 (extend the ambiguity surface to non-terminal local collision targets) ON THE EXISTING PR #1610 BRANCH bug-790 — do not open a second PR.'
+  created_at: 2026-08-29T23:11:20.719732080Z
+  modified_at: 2026-08-29T23:11:20.719732080Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
