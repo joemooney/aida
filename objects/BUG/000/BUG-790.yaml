@@ -76,12 +76,12 @@ description: |
         error path (exit 1) still works.
   - [ ] Whatever is chosen is documented, so agents know how to express a
         cross-repo reference.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:32:44.998110510Z
-modified_at: 2026-08-29T23:11:20.719732080Z
+modified_at: 2026-08-29T23:11:25.538185298Z
 req_type: Bug
 tags:
 - aida:rel
