@@ -338,6 +338,45 @@ mod tests {
         }
     }
 
+    /// BUG-797: the first live codex-reviewed drain shelved at phase 3 because
+    /// the rendered /aida-review prompt had dropped the verdict-file handshake
+    /// — the reviewer wrote a correct prose verdict and the orchestrator,
+    /// which polls `.aida/review-verdicts/PR-N.json`, saw nothing. On Claude
+    /// the skill carries this contract; on Codex the rendered command body IS
+    /// the whole prompt, so the command master must carry it too.
+    // trace:BUG-797 | ai:claude
+    #[test]
+    fn codex_review_prompt_carries_the_verdict_file_handshake() {
+        let prompts = expected_codex_prompts();
+        let (_, body) = prompts
+            .iter()
+            .find(|(n, _)| n == "aida-review")
+            .expect("aida-review must be in the portable set");
+        assert!(
+            body.contains(".aida/review-verdicts/PR-N.json"),
+            "the phase-3 → phase-4 handshake artifact must survive conversion"
+        );
+        for v in ["Approved", "RequestChanges", "Rejected"] {
+            assert!(
+                body.contains(v),
+                "verdict vocabulary `{v}` must be stated — the orchestrator parses it"
+            );
+        }
+        assert!(
+            body.contains("escalated-to-human"),
+            "the headless merge-escalation escape hatch must be documented"
+        );
+        // The ordering is the contract: file BEFORE the PR comment (BUG-280).
+        let file_pos = body.find("review-verdicts").unwrap();
+        let comment_pos = body
+            .find("consolidated review comment")
+            .expect("comment step present");
+        assert!(
+            file_pos < comment_pos,
+            "verdict file must be instructed BEFORE the PR comment"
+        );
+    }
+
     #[test]
     fn expected_codex_prompts_do_not_leak_claude_only_invocations() {
         for (name, body) in expected_codex_prompts() {
