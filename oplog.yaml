@@ -39839,5 +39839,44 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3660
+- id: 01a04eed-ae47-7270-9838-2c9a030885e5
+  target_id: 01a04eed-a96a-79d3-92ed-6b750ff558ea
+  author: aida
+  node_id: '1'
+  lamport: 3661
+  timestamp: 2026-08-29T19:09:54.631165030Z
+  kind: !Create
+    title: Document the commit trailer as the standalone, portable adoption unit
+    description: |
+      The metrics in EPIC-61 exist wherever the COMMIT TRAILER is followed. They do
+      not require AIDA adoption, aida-hub, the store, or any agent tooling.
+
+      That makes the trailer the portable adoption unit, and it is the honest thing
+      to lead with for a team evaluating this: a one-line commit convention, adoptable
+      in an afternoon with a commit-msg hook, that pays for itself immediately in
+      traceability and produces the measurement dataset for free as a byproduct.
+
+      Selling the toolchain when the convention is what carries the value would be
+      both inaccurate and a much harder sell.
+
+      ## What to write
+
+      - The trailer format, standalone, with no AIDA dependency implied.
+      - A minimal commit-msg hook a team can drop in.
+      - What becomes measurable once it is followed, and explicitly what does NOT
+        (no per-developer reporting — ADR-25).
+      - The honest caveat that a trailer is SELF-REPORTED. It is a good-faith signal,
+        not an audit trail, and its value depends on nothing being scored on it.
+
+      ## Acceptance
+
+      - [ ] The convention is documented independently of AIDA adoption.
+      - [ ] A copy-pasteable commit-msg hook is included.
+      - [ ] The aggregate-only constraint and its reasoning appear alongside it, not
+            buried in a separate document.
+      - [ ] The self-reported limitation is stated plainly.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3661
 node_id: '1'
