@@ -20,12 +20,12 @@ description: |-
   - [ ] Interactive `--force` behaviour is unchanged (or deliberately reconsidered, not accidentally).
   - [ ] Without `--force` on a non-TTY, the command still refuses rather than silently proceeding --
         the fix must not turn a guard into a footgun.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:00.101996416Z
-modified_at: 2026-08-29T19:56:19.485229958Z
+modified_at: 2026-08-29T19:56:20.798280985Z
 req_type: Bug
 tags:
 - codex headless papercut
