@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:32:44.998110510Z
-modified_at: 2026-08-29T21:12:28.259090871Z
+modified_at: 2026-08-29T21:13:07.902861394Z
 req_type: Bug
 tags:
 - aida:rel
@@ -125,6 +125,12 @@ comments:
     branch (bug-790); do not open a second PR.
   created_at: 2026-08-29T21:12:28.259090871Z
   modified_at: 2026-08-29T21:12:28.259090871Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04f5e-7e3e-7922-aabc-c62b2b25ac3b
+  author: joe
+  content: 'Correction: the verdict-file parity bug referenced above is BUG-797 (not 796).'
+  created_at: 2026-08-29T21:13:07.902861394Z
+  modified_at: 2026-08-29T21:13:07.902861394Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 failure_reason:
   phase: reviewer
