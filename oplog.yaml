@@ -40254,5 +40254,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3679
+- id: 01a04f55-ebba-7b93-a0c2-9378fe43d13d
+  target_id: 01a04f55-e805-7153-b5c9-25ee6ea2b820
+  author: aida
+  node_id: '1'
+  lamport: 3680
+  timestamp: 2026-08-29T21:03:46.106300700Z
+  kind: !Create
+    title: 'Review PR-1610: [AI:codex] fix(rel): surface cross-store spec ambiguity (BUG-790)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a04f46`) for branch `bug-790`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1610>
+      - Branch: `bug-790` → `main`
+
+      ## Covers
+
+      - BUG-790
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1610` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3680
 node_id: '1'
