@@ -39737,5 +39737,51 @@ operations:
     req_type: Decision
     status: Approved
     priority: High
-clock: 3658
+- id: 01a04eed-15d8-7390-9077-cb405043fe4f
+  target_id: 01a04eed-1100-7942-b5b0-bf3088654cb9
+  author: aida
+  node_id: '1'
+  lamport: 3659
+  timestamp: 2026-08-29T19:09:15.608904600Z
+  kind: !Create
+    title: 'aida metrics ai-lift: trailer coverage and attribution over git history'
+    description: |
+      `aida metrics agent-lift` reads the autonomous-drain log. Add a sibling that
+      reads the COMMIT CORPUS — the dataset that already exists in every repo
+      following the trailer convention.
+
+      ## What it reports
+
+      - **Trailer coverage over time.** What fraction of commits carry `[AI:tool]`,
+        as a time series. A fact, not a judgment.
+      - **Tool attribution.** Split by tool, including multi-tool commits
+        (`[AI:codex+claude]` — 6 present here; the parser must not drop them).
+      - **Confidence bands where present**, with an explicit caveat: the format
+        supports `:high` / `:med` / `:low`, but only ~42 of 1927 commits here use
+        them. Report the gradient as SPARSE rather than building a headline on it.
+
+      ## Constraints
+
+      - Read-only over `git log`. No new instrumentation, no daemon, no network.
+      - Must handle a repo with ZERO trailers without error — that is a legitimate
+        state (a team that has not adopted the convention), not a failure.
+      - Never-measured must stay distinguishable from measured-as-zero.
+      - Aggregate-only: no per-author breakdown. See the ADR — this is a hard
+        constraint, not a default.
+      - Honest about limits, following the precedent `agent-lift` already sets: it
+        states that unrecorded signals are "omitted rather than approximated". Keep
+        that standard.
+
+      ## Acceptance
+
+      - [ ] Trailer coverage is reported as a time series over the repo's history.
+      - [ ] Attribution is split by tool and handles multi-tool trailers correctly.
+      - [ ] Confidence bands are reported with their sparsity stated, not implied.
+      - [ ] A repository with no trailers reports "convention not adopted", not 0%.
+      - [ ] No per-author breakdown exists in any output, including `--json`.
+      - [ ] Runs on a large history without a full-corpus stall (2696 commits here).
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3659
 node_id: '1'
