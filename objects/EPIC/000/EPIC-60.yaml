@@ -52,3 +52,7 @@ modified_at: 2026-08-29T19:06:45.483941259Z
 req_type: Epic
 tags:
 - codex vendor-parity
+relationships:
+- rel_type: Parent
+  target_id: 01a04eeb-5496-7a43-8318-491ee2ce16e6
+  created_at: 2026-08-29T19:07:23.935233786Z
