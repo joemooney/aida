@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:00.101996416Z
-modified_at: 2026-08-29T19:08:00.101996416Z
+modified_at: 2026-08-29T19:56:19.485229958Z
 req_type: Bug
 tags:
 - codex headless papercut
@@ -33,3 +33,10 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T19:08:02.176413673Z
+comments:
+- id: 01a04f18-2c9d-72a2-a3e1-a47271d03ac0
+  author: joe
+  content: 'DUPLICATE of BUG-706 (completed), which fixed exactly this after the July validation run: --force/--yes now skip the confirmation even headless (pinned by bug776_session_end_confirm_tests::yes_or_force_skips_confirmation_even_headless), and non-TTY WITHOUT a flag refuses loudly instead of silently aborting (BUG-776). Filed 2026-08-29 from the stale runbook comment without re-verifying against current code — the verify-before-filing failure mode.'
+  created_at: 2026-08-29T19:56:19.485229958Z
+  modified_at: 2026-08-29T19:56:19.485229958Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
