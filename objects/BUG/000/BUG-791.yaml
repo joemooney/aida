@@ -29,3 +29,7 @@ modified_at: 2026-08-29T19:08:00.101996416Z
 req_type: Bug
 tags:
 - codex headless papercut
+relationships:
+- rel_type: Child
+  target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
+  created_at: 2026-08-29T19:08:02.176413673Z
