@@ -54,7 +54,10 @@ fi
 # violation. Suppress doc-ish files and the AIDA/Claude metadata trees. ──
 case "$FILE_PATH" in
     *.md | *.txt | *.json | *.toml | *.yaml | *.yml | *.lock) exit 0 ;;
-    */docs/* | */.aida/* | */.claude/*) exit 0 ;;
+    # Agent + substrate config, not product code. `.codex/` is the Codex
+    # equivalent of `.claude/` and must be treated identically, or the
+    # guard fires on the agent's own configuration.
+    */docs/* | */.aida/* | */.claude/* | */.codex/* | */.antigravity/*) exit 0 ;;
 esac
 
 # ── Fire only on recognized code extensions ──

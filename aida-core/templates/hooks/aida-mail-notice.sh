@@ -53,7 +53,7 @@
 
 # Resolve the project root the same way the role-context hook does, so the verb
 # runs against the right store regardless of the hook's cwd.
-project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
 
 # `--notice` defaults its identity to the union of this shell's user id and the
 # session role ($AIDA_SESSION_ROLE) — the same identity the statusline uses.

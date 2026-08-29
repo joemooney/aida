@@ -537,6 +537,8 @@ fn complete_init_scaffolding(
     // every re-init and `--refresh`. Failing to write it must never fail an
     // init: a project without a manifest is entirely normal.
     // trace:STORY-781 | ai:claude
+    maybe_scaffold_codex_hooks_on_init(root, force);
+
     let manifest_written = ensure_project_manifest_scaffold(root, force).unwrap_or(false);
     if manifest_written {
         println!(
@@ -2144,6 +2146,37 @@ pub(crate) fn handle_init_distributed_worktree(
     maybe_scaffold_codex_prompts_on_init(std::path::Path::new("."));
 
     Ok(())
+}
+
+/// TASK-1181: scaffold the Codex hook wiring (`.codex/hooks.json` plus the
+/// handlers under `.codex/hooks/`).
+///
+/// Written whenever the project carries Codex scaffolding at all, not only on a
+/// codex-resolved machine: a repo is shared, and the teammate who clones it on
+/// a Codex box should find the hooks already wired rather than having to know
+/// to run a scaffold verb. Idempotent, so an edited wiring survives.
+///
+/// Best-effort — a project without hooks is not broken, so this warns rather
+/// than failing init.
+// trace:TASK-1181 | ai:claude
+fn maybe_scaffold_codex_hooks_on_init(project_root: &std::path::Path, force: bool) {
+    match aida_core::scaffolding::codex_hooks::scaffold_codex_hooks(project_root, force) {
+        Ok(outcome) if !outcome.written.is_empty() => {
+            println!(
+                "  {} wrote Codex hook wiring ({} file(s) under .codex/) — the awaiting notice, \
+                 guardrails and session context now fire in Codex sessions too",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                outcome.written.len(),
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} Codex hook scaffold skipped ({e}) — hooks stay Claude-only for now",
+                "Warning:".yellow()
+            );
+        }
+    }
 }
 
 /// STORY-763: init-time hook — when the resolved default vendor is codex,

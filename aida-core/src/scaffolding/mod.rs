@@ -12,6 +12,7 @@
 
 mod aida_md;
 mod claude_md;
+pub mod codex_hooks;
 mod codex_md;
 pub mod codex_prompts;
 mod hooks;

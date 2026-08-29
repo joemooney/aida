@@ -32,11 +32,19 @@ if [ -z "$session_id" ]; then
     exit 0
 fi
 
-# Locate the transcript file. Encode cwd by replacing '/' with '-' per
-# Claude Code's project-dir convention.
-project_dir="${CLAUDE_PROJECT_DIR:-$PWD}"
-encoded_cwd="${project_dir//\//-}"
-transcript="$HOME/.claude/projects/${encoded_cwd}/${session_id}.jsonl"
+# Locate the transcript. BOTH Claude Code and Codex hand us `transcript_path`
+# in the hook payload, so take it rather than reconstructing a vendor-specific
+# location — Codex keeps sessions under ~/.codex/sessions/YYYY/MM/DD/rollout-*
+# and no amount of guessing the Claude layout would find them.
+transcript="$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null)"
+
+# Fall back to the Claude convention only if the payload omitted it, so an
+# older Claude Code that predates the field keeps working.
+if [ -z "$transcript" ]; then
+    project_dir="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
+    encoded_cwd="${project_dir//\//-}"
+    transcript="$HOME/.claude/projects/${encoded_cwd}/${session_id}.jsonl"
+fi
 
 if [ ! -f "$transcript" ]; then
     exit 0

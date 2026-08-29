@@ -235,7 +235,7 @@ project convention.
     /// user's `~/.codex/config.toml`. Registering `aida -- aida mcp-serve`
     /// here means a Codex session started from the project root discovers the
     /// AIDA tool surface without anyone running `codex mcp add aida ...` by
-    /// hand. The `project_trust_level = "trusted"` line opts the project into
+    /// hand. Trust is deliberately absent — see BUG-793; it opts the project into
     /// Codex's trusted-workspace posture so the local MCP server is allowed to
     /// run without a per-session prompt (the Codex analog of the
     /// `enabledMcpjsonServers: ["aida"]` pre-approval AIDA writes for Claude).
@@ -275,7 +275,12 @@ mod tests {
         assert!(toml.contains("args = [\"mcp-serve\"]"));
         // Baseline trusted-project posture so the local server runs without a
         // per-session prompt (parallel to the Claude pre-approval).
-        assert!(toml.contains("project_trust_level = \"trusted\""));
+        // BUG-793: this key makes Codex silently discard the entire project
+        // config, taking the MCP registration and hook wiring with it.
+        assert!(
+            !toml.contains("project_trust_level"),
+            "machine trust must never be scaffolded into a tracked project file"
+        );
         // Valid TOML that round-trips.
         let parsed: toml::Value = toml::from_str(&toml).expect("codex config.toml must parse");
         assert_eq!(
