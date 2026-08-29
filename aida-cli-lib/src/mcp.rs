@@ -2586,6 +2586,10 @@ impl<'a> McpServer<'a> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        // trace:BUG-790 | ai:codex
+        crate::reject_cross_store_spec_ref(spec_id).map_err(|e| e.to_string())?;
+        crate::reject_cross_store_spec_ref(target_spec_id).map_err(|e| e.to_string())?;
+
         let rel_type = parse_mcp_relationship_type(relationship_type_raw)?;
         let mut store = self.storage.load().map_err(|e| e.to_string())?;
         let source_req = store
@@ -2617,6 +2621,9 @@ impl<'a> McpServer<'a> {
             }
         }
 
+        let ambiguity_warning =
+            crate::relationship_terminal_ambiguity_warning(&rel_type, source_req, target_req);
+
         store
             .add_relationship(&source_id, rel_type.clone(), &target_id, bidirectional)
             .map_err(|e| e.to_string())?;
@@ -2630,6 +2637,9 @@ impl<'a> McpServer<'a> {
             if let Some(inverse) = rel_type.inverse() {
                 out.push_str(&format!("; inverse added as {}", inverse));
             }
+        }
+        if let Some(warning) = ambiguity_warning {
+            out.push_str(&format!("\nWarning: {warning}"));
         }
         Ok(out)
     }
@@ -6599,7 +6609,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "add_relationship",
-            "description": "Add a typed relationship between two existing requirements, mirroring `aida rel add` for MCP consumers. Built-in types include parent, child, duplicate, verifies, verified-by, references, blocked-by, and blocks; non-empty custom names are accepted for CLI parity. `depends-on` is accepted as an alias for blocked-by.",
+            "description": "Add a typed relationship between two existing local requirements, mirroring `aida rel add` for MCP consumers. Built-in types include parent, child, duplicate, verifies, verified-by, references, blocked-by, and blocks; non-empty custom names are accepted for CLI parity. `depends-on` is accepted as an alias for blocked-by. Cross-store references such as `other-project#STORY-21` are comment/prose notation today, not resolvable graph targets.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -10039,6 +10049,69 @@ mod tests {
             }))
             .expect_err("empty type should fail before target lookup");
         assert!(empty_type.contains("relationship_type must be non-empty"));
+    }
+
+    // trace:BUG-790 | ai:codex
+    #[test]
+    fn mcp_add_relationship_rejects_explicit_cross_store_refs() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let local = server
+            .tool_add_requirement(&json!({
+                "title": "Local collision",
+                "description": "source exists",
+                "type": "task",
+            }))
+            .unwrap();
+        let local_id = added_spec_id(&local).to_string();
+
+        let err = server
+            .tool_add_relationship(&json!({
+                "spec_id": local_id,
+                "relationship_type": "references",
+                "target_spec_id": "aida-hub#STORY-21",
+            }))
+            .expect_err("cross-store refs are not local graph edges");
+        assert!(err.contains("cross-store requirement reference"), "{err}");
+        assert!(
+            err.contains("cannot be resolved as a local graph edge"),
+            "{err}"
+        );
+    }
+
+    // trace:BUG-790 | ai:codex
+    #[test]
+    fn mcp_add_relationship_warns_on_open_to_terminal_non_hierarchy_target() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let source = server
+            .tool_add_requirement(&json!({
+                "title": "Open local source",
+                "description": "source exists",
+                "type": "story",
+            }))
+            .unwrap();
+        let source_id = added_spec_id(&source).to_string();
+        let target = server
+            .tool_add_requirement(&json!({
+                "title": "Terminal local target",
+                "description": "target exists",
+                "type": "story",
+            }))
+            .unwrap();
+        let target_id = added_spec_id(&target).to_string();
+        force_status(&server, &target_id, RequirementStatus::Rejected);
+
+        let response = server
+            .tool_add_relationship(&json!({
+                "spec_id": source_id,
+                "relationship_type": "references",
+                "target_spec_id": target_id,
+            }))
+            .unwrap();
+        assert!(response.contains("Relationship added"), "{response}");
+        assert!(response.contains("Warning:"), "{response}");
+        assert!(response.contains("another store"), "{response}");
     }
 
     // trace:TASK-551 | ai:codex

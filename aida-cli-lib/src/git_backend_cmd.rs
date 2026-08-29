@@ -4959,6 +4959,9 @@ pub(crate) fn handle_git_backend_command(
                 .as_deref()
                 .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
+            // trace:BUG-790 | ai:codex
+            reject_cross_store_spec_ref(from)?;
+            reject_cross_store_spec_ref(to)?;
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
                 .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
@@ -5037,6 +5040,12 @@ pub(crate) fn handle_git_backend_command(
                         );
                     }
                 }
+            }
+            if let Some(warning) =
+                relationship_terminal_ambiguity_warning(&rel_type, &from_req, &to_req)
+            {
+                // trace:BUG-790 | ai:codex
+                eprintln!("{} {}", "warning:".yellow().bold(), warning);
             }
 
             // TASK-679: a parent/child edge is canonically BIDIRECTIONAL so it

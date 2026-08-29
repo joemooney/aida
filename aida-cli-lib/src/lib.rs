@@ -60799,6 +60799,47 @@ fn rel_should_write_inverse(rel_type: &RelationshipType, bidirectional_flag: boo
     bidirectional_flag || matches!(rel_type, RelationshipType::Parent | RelationshipType::Child)
 }
 
+fn looks_like_cross_store_spec_ref(s: &str) -> bool {
+    let Some((project, spec)) = s.split_once('#') else {
+        return false;
+    };
+    !project.trim().is_empty()
+        && !spec.trim().is_empty()
+        && spec
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '-')
+}
+
+fn reject_cross_store_spec_ref(raw: &str) -> Result<()> {
+    if looks_like_cross_store_spec_ref(raw) {
+        anyhow::bail!(
+            "cross-store requirement reference `{raw}` cannot be resolved as a local graph edge. \
+             Record it in a spec comment as `{raw}` until AIDA has first-class cross-store links."
+        );
+    }
+    Ok(())
+}
+
+fn relationship_terminal_ambiguity_warning(
+    rel_type: &RelationshipType,
+    source: &Requirement,
+    target: &Requirement,
+) -> Option<String> {
+    if matches!(rel_type, RelationshipType::Parent | RelationshipType::Child) {
+        return None;
+    }
+    if is_terminal_status(&source.status) || !is_terminal_status(&target.status) {
+        return None;
+    }
+    Some(format!(
+        "target {} is {} while source {} is {}; if this was meant for another store, do not use this local edge. Record the cross-store reference in a comment instead.",
+        target.spec_id.as_deref().unwrap_or("?"),
+        target.status,
+        source.spec_id.as_deref().unwrap_or("?"),
+        source.status,
+    ))
+}
+
 // TASK-928 (SPIKE-71 source-side fix): a `parent:<SPEC-ID>` tag must
 // materialize the REAL bidirectional parent/child edge, not just sit on the
 // spec as an opaque string. The canonical `--parent` flag already writes the

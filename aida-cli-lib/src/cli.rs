@@ -3825,12 +3825,16 @@ pub enum RelDefCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum RelationshipCommand {
-    /// Add a relationship between requirements
+    /// Add a relationship between local requirements
     ///
     /// Both positional and flag forms work:
     ///   aida rel add <from> <to> --type child
     ///   aida rel add --from <from> --to <to> --type child
+    ///
+    /// Cross-store references such as `other-project#STORY-21` are not local
+    /// graph edges; record them in comments until AIDA has a resolver.
     // trace:TASK-487 | ai:claude
+    // trace:BUG-790 | ai:codex
     Add {
         /// Source requirement ID (UUID or SPEC-ID). Positional or via --from.
         #[clap(value_name = "FROM")]
