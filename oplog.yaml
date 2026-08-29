@@ -40590,5 +40590,44 @@ operations:
   timestamp: 2026-08-29T23:59:50.422166930Z
   kind: !SetStatus
     status: Needs Attention
-clock: 3697
+- id: 01a04ff7-2803-79e2-9c1d-318c1b38c788
+  target_id: 01a04ff7-2223-7b61-934e-d9274c15fdb6
+  author: aida
+  node_id: '1'
+  lamport: 3698
+  timestamp: 2026-08-29T23:59:52.835668631Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on BUG-790'
+    description: |
+      Auto-drafted by `aida queue work BUG-790 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the reviewer session produced no verdict file — the review did not complete
+
+      Failure kind: `no-verdict`
+
+      ## Recovery hint shown to the user
+
+      The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1612 --steal`
+
+      ## Phase durations
+
+        - phase 3 (reviewer): 246564 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-790","started_at":"2026-08-29T23:55:43.158898680+00:00","completed_at":"2026-08-29T23:59:51.267318558+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"no-verdict","failure_message":"the reviewer session produced no verdict file — the review did not complete","phase_durations":[{"phase":3,"slug":"reviewer","elapsed_ms":246564}],"total_ms":247160,"binary_sha":"7bb28b075"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3698
 node_id: '1'
