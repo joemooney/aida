@@ -17,12 +17,12 @@ description: |-
   ACCEPTANCE:
   - [ ] The no-human ack warning carries no SPEC-ID.
   - [ ] The trace marker stays in the source as a plain `//` comment so provenance is not lost.
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:06.415843028Z
-modified_at: 2026-08-29T19:56:23.354806993Z
+modified_at: 2026-08-29T19:56:24.750702436Z
 req_type: Bug
 tags:
 - codex papercut user-facing-text
