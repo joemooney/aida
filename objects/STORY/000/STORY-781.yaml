@@ -85,12 +85,12 @@ description: |-
   - [ ] A malformed manifest is reported clearly and does not break any command.
   - [ ] `aida doctor` reports presence, parseability and staleness.
   - [ ] The schema is readable by a consumer that is not AIDA.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:30:40.904764482Z
-modified_at: 2026-08-25T07:04:00.863427712Z
+modified_at: 2026-08-29T19:54:13.097153073Z
 req_type: Story
 tags:
 - aida:doctor
@@ -204,3 +204,21 @@ comments:
   created_at: 2026-08-25T07:04:00.863427712Z
   modified_at: 2026-08-25T07:04:00.863427712Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a04f16-3ee3-7911-ae8c-7019d3a02015
+  author: aida-auto-bump
+  timestamp: 2026-08-29T19:54:13.091302590Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a04f16-3ee9-7570-a25e-648d192c5158
+  timestamp: 2026-08-29T19:54:13.097152462Z
+  agent: aida
+  commit_sha: ca476470f0bec3562096bd7f018ec03754080434
+  summary: Completed via merge ca476470
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-29T19:54:12.401092537Z
+  completion_sha: ca476470f0bec3562096bd7f018ec03754080434
