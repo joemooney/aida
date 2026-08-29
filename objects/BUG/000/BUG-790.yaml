@@ -81,7 +81,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-25T06:32:44.998110510Z
-modified_at: 2026-08-29T21:10:13.242369543Z
+modified_at: 2026-08-29T21:12:28.259090871Z
 req_type: Bug
 tags:
 - aida:rel
@@ -96,6 +96,36 @@ relationships:
   target_id: 01a04f55-e805-7153-b5c9-25ee6ea2b820
   created_at: 2026-08-29T21:03:49.998327380Z
   created_by: joe
+comments:
+- id: 01a04f5d-e363-7532-aa69-9de09a9bf545
+  author: joe
+  content: |-
+    REVIEWER VERDICT (PR #1610, codex reviewer session 01a04f565418, 2026-08-29) — recorded by the
+    advisor because the session wrote no verdict file (see BUG-796); the substance was correct and must
+    not be lost with the mechanical failure:
+
+    VERDICT: REQUEST CHANGES.
+
+    P1 — acceptance still unmet for NON-TERMINAL collisions. The new guard only fires via
+    `rel_add_terminal_target_warning`, which returns None for any non-terminal target. So if the local
+    store has an unrelated STORY-21 in Approved/Planned/InProgress, `aida rel add --to STORY-21` still
+    creates the silently-wrong edge — which is the exact original failure shape. Sites named by the
+    reviewer: git_backend_cmd.rs:4985, lib.rs:60847, and the legacy path relationship_cmd.rs:124.
+
+    Reviewer verification that DID pass: explicit `sibling#STORY-008` cross-store form is rejected with
+    the prose-comment guidance; bare rejected (terminal) target warns; nonexistent target still exits 1;
+    task_679_canonical_rel_tests pass; fmt clean. The fix direction is right — the collision surface is
+    just narrower than the bug.
+
+    NEXT IMPLEMENTER: extend the ambiguity surface to non-terminal local targets. Note the design
+    tension the terminal-only choice was presumably avoiding: warning on EVERY rel add would be noise —
+    the signal worth surfacing is "the target id LOOKS like it may not mean what you think" and the spec
+    gives latitude; at minimum, echoing the resolved target's TITLE on every successful rel add would
+    have exposed the original mis-bind instantly and costs one line. Continue on the existing PR #1610
+    branch (bug-790); do not open a second PR.
+  created_at: 2026-08-29T21:12:28.259090871Z
+  modified_at: 2026-08-29T21:12:28.259090871Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 failure_reason:
   phase: reviewer
   phase_index: 3
