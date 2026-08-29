@@ -45,12 +45,12 @@ description: |-
   - [ ] `aida scaffold refresh` covers the codex hook pack, edit-preserving, per TASK-1170.
   - [ ] `.codex/hooks.json` is TRACKED -- it is team-shared config, not per-clone runtime state.
   - [ ] A project with no `.codex/` keeps working identically; nothing regresses for Claude users.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:07:20.598452738Z
-modified_at: 2026-08-29T19:54:04.540430619Z
+modified_at: 2026-08-29T19:54:13.692453528Z
 req_type: Task
 tags:
 - codex aida:init hooks
@@ -58,3 +58,21 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T19:07:23.935233786Z
+history:
+- id: 01a04f16-4136-7b03-8451-b67d837467b8
+  author: aida-auto-bump
+  timestamp: 2026-08-29T19:54:13.686671643Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a04f16-413c-7e72-84a4-4512fbedd5f1
+  timestamp: 2026-08-29T19:54:13.692452908Z
+  agent: aida
+  commit_sha: ca476470f0bec3562096bd7f018ec03754080434
+  summary: Completed via merge ca476470
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-29T19:54:12.401092537Z
+  completion_sha: ca476470f0bec3562096bd7f018ec03754080434
