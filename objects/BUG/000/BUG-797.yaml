@@ -48,7 +48,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T21:12:49.445860917Z
-modified_at: 2026-08-29T23:37:23.779872421Z
+modified_at: 2026-08-29T23:37:30.671159839Z
 req_type: Bug
 tags:
 - codex drain reviewer prompt-parity
@@ -68,6 +68,12 @@ comments:
   content: 'Follow-up: the prompt-content fix here is necessary but NOT sufficient — the second drive shelved identically because codex exec never expands /aida-review at all; the model got the literal slash string. Launch-boundary inline rendering is BUG-798. This spec''s E2E acceptance transfers there.'
   created_at: 2026-08-29T23:37:23.779872421Z
   modified_at: 2026-08-29T23:37:23.779872421Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a04fe2-ad2f-7f30-aa71-97b97a9f318e
+  author: joe
+  content: 'Correction: the launch-boundary bug is BUG-799 (not 798).'
+  created_at: 2026-08-29T23:37:30.671159839Z
+  modified_at: 2026-08-29T23:37:30.671159839Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a04fca-68a5-73f1-9ed9-3d75f70dccb5
