@@ -138,12 +138,23 @@ pub fn render_codex_config_document(name: &str, spec: &McpServerSpec) -> String 
     out.push_str("# Codex merges this project-local config over your `~/.codex/config.toml`.\n");
     out.push_str("# Personal preferences (model, footer, etc.) belong in the user-level file;\n");
     out.push_str("# keep this one limited to the project's AIDA integration.\n\n");
-    out.push_str("# Trust this project's local MCP server without a per-session prompt. This is\n");
-    out.push_str(
-        "# the Codex analog of the `enabledMcpjsonServers: [\"aida\"]` pre-approval AIDA\n",
-    );
-    out.push_str("# writes for Claude Code. Remove it if your team prefers an explicit prompt.\n");
-    out.push_str("project_trust_level = \"trusted\"\n\n");
+    // BUG-793: this file previously carried `project_trust_level = "trusted"`.
+    // Codex rejects that key here and SILENTLY IGNORES THE ENTIRE FILE — no
+    // error, no warning — so everything below (the MCP registration, and the
+    // project hook wiring) was inert on every project AIDA ever scaffolded.
+    //
+    // The key is also in the wrong place on principle. Codex records project
+    // trust machine-globally, keyed by path (`~/.codex/config.toml`
+    // `[projects."<path>"] trust_level`). Trust is a per-machine decision about
+    // a checkout, so it cannot live in a file that travels inside the
+    // repository — a repo that could assert its own trustworthiness is a
+    // supply-chain vector. That is exactly why the Claude analog it was modelled
+    // on (`enabledMcpjsonServers`) lives in the GITIGNORED
+    // `.claude/settings.local.json` (BUG-484). Modelling on it without carrying
+    // over the gitignore is what put the key here.
+    out.push_str("# Trust is deliberately NOT set here. Codex records it per machine, keyed by\n");
+    out.push_str("# path, in ~/.codex/config.toml — a repository cannot vouch for itself, and\n");
+    out.push_str("# setting it in this file makes Codex discard the whole config silently.\n\n");
     out.push_str("# AIDA MCP server: spec graph + cross-agent coordination surface.\n");
     if spec.command == "aida" {
         out.push_str(

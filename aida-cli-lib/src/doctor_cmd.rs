@@ -217,6 +217,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-781: project-manifest check. Reads one small file (plus one
+    // `git remote get-url` when a repository is recorded), so it is cheap, but
+    // it is appended here with the other opt-in categories rather than added
+    // to the hot `collect_doctor_findings` path. Honours `--category`.
+    // trace:STORY-781 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), "project-manifest")? {
+        findings.extend(scan_project_manifest(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
     // the same tip on every configured remote? Uses cheap `ls-remote` (refs
     // only, no object transfer), so it is kept OUT of the hot
@@ -619,6 +629,155 @@ fn spec_id_from_work_branch(branch: &str) -> Option<String> {
 /// can't reach is skipped (not a false alarm). Never writes. Emits one finding
 /// per diverged branch.
 // trace:TASK-1095 | ai:claude
+/// STORY-781: check the checked-in project manifest.
+///
+/// ABSENCE PRODUCES NO FINDING, deliberately and load-bearingly. A project
+/// without a manifest keeps working identically; treating its absence as a
+/// defect would make every pre-existing repository suddenly "unhealthy" for a
+/// file it never agreed to carry, and would turn an optional standard into a
+/// nag. Only things a human can act on are reported:
+///
+///   - malformed  — the file exists but cannot be read
+///   - unfilled   — scaffolded and never completed; the blank form this whole
+///                  design exists to prevent
+///   - drifted    — the recorded repository no longer matches `origin`
+///
+/// Read-only. Never mutates, never heals.
+// trace:STORY-781 | ai:claude
+pub(crate) fn scan_project_manifest(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    use aida_core::project_manifest as pm;
+
+    let mut findings = Vec::new();
+    let manifest = match pm::load(project_root) {
+        // Not a defect. Say nothing.
+        pm::ManifestState::Absent => return findings,
+        pm::ManifestState::Malformed(msg) => {
+            findings.push(DoctorFinding {
+                category: "project-manifest".to_string(),
+                id: "project-manifest-malformed".to_string(),
+                summary: format!("{} could not be read: {msg}", pm::MANIFEST_REL_PATH),
+                action: format!(
+                    "fix the TOML in {} (schema: docs/project-manifest.md).                      Nothing else is affected — every command keeps working without it",
+                    pm::MANIFEST_REL_PATH
+                ),
+                safe_heal: false,
+            });
+            return findings;
+        }
+        pm::ManifestState::Present(m) => m,
+    };
+
+    if manifest.is_unfilled() {
+        findings.push(DoctorFinding {
+            category: "project-manifest".to_string(),
+            id: "project-manifest-unfilled".to_string(),
+            summary: format!(
+                "{} was scaffolded but never filled in — nothing is recorded that a scan could not already work out",
+                pm::MANIFEST_REL_PATH
+            ),
+            action: "add at least `why` — the one thing no tool can derive for you".to_string(),
+            safe_heal: false,
+        });
+    }
+
+    // Values this build does not recognise. The FILE still parsed — that is the
+    // degrade-not-reject contract — but the author almost certainly believes
+    // they said something meaningful, so say that we did not understand it.
+    // Note this fires on a genuinely-newer schema too, which is the right
+    // trade: "your AIDA is older than this manifest" is worth knowing.
+    let mut unknown: Vec<String> = Vec::new();
+    if let Some(l) = manifest.project.liveness.as_ref() {
+        if !l.is_recognised() {
+            unknown.push(format!(
+                "liveness = \"{}\" (expected one of: {})",
+                l.as_str(),
+                pm::Liveness::ALL.join(", ")
+            ));
+        }
+    }
+    if let Some(st) = manifest.project.stage.as_ref() {
+        if !st.is_recognised() {
+            unknown.push(format!(
+                "stage = \"{}\" (expected one of: {})",
+                st.as_str(),
+                pm::Stage::ALL.join(", ")
+            ));
+        }
+    }
+    if !unknown.is_empty() {
+        findings.push(DoctorFinding {
+            category: "project-manifest".to_string(),
+            id: "project-manifest-unrecognised-value".to_string(),
+            summary: format!(
+                "{} uses a value this build does not recognise: {}",
+                pm::MANIFEST_REL_PATH,
+                unknown.join("; ")
+            ),
+            action: format!(
+                "fix the value, or upgrade `aida` if this manifest was written by a newer one.                  The rest of {} is still being read normally",
+                pm::MANIFEST_REL_PATH
+            ),
+            safe_heal: false,
+        });
+    }
+
+    // A recorded repository that no longer matches `origin` means the project
+    // moved and the manifest is now describing somewhere it does not live.
+    if let Some(recorded) = manifest.project.repository.as_deref() {
+        if let Some(actual) = aida_core::git_ops::remote_url(project_root, "origin") {
+            if !same_remote(recorded, &actual) {
+                findings.push(DoctorFinding {
+                    category: "project-manifest".to_string(),
+                    id: "project-manifest-repository-drift".to_string(),
+                    summary: format!(
+                        "{} records repository `{recorded}` but origin is `{actual}`",
+                        pm::MANIFEST_REL_PATH
+                    ),
+                    action: format!(
+                        "update `repository` in {} to match, or remove it",
+                        pm::MANIFEST_REL_PATH
+                    ),
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+
+    findings
+}
+
+/// Whether two clone URLs name the same repository.
+///
+/// The same repo is written `https://host/o/n.git`, `git@host:o/n.git` and
+/// `ssh://git@host/o/n` — comparing raw strings would report drift on every
+/// project whose manifest was written from one form and whose remote uses
+/// another. Reduced to `host/owner/name`.
+// trace:STORY-781 | ai:claude
+pub(crate) fn same_remote(a: &str, b: &str) -> bool {
+    fn key(url: &str) -> String {
+        let u = url.trim().trim_end_matches('/');
+        let u = u.strip_suffix(".git").unwrap_or(u);
+        // scp-style: git@host:owner/name
+        if let Some(rest) = u.split_once('@').map(|(_, r)| r) {
+            if let Some((host, path)) = rest.split_once(':') {
+                if !path.starts_with("//") {
+                    return format!("{}/{}", host.to_lowercase(), path.trim_start_matches('/'));
+                }
+            }
+        }
+        let after_scheme = u.split_once("://").map(|(_, r)| r).unwrap_or(u);
+        let after_user = after_scheme
+            .split_once('@')
+            .map(|(_, r)| r)
+            .unwrap_or(after_scheme);
+        match after_user.split_once('/') {
+            Some((host, path)) => format!("{}/{}", host.to_lowercase(), path),
+            None => after_user.to_lowercase(),
+        }
+    }
+    key(a) == key(b)
+}
+
 fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
     let remotes: Vec<String> = aida_core::git_ops::list_remotes(project_root)
         .into_iter()

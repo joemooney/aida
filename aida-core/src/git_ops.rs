@@ -1408,6 +1408,20 @@ pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
 /// reachability — that's `is_remote_reachable`. Useful for "should we
 /// even attempt a push?" decisions where unreachable-but-configured is
 /// still a useful signal. trace:BUG-23 | ai:claude
+/// The configured URL of `remote`, or None when it isn't configured.
+///
+/// Same probe as [`has_remote`], but keeps the value — callers pre-filling
+/// metadata want the URL, not just its existence.
+// trace:STORY-781 | ai:claude
+pub fn remote_url(repo: &Path, remote: &str) -> Option<String> {
+    let r = git(repo, &["remote", "get-url", remote]).ok()?;
+    if !r.success {
+        return None;
+    }
+    let url = r.stdout.trim().to_string();
+    Some(url).filter(|s| !s.is_empty())
+}
+
 pub fn has_remote(repo: &Path, remote: &str) -> bool {
     git(repo, &["remote", "get-url", remote])
         .map(|r| r.success)

@@ -29,7 +29,7 @@ command -v aida >/dev/null 2>&1 || exit 0
 
 # Run against the right store regardless of the hook's cwd, mirroring the other
 # SessionStart hooks (role-context / mail-notice).
-project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
 cd "$project_root" 2>/dev/null || exit 0
 
 role="${AIDA_SESSION_ROLE:-none}"

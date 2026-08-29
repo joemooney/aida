@@ -35,6 +35,10 @@ fn main() {
     // Settings (Claude Code configuration)
     embed_file(&mut code, "templates/settings.json", "settings.json");
 
+    // Codex hook wiring — the same handlers as settings.json, wired to
+    // Codex's hook events. TASK-1181.
+    embed_file(&mut code, "templates/codex-hooks.json", "codex-hooks.json");
+
     // Reserved namespaces injected into `aida ultraplan` prompts and
     // scaffolded into `.aida/reserved-paths.toml`. trace:TASK-517
     embed_file(

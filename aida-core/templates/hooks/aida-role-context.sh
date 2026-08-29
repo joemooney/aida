@@ -21,8 +21,8 @@ fi
 
 # Locate the role file. Honor AIDA_SESSION_PROJECT (set by `aida role enter`)
 # so the project copy takes precedence even when the hook fires from a
-# different cwd; fall back to $CLAUDE_PROJECT_DIR or pwd-walking.
-project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+# different cwd; fall back to the vendor project var, then git, then pwd.
+project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf %s "$PWD")}}}"
 role_file=""
 if [ -f "$project_root/.aida/roles/$role.toml" ]; then
     role_file="$project_root/.aida/roles/$role.toml"

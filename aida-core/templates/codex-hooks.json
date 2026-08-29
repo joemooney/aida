@@ -1,0 +1,108 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-validate-commit.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-git-guardrails.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-advisor-code-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-track-commits.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-session-context.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-role-context.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-mail-notice.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-mail-notice.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-subagent-start.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-subagent-stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-capture-prompt.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
