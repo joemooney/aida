@@ -1,0 +1,52 @@
+id: 01a04ff9-78ca-74c0-b368-ab3cab3a58e1
+spec_id: BUG-802
+agreed_id: BUG-802
+title: 'reviewer verdict lands in the wrong directory: add  verb + drive-root env anchor'
+description: |-
+  Layer 3 of the codex reviewer saga (after BUG-797 prompt content, BUG-799 launch-boundary
+  expansion): the reviewer NOW receives the workflow and writes a correct verdict file — but writes it
+  relative to ITS OWN working directory, and reviewers routinely check the PR out somewhere else. The
+  orchestrator polls `.aida/review-verdicts/PR-N.json` at the DRIVE root, sees nothing, and shelves.
+
+  OBSERVED on the third BUG-790 drive (2026-08-29): a byte-perfect verdict file
+  ({"verdict":"Approved", ...}, written before the PR comment exactly per contract) sitting in
+  /home/joe/ai/aida-pr-1612/.aida/review-verdicts/ — a PR checkout the reviewer created — while the
+  orchestrator polled /home/joe/ai/aida/.aida/review-verdicts/. Right artifact, wrong directory,
+  third consecutive phase-3 shelf, each layer one deeper than the last.
+
+  WHY EXHORTATION IS NOT THE FIX: telling the model "write it at the ORIGINAL root" is fragile —
+  "root" is ambiguous the moment the reviewer clones the PR (the clone has its own .aida/, its own
+  git toplevel; find_project_root from inside it resolves to the clone). The location contract needs
+  to be executable, not describable.
+
+  FIX SHAPE (substrate-as-bouncer):
+    1. `spawn_vendor_headless` (and the exec twin — same choke point, compose_headless_command's
+       callers) exports the drive root as an env anchor, e.g. AIDA_DRIVE_ROOT=<orchestrator project
+       root>, into every phase session.
+    2. New verb `aida review verdict --pr N --verdict Approved|RequestChanges|Rejected
+       [--summary "…"] [--merge escalated-to-human]` that WRITES the canonical file, resolving the
+       destination as: AIDA_DRIVE_ROOT if set, else find_project_root(). Validates the verdict
+       vocabulary (same tolerant parse the orchestrator uses), refuses garbage loudly.
+    3. The /aida-review command master's step 6 tells the reviewer to RUN THE VERB instead of
+       hand-writing JSON. One command is easier for every model than a hand-authored file at a
+       hand-resolved path, it is vendor-neutral, and it hard-binds the location.
+    4. Keep accepting a hand-written file (Claude skill flow unchanged); the verb is the recommended
+       path, not the only one.
+
+  ACCEPTANCE:
+  - [ ] The verb writes a file the orchestrator's Verdict::parse accepts, at the drive root, from ANY
+        cwd (test: run it from a nested temp dir with AIDA_DRIVE_ROOT set).
+  - [ ] Phase sessions receive the env anchor (both spawn and exec paths).
+  - [ ] Command master step 6 instructs the verb; rendered codex prompt carries it (extend the
+        BUG-797 pin).
+  - [ ] E2E: a codex drain review completes phase 3 — the remaining queue (STORY-783/784, TASK-1183)
+        is the live test.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-30T00:02:24.586922578Z
+modified_at: 2026-08-30T00:02:24.586922578Z
+req_type: Bug
+tags:
+- codex drain reviewer substrate-as-bouncer
