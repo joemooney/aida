@@ -1,0 +1,26 @@
+id: 01a050db-1f5f-7202-be5c-780e600b3030
+spec_id: STORY-798
+agreed_id: STORY-798
+title: 'Review PR-1626: [AI:codex] docs(positioning): add cold-reader migration path (TASK-1186)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a050cf`) for branch `task-1186`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1626>
+  - Branch: `task-1186` → `main`
+
+  ## Covers
+
+  - TASK-1186
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1626` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-30T04:08:52.831027834Z
+modified_at: 2026-08-30T04:08:52.831027834Z
+req_type: Story
