@@ -40959,5 +40959,81 @@ operations:
   timestamp: 2026-08-30T01:20:02.465741361Z
   kind: !SetStatus
     status: Completed
-clock: 3718
+- id: 01a05042-38aa-7993-9604-3134f0c0ae8f
+  target_id: 01a05042-3393-73e1-ac20-e511548a1c5b
+  author: aida
+  node_id: '1'
+  lamport: 3719
+  timestamp: 2026-08-30T01:21:52.298728724Z
+  kind: !Create
+    title: Project-identity checklist at init — offer the thesis, never demand it
+    description: |
+      STORY-781 scaffolds `.aida/project.toml` pre-filled from derivable facts. What
+      it cannot pre-fill is the part that matters most: **why this project exists and
+      what bet it is making.**
+
+      A new project is exactly the moment a human has that in their head, and exactly
+      the moment they will not write it down unless asked.
+
+      ## THE TIMING TRAP — read this before implementing
+
+      **`aida init` is the wrong moment to DEMAND a thesis.** At init you have a
+      directory and a hope. Forcing a thesis then produces a placeholder sentence
+      that is worse than blank, because blank is honestly "not recorded" while a
+      placeholder looks like a considered answer and never gets revisited.
+
+      A thesis usually crystallises after a few weeks, once the project has survived
+      contact with reality.
+
+      So the shape is two-stage:
+
+      1. **At init — OFFER, never require.** Prompt on a TTY, pre-filled where
+         derivable, trivially skippable, and silent/deferred when non-interactive.
+         Follow the pattern init already uses (`prompt_yes_no` default-Y on a TTY,
+         auto when headless) and the precedent of TASK-859, which added prompting for
+         high-value configurables at init.
+
+      2. **Later — NUDGE once it is earned.** `aida doctor` surfaces "no thesis
+         recorded" only for a project showing signs of being real (commits
+         accumulating, specs filed). Nagging a two-day-old scratch directory is how
+         the whole checklist gets ignored, including the parts that matter.
+
+      ## What belongs on the checklist
+
+      The three-layer identity, each with exactly one home and no retyping:
+
+      | Layer | Question | Home |
+      | --- | --- | --- |
+      | Thesis | what bet is this making? | the vision spec (`aida add --type vision`) |
+      | Why | what itch started it? | manifest `why` |
+      | Description | what is it? | manifest `description`, derivable from README |
+
+      Note the thesis's home is a VISION SPEC, not a manifest field — AIDA already
+      models it, and duplicating it into the manifest would create two sources that
+      drift. The checklist should OFFER to create the vision spec, not invent a
+      parallel field.
+
+      ## Prompt for the bet, not the reason
+
+      Wording is load-bearing here. "Why did you start this?" invites one line. The
+      thesis worth capturing is operative — it should be something later proposals can
+      be measured against. aida-hub's own VIS-1 is the model: it carries a governing
+      principle AND an explicit decision rule ("any proposed feature that requires
+      routine manual upkeep should be treated as suspect").
+
+      ## Acceptance
+
+      - [ ] Init offers the identity checklist on a TTY, pre-filled where derivable.
+      - [ ] Every item is skippable; nothing blocks init, and nothing prompts when
+            non-interactive.
+      - [ ] The thesis item offers to create a VISION SPEC, not a duplicate manifest
+            field.
+      - [ ] `aida doctor` nudges for a missing thesis only once a project shows signs
+            of being real; a fresh or dormant directory is not nagged.
+      - [ ] Prompt wording asks for the bet, not merely the reason.
+      - [ ] A skipped item is recorded as NOT RECORDED, never as a placeholder.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3719
 node_id: '1'
