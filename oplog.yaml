@@ -41323,5 +41323,25 @@ operations:
   timestamp: 2026-08-30T02:17:13.912267127Z
   kind: !SetStatus
     status: Completed
-clock: 3742
+- id: 01a05079-88e7-7772-b9b8-ce7e9fcac1aa
+  target_id: 01a05079-836d-7fb0-ba9c-0ea36ad8f3fb
+  author: aida
+  node_id: '1'
+  lamport: 3743
+  timestamp: 2026-08-30T02:22:17.319609418Z
+  kind: !Create
+    title: findings count fails when cache table is absent
+    description: |
+      While working TASK-1183, the pickup workflow command `aida findings list --count` failed with:
+
+      `error: "no such table: requirements_cache"`
+
+      This prevented the required pending-findings nudge from being evaluated. The rest of the AIDA CLI could still read the queue and specs, so this looks like a cache initialization or fallback gap specific to the findings count path.
+
+      Raised by the implementer while working TASK-1183.
+      Branch: task-1183  ·  Commit: d54bb5fb1  (PR link added on merge)
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 3743
 node_id: '1'
