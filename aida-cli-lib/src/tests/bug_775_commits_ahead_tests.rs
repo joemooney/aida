@@ -329,3 +329,98 @@ fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
         );
     }
 }
+
+// ── BUG-806: spec-keyed verdict fallback + drive-binary PATH ─────────────────
+
+#[test]
+fn a_fresh_spec_verdict_is_accepted_when_the_pr_file_is_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let vd = dir.path().join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&vd).unwrap();
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    std::fs::write(
+        vd.join("STORY-783.json"),
+        r#"{"verdict":"approved","reviewed_sha":"abc","recorded_at":"2026-08-29T18:02:00Z"}"#,
+    )
+    .unwrap();
+    let out = crate::spec_verdict_fallback_for_phase3(dir.path(), "STORY-783", started);
+    assert!(
+        matches!(
+            out,
+            Some(crate::auto_complete::ReviewerOutcome::Verdict(
+                crate::auto_complete::Verdict::Approved
+            ))
+        ),
+        "a verdict recorded during this session must be accepted: {out:?}"
+    );
+}
+
+#[test]
+fn a_verdict_recorded_before_this_session_is_stale_and_refused() {
+    // The freshness gate: an approval from an EARLIER review must never
+    // advance a later diff.
+    let dir = tempfile::tempdir().unwrap();
+    let vd = dir.path().join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&vd).unwrap();
+    std::fs::write(vd.join("BUG-1.json"), r#"{"verdict":"approved"}"#).unwrap();
+    let started = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+    assert_eq!(
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-1", started),
+        None
+    );
+}
+
+#[test]
+fn request_changes_flows_through_the_fallback_too() {
+    // The fallback must carry EVERY verdict, not just approvals — otherwise a
+    // request-changes review would look like "no verdict" and shelve.
+    let dir = tempfile::tempdir().unwrap();
+    let vd = dir.path().join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&vd).unwrap();
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    std::fs::write(vd.join("BUG-2.json"), r#"{"verdict":"request-changes"}"#).unwrap();
+    assert!(matches!(
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-2", started),
+        Some(crate::auto_complete::ReviewerOutcome::Verdict(
+            crate::auto_complete::Verdict::RequestChanges
+        ))
+    ));
+}
+
+#[test]
+fn absent_or_garbage_records_fall_through() {
+    let dir = tempfile::tempdir().unwrap();
+    let started = std::time::SystemTime::UNIX_EPOCH;
+    assert_eq!(
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-3", started),
+        None
+    );
+    let vd = dir.path().join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&vd).unwrap();
+    std::fs::write(vd.join("BUG-3.json"), "not json").unwrap();
+    assert_eq!(
+        crate::spec_verdict_fallback_for_phase3(dir.path(), "BUG-3", started),
+        None
+    );
+}
+
+#[test]
+fn drive_path_env_leads_with_the_current_exe_dir() {
+    let p = crate::session::drive_path_env().expect("path assembles");
+    let exe_dir = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let first = std::env::split_paths(&p).next().unwrap();
+    assert_eq!(
+        first, exe_dir,
+        "the drive's own binary dir must win resolution"
+    );
+    // And the inherited PATH must still be there, or children lose git/gh.
+    let inherited: Vec<_> = std::env::split_paths(&p).collect();
+    assert!(
+        inherited.len() > 1,
+        "inherited PATH entries must be preserved"
+    );
+}

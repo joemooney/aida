@@ -71882,6 +71882,41 @@ fn latest_run_id_for_branch(branch: &str) -> Option<String> {
 /// The `merge` field is dominant: an escalation is honoured whatever the
 /// `verdict` field says, so the phase-3 handshake artifact always parses.
 /// trace:STORY-246, STORY-306 | ai:claude
+/// BUG-806: phase-3 fallback — when the PR-keyed handshake file is absent,
+/// accept the SPEC-keyed recorded verdict (`aida review record <SPEC>`) if it
+/// was written DURING this reviewer session (file mtime >= session start).
+///
+/// Five consecutive phase-3 shelves proved the narrow polling wrong: on the
+/// fifth, the reviewer ran the record verb with a correct verdict and the
+/// orchestrator still shelved because only `PR-N.json` was consulted. The
+/// orchestrator drives a known spec; refusing first-class verdict state it can
+/// already see is the substrate losing information it holds. The mtime gate
+/// means a verdict recorded by an EARLIER review can never advance a later
+/// diff, and the PR-keyed file remains the primary contract — this runs only
+/// on a miss.
+// trace:BUG-806 | ai:claude
+fn spec_verdict_fallback_for_phase3(
+    project_root: &std::path::Path,
+    spec: &str,
+    reviewer_started_at: std::time::SystemTime,
+) -> Option<auto_complete::ReviewerOutcome> {
+    let path = review_verdict::verdict_path(project_root, spec);
+    let mtime = std::fs::metadata(&path).ok()?.modified().ok()?;
+    if mtime < reviewer_started_at {
+        return None; // stale: recorded by some earlier review, not this one
+    }
+    let body = std::fs::read_to_string(&path).ok()?;
+    let rec = review_verdict::parse_recorded_verdict(&body)?;
+    let verdict = auto_complete::Verdict::parse(rec.kind.label())?;
+    eprintln!(
+        "  {} no PR-keyed verdict file, but the reviewer recorded {} for {} during this session — accepting it",
+        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+        rec.kind.label(),
+        spec
+    );
+    Some(auto_complete::ReviewerOutcome::Verdict(verdict))
+}
+
 fn read_verdict_file(
     path: &std::path::Path,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
@@ -74769,6 +74804,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         let outcome = match read_verdict_file(&verdict_path) {
             Ok(o) => o,
+            // BUG-806: the spec-keyed record, when fresh, IS the verdict.
+            Err(_)
+                if spec_verdict_fallback_for_phase3(
+                    &self.project_root,
+                    &self.spec,
+                    reviewer_started_at,
+                )
+                .is_some() =>
+            {
+                spec_verdict_fallback_for_phase3(
+                    &self.project_root,
+                    &self.spec,
+                    reviewer_started_at,
+                )
+                .expect("checked is_some above")
+            }
             Err(failure) if self.no_human.is_some() => {
                 // BUG-280: under a headless `--no-human` drain, a NoVerdict
                 // failure is most often the AskUserQuestion-in-headless

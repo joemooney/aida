@@ -829,6 +829,22 @@ pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
     }
 }
 
+/// BUG-806: the PATH a phase session should run with — the directory of the
+/// binary that is ORCHESTRATING, prepended to the inherited PATH. Without
+/// this, a headless agent's login shell resolves `aida` however the machine's
+/// profile does (on the dev box: a months-old ~/.local/bin install), and the
+/// agent ends up holding older tools than the contract its prompt describes.
+/// Observed live: a reviewer that correctly ran `review record --pr` against
+/// a stale binary that did not have the flag.
+// trace:BUG-806 | ai:claude
+pub(crate) fn drive_path_env() -> Option<std::ffi::OsString> {
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let old = std::env::var_os("PATH").unwrap_or_default();
+    let mut parts = vec![exe_dir];
+    parts.extend(std::env::split_paths(&old));
+    std::env::join_paths(parts).ok()
+}
+
 pub(crate) fn compose_headless_command(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -899,6 +915,9 @@ pub fn spawn_vendor_headless(
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
+        // BUG-806: phase agents hold the drive's own binary, not whatever the
+        // machine's login shells happen to resolve.
+        .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .status()
@@ -1985,6 +2004,8 @@ pub fn exec_claude_headless(
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
+        // BUG-806: same PATH rule as the spawn path.
+        .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .spawn()
