@@ -11,8 +11,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:36:41.833880898Z
-modified_at: 2026-08-30T02:36:41.833880898Z
+modified_at: 2026-08-30T02:36:46.791454157Z
 req_type: Bug
 tags:
 - lifecycle
 - rollup
+execution_mode: drain
