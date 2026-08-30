@@ -6,12 +6,12 @@ description: |-
   EPIC-61 stays In Progress although every child is resolved: TASK-1183 / STORY-783 / STORY-784 are Completed and ADR-25 is an ACCEPTED decision (status approved). BUG-781 made an accepted ADR terminal for the open lens and the status tally, but the epic rollup was never taught the same rule: aida-core/src/graph_walk.rs status_rollup() maps Draft|Approved|Planned to remaining for every type, so a decision-type child in Approved (= Accepted) counts as open work and the parent epic can never roll up to Done/Completed.
 
   Fix: in status_rollup(), treat a child with requirement_type Decision + status Approved as resolved (count it with completed, or a dedicated accepted bucket that the epic-status derivation treats as resolved, mirroring how rejected/superseded children are resolved). Verify both derivation sites agree (graph_walk.rs status_rollup + the cache-side epic_status_override_from_cache in aida-core/src/db/cache.rs) and add a rollup test: epic with children [Completed, Completed, Decision+Approved] derives Completed. Acceptance: EPIC-61 rolls up to Completed with no child edits.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:36:41.833880898Z
-modified_at: 2026-08-30T02:36:46.791454157Z
+modified_at: 2026-08-30T02:54:59.157689644Z
 req_type: Bug
 tags:
 - lifecycle
