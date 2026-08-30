@@ -41435,5 +41435,24 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 3750
+- id: 01a05088-f309-7f92-8b93-8a2fabb1f834
+  target_id: 01a05088-e7e6-7902-bda5-605c70164e89
+  author: aida
+  node_id: '1'
+  lamport: 3751
+  timestamp: 2026-08-30T02:39:07.529898464Z
+  kind: !Create
+    title: Align public README/overview AIDA pitch with migration positioning
+    description: |-
+      Follow-up from TASK-0426. Review README.md and OVERVIEW.md for the same external-facing posture now used in docs/agents/porting-claude-code-to-codex.md: AIDA as a work-in-progress infrastructure/research substrate, useful when durable project intent and cross-agent coordination are real needs, and overkill when a lighter AGENTS.md/scripts path is enough.
+
+      Acceptance:
+      - Identify public-facing README.md and OVERVIEW.md language that overclaims maturity or undersells the work-in-progress caveat.
+      - Propose or land wording that preserves the honest research-probe framing.
+      - Keep the quick-start path concise; do not turn the README into a migration essay.
+      - Cross-link to the Codex migration guide or positioning docs where helpful.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 3751
 node_id: '1'
