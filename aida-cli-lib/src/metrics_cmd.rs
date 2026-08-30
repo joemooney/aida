@@ -19,7 +19,210 @@ pub(crate) fn handle_metrics_command(cmd: &crate::cli::MetricsCommand) -> Result
             markdown,
             json,
         } => handle_metrics_agent_lift(since, *markdown, *json),
+        crate::cli::MetricsCommand::AiLift { markdown, json } => {
+            handle_metrics_ai_lift(*markdown, *json)
+        }
     }
+}
+
+/// Compute + render the `ai-lift` report from the git commit corpus.
+// trace:STORY-783 | ai:codex
+fn handle_metrics_ai_lift(markdown: bool, json_out: bool) -> Result<()> {
+    let project_root = crate::find_project_root()?;
+    let commits = read_commit_corpus(&project_root)?;
+    let lift = metrics::compute_ai_lift(&commits);
+
+    if json_out {
+        println!("{}", serde_json::to_string_pretty(&ai_lift_json(&lift))?);
+        return Ok(());
+    }
+
+    if markdown {
+        render_ai_lift_markdown(&lift);
+        return Ok(());
+    }
+
+    render_ai_lift_terminal(&lift);
+    Ok(())
+}
+
+/// Read commit date + subject only. Author identity is intentionally never
+/// requested so the report cannot grow a per-author projection by accident.
+// trace:STORY-783 | ai:codex
+fn read_commit_corpus(project_root: &std::path::Path) -> Result<Vec<metrics::CommitCorpusEntry>> {
+    let output = std::process::Command::new("git")
+        .args(["log", "--date=short", "--format=%H%x00%ad%x00%s%x1e"])
+        .current_dir(project_root)
+        .output()?;
+
+    if !output.status.success() {
+        anyhow::bail!(
+            "git log failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout
+        .split('\x1e')
+        .filter_map(|raw| {
+            let raw = raw.trim_matches('\n');
+            if raw.is_empty() {
+                return None;
+            }
+            let mut parts = raw.splitn(3, '\0');
+            let _sha = parts.next()?;
+            let date = parts.next()?.to_string();
+            let message = parts.next().unwrap_or_default().to_string();
+            Some(metrics::CommitCorpusEntry { date, message })
+        })
+        .collect())
+}
+
+// trace:STORY-783 | ai:codex
+fn ai_lift_json(lift: &metrics::AiLift) -> serde_json::Value {
+    let coverage = if lift.convention_adopted() {
+        Some(lift.overall_coverage())
+    } else {
+        None
+    };
+    serde_json::json!({
+        "total_commits": lift.total_commits,
+        "trailer_commits": lift.trailer_commits,
+        "convention": if lift.convention_adopted() { "adopted" } else { "not adopted" },
+        "coverage": coverage,
+        "time_series": lift.buckets.iter().map(|bucket| {
+            serde_json::json!({
+                "month": bucket.month,
+                "total_commits": bucket.total_commits,
+                "trailer_commits": bucket.trailer_commits,
+                "coverage": if lift.convention_adopted() { Some(bucket.coverage()) } else { None },
+            })
+        }).collect::<Vec<_>>(),
+        "tools": lift.tools,
+        "confidence": {
+            "tagged_commits": lift.confidence_tagged_commits(),
+            "total_commits": lift.total_commits,
+            "trailer_commits": lift.trailer_commits,
+            "sparsity": lift.confidence_sparsity(),
+            "bands": lift.confidence,
+        }
+    })
+}
+
+/// Terminal rendering of aggregate commit-corpus AI-lift.
+// trace:STORY-783 | ai:codex
+fn render_ai_lift_terminal(lift: &metrics::AiLift) {
+    println!("{}", "AI-lift: git commit corpus".bold());
+    println!("  {:<24} {}", "commits scanned".bold(), lift.total_commits);
+
+    if !lift.convention_adopted() {
+        println!(
+            "  {:<24} {}",
+            "trailer convention".bold(),
+            "not adopted — no [AI:tool] trailers found".yellow()
+        );
+        return;
+    }
+
+    println!(
+        "  {:<24} {:.1}% ({} of {} commits)",
+        "trailer coverage".bold(),
+        lift.overall_coverage() * 100.0,
+        lift.trailer_commits.to_string().cyan(),
+        lift.total_commits,
+    );
+    println!(
+        "  {:<24} {}",
+        "confidence bands".bold(),
+        format!(
+            "{} tagged commits / {} total ({})",
+            lift.confidence_tagged_commits(),
+            lift.total_commits,
+            lift.confidence_sparsity()
+        )
+        .cyan()
+    );
+
+    println!();
+    println!("  {}", "Coverage over time".bold());
+    for bucket in &lift.buckets {
+        println!(
+            "    {}  {:>6.1}%  ({}/{})",
+            bucket.month,
+            bucket.coverage() * 100.0,
+            bucket.trailer_commits,
+            bucket.total_commits,
+        );
+    }
+
+    println!();
+    println!("  {}", "Tool attribution".bold());
+    for (tool, count) in &lift.tools {
+        println!("    {:<16} {}", tool, count);
+    }
+
+    println!();
+    println!("  {}", "Confidence bands".bold());
+    for (band, count) in &lift.confidence {
+        println!("    {:<16} {}", band, count);
+    }
+    println!(
+        "\n  {}",
+        "Aggregate-only: no per-author breakdown is computed or emitted.".dimmed()
+    );
+}
+
+/// Markdown rendering of aggregate commit-corpus AI-lift.
+// trace:STORY-783 | ai:codex
+fn render_ai_lift_markdown(lift: &metrics::AiLift) {
+    println!("## AIDA AI-lift from git history\n");
+    println!("- Commits scanned: {}", lift.total_commits);
+
+    if !lift.convention_adopted() {
+        println!("- Trailer convention: not adopted — no `[AI:tool]` trailers found");
+        return;
+    }
+
+    println!(
+        "- Trailer coverage: {:.1}% ({} of {} commits)",
+        lift.overall_coverage() * 100.0,
+        lift.trailer_commits,
+        lift.total_commits
+    );
+    println!(
+        "- Confidence bands: {} tagged commits / {} total ({})",
+        lift.confidence_tagged_commits(),
+        lift.total_commits,
+        lift.confidence_sparsity()
+    );
+    println!("\n### Coverage over time\n");
+    println!("| Month | Coverage | AI trailer commits | Total commits |");
+    println!("| --- | ---: | ---: | ---: |");
+    for bucket in &lift.buckets {
+        println!(
+            "| {} | {:.1}% | {} | {} |",
+            bucket.month,
+            bucket.coverage() * 100.0,
+            bucket.trailer_commits,
+            bucket.total_commits
+        );
+    }
+
+    println!("\n### Tool attribution\n");
+    println!("| Tool | Commit attributions |");
+    println!("| --- | ---: |");
+    for (tool, count) in &lift.tools {
+        println!("| {} | {} |", tool, count);
+    }
+
+    println!("\n### Confidence bands\n");
+    println!("| Band | Commits |");
+    println!("| --- | ---: |");
+    for (band, count) in &lift.confidence {
+        println!("| {} | {} |", band, count);
+    }
+    println!("\n> Aggregate-only: no per-author breakdown is computed or emitted.");
 }
 
 /// Compute + render the `agent-lift` report. Reads the two local telemetry
