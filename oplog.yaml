@@ -41648,5 +41648,22 @@ operations:
   timestamp: 2026-08-30T03:37:29.590823275Z
   kind: !SetPriority
     priority: Low
-clock: 3766
+- id: 01a050be-8c99-7731-be5c-2373c1998528
+  target_id: 01a05088-9400-7832-a8f3-779cfae53482
+  author: aida
+  node_id: '1'
+  lamport: 3767
+  timestamp: 2026-08-30T03:37:40.249944747Z
+  kind: !SetDescription
+    description: |-
+      Follow-up from TASK-0426. Review docs/positioning/README.md, docs/positioning/agent-decision-matrix.md, and related hub pages for readers comparing Claude Code, Codex CLI, and other coding-agent tools without prior AIDA context.
+
+      Acceptance:
+      - Add or revise a short path that explains where AIDA sits in the agent landscape without assuming internal project knowledge.
+      - Clarify the adopt / do-not-adopt threshold using the same durable-shared-state framing as the Codex migration guide.
+      - Preserve the agent-agnostic vs per-agent-convenience distinction from docs/aida/discipline/agent-agnostic-vs-claude-specific.md.
+      - Link outward to deeper comparison docs instead of duplicating every neighbor analysis.
+
+      BINDING CONSTRAINT (advisor re-scope 2026-08-29): execute in the champion-product framing — AIDA presented as the agent-collaboration layer (stable spec IDs, typed relationships, code-to-spec traces, cross-vendor coordination), stated as product strengths. No "research-grade" / "work-in-progress" identity language. Precise claims only (state the precise open slice; never overclaim). Vendor-standardization motivations stay generic — never tied to any specific employer.
+clock: 3767
 node_id: '1'
