@@ -10,12 +10,12 @@ description: |-
   - Clarify when AIDA is useful, when it is too much machinery, and how someone can help own, shape, and steer the project.
   - Align the wording with OVERVIEW.md and docs/aida/discipline/agent-agnostic-vs-claude-specific.md.
   - File follow-up docs tasks for any broader website/README/positioning updates needed.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.704172938Z
-modified_at: 2026-08-30T02:50:05.456675963Z
+modified_at: 2026-08-30T02:52:23.788460817Z
 req_type: Task
 tags:
 - docs-review
@@ -38,8 +38,24 @@ comments:
   created_at: 2026-08-30T02:20:19.999771456Z
   modified_at: 2026-08-30T02:20:19.999771456Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a05095-1966-79b2-839a-d3e7ab4a9110
+  author: aida-auto-bump
+  timestamp: 2026-08-30T02:52:23.782454239Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a05095-196c-7030-9544-d42516060aae
+  timestamp: 2026-08-30T02:52:23.788460339Z
+  agent: aida
+  commit_sha: ab54b896bcb746c5e21bf2e4aac265a9f8eca080
+  summary: Completed via merge ab54b896
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-08-30T02:40:09.028544961Z
   implemented_by: joe
+  completed_at: 2026-08-30T02:52:23.782328766Z
+  completion_sha: ab54b896bcb746c5e21bf2e4aac265a9f8eca080
