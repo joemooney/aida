@@ -23,18 +23,23 @@ Follow the workflow in `.claude/skills/aida-review.md`:
 3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
 5. Gate on CI green (`gh run watch` if a run is in-flight)
-6. **Write the verdict file FIRST** — before the PR comment, before any merge, before exit.
+6. **Record the verdict FIRST** — before the PR comment, before any merge, before exit.
    This is the orchestrator's phase-3 → phase-4 handshake; a review that skips it reads as
    "the review did not complete" no matter how good the prose verdict was, and the PR comment
-   is only its human-facing projection. Write `.aida/review-verdicts/PR-N.json`:
+   is only its human-facing projection. Run:
 
-   ```json
-   {"verdict": "Approved", "summary": "one line of why", "mode": "orchestrator-phase-3"}
+   ```
+   aida review record <SPEC> --pr N --verdict approved|request-changes|rejected --summary "one line of why"
    ```
 
-   `verdict` is one of `Approved` / `RequestChanges` / `Rejected` (case- and
-   hyphen-tolerant). Under a headless drain, add `"merge": "escalated-to-human"` instead of
-   merging yourself when the merge needs a human (irreversible migration, uncertain provenance).
+   The verb writes both the spec verdict and the handshake file
+   `.aida/review-verdicts/PR-N.json` at the DRIVE ROOT — correctly even if you checked the PR
+   out into another directory, which is exactly the case where a hand-written file lands
+   somewhere the orchestrator never looks. (Hand-writing the JSON — `{"verdict": "Approved",
+   "summary": "…", "mode": "orchestrator-phase-3"}`, verdict one of `Approved` /
+   `RequestChanges` / `Rejected` — still works, but only from the original repository root.)
+   Under a headless drain, when a merge needs a human (irreversible migration, uncertain
+   provenance), add `"merge": "escalated-to-human"` to the handshake file instead of merging.
 7. Post a consolidated review comment with the verdict table
 8. Interactive sessions: pause for explicit user confirmation before `gh pr merge N --squash`.
    Headless (`--no-human`) sessions: never prompt — act on the verdict-file default

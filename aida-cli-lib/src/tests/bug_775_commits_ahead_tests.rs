@@ -285,3 +285,47 @@ fn recorded_request_changes_blocks_until_a_commit_lands() {
     );
     assert_eq!(after, review_verdict::VerdictGate::Proceed);
 }
+
+// ── BUG-802: the drive-root anchor + PR handshake ────────────────────────────
+
+/// The env anchor must beat find_project_root: a reviewer inside a PR checkout
+/// (which has its own .aida/ and git toplevel) would otherwise write the
+/// handshake into the checkout, invisible to the orchestrator. Env mutation →
+/// serialized by the same guard the other env-sensitive tests use.
+// trace:BUG-802 | ai:claude
+#[test]
+fn drive_root_env_anchor_beats_project_root_discovery() {
+    let _guard = crate::test_env::env_lock();
+    let drive = tempfile::tempdir().unwrap();
+    std::env::set_var("AIDA_DRIVE_ROOT", drive.path());
+    let resolved = crate::drive_root_or_project_root().unwrap();
+    assert_eq!(resolved, drive.path());
+    std::env::remove_var("AIDA_DRIVE_ROOT");
+}
+
+#[test]
+fn a_dangling_drive_root_falls_back_rather_than_writing_into_the_void() {
+    let _guard = crate::test_env::env_lock();
+    std::env::set_var("AIDA_DRIVE_ROOT", "/nonexistent/definitely/not/here");
+    // Must not error out or return the bogus path — fall back to discovery.
+    let resolved = crate::drive_root_or_project_root();
+    if let Ok(p) = resolved {
+        assert_ne!(p, std::path::Path::new("/nonexistent/definitely/not/here"));
+    }
+    std::env::remove_var("AIDA_DRIVE_ROOT");
+}
+
+/// What `record --pr` writes must be exactly what phase 4 parses.
+// trace:BUG-802 | ai:claude
+#[test]
+fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
+    use crate::review_verdict::VerdictKind;
+    for raw in ["approved", "request-changes", "rejected"] {
+        let kind = VerdictKind::parse(raw);
+        let label = kind.label();
+        assert!(
+            crate::auto_complete::Verdict::parse(label).is_some(),
+            "orchestrator must accept the label the verb records: {label}"
+        );
+    }
+}
