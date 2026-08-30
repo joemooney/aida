@@ -12,7 +12,11 @@ Follow the workflow in `.claude/skills/aida-pickup.md`:
 1. Show the active role and queue head (`aida queue next`)
 2. If `aida findings list --count` is non-zero, surface a one-line nudge that findings await triage
 3. If the queue is empty, stop — don't fabricate work
-4. Confirm pickup with the user, then `aida edit <id> --status in-progress`
+4. Confirm pickup — **an item id passed as the argument IS the consent** (the operator or
+   orchestrator typed it; do not ask again), and under a headless session (`AIDA_HEADLESS=1`)
+   never ask anything: there is nobody to answer, and an unanswered question ends the session
+   with no work done. Only a bare `/aida-pickup` in an interactive conversation pauses to
+   confirm. Then `aida edit <id> --status in-progress`
 5. Render the picked-up spec as a card so its contract stays in terminal scrollback (`aida show <id> --card`; `--brief` / `--full` for autonomous drains or deep dives)
 6. Drive the implementation, add `// trace:<id> | ai:claude` comments, commit
 7. `aida queue done <id>` to atomically complete + remove from queue

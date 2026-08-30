@@ -383,6 +383,28 @@ mod tests {
         );
     }
 
+    /// BUG-804: with BUG-799 the codex implementer receives the pickup body
+    /// and follows it literally — a bare "confirm with the user" step ended a
+    /// headless session with "Awaiting your confirmation" and no work done.
+    /// The argument-as-consent rule (TASK-86/548) must be IN the rendered body.
+    // trace:BUG-804 | ai:claude
+    #[test]
+    fn codex_pickup_prompt_carries_argument_as_consent() {
+        let prompts = expected_codex_prompts();
+        let (_, body) = prompts
+            .iter()
+            .find(|(n, _)| n == "aida-pickup")
+            .expect("aida-pickup must be in the portable set");
+        assert!(
+            body.contains("IS the consent"),
+            "argument-as-consent must survive into the rendered body"
+        );
+        assert!(
+            body.contains("AIDA_HEADLESS"),
+            "the never-ask-headless rule must be stated"
+        );
+    }
+
     #[test]
     fn expected_codex_prompts_do_not_leak_claude_only_invocations() {
         for (name, body) in expected_codex_prompts() {
