@@ -205,7 +205,7 @@ For details on any of these see the [CLI reference](docs/cli/README.md).
 - Stable node-aware ids (`FR-1-052`) and agreed-id promotion at merge-gate
 - Pre-allocated blocks for offline-safe agreed ids (`aida db block claim`)
 - Inline trace comments: `// trace:FR-1-052 | ai:claude[:confidence]`
-- Commit message format: `[AI:tool] type(scope): description (REQ-ID)` — validated by the scaffolded commit-msg hook (`AIDA_COMMIT_STRICT=true` to reject non-conforming commits)
+- Portable commit trailer convention: `[AI:tool] type(scope): description (REQ-ID)` works without AIDA and can be adopted with a standalone commit-msg hook; see [Commit trailer convention](docs/commit-trailer-convention.md)
 
 ### AI / agent integration
 
