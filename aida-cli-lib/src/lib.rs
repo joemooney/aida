@@ -71917,6 +71917,82 @@ fn spec_verdict_fallback_for_phase3(
     Some(auto_complete::ReviewerOutcome::Verdict(verdict))
 }
 
+/// BUG-809: last-ditch verdict discovery when both the PR-keyed file and the
+/// spec-keyed record are missing from the drive root — sweep SIBLING
+/// directories of the drive root for a verdict this reviewer wrote into its
+/// own checkout. The env anchor (`AIDA_DRIVE_ROOT` + PATH, BUG-802/BUG-806)
+/// does not reliably survive a vendor's tool-call sandbox, so a reviewer that
+/// checked the PR out next to the repo and ran `aida review record` from
+/// inside the checkout lands both files there. The PR number is unique and
+/// the mtime gate (>= reviewer session start) makes stale pickup impossible,
+/// so accepting the freshest fresh candidate is safe regardless of what the
+/// reviewer named its checkout. A found PR-keyed file is copied back into the
+/// drive root's verdict dir so the calibration tag-along and the audit trail
+/// see the canonical location.
+// trace:BUG-809 | ai:claude
+fn sibling_verdict_sweep_for_phase3(
+    project_root: &std::path::Path,
+    pr: u32,
+    spec: &str,
+    reviewer_started_at: std::time::SystemTime,
+) -> Option<auto_complete::ReviewerOutcome> {
+    let root_canon = project_root.canonicalize().ok()?;
+    let parent = root_canon.parent()?;
+    // Collect fresh candidates: (mtime, path, is_pr_keyed), freshest first.
+    let mut candidates: Vec<(std::time::SystemTime, std::path::PathBuf, bool)> = Vec::new();
+    for entry in std::fs::read_dir(parent).ok()?.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        if dir.canonicalize().ok().as_deref() == Some(root_canon.as_path()) {
+            continue; // the drive root itself — already consulted
+        }
+        for (name, is_pr) in [
+            (format!("PR-{pr}.json"), true),
+            (format!("{spec}.json"), false),
+        ] {
+            let cand = dir.join(".aida").join("review-verdicts").join(&name);
+            let Some(mtime) = std::fs::metadata(&cand)
+                .ok()
+                .and_then(|m| m.modified().ok())
+            else {
+                continue;
+            };
+            if mtime >= reviewer_started_at {
+                candidates.push((mtime, cand, is_pr));
+            }
+        }
+    }
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, cand, is_pr) in candidates {
+        let outcome = if is_pr {
+            read_verdict_file(&cand).ok()
+        } else {
+            std::fs::read_to_string(&cand)
+                .ok()
+                .as_deref()
+                .and_then(review_verdict::parse_recorded_verdict)
+                .and_then(|rec| auto_complete::Verdict::parse(rec.kind.label()))
+                .map(auto_complete::ReviewerOutcome::Verdict)
+        };
+        let Some(outcome) = outcome else { continue };
+        // Copy back to the canonical location (best-effort): audit trail +
+        // the STORY-439 calibration tag-along both read the drive root.
+        let dest_dir = project_root.join(".aida").join("review-verdicts");
+        let _ = std::fs::create_dir_all(&dest_dir);
+        let dest = dest_dir.join(cand.file_name().expect("candidate has a file name"));
+        let _ = std::fs::copy(&cand, &dest);
+        eprintln!(
+            "  {} no verdict at the drive root, but the reviewer wrote one in a sibling checkout ({}) during this session — accepting it",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            cand.display()
+        );
+        return Some(outcome);
+    }
+    None
+}
+
 fn read_verdict_file(
     path: &std::path::Path,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
@@ -74804,37 +74880,41 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         let outcome = match read_verdict_file(&verdict_path) {
             Ok(o) => o,
-            // BUG-806: the spec-keyed record, when fresh, IS the verdict.
-            Err(_)
-                if spec_verdict_fallback_for_phase3(
+            Err(primary_failure) => {
+                // BUG-806: the spec-keyed record, when fresh, IS the verdict.
+                // BUG-809: failing that, sweep sibling checkouts — the env
+                // anchor does not reliably survive a vendor tool sandbox.
+                if let Some(o) = spec_verdict_fallback_for_phase3(
                     &self.project_root,
                     &self.spec,
                     reviewer_started_at,
                 )
-                .is_some() =>
-            {
-                spec_verdict_fallback_for_phase3(
-                    &self.project_root,
-                    &self.spec,
-                    reviewer_started_at,
-                )
-                .expect("checked is_some above")
+                .or_else(|| {
+                    sibling_verdict_sweep_for_phase3(
+                        &self.project_root,
+                        pr,
+                        &self.spec,
+                        reviewer_started_at,
+                    )
+                }) {
+                    o
+                } else if self.no_human.is_some() {
+                    // BUG-280: under a headless `--no-human` drain, a NoVerdict
+                    // failure is most often the AskUserQuestion-in-headless
+                    // symptom (reviewer skill called a confirmation prompt
+                    // forbidden by the harness, bailed before writing the
+                    // verdict file). Enrich the error message so the recovery
+                    // hint names the likely cause instead of the generic
+                    // "no verdict file." trace:BUG-280 | ai:claude
+                    return Err(enrich_no_verdict_with_headless_diagnostic(
+                        primary_failure,
+                        &self.project_root,
+                        reviewer_started_at,
+                    ));
+                } else {
+                    return Err(primary_failure);
+                }
             }
-            Err(failure) if self.no_human.is_some() => {
-                // BUG-280: under a headless `--no-human` drain, a NoVerdict
-                // failure is most often the AskUserQuestion-in-headless
-                // symptom (reviewer skill called a confirmation prompt
-                // forbidden by the harness, bailed before writing the
-                // verdict file). Enrich the error message so the recovery
-                // hint names the likely cause instead of the generic
-                // "no verdict file." trace:BUG-280 | ai:claude
-                return Err(enrich_no_verdict_with_headless_diagnostic(
-                    failure,
-                    &self.project_root,
-                    reviewer_started_at,
-                ));
-            }
-            Err(e) => return Err(e),
         };
 
         // STORY-439: tag-along read for reviewer-side calibration. Same

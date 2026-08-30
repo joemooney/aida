@@ -6802,6 +6802,34 @@ pub(crate) fn infer_queue_work_role(
 ///     argument) still pauses to confirm.
 ///     trace:TASK-86 trace:TASK-548 | ai:claude
 ///     trace:STORY-42 | ai:claude
+/// BUG-809: the reviewer's verdict-file anchor, carried in the PROMPT TEXT.
+/// The env anchor (`AIDA_DRIVE_ROOT` + PATH prepend) does not reliably
+/// survive a vendor's tool-call sandbox — codex in particular can hand the
+/// skill's shell a sanitized environment — so a reviewer that checks the PR
+/// out elsewhere resolves ITS checkout as project root and writes the verdict
+/// where the orchestrator can't see it. Prompt text cannot be stripped by a
+/// sandbox, so the absolute path rides in the instructions themselves.
+// trace:BUG-809 | ai:claude
+pub(crate) fn reviewer_verdict_anchor_suffix() -> Option<String> {
+    let vf = std::env::var("AIDA_REVIEW_VERDICT_FILE").ok()?;
+    if vf.trim().is_empty() {
+        return None;
+    }
+    // <root>/.aida/review-verdicts/PR-N.json → <root>
+    let root = std::path::Path::new(&vf)
+        .ancestors()
+        .nth(3)
+        .map(|p| p.display().to_string())
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| ".".to_string());
+    Some(format!(
+        "\n\nVerdict anchor (do not relocate): the verdict JSON must land at exactly `{vf}`. \
+         If you use `aida review record`, run it from `{root}` — cd there first if you checked \
+         the PR out somewhere else. A verdict written under any other directory is invisible \
+         to the orchestrator and shelves the spec."
+    ))
+}
+
 pub(crate) fn derive_queue_work_prompt(
     plan: &QueueWorkPlan,
     role: &str,
@@ -7162,7 +7190,14 @@ pub(crate) fn handle_queue_work(
         maybe_show_faithful_launcher_notice();
     }
 
-    let prompt = derive_queue_work_prompt(&plan, &role, plan_only, guided);
+    let mut prompt = derive_queue_work_prompt(&plan, &role, plan_only, guided);
+    // BUG-809: orchestrated reviewer child — the parent set the verdict-file
+    // env; bake the absolute anchor into the prompt text as well.
+    if role.eq_ignore_ascii_case("reviewer") {
+        if let Some(suffix) = reviewer_verdict_anchor_suffix() {
+            prompt.push_str(&suffix);
+        }
+    }
 
     // STORY-281: reviewer pre-flight stale-base check. Fires only when
     // the resolved scope is a GitHub PR AND the inferred role is the
@@ -8169,6 +8204,11 @@ pub(crate) fn handle_queue_work(
         // this env var. Setting it for standalone runs too is what makes
         // the skill "always write the verdict file" (BUG-226 acceptance).
         std::env::set_var("AIDA_REVIEW_VERDICT_FILE", verdict_path);
+        // BUG-809: same prompt-text anchor for the standalone reviewer —
+        // the env var was absent at prompt-derivation time above.
+        if let Some(suffix) = reviewer_verdict_anchor_suffix() {
+            prompt.push_str(&suffix);
+        }
     }
 
     eprintln!();
