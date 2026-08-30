@@ -41454,5 +41454,24 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 3751
+- id: 01a0508e-09d0-7db2-9a9f-70f53c7017f3
+  target_id: 01a0508e-03eb-7960-8511-feae315c8f93
+  author: aida
+  node_id: '1'
+  lamport: 3752
+  timestamp: 2026-08-30T02:44:41.040509109Z
+  kind: !Create
+    title: 'Codex statusline parity: Codex now owns the terminal title — update guidance to disable [tui] terminal_title and document the tmux status-right path'
+    description: |-
+      The Codex parity path for the AIDA statusline (TASK-896) is `aida statusline --title` riding the terminal title, on the assumption Codex leaves the title alone. Codex >= ~0.15x writes its own OSC title (`[tui] terminal_title`, default `["spinner", "project"]`, tui/src/terminal_title.rs), so the AIDA title set by the shell prompt hook is overwritten as soon as the Codex session starts. Verified against Codex 0.151.0 + openai/codex main on 2026-08-29. Also verified: `[tui] status_line` is still a closed enum (33 items: model, reasoning, current-dir, project-root, hostname, git-branch, pull-request-number, branch-changes, run-state, permissions, approval-mode, context-remaining/used, five-hour/weekly-limit, codex-version, token counters, thread-credits, estimated-thread-cost, thread-id, fast-mode, raw-output, thread-title, workspace-headline, task-progress) — no custom-text or command-backed item exists.
+
+      Acceptance:
+      - `aida statusline setup --client codex` prints `terminal_title = null` alongside the `[tui] status_line` snippet, and explains why (Codex overwrites the title otherwise).
+      - The same guidance offers the multiplexer path as the recommended full-fidelity option: tmux `set -g status-right '#(aida statusline --color=never)'` + `status-interval 15` (or `aida statusbar --plain`), which is agent-agnostic and survives inside any Codex/Claude session.
+      - `docs/agents/claude-surfaces-codex-parity.md` gap 5 + scaffolded AGENTS.md text updated to match (currently states "not shipped as of Codex 0.142").
+      - Add a tripwire note: re-check upstream for a command-backed status_line item at each competitive refresh.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 3752
 node_id: '1'
