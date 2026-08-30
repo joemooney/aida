@@ -3,19 +3,21 @@ spec_id: TASK-1187
 agreed_id: TASK-1187
 title: Align public README/overview AIDA pitch with migration positioning
 description: |-
-  Follow-up from TASK-0426. Review README.md and OVERVIEW.md for the same external-facing posture now used in docs/agents/porting-claude-code-to-codex.md: AIDA as a work-in-progress infrastructure/research substrate, useful when durable project intent and cross-agent coordination are real needs, and overkill when a lighter AGENTS.md/scripts path is enough.
+  Follow-up from TASK-0426, RE-SCOPED 2026-08-29 to the champion-product positioning (operator mandate: drop the research framing; build AIDA to win — see docs/competitive-analysis/2026-08-29-delta-champion-pivot.md).
+
+  The TASK-0426 merge (commit ab54b89) introduced "work-in-progress infrastructure project" and "closer to a research-grade substrate" into docs/agents/porting-claude-code-to-codex.md — that is the SUPERSEDED pre-pivot posture and must not be the public voice.
 
   Acceptance:
-  - Identify public-facing README.md and OVERVIEW.md language that overclaims maturity or undersells the work-in-progress caveat.
-  - Propose or land wording that preserves the honest research-probe framing.
-  - Keep the quick-start path concise; do not turn the README into a migration essay.
-  - Cross-link to the Codex migration guide or positioning docs where helpful.
-status: Draft
+  - Rewrite the AIDA positioning section in docs/agents/porting-claude-code-to-codex.md in the champion framing: AIDA is the agent-collaboration layer — stable spec IDs, typed relationships, code-to-spec traces, cross-vendor coordination (Claude Code + Codex parity) — stated as product strengths, not research hedges. No "research-grade", no "work-in-progress" identity language anywhere in the section.
+  - Apply the same voice pass to README.md and OVERVIEW.md pitch paragraphs: confident product framing with PRECISE claims (alpha maturity may be stated plainly as maturity, never as identity; do not overclaim — state the precise open slice per docs/positioning conventions).
+  - Employer-confidentiality rule holds: any vendor-standardization motivation stays generic, never tied to any specific employer.
+  - Grep gate: after the change, `grep -riE "research-grade|research substrate" README.md OVERVIEW.md docs/agents/porting-claude-code-to-codex.md` returns nothing.
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:39:04.678426542Z
-modified_at: 2026-08-30T02:39:04.678426542Z
+modified_at: 2026-08-30T03:37:24.826526432Z
 req_type: Task
 tags:
 - docs-review
@@ -26,3 +28,4 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-08-30T02:39:08.365094609Z
+execution_mode: drain

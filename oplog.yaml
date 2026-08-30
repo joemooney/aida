@@ -41599,5 +41599,30 @@ operations:
   timestamp: 2026-08-30T03:33:03.055743058Z
   kind: !SetStatus
     status: Completed
-clock: 3761
+- id: 01a050be-5092-7302-a285-833392da08d3
+  target_id: 01a05088-e7e6-7902-bda5-605c70164e89
+  author: aida
+  node_id: '1'
+  lamport: 3762
+  timestamp: 2026-08-30T03:37:24.882707730Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a050be-50eb-7a72-bdee-ee80b3f6a38d
+  target_id: 01a05088-e7e6-7902-bda5-605c70164e89
+  author: aida
+  node_id: '1'
+  lamport: 3763
+  timestamp: 2026-08-30T03:37:24.971732128Z
+  kind: !SetDescription
+    description: |-
+      Follow-up from TASK-0426, RE-SCOPED 2026-08-29 to the champion-product positioning (operator mandate: drop the research framing; build AIDA to win — see docs/competitive-analysis/2026-08-29-delta-champion-pivot.md).
+
+      The TASK-0426 merge (commit ab54b89) introduced "work-in-progress infrastructure project" and "closer to a research-grade substrate" into docs/agents/porting-claude-code-to-codex.md — that is the SUPERSEDED pre-pivot posture and must not be the public voice.
+
+      Acceptance:
+      - Rewrite the AIDA positioning section in docs/agents/porting-claude-code-to-codex.md in the champion framing: AIDA is the agent-collaboration layer — stable spec IDs, typed relationships, code-to-spec traces, cross-vendor coordination (Claude Code + Codex parity) — stated as product strengths, not research hedges. No "research-grade", no "work-in-progress" identity language anywhere in the section.
+      - Apply the same voice pass to README.md and OVERVIEW.md pitch paragraphs: confident product framing with PRECISE claims (alpha maturity may be stated plainly as maturity, never as identity; do not overclaim — state the precise open slice per docs/positioning conventions).
+      - Employer-confidentiality rule holds: any vendor-standardization motivation stays generic, never tied to any specific employer.
+      - Grep gate: after the change, `grep -riE "research-grade|research substrate" README.md OVERVIEW.md docs/agents/porting-claude-code-to-codex.md` returns nothing.
+clock: 3763
 node_id: '1'
