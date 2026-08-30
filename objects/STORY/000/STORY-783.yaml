@@ -37,12 +37,12 @@ description: |
   - [ ] A repository with no trailers reports "convention not adopted", not 0%.
   - [ ] No per-author breakdown exists in any output, including `--json`.
   - [ ] Runs on a large history without a full-corpus stall (2696 commits here).
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:09:14.368502321Z
-modified_at: 2026-08-30T01:22:34.012633929Z
+modified_at: 2026-08-30T01:29:16.026870575Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -52,15 +52,26 @@ relationships:
   target_id: 01a0502c-b4b4-7070-b9d3-c1a6f4c46756
   created_at: 2026-08-30T00:58:27.150484170Z
   created_by: joe
+history:
+- id: 01a05048-fdf4-74d0-962a-0701c4eced60
+  author: aida-auto-bump
+  timestamp: 2026-08-30T01:29:16.020913768Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a05048-fdfa-7733-8a40-9cefc4c141d0
+  timestamp: 2026-08-30T01:29:16.026869808Z
+  agent: aida
+  commit_sha: d16ffdb446e3a0b9781751cea1c3335b22e510c8
+  summary: Completed via merge d16ffdb4
+  punted:
+  - 'punted: the implementer session exited cleanly but opened no PR — run `/aida-pr` inside the session before exiting'
+  - 'punted: the reviewer session produced no verdict file — the review did not complete'
 implementation_info:
   implemented: true
   implemented_at: 2026-08-30T00:47:49.598824204Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: no-verdict
-  detail: the reviewer session produced no verdict file — the review did not complete
-  recovery_hint: 'The reviewer session ended without a usable verdict — re-run the review: `aida queue work PR-1616 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-08-30T01:03:16.945734136Z
+  completed_at: 2026-08-30T01:29:16.020784859Z
+  completion_sha: d16ffdb446e3a0b9781751cea1c3335b22e510c8
