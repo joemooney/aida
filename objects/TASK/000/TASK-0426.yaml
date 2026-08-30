@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: agents
 created_at: 2026-06-24T02:53:29.704172938Z
-modified_at: 2026-08-30T02:20:18.857847139Z
+modified_at: 2026-08-30T02:20:19.999771456Z
 req_type: Task
 tags:
 - docs-review
@@ -27,4 +27,11 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-06-24T02:53:29.704211421Z
+comments:
+- id: 01a05077-be9f-7b92-86fb-144b08fe8364
+  author: joe
+  content: 'Undeferred 2026-08-29: the revisit trigger (repositioning unparks) fired with the operator''s champion-product mandate — market analysis reactivated (docs/competitive-analysis/2026-08-29-delta-champion-pivot.md), relentless-push posture. Scope stays the doc-clarity acceptance as written; align the cold-reader framing with the champion pivot''s precise-claims rule.'
+  created_at: 2026-08-30T02:20:19.999771456Z
+  modified_at: 2026-08-30T02:20:19.999771456Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
