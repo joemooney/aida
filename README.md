@@ -29,7 +29,8 @@ fn validate_token(token: &str) -> Result<Session> { ... }
 
 Everything else in AIDA — the typed spec graph, stable IDs that never rot, an MCP server that serves the graph to any agent, the queue and review lifecycle — is **optional depth** for when a folder of markdown isn't enough. Start with the one command above.
 
-> **Status — honest about it:** AIDA is alpha, and began as a research probe into cross-vendor agent coordination (that thesis, and exactly what's proven vs. hypothesised, is in [Where this is and isn't proven](#where-this-is-and-isnt-proven) below). The neutral cross-vendor substrate angle — running a spec through N vendors as quality-variance QA (`aida compete`) — is the deeper bet a substrate-owner can make.
+<!-- trace:TASK-1187 | ai:codex -->
+> **Status — honest about it:** AIDA is alpha software with real dogfood evidence and still-rough edges. Its product bet is precise: a git-native agent-collaboration layer where stable spec IDs, typed relationships, code-to-spec traces, and MCP access keep project intent portable across Claude Code, Codex CLI, and other agents. The open slice is maturity, not identity: unattended reliability, onboarding, and broader-project validation are still being hardened, as detailed in [Where this is and isn't proven](#where-this-is-and-isnt-proven) below.
 
 ## What makes AIDA distinct
 
