@@ -15,8 +15,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:59:38.438294813Z
-modified_at: 2026-08-30T01:59:38.438294813Z
+modified_at: 2026-08-30T02:07:38.913553536Z
 req_type: Bug
 tags:
 - codex-parity
 - orchestrator
+comments:
+- id: 01a0506c-21a1-7c60-bce3-f10cffa49f45
+  author: joe
+  content: Commit 4cfbf3a6d references this requirement
+  created_at: 2026-08-30T02:07:38.913553536Z
+  modified_at: 2026-08-30T02:07:38.913553536Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
