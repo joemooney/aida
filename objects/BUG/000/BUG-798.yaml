@@ -37,13 +37,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T23:34:59.496043441Z
-modified_at: 2026-08-30T01:24:33.812298830Z
+modified_at: 2026-08-30T01:24:34.804893487Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-3
 - reviewer
+relationships:
+- rel_type: Duplicate
+  target_id: 01a04f5e-3625-7f21-81c6-402e28a005aa
+  created_at: 2026-08-30T01:24:34.804888063Z
+  created_by: joe
 comments:
 - id: 01a05044-ac32-70a0-920e-d633873eee05
   author: joe
