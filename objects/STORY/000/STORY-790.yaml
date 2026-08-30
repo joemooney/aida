@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:39.465804272Z
-modified_at: 2026-08-30T01:36:55.078746371Z
+modified_at: 2026-08-30T01:37:03.561690103Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -28,4 +28,8 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a0504f-b2e4-7330-a158-3b85843fe522
   created_at: 2026-08-30T01:36:55.078741542Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0504f-d2ed-7b10-8cf7-7fa483b2ccba
+  created_at: 2026-08-30T01:37:03.561685435Z
   created_by: joe
