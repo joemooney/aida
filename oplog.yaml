@@ -41665,5 +41665,31 @@ operations:
       - Link outward to deeper comparison docs instead of duplicating every neighbor analysis.
 
       BINDING CONSTRAINT (advisor re-scope 2026-08-29): execute in the champion-product framing — AIDA presented as the agent-collaboration layer (stable spec IDs, typed relationships, code-to-spec traces, cross-vendor coordination), stated as product strengths. No "research-grade" / "work-in-progress" identity language. Precise claims only (state the precise open slice; never overclaim). Vendor-standardization motivations stay generic — never tied to any specific employer.
-clock: 3767
+- id: 01a050ca-4885-79e0-87ee-54251ba8b5fe
+  target_id: 01a050ca-44bb-7683-8d00-d2e433ba06b5
+  author: aida
+  node_id: '1'
+  lamport: 3768
+  timestamp: 2026-08-30T03:50:29.253192851Z
+  kind: !Create
+    title: 'Review PR-1625: [AI:codex] docs(positioning): align AIDA pitch with migration positioning (TASK-1187)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a050be`) for branch `task-1187`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1625>
+      - Branch: `task-1187` → `main`
+
+      ## Covers
+
+      - TASK-1187
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1625` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3768
 node_id: '1'
