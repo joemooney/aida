@@ -41557,5 +41557,31 @@ operations:
   timestamp: 2026-08-30T03:14:32.066933610Z
   kind: !SetStatus
     status: Completed
-clock: 3758
+- id: 01a050b7-8507-7640-bf91-4768d5dc4082
+  target_id: 01a050b7-8199-7993-b525-bbf84753c584
+  author: aida
+  node_id: '1'
+  lamport: 3759
+  timestamp: 2026-08-30T03:29:59.559511193Z
+  kind: !Create
+    title: 'Review PR-1624: [AI:codex] test(cache): cover metadata-only cache self-heal (TASK-1185)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a050ab`) for branch `task-1185`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1624>
+      - Branch: `task-1185` → `main`
+
+      ## Covers
+
+      - TASK-1185
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1624` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3759
 node_id: '1'
