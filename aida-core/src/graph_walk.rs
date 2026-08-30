@@ -412,6 +412,15 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
             continue;
         };
         r.total += 1;
+        // trace:BUG-810 | ai:codex
+        let accepted_decision = crate::lifecycle::is_accepted_decision(
+            &req.req_type.to_string(),
+            req.status.cache_key(),
+        );
+        if accepted_decision {
+            r.completed += 1;
+            continue;
+        }
         match req.status {
             RequirementStatus::Completed => r.completed += 1,
             RequirementStatus::Done => r.done += 1,
@@ -545,6 +554,7 @@ mod tests {
             Some("STORY") => RequirementType::Story,
             Some("SPIKE") => RequirementType::Spike,
             Some("BUG") => RequirementType::Bug,
+            Some("ADR") => RequirementType::Decision,
             _ => RequirementType::Task,
         };
         r
@@ -748,6 +758,31 @@ mod tests {
         assert_eq!(r.total, 2);
         assert_eq!(r.completed, 2);
         assert!(r.total > 0 && r.completed == r.total);
+    }
+
+    // BUG-810: an accepted ADR is a resolved decision, not open work. Count it
+    // as completed for epic rollup math so a delivered epic with an accepted
+    // decision child can derive Completed.
+    #[test]
+    fn child_status_rollup_counts_accepted_decision_as_completed() {
+        let mut epic = make_req("EPIC-X", RequirementStatus::InProgress);
+        let story = make_req("STORY-1", RequirementStatus::Completed);
+        let task = make_req("TASK-1", RequirementStatus::Completed);
+        let accepted_adr = make_req("ADR-1", RequirementStatus::Approved);
+        link(&mut epic, RelationshipType::Parent, story.id);
+        link(&mut epic, RelationshipType::Parent, task.id);
+        link(&mut epic, RelationshipType::Parent, accepted_adr.id);
+        let eid = epic.id;
+        let store = store_with(vec![epic, story, task, accepted_adr]);
+
+        let r = child_status_rollup(&store, eid);
+        assert_eq!(r.total, 3);
+        assert_eq!(r.completed, 3);
+        assert_eq!(r.remaining, 0);
+        assert_eq!(
+            crate::rollup::derive_epic_status_from_rollup(&r),
+            Some(RequirementStatus::Completed)
+        );
     }
 
     // BUG-628: archived is a VIEW flag, not a status — it must not change the
@@ -1042,7 +1077,7 @@ mod tests {
     fn subtree_ids_is_transitive() {
         let mut epic = make_req("EPIC-1", RequirementStatus::InProgress);
         let mut story = make_req("STORY-1", RequirementStatus::Approved);
-        let mut task = make_req("TASK-1", RequirementStatus::Approved);
+        let task = make_req("TASK-1", RequirementStatus::Approved);
         link(&mut epic, RelationshipType::Parent, story.id);
         link(&mut story, RelationshipType::Parent, task.id);
         let (eid, sid, tid) = (epic.id, story.id, task.id);

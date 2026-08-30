@@ -2023,19 +2023,20 @@ fn epic_rollup_from_hierarchy(
                FROM hierarchy_edges e
                JOIN subtree s ON e.parent_id = s.id
          )
-         SELECT rc.status
+         SELECT rc.status, rc.req_type
            FROM requirements_cache rc
            JOIN subtree s ON rc.id = s.id
           WHERE rc.id <> ?1",
     ) else {
         return rollup;
     };
-    let Ok(rows) = stmt.query_map(params![epic_id.to_string()], |row| row.get::<_, String>(0))
-    else {
+    let Ok(rows) = stmt.query_map(params![epic_id.to_string()], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+    }) else {
         return rollup;
     };
-    for status in rows.flatten() {
-        tally_status_str(&mut rollup, &status);
+    for (status, req_type) in rows.flatten() {
+        tally_status_str(&mut rollup, &status, &req_type);
     }
     rollup
 }
@@ -2045,8 +2046,13 @@ fn epic_rollup_from_hierarchy(
 /// `graph_walk::status_rollup`. An unrecognized (custom) status counts toward
 /// `remaining` — it isn't a terminal/in-flight signal.
 // trace:BUG-626 | ai:claude
-fn tally_status_str(r: &mut crate::graph_walk::StatusRollup, status: &str) {
+// trace:BUG-810 | ai:codex
+fn tally_status_str(r: &mut crate::graph_walk::StatusRollup, status: &str, req_type: &str) {
     r.total += 1;
+    if crate::lifecycle::is_accepted_decision(req_type, status) {
+        r.completed += 1;
+        return;
+    }
     match status {
         "Completed" => r.completed += 1,
         "Done" => r.done += 1,
@@ -4645,6 +4651,47 @@ mod tests {
             cached_status(&cache, epic_id),
             "Completed",
             "zero open children must not read In Progress"
+        );
+    }
+
+    // BUG-810: the cache-side epic rollup must mirror graph_walk::status_rollup:
+    // an accepted ADR is resolved and should not keep a fully delivered epic
+    // in progress.
+    #[test]
+    fn cache_rollup_counts_accepted_decision_as_completed() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut epic = sample_req("EPIC-810", "accepted decision child epic");
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::InProgress;
+        let mut story = sample_req("STORY-810", "completed story");
+        story.req_type = RequirementType::Story;
+        story.status = RequirementStatus::Completed;
+        story
+            .relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+        let mut task = sample_req("TASK-810", "completed task");
+        task.req_type = RequirementType::Task;
+        task.status = RequirementStatus::Completed;
+        task.relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+        let mut accepted_adr = sample_req("ADR-810", "accepted decision");
+        accepted_adr.req_type = RequirementType::Decision;
+        accepted_adr.status = RequirementStatus::Approved;
+        accepted_adr
+            .relationships
+            .push(rel(RelationshipType::Parent, epic.id));
+
+        let epic_id = epic.id;
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, story, task, accepted_adr]);
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        assert_eq!(
+            cached_status(&cache, epic_id),
+            "Completed",
+            "Decision+Approved must be resolved for epic rollups"
         );
     }
 
