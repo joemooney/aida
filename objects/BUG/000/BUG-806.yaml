@@ -1,0 +1,52 @@
+id: 01a05032-8155-7572-80b4-074792cb0817
+spec_id: BUG-806
+agreed_id: BUG-806
+title: phase sessions run stale aida binaries and phase 3 ignores the spec-keyed verdict it already has
+description: |-
+  Layer 5, and the class-closer. On the fifth phase-3 attempt the codex reviewer did EVERYTHING right:
+  ran the BUG-802 verb with --pr 1616 and a proper summary, from its PR checkout — and still no
+  handshake landed, because every `aida` binary its login shell could see was stale:
+
+    - PATH resolved to ~/.local/bin/aida (v0.9.x era, July 19) — headless bash -lc login shells do
+      not inherit the dev-activate wrapper, so on a dev machine the phase sessions run an ANCIENT
+      binary silently
+    - the model NOTICED ("the installed aida in PATH is older") and fell back to
+      /home/joe/ai/aida/target/debug/aida — also stale (July 22, pre-BUG-802, no --pr, no
+      AIDA_DRIVE_ROOT support)
+
+  The model outperformed its environment. Meanwhile the orchestrator kept polling only the PR-keyed
+  handshake file and shelved a review whose verdict existed as recorded state one flag away.
+
+  TWO FIXES, both substrate-as-bouncer:
+
+  1. PHASE SESSIONS INHERIT THE DRIVE'S OWN BINARY. spawn/exec (compose path) prepend the directory
+     of std::env::current_exe() to the child PATH. Whatever binary is orchestrating IS the binary the
+     phase agents get — no login-shell archaeology, no version skew between the orchestrator's
+     contract and the tools the agent holds. This also fixes the class on any machine where `aida`
+     on PATH lags the drive binary.
+
+  2. PHASE 3 ACCEPTS THE SPEC-KEYED VERDICT. The orchestrator drives a known spec; when
+     .aida/review-verdicts/PR-N.json is absent but .aida/review-verdicts/<SPEC>.json exists with a
+     parseable verdict AND its recorded sha equals the PR head sha, that IS the verdict. Freshness is
+     sha-gated, so a stale approval of an older commit can never advance a newer diff. The PR-keyed
+     file stays the primary contract; this is the substrate refusing to lose information it holds.
+
+  EVIDENCE TRAIL: five consecutive phase-3 shelves (2026-08-29), each one layer deeper: BUG-797
+  prompt content -> BUG-799 launch expansion -> BUG-802 verdict location -> BUG-804 consent stall ->
+  this. Every fix moved the failure later; this one removes the failure's remaining surface.
+
+  ACCEPTANCE:
+  - [ ] compose/spawn paths export a child PATH whose head is the current_exe directory (test:
+        argv/env assembly includes it; both spawn and exec twins).
+  - [ ] Phase 3 verdict resolution: PR-keyed file wins; else spec-keyed record with sha == PR head
+        is accepted (unit tests: accept on match, refuse on sha mismatch, refuse on absent).
+  - [ ] E2E: STORY-783's re-drive (--from-pr on PR #1616) completes phase 3 and merges.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-30T01:04:42.325636223Z
+modified_at: 2026-08-30T01:04:42.325636223Z
+req_type: Bug
+tags:
+- codex drain launcher substrate-as-bouncer
