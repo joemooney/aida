@@ -1,0 +1,26 @@
+id: 01a05092-eb5a-7201-85a2-3c7a35b1991e
+spec_id: STORY-794
+agreed_id: STORY-794
+title: 'Review PR-1622: [AI:codex] docs(agents): refine AIDA migration positioning (TASK-0426)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a05087`) for branch `task-0426`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1622>
+  - Branch: `task-0426` → `main`
+
+  ## Covers
+
+  - TASK-0426
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1622` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-30T02:50:00.922847162Z
+modified_at: 2026-08-30T02:50:00.922847162Z
+req_type: Story
