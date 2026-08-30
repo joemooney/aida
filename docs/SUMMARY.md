@@ -16,6 +16,7 @@
 - [The autonomous drain](autonomous-drain.md)
 - [The inter-agent mailbox](mailbox.md)
 - [Requirement types](requirement-types.md)
+- [Commit trailer convention](commit-trailer-convention.md)
 - [Git workflow](git-workflow.md)
 
 # CLI reference
