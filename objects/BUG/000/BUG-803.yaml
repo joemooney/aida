@@ -35,10 +35,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T00:25:19.342944203Z
-modified_at: 2026-08-30T00:25:19.342944203Z
+modified_at: 2026-08-30T01:24:37.868365593Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-1
 - implementer
+comments:
+- id: 01a05044-bf6c-7e00-876b-c41edb8112ec
+  author: joe
+  content: 'Auto-filed by the orchestrator at shelf time. The underlying defect is the codex phase-parity arc, fixed as BUG-804 (see EPIC-60: BUG-797 prompt content, BUG-799 launch expansion, BUG-802 verdict location, BUG-804 consent stall, BUG-806 drive-binary PATH + spec-verdict fallback).'
+  created_at: 2026-08-30T01:24:37.868365593Z
+  modified_at: 2026-08-30T01:24:37.868365593Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
