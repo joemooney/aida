@@ -31,13 +31,16 @@
 
 use crate::auto_complete_telemetry::AutoCompleteEvent;
 use crate::usage::UsageEvent;
-use std::collections::BTreeMap;
+use aida_core::{RelationshipType, Requirement, RequirementStatus, RequirementType};
+use chrono::{DateTime, Utc};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// One commit as read from the git log corpus. This deliberately omits author
 /// fields because STORY-783 requires aggregate-only reporting.
 // trace:STORY-783 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitCorpusEntry {
+    pub sha: String,
     pub date: String,
     pub message: String,
 }
@@ -63,13 +66,14 @@ impl AiLiftBucket {
 
 /// Aggregate-only AI-lift signals derived from commit messages.
 // trace:STORY-783 | ai:codex
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct AiLift {
     pub total_commits: usize,
     pub trailer_commits: usize,
     pub buckets: Vec<AiLiftBucket>,
     pub tools: BTreeMap<String, usize>,
     pub confidence: BTreeMap<String, usize>,
+    pub flow_quality: FlowQualityMetrics,
 }
 
 impl AiLift {
@@ -102,6 +106,63 @@ impl AiLift {
         } else {
             "present"
         }
+    }
+}
+
+/// AI involvement bucket for store-derived flow and quality metrics.
+// trace:STORY-784 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AiInvolvementSegment {
+    Assisted,
+    NoTrailer,
+    UnknownCloseCommit,
+}
+
+impl AiInvolvementSegment {
+    pub fn label(self) -> &'static str {
+        match self {
+            AiInvolvementSegment::Assisted => "AI-assisted",
+            AiInvolvementSegment::NoTrailer => "No AI trailer",
+            AiInvolvementSegment::UnknownCloseCommit => "Unknown close commit",
+        }
+    }
+}
+
+/// One aggregate flow/quality bucket. No per-author or per-spec detail is
+/// emitted, preserving the STORY-783/ADR-25 aggregate-only posture.
+// trace:STORY-784 | ai:codex
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FlowQualitySegment {
+    pub completed_specs: usize,
+    pub mean_cycle_hours: Option<f64>,
+    pub median_cycle_hours: Option<f64>,
+    pub reworked_specs: usize,
+    pub rework_bug_refs: usize,
+}
+
+impl FlowQualitySegment {
+    pub fn rework_rate(&self) -> Option<f64> {
+        if self.completed_specs == 0 {
+            None
+        } else {
+            Some(self.reworked_specs as f64 / self.completed_specs as f64)
+        }
+    }
+}
+
+/// Store-derived flow and quality metrics segmented by close-commit AI
+/// involvement.
+// trace:STORY-784 | ai:codex
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FlowQualityMetrics {
+    pub segments: BTreeMap<AiInvolvementSegment, FlowQualitySegment>,
+    pub unfinished_by_status: BTreeMap<String, usize>,
+    pub total_specs_considered: usize,
+}
+
+impl FlowQualityMetrics {
+    pub fn is_empty(&self) -> bool {
+        self.total_specs_considered == 0
     }
 }
 
@@ -177,6 +238,202 @@ fn parse_ai_trailers(message: &str) -> Vec<AiTrailer> {
         .and_then(|cap| parse_ai_trailer_body(&cap[1]))
         .into_iter()
         .collect()
+}
+
+/// Compute store-derived flow and quality signals segmented by whether the
+/// close commit carried an AI trailer.
+// trace:STORY-784 | ai:codex
+pub fn compute_flow_quality_metrics(
+    requirements: &[Requirement],
+    commits: &[CommitCorpusEntry],
+) -> FlowQualityMetrics {
+    let commit_by_sha: HashMap<&str, &CommitCorpusEntry> = commits
+        .iter()
+        .map(|commit| (commit.sha.as_str(), commit))
+        .collect();
+    let req_by_uuid: HashMap<_, _> = requirements.iter().map(|req| (req.id, req)).collect();
+
+    let mut completed_specs: HashMap<_, (AiInvolvementSegment, f64)> = HashMap::new();
+    let mut cycle_hours_by_segment: BTreeMap<AiInvolvementSegment, Vec<f64>> = BTreeMap::new();
+    let mut unfinished_by_status: BTreeMap<String, usize> = BTreeMap::new();
+
+    for req in requirements {
+        if req.archived {
+            continue;
+        }
+
+        if let Some(completed_at) = completion_time(req) {
+            let segment = close_commit_segment(req, &commit_by_sha);
+            let hours = completed_at
+                .signed_duration_since(req.created_at)
+                .num_seconds()
+                .max(0) as f64
+                / 3600.0;
+            completed_specs.insert(req.id, (segment, hours));
+            cycle_hours_by_segment
+                .entry(segment)
+                .or_default()
+                .push(hours);
+        } else {
+            *unfinished_by_status
+                .entry(req.status.to_string())
+                .or_insert(0) += 1;
+        }
+    }
+
+    let mut reworked_spec_ids: HashSet<_> = HashSet::new();
+    let mut rework_bug_refs_by_segment: BTreeMap<AiInvolvementSegment, usize> = BTreeMap::new();
+    for bug in requirements
+        .iter()
+        .filter(|req| !req.archived && req.req_type == RequirementType::Bug)
+    {
+        for rel in bug
+            .relationships
+            .iter()
+            .filter(|rel| rel.rel_type == RelationshipType::References)
+        {
+            let Some(target) = req_by_uuid.get(&rel.target_id) else {
+                continue;
+            };
+            let Some((segment, _hours)) = completed_specs.get(&target.id) else {
+                continue;
+            };
+            let Some(target_completed_at) = completion_time(target) else {
+                continue;
+            };
+            if bug.created_at < target_completed_at {
+                continue;
+            }
+            reworked_spec_ids.insert(target.id);
+            *rework_bug_refs_by_segment.entry(*segment).or_insert(0) += 1;
+        }
+    }
+
+    let mut segments: BTreeMap<AiInvolvementSegment, FlowQualitySegment> = BTreeMap::new();
+    for segment in [
+        AiInvolvementSegment::Assisted,
+        AiInvolvementSegment::NoTrailer,
+        AiInvolvementSegment::UnknownCloseCommit,
+    ] {
+        let mut hours = cycle_hours_by_segment.remove(&segment).unwrap_or_default();
+        let completed_in_segment = completed_specs
+            .values()
+            .filter(|(actual_segment, _)| *actual_segment == segment)
+            .count();
+        let reworked_specs = completed_specs
+            .iter()
+            .filter(|(id, (actual_segment, _))| {
+                *actual_segment == segment && reworked_spec_ids.contains(id)
+            })
+            .count();
+        segments.insert(
+            segment,
+            FlowQualitySegment {
+                completed_specs: completed_in_segment,
+                mean_cycle_hours: mean(&hours),
+                median_cycle_hours: median(&mut hours),
+                reworked_specs,
+                rework_bug_refs: rework_bug_refs_by_segment
+                    .get(&segment)
+                    .copied()
+                    .unwrap_or(0),
+            },
+        );
+    }
+
+    let unfinished_count = unfinished_by_status.values().copied().sum::<usize>();
+
+    FlowQualityMetrics {
+        segments,
+        unfinished_by_status,
+        total_specs_considered: completed_specs.len() + unfinished_count,
+    }
+}
+
+// trace:STORY-784 | ai:codex
+fn completion_time(req: &Requirement) -> Option<DateTime<Utc>> {
+    if let Some(completed_at) = req
+        .implementation_info
+        .as_ref()
+        .and_then(|info| info.completed_at.or(info.implemented_at))
+    {
+        return Some(completed_at);
+    }
+
+    req.history
+        .iter()
+        .filter(|entry| {
+            entry.changes.iter().any(|change| {
+                change.field_name == "status" && is_completion_status(&change.new_value)
+            })
+        })
+        .map(|entry| entry.timestamp)
+        .min()
+        .or_else(|| {
+            if matches!(
+                req.status,
+                RequirementStatus::Done | RequirementStatus::Completed
+            ) {
+                Some(req.modified_at)
+            } else {
+                None
+            }
+        })
+}
+
+// trace:STORY-784 | ai:codex
+fn is_completion_status(raw: &str) -> bool {
+    let normalized = raw
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')
+        .collect::<String>()
+        .to_ascii_lowercase();
+    matches!(normalized.as_str(), "done" | "completed")
+}
+
+// trace:STORY-784 | ai:codex
+fn close_commit_segment(
+    req: &Requirement,
+    commit_by_sha: &HashMap<&str, &CommitCorpusEntry>,
+) -> AiInvolvementSegment {
+    let Some(sha) = req
+        .implementation_info
+        .as_ref()
+        .and_then(|info| info.completion_sha.as_deref())
+    else {
+        return AiInvolvementSegment::UnknownCloseCommit;
+    };
+    let Some(commit) = commit_by_sha.get(sha) else {
+        return AiInvolvementSegment::UnknownCloseCommit;
+    };
+    if parse_ai_trailers(&commit.message).is_empty() {
+        AiInvolvementSegment::NoTrailer
+    } else {
+        AiInvolvementSegment::Assisted
+    }
+}
+
+// trace:STORY-784 | ai:codex
+fn mean(values: &[f64]) -> Option<f64> {
+    if values.is_empty() {
+        None
+    } else {
+        Some(values.iter().sum::<f64>() / values.len() as f64)
+    }
+}
+
+// trace:STORY-784 | ai:codex
+fn median(values: &mut [f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(|a, b| a.total_cmp(b));
+    let mid = values.len() / 2;
+    if values.len() % 2 == 0 {
+        Some((values[mid - 1] + values[mid]) / 2.0)
+    } else {
+        Some(values[mid])
+    }
 }
 
 // trace:STORY-783 | ai:codex
@@ -311,6 +568,9 @@ pub fn compute_agent_lift(
 mod tests {
     use super::*;
     use crate::auto_complete_telemetry::{AutoRebaseEvent, PhaseDuration};
+    use aida_core::{ImplementationInfo, Relationship, RequirementPriority};
+    use chrono::TimeZone;
+    use uuid::Uuid;
 
     fn ac_event(
         spec: &str,
@@ -366,9 +626,56 @@ mod tests {
 
     fn commit(date: &str, message: &str) -> CommitCorpusEntry {
         CommitCorpusEntry {
+            sha: format!("sha-{date}-{message}"),
             date: date.to_string(),
             message: message.to_string(),
         }
+    }
+
+    fn commit_with_sha(sha: &str, date: &str, message: &str) -> CommitCorpusEntry {
+        CommitCorpusEntry {
+            sha: sha.to_string(),
+            date: date.to_string(),
+            message: message.to_string(),
+        }
+    }
+
+    fn req_with_dates(
+        spec_id: &str,
+        req_type: RequirementType,
+        status: RequirementStatus,
+        created: &str,
+        completed: Option<&str>,
+        completion_sha: Option<&str>,
+    ) -> Requirement {
+        let created_at = chrono::DateTime::parse_from_rfc3339(created)
+            .unwrap()
+            .with_timezone(&Utc);
+        let mut req = Requirement::new(spec_id.to_string(), String::new());
+        req.id = Uuid::new_v4();
+        req.spec_id = Some(spec_id.to_string());
+        req.req_type = req_type;
+        req.status = status;
+        req.priority = RequirementPriority::Medium;
+        req.created_at = created_at;
+        req.modified_at = completed
+            .map(|ts| {
+                chrono::DateTime::parse_from_rfc3339(ts)
+                    .unwrap()
+                    .with_timezone(&Utc)
+            })
+            .unwrap_or(created_at);
+        if completed.is_some() || completion_sha.is_some() {
+            let mut info = ImplementationInfo::default();
+            info.completed_at = completed.map(|ts| {
+                chrono::DateTime::parse_from_rfc3339(ts)
+                    .unwrap()
+                    .with_timezone(&Utc)
+            });
+            info.completion_sha = completion_sha.map(str::to_string);
+            req.implementation_info = Some(info);
+        }
+        req
     }
 
     #[test]
@@ -564,5 +871,94 @@ mod tests {
         assert_eq!(lift.human_invocations, 2);
         assert_eq!(lift.human_command_shapes, 2);
         assert!(!lift.is_empty());
+    }
+
+    #[test]
+    fn flow_quality_segments_cycle_time_by_close_commit_ai_trailer() {
+        let assisted = req_with_dates(
+            "TASK-1",
+            RequirementType::Task,
+            RequirementStatus::Completed,
+            "2026-01-01T00:00:00Z",
+            Some("2026-01-01T06:00:00Z"),
+            Some("aaa"),
+        );
+        let unassisted = req_with_dates(
+            "TASK-2",
+            RequirementType::Task,
+            RequirementStatus::Completed,
+            "2026-01-01T00:00:00Z",
+            Some("2026-01-01T10:00:00Z"),
+            Some("bbb"),
+        );
+        let unfinished = req_with_dates(
+            "TASK-3",
+            RequirementType::Task,
+            RequirementStatus::InProgress,
+            "2026-01-01T00:00:00Z",
+            None,
+            None,
+        );
+        let commits = vec![
+            commit_with_sha("aaa", "2026-01-01", "[AI:codex] fix: one"),
+            commit_with_sha("bbb", "2026-01-01", "fix: two"),
+        ];
+
+        let report = compute_flow_quality_metrics(&[assisted, unassisted, unfinished], &commits);
+
+        let assisted_stats = report
+            .segments
+            .get(&AiInvolvementSegment::Assisted)
+            .unwrap();
+        assert_eq!(assisted_stats.completed_specs, 1);
+        assert_eq!(assisted_stats.mean_cycle_hours, Some(6.0));
+        let unassisted_stats = report
+            .segments
+            .get(&AiInvolvementSegment::NoTrailer)
+            .unwrap();
+        assert_eq!(unassisted_stats.completed_specs, 1);
+        assert_eq!(unassisted_stats.median_cycle_hours, Some(10.0));
+        assert_eq!(report.unfinished_by_status.get("In Progress"), Some(&1));
+    }
+
+    #[test]
+    fn flow_quality_counts_later_bug_references_as_rework() {
+        let target = req_with_dates(
+            "TASK-1",
+            RequirementType::Task,
+            RequirementStatus::Completed,
+            "2026-01-01T00:00:00Z",
+            Some("2026-01-01T06:00:00Z"),
+            Some("aaa"),
+        );
+        let mut bug = req_with_dates(
+            "BUG-1",
+            RequirementType::Bug,
+            RequirementStatus::Completed,
+            "2026-01-02T00:00:00Z",
+            Some("2026-01-02T01:00:00Z"),
+            Some("bbb"),
+        );
+        bug.relationships.push(Relationship {
+            rel_type: RelationshipType::References,
+            target_id: target.id,
+            created_at: Some(Utc.with_ymd_and_hms(2026, 1, 2, 0, 0, 0).unwrap()),
+            created_by: None,
+        });
+        let commits = vec![
+            commit_with_sha("aaa", "2026-01-01", "[AI:codex] fix: one"),
+            commit_with_sha("bbb", "2026-01-02", "fix: bug"),
+        ];
+
+        let report = compute_flow_quality_metrics(&[target, bug], &commits);
+
+        let assisted_stats = report
+            .segments
+            .get(&AiInvolvementSegment::Assisted)
+            .unwrap();
+        assert_eq!(assisted_stats.completed_specs, 1);
+        assert_eq!(assisted_stats.reworked_specs, 1);
+        assert_eq!(assisted_stats.rework_bug_refs, 1);
+        assert_eq!(assisted_stats.rework_rate(), Some(1.0));
     }
 }
