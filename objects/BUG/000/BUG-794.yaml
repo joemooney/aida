@@ -15,12 +15,12 @@ description: |-
   - AIDA supports an explicit way to select multiple agent profiles, or documents and implements the existing both behavior as a precise compatibility shorthand.
   - Help text and scaffold status/apply behavior match the allow-list semantics.
   - A regression test verifies no unselected agent directories/files are created.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T20:32:01.643411704Z
-modified_at: 2026-08-29T20:32:01.643411704Z
+modified_at: 2026-08-30T01:25:11.798382745Z
 req_type: Bug
 tags:
 - agents
