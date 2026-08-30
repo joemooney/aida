@@ -3,12 +3,12 @@ spec_id: BUG-804
 agreed_id: BUG-804
 title: 'codex headless implementer stalls at pickup step 4: command body says confirm with the user, argument-as-consent rule lives only in the skill'
 description: 'Layer 4 of the codex phase-parity arc (BUG-797 verdict content, BUG-799 launch expansion, BUG-802 verdict location). With BUG-799 the codex implementer finally receives the full /aida-pickup command body — and follows it literally: step 4 says ''Confirm pickup with the user'', so under codex exec (one turn, nobody to answer) the session said ''Awaiting your confirmation to pick up STORY-783'' and ended. Phase 1: exited cleanly, no PR, shelved. Observed 2026-08-29 session 01a0500e0092, ~30s. The drain''s own prompt derivation documents the intended rule (TASK-86/TASK-548: ''the argument IS the consent signal'' — both forms skip the confirm) and the SKILL carries it; the command body codex receives does not. Same skill-vs-command mechanics gap as BUG-797. FIX: pickup command master step 4 states argument-as-consent + never-prompt under AIDA_HEADLESS=1; extend the rendered-prompt pin family. Sweep of other command bodies found the remaining ''confirm'' uses are verify-against-reality checks or interactive-only commands the drain never launches (recorded here).'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T00:26:15.113660527Z
-modified_at: 2026-08-30T00:26:35.104228800Z
+modified_at: 2026-08-30T00:37:09.750957586Z
 req_type: Bug
 tags:
 - codex drain prompt-parity
