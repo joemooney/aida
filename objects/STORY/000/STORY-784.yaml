@@ -47,12 +47,12 @@ description: |
   - [ ] Output states the correlation-not-causation caveat rather than leaving a
         reader to infer it.
   - [ ] Aggregate-only, per ADR-25.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:09:45.365389315Z
-modified_at: 2026-08-29T20:30:53.905666098Z
+modified_at: 2026-08-30T01:29:36.530129687Z
 req_type: Story
 relationships:
 - rel_type: Child
