@@ -356,6 +356,20 @@ pub enum MetricsCommand {
         #[clap(long, conflicts_with = "markdown")]
         json: bool,
     },
+    /// AI-lift signals over the git commit corpus: trailer coverage over time,
+    /// tool attribution, and confidence-band sparsity.
+    // trace:STORY-783 | ai:codex
+    AiLift {
+        /// Emit Markdown — suitable for pasting into release notes or a case
+        /// study. Default is the colorized terminal view.
+        // trace:STORY-783 | ai:codex
+        #[clap(long)]
+        markdown: bool,
+        /// Emit a JSON object with aggregate-only computed signals.
+        // trace:STORY-783 | ai:codex
+        #[clap(long, conflicts_with = "markdown")]
+        json: bool,
+    },
 }
 
 /// Observe-only rule-adherence field study.
