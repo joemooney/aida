@@ -10,12 +10,12 @@ description: |-
   Fix (two layers, vendor-agnostic):
   1. Prompt-text anchor: the orchestrator composes the phase-3 reviewer prompt with the ABSOLUTE drive root baked into the instructions (e.g. "run `aida review record ...` from <root>; the verdict file must land under <root>/.aida/review-verdicts/"). Prompt text cannot be stripped by a sandbox.
   2. Orchestrator-side sibling sweep: on verdict miss, after the spec-keyed fallback, glob sibling directories of the drive root (and the drive root's parent) for */.aida/review-verdicts/PR-<N>.json (and <SPEC>.json) with mtime >= reviewer session start; accept the freshest. PR number is unique and the mtime gate prevents stale pickup, so this is safe regardless of what the reviewer named its checkout.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:59:38.438294813Z
-modified_at: 2026-08-30T02:07:38.913553536Z
+modified_at: 2026-08-30T02:17:13.861938104Z
 req_type: Bug
 tags:
 - codex-parity
@@ -27,3 +27,21 @@ comments:
   created_at: 2026-08-30T02:07:38.913553536Z
   modified_at: 2026-08-30T02:07:38.913553536Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a05074-e77f-76c3-8094-8152f7342e46
+  author: aida-auto-bump
+  timestamp: 2026-08-30T02:17:13.855778299Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a05074-e785-75d2-90db-528924a3f655
+  timestamp: 2026-08-30T02:17:13.861936569Z
+  agent: aida
+  commit_sha: c85ecd28e215bebeb69f244dfcdbde2cd5f6312e
+  summary: Completed via merge c85ecd28
+implementation_info:
+  implemented: false
+  completed_at: 2026-08-30T02:17:13.855625390Z
+  completion_sha: c85ecd28e215bebeb69f244dfcdbde2cd5f6312e
