@@ -20,3 +20,11 @@
   added_at: 2026-08-30T01:22:33.382050370Z
   for_role: implementer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a0505b-9bbf-7523-8885-bf2c1afeb16b
+  position: 11000
+  added_by: claude-advisor-1
+  note: auto-queued by `session end` (01a05049); covers 1 spec
+  added_at: 2026-08-30T01:49:42.450374628Z
+  for_role: reviewer
+  added_by_machine: imac
