@@ -119,25 +119,26 @@ The strategic rule is:
 
 ## What AIDA Offers During This Migration
 
-AIDA is a small, git-backed coordination layer for AI-assisted software work.
-It keeps a durable graph of requirements, bugs, tasks, decisions, and their
-relationships; links code changes back to those records with trace comments;
-and exposes the graph to agents through a CLI and MCP server.
+<!-- trace:TASK-0426 | ai:codex -->
+AIDA is a work-in-progress infrastructure project for AI-assisted software
+work. Its core is a small, git-backed intent graph: requirements, bugs, tasks,
+decisions, relationships, lifecycle state, and code-to-spec trace comments,
+exposed through one CLI/MCP surface that Claude Code, Codex CLI, and other
+agents can all use.
 
-AIDA is also a work in progress. Its direction is more mature than its polish:
-the core idea is a vendor-neutral substrate for project intent and
-multi-agent coordination, but the product surface, onboarding path, and some
-cross-agent workflows are still being hardened. Treat it as an emerging
-infrastructure layer, not a finished replacement for an issue tracker, CI
-system, or agent runtime.
+That scope matters. AIDA is not a finished issue tracker, CI system, or agent
+runtime, and it should not be adopted as if it were a polished SaaS workflow.
+It is closer to a research-grade substrate: useful today for teams that need
+durable project intent and cross-agent coordination, but still actively being
+hardened in product surface, onboarding, and multi-agent ergonomics.
 
-AIDA becomes relevant when the migration exposes a deeper problem: too much of
-the team's workflow lived inside one vendor's agent runtime. If Claude hooks,
-slash commands, status lines, subagents, or memories were carrying project
-state and safety rules, then switching agents is not just a CLI migration. It is
-a workflow-portability problem.
+During a Claude-to-Codex migration, AIDA becomes relevant when the migration
+reveals that too much of the team's workflow lived inside one vendor's runtime.
+If Claude hooks, slash commands, status lines, subagents, or memories were
+carrying project state and safety rules, then switching agents is not just a
+CLI migration. It is a workflow-portability problem.
 
-AIDA's value in that situation is a vendor-neutral substrate:
+AIDA's answer to that problem is a vendor-neutral substrate:
 
 - stable requirement and task IDs that survive agent changes;
 - a git-canonical spec graph instead of private agent memory;
@@ -150,16 +151,17 @@ AIDA's value in that situation is a vendor-neutral substrate:
 That means AIDA can help a team move load-bearing workflow out of Claude Code
 and into project-owned state. Codex then becomes one worker against the same
 substrate, not the new place where all hidden process rules are re-created.
-The tradeoff is that adopting AIDA means accepting some immature edges in return
-for a deeper portability model than plain docs and scripts can usually provide.
+The tradeoff is real: adopting AIDA means accepting some immature edges in
+return for a deeper portability model than plain docs and scripts can usually
+provide.
 
-Even if AIDA is not the right immediate dependency for a migration, it may be
-interesting to people studying the AI coding-agent landscape and looking for a
-project to collaborate on. The problems AIDA is trying to address are
-infrastructure problems: durable project intent, cross-agent coordination,
-traceability, lifecycle state, and vendor portability. If those are the gaps a
-team sees while moving between Claude Code, Codex CLI, and other agents, AIDA
-may be a vehicle they can help own, shape, and steer.
+For people evaluating the broader AI coding-agent landscape, AIDA is also an
+invitation to work on the substrate itself. The project is still malleable:
+the roll-your-own verdict remains open, the cross-vendor discipline is still
+being tested, and the highest-leverage contributions are not just feature
+requests. They are concrete migration failures, better onboarding paths, sharper
+boundaries between universal gates and per-agent conveniences, and evidence
+about where AIDA is too much machinery.
 
 ### When to consider AIDA
 
@@ -195,6 +197,10 @@ For those users, the better path is usually lighter: write a good `AGENTS.md`,
 move important slash-command behavior into scripts, configure Codex permissions
 carefully, register any needed MCP servers, and verify the old workflow with a
 real task.
+
+AIDA should earn its place by carrying state that would otherwise be fragile:
+IDs, relationships, lifecycle, handoffs, and traceability. If those needs are
+not present, adding the substrate mostly adds process weight.
 
 ### The practical adoption path
 
