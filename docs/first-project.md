@@ -174,6 +174,13 @@ small and typed: `parent`, `child`, `references`, `duplicate`, `verifies`,
 `verified-by`. BUG-1 `references` STORY-3 because the empty-file crash lives in
 the persistence story's code.
 
+`aida rel add` only creates edges inside the current project's AIDA store. For a
+cross-repo reference, write the intended external target in a comment, for
+example `aida-hub#STORY-21`; AIDA refuses that syntax as a graph edge today so a
+colliding local ID cannot masquerade as the foreign spec. If a local edge points
+from open work at a terminal target, AIDA prints a warning because that shape is
+a common signal that the target ID may belong to another store.
+
 ---
 
 ## Step 4 — See the graph

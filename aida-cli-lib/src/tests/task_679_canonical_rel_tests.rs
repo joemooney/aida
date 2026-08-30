@@ -1,4 +1,7 @@
-use super::{effective_display_status, is_terminal_status, rel_should_write_inverse};
+use super::{
+    effective_display_status, is_terminal_status, looks_like_cross_store_spec_ref,
+    rel_should_write_inverse, relationship_terminal_ambiguity_warning,
+};
 use aida_core::models::{
     RelationshipType, Requirement, RequirementStatus, RequirementType, RequirementsStore,
 };
@@ -79,6 +82,43 @@ fn rel_add_dedups_repeated_edges() {
         .filter(|r| r.rel_type == RelationshipType::Parent && r.target_id == cid)
         .count();
     assert_eq!(count, 1, "only one Parent edge after a repeat");
+}
+
+#[test]
+fn rel_add_rejects_explicit_cross_store_target_syntax() {
+    assert!(looks_like_cross_store_spec_ref("aida-hub#STORY-21"));
+    assert!(looks_like_cross_store_spec_ref("project_name#BUG-790"));
+    assert!(!looks_like_cross_store_spec_ref("STORY-21"));
+    assert!(!looks_like_cross_store_spec_ref("#STORY-21"));
+    assert!(!looks_like_cross_store_spec_ref("aida-hub#"));
+}
+
+#[test]
+fn non_hierarchy_link_to_terminal_target_gets_ambiguity_warning() {
+    let mut source = Requirement::new("Open source".into(), "desc".into());
+    source.spec_id = Some("STORY-781".into());
+    source.status = RequirementStatus::Approved;
+    let mut target = Requirement::new("Closed target".into(), "desc".into());
+    target.spec_id = Some("STORY-21".into());
+    target.status = RequirementStatus::Rejected;
+
+    let warning =
+        relationship_terminal_ambiguity_warning(&RelationshipType::References, &source, &target)
+            .expect("open-to-terminal non-hierarchy edge should warn");
+    assert!(warning.contains("STORY-21"));
+    assert!(warning.contains("another store"));
+
+    assert!(
+        relationship_terminal_ambiguity_warning(&RelationshipType::Parent, &source, &target)
+            .is_none(),
+        "parent/child has its own terminal-parent guard"
+    );
+    source.status = RequirementStatus::Completed;
+    assert!(
+        relationship_terminal_ambiguity_warning(&RelationshipType::References, &source, &target)
+            .is_none(),
+        "terminal-to-terminal archival links remain quiet"
+    );
 }
 
 // BUG-628: the rel-add completed-parent guard must read the EFFECTIVE
