@@ -366,6 +366,12 @@ mod tests {
             body.contains("escalated-to-human"),
             "the headless merge-escalation escape hatch must be documented"
         );
+        // BUG-802: the cwd-robust verb is the recommended path — a reviewer
+        // that checked the PR out elsewhere hand-writes into the wrong tree.
+        assert!(
+            body.contains("aida review record"),
+            "the rendered prompt must instruct the drive-root-anchored verb"
+        );
         // The ordering is the contract: file BEFORE the PR comment (BUG-280).
         let file_pos = body.find("review-verdicts").unwrap();
         let comment_pos = body

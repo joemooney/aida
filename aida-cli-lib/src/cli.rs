@@ -703,6 +703,12 @@ pub enum ReviewCommand {
         /// the verdict surfaces.
         #[clap(long, value_name = "TEXT")]
         summary: Option<String>,
+        /// Also write the orchestrator's phase-3 handshake file
+        /// (`.aida/review-verdicts/PR-<N>.json`) for this PR number, at the
+        /// drive root. This is what lets a headless drain's phase 4 proceed.
+        // trace:BUG-802 | ai:claude
+        #[arg(long)]
+        pr: Option<u64>,
     },
 
     /// Show the recorded review verdict for a spec, if any.

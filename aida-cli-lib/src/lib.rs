@@ -65732,12 +65732,14 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             sha,
             branch,
             summary,
+            pr,
         } => handle_review_record(
             spec,
             verdict,
             sha.as_deref(),
             branch.as_deref(),
             summary.as_deref(),
+            *pr,
         ),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
@@ -65748,14 +65750,34 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
 /// read. The recorded commit defaults to the branch tip, which is what makes
 /// "has the branch moved since the review?" answerable later.
 // trace:BUG-775 | ai:claude
+/// BUG-802: the drive root a phase session should write orchestrator
+/// handshake artifacts into — the env anchor the spawn/exec paths export,
+/// falling back to `find_project_root`. The anchor exists because reviewers
+/// routinely check the PR out elsewhere; from inside such a checkout,
+/// `find_project_root` resolves to the CHECKOUT (it has its own `.aida/`),
+/// and a verdict written there is invisible to the orchestrator. Proven live:
+/// three consecutive phase-3 shelves on 2026-08-29, the last with a
+/// byte-perfect verdict file in the wrong tree.
+// trace:BUG-802 | ai:claude
+fn drive_root_or_project_root() -> Result<std::path::PathBuf> {
+    if let Some(root) = std::env::var_os("AIDA_DRIVE_ROOT") {
+        let p = std::path::PathBuf::from(root);
+        if p.is_dir() {
+            return Ok(p);
+        }
+    }
+    find_project_root()
+}
+
 fn handle_review_record(
     spec: &str,
     verdict: &str,
     sha: Option<&str>,
     branch: Option<&str>,
     summary: Option<&str>,
+    pr: Option<u64>,
 ) -> Result<()> {
-    let project_root = find_project_root()?;
+    let project_root = drive_root_or_project_root()?;
     let kind = review_verdict::VerdictKind::parse(verdict);
     if kind == review_verdict::VerdictKind::Other {
         anyhow::bail!(
@@ -65808,6 +65830,27 @@ fn handle_review_record(
         "record:".dimmed(),
         path.display().to_string().dimmed()
     );
+
+    // BUG-802: with --pr, also write the orchestrator's phase-3 handshake at
+    // the drive root. The verdict string is the tolerant-parse canonical label
+    // so `auto_complete::Verdict::parse` accepts it byte-for-byte.
+    if let Some(n) = pr {
+        let dir = project_root.join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&dir)?;
+        let handshake = dir.join(format!("PR-{n}.json"));
+        let body = serde_json::json!({
+            "verdict": kind.label(),
+            "summary": summary.unwrap_or(""),
+            "mode": "orchestrator-phase-3",
+        });
+        std::fs::write(&handshake, format!("{}\n", serde_json::to_string(&body)?))
+            .with_context(|| format!("could not write {}", handshake.display()))?;
+        println!(
+            "  {} {} (phase-3 handshake — the orchestrator reads this to proceed)",
+            "handshake:".dimmed(),
+            handshake.display().to_string().dimmed()
+        );
+    }
     Ok(())
 }
 

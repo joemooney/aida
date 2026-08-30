@@ -895,6 +895,10 @@ pub fn spawn_vendor_headless(
     let status = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        // BUG-802: anchor the drive root so `aida review record --pr N` (and
+        // any future handshake writer) lands artifacts where the orchestrator
+        // polls, no matter where the session wanders (PR checkouts, /tmp).
+        .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .status()
@@ -1978,6 +1982,9 @@ pub fn exec_claude_headless(
     let mut child = Command::new(program)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        // BUG-802: same drive-root anchor as the spawn path — the two launch
+        // paths must never diverge on env.
+        .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .spawn()
@@ -2187,6 +2194,9 @@ pub fn spawn_claude_headless_resume(
         .current_dir(cwd)
         .args(args)
         .env("AIDA_HEADLESS", "1")
+        // BUG-802: same drive-root anchor as the spawn path — the two launch
+        // paths must never diverge on env.
+        .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value)
         .stdout(Stdio::from(log))
         .status()
