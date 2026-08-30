@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:38:43.200066764Z
-modified_at: 2026-08-30T03:37:26.617007509Z
+modified_at: 2026-08-30T03:37:28.124968707Z
 req_type: Task
 tags:
 - docs-review
@@ -26,4 +26,11 @@ relationships:
 - rel_type: Child
   target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
   created_at: 2026-08-30T02:38:46.747410661Z
+comments:
+- id: 01a050be-5d3c-72f3-8c7a-450baaaf28ed
+  author: joe
+  content: 'Groomed 2026-08-29: execute in the champion-product framing (see TASK-1187 description for the binding voice rules) — the cold-reader path presents AIDA as the agent-collaboration layer, not a research substrate.'
+  created_at: 2026-08-30T03:37:28.124968707Z
+  modified_at: 2026-08-30T03:37:28.124968707Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
