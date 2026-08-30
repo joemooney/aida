@@ -11,11 +11,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:36:41.833880898Z
-modified_at: 2026-08-30T03:00:38.297654460Z
+modified_at: 2026-08-30T03:11:03.152475162Z
 req_type: Bug
 tags:
 - lifecycle
 - rollup
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a050a6-1c62-7c30-b61e-8f89e69d98ca
+  created_at: 2026-08-30T03:11:03.152467006Z
+  created_by: joe
 execution_mode: drain
 implementation_info:
   implemented: true
