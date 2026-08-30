@@ -1,7 +1,7 @@
 id: 01a04ff9-78ca-74c0-b368-ab3cab3a58e1
 spec_id: BUG-802
 agreed_id: BUG-802
-title: 'reviewer verdict lands in the wrong directory: add  verb + drive-root env anchor'
+title: 'reviewer verdict lands in the wrong directory: teach the existing "aida review verdict" verb the drive-root anchor and put it in the prompt'
 description: |-
   Layer 3 of the codex reviewer saga (after BUG-797 prompt content, BUG-799 launch-boundary
   expansion): the reviewer NOW receives the workflow and writes a correct verdict file — but writes it
@@ -46,7 +46,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T00:02:24.586922578Z
-modified_at: 2026-08-30T00:02:24.586922578Z
+modified_at: 2026-08-30T00:02:42.402740431Z
 req_type: Bug
 tags:
 - codex drain reviewer substrate-as-bouncer

@@ -40695,5 +40695,13 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 3701
+- id: 01a04ff9-be98-7113-b084-a906e1655b04
+  target_id: 01a04ff9-78ca-74c0-b368-ab3cab3a58e1
+  author: aida
+  node_id: '1'
+  lamport: 3702
+  timestamp: 2026-08-30T00:02:42.456837893Z
+  kind: !SetTitle
+    title: 'reviewer verdict lands in the wrong directory: teach the existing "aida review verdict" verb the drive-root anchor and put it in the prompt'
+clock: 3702
 node_id: '1'
