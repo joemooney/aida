@@ -12,12 +12,12 @@ description: |-
   - Apply the same voice pass to README.md and OVERVIEW.md pitch paragraphs: confident product framing with PRECISE claims (alpha maturity may be stated plainly as maturity, never as identity; do not overclaim — state the precise open slice per docs/positioning conventions).
   - Employer-confidentiality rule holds: any vendor-standardization motivation stays generic, never tied to any specific employer.
   - Grep gate: after the change, `grep -riE "research-grade|research substrate" README.md OVERVIEW.md docs/agents/porting-claude-code-to-codex.md` returns nothing.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:39:04.678426542Z
-modified_at: 2026-08-30T03:50:33.187175793Z
+modified_at: 2026-08-30T03:53:03.027326781Z
 req_type: Task
 tags:
 - docs-review
