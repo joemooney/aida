@@ -12,3 +12,7 @@ modified_at: 2026-08-30T00:26:15.113660527Z
 req_type: Bug
 tags:
 - codex drain prompt-parity
+relationships:
+- rel_type: Child
+  target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
+  created_at: 2026-08-30T00:26:17.157298351Z
