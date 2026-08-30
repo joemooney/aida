@@ -30,12 +30,12 @@ description: |
   - [ ] The aggregate-only constraint and its reasoning appear alongside it, not
         buried in a separate document.
   - [ ] The self-reported limitation is stated plainly.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:09:53.386177595Z
-modified_at: 2026-08-29T19:09:53.386177595Z
+modified_at: 2026-08-30T02:18:32.124041589Z
 req_type: Task
 relationships:
 - rel_type: Child
