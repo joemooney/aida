@@ -41135,5 +41135,27 @@ operations:
     req_type: Task
     status: Draft
     priority: High
-clock: 3730
+- id: 01a0504f-c5bb-7220-924c-14bf0d89d8b5
+  target_id: 01a0504f-c229-7702-8dfe-b0880ea21bbb
+  author: aida
+  node_id: '1'
+  lamport: 3731
+  timestamp: 2026-08-30T01:36:40.379938824Z
+  kind: !Create
+    title: 'aida agent resume <name|SPEC>: reattach a previously-launched agent session after a long gap'
+    description: |-
+      Operator returns to a project after weeks and wants to pick up an agent where it left off. Today the registry entry (`AgentRegistryEntry`) records role/spec/worktree/version but NOT the vendor's native session id, so nothing can `claude --resume` / `codex resume` it. The orchestrator already resumes Claude sessions (advisor fork-from-live, `queue work --resume`), so the mechanics exist — only the `agent` lane lacks them.
+
+      Reuse the existing verb: `aida agent resume <name>` today clears the STORY-528 paused marker on a LIVE process. Extend it: live process → clear pause (unchanged); EXITED process → reattach.
+
+      Acceptance:
+      - `aida agent new <vendor>` passes an explicit session id to the vendor where supported (claude `--session-id`, codex equivalent; antigravity verified before claiming) and stores `native_session_id` on the registry entry. Registry entries of launcher-spawned agents are retained after exit (an `ended_at` field or an `ended/` subdir), so `resume` has something to find.
+      - `aida agent resume <name|SPEC>` on an exited agent relaunches the same vendor with its resume flag, same cwd/worktree/env/role/description, writes a new entry linked to the old (`resumed_from`). Refuses cleanly when the worktree is gone or the vendor transcript is not on this machine (Claude transcripts are per-machine under ~/.claude/projects/).
+      - On reattach, inject a fresh role-context snapshot with a DRIFT BRIEF: spec status then vs now, PR state, commits on main since, unread mail/briefs since `ended_at`. This is what makes resume better than a fresh `agent new --spec X` for a stale transcript.
+      - `aida agent ls --ended` lists resumable sessions with role/description/spec/age.
+      - Vendor the resume flag behind the launcher adapter (execution layer), not the coordination layer.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 3731
 node_id: '1'
