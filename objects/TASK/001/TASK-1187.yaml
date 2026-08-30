@@ -22,3 +22,7 @@ tags:
 - follow-up
 - migration:claude-to-codex
 - positioning
+relationships:
+- rel_type: Child
+  target_id: 019ef78b-4dc5-7ec0-b693-ef10e34e7fef
+  created_at: 2026-08-30T02:39:08.365094609Z
