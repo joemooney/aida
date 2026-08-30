@@ -41115,5 +41115,25 @@ operations:
   timestamp: 2026-08-30T01:29:16.688260972Z
   kind: !SetStatus
     status: Completed
-clock: 3729
+- id: 01a0504f-b813-7640-96fe-74565c9b3a9f
+  target_id: 01a0504f-b2e4-7330-a158-3b85843fe522
+  author: aida
+  node_id: '1'
+  lamport: 3730
+  timestamp: 2026-08-30T01:36:36.883946940Z
+  kind: !Create
+    title: 'aida agent gc: prune dead-PID registry entries (registry grows without bound)'
+    description: |-
+      Nothing ever prunes `.aida/agents/*.toml` — only `aida agent stop` removes an entry (`agent_registry::remove_agent`). Every MCP-serving process (drain phases, subagents, reviewers, source=mcp) leaves a tombstone, so `aida agent ls` showed 108 rows of which 103 were dead PIDs (2026-08-29 audit; 103 source=mcp, 5 source=agent-launcher).
+
+      Acceptance:
+      - `aida agent gc [--dry-run] [--older-than D]` removes entries whose PID is not alive (same liveness check `ls` uses to print `stale`). Prints count + what it removed.
+      - Entries carrying a resumable native session id (see the sibling `agent resume` story) are RETAINED unless `--older-than` says otherwise — gc must not destroy the thing resume needs.
+      - `aida agent ls` runs the same prune opportunistically (substrate-as-bouncer: the list should never show a dead process by default; `--all`/`--stale` to see tombstones).
+      - `aida session reap` and the orchestrator's end-of-drain path call it so the registry self-heals.
+      - Never touches the `.aida/agents/context/` snapshots.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 3730
 node_id: '1'
