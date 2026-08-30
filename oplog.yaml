@@ -41157,5 +41157,25 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 3731
+- id: 01a0504f-d657-7b30-9b6c-1f5f49ea911d
+  target_id: 01a0504f-d2ed-7b10-8cf7-7fa483b2ccba
+  author: aida
+  node_id: '1'
+  lamport: 3732
+  timestamp: 2026-08-30T01:36:44.631970291Z
+  kind: !Create
+    title: 'Agent registry: one row per session, a description per agent, and singleton-per-role unless scoped'
+    description: |-
+      Even after pruning dead PIDs, `aida agent ls` is hard to read: (a) a launched agent appears TWICE (launcher entry `claude-product-1` pid A + its MCP-server child `claude#B` registered again with source=mcp); (b) rows have no description — `claude#1232003 implementer (none)` says nothing about what it is for; (c) session LEASES (reviewer PR-1610, FR-284) are folded into the same table as processes with `unknown#` ids, blurring the STORY-431 distinction; (d) nothing stops several advisor/product agents coexisting on the same scope, though the operating model is ONE master advisor until subsystem-scoped (SPIKE-10).
+
+      Acceptance:
+      - Dedup: an MCP registration from a process whose parent/ancestor is a launcher-registered agent attaches to that row (same session) instead of creating a second one. One row per session.
+      - `aida agent new ... --description "<what this agent is for>"` (prompt at a TTY when omitted for advisor/product roles); stored on the entry and shown as a column in `ls`; `aida agent describe <name> "<text>"` edits it later.
+      - Singleton-per-role policy for the seat roles (advisor, product, integrator): a second `agent new --role advisor` on the same scope is REFUSED with the existing agent named, unless `--scope <EPIC|subsystem>` compartmentalizes it (and `ls` shows the scope). Implementer/reviewer are many-per-project. Policy under a `[agent_registry]` config key with the singleton default (configurable-policy-with-safe-default).
+      - `ls` separates or labels lease-only rows (`unknown#` today) — e.g. a LEASES section or a KIND column — so process rows and scope rows are not confused.
+      - Default `ls` hides dead PIDs (depends on the `agent gc` task).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 3732
 node_id: '1'
