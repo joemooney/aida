@@ -12,12 +12,12 @@ description: |-
   - Link outward to deeper comparison docs instead of duplicating every neighbor analysis.
 
   BINDING CONSTRAINT (advisor re-scope 2026-08-29): execute in the champion-product framing — AIDA presented as the agent-collaboration layer (stable spec IDs, typed relationships, code-to-spec traces, cross-vendor coordination), stated as product strengths. No "research-grade" / "work-in-progress" identity language. Precise claims only (state the precise open slice; never overclaim). Vendor-standardization motivations stay generic — never tied to any specific employer.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:38:43.200066764Z
-modified_at: 2026-08-30T03:37:40.196368407Z
+modified_at: 2026-08-30T03:55:50.845348419Z
 req_type: Task
 tags:
 - docs-review
