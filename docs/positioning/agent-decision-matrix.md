@@ -1,12 +1,13 @@
 <!-- trace:TASK-0427 -->
+<!-- trace:TASK-1186 | ai:codex -->
 
 # Agent tooling decision matrix: Claude Code vs Codex CLI vs an AIDA-style substrate
 
-*Last updated: 2026-07-09*
+*Last updated: 2026-08-29*
 
-This is a decision-support page, not a sales page. It is for a team or an
-individual sitting in front of the "which agent tooling, and how much of it"
-question: stay in Claude Code, move to Codex CLI, or push some of the workflow
+This is a decision-support page for a team or an individual sitting in front of
+the "which agent tooling, and how much of it" question: stay in Claude Code,
+move to Codex CLI, run more than one coding agent, or push part of the workflow
 down into vendor-neutral project infrastructure (scripts, CI, git hooks, MCP
 servers, or a substrate like AIDA).
 
@@ -31,6 +32,13 @@ not in aspiration. The source documents are:
 Both CLIs move fast. Re-verify any capability claim against your installed
 version before making a binding decision; the source docs above carry their own
 "verified on <date>" stamps for exactly that reason.
+
+For cold readers: Claude Code, Codex CLI, Cursor, Continue, and similar tools are
+agent runtimes. AIDA is the **agent-collaboration layer** that lets those
+runtimes share durable project state: stable requirement IDs, typed
+relationships, code-to-spec traces, queue/lease ownership, lifecycle state, and
+MCP access to the same git-canonical record. Adopt it for that layer. Do not
+adopt it just to switch which assistant edits code.
 
 ---
 
@@ -245,12 +253,12 @@ is the right answer, and the recommendation is to *not* take on the machinery.
   not keep even a hand-written `REQUIREMENTS.md`, the graph will not maintain
   itself. (`when-not-to-use-aida.md`, case 5)
 
-A note on register: the substrate discussed here (AIDA) is itself a research
-probe and a work in progress — more mature in direction than in polish. That is
-exactly why the right default for most readers is the lighter path, and why a
-matrix that sends some readers *away* from it is the trustworthy one. If you do
-not have the portability or coordination problem, you do not need the substrate;
-say so to yourself before adopting it.
+The precise open slice: AIDA is the right layer when the project needs a durable,
+shared coordination record across agents, sessions, PRs, and time. It is not the
+right layer for one-off coding assistance, a single-vendor workflow with no
+portability requirement, or a project whose process is already clear in an issue
+tracker plus scripts. If you do not have the portability, traceability, or
+coordination problem, you do not need the substrate; say so before adopting it.
 
 ---
 
