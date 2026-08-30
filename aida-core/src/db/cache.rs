@@ -964,16 +964,14 @@ impl Cache {
             .as_deref()
             .map(|v| v != SCHEMA_VERSION)
             .unwrap_or(false);
-        // BUG-757: a torn/partial migration can leave `requirements_cache`
-        // present + `schema_version` stamped current + `requirements_fts`
-        // entirely ABSENT. The column-drift detectors return false for a
-        // missing table (nothing to PRAGMA) and `cache_tables_present` used to
-        // pass on `requirements_cache` alone, so the schema never re-applied —
-        // a one-way trap where every cache op (including `aida cache rebuild`)
-        // hard-errored with `no such table: requirements_fts` until the db was
-        // deleted by hand. A partial table set is structural drift: drop +
-        // reapply + invalidate the head SHA, same as a missing column.
-        // trace:BUG-757 | ai:claude
+        // BUG-757 / TASK-1185: a torn/partial migration can leave one expected
+        // cache table present while another is entirely absent (for example
+        // `requirements_cache` present but `requirements_fts` absent, or only
+        // `cache_meta` surviving). The column-drift detectors return false for
+        // a missing table (nothing to PRAGMA), so the schema must treat any
+        // partial table set as structural drift: drop + reapply + invalidate the
+        // head SHA, same as a missing column.
+        // trace:BUG-757 trace:TASK-1185 | ai:codex
         let schema_drifted =
             fts_schema_drifted(&conn) || cache_schema_drifted(&conn) || cache_tables_partial(&conn);
         // BUG-664: a PURE READER must not take the cache write-lock on open. The
@@ -3787,6 +3785,47 @@ mod tests {
             .expect("FTS search must succeed after self-heal");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].spec_id.as_deref(), Some("BUG-757"));
+    }
+
+    #[test]
+    fn metadata_only_cache_self_heals_missing_requirements_cache_on_open() {
+        // TASK-1185: `aida findings list --count` needs the standard cache open
+        // path to recover when `cache_meta` exists but `requirements_cache` does
+        // not. A stamped version + head SHA must not let a metadata-only cache
+        // look healthy until the first list query hard-errors with
+        // `no such table: requirements_cache`.
+        // trace:TASK-1185 | ai:codex
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join("cache.db");
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE cache_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SCHEMA_VERSION, SCHEMA_VERSION],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO cache_meta (key, value) VALUES (?1, ?2)",
+                params![META_KEY_SOURCE_HEAD_SHA, "stalehead"],
+            )
+            .unwrap();
+        }
+
+        let cache = Cache::open(&cache_path).unwrap();
+        assert!(
+            cache.source_head_sha().unwrap().is_none(),
+            "metadata-only self-heal should invalidate the recorded head SHA so a rebuild fires"
+        );
+
+        let rows = cache
+            .list_summaries(&ListFilter::default())
+            .expect("list should see a recreated requirements_cache table");
+        assert!(rows.is_empty());
     }
 
     #[test]
