@@ -424,3 +424,150 @@ fn drive_path_env_leads_with_the_current_exe_dir() {
         "inherited PATH entries must be preserved"
     );
 }
+
+// ── BUG-809: sibling-checkout verdict sweep + prompt-text anchor ─────────────
+
+/// A reviewer that checked the PR out NEXT TO the repo and recorded the
+/// verdict there (env anchor stripped by the vendor sandbox) must still land:
+/// the sweep finds the fresh PR-keyed file in the sibling dir and copies it
+/// back to the drive root.
+#[test]
+fn a_fresh_sibling_checkout_verdict_is_accepted_and_copied_back() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("aida");
+    std::fs::create_dir_all(&root).unwrap();
+    let checkout_vd = parent
+        .path()
+        .join("aida-pr-1619")
+        .join(".aida")
+        .join("review-verdicts");
+    std::fs::create_dir_all(&checkout_vd).unwrap();
+    std::fs::write(
+        checkout_vd.join("PR-1619.json"),
+        r#"{"verdict":"APPROVED","summary":"ok","mode":"orchestrator-phase-3"}"#,
+    )
+    .unwrap();
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    let out = crate::sibling_verdict_sweep_for_phase3(&root, 1619, "STORY-784", started);
+    assert!(
+        matches!(
+            out,
+            Some(crate::auto_complete::ReviewerOutcome::Verdict(
+                crate::auto_complete::Verdict::Approved
+            ))
+        ),
+        "the sibling checkout's fresh verdict must be accepted: {out:?}"
+    );
+    assert!(
+        root.join(".aida/review-verdicts/PR-1619.json").is_file(),
+        "the found verdict must be copied back to the drive root for audit + calibration"
+    );
+}
+
+/// The freshness gate holds for the sweep too: a sibling verdict older than
+/// the reviewer session start must never advance a later diff.
+#[test]
+fn a_stale_sibling_verdict_is_refused() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("aida");
+    std::fs::create_dir_all(&root).unwrap();
+    let checkout_vd = parent
+        .path()
+        .join("aida-pr-9")
+        .join(".aida")
+        .join("review-verdicts");
+    std::fs::create_dir_all(&checkout_vd).unwrap();
+    std::fs::write(
+        checkout_vd.join("PR-9.json"),
+        r#"{"verdict":"APPROVED","summary":"old","mode":"orchestrator-phase-3"}"#,
+    )
+    .unwrap();
+    // Session "started" in the future relative to the file's mtime.
+    let started = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+    assert!(
+        crate::sibling_verdict_sweep_for_phase3(&root, 9, "BUG-9", started).is_none(),
+        "a verdict recorded before this session is stale for the sweep too"
+    );
+}
+
+/// A spec-keyed `review record` file in the sibling checkout works as well —
+/// the sweep understands both shapes.
+#[test]
+fn a_sibling_spec_keyed_record_is_accepted() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("aida");
+    std::fs::create_dir_all(&root).unwrap();
+    let checkout_vd = parent
+        .path()
+        .join("review-co")
+        .join(".aida")
+        .join("review-verdicts");
+    std::fs::create_dir_all(&checkout_vd).unwrap();
+    std::fs::write(
+        checkout_vd.join("STORY-1.json"),
+        r#"{"verdict":"request-changes","reviewed_sha":"abc","recorded_at":"2026-08-29T18:02:00Z"}"#,
+    )
+    .unwrap();
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    let out = crate::sibling_verdict_sweep_for_phase3(&root, 42, "STORY-1", started);
+    assert!(
+        matches!(
+            out,
+            Some(crate::auto_complete::ReviewerOutcome::Verdict(
+                crate::auto_complete::Verdict::RequestChanges
+            ))
+        ),
+        "a fresh spec-keyed sibling record must be accepted: {out:?}"
+    );
+}
+
+/// The drive root itself is never treated as a "sibling" (already consulted),
+/// and unrelated garbage in sibling dirs falls through to None.
+#[test]
+fn the_sweep_skips_the_drive_root_and_garbage() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("aida");
+    let root_vd = root.join(".aida").join("review-verdicts");
+    std::fs::create_dir_all(&root_vd).unwrap();
+    // A fresh file at the ROOT would have been read by the primary path;
+    // the sweep must not double-report it as a sibling find.
+    std::fs::write(root_vd.join("PR-5.json"), r#"{"verdict":"APPROVED"}"#).unwrap();
+    let sibling_vd = parent
+        .path()
+        .join("junk")
+        .join(".aida")
+        .join("review-verdicts");
+    std::fs::create_dir_all(&sibling_vd).unwrap();
+    std::fs::write(sibling_vd.join("PR-5.json"), "not json").unwrap();
+    let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    assert!(
+        crate::sibling_verdict_sweep_for_phase3(&root, 5, "BUG-5", started).is_none(),
+        "root is not a sibling; garbage siblings must not produce a verdict"
+    );
+}
+
+/// The prompt-text anchor: with the verdict-file env set, the reviewer prompt
+/// gains an absolute-path anchor naming both the file and the directory to
+/// run `aida review record` from; without it, nothing is appended.
+#[test]
+fn reviewer_prompt_anchor_names_the_absolute_verdict_path() {
+    let _guard = crate::test_env::env_lock();
+    std::env::set_var(
+        "AIDA_REVIEW_VERDICT_FILE",
+        "/home/u/proj/.aida/review-verdicts/PR-7.json",
+    );
+    let suffix = crate::queue_cmd::reviewer_verdict_anchor_suffix().expect("suffix renders");
+    assert!(
+        suffix.contains("/home/u/proj/.aida/review-verdicts/PR-7.json"),
+        "anchor must carry the exact absolute verdict path: {suffix}"
+    );
+    assert!(
+        suffix.contains("from `/home/u/proj`"),
+        "anchor must name the drive root to run `review record` from: {suffix}"
+    );
+    std::env::remove_var("AIDA_REVIEW_VERDICT_FILE");
+    assert!(
+        crate::queue_cmd::reviewer_verdict_anchor_suffix().is_none(),
+        "no env, no anchor"
+    );
+}
