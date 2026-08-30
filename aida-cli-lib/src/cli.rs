@@ -9959,8 +9959,13 @@ pub enum Command {
         #[clap(long)]
         no_skills: bool,
 
-        /// Agent profile to scaffold
-        #[clap(long, default_value = "both", value_parser = ["claude", "codex", "both"])]
+        /// Agent profiles to scaffold — a STRICT allow-list: only the named
+        /// agents' surfaces are written. Accepts `claude`, `codex`,
+        /// `antigravity`, a comma-list (`claude,codex`), `both`
+        /// (= claude,codex exactly — no antigravity), or `all` (every
+        /// profile; the default, matching an unflagged init).
+        // trace:BUG-794 | ai:claude
+        #[clap(long, default_value = "all")]
         agent: String,
 
         /// Skip generating commit validation hooks
