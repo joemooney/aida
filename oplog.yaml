@@ -41515,5 +41515,31 @@ operations:
   timestamp: 2026-08-30T02:52:24.560908188Z
   kind: !SetStatus
     status: Completed
-clock: 3755
+- id: 01a050a6-204c-7310-93d5-0d700d80aa79
+  target_id: 01a050a6-1c62-7c30-b61e-8f89e69d98ca
+  author: aida
+  node_id: '1'
+  lamport: 3756
+  timestamp: 2026-08-30T03:10:59.660658099Z
+  kind: !Create
+    title: 'Review PR-1623: [AI:codex] fix(rollup): count accepted decisions as resolved (BUG-810)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a05097`) for branch `bug-810`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1623>
+      - Branch: `bug-810` → `main`
+
+      ## Covers
+
+      - BUG-810
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1623` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3756
 node_id: '1'
