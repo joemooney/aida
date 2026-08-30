@@ -277,6 +277,72 @@ fn unpushed_scaffold_note(
     ))
 }
 
+/// BUG-794: which agent profiles an init scaffolds — the allow-list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AgentSelection {
+    pub claude: bool,
+    pub codex: bool,
+    pub antigravity: bool,
+}
+
+/// Parse `--agent`. Accepted forms:
+///   - `claude` / `codex` / `antigravity` — that profile only
+///   - a comma-list (`claude,codex`) — exactly those profiles
+///   - `both` — `claude,codex` exactly. NOT antigravity: the name says two,
+///     and the old behavior of quietly including a third agent is the bug.
+///   - `all` — every profile; the default, byte-identical to an unflagged init.
+/// Pure, so the allow-list semantics are unit-testable.
+// trace:BUG-794 | ai:claude
+pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
+    let norm = agent.trim().to_ascii_lowercase();
+    match norm.as_str() {
+        "all" => {
+            return Ok(AgentSelection {
+                claude: true,
+                codex: true,
+                antigravity: true,
+            })
+        }
+        "both" => {
+            return Ok(AgentSelection {
+                claude: true,
+                codex: true,
+                antigravity: false,
+            })
+        }
+        _ => {}
+    }
+    let mut sel = AgentSelection {
+        claude: false,
+        codex: false,
+        antigravity: false,
+    };
+    for part in norm.split(',') {
+        match part.trim() {
+            "claude" => sel.claude = true,
+            "codex" => sel.codex = true,
+            "antigravity" | "agy" => sel.antigravity = true,
+            "" => {}
+            other => anyhow::bail!(
+                "Invalid --agent value '{other}'. Use claude, codex, antigravity, \
+                 a comma-list of those, both (= claude,codex), or all."
+            ),
+        }
+    }
+    if sel
+        == (AgentSelection {
+            claude: false,
+            codex: false,
+            antigravity: false,
+        })
+    {
+        anyhow::bail!(
+            "--agent selected no profiles — name at least one of claude, codex, antigravity"
+        );
+    }
+    Ok(sel)
+}
+
 fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
     use aida_core::git_ops;
 
@@ -406,34 +472,29 @@ fn complete_init_scaffolding(
     // commits its own scaffolding as before. trace:BUG-570 | ai:claude
     suppress_scaffold_commit: bool,
 ) -> Result<()> {
-    // Build ScaffoldConfig with escape hatches
+    // BUG-794: `--agent` is a STRICT allow-list. The old subtractive arms
+    // leaked: `--agent codex` disabled the Claude surfaces but forgot
+    // Antigravity, so a compliance-driven "codex only" init still scaffolded
+    // `.antigravity/` — exactly what a policy-restricted environment must not
+    // get. Selection is now parsed to a profile set and every agent-facing
+    // flag is DERIVED from membership, so an unselected agent cannot leak by
+    // omission when the next surface is added.
+    let selection = parse_agent_selection(agent)?;
     let mut config = ScaffoldConfig::default();
-    match agent {
-        "claude" => {
-            config.generate_agents_md = false;
-            config.generate_codex_skills = false;
-            // A Claude-only project needs no Codex MCP registration; the
-            // .codex/config.toml is the Codex-side parallel to .mcp.json and
-            // is skipped here alongside the Codex skills. trace:TASK-0424 | ai:claude
-            config.generate_codex_config = false;
-            // .antigravity/ mirrors the non-Claude .codex/ dir; the
-            // Claude-only profile skips both. trace:TASK-457 | ai:claude
-            config.generate_antigravity_skills = false;
-        }
-        "codex" => {
-            config.generate_claude_md = false;
-            config.generate_commands = false;
-            config.generate_skills = false;
-            config.generate_claude_code_hooks = false;
-        }
-        "both" => {}
-        _ => {
-            anyhow::bail!(
-                "Invalid --agent value '{}'. Use claude, codex, or both.",
-                agent
-            );
-        }
-    }
+    config.generate_claude_md = selection.claude;
+    config.generate_commands = selection.claude;
+    config.generate_skills = selection.claude;
+    config.generate_claude_code_hooks = selection.claude;
+    // AGENTS.md is the cross-vendor instructions standard — needed by any
+    // non-Claude profile, skipped for Claude-only (matching the old arm).
+    config.generate_agents_md = selection.codex || selection.antigravity;
+    config.generate_codex_skills = selection.codex;
+    // .codex/config.toml is the Codex-side parallel to .mcp.json. trace:TASK-0424
+    config.generate_codex_config = selection.codex;
+    config.generate_antigravity_skills = selection.antigravity;
+    // Captured before `config` moves into the Scaffolder; read at the codex
+    // hook-scaffold gate below.
+    let codex_profile_selected = selection.codex;
 
     if no_skills {
         config.generate_skills = false;
@@ -537,7 +598,11 @@ fn complete_init_scaffolding(
     // every re-init and `--refresh`. Failing to write it must never fail an
     // init: a project without a manifest is entirely normal.
     // trace:STORY-781 | ai:claude
-    maybe_scaffold_codex_hooks_on_init(root, force);
+    // BUG-794: the Codex hook wiring is a Codex-facing surface — it obeys the
+    // allow-list like every other agent artifact.
+    if codex_profile_selected {
+        maybe_scaffold_codex_hooks_on_init(root, force);
+    }
 
     let manifest_written = ensure_project_manifest_scaffold(root, force).unwrap_or(false);
     if manifest_written {
@@ -1228,6 +1293,64 @@ mod task_631_init_self_commit_tests {
     // on the code branch and does not push it. These pin the wording that stops
     // "AIDA initialized ✓" reading as "everything is pushed".
     // trace:BUG-789 | ai:claude
+    // ── BUG-794: --agent is a strict allow-list ──
+
+    #[test]
+    fn single_agent_selections_are_strict() {
+        let c = parse_agent_selection("claude").unwrap();
+        assert!(c.claude && !c.codex && !c.antigravity);
+        let x = parse_agent_selection("codex").unwrap();
+        assert!(
+            !x.claude && x.codex && !x.antigravity,
+            "codex must NOT drag antigravity along — the original bug"
+        );
+        let a = parse_agent_selection("antigravity").unwrap();
+        assert!(!a.claude && !a.codex && a.antigravity);
+    }
+
+    #[test]
+    fn both_means_exactly_claude_and_codex() {
+        let b = parse_agent_selection("both").unwrap();
+        assert!(b.claude && b.codex);
+        assert!(
+            !b.antigravity,
+            "the name says two; a silent third agent is the bug"
+        );
+    }
+
+    #[test]
+    fn all_is_every_profile_and_matches_the_default() {
+        let a = parse_agent_selection("all").unwrap();
+        assert!(a.claude && a.codex && a.antigravity);
+    }
+
+    #[test]
+    fn comma_lists_select_exactly_what_they_name() {
+        let cc = parse_agent_selection("claude,codex").unwrap();
+        assert!(cc.claude && cc.codex && !cc.antigravity);
+        let ca = parse_agent_selection("codex, antigravity").unwrap();
+        assert!(
+            !ca.claude && ca.codex && ca.antigravity,
+            "whitespace tolerated"
+        );
+        let agy = parse_agent_selection("agy").unwrap();
+        assert!(agy.antigravity, "agy is the accepted short form");
+    }
+
+    #[test]
+    fn garbage_and_empty_selections_fail_loudly() {
+        assert!(parse_agent_selection("cursor").is_err());
+        assert!(
+            parse_agent_selection("claude,cursor").is_err(),
+            "one bad entry fails the whole list"
+        );
+        assert!(
+            parse_agent_selection(",,").is_err(),
+            "no profiles selected is an error"
+        );
+        assert!(parse_agent_selection("CLAUDE").is_ok(), "case-insensitive");
+    }
+
     #[test]
     fn no_origin_means_nothing_to_say_about_pushing() {
         assert_eq!(unpushed_scaffold_note("main", false, false, 3), None);
