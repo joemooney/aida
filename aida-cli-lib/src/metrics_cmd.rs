@@ -11,6 +11,7 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::{auto_complete_telemetry, metrics, parse_days_arg, usage};
+use aida_core::storage::Storage;
 
 pub(crate) fn handle_metrics_command(cmd: &crate::cli::MetricsCommand) -> Result<()> {
     match cmd {
@@ -30,7 +31,9 @@ pub(crate) fn handle_metrics_command(cmd: &crate::cli::MetricsCommand) -> Result
 fn handle_metrics_ai_lift(markdown: bool, json_out: bool) -> Result<()> {
     let project_root = crate::find_project_root()?;
     let commits = read_commit_corpus(&project_root)?;
-    let lift = metrics::compute_ai_lift(&commits);
+    let mut lift = metrics::compute_ai_lift(&commits);
+    let store = Storage::new(project_root.join(".aida-store")).load()?;
+    lift.flow_quality = metrics::compute_flow_quality_metrics(&store.requirements, &commits);
 
     if json_out {
         println!("{}", serde_json::to_string_pretty(&ai_lift_json(&lift))?);
@@ -71,10 +74,10 @@ fn read_commit_corpus(project_root: &std::path::Path) -> Result<Vec<metrics::Com
                 return None;
             }
             let mut parts = raw.splitn(3, '\0');
-            let _sha = parts.next()?;
+            let sha = parts.next()?.to_string();
             let date = parts.next()?.to_string();
             let message = parts.next().unwrap_or_default().to_string();
-            Some(metrics::CommitCorpusEntry { date, message })
+            Some(metrics::CommitCorpusEntry { sha, date, message })
         })
         .collect())
 }
@@ -106,7 +109,28 @@ fn ai_lift_json(lift: &metrics::AiLift) -> serde_json::Value {
             "trailer_commits": lift.trailer_commits,
             "sparsity": lift.confidence_sparsity(),
             "bands": lift.confidence,
-        }
+        },
+        "flow_quality": flow_quality_json(&lift.flow_quality),
+    })
+}
+
+// trace:STORY-784 | ai:codex
+fn flow_quality_json(flow_quality: &metrics::FlowQualityMetrics) -> serde_json::Value {
+    serde_json::json!({
+        "caveat": "Correlation, not causation: harder specs may attract different tooling and segment comparability may be confounded.",
+        "total_specs_considered": flow_quality.total_specs_considered,
+        "segments": flow_quality.segments.iter().map(|(segment, stats)| {
+            serde_json::json!({
+                "segment": segment.label(),
+                "completed_specs": stats.completed_specs,
+                "mean_cycle_hours": stats.mean_cycle_hours,
+                "median_cycle_hours": stats.median_cycle_hours,
+                "reworked_specs": stats.reworked_specs,
+                "rework_bug_refs": stats.rework_bug_refs,
+                "rework_rate": stats.rework_rate(),
+            })
+        }).collect::<Vec<_>>(),
+        "unfinished_by_status": flow_quality.unfinished_by_status,
     })
 }
 
@@ -167,6 +191,7 @@ fn render_ai_lift_terminal(lift: &metrics::AiLift) {
     for (band, count) in &lift.confidence {
         println!("    {:<16} {}", band, count);
     }
+    render_flow_quality_terminal(&lift.flow_quality);
     println!(
         "\n  {}",
         "Aggregate-only: no per-author breakdown is computed or emitted.".dimmed()
@@ -222,7 +247,102 @@ fn render_ai_lift_markdown(lift: &metrics::AiLift) {
     for (band, count) in &lift.confidence {
         println!("| {} | {} |", band, count);
     }
+    render_flow_quality_markdown(&lift.flow_quality);
     println!("\n> Aggregate-only: no per-author breakdown is computed or emitted.");
+}
+
+// trace:STORY-784 | ai:codex
+fn render_flow_quality_terminal(flow_quality: &metrics::FlowQualityMetrics) {
+    println!();
+    println!(
+        "  {}",
+        "Flow and quality by close-commit AI involvement".bold()
+    );
+    if flow_quality.is_empty() {
+        println!("    {}", "no requirements found in the store".dimmed());
+        return;
+    }
+    println!(
+        "    {:<22} {:>9} {:>12} {:>14} {:>14}",
+        "segment", "completed", "mean cycle", "median cycle", "rework rate"
+    );
+    for (segment, stats) in &flow_quality.segments {
+        println!(
+            "    {:<22} {:>9} {:>11}h {:>13}h {:>13}",
+            segment.label(),
+            stats.completed_specs,
+            format_optional_hours(stats.mean_cycle_hours),
+            format_optional_hours(stats.median_cycle_hours),
+            format_rework_rate(stats),
+        );
+    }
+    if !flow_quality.unfinished_by_status.is_empty() {
+        let unfinished = flow_quality
+            .unfinished_by_status
+            .iter()
+            .map(|(status, count)| format!("{status}: {count}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("    unfinished specs counted separately: {unfinished}");
+    }
+    println!(
+        "    {}",
+        "Caveat: correlation, not causation; segment comparability may be confounded.".dimmed()
+    );
+}
+
+// trace:STORY-784 | ai:codex
+fn render_flow_quality_markdown(flow_quality: &metrics::FlowQualityMetrics) {
+    println!("\n### Flow and quality by close-commit AI involvement\n");
+    if flow_quality.is_empty() {
+        println!("_No requirements found in the store._");
+        return;
+    }
+    println!("| Segment | Completed specs | Mean cycle time | Median cycle time | Reworked specs | Rework BUG refs | Rework rate |");
+    println!("| --- | ---: | ---: | ---: | ---: | ---: | ---: |");
+    for (segment, stats) in &flow_quality.segments {
+        println!(
+            "| {} | {} | {}h | {}h | {} | {} | {} |",
+            segment.label(),
+            stats.completed_specs,
+            format_optional_hours(stats.mean_cycle_hours),
+            format_optional_hours(stats.median_cycle_hours),
+            stats.reworked_specs,
+            stats.rework_bug_refs,
+            format_rework_rate(stats),
+        );
+    }
+    if !flow_quality.unfinished_by_status.is_empty() {
+        println!("\nUnfinished specs counted separately:");
+        for (status, count) in &flow_quality.unfinished_by_status {
+            println!("- {status}: {count}");
+        }
+    }
+    println!(
+        "\n> Caveat: correlation, not causation; harder specs may attract different tooling and segment comparability may be confounded."
+    );
+}
+
+// trace:STORY-784 | ai:codex
+fn format_optional_hours(value: Option<f64>) -> String {
+    value
+        .map(|hours| format!("{hours:.1}"))
+        .unwrap_or_else(|| "n/a".to_string())
+}
+
+// trace:STORY-784 | ai:codex
+fn format_rework_rate(stats: &metrics::FlowQualitySegment) -> String {
+    stats
+        .rework_rate()
+        .map(|rate| {
+            format!(
+                "{:.1}% ({}/{})",
+                rate * 100.0,
+                stats.reworked_specs,
+                stats.completed_specs
+            )
+        })
+        .unwrap_or_else(|| "n/a".to_string())
 }
 
 /// Compute + render the `agent-lift` report. Reads the two local telemetry
