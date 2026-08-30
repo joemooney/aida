@@ -1,0 +1,22 @@
+id: 01a05064-ccc6-7793-983e-b715531df699
+spec_id: BUG-809
+agreed_id: BUG-809
+title: 'phase-3 verdict handshake: env anchor does not survive vendor tool sandbox — anchor via prompt text + sibling-checkout sweep'
+description: |-
+  STORY-784 tail drain shelved at phase 3 despite the reviewer recording APPROVED via `aida review record --pr 1619`. Both PR-1619.json and STORY-784.json landed in the reviewer's own PR checkout (~/ai/aida-pr-1619/.aida/review-verdicts/), not the drive root, so neither the primary read nor the BUG-806 spec-keyed fallback could see them.
+
+  Root cause: the BUG-802/BUG-806 anchor is carried in env (AIDA_DRIVE_ROOT + PATH prepend) on the spawned vendor process, but the vendor's tool-call shell does not reliably inherit that env (codex sanitizes tool exec env), so `review record` run from inside a checkout resolves the checkout as project root. Env is the wrong channel through a vendor sandbox.
+
+  Fix (two layers, vendor-agnostic):
+  1. Prompt-text anchor: the orchestrator composes the phase-3 reviewer prompt with the ABSOLUTE drive root baked into the instructions (e.g. "run `aida review record ...` from <root>; the verdict file must land under <root>/.aida/review-verdicts/"). Prompt text cannot be stripped by a sandbox.
+  2. Orchestrator-side sibling sweep: on verdict miss, after the spec-keyed fallback, glob sibling directories of the drive root (and the drive root's parent) for */.aida/review-verdicts/PR-<N>.json (and <SPEC>.json) with mtime >= reviewer session start; accept the freshest. PR number is unique and the mtime gate prevents stale pickup, so this is safe regardless of what the reviewer named its checkout.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-08-30T01:59:38.438294813Z
+modified_at: 2026-08-30T01:59:38.438294813Z
+req_type: Bug
+tags:
+- codex-parity
+- orchestrator
