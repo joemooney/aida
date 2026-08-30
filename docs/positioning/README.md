@@ -13,6 +13,43 @@ The docs here are **focused comparisons**: one file per neighbor, each answering
 
 ---
 
+## If you're comparing coding agents cold
+
+<!-- trace:TASK-1186 | ai:codex -->
+
+Start with the layer question, not the vendor question. Claude Code, Codex CLI,
+Cursor, Continue, and future agents are runtimes: they edit, review, plan, and
+orchestrate work. AIDA is the **agent-collaboration layer** underneath those
+runtimes: stable spec IDs, typed requirement relationships, code-to-spec trace
+comments, lifecycle state, queue/lease coordination, and an MCP surface that
+lets multiple vendors read and update the same project record.
+
+That distinction gives you the adoption test:
+
+- If you are choosing one interactive coding assistant for ad-hoc edits, do
+  **not** start with AIDA. Write a good `AGENTS.md`, move load-bearing checks to
+  scripts/CI/git hooks, configure sandboxing, and pick the runtime you prefer.
+- If work needs to survive across sessions, agents, vendors, PRs, and months,
+  AIDA is the layer that keeps the durable shared state: what exists, why it
+  exists, who owns it, what blocks it, and which code implements it.
+- If a vendor-specific feature is only convenience — slash commands, status
+  lines, skill wrappers, team UX — use it freely. If it is load-bearing
+  discipline, put the rule in the substrate or another universal gate so a
+  vendor switch cannot bypass it.
+
+The short reading path:
+
+1. [agent-decision-matrix.md](agent-decision-matrix.md) for Claude Code vs Codex
+   CLI vs a vendor-neutral substrate.
+2. [when-not-to-use-aida.md](when-not-to-use-aida.md) for the cases where AIDA's
+   graph is overhead.
+3. [composition.md](composition.md) for how AIDA layers with Spec Kit, Agent
+   Teams, MCP editors, GitHub Issues, and plain markdown.
+4. [../aida/discipline/agent-agnostic-vs-claude-specific.md](../aida/discipline/agent-agnostic-vs-claude-specific.md)
+   for the universal-discipline vs per-agent-convenience split.
+
+---
+
 ## The defensible niche statement
 
 AIDA is **the agent-collaboration layer for project intent.** Not a replacement for project management tools, not a replacement for code review tools, not a replacement for documentation generators. The defensible thing AIDA brings is the *stable, queryable graph of what exists, who depends on it, and why* — served to agents through a token-efficient CLI (the primary agent surface), to MCP-native clients through typed MCP tools, and to humans through the same small CLI. *(Refresh 2026-07-19: this line previously read "served to AI through MCP" — the 2026-06-29 SPIKE-73 benchmark found MCP ~2× the CLI's cost at equal-or-lower success, so the CLI is primary and MCP is the typed option.)*
