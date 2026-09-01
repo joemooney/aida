@@ -40,12 +40,12 @@ description: |-
   - [ ] `--role` on `queue work --auto-complete` either works or is rejected with an explanation.
   - [ ] docs/autonomous-drain.md states which queue a drain consumes and how --for routing interacts.
   - [ ] A test pins the error text for the items-exist-elsewhere case.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T20:47:10.882565761Z
-modified_at: 2026-09-01T03:46:20.778579712Z
+modified_at: 2026-09-01T03:46:40.811844158Z
 req_type: Bug
 tags:
 - aida:queue drain ux papercut
