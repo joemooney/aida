@@ -6787,11 +6787,40 @@ pub enum AgentCommand {
 
     /// List active agent processes.
     // trace:TASK-542 | ai:antigravity
-    Ls,
+    // trace:TASK-1184 | ai:codex
+    Ls {
+        /// Include stale registry entries instead of pruning them first.
+        #[clap(long)]
+        all: bool,
+
+        /// Show only stale registry entries without pruning them first.
+        #[clap(long)]
+        stale: bool,
+    },
 
     /// Show active agent processes (alias of `ls`).
     // trace:STORY-528 | ai:claude
-    Status,
+    Status {
+        /// Include stale registry entries instead of pruning them first.
+        #[clap(long)]
+        all: bool,
+
+        /// Show only stale registry entries without pruning them first.
+        #[clap(long)]
+        stale: bool,
+    },
+
+    /// Prune dead-PID agent registry entries.
+    // trace:TASK-1184 | ai:codex
+    Gc {
+        /// Show what would be removed without touching registry files.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Also prune resumable dead entries older than this many days.
+        #[clap(long, value_name = "DAYS")]
+        older_than: Option<u64>,
+    },
 
     /// Report dispatch health and recovery hints for active agent/spec work.
     // trace:STORY-759 | ai:codex

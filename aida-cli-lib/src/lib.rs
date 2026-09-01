@@ -1649,7 +1649,7 @@ fn rewrite_groom_alias(args: &[String]) -> (Vec<String>, Option<String>) {
 
 /// TASK-858: bare `aida agent` (no recognized subcommand) defaults to
 /// `aida agent new`, git-style, forwarding any flags/args to `new`. The
-/// recognized subcommands (`new`, `register`, `ls`, `status`,
+/// recognized subcommands (`new`, `register`, `ls`, `status`, `gc`,
 /// `dispatch-health`, `pause`, `resume`, `stop`, `list-roles`) pass through
 /// unchanged, and `aida agent --help` / `-h` keeps clap's parent help (so the
 /// surface stays discoverable). Mirrors the pre-clap argv-rewrite pattern used
@@ -1665,6 +1665,7 @@ fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
             "register",
             "ls",
             "status",
+            "gc",
             "dispatch-health",
             "pause",
             "resume",
@@ -19307,8 +19308,12 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             name,
         } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
-        AgentCommand::Ls => agent_ls(),
-        AgentCommand::Status => agent_ls(),
+        AgentCommand::Ls { all, stale } => agent_ls(*all, *stale),
+        AgentCommand::Status { all, stale } => agent_ls(*all, *stale),
+        AgentCommand::Gc {
+            dry_run,
+            older_than,
+        } => agent_gc(*dry_run, *older_than),
         AgentCommand::DispatchHealth { force } => agent_dispatch_health(*force),
         AgentCommand::Pause {
             agent,
@@ -21818,17 +21823,35 @@ fn run_tracked_agent(
 }
 
 // trace:TASK-542 | ai:antigravity
-fn agent_ls() -> Result<()> {
+// trace:TASK-1184 | ai:codex
+fn agent_ls(show_all: bool, stale_only: bool) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    if !show_all && !stale_only {
+        let _ = agent_registry::gc_dead_agents(&project_root, false, None);
+    }
     let leases = list_leases(&project_root);
     let agent_ctx = build_agent_classify_context(&project_root, &leases);
     let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
-    let agents =
+    let mut agents =
         merge_agent_views_with_lease_fallback(&project_root, &leases, registry_agents, &agent_ctx);
+    if !show_all || stale_only {
+        agents.retain(|agent| {
+            let is_stale = agent.status == agent_registry::AgentStatus::Stale;
+            if stale_only {
+                is_stale
+            } else {
+                !is_stale
+            }
+        });
+    }
 
     if agents.is_empty() {
-        println!("No active agents found.");
+        if stale_only {
+            println!("No stale agents found.");
+        } else {
+            println!("No active agents found.");
+        }
         return Ok(());
     }
 
@@ -21871,6 +21894,57 @@ fn agent_ls() -> Result<()> {
             format!("({elapsed})"),
             agent.worktree_path.display(),
             paused_note
+        );
+    }
+    Ok(())
+}
+
+// trace:TASK-1184 | ai:codex
+fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let report = agent_registry::gc_dead_agents(&project_root, dry_run, older_than)?;
+    let verb = if dry_run { "would remove" } else { "removed" };
+    println!(
+        "Agent registry gc: {} {} dead entr{}{}.",
+        verb,
+        report.removed_count(),
+        if report.removed_count() == 1 {
+            "y"
+        } else {
+            "ies"
+        },
+        if report.retained.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "; retained {} resumable entr{}",
+                report.retained.len(),
+                if report.retained.len() == 1 {
+                    "y"
+                } else {
+                    "ies"
+                }
+            )
+        }
+    );
+    for row in &report.removed {
+        println!(
+            "  {} {}#{} ({}) {}",
+            if dry_run { "would remove" } else { "removed" },
+            row.agent_type,
+            row.pid,
+            row.source,
+            row.path.display()
+        );
+    }
+    for row in &report.retained {
+        println!(
+            "  retained {}#{} ({}) — resumable session {}",
+            row.agent_type,
+            row.pid,
+            row.source,
+            row.resumable_session_id.as_deref().unwrap_or("(unknown)")
         );
     }
     Ok(())
@@ -68150,6 +68224,9 @@ fn run_auto_complete(
             );
         }
     }
+
+    // trace:TASK-1184 | ai:codex
+    let _ = agent_registry::gc_dead_agents(&project_root, false, None);
 
     result
 }

@@ -106,6 +106,10 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) paused_reason: Option<PauseReason>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) expected_back: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) native_session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) claude_session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -147,6 +151,32 @@ pub(crate) struct AgentRegistryView {
     pub(crate) paused_since: Option<DateTime<Utc>>,
     pub(crate) paused_reason: Option<PauseReason>,
     pub(crate) expected_back: Option<DateTime<Utc>>,
+}
+
+// trace:TASK-1184 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct AgentGcRow {
+    pub(crate) id: String,
+    pub(crate) agent_type: String,
+    pub(crate) pid: u32,
+    pub(crate) source: String,
+    pub(crate) path: PathBuf,
+    pub(crate) resumable_session_id: Option<String>,
+    pub(crate) last_active_at: DateTime<Utc>,
+    pub(crate) outcome: &'static str,
+}
+
+// trace:TASK-1184 | ai:codex
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub(crate) struct AgentGcReport {
+    pub(crate) removed: Vec<AgentGcRow>,
+    pub(crate) retained: Vec<AgentGcRow>,
+}
+
+impl AgentGcReport {
+    pub(crate) fn removed_count(&self) -> usize {
+        self.removed.len()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -346,6 +376,8 @@ pub(crate) fn touch_mcp_agent(
             paused_since: None,
             paused_reason: None,
             expected_back: None,
+            native_session_id: None,
+            claude_session_id: None,
         });
 
     entry.id = id;
@@ -406,6 +438,8 @@ pub(crate) fn register_spawned_agent(
         paused_since: None,
         paused_reason: None,
         expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -626,9 +660,79 @@ pub(crate) fn register_existing_agent(
         paused_since: None,
         paused_reason: None,
         expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
+}
+
+// trace:TASK-1184 | ai:codex
+fn resumable_session_id(entry: &AgentRegistryEntry) -> Option<String> {
+    entry
+        .native_session_id
+        .as_ref()
+        .or(entry.claude_session_id.as_ref())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+// trace:TASK-1184 | ai:codex
+fn gc_row(
+    path: PathBuf,
+    entry: &AgentRegistryEntry,
+    resumable_session_id: Option<String>,
+    outcome: &'static str,
+) -> AgentGcRow {
+    AgentGcRow {
+        id: entry.id.clone(),
+        agent_type: entry.agent_type.clone(),
+        pid: entry.pid,
+        source: entry.source.clone(),
+        path,
+        resumable_session_id,
+        last_active_at: entry.last_active_at,
+        outcome,
+    }
+}
+
+// trace:TASK-1184 | ai:codex
+pub(crate) fn gc_dead_agents(
+    project_root: &Path,
+    dry_run: bool,
+    older_than_days: Option<u64>,
+) -> Result<AgentGcReport> {
+    let now = Utc::now();
+    let mut report = AgentGcReport::default();
+    for (path, entry) in load_entries(project_root) {
+        if crate::process_probe::pid_is_alive(entry.pid) {
+            continue;
+        }
+        let resumable = resumable_session_id(&entry);
+        let resumable_still_protected = resumable.is_some()
+            && older_than_days
+                .map(|days| {
+                    elapsed_secs_clamped(now, entry.last_active_at)
+                        < (days.saturating_mul(86_400)) as i64
+                })
+                .unwrap_or(true);
+        if resumable_still_protected {
+            report
+                .retained
+                .push(gc_row(path, &entry, resumable, "retained"));
+            continue;
+        }
+        let row = gc_row(path.clone(), &entry, resumable, "removed");
+        if !dry_run {
+            std::fs::remove_file(&path).with_context(|| {
+                format!("removing dead agent registry entry {}", path.display())
+            })?;
+        }
+        report.removed.push(row);
+    }
+    report.removed.sort_by(|a, b| a.id.cmp(&b.id));
+    report.retained.sort_by(|a, b| a.id.cmp(&b.id));
+    Ok(report)
 }
 
 // trace:STORY-432 | ai:codex
@@ -1053,6 +1157,8 @@ mod tests {
             paused_since: None,
             paused_reason: None,
             expected_back: None,
+            native_session_id: None,
+            claude_session_id: None,
         }
     }
 
@@ -1185,6 +1291,44 @@ mod tests {
         assert_eq!(views.len(), 1);
         assert_eq!(views[0].agent_type, "codex");
         assert_eq!(views[0].status, AgentStatus::Stale);
+    }
+
+    // TASK-1184: dead rows without a resumable native session are pruned.
+    #[test]
+    fn gc_dead_agents_removes_dead_non_resumable_entries() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let record = entry_with(u32::MAX - 1, now);
+        let path = registry_path(tmp.path(), &record.id);
+        write_entry(tmp.path(), &record).unwrap();
+
+        let report = gc_dead_agents(tmp.path(), false, None).unwrap();
+
+        assert_eq!(report.removed_count(), 1);
+        assert!(report.retained.is_empty());
+        assert!(!path.exists());
+    }
+
+    // TASK-1184: resumable rows are retained by default, but an explicit
+    // age threshold can prune old tombstones.
+    #[test]
+    fn gc_dead_agents_retains_resumable_until_older_than_matches() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let mut record = entry_with(u32::MAX - 1, now - Duration::days(10));
+        record.native_session_id = Some("native-session-1".to_string());
+        let path = registry_path(tmp.path(), &record.id);
+        write_entry(tmp.path(), &record).unwrap();
+
+        let retained = gc_dead_agents(tmp.path(), false, None).unwrap();
+        assert!(retained.removed.is_empty());
+        assert_eq!(retained.retained.len(), 1);
+        assert!(path.exists());
+
+        let removed = gc_dead_agents(tmp.path(), false, Some(7)).unwrap();
+        assert_eq!(removed.removed_count(), 1);
+        assert!(removed.retained.is_empty());
+        assert!(!path.exists());
     }
 
     // TASK-543: raw-registered agents use the same stale-PID transition as
