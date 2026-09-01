@@ -45,7 +45,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T20:47:10.882565761Z
-modified_at: 2026-08-29T20:47:10.882565761Z
+modified_at: 2026-09-01T03:46:20.778579712Z
 req_type: Bug
 tags:
 - aida:queue drain ux papercut
+execution_mode: drain
