@@ -41982,5 +41982,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3789
+- id: 01a05b74-411f-72a0-bc69-4d29ef9b5240
+  target_id: 01a05b74-375b-7092-81af-1775bed73cbf
+  author: aida
+  node_id: '1'
+  lamport: 3790
+  timestamp: 2026-09-01T05:32:20.639253185Z
+  kind: !Create
+    title: 'Review PR-1631: [AI:codex] feat(init): offer project identity checklist (STORY-789)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a05b61`) for branch `story-789`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1631>
+      - Branch: `story-789` → `main`
+
+      ## Covers
+
+      - STORY-789
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1631` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3790
 node_id: '1'
