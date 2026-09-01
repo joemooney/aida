@@ -9,6 +9,7 @@
 
 use super::*;
 use aida_core::project_manifest as pm;
+use aida_core::{Requirement, RequirementStatus, RequirementType};
 
 fn tmp(tag: &str) -> std::path::PathBuf {
     let d = std::env::temp_dir().join(format!(
@@ -19,6 +20,33 @@ fn tmp(tag: &str) -> std::path::PathBuf {
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
+}
+
+fn empty_store() -> aida_core::RequirementsStore {
+    aida_core::RequirementsStore::new()
+}
+
+fn store_with_task() -> aida_core::RequirementsStore {
+    let mut store = empty_store();
+    let mut req = Requirement::new(
+        "A real project task".to_string(),
+        "ship something".to_string(),
+    );
+    req.req_type = RequirementType::Task;
+    req.status = RequirementStatus::Approved;
+    store.add_requirement_with_id(req, None, Some("task"));
+    store
+}
+
+fn store_with_vision() -> aida_core::RequirementsStore {
+    let mut store = store_with_task();
+    let mut req = Requirement::new(
+        "Project thesis".to_string(),
+        "What bet is this project making?\n\nThe bet.".to_string(),
+    );
+    req.req_type = RequirementType::Vision;
+    store.add_requirement_with_id(req, None, Some("vision"));
+    store
 }
 
 // ── scaffolding ──────────────────────────────────────────────────────────────
@@ -233,7 +261,7 @@ fn doctor_says_nothing_when_there_is_no_manifest() {
     // pre-existing repository must stay clean.
     let root = tmp("doc-absent");
     assert!(
-        crate::doctor_cmd::scan_project_manifest(&root).is_empty(),
+        crate::doctor_cmd::scan_project_manifest(&root, &empty_store()).is_empty(),
         "a project without a manifest must produce no finding"
     );
     std::fs::remove_dir_all(&root).ok();
@@ -245,7 +273,7 @@ fn doctor_reports_a_malformed_manifest_without_breaking() {
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::write(root.join(pm::MANIFEST_REL_PATH), "[project\nwhy = ").unwrap();
 
-    let f = crate::doctor_cmd::scan_project_manifest(&root);
+    let f = crate::doctor_cmd::scan_project_manifest(&root, &empty_store());
     assert_eq!(f.len(), 1, "expected exactly one finding, got {f:?}");
     assert_eq!(f[0].id, "project-manifest-malformed");
     assert!(!f[0].safe_heal, "never auto-heal a human's file");
@@ -258,10 +286,22 @@ fn doctor_reports_a_malformed_manifest_without_breaking() {
 }
 
 #[test]
-fn doctor_reports_a_scaffolded_but_unfilled_manifest() {
+fn doctor_is_quiet_for_a_fresh_scaffolded_but_unfilled_manifest() {
     let root = tmp("doc-unfilled");
     ensure_project_manifest_scaffold(&root, false).unwrap();
-    let f = crate::doctor_cmd::scan_project_manifest(&root);
+    let f = crate::doctor_cmd::scan_project_manifest(&root, &empty_store());
+    assert!(
+        f.is_empty(),
+        "a fresh project must not be nagged before it proves it is real: {f:?}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn doctor_reports_unfilled_manifest_once_the_project_has_real_specs() {
+    let root = tmp("doc-unfilled-real");
+    ensure_project_manifest_scaffold(&root, false).unwrap();
+    let f = crate::doctor_cmd::scan_project_manifest(&root, &store_with_task());
     assert!(
         f.iter().any(|x| x.id == "project-manifest-unfilled"),
         "a blank form is exactly the staleness this checks for: {f:?}"
@@ -279,7 +319,7 @@ fn doctor_is_quiet_once_the_manifest_says_something() {
     )
     .unwrap();
     assert!(
-        crate::doctor_cmd::scan_project_manifest(&root).is_empty(),
+        crate::doctor_cmd::scan_project_manifest(&root, &store_with_vision()).is_empty(),
         "a filled-in manifest with no remote recorded is clean"
     );
     std::fs::remove_dir_all(&root).ok();
@@ -297,7 +337,7 @@ fn doctor_reports_an_unrecognised_value_without_rejecting_the_file() {
     )
     .unwrap();
 
-    let f = crate::doctor_cmd::scan_project_manifest(&root);
+    let f = crate::doctor_cmd::scan_project_manifest(&root, &empty_store());
     let hit = f
         .iter()
         .find(|x| x.id == "project-manifest-unrecognised-value")
@@ -319,6 +359,55 @@ fn doctor_reports_an_unrecognised_value_without_rejecting_the_file() {
     );
     assert!(!f.iter().any(|x| x.id == "project-manifest-malformed"));
     std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn doctor_nudges_for_missing_thesis_only_after_real_project_signals() {
+    let root = tmp("doc-thesis-real");
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(pm::MANIFEST_REL_PATH),
+        "[project]\nwhy = \"because the existing workflow hurts\"\n",
+    )
+    .unwrap();
+
+    let fresh = crate::doctor_cmd::scan_project_manifest(&root, &empty_store());
+    assert!(
+        !fresh.iter().any(|x| x.id == "project-thesis-missing"),
+        "fresh/dormant directories should not be nagged: {fresh:?}"
+    );
+
+    let real = crate::doctor_cmd::scan_project_manifest(&root, &store_with_task());
+    assert!(
+        real.iter().any(|x| x.id == "project-thesis-missing"),
+        "real project with no VISION should get a thesis nudge: {real:?}"
+    );
+
+    let with_vision = crate::doctor_cmd::scan_project_manifest(&root, &store_with_vision());
+    assert!(
+        !with_vision.iter().any(|x| x.id == "project-thesis-missing"),
+        "an existing VISION is the thesis home: {with_vision:?}"
+    );
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn doctor_does_not_nudge_parked_or_abandoned_projects_for_thesis() {
+    for liveness in ["parked", "abandoned"] {
+        let root = tmp(&format!("doc-thesis-{liveness}"));
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(pm::MANIFEST_REL_PATH),
+            format!("[project]\nwhy = \"x\"\nliveness = \"{liveness}\"\n"),
+        )
+        .unwrap();
+        let f = crate::doctor_cmd::scan_project_manifest(&root, &store_with_task());
+        assert!(
+            !f.iter().any(|x| x.id == "project-thesis-missing"),
+            "dormant {liveness} project should stay quiet: {f:?}"
+        );
+        std::fs::remove_dir_all(&root).ok();
+    }
 }
 
 #[test]

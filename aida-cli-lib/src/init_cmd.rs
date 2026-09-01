@@ -611,6 +611,25 @@ fn complete_init_scaffolding(
             crate::glyph(crate::glyphs::Glyph::Check).green(),
             aida_core::project_manifest::MANIFEST_REL_PATH
         );
+        // trace:STORY-789 | ai:codex — init offers project identity on a TTY,
+        // but non-interactive runs stay completely silent and unblocked.
+        if init_identity_checklist_is_interactive(
+            std::io::stdin().is_terminal(),
+            std::io::stdout().is_terminal(),
+        ) {
+            let storage_path = if db_path.is_absolute() {
+                db_path.clone()
+            } else {
+                root.join(&db_path)
+            };
+            if let Err(e) = offer_project_identity_checklist(root, &storage_path) {
+                eprintln!(
+                    "  {} project-identity checklist skipped: {}",
+                    "Note:".dimmed(),
+                    e
+                );
+            }
+        }
     }
 
     // Auto-configure Codex MCP if codex is installed
@@ -1036,6 +1055,104 @@ fn build_initial_scaffold_requirement() -> aida_core::Requirement {
     req
 }
 
+fn init_identity_checklist_is_interactive(stdin_is_tty: bool, stdout_is_tty: bool) -> bool {
+    stdin_is_tty && stdout_is_tty
+}
+
+fn offer_project_identity_checklist(
+    root: &std::path::Path,
+    storage_path: &std::path::Path,
+) -> Result<()> {
+    println!();
+    println!("  {}", "Project identity".bold());
+    println!(
+        "    {}",
+        "Every item is optional; skipped answers stay recorded as NOT RECORDED.".dimmed()
+    );
+
+    if prompt_yes_no(
+        "  Record the project itch in .aida/project.toml now? [y/N] ",
+        false,
+    )? {
+        let why = prompt_optional_line("  What itch started it? ")?;
+        if let Some(why) = why {
+            record_manifest_why(root, &why)?;
+            println!(
+                "  {} recorded `why` in {}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                aida_core::project_manifest::MANIFEST_REL_PATH
+            );
+        }
+    }
+
+    if prompt_yes_no(
+        "  Create a VISION spec for the bet this project is making? [y/N] ",
+        false,
+    )? {
+        let thesis = prompt_optional_line("  What bet is this project making? ")?;
+        if let Some(thesis) = thesis {
+            let spec_id = create_project_thesis_vision(storage_path, &thesis)?;
+            println!(
+                "  {} created {} for the project thesis",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                spec_id.cyan()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn prompt_optional_line(prompt: &str) -> Result<Option<String>> {
+    use std::io::Write;
+    print!("{prompt}");
+    std::io::stdout().flush()?;
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+    let answer = input.trim().to_string();
+    Ok((!answer.is_empty()).then_some(answer))
+}
+
+fn record_manifest_why(root: &std::path::Path, why: &str) -> Result<()> {
+    use aida_core::project_manifest as pm;
+    let path = root.join(pm::MANIFEST_REL_PATH);
+    let mut manifest = match pm::load(root) {
+        pm::ManifestState::Present(m) => *m,
+        pm::ManifestState::Absent => pm::ProjectManifest::default(),
+        pm::ManifestState::Malformed(msg) => anyhow::bail!(msg),
+    };
+    manifest.project.why = Some(why.trim().to_string());
+    let mut text = toml::to_string_pretty(&manifest)?;
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    std::fs::write(path, text)?;
+    Ok(())
+}
+
+fn create_project_thesis_vision(storage_path: &std::path::Path, thesis: &str) -> Result<String> {
+    use aida_core::{
+        Requirement, RequirementPriority, RequirementStatus, RequirementType, Storage,
+    };
+
+    let storage = Storage::new(storage_path);
+    let mut store = storage.load()?;
+    let description = format!("What bet is this project making?\n\n{}", thesis.trim());
+    let mut req = Requirement::new("Project thesis".to_string(), description);
+    req.req_type = RequirementType::Vision;
+    req.status = RequirementStatus::Draft;
+    req.priority = RequirementPriority::Medium;
+    req.tags.insert("project-thesis".to_string());
+    req.tags.insert("from-aida-init".to_string());
+    store.add_requirement_with_id(req, None, Some("vision"));
+    let spec_id = store
+        .requirements
+        .last()
+        .and_then(|r| r.spec_id.clone())
+        .unwrap_or_else(|| "VIS-?".to_string());
+    storage.save(&store)?;
+    Ok(spec_id)
+}
+
 // trace:TASK-510 | ai:antigravity
 fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Path) -> Result<()> {
     use aida_core::Storage;
@@ -1235,6 +1352,37 @@ mod task_510_init_scaffold_task_tests {
             desc.contains("git add .gitignore"),
             "instruction must stage scoped paths starting with .gitignore (BUG-445 c)"
         );
+    }
+
+    #[test]
+    fn identity_checklist_only_runs_with_both_ttys() {
+        assert!(init_identity_checklist_is_interactive(true, true));
+        assert!(!init_identity_checklist_is_interactive(true, false));
+        assert!(!init_identity_checklist_is_interactive(false, true));
+        assert!(!init_identity_checklist_is_interactive(false, false));
+    }
+
+    #[test]
+    fn project_thesis_creation_writes_a_draft_vision() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join(".aida/cache.db");
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+
+        let spec_id =
+            create_project_thesis_vision(&db_path, "manual upkeep should be suspect").unwrap();
+
+        let storage = Storage::new(&db_path);
+        let store = storage.load().unwrap();
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            .expect("created VISION should round-trip");
+        assert_eq!(req.req_type, RequirementType::Vision);
+        assert_eq!(req.status, RequirementStatus::Draft);
+        assert!(req.description.contains("What bet is this project making?"));
+        assert!(req.description.contains("manual upkeep should be suspect"));
+        assert!(req.tags.contains("project-thesis"));
     }
 }
 

@@ -223,7 +223,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // to the hot `collect_doctor_findings` path. Honours `--category`.
     // trace:STORY-781 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "project-manifest")? {
-        findings.extend(scan_project_manifest(&project_root));
+        findings.extend(scan_project_manifest(&project_root, &store));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
@@ -644,7 +644,10 @@ fn spec_id_from_work_branch(branch: &str) -> Option<String> {
 ///
 /// Read-only. Never mutates, never heals.
 // trace:STORY-781 | ai:claude
-pub(crate) fn scan_project_manifest(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+pub(crate) fn scan_project_manifest(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+) -> Vec<DoctorFinding> {
     use aida_core::project_manifest as pm;
 
     let mut findings = Vec::new();
@@ -667,7 +670,10 @@ pub(crate) fn scan_project_manifest(project_root: &std::path::Path) -> Vec<Docto
         pm::ManifestState::Present(m) => m,
     };
 
-    if manifest.is_unfilled() {
+    let real_enough_for_identity_nudge =
+        project_identity_is_real_enough(project_root, store, &manifest);
+
+    if manifest.is_unfilled() && real_enough_for_identity_nudge {
         findings.push(DoctorFinding {
             category: "project-manifest".to_string(),
             id: "project-manifest-unfilled".to_string(),
@@ -676,6 +682,20 @@ pub(crate) fn scan_project_manifest(project_root: &std::path::Path) -> Vec<Docto
                 pm::MANIFEST_REL_PATH
             ),
             action: "add at least `why` — the one thing no tool can derive for you".to_string(),
+            safe_heal: false,
+        });
+    }
+
+    // trace:STORY-789 | ai:codex — the thesis lives as a VISION, not as a
+    // duplicate manifest field, and doctor only nudges once the project has
+    // earned that ask.
+    if real_enough_for_identity_nudge && !store.requirements.iter().any(is_project_vision) {
+        findings.push(DoctorFinding {
+            category: "project-manifest".to_string(),
+            id: "project-thesis-missing".to_string(),
+            summary: "no project thesis VISION is recorded — the governing bet is still implicit"
+                .to_string(),
+            action: "create one with `aida add --type vision --title \"Project thesis\"` and phrase it as the bet this project is making".to_string(),
             safe_heal: false,
         });
     }
@@ -744,6 +764,53 @@ pub(crate) fn scan_project_manifest(project_root: &std::path::Path) -> Vec<Docto
     }
 
     findings
+}
+
+fn is_project_vision(req: &aida_core::Requirement) -> bool {
+    req.req_type == aida_core::RequirementType::Vision
+}
+
+fn project_identity_is_real_enough(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    manifest: &aida_core::project_manifest::ProjectManifest,
+) -> bool {
+    use aida_core::project_manifest::Liveness;
+
+    if matches!(
+        manifest.project.liveness.as_ref(),
+        Some(Liveness::Parked | Liveness::Abandoned)
+    ) {
+        return false;
+    }
+
+    if store.requirements.iter().any(|r| {
+        r.req_type != aida_core::RequirementType::Meta
+            && !r.tags.contains("from-aida-init")
+            && !r.title.trim().is_empty()
+    }) {
+        return true;
+    }
+
+    git_commit_count(project_root) >= 3
+}
+
+fn git_commit_count(project_root: &std::path::Path) -> usize {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-list", "--count", "HEAD"])
+        .output();
+    let Ok(out) = out else {
+        return 0;
+    };
+    if !out.status.success() {
+        return 0;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse()
+        .unwrap_or(0)
 }
 
 /// Whether two clone URLs name the same repository.

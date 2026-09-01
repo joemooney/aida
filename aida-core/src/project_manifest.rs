@@ -271,7 +271,10 @@ impl ProjectManifest {
 }
 
 fn blank(v: &Option<String>) -> bool {
-    v.as_deref().map(str::trim).unwrap_or("").is_empty()
+    v.as_deref()
+        .map(str::trim)
+        .map(|s| s.is_empty() || s.eq_ignore_ascii_case("NOT RECORDED"))
+        .unwrap_or(true)
 }
 
 /// The result of looking for a manifest.
@@ -370,7 +373,8 @@ pub fn render(facts: &DerivedFacts) -> String {
     s.push_str(
         "\n# WHY it exists — the one thing no tool can work out for you, and the\n\
          # reason this file is worth keeping. What was the itch?\n\
-         why = \"\"\n",
+         # NOT RECORDED means this item was skipped at init, not answered.\n\
+         why = \"NOT RECORDED\"\n",
     );
 
     s.push_str(&format!(
@@ -780,6 +784,19 @@ mod tests {
             other => panic!("{other:?}"),
         };
         assert!(m.is_unfilled(), "a field of spaces is still unfilled");
+    }
+
+    #[test]
+    fn not_recorded_is_a_skipped_marker_not_content() {
+        let m = match parse_state("[project]\nwhy = \"NOT RECORDED\"\n") {
+            ManifestState::Present(m) => m,
+            other => panic!("{other:?}"),
+        };
+        assert!(m.is_unfilled(), "skipped init answers are not content");
+        assert!(
+            render(&DerivedFacts::default()).contains("why = \"NOT RECORDED\""),
+            "the scaffold should record an honest skipped state"
+        );
     }
 
     #[test]
