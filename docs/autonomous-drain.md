@@ -15,6 +15,25 @@ work is finished. That is what makes an unattended overnight drain possible:
 aida queue work --batch nightly --auto-complete --no-human
 ```
 
+### Which queue a drain consumes
+
+When `aida queue work --auto-complete` is launched without an explicit spec,
+batch, or `nextN` target, it consumes the head of the selected role queue. By
+default that selected queue is the active shell role (`AIDA_SESSION_ROLE`);
+`--role <NAME>` overrides only the queue-pull role, so an advisor can start a
+drain that consumes work routed with `aida queue add <SPEC> --for implementer`.
+For example:
+
+```bash
+aida queue work --auto-complete --role implementer --no-human=both
+```
+
+The drain-start permission check still uses the caller's real authority. The
+role override does not turn an implementer shell into an advisor; it only says
+which role queue to read. If the selected queue is empty while sibling role
+queues hold work, AIDA names those queues and prints the exact rerun command.
+trace:BUG-795
+
 > **This serial engine is the vendor-agnostic drain.** `aida queue work
 > --auto-complete` drives one spec at a time and the **orchestrator** owns the
 > drive, so it runs under any vendor (Codex, Cursor, Amp, a bare `claude -p`

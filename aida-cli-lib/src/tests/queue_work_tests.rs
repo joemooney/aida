@@ -1318,11 +1318,62 @@ fn prepare_auto_complete_phase1_status_flips_approved_before_spawn() {
     assert_eq!(req.status, RequirementStatus::InProgress);
 }
 
+#[test]
+fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let storage = Storage::new(&root);
+
+    let mut req = aida_core::Requirement::new("route me".to_string(), String::new());
+    req.spec_id = Some("BUG-795".to_string());
+    req.status = RequirementStatus::Approved;
+    let req_id = req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    storage
+        .queue_add(aida_core::QueueEntry {
+            user_id: "u".into(),
+            requirement_id: req_id,
+            position: 1000,
+            added_by: "u".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some("implementer".into()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        })
+        .unwrap();
+
+    // trace:BUG-795 | ai:codex
+    let err = resolve_auto_complete_head(&storage, "u", Some("advisor"))
+        .expect_err("advisor queue should be empty when item is routed to implementer")
+        .to_string();
+    for needle in [
+        "queue is empty for advisor",
+        "1 item(s) routed for:implementer",
+        "aida queue work --auto-complete --role implementer",
+    ] {
+        assert!(
+            err.contains(needle),
+            "empty-role error missing `{needle}`:\n{err}"
+        );
+    }
+
+    let picked = resolve_auto_complete_head(&storage, "u", Some("implementer"))
+        .expect("--role implementer should select the implementer-routed head");
+    assert_eq!(picked, "BUG-795");
+}
+
 /// TASK-547 acceptance: smart-default auto-queues an Approved-but-not-queued
 /// spec for the current role when resolving the queue work plan, unless `--strict` is set.
 // trace:TASK-547 | ai:antigravity
 #[test]
 fn resolve_queue_work_plan_auto_queues_when_not_strict() {
+    let prior_role = std::env::var("AIDA_SESSION_ROLE").ok();
+    std::env::remove_var("AIDA_SESSION_ROLE");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("aida-store");
     let backend = aida_core::GitBackend::new(&root).unwrap();
@@ -1366,6 +1417,9 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     let entries = storage.queue_list("test-user", false).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
+    if let Some(role) = prior_role {
+        std::env::set_var("AIDA_SESSION_ROLE", role);
+    }
 }
 
 fn queue_review_story(storage: &Storage, root: &std::path::Path) {

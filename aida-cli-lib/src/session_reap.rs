@@ -716,7 +716,8 @@ pub(crate) fn next_up_suggestion(reaped_count: usize, next_spec: Option<&str>) -
 fn resolve_next_queued_spec(project_root: &std::path::Path) -> Option<String> {
     let storage = Storage::new(project_root.join(".aida-store"));
     let user_id = current_user_id(None);
-    let candidates = crate::queue_cmd::auto_complete_head_candidates(&storage, &user_id).ok()?;
+    let candidates =
+        crate::queue_cmd::auto_complete_head_candidates(&storage, &user_id, None).ok()?;
     crate::queue_cmd::pick_auto_complete_head(&candidates)
         .ok()
         .map(|(spec, _skipped)| spec)
