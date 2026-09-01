@@ -377,6 +377,13 @@ impl SqliteBackend {
             "Sprint" => RequirementType::Sprint,
             "Folder" => RequirementType::Folder,
             "Meta" => RequirementType::Meta,
+            // trace:STORY-789 | ai:codex — init can create a thesis VISION in
+            // legacy SQLite mode too, so the read mapping must round-trip it.
+            "Principle" => RequirementType::Principle,
+            "Vision" => RequirementType::Vision,
+            "Constraint" => RequirementType::Constraint,
+            "Decision" => RequirementType::Decision,
+            "Term" => RequirementType::Term,
             "Doc" => RequirementType::Doc,
             _ => RequirementType::Functional,
         }
