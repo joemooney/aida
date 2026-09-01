@@ -440,6 +440,17 @@ mod tests {
         }
     }
 
+    // trace:BUG-800 | ai:codex
+    #[test]
+    fn expected_codex_prompts_do_not_suggest_bare_rust_test_names() {
+        for (name, body) in expected_codex_prompts() {
+            assert!(
+                !body.contains("cargo test <test_name>"),
+                "{name} suggests a bare Rust test name instead of `cargo test -p <crate> <test_name>`"
+            );
+        }
+    }
+
     // trace:TASK-1124 — the pure enumeration matches what scaffold_codex_prompts
     // would write: the portable set (nonportable excluded), stripped bodies.
     #[test]
