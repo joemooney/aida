@@ -3,12 +3,12 @@ spec_id: BUG-800
 agreed_id: BUG-800
 title: codex sessions repeatedly mis-invoke named tests (test name passed to the wrong binary) — 3 occurrences across independent sessions
 description: 'Observed three times on 2026-08-29, each in a DIFFERENT headless codex session (two reviewers, one implementer): the model passes a cargo test NAME as an argument to a non-cargo invocation, e.g. ''error: unexpected argument rel_add_warns_when_target_resolves_to_terminal_local_spec found'' / ''...mcp_add_relationship_warns_on_open_to_terminal_non_hierarchy_target found''. Each session self-recovers, but it costs a wasted cycle every time and is systematic, not random. Likely cause: the review/test-plan prompt text lists bare test names without the invocation shape, and codex reaches for the nearest binary. FIX SHAPE: wherever prompts or generated review checklists name tests, name the COMMAND (''cargo test -p <crate> <name>''), not the bare identifier — probably in the aida review prompt generator and/or the converted codex prompt bodies. Low priority: self-recovering, but three-for-three means every codex session pays it.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T23:57:13.255685702Z
-modified_at: 2026-09-01T05:12:02.012032358Z
+modified_at: 2026-09-01T05:43:50.928121779Z
 req_type: Bug
 tags:
 - codex prompt-parity papercut
@@ -17,6 +17,23 @@ relationships:
   target_id: 01a05b57-ab17-73c2-b639-1bacf2dc3098
   created_at: 2026-09-01T05:01:11.848097902Z
   created_by: joe
+history:
+- id: 01a05b7e-c986-7303-8a13-92939f8d1692
+  author: aida-auto-bump
+  timestamp: 2026-09-01T05:43:50.918366063Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a05b7e-c990-7dc0-a9a3-16efdd6e6043
+  timestamp: 2026-09-01T05:43:50.928120735Z
+  agent: aida
+  commit_sha: 350c59aca2b2fde6fe5a8c87844ef873d54f3035
+  summary: 'Advisor diff-review after reviewer watchdog trip: worksheet Test Commands section + codex-prompt pin + triage template fix match acceptance; CI green; tests pin the contract.'
+  punted:
+  - 'punted: the reviewer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
@@ -26,14 +43,8 @@ implementation_info:
     cargo fmt --all -- --check
   implemented_at: 2026-09-01T05:00:24.364509579Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: no-progress-watchdog
-  detail: the reviewer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
-  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework BUG-800 --work`.'
-  shelved_by: advisor
-  shelved_at: 2026-09-01T05:12:02.012032358Z
+  completed_at: 2026-09-01T05:43:50.918229943Z
+  completion_sha: 350c59aca2b2fde6fe5a8c87844ef873d54f3035
 interface_changes:
   cli:
   - aida review prompt now tells reviewers to name focused tests as full runnable commands
