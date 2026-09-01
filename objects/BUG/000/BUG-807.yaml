@@ -3,13 +3,17 @@ spec_id: BUG-807
 agreed_id: BUG-807
 title: 'flaky test: mailbox publish_for_sync_stages_canonical fails intermittently even in near-isolation'
 description: 'publish_for_sync_stages_canonical_without_committing_and_is_idempotent fails intermittently: ''both local messages publish into the canonical store: left 0, right 2''. Reproduced 2026-08-29 on a clean worktree of main (+scaffold-only diff, unrelated code): full-suite runs fail it roughly 1-in-2, and running JUST the two publish_for_sync tests together fails ~2-in-3 while re-runs pass — so the race is against its SIBLING test (shared canonical-store path or env), not suite-wide pollution. It has burned two PR gates today by making full-suite runs untrustworthy (each time the push had already happened before the failure was read — a flaky gate trains exactly that bad habit). Fix shape: isolate the two tests'' store paths (tempdir per test) or serialize them via the env lock; assert on per-test state, not a shared location.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:42:15.188068919Z
-modified_at: 2026-09-01T04:12:57.054140445Z
+modified_at: 2026-09-01T04:18:54.971217710Z
 req_type: Bug
 tags:
 - test-flake ci
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-01T04:18:54.971217710Z
+  implemented_by: joe
