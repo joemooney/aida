@@ -28,3 +28,10 @@
   added_at: 2026-09-01T03:46:24.437817039Z
   for_role: advisor
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a0508a-5e3b-7b03-b865-19cd37d5d195
+  position: 21000
+  added_by: claude-advisor-1
+  added_at: 2026-09-01T03:46:26.275861243Z
+  for_role: advisor
+  added_by_machine: imac
