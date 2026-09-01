@@ -11,12 +11,12 @@ description: |-
   - Singleton-per-role policy for the seat roles (advisor, product, integrator): a second `agent new --role advisor` on the same scope is REFUSED with the existing agent named, unless `--scope <EPIC|subsystem>` compartmentalizes it (and `ls` shows the scope). Implementer/reviewer are many-per-project. Policy under a `[agent_registry]` config key with the singleton default (configurable-policy-with-safe-default).
   - `ls` separates or labels lease-only rows (`unknown#` today) — e.g. a LEASES section or a KIND column — so process rows and scope rows are not confused.
   - Default `ls` hides dead PIDs (depends on the `agent gc` task).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:43.757865753Z
-modified_at: 2026-08-30T01:36:59.846760332Z
+modified_at: 2026-09-01T03:47:14.154757407Z
 req_type: Story
 tags:
 - aida:agent:ls
