@@ -1,0 +1,26 @@
+id: 01a05b90-398b-7160-b346-e1fcbdf251c2
+spec_id: STORY-804
+agreed_id: STORY-804
+title: 'Review PR-1632: [AI:codex] feat(agent): prune dead registry entries (TASK-1184)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a05b7f`) for branch `task-1184`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1632>
+  - Branch: `task-1184` → `main`
+
+  ## Covers
+
+  - TASK-1184
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1632` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-01T06:02:53.707065317Z
+modified_at: 2026-09-01T06:02:53.707065317Z
+req_type: Story
