@@ -505,7 +505,7 @@ Claude command-backed status lines and hook notifications may not map directly
 to Codex. For Codex, combine:
 
 - the built-in TUI footer/status-line fields;
-- shell prompt or terminal multiplexer status commands;
+- terminal multiplexer status commands;
 - `codex exec --json` for automation event streams;
 - OpenTelemetry when a team needs centralized logs;
 - project-native logs or CI artifacts for durable evidence.
@@ -522,6 +522,12 @@ yet have is Claude's **command-backed** status line (a script that emits the
 line); that is an open feature request (codex issues #20043, #20244) and a
 near-term watch item — so for now `aida statusline` cannot drive the Codex
 footer the way it drives Claude's `statusLine.command`.
+
+Codex also writes its own terminal title via `[tui] terminal_title`, so AIDA's
+old `aida statusline --title` prompt-hook fallback is not reliable in current
+Codex sessions. Set `terminal_title = null` if you need external title/status
+ownership, and prefer tmux `status-right` for the full AIDA role/queue/inbox
+segment.
 
 ### Plan for non-interactive differences
 
@@ -816,18 +822,22 @@ codex mcp add aida -- aida mcp-serve
 ```
 
 **Codex** — no command-backed status line yet (open FR #20043/#20244). The TUI
-footer takes built-in fields only:
+footer takes built-in fields only. Disable Codex's terminal-title writer if
+external status integrations need ownership:
 
 ```toml
 [tui]
 status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+terminal_title = null
 ```
 
 So the live role/queue/lease readout can't live in the Codex footer today —
-surface it with the AIDA TUI, a shell-prompt/tmux integration, or `aida status`
-polling instead. AIDA already scaffolds this fallback: see
+surface it with the AIDA TUI, tmux
+`set -g status-right '#(aida statusline --color=never)'` plus
+`set -g status-interval 15`, `aida statusbar --plain`, or `aida status` polling
+instead. AIDA already scaffolds this fallback: see
 `docs/agents/codex-mcp-setup.md` for the built-in `[tui] status_line` snippet and
-the opt-in `aida statusline` bootstrap. Native command-backed wiring is gated on
+the opt-in tmux/statusbar bootstrap. Native command-backed wiring is gated on
 the upstream FR and tracked as a deferred watch-item under EPIC-0419.
 
 ### A.6 Headless approval gate: Claude `defer` → AIDA punt (portable)

@@ -477,42 +477,53 @@ fn print_claude_statusline_setup(settings_path: &std::path::Path) {
     println!("  deleting it to re-add). Claude Code falls back to its built-in footer.");
 }
 
-/// Print the Codex TUI footer guidance. Codex's footer renders built-in
+/// Render the Codex TUI footer guidance. Codex's footer renders built-in
 /// item IDs only — it does NOT run `aida statusline` as a command — so we
-/// configure companion built-in fields, give the in-agent parity path
-/// (the OSC terminal-title segment via `aida statusline --title`), and
-/// point at the shell statusline for the full AIDA-aware segment.
+/// configure companion built-in fields, disable Codex's terminal-title writer
+/// so it does not fight external status integrations, and point at tmux for
+/// the full AIDA-aware segment.
 // trace:TASK-0414
 // trace:TASK-896
+// trace:TASK-1188 | ai:codex
+pub(crate) fn codex_statusline_setup_text() -> String {
+    [
+        "Codex CLI — built-in TUI footer",
+        "  Codex's footer renders built-in item IDs; it does not run",
+        "  `aida statusline` as a command. Configure the companion built-in",
+        "  fields in `~/.codex/config.toml` (personal) or a trusted project's",
+        "  `.codex/config.toml` (team):",
+        "",
+        "  [tui]",
+        "  status_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\", \"current-dir\"]",
+        "  terminal_title = null",
+        "",
+        "  `terminal_title = null` disables Codex's OSC title writer. Current",
+        "  Codex releases overwrite shell prompt title hooks, so this prevents",
+        "  Codex from racing AIDA or your multiplexer for terminal-title ownership.",
+        "",
+        "  Recommended full-fidelity path: put the AIDA segment in your",
+        "  multiplexer status line so it survives inside any Codex or Claude",
+        "  session:",
+        "",
+        "    # tmux",
+        "    set -g status-right '#(aida statusline --color=never)'",
+        "    set -g status-interval 15",
+        "",
+        "  `aida statusbar --plain` is the lower-cost ambient meter variant for",
+        "  the same tmux `status-right` slot.",
+        "",
+        "  Tripwire: at each competitive refresh, re-check upstream Codex for a",
+        "  command-backed `[tui] status_line` item. If that lands, prefer the",
+        "  native footer over the tmux/title workaround.",
+        "",
+        "  To disable later, remove the `[tui] status_line` and `terminal_title`",
+        "  lines (or the whole `[tui]` block) from your Codex config.toml.",
+    ]
+    .join("\n")
+}
+
 fn print_codex_statusline_setup() {
-    println!("Codex CLI — built-in TUI footer");
-    println!("  Codex's footer renders built-in item IDs; it does not run");
-    println!("  `aida statusline` as a command. Configure the companion built-in");
-    println!("  fields in `~/.codex/config.toml` (personal) or a trusted project's");
-    println!("  `.codex/config.toml` (team):");
-    println!();
-    println!("  [tui]");
-    println!(
-        "  status_line = [\"model-with-reasoning\", \"context-remaining\", \"git-branch\", \"current-dir\"]"
-    );
-    println!();
-    println!("  In-agent parity (role / queue depth / inbox depth): Codex's footer");
-    println!("  cannot host the `aida statusline` segment, but it honors the terminal");
-    println!("  title. Wire `aida statusline --title` into your shell prompt so the");
-    println!("  AIDA segment rides the terminal title bar / tmux window name during the");
-    println!("  Codex session:");
-    println!();
-    println!("    # bash (~/.bashrc)");
-    println!("    PROMPT_COMMAND='aida statusline --title 2>/dev/null; '\"$PROMPT_COMMAND\"");
-    println!();
-    println!("    # zsh (~/.zshrc)");
-    println!("    precmd() {{ aida statusline --title 2>/dev/null }}");
-    println!();
-    println!("  For the full AIDA-aware segment as visible text, run");
-    println!("  `aida statusline --color=always` anywhere your shell, multiplexer, or");
-    println!("  terminal supports a command-backed status line. To disable later, remove");
-    println!("  the `[tui] status_line` line (or the whole `[tui]` block) from your Codex");
-    println!("  config.toml and drop the `aida statusline --title` prompt hook.");
+    println!("{}", codex_statusline_setup_text());
 }
 
 /// Merge the AIDA `statusLine` block into `.claude/settings.json`,
