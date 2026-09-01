@@ -10,12 +10,12 @@ description: |-
   - The same guidance offers the multiplexer path as the recommended full-fidelity option: tmux `set -g status-right '#(aida statusline --color=never)'` + `status-interval 15` (or `aida statusbar --plain`), which is agent-agnostic and survives inside any Codex/Claude session.
   - `docs/agents/claude-surfaces-codex-parity.md` gap 5 + scaffolded AGENTS.md text updated to match (currently states "not shipped as of Codex 0.142").
   - Add a tripwire note: re-check upstream for a command-backed status_line item at each competitive refresh.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:44:39.531041511Z
-modified_at: 2026-09-01T03:47:11.569269574Z
+modified_at: 2026-09-01T06:11:40.935928422Z
 req_type: Task
 tags:
 - codex
