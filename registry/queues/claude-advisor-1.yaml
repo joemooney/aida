@@ -15,13 +15,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: claude-advisor-1
-  requirement_id: 01a04ff4-b8a7-70a1-8878-a4dd21465d74
-  position: 22000
-  added_by: claude-advisor-1
-  added_at: 2026-09-01T03:46:29.400296804Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: claude-advisor-1
   requirement_id: 01a05042-3393-73e1-ac20-e511548a1c5b
   position: 23000
   added_by: claude-advisor-1
