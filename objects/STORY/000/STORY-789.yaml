@@ -67,12 +67,12 @@ description: |
         of being real; a fresh or dormant directory is not nagged.
   - [ ] Prompt wording asks for the bet, not merely the reason.
   - [ ] A skipped item is recorded as NOT RECORDED, never as a placeholder.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:21:50.995584233Z
-modified_at: 2026-09-01T05:12:48.061113798Z
+modified_at: 2026-09-01T05:22:23.726070225Z
 req_type: Story
 tags:
 - aida:doctor
@@ -89,3 +89,7 @@ relationships:
   created_at: 2026-08-30T01:22:01.940562158Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-01T05:22:23.726070225Z
+  implemented_by: joe
