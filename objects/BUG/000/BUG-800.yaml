@@ -8,13 +8,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T23:57:13.255685702Z
-modified_at: 2026-09-01T05:00:28.611528829Z
+modified_at: 2026-09-01T05:00:29.683383652Z
 req_type: Bug
 tags:
 - codex prompt-parity papercut
 execution_mode: drain
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo test -p aida-core expected_codex_prompts_do_not_suggest_bare_rust_test_names
+    cargo test -p aida-cli-lib review_prompt_names_focused_tests_as_commands
+    cargo fmt --all -- --check
   implemented_at: 2026-09-01T05:00:24.364509579Z
   implemented_by: joe
 interface_changes:
