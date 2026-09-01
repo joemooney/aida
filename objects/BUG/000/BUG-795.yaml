@@ -40,12 +40,12 @@ description: |-
   - [ ] `--role` on `queue work --auto-complete` either works or is rejected with an explanation.
   - [ ] docs/autonomous-drain.md states which queue a drain consumes and how --for routing interacts.
   - [ ] A test pins the error text for the items-exist-elsewhere case.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T20:47:10.882565761Z
-modified_at: 2026-09-01T04:01:58.673820123Z
+modified_at: 2026-09-01T04:09:52.177075137Z
 req_type: Bug
 tags:
 - aida:queue drain ux papercut
@@ -54,8 +54,24 @@ relationships:
   target_id: 01a05b21-7238-7fd0-a93d-38c1bd491d81
   created_at: 2026-09-01T04:01:58.673815377Z
   created_by: joe
+history:
+- id: 01a05b28-bf1c-7622-9119-a983f167a58f
+  author: aida-auto-bump
+  timestamp: 2026-09-01T04:09:52.156292881Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a05b28-bf31-7fe2-a34f-82abdf5bd58e
+  timestamp: 2026-09-01T04:09:52.177073546Z
+  agent: aida
+  commit_sha: d778cfa53b1255f59922eaa68e14a1a97ede6102
+  summary: Completed via merge d778cfa5
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-01T03:58:05.270336236Z
   implemented_by: joe
+  completed_at: 2026-09-01T04:09:52.156137776Z
+  completion_sha: d778cfa53b1255f59922eaa68e14a1a97ede6102
