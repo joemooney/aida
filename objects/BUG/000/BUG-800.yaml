@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T23:57:13.255685702Z
-modified_at: 2026-09-01T05:00:24.364509579Z
+modified_at: 2026-09-01T05:00:28.611528829Z
 req_type: Bug
 tags:
 - codex prompt-parity papercut
@@ -17,3 +17,8 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-01T05:00:24.364509579Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida review prompt now tells reviewers to name focused tests as full runnable commands
+  other:
+  - scaffolded Codex/AIDA prompt text avoids bare Rust test-name placeholders
