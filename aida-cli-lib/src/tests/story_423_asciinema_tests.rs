@@ -195,6 +195,7 @@ fn bare_agent_defaults_to_agent_new() {
         "new",
         "ls",
         "status",
+        "gc",
         "dispatch-health",
         "register",
         "pause",
@@ -217,7 +218,10 @@ fn bare_agent_defaults_to_agent_new() {
         Cli::try_parse_from(rewrite_agent_default_new(&s(&["aida", "agent", "ls"])))
             .unwrap()
             .command,
-        Command::Agent(AgentCommand::Ls)
+        Command::Agent(AgentCommand::Ls {
+            all: false,
+            stale: false,
+        })
     ));
     assert!(matches!(
         Cli::try_parse_from(rewrite_agent_default_new(&s(&[

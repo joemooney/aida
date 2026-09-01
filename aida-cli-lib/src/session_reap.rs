@@ -731,6 +731,10 @@ fn resolve_next_queued_spec(project_root: &std::path::Path) -> Option<String> {
 // trace:TASK-1177 | ai:claude
 pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     let project_root = main_worktree_root_from(&find_project_root()?);
+    // trace:TASK-1184 | ai:codex
+    if !opts.dry_run {
+        let _ = agent_registry::gc_dead_agents(&project_root, false, None);
+    }
     let mut report = scan_reapable(&project_root);
 
     if report.reapable.is_empty() && report.skipped.is_empty() {
