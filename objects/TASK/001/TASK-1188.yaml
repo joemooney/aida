@@ -10,12 +10,12 @@ description: |-
   - The same guidance offers the multiplexer path as the recommended full-fidelity option: tmux `set -g status-right '#(aida statusline --color=never)'` + `status-interval 15` (or `aida statusbar --plain`), which is agent-agnostic and survives inside any Codex/Claude session.
   - `docs/agents/claude-surfaces-codex-parity.md` gap 5 + scaffolded AGENTS.md text updated to match (currently states "not shipped as of Codex 0.142").
   - Add a tripwire note: re-check upstream for a command-backed status_line item at each competitive refresh.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T02:44:39.531041511Z
-modified_at: 2026-09-01T06:29:27.183499163Z
+modified_at: 2026-09-01T06:33:04.636129591Z
 req_type: Task
 tags:
 - codex
@@ -27,8 +27,24 @@ relationships:
   target_id: 01a05ba8-710d-7ba0-a8dd-77725c460806
   created_at: 2026-09-01T06:29:27.183493585Z
   created_by: joe
+history:
+- id: 01a05bab-db75-7c91-9586-0aadee37a754
+  author: aida-auto-bump
+  timestamp: 2026-09-01T06:33:04.629913954Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a05bab-db7c-7981-81db-29d56689da8f
+  timestamp: 2026-09-01T06:33:04.636128999Z
+  agent: aida
+  commit_sha: e481113b255ce24259c686b4a2e8bc35f82af5ed
+  summary: Completed via merge e481113b
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-01T06:18:45.043943577Z
   implemented_by: joe
+  completed_at: 2026-09-01T06:33:04.629800008Z
+  completion_sha: e481113b255ce24259c686b4a2e8bc35f82af5ed
