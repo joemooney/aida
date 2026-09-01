@@ -4234,7 +4234,7 @@ pub(crate) fn handle_queue_command(
             // drain N); a best-effort `0` falls back to 99 inside the resolver.
             // Explicit flags always win. trace:TASK-578 | ai:claude
             let drain_queue_size = if *drain {
-                drivable_queued_count(storage, &user_id).unwrap_or(0)
+                drivable_queued_count(storage, &user_id, role.as_deref()).unwrap_or(0)
             } else {
                 0
             };
@@ -4860,6 +4860,7 @@ pub(crate) fn handle_queue_command(
                             variant,
                             *json,
                             permission_mode.as_deref(),
+                            role.as_deref(),
                             no_human_mode,
                             escalate_mode,
                             *steal,
@@ -4887,6 +4888,7 @@ pub(crate) fn handle_queue_command(
                         variant,
                         *json,
                         permission_mode.as_deref(),
+                        role.as_deref(),
                         no_human_mode,
                         escalate_mode,
                         *steal,
@@ -4913,7 +4915,7 @@ pub(crate) fn handle_queue_command(
                 // trace:TASK-292 | ai:claude
                 let spec = match effective_id {
                     Some(s) => s.to_string(),
-                    None => resolve_auto_complete_head(storage, &user_id)?,
+                    None => resolve_auto_complete_head(storage, &user_id, role.as_deref())?,
                 };
                 // TASK-405: `--from-pr` — implementation shipped OUTSIDE the
                 // orchestrator (a PR is already open). Drive phases 3-6 only,
@@ -8654,12 +8656,18 @@ pub(crate) fn pick_auto_complete_head(
 pub(crate) fn auto_complete_head_candidates(
     storage: &Storage,
     user_id: &str,
+    role_override: Option<&str>,
 ) -> Result<Vec<(String, RequirementStatus)>> {
     let entries = storage.queue_list(user_id, /* include_completed */ false)?;
     let store = storage.load()?;
-    let role_filter: Option<String> = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.is_empty());
+    let role_filter: Option<String> = role_override
+        .filter(|s| !s.is_empty())
+        .map(canonical_role_name)
+        .or_else(|| {
+            std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty())
+        });
 
     let mut ordered: Vec<&aida_core::QueueEntry> = entries
         .iter()
@@ -8689,12 +8697,21 @@ pub(crate) fn auto_complete_head_candidates(
 /// returns the first item the orchestrator can drive from scratch, skipping —
 /// with a note — any item already In Progress / Done / terminal. Errors when
 /// nothing drivable remains. trace:TASK-292 | ai:claude
-pub(crate) fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Result<String> {
-    let role_label = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
+pub(crate) fn resolve_auto_complete_head(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Result<String> {
+    let role_label = role_override
         .filter(|s| !s.is_empty())
+        .map(canonical_role_name)
+        .or_else(|| {
+            std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty())
+        })
         .unwrap_or_else(|| "any role".to_string());
-    let candidates = auto_complete_head_candidates(storage, user_id)?;
+    let candidates = auto_complete_head_candidates(storage, user_id, role_override)?;
 
     match pick_auto_complete_head(&candidates) {
         Ok((spec, skipped)) => {
@@ -8711,9 +8728,10 @@ pub(crate) fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Re
             }
             Ok(spec)
         }
-        Err(skipped) if skipped.is_empty() => {
-            anyhow::bail!("queue is empty for {role_label}; nothing to drive")
-        }
+        Err(skipped) if skipped.is_empty() => anyhow::bail!(
+            "queue is empty for {role_label}; nothing to drive{}",
+            auto_complete_sibling_role_hint(storage, user_id, &role_label).unwrap_or_default()
+        ),
         Err(skipped) => {
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
@@ -8739,6 +8757,59 @@ pub(crate) fn resolve_auto_complete_head(storage: &Storage, user_id: &str) -> Re
             )
         }
     }
+}
+
+/// When an autonomous head pickup finds nothing for the selected role, name
+/// sibling role queues that do have queued items so the operator gets a concrete
+/// recovery command instead of a dead end.
+// trace:BUG-795 | ai:codex
+fn auto_complete_sibling_role_hint(
+    storage: &Storage,
+    user_id: &str,
+    selected_role: &str,
+) -> Result<String> {
+    if selected_role == "any role" {
+        return Ok(String::new());
+    }
+    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    let store = storage.load()?;
+    let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for entry in entries {
+        let Some(role) = entry.for_role.as_deref() else {
+            continue;
+        };
+        let role = canonical_role_name(role);
+        if role == selected_role {
+            continue;
+        }
+        let Some(req) = store
+            .requirements
+            .iter()
+            .find(|r| r.id == entry.requirement_id)
+        else {
+            continue;
+        };
+        if is_terminal_status(&req.status) {
+            continue;
+        }
+        *counts.entry(role).or_default() += 1;
+    }
+    if counts.is_empty() {
+        return Ok(String::new());
+    }
+    let summary = counts
+        .iter()
+        .map(|(role, count)| format!("{count} item(s) routed for:{role}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let command_role = counts
+        .keys()
+        .next()
+        .cloned()
+        .unwrap_or_else(|| selected_role.to_string());
+    Ok(format!(
+        " — {summary}; re-run with `aida queue work --auto-complete --role {command_role}` or re-route them"
+    ))
 }
 
 /// STORY-384: `aida queue recover <id>` — the failed-phase-1 recovery wizard.

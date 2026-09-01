@@ -69841,8 +69841,12 @@ fn parse_next_count(raw: &str) -> Result<usize> {
 /// drivable head of the active role's queue, or `None` when nothing drivable
 /// remains (the drain is then complete). A store/queue read failure is fatal —
 /// it is not "drained" and would recur on every iteration. trace:TASK-293
-fn resolve_next_n_head(storage: &Storage, user_id: &str) -> Option<String> {
-    match auto_complete_head_candidates(storage, user_id) {
+fn resolve_next_n_head(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Option<String> {
+    match auto_complete_head_candidates(storage, user_id, role_override) {
         Ok(candidates) => pick_auto_complete_head(&candidates)
             .ok()
             .map(|(spec, _skipped)| spec),
@@ -69860,11 +69864,17 @@ fn resolve_next_n_head(storage: &Storage, user_id: &str) -> Option<String> {
 /// Count the orchestrator-drivable items queued for the active role — used to
 /// surface the "only K items queued" note when a `nextN` asks for more than
 /// the queue holds. trace:TASK-293 | ai:claude
-fn drivable_queued_count(storage: &Storage, user_id: &str) -> Result<usize> {
-    Ok(auto_complete_head_candidates(storage, user_id)?
-        .iter()
-        .filter(|(_, status)| auto_complete_head_drivable(status))
-        .count())
+fn drivable_queued_count(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+) -> Result<usize> {
+    Ok(
+        auto_complete_head_candidates(storage, user_id, role_override)?
+            .iter()
+            .filter(|(_, status)| auto_complete_head_drivable(status))
+            .count(),
+    )
 }
 
 /// TASK-966: process-exit code a drain uses when a hard budget cap
@@ -70064,6 +70074,7 @@ fn finalize_drain_summary(
 struct RealNextNDriver<'a> {
     storage: &'a Storage,
     user_id: String,
+    role_override: Option<String>,
     variant: auto_complete::AutoCompleteVariant,
     json: bool,
     permission_mode: Option<String>,
@@ -70086,7 +70097,7 @@ struct RealNextNDriver<'a> {
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     fn next_head(&mut self) -> Option<String> {
-        resolve_next_n_head(self.storage, &self.user_id)
+        resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref())
     }
 
     fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
@@ -70139,6 +70150,7 @@ fn handle_auto_complete_next_n(
     variant: auto_complete::AutoCompleteVariant,
     json: bool,
     permission_mode: Option<&str>,
+    role_override: Option<&str>,
     no_human: Option<auto_complete::NoHumanMode>,
     escalate_mode: auto_complete::EscalateMode,
     // BUG-311: outer `--steal`, threaded to every drained member's phase 1.
@@ -70165,7 +70177,7 @@ fn handle_auto_complete_next_n(
         );
         // Acceptance: when N exceeds the queue length, drain all available
         // and say so up front rather than silently shipping fewer than asked.
-        if let Ok(drivable) = drivable_queued_count(storage, user_id) {
+        if let Ok(drivable) = drivable_queued_count(storage, user_id, role_override) {
             if drivable < n {
                 eprintln!(
                     "  {} only {} drivable item{} queued — draining those",
@@ -70181,7 +70193,7 @@ fn handle_auto_complete_next_n(
     // at N, is the member list. Best-effort. trace:STORY-301 | ai:claude
     let drain_root = find_main_worktree_root().ok();
     if let Some(root) = &drain_root {
-        if let Ok(candidates) = auto_complete_head_candidates(storage, user_id) {
+        if let Ok(candidates) = auto_complete_head_candidates(storage, user_id, role_override) {
             let specs: Vec<String> = candidates
                 .into_iter()
                 .filter(|(_, status)| auto_complete_head_drivable(status))
@@ -70206,6 +70218,7 @@ fn handle_auto_complete_next_n(
     let mut driver = RealNextNDriver {
         storage,
         user_id: user_id.to_string(),
+        role_override: role_override.map(canonical_role_name),
         variant,
         json,
         permission_mode: permission_mode.map(|s| s.to_string()),
