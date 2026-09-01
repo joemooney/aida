@@ -72,7 +72,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:21:50.995584233Z
-modified_at: 2026-09-01T05:22:23.726070225Z
+modified_at: 2026-09-01T05:32:24.303230476Z
 req_type: Story
 tags:
 - aida:doctor
@@ -87,6 +87,10 @@ relationships:
 - rel_type: References
   target_id: 01a03035-b0ab-7eb0-8282-3b440fe932f8
   created_at: 2026-08-30T01:22:01.940562158Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a05b74-375b-7092-81af-1775bed73cbf
+  created_at: 2026-09-01T05:32:24.303222139Z
   created_by: joe
 execution_mode: drain
 implementation_info:
