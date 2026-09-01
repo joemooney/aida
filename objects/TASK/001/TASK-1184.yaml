@@ -11,12 +11,12 @@ description: |-
   - `aida agent ls` runs the same prune opportunistically (substrate-as-bouncer: the list should never show a dead process by default; `--all`/`--stale` to see tombstones).
   - `aida session reap` and the orchestrator's end-of-drain path call it so the registry self-heals.
   - Never touches the `.aida/agents/context/` snapshots.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:35.556909518Z
-modified_at: 2026-09-01T03:47:09.761685372Z
+modified_at: 2026-09-01T05:44:12.274076807Z
 req_type: Task
 tags:
 - aida:agent:gc
