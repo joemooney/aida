@@ -11,12 +11,12 @@ description: |-
   - `aida agent ls` runs the same prune opportunistically (substrate-as-bouncer: the list should never show a dead process by default; `--all`/`--stale` to see tombstones).
   - `aida session reap` and the orchestrator's end-of-drain path call it so the registry self-heals.
   - Never touches the `.aida/agents/context/` snapshots.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:35.556909518Z
-modified_at: 2026-09-01T06:02:58.620698103Z
+modified_at: 2026-09-01T06:09:10.520880245Z
 req_type: Task
 tags:
 - aida:agent:gc
@@ -27,8 +27,25 @@ relationships:
   target_id: 01a05b90-398b-7160-b346-e1fcbdf251c2
   created_at: 2026-09-01T06:02:58.620689608Z
   created_by: joe
+history:
+- id: 01a05b95-f972-7ff1-94c0-10136a8282ec
+  author: aida-auto-bump
+  timestamp: 2026-09-01T06:09:10.514845514Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a05b95-f978-76f0-a877-261622a81806
+  timestamp: 2026-09-01T06:09:10.520879455Z
+  agent: aida
+  commit_sha: 155eaba6d2cae47a46d00dcf0228da40d566fb29
+  summary: 'TASK-1184 passes: gc command, retention rules, opportunistic pruning hooks, and targeted tests verified.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-01T05:53:29.384252100Z
   implemented_by: joe
+  completed_at: 2026-09-01T06:09:10.514741649Z
+  completion_sha: 155eaba6d2cae47a46d00dcf0228da40d566fb29
