@@ -41915,5 +41915,31 @@ operations:
   timestamp: 2026-09-01T04:53:32.945041893Z
   kind: !SetStatus
     status: Completed
-clock: 3787
+- id: 01a05b57-af76-7743-8e6e-ff1ae2ee8850
+  target_id: 01a05b57-ab17-73c2-b639-1bacf2dc3098
+  author: aida
+  node_id: '1'
+  lamport: 3788
+  timestamp: 2026-09-01T05:01:08.342681316Z
+  kind: !Create
+    title: 'Review PR-1630: [AI:codex] fix(codex): avoid missing pickup skill dependency (TASK-150) (#1629)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a05b53`) for branch `bug-800`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1630>
+      - Branch: `bug-800` → `main`
+
+      ## Covers
+
+      - BUG-800
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1630` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3788
 node_id: '1'
