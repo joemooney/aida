@@ -112,6 +112,10 @@ fn best_effort_swallows_a_digest_error() {
 // re-running stages nothing new. trace:STORY-643 | ai:claude
 #[test]
 fn publish_for_sync_stages_canonical_without_committing_and_is_idempotent() {
+    // trace:BUG-807 | ai:codex — this test asserts the default autosync path, so it must hold
+    // the shared env lock with AIDA_MAILBOX_AUTOSYNC unset while sibling tests
+    // mutate that process-global knob.
+    let _autosync_env = crate::test_env::EnvVarGuard::unset("AIDA_MAILBOX_AUTOSYNC");
     let (proj, store_root) = project_with_store();
     mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
     mailbox_store::write_message(proj.path(), &msg("b")).unwrap();
@@ -133,17 +137,19 @@ fn publish_for_sync_stages_canonical_without_committing_and_is_idempotent() {
 // The opt-out (env or config) disables the publish leg entirely. trace:STORY-643
 #[test]
 fn publish_for_sync_honors_the_opt_out() {
+    // trace:BUG-807 | ai:codex — hold the shared env lock across the whole env/config sequence so
+    // the default-path sibling cannot observe this test's temporary opt-out.
+    let mut autosync_env = crate::test_env::EnvVarGuard::set("AIDA_MAILBOX_AUTOSYNC", "0");
     let (proj, store_root) = project_with_store();
     mailbox_store::write_message(proj.path(), &msg("a")).unwrap();
 
     // Env opt-out wins; nothing is published.
-    std::env::set_var("AIDA_MAILBOX_AUTOSYNC", "0");
     assert!(!mailbox_autosync_enabled(proj.path()));
     assert_eq!(maybe_publish_mailbox_for_sync(&store_root, "test"), 0);
     assert!(mailbox_store::read_canonical_messages(&store_root)
         .unwrap()
         .is_empty());
-    std::env::remove_var("AIDA_MAILBOX_AUTOSYNC");
+    autosync_env.reset_unset();
 
     // Default (no env, no config) is on.
     assert!(mailbox_autosync_enabled(proj.path()));
@@ -157,7 +163,6 @@ fn publish_for_sync_honors_the_opt_out() {
     .unwrap();
     assert!(!mailbox_autosync_enabled(proj.path()));
     // Env presence overrides the config-file false.
-    std::env::set_var("AIDA_MAILBOX_AUTOSYNC", "1");
+    autosync_env.reset("1");
     assert!(mailbox_autosync_enabled(proj.path()));
-    std::env::remove_var("AIDA_MAILBOX_AUTOSYNC");
 }
