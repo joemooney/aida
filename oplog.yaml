@@ -42082,5 +42082,31 @@ operations:
   timestamp: 2026-09-01T06:09:11.181520920Z
   kind: !SetStatus
     status: Completed
-clock: 3797
+- id: 01a05ba8-7c0f-7a61-8dc4-fb16ae13e082
+  target_id: 01a05ba8-710d-7ba0-a8dd-77725c460806
+  author: aida
+  node_id: '1'
+  lamport: 3798
+  timestamp: 2026-09-01T06:29:23.599915743Z
+  kind: !Create
+    title: 'Review PR-1633: [AI:codex] docs(codex): update statusline title guidance (TASK-1188)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a05b98`) for branch `task-1188`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1633>
+      - Branch: `task-1188` → `main`
+
+      ## Covers
+
+      - TASK-1188
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1633` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3798
 node_id: '1'
