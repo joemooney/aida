@@ -8,7 +8,7 @@ priority: Low
 owner: joe
 feature: Uncategorized
 created_at: 2026-08-30T02:40:40.507443737Z
-modified_at: 2026-08-30T03:37:29.449703450Z
+modified_at: 2026-09-01T03:46:25.293462081Z
 req_type: Task
 tags:
 - aida-pickup
@@ -19,3 +19,4 @@ tags:
 - linked:TASK-0426
 - severity:minor
 - skills
+execution_mode: drain
