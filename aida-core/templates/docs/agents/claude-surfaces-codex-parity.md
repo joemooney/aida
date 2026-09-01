@@ -70,7 +70,7 @@ agent client.
 | Surface | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
 | `settings.json` `hooks` block | Maps Claude lifecycle events to the command hooks in §1 | enforcement/observation | `.codex/config.toml` / `.codex/hooks.json` (project) or `~/.codex/hooks.json` | A whole-file analog is needed; Codex's event set is narrower (no defer, no mutation). Coverage: TASK-0422 (defer/mutation) + TASK-0424 (scaffold the Codex equivalent) |
-| `settings.json` `statusLine` (`aida statusline ...`) | Command-backed status footer showing role/queue/scope | UX | Codex built-in TUI footer fields (`[tui] status_line = [...]`) — fixed field set, no arbitrary command | Codex cannot run an arbitrary status command in its footer today (open upstream request, not shipped as of Codex 0.142). `aida statusline --title` (TASK-896) emits the same one-liner as an OSC terminal-title escape, so wiring it into the shell prompt rides the AIDA segment in the terminal title bar / tmux window name during the Codex session — the in-agent parity path. Coverage: TASK-896 (DONE — `--title` + `statusline setup --client codex` guidance + scaffolded `AGENTS.md`); a richer command-backed footer awaits the upstream Codex feature |
+| `settings.json` `statusLine` (`aida statusline ...`) | Command-backed status footer showing role/queue/scope | UX | Codex built-in TUI footer fields (`[tui] status_line = [...]`) — fixed field set, no arbitrary command; set `[tui] terminal_title = null` so Codex does not overwrite external status integrations | Codex cannot run an arbitrary status command in its footer today (open upstream request; re-check upstream for a command-backed `status_line` item at each competitive refresh). Current Codex releases own the terminal title, so `aida statusline --title` is no longer the Codex parity path. Recommended full-fidelity path: tmux `set -g status-right '#(aida statusline --color=never)'` plus `set -g status-interval 15`, or `aida statusbar --plain` for the ambient meter. Coverage: TASK-1188 updates `statusline setup --client codex` guidance + scaffolded `AGENTS.md`; a richer command-backed footer awaits the upstream Codex feature |
 | `$CLAUDE_PROJECT_DIR` path convention in hook commands | Resolves hook scripts regardless of CWD | enforcement plumbing | Codex hook env vars differ; project trust must be granted | Hook command paths must be rewritten for Codex's env + trust model. Coverage: TASK-0424 |
 
 ## 3. `.claude/skills` and `.claude/commands`
@@ -189,17 +189,17 @@ CLI. The gap is not the substrate; it is that the headless orchestrator
    TUI tab or Codex crash-recovery resume.
 5. **In-agent status footer parity.** ~~Codex's footer is a fixed field set; the
    command-backed `aida statusline` richness is lost inside the agent.~~
-   **Closed by TASK-896.** Codex still cannot run an arbitrary command in its
-   built-in footer (an open upstream request, not shipped as of Codex 0.142),
-   so the parity surface is the *terminal title*, which Codex's PTY honors:
-   `aida statusline --title` emits the one-liner wrapped in an OSC 2
-   set-window-title escape, and wiring it into the shell prompt
-   (`PROMPT_COMMAND` / `precmd`) rides the AIDA role/queue/inbox segment in the
-   terminal title bar / tmux window name during the session. `aida statusline
-   setup --client codex` prints the copy-paste config and the scaffolded
-   `AGENTS.md` documents it. (Low severity — UX, not load-bearing — so the
-   terminal-title shim is the right altitude; a command-backed in-footer
-   segment would just consume the upstream Codex feature when it ships.)
+   **Updated by TASK-1188.** Codex still cannot run an arbitrary command in its
+   built-in footer, and current Codex releases own the terminal title via
+   `[tui] terminal_title`, so the old `aida statusline --title` prompt-hook path
+   is not reliable. `aida statusline setup --client codex` now prints
+   `terminal_title = null` beside the built-in `[tui] status_line` snippet and
+   recommends the agent-agnostic multiplexer path:
+   `set -g status-right '#(aida statusline --color=never)'` plus
+   `set -g status-interval 15`, or `aida statusbar --plain` for the ambient
+   meter. Tripwire: at each competitive refresh, re-check upstream Codex for a
+   command-backed `[tui] status_line` item and switch to the native footer if it
+   lands.
 
 The strategic read matches the porting doc's thesis: the load-bearing
 invariants (graph, IDs, traces, MCP, queue, leases, briefs, punts, findings,

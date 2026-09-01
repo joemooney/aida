@@ -109,32 +109,34 @@ has its own built-in TUI footer, configured with `[tui].status_line` in Codex
 `config.toml` or interactively with `/statusline`. Codex's current footer
 accepts built-in item IDs; it does not run `aida statusline` as an arbitrary
 command. For Codex, use the built-in footer fields as a lightweight companion
-to the AIDA-aware shell/statusline command:
+and disable Codex's terminal-title writer so it does not overwrite external
+status integrations:
 
 ```toml
 [tui]
 status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+terminal_title = null
 ```
 
 Put that in `~/.codex/config.toml` for a personal default, or in a trusted
 project's `.codex/config.toml` if the whole team wants the same footer.
 
 The built-in footer fields cannot host AIDA's role / queue-depth / inbox-depth
-segment, so for in-agent parity wire `aida statusline --title` into your shell
-prompt: it emits the same one-liner wrapped in an OSC terminal-title escape, so
-the AIDA segment rides the terminal title bar / tmux window name during the
-Codex session — the in-agent analog of the command-backed footer Claude Code
-runs in `.claude/settings.json`.
+segment. The recommended full-fidelity path is your multiplexer status line,
+which is agent-agnostic and survives inside any Codex or Claude session:
 
 ```bash
-# bash (~/.bashrc)
-PROMPT_COMMAND='aida statusline --title 2>/dev/null; '"$PROMPT_COMMAND"
-
-# zsh (~/.zshrc)
-precmd() {{ aida statusline --title 2>/dev/null }}
+# tmux
+set -g status-right '#(aida statusline --color=never)'
+set -g status-interval 15
 ```
 
-Run `aida statusline setup --client codex` for the copy-paste version of both.
+`aida statusbar --plain` is the lower-cost ambient meter variant for the same
+tmux `status-right` slot. At each competitive refresh, re-check upstream Codex
+for a command-backed `[tui] status_line` item; if one lands, prefer that native
+footer path.
+
+Run `aida statusline setup --client codex` for the copy-paste version.
 
 ### MCP Coordination
 
@@ -306,10 +308,12 @@ mod tests {
         assert!(md.contains("status_line = [\"model-with-reasoning\""));
         assert!(md.contains("without forcing a"));
         assert!(md.contains("does not run `aida statusline`"));
-        // trace:TASK-896 — the in-agent parity path (OSC terminal-title via
-        // `aida statusline --title` wired into the shell prompt) is documented.
-        assert!(md.contains("aida statusline --title"));
-        assert!(md.contains("terminal title"));
+        // trace:TASK-1188 | ai:codex — current Codex owns the terminal title,
+        // so the scaffold disables it and recommends tmux for full fidelity.
+        assert!(md.contains("terminal_title = null"));
+        assert!(md.contains("status-right '#(aida statusline --color=never)'"));
+        assert!(md.contains("aida statusbar --plain"));
+        assert!(md.contains("command-backed `[tui] status_line` item"));
         assert!(md.contains("SPEC-410"));
         assert!(md.contains("BUG-345"));
         assert!(md.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));

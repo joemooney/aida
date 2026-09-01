@@ -1,7 +1,7 @@
 use super::*;
 use crate::statusline_cmd::{
-    claude_statusline_block, install_claude_statusline, osc_terminal_title,
-    STATUSLINE_SETUP_COMMAND,
+    claude_statusline_block, codex_statusline_setup_text, install_claude_statusline,
+    osc_terminal_title, STATUSLINE_SETUP_COMMAND,
 };
 
 /// The Claude Code statusLine block uses the same command string the
@@ -81,6 +81,24 @@ fn install_refuses_invalid_json() {
     assert!(err.to_string().contains("valid JSON"));
     // The original bytes are untouched.
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
+}
+
+// trace:TASK-1188 | ai:codex — Codex now writes its own terminal title, so
+// setup guidance must disable it and steer full AIDA status to tmux.
+#[test]
+fn codex_setup_disables_terminal_title_and_recommends_tmux_status_right() {
+    let out = codex_statusline_setup_text();
+
+    assert!(out.contains("[tui]"));
+    assert!(out.contains("status_line = [\"model-with-reasoning\""));
+    assert!(out.contains("terminal_title = null"));
+    assert!(out.contains("Codex releases overwrite shell prompt title hooks"));
+    assert!(out.contains("set -g status-right '#(aida statusline --color=never)'"));
+    assert!(out.contains("set -g status-interval 15"));
+    assert!(out.contains("aida statusbar --plain"));
+    assert!(out.contains("command-backed `[tui] status_line` item"));
+    assert!(!out.contains("PROMPT_COMMAND"));
+    assert!(!out.contains("precmd()"));
 }
 
 // trace:TASK-896 — `--title` parity surface for clients (e.g. Codex CLI)

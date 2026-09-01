@@ -104,23 +104,34 @@ Claude Code can run that command through
 
 Codex CLI has a footer concept too, but its current `status_line` setting
 chooses from Codex built-in item IDs. It does not execute arbitrary commands
-like `aida statusline`, so treat Codex's footer as a companion to the AIDA-aware
-shell/statusline command rather than as a replacement.
+like `aida statusline`, so treat Codex's footer as a companion rather than as a
+replacement for the AIDA-aware tmux/statusbar path.
 
 For Codex, use the built-in footer fields that best complement AIDA's session
-and worktree model:
+and worktree model, and disable Codex's terminal-title writer so it does not
+overwrite external status integrations:
 
 ```toml
 [tui]
 status_line = ["model-with-reasoning", "context-remaining", "git-branch", "current-dir"]
+terminal_title = null
 ```
 
 Put this in `~/.codex/config.toml` for your personal Codex default. For a
 trusted AIDA project, the same snippet can live in `.codex/config.toml`.
-Continue using `aida statusline` directly in the shell when you need the
-AIDA-specific role, queue, cache, and session summary.
+For the AIDA-specific role, queue, cache, and session summary, prefer tmux:
+
+```tmux
+set -g status-right '#(aida statusline --color=never)'
+set -g status-interval 15
+```
+
+`aida statusbar --plain` is the lower-cost ambient meter variant for the same
+`status-right` slot. Re-check upstream Codex for a command-backed
+`[tui] status_line` item at each competitive refresh.
 
 trace:TASK-0413 | ai:claude
+trace:TASK-1188 | ai:codex
 
 ## Launch Codex Through AIDA
 
