@@ -10,10 +10,9 @@
 //! command template into that shape:
 //!
 //! - the YAML frontmatter (a Claude Code convention) is stripped;
-//! - `.claude/skills/<name>.md` references are rewritten to the project's
-//!   `.codex/skills/<name>/SKILL.md` copy when that skill ships in the codex
-//!   set (both are plain repo files an agent can read — the rewrite just
-//!   points Codex at its own copy first);
+//! - `.claude/skills/<name>.md` references are rewritten to the workflow
+//!   embedded in the rendered Codex prompt, so Codex does not try to invoke a
+//!   local skill that may not exist in its advertised skill set;
 //! - commands that structurally depend on Claude-only mechanics (hooks, the
 //!   Agent-tool subagent fan-out, session resume) are excluded with a stated
 //!   reason instead of silently dropped.
@@ -86,9 +85,16 @@ fn adapt_claude_only_prompt_language(body: &str) -> String {
     // trace:BUG-731 | ai:codex
     let claude_skill_ref = Regex::new(r"`?\.claude/skills/(aida-[A-Za-z0-9_-]+)(?:/SKILL)?\.md`?")
         .expect("valid Claude skill ref regex");
+    // Codex custom prompts are the runnable surface. Pointing them at "the
+    // AIDA skill" can trigger progressive-disclosure lookup for a skill that
+    // is not installed, even though the command template already carries the
+    // needed workflow below. trace:TASK-150 | ai:codex
     let mut out = claude_skill_ref
         .replace_all(body, |caps: &regex::Captures<'_>| {
-            format!("the AIDA skill `{}`", &caps[1])
+            format!(
+                "the Codex-adapted AIDA workflow below (from `{}`)",
+                &caps[1]
+            )
         })
         .into_owned();
 
@@ -279,12 +285,19 @@ mod tests {
     }
 
     #[test]
-    fn convert_rewrites_claude_skill_refs_to_vendor_neutral_names() {
+    fn convert_rewrites_claude_skill_refs_to_embedded_workflow_refs() {
         let body = "---\ndescription: d\n---\nFollow the workflow in `.claude/skills/aida-commit.md`:\nand `.claude/skills/aida-noncodex.md` stays.";
         let out = convert_command_to_codex_prompt(body);
-        assert!(out.contains("the AIDA skill `aida-commit`"), "{out}");
-        assert!(out.contains("the AIDA skill `aida-noncodex`"), "{out}");
+        assert!(
+            out.contains("the Codex-adapted AIDA workflow below (from `aida-commit`)"),
+            "{out}"
+        );
+        assert!(
+            out.contains("the Codex-adapted AIDA workflow below (from `aida-noncodex`)"),
+            "{out}"
+        );
         assert!(!out.contains(".claude/skills/"), "{out}");
+        assert!(!out.contains("the AIDA skill `"), "{out}");
         assert!(out.contains("Codex prompt arguments: `$ARGUMENTS`"));
         assert!(
             !out.starts_with("---"),
@@ -402,6 +415,14 @@ mod tests {
         assert!(
             body.contains("AIDA_HEADLESS"),
             "the never-ask-headless rule must be stated"
+        );
+        assert!(
+            body.contains("the Codex-adapted AIDA workflow below (from `aida-pickup`)"),
+            "Codex pickup must not require an unavailable local aida-pickup skill"
+        );
+        assert!(
+            !body.contains("the AIDA skill `aida-pickup`"),
+            "Codex pickup must not instruct the agent to resolve a local skill"
         );
     }
 
