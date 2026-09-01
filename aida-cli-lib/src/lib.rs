@@ -66002,6 +66002,8 @@ fn generate_review_prompt(
         }
     }
 
+    out.push_str(review_prompt_test_commands_section());
+
     out.push_str("## Decide\n\n");
     out.push_str(
         "If every item above passes: approve and merge (`gh pr merge --squash` / \
@@ -66031,6 +66033,15 @@ fn generate_review_prompt(
         print!("{}", out);
     }
     Ok(())
+}
+
+// trace:BUG-800 | ai:codex
+fn review_prompt_test_commands_section() -> &'static str {
+    "## Test Commands\n\n\
+     When you name focused tests, name the runnable command, not a bare test \
+     identifier. For Rust, use `cargo test -p <crate> <test_name>` (or the \
+     exact workspace/package command you ran) so the next agent does not \
+     pass the test name to the wrong binary.\n\n"
 }
 
 /// trace:STORY-67 | ai:claude
@@ -76943,6 +76954,13 @@ mod task_1056_batched_git_fanout_tests;
 #[cfg(test)]
 #[path = "tests/story_698_test_plan_capture_tests.rs"]
 mod story_698_test_plan_capture_tests;
+
+// BUG-800: review worksheets must name runnable focused-test commands instead
+// of bare test identifiers, so Codex does not pass the name to the wrong
+// binary. trace:BUG-800 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_800_review_test_command_prompt_tests.rs"]
+mod bug_800_review_test_command_prompt_tests;
 
 // BUG-777: recovering a lease left behind by an already-exited session — the
 // verifiably-gone + clean-worktree reclaim, the never-reap-a-live-lease floor,

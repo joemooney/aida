@@ -119,7 +119,7 @@ Understand the steps to trigger the bug. Try to reproduce it:
 
 ```bash
 # Run the relevant tests
-cargo test <test_name>
+cargo test -p <crate> <test_name>
 
 # Or try the steps described in the bug
 ```
