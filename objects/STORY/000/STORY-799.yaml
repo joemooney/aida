@@ -1,0 +1,26 @@
+id: 01a05b21-7238-7fd0-a93d-38c1bd491d81
+spec_id: STORY-799
+agreed_id: STORY-799
+title: 'Review PR-1627: [AI:codex] fix(queue): honor auto-complete role override (BUG-795)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a05b13`) for branch `bug-795`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1627>
+  - Branch: `bug-795` → `main`
+
+  ## Covers
+
+  - BUG-795
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1627` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-01T04:01:53.720972349Z
+modified_at: 2026-09-01T04:01:53.720972349Z
+req_type: Story
