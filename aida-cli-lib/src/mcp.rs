@@ -11802,6 +11802,7 @@ mod tests {
             claude_session_id: None,
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: vec![
                 crate::session_manifest::ManifestItem {
                     spec_id: "TASK-100".to_string(),

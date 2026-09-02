@@ -95,6 +95,10 @@ pub struct RecordedVerdict {
     pub recorded_at: Option<String>,
     /// One-line rationale.
     pub summary: Option<String>,
+    /// URL of the consolidated review comment, when recorded.
+    pub comment_url: Option<String>,
+    /// Blocking findings carried by a RequestChanges/Rejected verdict.
+    pub findings: Vec<String>,
 }
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
@@ -118,7 +122,33 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
             .filter(|s| !s.is_empty())
             .map(str::to_string)
     };
+    let string_array_field = |k: &str| -> Vec<String> {
+        obj.get(k)
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
     let raw = str_field("verdict")?;
+    let mut findings = Vec::new();
+    for key in [
+        "review_findings",
+        "blocking_findings",
+        "findings",
+        "findings_to_address",
+    ] {
+        for item in string_array_field(key) {
+            if !findings.iter().any(|f| f == &item) {
+                findings.push(item);
+            }
+        }
+    }
     Some(RecordedVerdict {
         kind: VerdictKind::parse(&raw),
         raw,
@@ -126,6 +156,8 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         reviewed_branch: str_field("reviewed_branch"),
         recorded_at: str_field("recorded_at"),
         summary: str_field("summary"),
+        comment_url: str_field("comment_url"),
+        findings,
     })
 }
 
@@ -367,6 +399,40 @@ pub fn verdict_notice_line(v: &RecordedVerdict) -> String {
         line.push_str(&format!(" — {s}"));
     }
     line
+}
+
+/// Blocking review-findings context for a rework pickup. The review skill has
+/// historically guaranteed only `verdict` + `summary`, so the summary becomes a
+/// single finding when no structured findings array exists.
+// trace:BUG-814 | ai:codex
+pub fn rework_findings_context(
+    verdict: &RecordedVerdict,
+    pr: Option<u64>,
+) -> Option<crate::session_manifest::ReviewFindingsContext> {
+    if !verdict.kind.blocks_done() {
+        return None;
+    }
+    let mut findings = verdict.findings.clone();
+    if findings.is_empty() {
+        if let Some(summary) = verdict
+            .summary
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            findings.push(summary.to_string());
+        }
+    }
+    if findings.is_empty() {
+        return None;
+    }
+    Some(crate::session_manifest::ReviewFindingsContext {
+        verdict: verdict.kind.label().to_string(),
+        pr,
+        comment_url: verdict.comment_url.clone(),
+        summary: verdict.summary.clone(),
+        findings,
+    })
 }
 
 #[cfg(test)]

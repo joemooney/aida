@@ -124,7 +124,7 @@ fn prompt_reviewer_pr_passes_number() {
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "reviewer", false, false),
+        derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review --pr 11"
     );
 }
@@ -135,7 +135,7 @@ fn prompt_reviewer_non_pr_is_bare() {
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "reviewer", false, false),
+        derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review"
     );
 }
@@ -153,8 +153,101 @@ fn prompt_implementer_item_passes_focus() {
         anchor_title: "title".into(),
     };
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, false),
+        derive_queue_work_prompt(&plan, "implementer", false, false, None),
         "/aida-pickup BUG-83"
+    );
+}
+
+/// BUG-814: rework pickups must carry blocking reviewer findings into the
+/// launched prompt, not just the original spec id.
+// trace:BUG-814 | ai:codex
+#[test]
+fn prompt_implementer_item_leads_with_review_findings() {
+    let e = resolved("BUG-814", entry(Uuid::now_v7(), Some("implementer"), None));
+    let plan = QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![e],
+        scope: "BUG-814".into(),
+        review_target: None,
+        anchor_display: "BUG-814".into(),
+        anchor_title: "title".into(),
+    };
+    let ctx = session_manifest::ReviewFindingsContext {
+        verdict: "CHANGES REQUESTED".to_string(),
+        pr: Some(1634),
+        comment_url: None,
+        summary: Some("review found two blockers".to_string()),
+        findings: vec![
+            "surface the recorded findings".to_string(),
+            "do not pass through with no commit".to_string(),
+        ],
+    };
+    let prompt = derive_queue_work_prompt(&plan, "implementer", false, false, Some(&ctx));
+    assert!(prompt.starts_with("/aida-pickup BUG-814"), "{prompt}");
+    assert!(
+        prompt.contains("REVIEW FINDINGS TO ADDRESS (PR #1634)"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("surface the recorded findings"), "{prompt}");
+    assert!(prompt.contains("at least one commit"), "{prompt}");
+}
+
+#[test]
+fn rework_findings_comment_is_numbered_and_names_pr() {
+    let ctx = session_manifest::ReviewFindingsContext {
+        verdict: "CHANGES REQUESTED".to_string(),
+        pr: Some(1634),
+        comment_url: Some("https://example.test/pull/1634#issuecomment-1".to_string()),
+        summary: Some("two blockers".to_string()),
+        findings: vec!["first".to_string(), "second".to_string()],
+    };
+    let comment = format_rework_findings_comment(&ctx);
+    assert!(comment.starts_with("REVIEW FINDINGS TO ADDRESS (PR #1634):"));
+    assert!(comment.contains("Summary: two blockers"));
+    assert!(comment.contains("Review comment: https://example.test/pull/1634"));
+    assert!(comment.contains("1. first"));
+    assert!(comment.contains("2. second"));
+}
+
+#[test]
+fn rework_findings_comment_is_written_once_to_requirement() {
+    let mut req = req("BUG-814", None, RequirementType::Bug);
+    let comment = "REVIEW FINDINGS TO ADDRESS (PR #1634):\n1. first";
+    assert!(add_rework_findings_comment(&mut req, "codex", comment));
+    assert_eq!(req.comments.len(), 1);
+    assert_eq!(req.comments[0].content, comment);
+    assert!(!add_rework_findings_comment(&mut req, "codex", comment));
+    assert_eq!(req.comments.len(), 1);
+}
+
+#[test]
+fn github_issue_comment_url_parser_extracts_comment_id() {
+    let parsed = parse_github_issue_comment_url(
+        "https://github.com/owner/repo/pull/1634#issuecomment-123456",
+    )
+    .expect("github comment url");
+    assert_eq!(parsed.0, "owner");
+    assert_eq!(parsed.1, "repo");
+    assert_eq!(parsed.2, "123456");
+    assert!(parse_github_issue_comment_url("https://example.test/x").is_none());
+}
+
+#[test]
+fn review_comment_extractor_keeps_blocking_rows() {
+    let body = "\
+Review summary
+- PASS: traced comments present
+- FAIL: queue rework drops reviewer findings
+2. RequestChanges: pickup prompt omits blocking review text
+- note: non-blocking cleanup
+";
+    let findings = extract_blocking_findings_from_review_comment(body);
+    assert_eq!(
+        findings,
+        vec![
+            "FAIL: queue rework drops reviewer findings",
+            "RequestChanges: pickup prompt omits blocking review text"
+        ]
     );
 }
 
@@ -166,7 +259,7 @@ fn prompt_implementer_cluster_is_auto_first() {
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, false),
+        derive_queue_work_prompt(&plan, "implementer", false, false, None),
         "/aida-pickup --auto-first"
     );
 }
@@ -180,7 +273,7 @@ fn prompt_implementer_head_is_auto_first() {
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, false),
+        derive_queue_work_prompt(&plan, "implementer", false, false, None),
         "/aida-pickup --auto-first"
     );
 }
@@ -199,7 +292,7 @@ fn prompt_plan_only_runs_aida_plan() {
         anchor_title: "title".into(),
     };
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", true, false),
+        derive_queue_work_prompt(&plan, "implementer", true, false, None),
         "/aida-plan BUG-83"
     );
 }
@@ -218,7 +311,7 @@ fn prompt_guided_runs_guided_implement() {
         anchor_title: "title".into(),
     };
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, true),
+        derive_queue_work_prompt(&plan, "implementer", false, true, None),
         "/aida-guided-implement STORY-7"
     );
 }
@@ -1488,7 +1581,7 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
         "PR-N pickup must set review_target so it routes to the reviewer"
     );
     assert_eq!(
-        derive_queue_work_prompt(&plan, "reviewer", false, false),
+        derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review --pr 457"
     );
 }

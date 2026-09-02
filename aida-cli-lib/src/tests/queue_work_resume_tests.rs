@@ -151,6 +151,7 @@ fn find_orchestrated_lease_pins_session_by_claude_id() {
             claude_session_id: claude_id.map(str::to_string),
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: vec![],
         };
         session_manifest::save(&session_manifest::manifest_path(root, lease_id), &manifest)

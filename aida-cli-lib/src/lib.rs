@@ -20805,6 +20805,7 @@ fn agent_new_bg_dispatch(
                     claude_session_id: None,
                     batch_name: None,
                     plan: None,
+                    review_findings: None,
                     items: Vec::new(),
                 }
             });
@@ -35583,6 +35584,38 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
         );
     }
 
+    // BUG-814: lead rework pickups with the blocking review findings, before
+    // any plan context. These are the acceptance delta the implementer must
+    // address before marking the spec done again.
+    // trace:BUG-814 | ai:codex
+    if let Some(ctx) = &manifest.review_findings {
+        println!();
+        let heading = match ctx.pr {
+            Some(pr) => format!("Review findings to address (PR #{pr}):"),
+            None => "Review findings to address:".to_string(),
+        };
+        println!("{}", heading.bold());
+        if let Some(summary) = ctx
+            .summary
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            println!("  {} {}", "Summary:".dimmed(), summary);
+        }
+        if let Some(url) = ctx
+            .comment_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            println!("  {} {}", "Comment:".dimmed(), url.cyan());
+        }
+        for (idx, finding) in ctx.findings.iter().enumerate() {
+            println!("  {}. {}", idx + 1, finding);
+        }
+    }
+
     // TASK-95: the plan brief — Critical Files / Followups / Verification
     // pre-populated by `aida queue work` from the owning docs/plans/ file.
     // This is what /aida-pickup surfaces so the implementer gets their
@@ -35852,9 +35885,11 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
     // the batch context /aida-pickup keys its next-steps menu off.
     // trace:TASK-272 | ai:claude
     let path = session_manifest::manifest_path(&project_root, &lease.id);
-    let batch_name = session_manifest::load(&path)
-        .ok()
-        .and_then(|m| m.batch_name);
+    let existing_manifest = session_manifest::load(&path).ok();
+    let batch_name = existing_manifest
+        .as_ref()
+        .and_then(|m| m.batch_name.clone());
+    let review_findings = existing_manifest.and_then(|m| m.review_findings);
 
     let manifest = session_manifest::SessionManifest {
         session_id: lease.id.clone(),
@@ -35863,6 +35898,7 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
         claude_session_id: None,
         batch_name,
         plan: None,
+        review_findings,
         items: manifest_items,
     };
 
@@ -77238,6 +77274,7 @@ fn write_queue_work_manifest(
     lease: &SessionLease,
     plan: &QueueWorkPlan,
     plan_context: Option<session_manifest::PlanContext>,
+    review_findings: Option<session_manifest::ReviewFindingsContext>,
     claude_session_id: Option<String>,
     batch_name: Option<&str>,
 ) -> Result<()> {
@@ -77265,6 +77302,7 @@ fn write_queue_work_manifest(
         // --batch NAME` so /aida-pickup detects batch context.
         batch_name: batch_name.map(str::to_string),
         plan: plan_context,
+        review_findings,
         items,
     };
     let path = session_manifest::manifest_path(project_root, &lease.id);

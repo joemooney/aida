@@ -23,6 +23,7 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
         claude_session_id: claude_id.map(str::to_string),
         batch_name: None,
         plan: None,
+        review_findings: None,
         items: vec![],
     };
     crate::session_manifest::save(

@@ -3452,6 +3452,7 @@ mod tests {
             claude_session_id: None,
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: items
                 .iter()
                 .map(|(spec, pos, started)| ManifestItem {

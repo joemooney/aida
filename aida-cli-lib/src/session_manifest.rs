@@ -73,6 +73,28 @@ pub struct PlanContext {
     pub verification: Option<String>,
 }
 
+/// BUG-814: blocking review findings carried into a rework pickup. These are
+/// not non-blocking `findings_filed` follow-ups; they are the acceptance delta a
+/// RequestChanges rework must answer.
+// trace:BUG-814 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ReviewFindingsContext {
+    /// Review verdict label, usually `CHANGES REQUESTED`.
+    pub verdict: String,
+    /// PR number when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr: Option<u64>,
+    /// URL of the consolidated review comment, when the verdict recorded one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment_url: Option<String>,
+    /// One-line review summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Blocking findings to address before marking the spec done again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionManifest {
     pub session_id: String,
@@ -106,6 +128,10 @@ pub struct SessionManifest {
     /// table before the `[[items]]` array-of-tables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<PlanContext>,
+    /// BUG-814: RequestChanges details for a rework pickup.
+    // trace:BUG-814 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_findings: Option<ReviewFindingsContext>,
     pub items: Vec<ManifestItem>,
 }
 
@@ -337,6 +363,7 @@ mod tests {
             claude_session_id: None,
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: specs.iter().map(|(s, p)| item(s, *p)).collect(),
         }
     }
@@ -436,6 +463,7 @@ mod tests {
             claude_session_id: None,
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: vec![item("STORY-1", 1), item("BUG-2", 2)],
         };
         save(&path, &m).unwrap();
@@ -499,6 +527,30 @@ mod tests {
     }
 
     #[test]
+    fn review_findings_survive_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rework.manifest.toml");
+        let mut m = manifest("s-review", &[("BUG-814", 1)]);
+        m.review_findings = Some(ReviewFindingsContext {
+            verdict: "CHANGES REQUESTED".to_string(),
+            pr: Some(1634),
+            comment_url: Some("https://example.test/pull/1634#issuecomment-1".to_string()),
+            summary: Some("two blockers".to_string()),
+            findings: vec!["first blocker".to_string(), "second blocker".to_string()],
+        });
+        save(&path, &m).unwrap();
+        let serialized = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            serialized.contains("[review_findings]"),
+            "serialized manifest should carry review findings:\n{serialized}"
+        );
+        let loaded = load(&path).unwrap();
+        let ctx = loaded.review_findings.expect("review findings");
+        assert_eq!(ctx.pr, Some(1634));
+        assert_eq!(ctx.findings, vec!["first blocker", "second blocker"]);
+    }
+
+    #[test]
     fn mark_started_is_idempotent() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("t.manifest.toml");
@@ -509,6 +561,7 @@ mod tests {
             claude_session_id: None,
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: vec![item("X", 1)],
         };
         save(&path, &m).unwrap();
@@ -540,6 +593,7 @@ mod tests {
             claude_session_id: None,
             batch_name: None,
             plan: None,
+            review_findings: None,
             items: vec![item("X", 1)],
         };
         save(&path, &m).unwrap();

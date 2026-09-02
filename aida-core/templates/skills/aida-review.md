@@ -572,6 +572,10 @@ EOF
 
 - `verdict` — exactly `Approved`, `RequestChanges`, or `Rejected`.
 - `summary` — a one-line rationale.
+- `blocking_findings` — when `verdict` is `RequestChanges` or `Rejected`,
+  include one string per blocking issue the implementer must address. Keep
+  each item actionable and specific enough for a rework implementer to change
+  code without rediscovering the review comment. Omit for `Approved`.
 - `mode` — `standalone` or `orchestrator-phase-3` (corroborated above); lets
   a consumer tell a one-off review from an orchestrator handshake artifact.
 - `comment_url` — filled in by step 7a after step 7 posts the comment.

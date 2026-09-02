@@ -74,6 +74,10 @@ the discipline is to poll first.
 
 !`aida orchestrator status 2>/dev/null | grep -q orchestrated && aida drain status 2>/dev/null || true`
 
+## Review findings
+
+!`aida session show --plan 2>/dev/null | sed -n '/Review findings to address:/,/^Plan brief:/p' | sed '/^Plan brief:/d' || true`
+
 ## Plan brief
 
 !`aida session show --plan 2>/dev/null | sed -n '/Plan brief:/,$p' || true`
@@ -170,11 +174,19 @@ triaged yet: the reviewer (`from-review:`) and/or the implementer
 one-line nudge. Don't act on it here (triage is the advisor's job); just
 make sure it isn't missed. Stay silent when the block is empty.
 
+**If Review findings are shown above** (BUG-814) — this is a rework after a
+reviewer `RequestChanges` / `Rejected` verdict. Lead your first message
+with those findings, before plan context, and treat them as the acceptance
+delta for this pass. The session must produce at least one commit that
+addresses them, or an explicit punt naming which finding you dispute; never
+silently pass the same branch back to review unchanged.
+
 **If a Plan brief is shown above** (TASK-95) — `aida queue work`
 pre-populated it from a matching `docs/plans/` file — lead your first
-message with it: name the plan file, the Critical Files (the blast
-radius), and the Verification script (the definition of done). The
-implementer should not have to grep for the plan. The Followups list is
+message with it unless review findings are present; in that case, mention
+the plan after the review findings. Name the plan file, the Critical Files
+(the blast radius), and the Verification script (the definition of done).
+The implementer should not have to grep for the plan. The Followups list is
 informational here; the `aida queue done` handler offers to file those as
 TASKs at completion time (TASK-96).
 

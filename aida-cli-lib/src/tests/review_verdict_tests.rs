@@ -15,6 +15,8 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         reviewed_branch: Some("task-5".to_string()),
         recorded_at: Some("2026-07-21T10:00:00Z".to_string()),
         summary: Some("three blocking defects".to_string()),
+        comment_url: None,
+        findings: Vec::new(),
     }
 }
 
@@ -55,10 +57,17 @@ fn parses_verdict_file_with_and_without_the_new_fields() {
     assert_eq!(v.reviewed_sha, None);
 
     let stamped = r#"{"verdict":"RequestChanges","summary":"x","reviewed_sha":"e49317ecafe",
-                      "reviewed_branch":"task-5","recorded_at":"2026-07-21T10:00:00Z"}"#;
+                      "reviewed_branch":"task-5","recorded_at":"2026-07-21T10:00:00Z",
+                      "comment_url":"https://example.test/pull/42#issuecomment-1",
+                      "blocking_findings":["fix the retry loop","surface the error"]}"#;
     let v = parse_recorded_verdict(stamped).expect("stamped file parses");
     assert_eq!(v.reviewed_sha.as_deref(), Some("e49317ecafe"));
     assert_eq!(v.reviewed_branch.as_deref(), Some("task-5"));
+    assert_eq!(
+        v.comment_url.as_deref(),
+        Some("https://example.test/pull/42#issuecomment-1")
+    );
+    assert_eq!(v.findings, vec!["fix the retry loop", "surface the error"]);
 }
 
 #[test]
@@ -230,4 +239,28 @@ fn notice_line_is_one_readable_line() {
     assert!(line.starts_with("CHANGES REQUESTED"), "{line}");
     assert!(line.contains("e49317ecafe0"), "{line}");
     assert!(!line.contains('\n'), "{line}");
+}
+
+#[test]
+fn rework_context_prefers_structured_findings_and_falls_back_to_summary() {
+    let structured = RecordedVerdict {
+        findings: vec!["first blocker".to_string(), "second blocker".to_string()],
+        comment_url: Some("https://example.test/pull/7#issuecomment-1".to_string()),
+        ..rc("RequestChanges", Some("abc"))
+    };
+    let ctx = rework_findings_context(&structured, Some(7)).expect("context");
+    assert_eq!(ctx.verdict, "CHANGES REQUESTED");
+    assert_eq!(ctx.pr, Some(7));
+    assert_eq!(ctx.findings, vec!["first blocker", "second blocker"]);
+    assert_eq!(
+        ctx.comment_url.as_deref(),
+        Some("https://example.test/pull/7#issuecomment-1")
+    );
+
+    let fallback = rc("RequestChanges", Some("abc"));
+    let ctx = rework_findings_context(&fallback, None).expect("summary fallback");
+    assert_eq!(ctx.findings, vec!["three blocking defects"]);
+
+    let approved = rc("Approved", Some("abc"));
+    assert!(rework_findings_context(&approved, None).is_none());
 }

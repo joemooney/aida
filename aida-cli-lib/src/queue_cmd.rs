@@ -5679,6 +5679,12 @@ pub(crate) fn handle_queue_rework(
         .unwrap_or_else(|| "???".to_string());
     let title = req.title.clone();
     let current_status = req.status.clone();
+    let project_root = find_project_root()
+        .ok()
+        .map(|root| main_worktree_root_from(&root));
+    let review_findings = project_root
+        .as_deref()
+        .and_then(|root| rework_review_findings_for(root, &display_id, &spec_id));
 
     // Smart target-status resolution. `--status` always wins; otherwise
     // pick per the table in TASK-218's spec. See `rework_smart_target`.
@@ -5753,6 +5759,25 @@ pub(crate) fn handle_queue_rework(
             "  {} reason captured as comment ({} chars)",
             "·".dimmed(),
             reason_text.chars().count()
+        );
+    }
+
+    // BUG-814: a rework must carry the blocking RequestChanges findings onto
+    // the spec itself. Otherwise the next implementer sees only the original
+    // acceptance criteria and can no-op into an identical reviewer failure.
+    // trace:BUG-814 | ai:codex
+    if let Some(ctx) = &review_findings {
+        let author = get_default_author();
+        let body = format_rework_findings_comment(ctx);
+        storage.update_atomically(|s| {
+            if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                add_rework_findings_comment(r, &author, &body);
+            }
+        })?;
+        println!(
+            "  {} review findings captured on {}",
+            "·".dimmed(),
+            display_id
         );
     }
 
@@ -5858,6 +5883,138 @@ pub(crate) fn handle_queue_rework(
     }
 
     Ok(())
+}
+
+fn rework_review_findings_for(
+    project_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+) -> Option<session_manifest::ReviewFindingsContext> {
+    let pr = match detect_open_pr_for_spec_via_forge(project_root, display_id) {
+        PrLookup::Found(info) => Some(info.number as u64),
+        _ => None,
+    };
+    let pr_label = pr.map(|n| format!("PR-{n}"));
+    let mut ids: Vec<&str> = vec![display_id, spec_id];
+    if let Some(label) = pr_label.as_deref() {
+        ids.insert(0, label);
+    }
+    let mut verdict = review_verdict::read_recorded_verdict_any(project_root, &ids)?;
+    if verdict.findings.is_empty() {
+        if let Some(url) = verdict.comment_url.as_deref() {
+            if let Some(body) = fetch_github_issue_comment_body(project_root, url) {
+                let extracted = extract_blocking_findings_from_review_comment(&body);
+                if !extracted.is_empty() {
+                    verdict.findings = extracted;
+                }
+            }
+        }
+    }
+    review_verdict::rework_findings_context(&verdict, pr)
+}
+
+pub(crate) fn format_rework_findings_comment(
+    ctx: &session_manifest::ReviewFindingsContext,
+) -> String {
+    let mut out = match ctx.pr {
+        Some(pr) => format!("REVIEW FINDINGS TO ADDRESS (PR #{pr}):"),
+        None => "REVIEW FINDINGS TO ADDRESS:".to_string(),
+    };
+    if let Some(summary) = ctx
+        .summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.push_str(&format!("\nSummary: {summary}"));
+    }
+    if let Some(url) = ctx
+        .comment_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        out.push_str(&format!("\nReview comment: {url}"));
+    }
+    for (idx, finding) in ctx.findings.iter().enumerate() {
+        out.push_str(&format!("\n{}. {}", idx + 1, finding.trim()));
+    }
+    out
+}
+
+pub(crate) fn add_rework_findings_comment(
+    req: &mut aida_core::Requirement,
+    author: &str,
+    body: &str,
+) -> bool {
+    if req.comments.iter().any(|c| c.content.trim() == body.trim()) {
+        return false;
+    }
+    req.add_comment(aida_core::Comment::new(
+        author.to_string(),
+        body.to_string(),
+    ));
+    true
+}
+
+fn fetch_github_issue_comment_body(project_root: &std::path::Path, url: &str) -> Option<String> {
+    let (owner, repo, comment_id) = parse_github_issue_comment_url(url)?;
+    let endpoint = format!("repos/{owner}/{repo}/issues/comments/{comment_id}");
+    let output = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args(["api", &endpoint, "--jq", ".body"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let body = String::from_utf8(output.stdout).ok()?;
+    let trimmed = body.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+pub(crate) fn parse_github_issue_comment_url(url: &str) -> Option<(String, String, String)> {
+    let marker = "github.com/";
+    let start = url.find(marker)? + marker.len();
+    let rest = &url[start..];
+    let mut parts = rest.split('/');
+    let owner = parts.next()?.trim();
+    let repo = parts.next()?.trim();
+    if owner.is_empty() || repo.is_empty() {
+        return None;
+    }
+    let comment_id = url
+        .split("issuecomment-")
+        .nth(1)?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>();
+    (!comment_id.is_empty()).then(|| (owner.to_string(), repo.to_string(), comment_id))
+}
+
+pub(crate) fn extract_blocking_findings_from_review_comment(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for raw in body.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let normalized = line
+            .trim_start_matches(['-', '*'])
+            .trim()
+            .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.')
+            .trim();
+        if normalized.contains("FAIL") || normalized.contains("RequestChanges") {
+            let finding = normalized
+                .trim_start_matches(|c: char| !c.is_ascii_alphanumeric() && c != '`')
+                .trim()
+                .to_string();
+            if !finding.is_empty() && !out.iter().any(|f| f == &finding) {
+                out.push(finding);
+            }
+        }
+    }
+    out
 }
 
 /// STORY-42: resolved pickup plan — which queue entries we're working,
@@ -6837,6 +6994,7 @@ pub(crate) fn derive_queue_work_prompt(
     role: &str,
     plan_only: bool,
     guided: bool,
+    review_findings: Option<&session_manifest::ReviewFindingsContext>,
 ) -> String {
     let role_lower = role.to_ascii_lowercase();
     if role_lower == "reviewer" {
@@ -6863,11 +7021,47 @@ pub(crate) fn derive_queue_work_prompt(
     }
     // Implementer (and unknown roles): /aida-pickup with optional focus.
     if plan.mode == QueueWorkMode::Item {
-        return format!("/aida-pickup {}", plan.anchor_display);
+        return append_review_findings_prompt(
+            format!("/aida-pickup {}", plan.anchor_display),
+            review_findings,
+        );
     }
     // Cluster / Head: drain-intent already confirmed by the queue work
     // pre-flight; pass --auto-first so the skill skips its own confirm.
-    "/aida-pickup --auto-first".to_string()
+    append_review_findings_prompt("/aida-pickup --auto-first".to_string(), review_findings)
+}
+
+fn append_review_findings_prompt(
+    mut prompt: String,
+    review_findings: Option<&session_manifest::ReviewFindingsContext>,
+) -> String {
+    let Some(ctx) = review_findings else {
+        return prompt;
+    };
+    if ctx.findings.is_empty() {
+        return prompt;
+    }
+    prompt.push_str("\n\nREVIEW FINDINGS TO ADDRESS");
+    if let Some(pr) = ctx.pr {
+        prompt.push_str(&format!(" (PR #{pr})"));
+    }
+    prompt.push_str(":\n");
+    if let Some(summary) = ctx
+        .summary
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        prompt.push_str(&format!("Summary: {summary}\n"));
+    }
+    for (idx, finding) in ctx.findings.iter().enumerate() {
+        prompt.push_str(&format!("{}. {}\n", idx + 1, finding.trim()));
+    }
+    prompt.push_str(
+        "\nTreat these as the acceptance delta for this rework. Finish with at least one commit, \
+         or punt explicitly naming the finding you dispute.",
+    );
+    prompt
 }
 
 /// BUG-225: render the copy-pasteable `claude` command line for a
@@ -7192,7 +7386,14 @@ pub(crate) fn handle_queue_work(
         maybe_show_faithful_launcher_notice();
     }
 
-    let mut prompt = derive_queue_work_prompt(&plan, &role, plan_only, guided);
+    // BUG-814: if this pickup is rework after RequestChanges, lead the spawned
+    // implementer with the blocking review findings.
+    // trace:BUG-814 | ai:codex
+    let review_findings = project_root_for_config
+        .as_deref()
+        .and_then(|root| rework_review_findings_for(root, &plan.anchor_display, &plan.scope));
+    let mut prompt =
+        derive_queue_work_prompt(&plan, &role, plan_only, guided, review_findings.as_ref());
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
@@ -8054,6 +8255,7 @@ pub(crate) fn handle_queue_work(
     // trace:STORY-98, TASK-95, TASK-112, TASK-272 | ai:claude
     if plan.mode == QueueWorkMode::Cluster
         || plan_context.is_some()
+        || review_findings.is_some()
         || claude_session_id.is_some()
         || batch_name.is_some()
     {
@@ -8062,6 +8264,7 @@ pub(crate) fn handle_queue_work(
             &lease,
             &plan,
             plan_context.clone(),
+            review_findings.clone(),
             claude_session_id.clone(),
             batch_name,
         )?;
@@ -8077,6 +8280,12 @@ pub(crate) fn handle_queue_work(
                 "  {} attached plan brief from {}",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 ctx.plan_file.cyan()
+            );
+        }
+        if review_findings.is_some() {
+            eprintln!(
+                "  {} attached review findings for rework",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             );
         }
     }
