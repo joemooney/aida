@@ -13,12 +13,12 @@ description: |-
   - On reattach, inject a fresh role-context snapshot with a DRIFT BRIEF: spec status then vs now, PR state, commits on main since, unread mail/briefs since `ended_at`. This is what makes resume better than a fresh `agent new --spec X` for a stale transcript.
   - `aida agent ls --ended` lists resumable sessions with role/description/spec/age.
   - Vendor the resume flag behind the launcher adapter (execution layer), not the coordination layer.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:39.465804272Z
-modified_at: 2026-09-02T04:47:54.720029016Z
+modified_at: 2026-09-02T05:15:18.199027551Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -49,4 +49,4 @@ failure_reason:
   detail: reviewer verdict is RequestChanges — not Approved
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-790 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-02T04:46:34.489188139Z
+  shelved_at: 2026-09-02T05:15:18.199027551Z
