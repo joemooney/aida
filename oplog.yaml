@@ -42306,5 +42306,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3807
+- id: 01a06086-f46e-7d21-b34b-c054b6d168de
+  target_id: 01a06086-ef20-72f0-badd-163cf6f8774a
+  author: aida
+  node_id: '1'
+  lamport: 3808
+  timestamp: 2026-09-02T05:10:52.270950655Z
+  kind: !Create
+    title: 'Review PR-1636: [AI:codex] feat(agent): clarify registry sessions and scope policy (STORY-791)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a06072`) for branch `story-790-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1636>
+      - Branch: `story-790-2` → `main`
+
+      ## Covers
+
+      - STORY-791
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1636` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3808
 node_id: '1'
