@@ -38,12 +38,19 @@ description: |-
   bootstrapping the aida-hub project on 2026-08-23. The sequence is being hand-executed now and the
   exact commands run will be captured back here as the acceptance criteria, so the command is
   specified from a sequence that was actually walked rather than one that was imagined.
+
+  ACCEPTANCE (operator-decided 2026-09-01, guided session — binding):
+  1. Invocation: positional — aida init <name> creates ./<name> and walks the full ordered sequence inside it; bare aida init keeps today's in-place behavior byte-identical. No --create flag.
+  2. Sequence (the invariant AIDA owns): mkdir → optional language scaffold → ensure git repo → first commit → standard aida init bootstrap (store branch, config, cache, scaffolds) → optional remote creation → push main → push aida-store. Fail-fast at any step with a printed checklist of done/remaining steps; re-running is idempotent (each completed step no-ops).
+  3. --lang rust|python|node delegates to the NATIVE tool (cargo init / uv init / npm init -y). AIDA ships no language templates. Missing tool = clear error naming the install, before any mkdir.
+  4. Remote: --github creates the repo via the forge layer (no new direct gh call sites outside forge.rs) — PRIVATE by default, --public is the explicit opt-in — then pushes main and aida-store in that order. --remote <url> is the bring-your-own alternative (sets origin, pushes both legs; covers GitLab push-to-create). Omitting both leaves a local-only project with the push commands printed.
+  5. Tests: ordering + refusal logic unit-tested; language-tool integration tests gate on tool presence; a plain-path (no lang, no remote) end-to-end test in a temp dir.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-23T20:00:20.139796022Z
-modified_at: 2026-08-23T20:14:17.266012314Z
+modified_at: 2026-09-02T04:42:30.089791372Z
 req_type: Story
 tags:
 - aida:init

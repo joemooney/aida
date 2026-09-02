@@ -42176,5 +42176,55 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3803
+- id: 01a0606c-fb81-7d63-8b51-0b0a64c436da
+  target_id: 01a03035-b0ab-7eb0-8282-3b440fe932f8
+  author: aida
+  node_id: '1'
+  lamport: 3804
+  timestamp: 2026-09-02T04:42:30.145325969Z
+  kind: !SetDescription
+    description: |-
+      There is no supported path from "nothing" to "an initialized AIDA project". `aida init` assumes the
+      caller is already standing inside a directory; `--git-init` covers "this folder is not a repo yet",
+      but nothing creates the directory, scaffolds the language project, creates the remote, or pushes.
+
+      Today a new project requires a hand-run sequence (mkdir, cargo/uv/npm scaffold, git init, first
+      commit, gh repo create, push main, push aida-store, aida init) whose ORDERING is load-bearing and
+      currently documented nowhere except scripts/aida-demo.sh and operator memory.
+
+      WHY THE ORDERING MATTERS (the real motivation, not convenience):
+      `aida init` creates the orphan `aida-store` branch. The two obvious naive sequences both fail:
+        - `gh repo create --add-readme` then `aida init`  -> remote holds a commit the clone does not,
+          so the user reconciles divergent history on day one.
+        - `aida init` then `gh repo create`               -> two branches now need pushing; pushing them
+          in the wrong order, or forgetting `aida-store` entirely, is a silent failure that surfaces
+          much later as a missing store on a second clone.
+      This is exactly the substrate-as-bouncer case: guarantee the invariant with a programmatic gate,
+      not a paragraph in a doc that readers skip.
+
+      SURFACE DECISION (settled with the operator 2026-08-23):
+      Extend `aida init` -- do NOT take the top-level verb `aida new`. `new` is short, memorable, and has
+      higher-value future claims (new spec, new agent, new role); spending it on project bootstrap is a
+      bad trade. Exact flag spelling is open: `aida init --create <name>` is the straw man.
+
+      SCOPE BOUNDARY (hold this line):
+      AIDA owns the SEQUENCE and its ordering. AIDA does NOT own language templates. Language scaffolding
+      delegates to the native tool -- cargo new / uv init / npm create. The moment AIDA ships its own
+      Rust/Python/Node templates it owns keeping them current forever: long tail, low value, and it
+      fattens the visible surface, which cuts directly against the Trojan-horse positioning in CLAUDE.md.
+      Remote creation stays opt-in (--github / --gitlab) and should route through the EPIC-35 forge
+      abstraction rather than adding another direct `gh` call site.
+
+      ACCEPTANCE CRITERIA: deliberately not yet written. This spec was filed from live friction while
+      bootstrapping the aida-hub project on 2026-08-23. The sequence is being hand-executed now and the
+      exact commands run will be captured back here as the acceptance criteria, so the command is
+      specified from a sequence that was actually walked rather than one that was imagined.
+
+      ACCEPTANCE (operator-decided 2026-09-01, guided session — binding):
+      1. Invocation: positional — aida init <name> creates ./<name> and walks the full ordered sequence inside it; bare aida init keeps today's in-place behavior byte-identical. No --create flag.
+      2. Sequence (the invariant AIDA owns): mkdir → optional language scaffold → ensure git repo → first commit → standard aida init bootstrap (store branch, config, cache, scaffolds) → optional remote creation → push main → push aida-store. Fail-fast at any step with a printed checklist of done/remaining steps; re-running is idempotent (each completed step no-ops).
+      3. --lang rust|python|node delegates to the NATIVE tool (cargo init / uv init / npm init -y). AIDA ships no language templates. Missing tool = clear error naming the install, before any mkdir.
+      4. Remote: --github creates the repo via the forge layer (no new direct gh call sites outside forge.rs) — PRIVATE by default, --public is the explicit opt-in — then pushes main and aida-store in that order. --remote <url> is the bring-your-own alternative (sets origin, pushes both legs; covers GitLab push-to-create). Omitting both leaves a local-only project with the push commands printed.
+      5. Tests: ordering + refusal logic unit-tested; language-tool integration tests gate on tool presence; a plain-path (no lang, no remote) end-to-end test in a temp dir.
+clock: 3804
 node_id: '1'
