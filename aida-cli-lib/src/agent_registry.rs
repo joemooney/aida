@@ -110,6 +110,17 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) native_session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) claude_session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) ended_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) resumed_from: Option<String>,
+    /// The spec's status AT THE MOMENT this session ended — recorded so a
+    /// later `aida agent resume` can render the drift brief's required
+    /// "status then vs now" comparison instead of only the current status.
+    /// `None` on legacy records and sessions with no spec.
+    // trace:STORY-790 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) spec_status_at_end: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -151,6 +162,10 @@ pub(crate) struct AgentRegistryView {
     pub(crate) paused_since: Option<DateTime<Utc>>,
     pub(crate) paused_reason: Option<PauseReason>,
     pub(crate) expected_back: Option<DateTime<Utc>>,
+    // trace:STORY-790 | ai:codex
+    pub(crate) native_session_id: Option<String>,
+    pub(crate) ended_at: Option<DateTime<Utc>>,
+    pub(crate) resumed_from: Option<String>,
 }
 
 // trace:TASK-1184 | ai:codex
@@ -378,6 +393,9 @@ pub(crate) fn touch_mcp_agent(
             expected_back: None,
             native_session_id: None,
             claude_session_id: None,
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
         });
 
     entry.id = id;
@@ -417,6 +435,8 @@ pub(crate) fn register_spawned_agent(
     worktree_path: PathBuf,
     binary: Option<&AgentBinaryIdentity>,
     name: Option<String>,
+    native_session_id: Option<String>,
+    resumed_from: Option<String>,
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
@@ -438,8 +458,11 @@ pub(crate) fn register_spawned_agent(
         paused_since: None,
         paused_reason: None,
         expected_back: None,
-        native_session_id: None,
+        native_session_id,
         claude_session_id: None,
+        ended_at: None,
+        spec_status_at_end: None,
+        resumed_from,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -662,6 +685,9 @@ pub(crate) fn register_existing_agent(
         expected_back: None,
         native_session_id: None,
         claude_session_id: None,
+        ended_at: None,
+        spec_status_at_end: None,
+        resumed_from: None,
     };
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -705,18 +731,19 @@ pub(crate) fn gc_dead_agents(
     let now = Utc::now();
     let mut report = AgentGcReport::default();
     for (path, entry) in load_entries(project_root) {
-        if crate::process_probe::pid_is_alive(entry.pid) {
+        if entry.ended_at.is_none() && crate::process_probe::pid_is_alive(entry.pid) {
             continue;
         }
         let resumable = resumable_session_id(&entry);
-        let resumable_still_protected = resumable.is_some()
+        let ended_launcher = entry.source == "agent-launcher" && entry.ended_at.is_some();
+        let protected_ended_or_resumable = (resumable.is_some() || ended_launcher)
             && older_than_days
                 .map(|days| {
                     elapsed_secs_clamped(now, entry.last_active_at)
                         < (days.saturating_mul(86_400)) as i64
                 })
                 .unwrap_or(true);
-        if resumable_still_protected {
+        if protected_ended_or_resumable {
             report
                 .retained
                 .push(gc_row(path, &entry, resumable, "retained"));
@@ -746,6 +773,37 @@ pub(crate) fn remove_agent(project_root: &Path, agent_type: &str, pid: u32) -> R
             Err(err).with_context(|| format!("removing agent registry entry {}", path.display()))
         }
     }
+}
+
+// trace:STORY-790 | ai:codex
+pub(crate) fn mark_agent_ended(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+) -> Result<Option<AgentRegistryEntry>> {
+    let agent_type = normalize_agent_type(agent_type.to_string());
+    let path = registry_path(project_root, &agent_id(&agent_type, pid));
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
+    };
+    let mut entry: AgentRegistryEntry =
+        toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+    entry.ended_at = Some(Utc::now());
+    entry.last_active_at = entry.ended_at.unwrap();
+    // trace:STORY-790 | ai:claude — freeze the spec's status for the resume
+    // drift brief's then-vs-now line. Best-effort: a store hiccup leaves None.
+    entry.spec_status_at_end = entry
+        .current_spec
+        .as_deref()
+        .and_then(|spec| crate::current_spec_status_line(project_root, spec));
+    entry.availability = Availability::Available;
+    entry.paused_since = None;
+    entry.paused_reason = None;
+    entry.expected_back = None;
+    write_entry(project_root, &entry)?;
+    Ok(Some(entry))
 }
 
 /// Load every registry entry (alive or stale) as `(path, entry)` pairs.
@@ -850,6 +908,83 @@ pub(crate) fn resume_agent(project_root: &Path, target: &str) -> Result<AgentReg
     entry.expected_back = None;
     write_entry(project_root, &entry)?;
     Ok(entry)
+}
+
+// trace:STORY-790 | ai:codex
+pub(crate) fn resolve_resumable_ended_agent(
+    project_root: &Path,
+    target: &str,
+) -> Result<AgentRegistryEntry> {
+    let target = target.trim();
+    if target.is_empty() {
+        anyhow::bail!("agent target cannot be empty");
+    }
+    let mut matches: Vec<AgentRegistryEntry> = load_entries(project_root)
+        .into_iter()
+        .map(|(_, e)| e)
+        .filter(|e| e.ended_at.is_some() && resumable_session_id(e).is_some())
+        .filter(|e| {
+            let name_match = e
+                .name
+                .as_deref()
+                .map(|n| n.eq_ignore_ascii_case(target))
+                .unwrap_or(false);
+            let spec_match = e
+                .current_spec
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(target))
+                .unwrap_or(false);
+            let hash_id = format!("{}#{}", e.agent_type, e.pid);
+            let dash_id = format!("{}-{}", e.agent_type, e.pid);
+            name_match
+                || spec_match
+                || e.id.eq_ignore_ascii_case(target)
+                || hash_id.eq_ignore_ascii_case(target)
+                || dash_id.eq_ignore_ascii_case(target)
+        })
+        .collect();
+    matches.sort_by_key(|e| e.ended_at);
+    matches.reverse();
+
+    match matches.len() {
+        0 => anyhow::bail!("no ended resumable agent found matching '{}'", target),
+        1 => Ok(matches.remove(0)),
+        _ => {
+            let ids: Vec<String> = matches
+                .iter()
+                .map(|e| {
+                    e.name
+                        .clone()
+                        .unwrap_or_else(|| format!("{}#{}", e.agent_type, e.pid))
+                })
+                .collect();
+            anyhow::bail!(
+                "ended agent target '{}' is ambiguous — matches: {}",
+                target,
+                ids.join(", ")
+            )
+        }
+    }
+}
+
+// trace:STORY-790 | ai:codex
+pub(crate) fn ended_resumable_agent_views(
+    project_root: &Path,
+    ctx: &AgentClassifyContext,
+) -> Vec<AgentRegistryView> {
+    let mut out: Vec<AgentRegistryView> = load_entries(project_root)
+        .into_iter()
+        .map(|(_, e)| e)
+        .filter(|e| e.ended_at.is_some() && resumable_session_id(e).is_some())
+        .map(|e| view_for(e, ctx))
+        .collect();
+    out.sort_by(|a, b| {
+        b.ended_at
+            .cmp(&a.ended_at)
+            .then_with(|| a.agent_type.cmp(&b.agent_type))
+            .then_with(|| a.pid.cmp(&b.pid))
+    });
+    out
 }
 
 /// Brief-time GUARD: if a brief target resolves to a *paused* live agent,
@@ -990,6 +1125,7 @@ fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
 fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegistryView {
     let pid_alive = crate::process_probe::pid_is_alive(entry.pid);
     let status = classify_status(&entry, pid_alive, ctx);
+    let native_session_id = resumable_session_id(&entry);
     AgentRegistryView {
         id: entry.id,
         agent_type: entry.agent_type,
@@ -1009,6 +1145,9 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         paused_since: entry.paused_since,
         paused_reason: entry.paused_reason,
         expected_back: entry.expected_back,
+        native_session_id,
+        ended_at: entry.ended_at,
+        resumed_from: entry.resumed_from,
     }
 }
 
@@ -1021,6 +1160,9 @@ fn classify_status(
     pid_alive: bool,
     ctx: &AgentClassifyContext,
 ) -> AgentStatus {
+    if entry.ended_at.is_some() {
+        return AgentStatus::Stale;
+    }
     if !pid_alive {
         return AgentStatus::Stale;
     }
@@ -1159,6 +1301,9 @@ mod tests {
             expected_back: None,
             native_session_id: None,
             claude_session_id: None,
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
         }
     }
 
@@ -1200,6 +1345,51 @@ mod tests {
         let e = entry_with(42, now - Duration::minutes(5));
         let c = ctx(now, 30, vec![]);
         assert_eq!(classify_status(&e, true, &c), AgentStatus::Idle);
+    }
+
+    // trace:STORY-790 | ai:codex
+    #[test]
+    fn ended_resumable_agent_resolves_by_name_or_spec() {
+        let tmp = TempDir::new().unwrap();
+        let dead_pid = 4_294_967_294u32;
+        let binary = AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        register_spawned_agent(
+            tmp.path(),
+            "claude",
+            dead_pid,
+            Some("advisor".into()),
+            Some("STORY-790".into()),
+            tmp.path().into(),
+            Some(&binary),
+            Some("claude-advisor-1".into()),
+            Some("018f-session".into()),
+            None,
+        )
+        .unwrap();
+        mark_agent_ended(tmp.path(), "claude", dead_pid).unwrap();
+
+        let by_name = resolve_resumable_ended_agent(tmp.path(), "claude-advisor-1").unwrap();
+        assert_eq!(by_name.native_session_id.as_deref(), Some("018f-session"));
+        assert!(by_name.ended_at.is_some());
+
+        let by_spec = resolve_resumable_ended_agent(tmp.path(), "STORY-790").unwrap();
+        assert_eq!(by_spec.id, by_name.id);
+
+        let views =
+            ended_resumable_agent_views(tmp.path(), &ctx(Utc::now(), 30, vec![tmp.path().into()]));
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].native_session_id.as_deref(), Some("018f-session"));
+    }
+
+    // trace:STORY-790 | ai:codex
+    #[test]
+    fn ended_marker_wins_over_live_pid_probe() {
+        let now = Utc::now();
+        let mut e = entry_with(std::process::id(), now);
+        e.ended_at = Some(now);
+        e.native_session_id = Some("session-id".to_string());
+        let c = ctx(now, 30, vec![]);
+        assert_eq!(classify_status(&e, true, &c), AgentStatus::Stale);
     }
 
     // STORY-435: stale activity but a Live lease covers the worktree → Busy.
@@ -1415,6 +1605,9 @@ mod tests {
             paused_since: None,
             paused_reason: None,
             expected_back: None,
+            native_session_id: None,
+            ended_at: None,
+            resumed_from: None,
         };
 
         let lines = format_agent_status_lines(&[view]);
@@ -1604,6 +1797,9 @@ source = "mcp"
             paused_since: reason.map(|_| now),
             paused_reason: reason,
             expected_back: None,
+            native_session_id: None,
+            ended_at: None,
+            resumed_from: None,
         };
 
         let avail_line = &format_agent_status_lines(&[mk(Availability::Available, None)])[0];

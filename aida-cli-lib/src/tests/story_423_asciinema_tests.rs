@@ -221,6 +221,7 @@ fn bare_agent_defaults_to_agent_new() {
         Command::Agent(AgentCommand::Ls {
             all: false,
             stale: false,
+            ended: false,
         })
     ));
     assert!(matches!(

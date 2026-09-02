@@ -691,6 +691,8 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         current_spec: Some("TASK-556".into()),
         name: "agent-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
     let claude = AgentLaunchConfig {
         agent_type: "claude",
@@ -750,6 +752,47 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
     let no_spec =
         agent_initial_prompt_args(&codex, &no_spec_plan, &AgentPromptOptions::new(None, false));
     assert!(no_spec.is_empty());
+}
+
+// trace:STORY-790 | ai:codex
+#[test]
+fn agent_resume_adapter_args_are_vendor_specific() {
+    assert_eq!(
+        agent_seed_session_args("claude", Some("sid-1")),
+        vec!["--session-id", "sid-1"]
+    );
+    assert!(agent_seed_session_args("codex", Some("sid-1")).is_empty());
+    assert_eq!(
+        agent_resume_args("claude", "sid-1", "read context").unwrap(),
+        vec!["--resume", "sid-1", "read context"]
+    );
+    assert_eq!(
+        agent_resume_args("codex", "sid-1", "read context").unwrap(),
+        vec!["resume", "sid-1", "read context"]
+    );
+    assert_eq!(
+        agent_resume_args("antigravity", "sid-1", "read context").unwrap(),
+        vec![
+            "--conversation",
+            "sid-1",
+            "--prompt-interactive",
+            "read context"
+        ]
+    );
+}
+
+// trace:STORY-790 | ai:codex
+#[test]
+fn parses_agent_ls_ended_flag() {
+    let cli = Cli::try_parse_from(["aida", "agent", "ls", "--ended"]).unwrap();
+    let Command::Agent(AgentCommand::Ls {
+        all: false,
+        stale: false,
+        ended: true,
+    }) = cli.command
+    else {
+        panic!("expected agent ls command");
+    };
 }
 
 #[test]
@@ -964,6 +1007,8 @@ fn spawned_agent_registry_entry_is_pid_keyed_and_removable() {
         tmp.path().into(),
         Some(&binary),
         None,
+        Some("session-111".to_string()),
+        None,
     )
     .unwrap();
     let second = agent_registry::register_spawned_agent(
@@ -974,6 +1019,8 @@ fn spawned_agent_registry_entry_is_pid_keyed_and_removable() {
         None,
         tmp.path().into(),
         Some(&binary),
+        None,
+        Some("session-222".to_string()),
         None,
     )
     .unwrap();
@@ -1062,6 +1109,8 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         current_spec: Some("STORY-433".into()),
         name: "codex-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
 
     let prompt_args =
@@ -1096,11 +1145,13 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     );
     assert!(argv.contains("aida show STORY-433"), "{argv}");
     assert!(argv.contains("trace:STORY-433"), "{argv}");
-    assert!(agent_registry::list_agent_views(
+    let views = agent_registry::list_agent_views(
         &project,
-        &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
-    )
-    .is_empty());
+        &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]),
+    );
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].status, agent_registry::AgentStatus::Stale);
+    assert!(views[0].ended_at.is_some());
     std::env::remove_var("AIDA_TEST_ENV_OUT");
     std::env::remove_var("AIDA_TEST_ARGV_OUT");
 }
@@ -1146,6 +1197,8 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         current_spec: Some("STORY-434".into()),
         name: "agy-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
 
     let prompt_args = agent_initial_prompt_args(
@@ -1180,11 +1233,13 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     assert!(argv.contains("--dangerously-skip-permissions"), "{argv}");
     assert!(argv.contains("--prompt-interactive"), "{argv}");
     assert!(argv.contains("work STORY-434"), "{argv}");
-    assert!(agent_registry::list_agent_views(
+    let views = agent_registry::list_agent_views(
         &project,
-        &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![])
-    )
-    .is_empty());
+        &agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]),
+    );
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].status, agent_registry::AgentStatus::Stale);
+    assert!(views[0].ended_at.is_some());
     std::env::remove_var("AIDA_TEST_ENV_OUT");
     std::env::remove_var("AIDA_TEST_ARGV_OUT");
 }
@@ -1212,6 +1267,8 @@ fn renders_agent_launch_context_with_role_guidance_and_briefs() {
         current_spec: Some("STORY-436".into()),
         name: "codex-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
 
     let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
@@ -1299,6 +1356,8 @@ fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
         current_spec: None,
         name: "antigravity-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
 
     let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
@@ -1334,6 +1393,8 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
         current_spec: None,
         name: "codex-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
 
     let context = render_agent_launch_context(&config, &plan, "token-123").unwrap();
@@ -1391,6 +1452,8 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         current_spec: None,
         name: "codex-test".to_string(),
         lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
     };
 
     let prompt_args =

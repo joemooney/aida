@@ -6788,6 +6788,7 @@ pub enum AgentCommand {
     /// List active agent processes.
     // trace:TASK-542 | ai:antigravity
     // trace:TASK-1184 | ai:codex
+    // trace:STORY-790 | ai:codex
     Ls {
         /// Include stale registry entries instead of pruning them first.
         #[clap(long)]
@@ -6796,10 +6797,15 @@ pub enum AgentCommand {
         /// Show only stale registry entries without pruning them first.
         #[clap(long)]
         stale: bool,
+
+        /// Show only ended launcher sessions that carry a native resume id.
+        #[clap(long)]
+        ended: bool,
     },
 
     /// Show active agent processes (alias of `ls`).
     // trace:STORY-528 | ai:claude
+    // trace:STORY-790 | ai:codex
     Status {
         /// Include stale registry entries instead of pruning them first.
         #[clap(long)]
@@ -6808,6 +6814,10 @@ pub enum AgentCommand {
         /// Show only stale registry entries without pruning them first.
         #[clap(long)]
         stale: bool,
+
+        /// Show only ended launcher sessions that carry a native resume id.
+        #[clap(long)]
+        ended: bool,
     },
 
     /// Prune dead-PID agent registry entries.

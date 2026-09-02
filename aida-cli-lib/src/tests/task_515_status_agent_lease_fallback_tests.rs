@@ -85,6 +85,9 @@ fn status_agents_registry_entry_wins_over_matching_lease() {
         paused_since: None,
         paused_reason: None,
         expected_back: None,
+        native_session_id: None,
+        ended_at: None,
+        resumed_from: None,
     };
     let ctx = agent_registry::AgentClassifyContext::new(lease.started_at, 30, vec![]);
 
