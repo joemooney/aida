@@ -7,6 +7,7 @@ fn agent_view(id: &str, status: agent_registry::AgentStatus) -> agent_registry::
         agent_type: "claude".to_string(),
         pid: 4242,
         name: None,
+        description: None,
         tty: None,
         started_at: now,
         last_active_at: now,

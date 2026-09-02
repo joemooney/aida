@@ -19307,7 +19307,15 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             role,
             spec,
             name,
-        } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
+            description,
+        } => agent_register(
+            *pid,
+            agent_type,
+            role,
+            spec.as_deref(),
+            name.as_deref(),
+            description.as_deref(),
+        ),
         AgentCommand::Ls { all, stale, ended } => agent_ls(*all, *stale, *ended),
         AgentCommand::Status { all, stale, ended } => agent_ls(*all, *stale, *ended),
         AgentCommand::Gc {
@@ -19321,6 +19329,7 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             resets,
         } => agent_pause(agent, reason, resets.as_deref()),
         AgentCommand::Resume { agent } => agent_resume(agent),
+        AgentCommand::Describe { agent, description } => agent_describe(agent, description),
         AgentCommand::Stop { name } => agent_stop(name),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
     }
@@ -19744,6 +19753,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_default_flags: false,
             extra_flags: Vec::new(),
             name: None,
+            description: None,
             bg: false,
         }),
         "codex" => Some(AgentNewCommand::Codex {
@@ -19759,6 +19769,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_default_flags: false,
             extra_flags: Vec::new(),
             name: None,
+            description: None,
         }),
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
@@ -19773,6 +19784,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_default_flags: false,
             extra_flags: Vec::new(),
             name: None,
+            description: None,
         }),
         _ => None,
     }
@@ -19839,6 +19851,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             extra_flags,
             name,
             bg,
+            description,
         } => agent_new_claude(
             role.clone(),
             spec.clone(),
@@ -19850,6 +19863,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
+            description.clone(),
             *bg,
         ),
         AgentNewCommand::Codex {
@@ -19865,6 +19879,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_default_flags,
             extra_flags,
             name,
+            description,
         } => agent_new_codex(
             role.clone(),
             spec.clone(),
@@ -19875,6 +19890,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
+            description.clone(),
         ),
         AgentNewCommand::Antigravity {
             role,
@@ -19889,6 +19905,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_default_flags,
             extra_flags,
             name,
+            description,
         } => agent_new_antigravity(
             role.clone(),
             spec.clone(),
@@ -19899,6 +19916,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
+            description.clone(),
         ),
     }
 }
@@ -20035,7 +20053,14 @@ fn agent_resume_ended(
         "context".bold(),
         launch_context.path.display().to_string().cyan()
     );
-    run_tracked_agent(&binary, &config, &plan, Some(&launch_context), &[])
+    run_tracked_agent(
+        &binary,
+        &config,
+        &plan,
+        Some(&launch_context),
+        &[],
+        entry.description.clone(),
+    )
 }
 
 // trace:STORY-790 | ai:codex
@@ -20270,6 +20295,7 @@ fn agent_new_claude(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    description: Option<String>,
     bg: bool,
 ) -> Result<()> {
     // TASK-646: resolve the child role (flag → picker → implementer default)
@@ -20338,6 +20364,7 @@ fn agent_new_claude(
             prompt,
             flag_options,
             name,
+            description,
             explicit,
         )
     } else {
@@ -20351,6 +20378,7 @@ fn agent_new_claude(
             prompt,
             flag_options,
             name,
+            description,
             explicit,
         )
     }
@@ -20369,6 +20397,7 @@ fn agent_new_codex(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    description: Option<String>,
 ) -> Result<()> {
     // TASK-646: resolve the child role before launch (flag → picker → default).
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "codex")? {
@@ -20403,6 +20432,7 @@ fn agent_new_codex(
         prompt,
         flag_options,
         name,
+        description,
         bypass_sandbox,
     )
 }
@@ -20420,6 +20450,7 @@ fn agent_new_antigravity(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    description: Option<String>,
 ) -> Result<()> {
     // TASK-646: resolve the child role before launch (flag → picker → default).
     let role = match resolve_child_role(&child_role_project_root(cwd)?, role, "antigravity")? {
@@ -20454,6 +20485,7 @@ fn agent_new_antigravity(
         prompt,
         flag_options,
         name,
+        description,
         bypass_sandbox,
     )
 }
@@ -20470,6 +20502,7 @@ fn agent_new_with_config(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    description: Option<String>,
     explicit_permission: bool,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
@@ -20526,11 +20559,19 @@ fn agent_new_with_config(
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
+    enforce_agent_singleton_preflight(
+        &project_root,
+        role.as_deref(),
+        spec.as_deref(),
+        &project_root,
+    )?;
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
+    enforce_agent_singleton(&project_root, &plan)?;
+    let description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
     assert_no_worktree_tangle(&plan, &project_root)?;
@@ -20580,6 +20621,7 @@ fn agent_new_with_config(
         &plan,
         launch_context.as_ref(),
         &prompt_args,
+        description,
     )
 }
 
@@ -20608,6 +20650,7 @@ fn agent_new_bg_dispatch(
     prompt: AgentPromptOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
+    description: Option<String>,
     explicit_permission: bool,
 ) -> Result<()> {
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
@@ -20656,11 +20699,19 @@ fn agent_new_bg_dispatch(
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
+    enforce_agent_singleton_preflight(
+        &project_root,
+        role.as_deref(),
+        spec.as_deref(),
+        &project_root,
+    )?;
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
     ));
+    enforce_agent_singleton(&project_root, &plan)?;
+    let _description = resolve_agent_description(plan.role.as_deref(), description)?;
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
     assert_no_worktree_tangle(&plan, &project_root)?;
@@ -21511,6 +21562,60 @@ fn prepare_agent_launch(
     }
 }
 
+// trace:STORY-791 | ai:codex
+fn enforce_agent_singleton(project_root: &std::path::Path, plan: &AgentLaunchPlan) -> Result<()> {
+    enforce_agent_singleton_preflight(
+        project_root,
+        plan.role.as_deref(),
+        plan.current_spec.as_deref(),
+        &plan.launch_cwd,
+    )
+}
+
+// trace:STORY-791 | ai:codex
+fn enforce_agent_singleton_preflight(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &std::path::Path,
+) -> Result<()> {
+    let cfg = agent_registry::Config::load(project_root);
+    if let Some(conflict) =
+        agent_registry::same_scope_conflict(project_root, &cfg, role, current_spec, worktree_path)
+    {
+        anyhow::bail!(
+            "agent role `{}` is already active on this scope: {} (session {}, spec {}, pid {}).",
+            role.unwrap_or("(none)"),
+            conflict.name_or_id,
+            conflict.session_id,
+            conflict.spec.as_deref().unwrap_or("(none)"),
+            conflict.pid
+        );
+    }
+    Ok(())
+}
+
+// trace:STORY-791 | ai:codex
+fn resolve_agent_description(
+    role: Option<&str>,
+    description: Option<String>,
+) -> Result<Option<String>> {
+    let description = agent_registry::normalize_description(description);
+    if description.is_some() {
+        return Ok(description);
+    }
+    let needs_prompt = role
+        .map(|r| matches!(r.to_ascii_lowercase().as_str(), "advisor" | "product"))
+        .unwrap_or(false);
+    if !needs_prompt || !std::io::stdin().is_terminal() {
+        return Ok(None);
+    }
+    let answer = inquire::Text::new("Agent description:")
+        .with_help_message("One line describing what this advisor/product agent is for")
+        .prompt()?;
+    Ok(agent_registry::normalize_description(Some(answer)))
+}
+
 // trace:STORY-436 | ai:codex
 fn prepare_agent_launch_context(
     config: &AgentLaunchConfig,
@@ -22121,6 +22226,7 @@ fn run_tracked_agent(
     plan: &AgentLaunchPlan,
     launch_context: Option<&AgentLaunchContext>,
     prompt_args: &[String],
+    description: Option<String>,
 ) -> Result<()> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
@@ -22188,6 +22294,7 @@ fn run_tracked_agent(
         Some(plan.name.clone()),
         plan.native_session_id.clone(),
         plan.resumed_from.clone(),
+        description,
     )?;
     let signal_forwarder = install_child_signal_forwarder(child_pid)?;
     let status = child
@@ -22262,8 +22369,8 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     }
 
     println!(
-        "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} WORKTREE",
-        "NAME/ID", "PID", "ROLE", "SPEC", "STATUS", "AGE"
+        "{:<30} {:<10} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} WORKTREE",
+        "NAME/ID", "PID", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "DESC"
     );
     let now = chrono::Utc::now();
     for agent in agents {
@@ -22285,6 +22392,12 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
         } else {
             agent.pid.to_string()
         };
+        let scope = agent_registry::agent_scope(
+            agent.role.as_deref(),
+            agent.current_spec.as_deref(),
+            &agent.worktree_path,
+        );
+        let desc = agent.description.as_deref().unwrap_or("(none)");
         // STORY-528: surface paused-availability inline after the worktree.
         let paused_note = match agent_registry::paused_glyph(&agent) {
             Some(g) => format!("  {g}"),
@@ -22315,13 +22428,16 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
             );
         } else {
             println!(
-                "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}{}",
+                "{:<30} {:<10} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} {}{}",
                 identity,
                 pid_str,
+                agent_registry::view_kind(&agent),
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
+                scope,
                 agent.status.as_str(),
                 format!("({elapsed})"),
+                desc,
                 agent.worktree_path.display(),
                 paused_note
             );
@@ -22429,6 +22545,7 @@ fn agent_register(
     role: &str,
     spec: Option<&str>,
     name: Option<&str>,
+    description: Option<&str>,
 ) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
@@ -22454,6 +22571,8 @@ fn agent_register(
         }
         None => None,
     };
+    let description =
+        agent_registry::normalize_description(description.map(std::string::ToString::to_string));
 
     validate_register_pid(pid)?;
     let worktree_path = registered_process_cwd(pid).unwrap_or_else(|| project_root.clone());
@@ -22465,6 +22584,7 @@ fn agent_register(
         spec,
         worktree_path,
         name,
+        description,
     )?;
     println!(
         "{} registered {}#{} ({}) at {}",
@@ -22473,6 +22593,23 @@ fn agent_register(
         entry.pid,
         entry.role.as_deref().unwrap_or("(none)"),
         entry.worktree_path.display()
+    );
+    Ok(())
+}
+
+// trace:STORY-791 | ai:codex
+fn agent_describe(agent: &str, description: &str) -> Result<()> {
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let entry = agent_registry::describe_agent(&project_root, agent, description.to_string())?;
+    let identity = entry
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+    println!(
+        "{} {} described.",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        identity.cyan()
     );
     Ok(())
 }
@@ -56709,6 +56846,7 @@ fn lease_agent_view(
         agent_type: lease_agent_type(lease),
         pid: lease.creator_pid.unwrap_or(0),
         name: None,
+        description: None,
         tty: None,
         started_at: lease.started_at,
         last_active_at: lease_activity_timestamp(project_root, lease).unwrap_or(lease.started_at),

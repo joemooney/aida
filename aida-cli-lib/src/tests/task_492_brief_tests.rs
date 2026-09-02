@@ -804,6 +804,7 @@ fn banner_scan_does_not_warn_when_agent_type_is_ambiguous() {
         None,
         root.to_path_buf(),
         Some("antigravity-advisor-1".to_string()),
+        None,
     )
     .unwrap();
     agent_registry::register_existing_agent(
@@ -814,6 +815,7 @@ fn banner_scan_does_not_warn_when_agent_type_is_ambiguous() {
         None,
         root.to_path_buf(),
         Some("antigravity-implementer-2".to_string()),
+        None,
     )
     .unwrap();
 

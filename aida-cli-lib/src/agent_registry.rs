@@ -82,6 +82,8 @@ pub(crate) struct AgentRegistryEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) tty: Option<String>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
@@ -147,6 +149,7 @@ pub(crate) struct AgentRegistryView {
     pub(crate) agent_type: String,
     pub(crate) pid: u32,
     pub(crate) name: Option<String>,
+    pub(crate) description: Option<String>,
     pub(crate) tty: Option<String>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
@@ -239,12 +242,20 @@ impl AgentClassifyContext {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Config {
     pub(crate) busy_threshold_secs: u64,
+    pub(crate) singleton_roles: Vec<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             busy_threshold_secs: 30,
+            singleton_roles: vec![
+                "advisor".to_string(),
+                "product".to_string(),
+                "integrator".to_string(),
+                "implementer".to_string(),
+                "reviewer".to_string(),
+            ],
         }
     }
 }
@@ -265,10 +276,31 @@ impl Config {
                 if let Ok(n) = val.parse::<u64>() {
                     cfg.busy_threshold_secs = n;
                 }
+            } else if key == "singleton_roles" {
+                cfg.singleton_roles = parse_csv_words(&val);
             }
         }
         cfg
     }
+
+    pub(crate) fn role_is_singleton(&self, role: &str) -> bool {
+        self.singleton_roles
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(role))
+    }
+}
+
+fn parse_csv_words(raw: &str) -> Vec<String> {
+    raw.trim_matches(['[', ']'])
+        .split(',')
+        .map(|part| {
+            part.trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_ascii_lowercase()
+        })
+        .filter(|part| !part.is_empty())
+        .collect()
 }
 
 /// Hand-rolled `[agent_registry]` scanner — mirrors `OrchestratorConfig`
@@ -360,6 +392,18 @@ fn agent_id(agent_type: &str, pid: u32) -> String {
     format!("{agent_type}-{pid}")
 }
 
+// trace:STORY-791 | ai:codex
+fn find_launcher_ancestor_entry(
+    project_root: &Path,
+    child_pid: u32,
+) -> Option<(PathBuf, AgentRegistryEntry)> {
+    load_entries(project_root).into_iter().find(|(_, entry)| {
+        entry.source == "agent-launcher"
+            && crate::process_probe::pid_is_alive(entry.pid)
+            && pid_has_ancestor(child_pid, entry.pid)
+    })
+}
+
 pub(crate) fn touch_mcp_agent(
     project_root: &Path,
     binary: &AgentBinaryIdentity,
@@ -368,16 +412,25 @@ pub(crate) fn touch_mcp_agent(
     let pid = std::process::id();
     let agent_type = detect_agent_type();
     let id = agent_id(&agent_type, pid);
-    let path = registry_path(project_root, &id);
+    let existing_launcher = find_launcher_ancestor_entry(project_root, pid);
+    let path = existing_launcher
+        .as_ref()
+        .map(|(path, _)| path.clone())
+        .unwrap_or_else(|| registry_path(project_root, &id));
 
-    let mut entry = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+    let mut entry = existing_launcher
+        .map(|(_, entry)| entry)
+        .or_else(|| {
+            std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        })
         .unwrap_or_else(|| AgentRegistryEntry {
             id: id.clone(),
             agent_type: agent_type.clone(),
             pid,
             name: None,
+            description: None,
             tty: current_tty(),
             started_at: now,
             last_active_at: now,
@@ -398,16 +451,20 @@ pub(crate) fn touch_mcp_agent(
             resumed_from: None,
         });
 
-    entry.id = id;
-    entry.agent_type = agent_type;
-    entry.pid = pid;
+    if entry.source != "agent-launcher" {
+        entry.id = id;
+        entry.agent_type = agent_type;
+        entry.pid = pid;
+    }
     entry.last_active_at = now;
     entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
     entry.current_spec = env_nonempty("AIDA_SESSION_SCOPE")
         .filter(|s| looks_like_spec_id(s))
         .or(entry.current_spec);
-    entry.worktree_path = project_root.to_path_buf();
-    entry.source = "mcp".to_string();
+    if entry.source != "agent-launcher" {
+        entry.worktree_path = project_root.to_path_buf();
+        entry.source = "mcp".to_string();
+    }
     entry.binary_version = Some(binary.version.clone());
     entry.build_sha = Some(binary.sha.clone());
     if entry.tty.is_none() {
@@ -437,6 +494,7 @@ pub(crate) fn register_spawned_agent(
     name: Option<String>,
     native_session_id: Option<String>,
     resumed_from: Option<String>,
+    description: Option<String>,
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
@@ -445,6 +503,7 @@ pub(crate) fn register_spawned_agent(
         agent_type,
         pid,
         name,
+        description,
         tty: current_tty(),
         started_at: now,
         last_active_at: now,
@@ -662,6 +721,7 @@ pub(crate) fn register_existing_agent(
     current_spec: Option<String>,
     worktree_path: PathBuf,
     name: Option<String>,
+    description: Option<String>,
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
@@ -670,6 +730,7 @@ pub(crate) fn register_existing_agent(
         agent_type,
         pid,
         name,
+        description,
         tty: process_tty(pid).or_else(current_tty),
         started_at: now,
         last_active_at: now,
@@ -689,6 +750,80 @@ pub(crate) fn register_existing_agent(
         spec_status_at_end: None,
         resumed_from: None,
     };
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+// trace:STORY-791 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentScopeConflict {
+    pub(crate) name_or_id: String,
+    pub(crate) pid: u32,
+    pub(crate) session_id: String,
+    pub(crate) spec: Option<String>,
+}
+
+pub(crate) fn agent_scope(
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &Path,
+) -> String {
+    if let Some(spec) = current_spec.filter(|s| !s.trim().is_empty()) {
+        return format!("spec:{}", spec.to_ascii_uppercase());
+    }
+    match role.unwrap_or("").to_ascii_lowercase().as_str() {
+        "advisor" | "product" | "integrator" => "repo".to_string(),
+        _ => format!("worktree:{}", worktree_path.display()),
+    }
+}
+
+pub(crate) fn same_scope_conflict(
+    project_root: &Path,
+    cfg: &Config,
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &Path,
+) -> Option<AgentScopeConflict> {
+    let role = role?;
+    if !cfg.role_is_singleton(role) {
+        return None;
+    }
+    let scope = agent_scope(Some(role), current_spec, worktree_path);
+    load_entries(project_root)
+        .into_iter()
+        .map(|(_, entry)| entry)
+        .filter(|entry| crate::process_probe::pid_is_alive(entry.pid))
+        .find(|entry| {
+            entry
+                .role
+                .as_deref()
+                .map(|r| r.eq_ignore_ascii_case(role))
+                .unwrap_or(false)
+                && agent_scope(
+                    entry.role.as_deref(),
+                    entry.current_spec.as_deref(),
+                    &entry.worktree_path,
+                ) == scope
+        })
+        .map(|entry| AgentScopeConflict {
+            name_or_id: entry
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid)),
+            pid: entry.pid,
+            session_id: entry.id,
+            spec: entry.current_spec,
+        })
+}
+
+// trace:STORY-791 | ai:codex
+pub(crate) fn describe_agent(
+    project_root: &Path,
+    target: &str,
+    description: String,
+) -> Result<AgentRegistryEntry> {
+    let (_, mut entry) = resolve_target_entry(project_root, target)?;
+    entry.description = normalize_description(Some(description));
     write_entry(project_root, &entry)?;
     Ok(entry)
 }
@@ -1090,6 +1225,12 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
             } else {
                 ""
             };
+            let scope = agent_scope(
+                agent.role.as_deref(),
+                agent.current_spec.as_deref(),
+                &agent.worktree_path,
+            );
+            let desc = agent.description.as_deref().unwrap_or("(none)");
             // STORY-528: a paused agent gets its `⏸ paused (...)` state
             // appended so the operator sees budget/rate-limit holds inline.
             let paused_note = match paused_glyph(agent) {
@@ -1097,12 +1238,15 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
                 None => String::new(),
             };
             format!(
-                "  {:<15} {:<11} {:<12} {:<5} {:<8} {}{}{}",
+                "  {:<15} {:<8} {:<11} {:<12} {:<18} {:<5} {:<8} {:<24} {}{}{}",
                 identity,
+                view_kind(agent),
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
+                scope,
                 agent.status.as_str(),
                 format!("({elapsed})"),
+                desc,
                 agent.worktree_path.display(),
                 source_note,
                 paused_note
@@ -1131,6 +1275,7 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         agent_type: entry.agent_type,
         pid: entry.pid,
         name: entry.name,
+        description: entry.description,
         tty: entry.tty,
         started_at: entry.started_at,
         last_active_at: entry.last_active_at,
@@ -1148,6 +1293,22 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         native_session_id,
         ended_at: entry.ended_at,
         resumed_from: entry.resumed_from,
+    }
+}
+
+// trace:STORY-791 | ai:codex
+pub(crate) fn normalize_description(description: Option<String>) -> Option<String> {
+    description
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty())
+}
+
+// trace:STORY-791 | ai:codex
+pub(crate) fn view_kind(agent: &AgentRegistryView) -> &'static str {
+    if agent.source == "lease" {
+        "lease"
+    } else {
+        "process"
     }
 }
 
@@ -1264,6 +1425,33 @@ fn process_tty(pid: u32) -> Option<String> {
         .filter(|s| s.starts_with("/dev/"))
 }
 
+#[cfg(unix)]
+// trace:STORY-791 | ai:codex
+fn pid_has_ancestor(mut child_pid: u32, ancestor_pid: u32) -> bool {
+    while let Some(parent) = parent_pid(child_pid) {
+        if parent == ancestor_pid {
+            return true;
+        }
+        if parent == 0 || parent == child_pid {
+            return false;
+        }
+        child_pid = parent;
+    }
+    false
+}
+
+#[cfg(unix)]
+fn parent_pid(pid: u32) -> Option<u32> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let after_comm = stat.rsplit_once(") ")?.1;
+    after_comm.split_whitespace().nth(1)?.parse().ok()
+}
+
+#[cfg(not(unix))]
+fn pid_has_ancestor(_child_pid: u32, _ancestor_pid: u32) -> bool {
+    false
+}
+
 #[cfg(not(unix))]
 fn current_tty() -> Option<String> {
     None
@@ -1286,6 +1474,7 @@ mod tests {
             agent_type: "codex".to_string(),
             pid,
             name: None,
+            description: None,
             tty: Some("/dev/pts/1".to_string()),
             started_at: last_active_at,
             last_active_at,
@@ -1363,6 +1552,7 @@ mod tests {
             Some(&binary),
             Some("claude-advisor-1".into()),
             Some("018f-session".into()),
+            None,
             None,
         )
         .unwrap();
@@ -1483,6 +1673,116 @@ mod tests {
         assert_eq!(views[0].status, AgentStatus::Stale);
     }
 
+    // STORY-791: descriptions are durable registry metadata and render in the
+    // agent-status row instead of forcing operators to infer purpose from role.
+    #[test]
+    fn spawned_agent_description_roundtrips_to_view_and_status_line() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let binary = AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        let entry = register_spawned_agent(
+            tmp.path(),
+            "codex",
+            std::process::id(),
+            Some("advisor".to_string()),
+            None,
+            tmp.path().to_path_buf(),
+            Some(&binary),
+            Some("codex-advisor-1".to_string()),
+            None,
+            None,
+            Some("repo triage".to_string()),
+        )
+        .unwrap();
+        assert_eq!(entry.description.as_deref(), Some("repo triage"));
+
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]));
+        assert_eq!(views[0].description.as_deref(), Some("repo triage"));
+        let lines = format_agent_status_lines(&views);
+        assert!(lines[0].contains("process"));
+        assert!(lines[0].contains("repo triage"));
+    }
+
+    // STORY-791: the singleton role set has a safe default but remains
+    // configurable under [agent_registry].
+    #[test]
+    fn config_parses_singleton_roles() {
+        let cfg = Config::from_toml_str(
+            "[agent_registry]\nsingleton_roles = \"advisor, product, integrator\"\n",
+        );
+        assert!(cfg.role_is_singleton("advisor"));
+        assert!(cfg.role_is_singleton("product"));
+        assert!(!cfg.role_is_singleton("implementer"));
+    }
+
+    // STORY-791: launches are singleton per role per derived scope. A repo-wide
+    // advisor conflicts with another advisor, while a different role does not.
+    #[test]
+    fn same_scope_conflict_detects_live_same_role_scope() {
+        let tmp = TempDir::new().unwrap();
+        let binary = AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        register_spawned_agent(
+            tmp.path(),
+            "codex",
+            std::process::id(),
+            Some("advisor".to_string()),
+            None,
+            tmp.path().to_path_buf(),
+            Some(&binary),
+            Some("codex-advisor-1".to_string()),
+            None,
+            None,
+            Some("repo master advisor".to_string()),
+        )
+        .unwrap();
+        let cfg = Config::default();
+
+        let conflict = same_scope_conflict(tmp.path(), &cfg, Some("advisor"), None, tmp.path());
+        assert!(conflict.is_some());
+        assert!(
+            same_scope_conflict(tmp.path(), &cfg, Some("reviewer"), None, tmp.path()).is_none()
+        );
+    }
+
+    // STORY-791: spec-scoped doer roles conflict only on the same spec scope.
+    #[test]
+    fn same_scope_conflict_is_spec_scoped_for_implementers() {
+        let tmp = TempDir::new().unwrap();
+        let binary = AgentBinaryIdentity::new("0.9.1".into(), "abc123".into());
+        register_spawned_agent(
+            tmp.path(),
+            "codex",
+            std::process::id(),
+            Some("implementer".to_string()),
+            Some("TASK-1".to_string()),
+            tmp.path().join("task-1"),
+            Some(&binary),
+            Some("codex-implementer-1".to_string()),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let cfg = Config::default();
+
+        assert!(same_scope_conflict(
+            tmp.path(),
+            &cfg,
+            Some("implementer"),
+            Some("TASK-1"),
+            &tmp.path().join("other")
+        )
+        .is_some());
+        assert!(same_scope_conflict(
+            tmp.path(),
+            &cfg,
+            Some("implementer"),
+            Some("TASK-2"),
+            &tmp.path().join("task-2")
+        )
+        .is_none());
+    }
+
     // TASK-1184: dead rows without a resumable native session are pruned.
     #[test]
     fn gc_dead_agents_removes_dead_non_resumable_entries() {
@@ -1588,6 +1888,7 @@ mod tests {
             agent_type: "codex".to_string(),
             pid: 42,
             name: None,
+            description: None,
             tty: None,
             started_at: now,
             // Freshness column is computed relative to `Utc::now()` inside
@@ -1617,7 +1918,9 @@ mod tests {
         // trailing hint is loose because Utc::now() inside the formatter
         // can tick a second on a slow runner.
         assert!(
-            line.starts_with("  codex#42        implementer STORY-431    busy  ("),
+            line.starts_with(
+                "  codex#42        process  implementer STORY-431    spec:STORY-431     busy  ("
+            ),
             "unexpected line: {line:?}"
         );
         assert!(
@@ -1698,6 +2001,22 @@ source = "mcp"
         assert!(entry.paused_since.is_none());
         assert!(entry.paused_reason.is_none());
         assert!(entry.expected_back.is_none());
+        assert!(entry.description.is_none());
+    }
+
+    #[cfg(unix)]
+    // STORY-791: MCP child registration can attach to the launcher row by
+    // walking process ancestry rather than creating a second row.
+    #[test]
+    fn pid_has_ancestor_detects_live_child_parent() {
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let child_pid = child.id();
+        assert!(pid_has_ancestor(child_pid, std::process::id()));
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     // STORY-528: pause then resume roundtrips through the on-disk record.
@@ -1783,6 +2102,7 @@ source = "mcp"
             agent_type: "codex".to_string(),
             pid: 42,
             name: None,
+            description: None,
             tty: None,
             started_at: now,
             last_active_at: now,
