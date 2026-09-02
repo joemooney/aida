@@ -42150,5 +42150,31 @@ operations:
       - Default `ls` hides dead PIDs (depends on the `agent gc` task).
 
       SCOPING DECISION (operator, 2026-09-01, binding): singleton per role PER SCOPE. The advisor role is repo-wide singleton; an implementer is singleton per spec/worktree. Launching a second same-role agent on the SAME scope is REFUSED with a message pointing at the live agent (its session id, spec, and pid). Different scopes coexist freely. No new --scope concept is introduced — the scope IS the existing lease scope (repo for advisor, spec/worktree for doer roles). This matches the one-master-advisor operating model until subsystem-scoped advisors (SPIKE-10) exist.
-clock: 3802
+- id: 01a0606a-ce06-7ae2-816b-92c72abb4ee2
+  target_id: 01a0606a-c6ba-7262-9a90-286a246df3e8
+  author: aida
+  node_id: '1'
+  lamport: 3803
+  timestamp: 2026-09-02T04:40:07.430879519Z
+  kind: !Create
+    title: 'Review PR-1634: [AI:codex] feat(agent): resume ended launcher sessions (STORY-790)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0605a`) for branch `story-790`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1634>
+      - Branch: `story-790` → `main`
+
+      ## Covers
+
+      - STORY-790
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1634` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3803
 node_id: '1'
