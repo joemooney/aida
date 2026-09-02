@@ -50,7 +50,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-23T20:00:20.139796022Z
-modified_at: 2026-09-02T04:42:35.797533716Z
+modified_at: 2026-09-02T04:52:29.161548768Z
 req_type: Story
 tags:
 - aida:init
@@ -110,4 +110,10 @@ comments:
     which has higher-value future uses (new spec / agent / role).
   created_at: 2026-08-23T20:13:27.081259661Z
   modified_at: 2026-08-23T20:13:27.081259661Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a06076-1f69-7961-bbad-9a60968a4c0a
+  author: joe
+  content: Commit e481113b2 references this requirement
+  created_at: 2026-09-02T04:52:29.161548768Z
+  modified_at: 2026-09-02T04:52:29.161548768Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
