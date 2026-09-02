@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:39.465804272Z
-modified_at: 2026-09-02T05:15:18.199027551Z
+modified_at: 2026-09-02T05:25:32.588145847Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -37,6 +37,13 @@ relationships:
   target_id: 01a0606a-c6ba-7262-9a90-286a246df3e8
   created_at: 2026-09-02T04:40:11.843024332Z
   created_by: joe
+comments:
+- id: 01a06094-632c-7cd2-bffe-fa8e8e49882a
+  author: joe
+  content: Commit e481113b2 references this requirement
+  created_at: 2026-09-02T05:25:32.588145847Z
+  modified_at: 2026-09-02T05:25:32.588145847Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
