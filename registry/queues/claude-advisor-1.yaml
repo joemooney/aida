@@ -77,3 +77,9 @@
   added_at: 2026-09-02T04:40:13.178578441Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a0504f-c229-7702-8dfe-b0880ea21bbb
+  position: 35000
+  added_by: claude-advisor-1
+  added_at: 2026-09-02T04:47:55.729800642Z
+  for_role: advisor
