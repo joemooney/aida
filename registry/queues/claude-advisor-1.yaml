@@ -62,3 +62,10 @@
   added_at: 2026-09-01T06:29:27.869435498Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a0504f-c229-7702-8dfe-b0880ea21bbb
+  position: 32000
+  added_by: claude-advisor-1
+  added_at: 2026-09-02T04:22:01.755391689Z
+  for_role: advisor
+  added_by_machine: imac
