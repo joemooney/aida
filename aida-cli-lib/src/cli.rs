@@ -6783,6 +6783,10 @@ pub enum AgentCommand {
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
+
+        /// Optional human-readable description of this agent session.
+        #[clap(long)]
+        description: Option<String>,
     },
 
     /// List active agent processes.
@@ -6866,6 +6870,16 @@ pub enum AgentCommand {
     Resume {
         /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
         agent: String,
+    },
+
+    /// Edit an active agent's human-readable description.
+    // trace:STORY-791 | ai:codex
+    Describe {
+        /// Agent name, `<type>#<pid>`, or `<type>-<pid>` id.
+        agent: String,
+
+        /// New one-line description.
+        description: String,
     },
 
     /// Stop an active agent process by name.
@@ -6953,6 +6967,10 @@ pub enum AgentNewCommand {
         #[clap(long)]
         name: Option<String>,
 
+        /// Optional human-readable description of this agent session.
+        #[clap(long)]
+        description: Option<String>,
+
         /// Dispatch to Claude Code's background supervisor via `claude
         /// --bg`. The session detaches from this terminal and shows up
         /// in `claude agents` (and `aida status`). When `--spec` is
@@ -7021,6 +7039,10 @@ pub enum AgentNewCommand {
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
+
+        /// Optional human-readable description of this agent session.
+        #[clap(long)]
+        description: Option<String>,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.
@@ -7080,6 +7102,10 @@ pub enum AgentNewCommand {
         /// Optional human-readable instance name.
         #[clap(long)]
         name: Option<String>,
+
+        /// Optional human-readable description of this agent session.
+        #[clap(long)]
+        description: Option<String>,
     },
 }
 

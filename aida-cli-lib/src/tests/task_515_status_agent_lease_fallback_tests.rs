@@ -71,6 +71,7 @@ fn status_agents_registry_entry_wins_over_matching_lease() {
         agent_type: "codex".to_string(),
         pid: 123,
         name: None,
+        description: None,
         tty: None,
         started_at: lease.started_at,
         last_active_at: lease.started_at,

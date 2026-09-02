@@ -915,6 +915,8 @@ fn parses_agent_register_flags() {
         "TASK-543",
         "--name",
         "codex-1",
+        "--description",
+        "implementation lane",
     ])
     .unwrap();
     let Command::Agent(AgentCommand::Register {
@@ -923,6 +925,7 @@ fn parses_agent_register_flags() {
         role,
         spec,
         name,
+        description,
     }) = cli.command
     else {
         panic!("expected agent register command");
@@ -932,6 +935,25 @@ fn parses_agent_register_flags() {
     assert_eq!(role, "implementer");
     assert_eq!(spec.as_deref(), Some("TASK-543"));
     assert_eq!(name.as_deref(), Some("codex-1"));
+    assert_eq!(description.as_deref(), Some("implementation lane"));
+}
+
+// trace:STORY-791 | ai:codex
+#[test]
+fn parses_agent_describe_command() {
+    let cli = Cli::try_parse_from([
+        "aida",
+        "agent",
+        "describe",
+        "codex-advisor-1",
+        "repo master advisor",
+    ])
+    .unwrap();
+    let Command::Agent(AgentCommand::Describe { agent, description }) = cli.command else {
+        panic!("expected agent describe command");
+    };
+    assert_eq!(agent, "codex-advisor-1");
+    assert_eq!(description, "repo master advisor");
 }
 
 // trace:TASK-543 | ai:codex
@@ -1009,6 +1031,7 @@ fn spawned_agent_registry_entry_is_pid_keyed_and_removable() {
         None,
         Some("session-111".to_string()),
         None,
+        None,
     )
     .unwrap();
     let second = agent_registry::register_spawned_agent(
@@ -1021,6 +1044,7 @@ fn spawned_agent_registry_entry_is_pid_keyed_and_removable() {
         Some(&binary),
         None,
         Some("session-222".to_string()),
+        None,
         None,
     )
     .unwrap();
@@ -1044,6 +1068,7 @@ fn register_existing_agent_entry_is_status_visible_and_pid_keyed() {
         Some("TASK-543".to_string()),
         tmp.path().into(),
         Some("browser-advisor".to_string()),
+        None,
     )
     .unwrap();
 
@@ -1123,13 +1148,13 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     // retry the whole call — run_tracked_agent registers the agent only
     // AFTER a successful spawn, so a failed attempt leaves no partial
     // registry state. trace:BUG-423 | ai:claude
-    let mut spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+    let mut spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None);
     for _ in 0..5 {
         if spawn_result.is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
-        spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+        spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None);
     }
     spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
@@ -1214,13 +1239,13 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     // retry the whole call — run_tracked_agent registers the agent only
     // AFTER a successful spawn, so a failed attempt leaves no partial
     // registry state. trace:BUG-423 | ai:claude
-    let mut spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+    let mut spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None);
     for _ in 0..5 {
         if spawn_result.is_ok() {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(50));
-        spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args);
+        spawn_result = run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None);
     }
     spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
 
@@ -1467,6 +1492,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         &plan,
         Some(&launch_context),
         &prompt_args,
+        None,
     );
     for _ in 0..5 {
         if spawn_result.is_ok() {
@@ -1479,6 +1505,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
             &plan,
             Some(&launch_context),
             &prompt_args,
+            None,
         );
     }
     spawn_result.expect("run_tracked_agent should succeed after retrying transient spawn");
