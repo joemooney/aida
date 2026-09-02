@@ -7,12 +7,12 @@ description: |-
 
   Fix: a rework pickup MUST lead with the blocking findings. Concretely: (1) at rework time, read the recorded verdict for the spec/PR (.aida/review-verdicts/) and the reviewer PR comment, and write them onto the spec as a structured comment ("REVIEW FINDINGS TO ADDRESS (PR #N): 1. ... 2. ...") so the substrate holds them; (2) the queue-work pickup brief for a spec with an open PR + a recorded RequestChanges verdict leads with those findings ahead of the plan context, and the implementer treats them as the acceptance delta; (3) acceptance: a rework drive on a spec with recorded findings produces at least one commit OR an explicit punt naming which finding it disputes — never a silent no-change pass-through.
   Acceptance test: unit — rework on a spec with a recorded RequestChanges verdict writes the findings comment; the derived pickup prompt contains the findings text.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:16:42.166637576Z
-modified_at: 2026-09-02T05:35:10.306862219Z
+modified_at: 2026-09-02T05:35:52.529003929Z
 req_type: Bug
 tags:
 - orchestrator
