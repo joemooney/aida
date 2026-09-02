@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:43.757865753Z
-modified_at: 2026-09-02T05:10:55.837634403Z
+modified_at: 2026-09-02T05:14:23.481859352Z
 req_type: Story
 tags:
 - aida:agent:ls
@@ -41,6 +41,11 @@ comments:
   created_at: 2026-09-01T03:47:20.062166410Z
   modified_at: 2026-09-01T03:47:20.062166410Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0608a-2d79-7a23-8a6e-26871f6d0344
+  author: mcp
+  content: 'PR-1636 review verdict: RequestChanges. Evidence: local `cargo fmt --all -- --check`, `cargo test -p aida-cli-lib agent_registry -- --nocapture`, and `cargo test -p aida-cli-lib agent_launcher_tests -- --nocapture` passed; GitHub Build (ubuntu-latest) passed. Blocking gaps: default `[agent_registry] singleton_roles` includes `reviewer`, contradicting the requirement that reviewer sessions remain many-per-project; `aida agent new claude --bg --description ...` accepts/resolves a description but discards it before any registry/status surface can show it.'
+  created_at: 2026-09-02T05:14:23.481827852Z
+  modified_at: 2026-09-02T05:14:23.481827852Z
 execution_mode: drain
 implementation_info:
   implemented: true
