@@ -21578,11 +21578,26 @@ fn render_agent_resume_drift_brief(
         ));
     }
     if let Some(spec) = plan.current_spec.as_deref() {
-        out.push_str(&format!(
-            "- Spec status now: {}\n",
-            current_spec_status_line(&plan.project_root, spec)
-                .unwrap_or_else(|| "unknown".to_string())
-        ));
+        // Then-vs-now: the status frozen when the previous session ended,
+        // against the status at resume time — the drift itself, not just the
+        // present. trace:STORY-790 | ai:claude
+        let now_status = current_spec_status_line(&plan.project_root, spec)
+            .unwrap_or_else(|| "unknown".to_string());
+        match previous.spec_status_at_end.as_deref() {
+            Some(then) if then != now_status => {
+                out.push_str(&format!(
+                    "- Spec status: {then} (at exit) → {now_status} (now)\n"
+                ));
+            }
+            Some(then) => {
+                out.push_str(&format!("- Spec status: {then} (unchanged since exit)\n"));
+            }
+            None => {
+                out.push_str(&format!(
+                    "- Spec status now: {now_status} (status at previous exit not recorded)\n"
+                ));
+            }
+        }
         out.push_str(&format!(
             "- PR state now: {}\n",
             pr_state_for_spec(&plan.project_root, spec)
@@ -21595,9 +21610,72 @@ fn render_agent_resume_drift_brief(
             main_commit_count_since(&plan.project_root, ended_at)
                 .unwrap_or_else(|| "unknown".to_string())
         ));
+        // Coordination drift, scoped to ended_at: mail addressed to this
+        // agent (or broadcast) and briefs filed since it exited — the two
+        // channels where work routes to an absent agent.
+        // trace:STORY-790 | ai:claude
+        out.push_str(&format!(
+            "- Mail for this agent since previous exit: {}\n",
+            mail_count_for_agent_since(&plan.project_root, previous, ended_at)
+        ));
+        out.push_str(&format!(
+            "- Briefs filed for this agent since previous exit: {}\n",
+            brief_count_for_agent_since(&plan.project_root, previous, ended_at)
+        ));
     }
     out.push_str("\nResume rule: reconcile this drift before continuing the old transcript.\n");
     Ok(out)
+}
+
+/// Mail addressed to the resumed agent — by name, role, agent type, or
+/// broadcast — with a timestamp at or after the previous session's end.
+// trace:STORY-790 | ai:claude
+fn mail_count_for_agent_since(
+    project_root: &std::path::Path,
+    previous: &agent_registry::AgentRegistryEntry,
+    ended_at: chrono::DateTime<chrono::Utc>,
+) -> usize {
+    let cutoff = ended_at.timestamp_millis();
+    let msgs = mailbox_store::read_local_messages(project_root).unwrap_or_default();
+    msgs.iter()
+        .filter(|m| m.timestamp >= cutoff)
+        .filter(|m| match &m.to {
+            aida_core::mailbox::Recipient::Broadcast => true,
+            aida_core::mailbox::Recipient::Agent(who) => {
+                previous.name.as_deref() == Some(who.as_str())
+                    || previous.role.as_deref() == Some(who.as_str())
+                    || previous.agent_type == *who
+            }
+        })
+        .count()
+}
+
+/// Briefs filed under `.aida/agent-briefs/<name|type>/` since the previous
+/// session ended (file mtime is the filing time).
+// trace:STORY-790 | ai:claude
+fn brief_count_for_agent_since(
+    project_root: &std::path::Path,
+    previous: &agent_registry::AgentRegistryEntry,
+    ended_at: chrono::DateTime<chrono::Utc>,
+) -> usize {
+    let cutoff: std::time::SystemTime = ended_at.into();
+    let mut count = 0;
+    for who in [previous.name.as_deref(), Some(previous.agent_type.as_str())]
+        .into_iter()
+        .flatten()
+    {
+        let dir = project_root.join(".aida").join("agent-briefs").join(who);
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for e in entries.flatten() {
+                if let Ok(mtime) = e.metadata().and_then(|m| m.modified()) {
+                    if mtime >= cutoff {
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+    count
 }
 
 // trace:STORY-790 | ai:codex
@@ -77394,6 +77472,12 @@ mod story_698_test_plan_capture_tests;
 #[cfg(test)]
 #[path = "tests/bug_800_review_test_command_prompt_tests.rs"]
 mod bug_800_review_test_command_prompt_tests;
+
+// STORY-790 review findings: drift brief then-vs-now + mail/briefs since exit.
+// trace:STORY-790 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_790_drift_brief_tests.rs"]
+mod story_790_drift_brief_tests;
 
 // BUG-777: recovering a lease left behind by an already-exited session — the
 // verifiably-gone + clean-worktree reclaim, the never-reap-a-live-lease floor,

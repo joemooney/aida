@@ -114,6 +114,13 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) ended_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) resumed_from: Option<String>,
+    /// The spec's status AT THE MOMENT this session ended — recorded so a
+    /// later `aida agent resume` can render the drift brief's required
+    /// "status then vs now" comparison instead of only the current status.
+    /// `None` on legacy records and sessions with no spec.
+    // trace:STORY-790 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) spec_status_at_end: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -387,6 +394,7 @@ pub(crate) fn touch_mcp_agent(
             native_session_id: None,
             claude_session_id: None,
             ended_at: None,
+            spec_status_at_end: None,
             resumed_from: None,
         });
 
@@ -453,6 +461,7 @@ pub(crate) fn register_spawned_agent(
         native_session_id,
         claude_session_id: None,
         ended_at: None,
+        spec_status_at_end: None,
         resumed_from,
     };
     write_entry(project_root, &entry)?;
@@ -677,6 +686,7 @@ pub(crate) fn register_existing_agent(
         native_session_id: None,
         claude_session_id: None,
         ended_at: None,
+        spec_status_at_end: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -782,6 +792,12 @@ pub(crate) fn mark_agent_ended(
         toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
     entry.ended_at = Some(Utc::now());
     entry.last_active_at = entry.ended_at.unwrap();
+    // trace:STORY-790 | ai:claude — freeze the spec's status for the resume
+    // drift brief's then-vs-now line. Best-effort: a store hiccup leaves None.
+    entry.spec_status_at_end = entry
+        .current_spec
+        .as_deref()
+        .and_then(|spec| crate::current_spec_status_line(project_root, spec));
     entry.availability = Availability::Available;
     entry.paused_since = None;
     entry.paused_reason = None;
@@ -1286,6 +1302,7 @@ mod tests {
             native_session_id: None,
             claude_session_id: None,
             ended_at: None,
+            spec_status_at_end: None,
             resumed_from: None,
         }
     }
