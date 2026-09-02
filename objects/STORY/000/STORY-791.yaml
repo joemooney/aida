@@ -13,12 +13,12 @@ description: |-
   - Default `ls` hides dead PIDs (depends on the `agent gc` task).
 
   SCOPING DECISION (operator, 2026-09-01, binding): singleton per role PER SCOPE. The advisor role is repo-wide singleton; an implementer is singleton per spec/worktree. Launching a second same-role agent on the SAME scope is REFUSED with a message pointing at the live agent (its session id, spec, and pid). Different scopes coexist freely. No new --scope concept is introduced — the scope IS the existing lease scope (repo for advisor, spec/worktree for doer roles). This matches the one-master-advisor operating model until subsystem-scoped advisors (SPIKE-10) exist.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:43.757865753Z
-modified_at: 2026-09-02T05:35:44.066246165Z
+modified_at: 2026-09-02T06:12:36.917673587Z
 req_type: Story
 tags:
 - aida:agent:ls
@@ -46,16 +46,27 @@ comments:
   content: 'PR-1636 review verdict: RequestChanges. Evidence: local `cargo fmt --all -- --check`, `cargo test -p aida-cli-lib agent_registry -- --nocapture`, and `cargo test -p aida-cli-lib agent_launcher_tests -- --nocapture` passed; GitHub Build (ubuntu-latest) passed. Blocking gaps: default `[agent_registry] singleton_roles` includes `reviewer`, contradicting the requirement that reviewer sessions remain many-per-project; `aida agent new claude --bg --description ...` accepts/resolves a description but discards it before any registry/status surface can show it.'
   created_at: 2026-09-02T05:14:23.481827852Z
   modified_at: 2026-09-02T05:14:23.481827852Z
+history:
+- id: 01a060bf-7baf-70a1-9b6f-eb88493a8e1d
+  author: aida-auto-bump
+  timestamp: 2026-09-02T06:12:36.911674432Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a060bf-7bb5-7e43-a286-e5ec464db1f5
+  timestamp: 2026-09-02T06:12:36.917672611Z
+  agent: aida
+  commit_sha: edfcf5705ee4da12704c2b8c2dbc35098693c1af
+  summary: 'Advisor diff-review (implementer died at exit, work complete): dedup to one row per session, --description, singleton-per-role-per-scope refusal with live-agent pointer per the operator''s binding scoping decision; 6 tests; CI green.'
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-02T05:00:24.233264405Z
   implemented_by: joe
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-791 --resume`'
-  shelved_by: advisor
-  shelved_at: 2026-09-02T05:35:44.066246165Z
+  completed_at: 2026-09-02T06:12:36.911509362Z
+  completion_sha: edfcf5705ee4da12704c2b8c2dbc35098693c1af
