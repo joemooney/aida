@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:39.465804272Z
-modified_at: 2026-09-02T04:40:11.843029391Z
+modified_at: 2026-09-02T04:46:34.489188139Z
 req_type: Story
 tags:
 - aida:agent:new
@@ -42,3 +42,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-02T04:37:19.709301764Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: failed
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-790 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-02T04:46:34.489188139Z
