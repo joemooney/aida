@@ -284,6 +284,7 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
         );
         println!("      git push -u origin {branch}");
         println!("      git push -u origin aida-store");
+        emit_enter_dir(&plan.dir);
         return Ok(());
     }
 
@@ -295,6 +296,22 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
     );
     println!();
     println!("  {} project ready:", "✓".green().bold());
-    println!("      cd {}", plan.dir.display());
+    emit_enter_dir(&plan.dir);
     Ok(())
+}
+
+/// Hand the calling shell a `cd` into the new project — through the marked
+/// eval channel when (and only when) the shell's wrapper advertises the
+/// `init-cd` capability; otherwise a plain copy-paste hint. A wrapper that
+/// speaks only the legacy verbs never sees markers from init, so nothing is
+/// ever printed as comment noise.
+fn emit_enter_dir(plan_dir: &Path) {
+    let abs = std::env::current_dir().unwrap_or_else(|_| plan_dir.to_path_buf());
+    let wrapper = std::env::var("AIDA_SHELL_WRAPPER").ok();
+    if crate::shell_eval::marker_has_cap(wrapper.as_deref(), crate::shell_eval::INIT_CD_CAP) {
+        let _eval = crate::shell_eval::EvalBlock::open_with(true);
+        println!("cd '{}'", abs.display());
+    } else {
+        println!("      cd {}", plan_dir.display());
+    }
 }

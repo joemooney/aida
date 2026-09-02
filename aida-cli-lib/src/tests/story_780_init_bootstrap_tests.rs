@@ -126,3 +126,34 @@ fn bootstrap_flags_require_the_positional_dir() {
     ])
     .is_ok());
 }
+
+#[test]
+fn init_cd_capability_gates_on_the_wrapper_token() {
+    use crate::shell_eval::{marker_has_cap, INIT_CD_CAP};
+    // The new-wrapper marker carries it; the pre-STORY-780 marker does not.
+    assert!(marker_has_cap(
+        Some("role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd"),
+        INIT_CD_CAP
+    ));
+    assert!(!marker_has_cap(
+        Some("role,session,dev,worktree,worktree-exit,worktree-stale,eval-block"),
+        INIT_CD_CAP
+    ));
+    assert!(!marker_has_cap(None, INIT_CD_CAP));
+}
+
+#[test]
+fn the_scaffolded_wrapper_routes_init_and_advertises_init_cd() {
+    // Pin the wrapper template: the init case branch exists, the capability
+    // token is advertised, and — the safety property — the init branch has no
+    // bare-payload fallback (a markerless init prints, never evals).
+    let script = crate::dev_cmd::SHELL_HELPERS;
+    assert!(
+        script.contains(r#""init"|"init "*)"#),
+        "wrapper must route init through its own case branch"
+    );
+    assert!(
+        script.contains("eval-block,init-cd"),
+        "wrapper must advertise the init-cd capability"
+    );
+}

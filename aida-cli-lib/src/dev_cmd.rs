@@ -1135,7 +1135,7 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # block, so ordinary stdout is never an eval candidate. A binary that does not
 # see this token keeps emitting the legacy bare payload, so upgrading the binary
 # under an older wrapper changes nothing. (trace:TASK-1171)
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block'
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd'
 
 aida() {
     # Take the first two positional words verbatim — that's enough to
@@ -1203,6 +1203,42 @@ aida() {
                 done
                 return "$_aida_rc"
             fi
+            ;;
+        "init"|"init "*)
+            # STORY-780: `aida init <DIR>` finishes by handing this shell a
+            # `cd` into the new project, through the same marker-delimited
+            # eval channel as the verbs above. One deliberate difference:
+            # there is NO bare-payload fallback here. A markerless init
+            # (bare in-place init, or an older binary) has only prose on
+            # stdout, which must never be eval'd — it prints as-is. The
+            # binary only emits the marker block when AIDA_SHELL_WRAPPER
+            # advertises `init-cd`, so older wrappers never see markers.
+            local _aida_out _aida_rc _aida_pre _aida_eval _aida_rest _aida_post
+            local _aida_b='#aida:eval:begin'
+            local _aida_e='#aida:eval:end'
+            local _aida_nl='
+'
+            _aida_out=$(command aida "$@")
+            _aida_rc=$?
+            case "$_aida_out" in
+                *"$_aida_b"*)
+                    _aida_pre="${_aida_out%%"$_aida_b"*}"
+                    _aida_rest="${_aida_out#*"$_aida_b"}"
+                    _aida_eval="${_aida_rest%%"$_aida_e"*}"
+                    _aida_post="${_aida_rest#*"$_aida_e"}"
+                    _aida_pre="${_aida_pre%"$_aida_nl"}"
+                    _aida_eval="${_aida_eval#"$_aida_nl"}"
+                    _aida_eval="${_aida_eval%"$_aida_nl"}"
+                    _aida_post="${_aida_post#"$_aida_nl"}"
+                    [ -n "$_aida_pre" ] && printf '%s\n' "$_aida_pre"
+                    [ "$_aida_rc" -eq 0 ] && [ -n "$_aida_eval" ] && eval "$_aida_eval"
+                    [ -n "$_aida_post" ] && printf '%s\n' "$_aida_post"
+                    ;;
+                *)
+                    [ -n "$_aida_out" ] && printf '%s\n' "$_aida_out"
+                    ;;
+            esac
+            return "$_aida_rc"
             ;;
         "tui"|"tui "*)
             # STORY-681: `aida tui` is now self-sufficient — it dispatches
