@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:43.757865753Z
-modified_at: 2026-09-02T05:14:23.481859352Z
+modified_at: 2026-09-02T05:35:44.066246165Z
 req_type: Story
 tags:
 - aida:agent:ls
@@ -51,3 +51,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-02T05:00:24.233264405Z
   implemented_by: joe
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: failed
+  detail: the implementer session exited 1 — it was aborted or errored
+  recovery_hint: 'Continue the implementer session: `aida queue work STORY-791 --resume`'
+  shelved_by: advisor
+  shelved_at: 2026-09-02T05:35:44.066246165Z
