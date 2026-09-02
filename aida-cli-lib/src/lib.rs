@@ -19308,8 +19308,8 @@ fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
             spec,
             name,
         } => agent_register(*pid, agent_type, role, spec.as_deref(), name.as_deref()),
-        AgentCommand::Ls { all, stale } => agent_ls(*all, *stale),
-        AgentCommand::Status { all, stale } => agent_ls(*all, *stale),
+        AgentCommand::Ls { all, stale, ended } => agent_ls(*all, *stale, *ended),
+        AgentCommand::Status { all, stale, ended } => agent_ls(*all, *stale, *ended),
         AgentCommand::Gc {
             dry_run,
             older_than,
@@ -19931,16 +19931,150 @@ fn agent_pause(agent: &str, reason: &str, resets: Option<&str>) -> Result<()> {
 fn agent_resume(agent: &str) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
-    let entry = agent_registry::resume_agent(&project_root, agent)?;
-    let identity = entry
-        .name
-        .clone()
-        .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
-    println!(
-        "{} {} resumed (available)",
-        crate::glyph(crate::glyphs::Glyph::FlowActive).green(),
-        identity.cyan()
+    match agent_registry::resume_agent(&project_root, agent) {
+        Ok(entry) => {
+            let identity = entry
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("{}#{}", entry.agent_type, entry.pid));
+            println!(
+                "{} {} resumed (available)",
+                crate::glyph(crate::glyphs::Glyph::FlowActive).green(),
+                identity.cyan()
+            );
+            Ok(())
+        }
+        Err(live_err) => {
+            match agent_registry::resolve_resumable_ended_agent(&project_root, agent) {
+                Ok(entry) => agent_resume_ended(&project_root, entry),
+                Err(ended_err) => anyhow::bail!("{live_err}; {ended_err}"),
+            }
+        }
+    }
+}
+
+// trace:STORY-790 | ai:codex
+fn agent_resume_ended(
+    project_root: &std::path::Path,
+    entry: agent_registry::AgentRegistryEntry,
+) -> Result<()> {
+    if !entry.worktree_path.exists() {
+        anyhow::bail!(
+            "cannot resume {}: recorded worktree is gone ({})",
+            entry.name.as_deref().unwrap_or(entry.id.as_str()),
+            entry.worktree_path.display()
+        );
+    }
+    let native_session_id = entry.native_session_id.as_deref().ok_or_else(|| {
+        anyhow::anyhow!(
+            "cannot resume {}: registry entry has no native session id",
+            entry.name.as_deref().unwrap_or(entry.id.as_str())
+        )
+    })?;
+    verify_agent_native_session_available(
+        &entry.agent_type,
+        &entry.worktree_path,
+        native_session_id,
+    )?;
+    let binary_name = match entry.agent_type.as_str() {
+        "claude" => "claude",
+        "codex" => "codex",
+        "antigravity" => "agy",
+        other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
+    };
+    let binary = find_executable_on_path(binary_name).ok_or_else(|| {
+        anyhow::anyhow!(
+            "`{}` is not on PATH — install {} or activate the environment that provides it",
+            binary_name,
+            entry.agent_type
+        )
+    })?;
+    let resume_prompt =
+        "Read the fresh AIDA resume context first: cat \"$AIDA_AGENT_CONTEXT_FILE\"";
+    let config = AgentLaunchConfig {
+        agent_type: match entry.agent_type.as_str() {
+            "claude" => "claude",
+            "codex" => "codex",
+            "antigravity" => "antigravity",
+            _ => unreachable!(),
+        },
+        binary: binary_name,
+        default_args: agent_resume_args(&entry.agent_type, native_session_id, resume_prompt)?,
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project_root.to_path_buf(),
+        launch_cwd: entry.worktree_path.clone(),
+        role: entry.role.clone(),
+        current_spec: entry.current_spec.clone(),
+        name: entry
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("{}-resumed", entry.id)),
+        lease_id: None,
+        native_session_id: Some(native_session_id.to_string()),
+        resumed_from: Some(entry.id.clone()),
+    };
+    let launch_context = prepare_agent_resume_context(&config, &plan, &entry)?;
+    eprintln!(
+        "{} resuming {} (stable name: {}) in {}",
+        crate::glyph(crate::glyphs::Glyph::FlowActive)
+            .green()
+            .bold(),
+        config.agent_type,
+        plan.name.cyan(),
+        plan.launch_cwd.display().to_string().cyan()
     );
+    eprintln!(
+        "  {}: {}",
+        "native session".bold(),
+        native_session_id.cyan()
+    );
+    eprintln!(
+        "  {}: {}",
+        "context".bold(),
+        launch_context.path.display().to_string().cyan()
+    );
+    run_tracked_agent(&binary, &config, &plan, Some(&launch_context), &[])
+}
+
+// trace:STORY-790 | ai:codex
+fn verify_agent_native_session_available(
+    agent_type: &str,
+    worktree: &std::path::Path,
+    native_session_id: &str,
+) -> Result<()> {
+    match agent_type {
+        "claude" => {
+            let transcript =
+                session::claude_project_dir(worktree)?.join(format!("{native_session_id}.jsonl"));
+            if !transcript.exists() {
+                anyhow::bail!(
+                    "cannot resume claude session {native_session_id}: transcript not found at {}",
+                    transcript.display()
+                );
+            }
+        }
+        "antigravity" => {
+            let Some(home) = dirs::home_dir() else {
+                anyhow::bail!(
+                    "cannot resume antigravity session {native_session_id}: no home directory"
+                );
+            };
+            let brain = home
+                .join(".gemini")
+                .join("antigravity-cli")
+                .join("brain")
+                .join(native_session_id);
+            if !brain.exists() {
+                anyhow::bail!(
+                    "cannot resume antigravity session {native_session_id}: brain directory not found at {}",
+                    brain.display()
+                );
+            }
+        }
+        _ => {}
+    }
     Ok(())
 }
 
@@ -19993,6 +20127,13 @@ struct AgentLaunchPlan {
     /// path attach Claude Code's sessionId back to the AIDA manifest so
     /// `aida status` cross-references the right pair. trace:SPIKE-34
     lease_id: Option<String>,
+    // trace:STORY-790 | ai:codex
+    /// Native vendor conversation id when AIDA can seed it before launch.
+    /// `agent resume` uses this rather than an AIDA lease id.
+    native_session_id: Option<String>,
+    // trace:STORY-790 | ai:codex
+    /// Registry id of the ended launcher session this launch resumes.
+    resumed_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20386,6 +20527,10 @@ fn agent_new_with_config(
     }
 
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    config.default_args.extend(agent_seed_session_args(
+        config.agent_type,
+        plan.native_session_id.as_deref(),
+    ));
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
     assert_no_worktree_tangle(&plan, &project_root)?;
@@ -20512,6 +20657,10 @@ fn agent_new_bg_dispatch(
     }
 
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
+    config.default_args.extend(agent_seed_session_args(
+        config.agent_type,
+        plan.native_session_id.as_deref(),
+    ));
     // TASK-965: worktree-tangle spawn gate — refuse a fan-out into the primary
     // checkout. trace:TASK-965 | ai:claude
     assert_no_worktree_tangle(&plan, &project_root)?;
@@ -20655,6 +20804,44 @@ fn parse_bg_session_id(stdout: &str) -> Option<String> {
         }
     }
     None
+}
+
+// trace:STORY-790 | ai:codex
+fn agent_native_session_id_for_new(agent_type: &str) -> Option<String> {
+    match agent_type {
+        "claude" => Some(Uuid::now_v7().to_string()),
+        _ => None,
+    }
+}
+
+// trace:STORY-790 | ai:codex
+fn agent_seed_session_args(agent_type: &str, native_session_id: Option<&str>) -> Vec<String> {
+    match (agent_type, native_session_id) {
+        ("claude", Some(id)) => vec!["--session-id".to_string(), id.to_string()],
+        _ => Vec::new(),
+    }
+}
+
+// trace:STORY-790 | ai:codex
+fn agent_resume_args(
+    agent_type: &str,
+    native_session_id: &str,
+    prompt: &str,
+) -> Result<Vec<String>> {
+    let mut args = match agent_type {
+        "claude" => vec!["--resume".to_string(), native_session_id.to_string()],
+        "codex" => vec!["resume".to_string(), native_session_id.to_string()],
+        "antigravity" => vec![
+            "--conversation".to_string(),
+            native_session_id.to_string(),
+            "--prompt-interactive".to_string(),
+        ],
+        other => anyhow::bail!("agent type `{other}` does not have a supported resume adapter"),
+    };
+    if !prompt.trim().is_empty() {
+        args.push(prompt.to_string());
+    }
+    Ok(args)
 }
 
 #[cfg(test)]
@@ -21298,6 +21485,8 @@ fn prepare_agent_launch(
                 current_spec: Some(spec),
                 name,
                 lease_id,
+                native_session_id: agent_native_session_id_for_new(agent_type),
+                resumed_from: None,
             })
         }
         None => {
@@ -21315,6 +21504,8 @@ fn prepare_agent_launch(
                 current_spec: None,
                 name,
                 lease_id: None,
+                native_session_id: agent_native_session_id_for_new(agent_type),
+                resumed_from: None,
             })
         }
     }
@@ -21349,6 +21540,131 @@ fn prepare_agent_launch_context(
     Ok(Some(AgentLaunchContext { path, token }))
 }
 
+// trace:STORY-790 | ai:codex
+fn prepare_agent_resume_context(
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    previous: &agent_registry::AgentRegistryEntry,
+) -> Result<AgentLaunchContext> {
+    let token = Uuid::now_v7().to_string();
+    let dir = plan
+        .project_root
+        .join(".aida")
+        .join("agents")
+        .join("context");
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("creating agent context dir {}", dir.display()))?;
+    let path = dir.join(format!("{}-resume-{token}.context.md", config.agent_type));
+    let mut body = render_agent_resume_drift_brief(plan, previous)?;
+    body.push('\n');
+    body.push_str(&render_agent_launch_context(config, plan, &token)?);
+    std::fs::write(&path, &body).with_context(|| format!("writing {}", path.display()))?;
+    Ok(AgentLaunchContext { path, token })
+}
+
+// trace:STORY-790 | ai:codex
+fn render_agent_resume_drift_brief(
+    plan: &AgentLaunchPlan,
+    previous: &agent_registry::AgentRegistryEntry,
+) -> Result<String> {
+    let mut out = String::new();
+    out.push_str("# DRIFT BRIEF\n\n");
+    out.push_str("This is a fresh AIDA snapshot for a resumed native agent transcript.\n\n");
+    out.push_str(&format!("- Resumed from registry entry: {}\n", previous.id));
+    if let Some(ended_at) = previous.ended_at {
+        out.push_str(&format!(
+            "- Previous session ended at: {}\n",
+            ended_at.to_rfc3339()
+        ));
+    }
+    if let Some(spec) = plan.current_spec.as_deref() {
+        out.push_str(&format!(
+            "- Spec status now: {}\n",
+            current_spec_status_line(&plan.project_root, spec)
+                .unwrap_or_else(|| "unknown".to_string())
+        ));
+        out.push_str(&format!(
+            "- PR state now: {}\n",
+            pr_state_for_spec(&plan.project_root, spec)
+                .unwrap_or_else(|| "not detected".to_string())
+        ));
+    }
+    if let Some(ended_at) = previous.ended_at {
+        out.push_str(&format!(
+            "- Main commits since previous exit: {}\n",
+            main_commit_count_since(&plan.project_root, ended_at)
+                .unwrap_or_else(|| "unknown".to_string())
+        ));
+    }
+    out.push_str("\nResume rule: reconcile this drift before continuing the old transcript.\n");
+    Ok(out)
+}
+
+// trace:STORY-790 | ai:codex
+fn current_spec_status_line(project_root: &std::path::Path, spec: &str) -> Option<String> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let store = storage.load().ok()?;
+    let req = store
+        .requirements
+        .iter()
+        .find(|req| spec_matches(req, spec))?;
+    Some(format!("{} — {}", req.status, req.title))
+}
+
+// trace:STORY-790 | ai:codex
+fn main_commit_count_since(
+    project_root: &std::path::Path,
+    since: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let default_ref = resolve_default_branch_ref(project_root)?;
+    let since_arg = since.to_rfc3339();
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "rev-list",
+            "--count",
+            &format!("--since={since_arg}"),
+            &default_ref,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+// trace:STORY-790 | ai:codex
+fn pr_state_for_spec(project_root: &std::path::Path, spec: &str) -> Option<String> {
+    let gh = resolve_gh_binary()?;
+    let out = std::process::Command::new(gh)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--search",
+            spec,
+            "--json",
+            "number,state,title",
+            "--limit",
+            "5",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let first = value.as_array()?.first()?;
+    let number = first.get("number")?.as_u64()?;
+    let state = first.get("state")?.as_str()?;
+    let title = first.get("title").and_then(|v| v.as_str()).unwrap_or("");
+    Some(format!("PR-{number} {state} — {title}"))
+}
+
 /// BUG-408: the dry counterpart of `prepare_agent_launch`. Computes what the
 /// launch plan WOULD be — resolved role, generated stable name, current spec —
 /// WITHOUT any side effects: no `session_start`, so no worktree is created, no
@@ -21380,6 +21696,8 @@ fn prepare_agent_launch_dry(
         current_spec: spec,
         name,
         lease_id: None,
+        native_session_id: agent_native_session_id_for_new(agent_type),
+        resumed_from: None,
     })
 }
 
@@ -21790,16 +22108,19 @@ fn run_tracked_agent(
         plan.launch_cwd.clone(),
         Some(&binary),
         Some(plan.name.clone()),
+        plan.native_session_id.clone(),
+        plan.resumed_from.clone(),
     )?;
     let signal_forwarder = install_child_signal_forwarder(child_pid)?;
     let status = child
         .wait()
         .with_context(|| format!("failed to wait for {}", config.agent_type))?;
     signal_forwarder.stop();
-    if let Err(err) = agent_registry::remove_agent(&plan.project_root, config.agent_type, child_pid)
+    if let Err(err) =
+        agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid)
     {
         eprintln!(
-            "{} failed to remove agent registry entry for {}#{}: {err}",
+            "{} failed to mark agent registry entry ended for {}#{}: {err}",
             "warning:".yellow().bold(),
             config.agent_type,
             child_pid
@@ -21824,22 +22145,27 @@ fn run_tracked_agent(
 
 // trace:TASK-542 | ai:antigravity
 // trace:TASK-1184 | ai:codex
-fn agent_ls(show_all: bool, stale_only: bool) -> Result<()> {
+fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     let project_root =
         main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
-    if !show_all && !stale_only {
+    if !show_all && !stale_only && !ended_only {
         let _ = agent_registry::gc_dead_agents(&project_root, false, None);
     }
     let leases = list_leases(&project_root);
     let agent_ctx = build_agent_classify_context(&project_root, &leases);
-    let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
-    let mut agents =
-        merge_agent_views_with_lease_fallback(&project_root, &leases, registry_agents, &agent_ctx);
-    if !show_all || stale_only {
+    let mut agents = if ended_only {
+        agent_registry::ended_resumable_agent_views(&project_root, &agent_ctx)
+    } else {
+        let registry_agents = agent_registry::list_agent_views(&project_root, &agent_ctx);
+        merge_agent_views_with_lease_fallback(&project_root, &leases, registry_agents, &agent_ctx)
+    };
+    if !show_all || stale_only || ended_only {
         agents.retain(|agent| {
             let is_stale = agent.status == agent_registry::AgentStatus::Stale;
             if stale_only {
                 is_stale
+            } else if ended_only {
+                agent.ended_at.is_some() && agent.native_session_id.is_some()
             } else {
                 !is_stale
             }
@@ -21847,7 +22173,9 @@ fn agent_ls(show_all: bool, stale_only: bool) -> Result<()> {
     }
 
     if agents.is_empty() {
-        if stale_only {
+        if ended_only {
+            println!("No ended resumable agents found.");
+        } else if stale_only {
             println!("No stale agents found.");
         } else {
             println!("No active agents found.");
@@ -21884,17 +22212,42 @@ fn agent_ls(show_all: bool, stale_only: bool) -> Result<()> {
             Some(g) => format!("  {g}"),
             None => String::new(),
         };
-        println!(
-            "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}{}",
-            identity,
-            pid_str,
-            agent.role.as_deref().unwrap_or("(none)"),
-            agent.current_spec.as_deref().unwrap_or("(none)"),
-            agent.status.as_str(),
-            format!("({elapsed})"),
-            agent.worktree_path.display(),
-            paused_note
-        );
+        if ended_only {
+            let ended = agent
+                .ended_at
+                .map(|at| {
+                    agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(now, at))
+                })
+                .unwrap_or_else(|| "?".to_string());
+            println!(
+                "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}  resume:{}{}",
+                identity,
+                pid_str,
+                agent.role.as_deref().unwrap_or("(none)"),
+                agent.current_spec.as_deref().unwrap_or("(none)"),
+                "ended",
+                format!("({ended})"),
+                agent.worktree_path.display(),
+                agent.native_session_id.as_deref().unwrap_or("(unknown)"),
+                agent
+                    .resumed_from
+                    .as_deref()
+                    .map(|id| format!("  from:{id}"))
+                    .unwrap_or_default()
+            );
+        } else {
+            println!(
+                "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}{}",
+                identity,
+                pid_str,
+                agent.role.as_deref().unwrap_or("(none)"),
+                agent.current_spec.as_deref().unwrap_or("(none)"),
+                agent.status.as_str(),
+                format!("({elapsed})"),
+                agent.worktree_path.display(),
+                paused_note
+            );
+        }
     }
     Ok(())
 }
@@ -21918,7 +22271,7 @@ fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
             String::new()
         } else {
             format!(
-                "; retained {} resumable entr{}",
+                "; retained {} ended/resumable entr{}",
                 report.retained.len(),
                 if report.retained.len() == 1 {
                     "y"
@@ -21940,7 +22293,7 @@ fn agent_gc(dry_run: bool, older_than: Option<u64>) -> Result<()> {
     }
     for row in &report.retained {
         println!(
-            "  retained {}#{} ({}) — resumable session {}",
+            "  retained {}#{} ({}) — resume id {}",
             row.agent_type,
             row.pid,
             row.source,
@@ -56294,6 +56647,9 @@ fn lease_agent_view(
         paused_since: None,
         paused_reason: None,
         expected_back: None,
+        native_session_id: None,
+        ended_at: None,
+        resumed_from: None,
     }
 }
 

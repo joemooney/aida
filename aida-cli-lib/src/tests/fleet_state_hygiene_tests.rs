@@ -21,6 +21,9 @@ fn agent_view(id: &str, status: agent_registry::AgentStatus) -> agent_registry::
         paused_since: None,
         paused_reason: None,
         expected_back: None,
+        native_session_id: None,
+        ended_at: None,
+        resumed_from: None,
     }
 }
 
