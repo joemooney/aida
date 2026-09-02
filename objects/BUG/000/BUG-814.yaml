@@ -1,0 +1,19 @@
+id: 01a0608c-4b36-77c1-9d2d-7659feca9b2e
+spec_id: BUG-814
+agreed_id: BUG-814
+title: queue rework never surfaces the RequestChanges findings — rework loops produce identical verdicts by construction
+description: |-
+  Observed live on STORY-790 (2026-09-01): reviewer recorded RequestChanges with two concrete findings; aida queue rework re-queued the spec; the rework implementer saw a spec whose acceptance its existing branch already satisfied (in its view), changed NOTHING (PR #1634 still has exactly one commit), and the reviewer re-failed with a byte-identical verdict. Infinite loop by construction: handle_queue_rework (queue_cmd.rs) resets status and re-queues but carries no findings, and the pickup prompt for the rework session never mentions the review outcome.
+
+  Fix: a rework pickup MUST lead with the blocking findings. Concretely: (1) at rework time, read the recorded verdict for the spec/PR (.aida/review-verdicts/) and the reviewer PR comment, and write them onto the spec as a structured comment ("REVIEW FINDINGS TO ADDRESS (PR #N): 1. ... 2. ...") so the substrate holds them; (2) the queue-work pickup brief for a spec with an open PR + a recorded RequestChanges verdict leads with those findings ahead of the plan context, and the implementer treats them as the acceptance delta; (3) acceptance: a rework drive on a spec with recorded findings produces at least one commit OR an explicit punt naming which finding it disputes — never a silent no-change pass-through.
+  Acceptance test: unit — rework on a spec with a recorded RequestChanges verdict writes the findings comment; the derived pickup prompt contains the findings text.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-02T05:16:42.166637576Z
+modified_at: 2026-09-02T05:16:42.166637576Z
+req_type: Bug
+tags:
+- orchestrator
+- review-loop
