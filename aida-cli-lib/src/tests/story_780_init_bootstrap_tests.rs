@@ -83,6 +83,17 @@ fn preflight_allows_missing_and_empty_dirs() {
 /// (the fail-fast-then-resume contract).
 #[test]
 fn plain_bootstrap_is_idempotent_and_leaves_one_commit() {
+    // CI runners have no global git identity; the bootstrap's first commit
+    // must not depend on the machine's ~/.gitconfig in this test.
+    let _guard = crate::test_env::env_lock();
+    for (k, v) in [
+        ("GIT_AUTHOR_NAME", "aida-test"),
+        ("GIT_AUTHOR_EMAIL", "aida-test@example.invalid"),
+        ("GIT_COMMITTER_NAME", "aida-test"),
+        ("GIT_COMMITTER_EMAIL", "aida-test@example.invalid"),
+    ] {
+        std::env::set_var(k, v);
+    }
     let parent = tempfile::tempdir().unwrap();
     let dir = parent.path().join("proj");
     let plan = plain_plan(dir.clone());
@@ -99,6 +110,15 @@ fn plain_bootstrap_is_idempotent_and_leaves_one_commit() {
         "1",
         "re-running must not stack commits"
     );
+
+    for k in [
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+    ] {
+        std::env::remove_var(k);
+    }
 }
 
 #[test]
