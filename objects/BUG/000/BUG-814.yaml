@@ -12,8 +12,9 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:16:42.166637576Z
-modified_at: 2026-09-02T05:16:42.166637576Z
+modified_at: 2026-09-02T05:35:10.306862219Z
 req_type: Bug
 tags:
 - orchestrator
 - review-loop
+execution_mode: drain
