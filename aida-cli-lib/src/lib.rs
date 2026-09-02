@@ -133,6 +133,7 @@ mod human_audit;
 mod human_cmd;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
+mod init_bootstrap;
 mod init_cmd;
 mod intake;
 mod integrate;
@@ -1988,6 +1989,11 @@ fn run() -> Result<()> {
         commit_scaffold,
         node_name,
         minimal,
+        dir,
+        lang,
+        github,
+        public,
+        remote,
     } = &cli.command
     {
         // STORY-757: the markdown-only first run — scaffold just a `specs/`
@@ -1998,6 +2004,32 @@ fn run() -> Result<()> {
             handle_init_minimal(*force)?;
             return Ok(());
         }
+        // STORY-780: `aida init <DIR>` bootstraps a brand-new project. The
+        // pre-steps (mkdir → native-tool scaffold → git init → first commit)
+        // run from the caller's cwd, then cwd moves INTO the new dir so the
+        // entire standard init below runs there unchanged; the remote/push
+        // post-steps run at the end of this block, after the store branch
+        // exists. trace:STORY-780 | ai:claude
+        let bootstrap: Option<init_bootstrap::BootstrapPlan> = match dir {
+            Some(d) => {
+                let plan = init_bootstrap::BootstrapPlan {
+                    dir: std::path::PathBuf::from(d),
+                    lang: lang
+                        .as_deref()
+                        .map(init_bootstrap::Lang::parse)
+                        .transpose()?,
+                    github: *github,
+                    public: *public,
+                    remote: remote.clone(),
+                };
+                init_bootstrap::preflight(&plan)?;
+                init_bootstrap::create_and_scaffold(&plan)?;
+                std::env::set_current_dir(&plan.dir)
+                    .with_context(|| format!("could not enter {}", plan.dir.display()))?;
+                Some(plan)
+            }
+            None => None,
+        };
         // Default: distributed (git-canonical) mode per EPIC-1-001.
         // --sibling implies distributed-sibling. --centralized opts into
         // the deprecated SQLite-canonical path.
@@ -2112,6 +2144,11 @@ fn run() -> Result<()> {
         // abort an otherwise-successful init. trace:TASK-859 | ai:claude
         if let Err(e) = maybe_prompt_init_config(&statusline_project_root()) {
             eprintln!("  {} config prompts skipped: {}", "Note:".dimmed(), e);
+        }
+        // STORY-780: remote + ordered pushes, only for a bootstrap init and
+        // only now that the store branch exists. trace:STORY-780 | ai:claude
+        if let Some(plan) = &bootstrap {
+            init_bootstrap::finish_remote(plan)?;
         }
         return Ok(());
     }
@@ -77616,6 +77653,13 @@ mod bug_800_review_test_command_prompt_tests;
 #[cfg(test)]
 #[path = "tests/story_790_drift_brief_tests.rs"]
 mod story_790_drift_brief_tests;
+
+// STORY-780: init-from-nothing bootstrap — the ordered sequence, its
+// refusals, idempotent resume, and the forge repo-create argv.
+// trace:STORY-780 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_780_init_bootstrap_tests.rs"]
+mod story_780_init_bootstrap_tests;
 
 // BUG-777: recovering a lease left behind by an already-exited session — the
 // verifiably-gone + clean-worktree reclaim, the never-reap-a-live-lease floor,
