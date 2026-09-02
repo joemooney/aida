@@ -1,0 +1,36 @@
+id: 01a06085-00b3-7040-ad71-824a7ddfa6c0
+spec_id: STORY-807
+agreed_id: STORY-807
+title: 'Agent selection is explicit and revisable: PATH-detected prompt at init, list/enable/disable in aida config menu'
+description: |-
+  Two operator observations from live STORY-780 testing (2026-09-01):
+  (a) aida init never asks which agents to scaffold — the most visible choice it makes (.claude/ + .codex/ + .antigravity/ all appear, default --agent all) is silent, so a codex-only user gets Claude skills dumped in the repo and never knew there was a choice.
+  (b) The choice is not revisable anywhere: aida config menu has no agents section.
+
+  Design (advisor-proposed, operator-endorsed in discussion):
+  1. DETECT: probe PATH for the agent CLIs (claude, codex, agy/antigravity). The detection result is the default selection.
+  2. CONFIRM at a TTY: one prompt — "Scaffold agent support for: <detected> — Enter to accept, or edit". Non-interactive init stays silent-default (detection result; falls back to all when nothing is detected). --agent <list> still overrides everything, unchanged (BUG-794 parser is the single source of truth for the grammar).
+  3. RECORD: the accepted selection persists in .aida/config.toml [agents] enabled = [...] so it is project state, not a lost init-time answer.
+  4. REVISE: aida config menu gains an Agents section listing every known profile with enabled/disabled state; toggling ON offers to scaffold that agent pack now (aida scaffold apply scoped to the one agent); toggling OFF leaves files in place but stops future refresh/scaffold passes from touching that pack (never deletes user files).
+  5. SHOW not ask: init output gains a one-line summary of installed global roles (implementer, advisor, reviewer — see aida role list) — informational, no prompt; roles are machine-global and have no per-project fork today.
+
+  Guardrails: keep init to ONE new question maximum (Trojan-horse rule — no wizard); every prompt has a pre-filled default reachable by Enter; scripts/CI see no prompts at all.
+
+  Acceptance:
+  - Fresh init at a TTY with only codex on PATH: single confirm prompt defaulting to codex; accepting writes [agents] enabled = ["codex"] and scaffolds only .codex/ (+ shared surfaces).
+  - Same init piped (non-TTY): no prompt, detection default applied silently, same config written.
+  - aida init --agent claude,codex: no prompt, flag wins, config records the flag selection.
+  - aida config menu: Agents section shows all profiles + state; enabling codex on a claude-only project offers and performs the codex pack scaffold; disabling never deletes files.
+  - aida init <DIR> bootstrap (STORY-780) composes: the prompt appears at the same point in the inner init flow.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-02T05:08:44.339302383Z
+modified_at: 2026-09-02T05:08:44.339302383Z
+req_type: Story
+tags:
+- codex-parity
+- config
+- init
+- ux
