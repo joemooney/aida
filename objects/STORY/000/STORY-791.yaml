@@ -11,12 +11,14 @@ description: |-
   - Singleton-per-role policy for the seat roles (advisor, product, integrator): a second `agent new --role advisor` on the same scope is REFUSED with the existing agent named, unless `--scope <EPIC|subsystem>` compartmentalizes it (and `ls` shows the scope). Implementer/reviewer are many-per-project. Policy under a `[agent_registry]` config key with the singleton default (configurable-policy-with-safe-default).
   - `ls` separates or labels lease-only rows (`unknown#` today) — e.g. a LEASES section or a KIND column — so process rows and scope rows are not confused.
   - Default `ls` hides dead PIDs (depends on the `agent gc` task).
+
+  SCOPING DECISION (operator, 2026-09-01, binding): singleton per role PER SCOPE. The advisor role is repo-wide singleton; an implementer is singleton per spec/worktree. Launching a second same-role agent on the SAME scope is REFUSED with a message pointing at the live agent (its session id, spec, and pid). Different scopes coexist freely. No new --scope concept is introduced — the scope IS the existing lease scope (repo for advisor, spec/worktree for doer roles). This matches the one-master-advisor operating model until subsystem-scoped advisors (SPIKE-10) exist.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-30T01:36:43.757865753Z
-modified_at: 2026-09-01T03:47:20.062166410Z
+modified_at: 2026-09-02T04:24:04.797291163Z
 req_type: Story
 tags:
 - aida:agent:ls
@@ -35,3 +37,4 @@ comments:
   created_at: 2026-09-01T03:47:20.062166410Z
   modified_at: 2026-09-01T03:47:20.062166410Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+execution_mode: drain
