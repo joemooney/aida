@@ -45,12 +45,12 @@ description: |-
   3. --lang rust|python|node delegates to the NATIVE tool (cargo init / uv init / npm init -y). AIDA ships no language templates. Missing tool = clear error naming the install, before any mkdir.
   4. Remote: --github creates the repo via the forge layer (no new direct gh call sites outside forge.rs) — PRIVATE by default, --public is the explicit opt-in — then pushes main and aida-store in that order. --remote <url> is the bring-your-own alternative (sets origin, pushes both legs; covers GitLab push-to-create). Omitting both leaves a local-only project with the push commands printed.
   5. Tests: ordering + refusal logic unit-tested; language-tool integration tests gate on tool presence; a plain-path (no lang, no remote) end-to-end test in a temp dir.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-23T20:00:20.139796022Z
-modified_at: 2026-09-02T04:42:30.089791372Z
+modified_at: 2026-09-02T04:42:35.797533716Z
 req_type: Story
 tags:
 - aida:init
