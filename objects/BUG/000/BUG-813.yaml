@@ -37,10 +37,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:15:19.129050576Z
-modified_at: 2026-09-02T05:15:19.129050576Z
+modified_at: 2026-09-03T14:57:29.590309392Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-3
 - reviewer
+comments:
+- id: 01a067c6-61f6-7051-abda-f0cd747ed69f
+  author: joe
+  content: 'Advisor triage 2026-09-03: auto-filed shelf record; underlying cause resolved — STORY-790 merged via PR #1634. Rejecting as overtaken.'
+  created_at: 2026-09-03T14:57:29.590309392Z
+  modified_at: 2026-09-03T14:57:29.590309392Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
