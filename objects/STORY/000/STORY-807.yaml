@@ -22,12 +22,12 @@ description: |-
   - aida init --agent claude,codex: no prompt, flag wins, config records the flag selection.
   - aida config menu: Agents section shows all profiles + state; enabling codex on a claude-only project offers and performs the codex pack scaffold; disabling never deletes files.
   - aida init <DIR> bootstrap (STORY-780) composes: the prompt appears at the same point in the inner init flow.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:08:44.339302383Z
-modified_at: 2026-09-02T05:08:56.341164582Z
+modified_at: 2026-09-03T15:16:50.867671095Z
 req_type: Story
 tags:
 - codex-parity
