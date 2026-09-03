@@ -221,11 +221,25 @@ pub(crate) fn advance_dispatch(
                 return Ok(());
             }
             if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-                let approved = inquire::Confirm::new(&format!(
-                    "Was {display} approved? (drop `review:draft-only` so it drains)"
-                ))
-                .with_default(false)
-                .prompt()
+                // trace:STORY-809 | ai:claude
+                let card = crate::context_prompt::ContextCard {
+                    decision: format!(
+                        "whether {display} is operator-approved, clearing its `review:draft-only` hold"
+                    ),
+                    provenance: vec![format!(
+                        "{display} carries `review:draft-only` — filed as a draft awaiting an explicit approval decision"
+                    )],
+                    answers: vec![
+                        "y: drop the tag — the spec becomes drainable by autonomous runs".to_string(),
+                        "n: keep the hold; nothing changes (re-runnable any time)".to_string(),
+                    ],
+                    recommended_default: "n — only approve when you have actually reviewed the spec text".to_string(),
+                };
+                let approved = crate::context_prompt::confirm_with_context(
+                    &format!("Was {display} approved? (drop `review:draft-only` so it drains)"),
+                    false,
+                    &card,
+                )
                 .unwrap_or(false);
                 if approved {
                     let mut req = backend
@@ -335,10 +349,24 @@ pub(crate) fn advance_dispatch(
         AdvanceAction::Reject => {
             // Offer Reject (resolve it out) or leave it parked.
             let do_reject = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-                inquire::Confirm::new(&format!("Reject {display} (resolve it out)?"))
-                    .with_default(false)
-                    .prompt()
-                    .unwrap_or(false)
+                // trace:STORY-809 | ai:claude
+                let card = crate::context_prompt::ContextCard {
+                    decision: format!("whether to move {display} to Rejected (declined — nothing adopted)"),
+                    provenance: vec![format!(
+                        "{display} is parked and the advance flow judged rejection the plausible resolution"
+                    )],
+                    answers: vec![
+                        "y: status → Rejected; it leaves every open/candidate view (reversible via `aida edit --status`)".to_string(),
+                        "n: leave it parked as-is".to_string(),
+                    ],
+                    recommended_default: "n — reject only when you are sure the work should not happen".to_string(),
+                };
+                crate::context_prompt::confirm_with_context(
+                    &format!("Reject {display} (resolve it out)?"),
+                    false,
+                    &card,
+                )
+                .unwrap_or(false)
             } else {
                 false
             };
@@ -387,11 +415,23 @@ pub(crate) fn advance_dispatch(
             // BUG-543: a fully-delivered epic (all children Completed). Offer to
             // close it (status → Completed) — operator-confirmed, never silent.
             let do_close = if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-                inquire::Confirm::new(&format!(
-                    "Close {display}? (all children completed → status completed)"
-                ))
-                .with_default(true)
-                .prompt()
+                // trace:STORY-809 | ai:claude
+                let card = crate::context_prompt::ContextCard {
+                    decision: format!("whether to close {display} now that every child is Completed"),
+                    provenance: vec![format!(
+                        "the rollup for {display} reports all children Completed — the epic is fully delivered"
+                    )],
+                    answers: vec![
+                        "y: status → Completed; it leaves the open lens (reversible via `aida edit --status`)".to_string(),
+                        "n: leave it open (it will be offered again next pass)".to_string(),
+                    ],
+                    recommended_default: "y — a fully-delivered epic staying open just clutters the open view".to_string(),
+                };
+                crate::context_prompt::confirm_with_context(
+                    &format!("Close {display}? (all children completed → status completed)"),
+                    true,
+                    &card,
+                )
                 .unwrap_or(false)
             } else {
                 false

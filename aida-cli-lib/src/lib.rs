@@ -14574,9 +14574,23 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
 
     // Confirm deletion unless --yes flag is used
     if !skip_confirm {
-        let confirm = inquire::Confirm::new("Are you sure you want to delete this requirement?")
-            .with_default(false)
-            .prompt()?;
+        // trace:STORY-809 | ai:claude
+        let card = context_prompt::ContextCard {
+            decision: "whether to permanently delete this requirement from the store".to_string(),
+            provenance: vec![
+                "deletion removes the YAML object outright — unlike archive/reject, no audit row survives".to_string(),
+            ],
+            answers: vec![
+                "y: the requirement and its relationships are removed (recoverable only from store git history)".to_string(),
+                "n: nothing changes — consider `aida archive` or `--status rejected` instead".to_string(),
+            ],
+            recommended_default: "n — archive or reject preserves the audit trail; delete is for mistakes/spam".to_string(),
+        };
+        let confirm = context_prompt::confirm_with_context(
+            "Are you sure you want to delete this requirement?",
+            false,
+            &card,
+        )?;
 
         if !confirm {
             println!("{}", "Deletion cancelled.".yellow());
@@ -61568,6 +61582,7 @@ fn strip_v(s: &str) -> &str {
 
 // ---- shared helpers -------------------------------------------------------
 
+// ?-exempt: bare helper; each consequential CALLER carries its own card or exemption. trace:STORY-809
 fn confirm(prompt: &str) -> bool {
     print!("{}", prompt);
     std::io::Write::flush(&mut std::io::stdout()).ok();

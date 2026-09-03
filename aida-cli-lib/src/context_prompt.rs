@@ -182,3 +182,40 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod story_809_coverage_tests {
+    /// The STORY-809 adopt-or-annotate gate: every bare yes/no confirm
+    /// (`Confirm::new`) outside this module either went through
+    /// `confirm_with_context` (and so no longer matches) or carries a
+    /// `?-exempt:` comment within the two preceding lines. A new bare
+    /// confirm without an exemption fails this test.
+    // trace:STORY-809 | ai:claude
+    #[test]
+    fn every_bare_confirm_is_exempted_or_adopted() {
+        let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut violations = Vec::new();
+        for entry in std::fs::read_dir(&src_dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs")
+                || path.file_name().and_then(|n| n.to_str()) == Some("context_prompt.rs")
+            {
+                continue;
+            }
+            let body = std::fs::read_to_string(&path).unwrap_or_default();
+            let lines: Vec<&str> = body.lines().collect();
+            for (i, line) in lines.iter().enumerate() {
+                if line.contains("Confirm::new") && !line.trim_start().starts_with("//") {
+                    let window = lines[i.saturating_sub(2)..i].join("\n");
+                    if !window.contains("?-exempt:") {
+                        violations.push(format!("{}:{}", path.display(), i + 1));
+                    }
+                }
+            }
+        }
+        assert!(
+            violations.is_empty(),
+            "bare confirms without a ContextCard or ?-exempt annotation: {violations:?}"
+        );
+    }
+}

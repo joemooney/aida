@@ -345,9 +345,19 @@ fn remove_relationship_definition(
             "This will not affect existing relationships, but they will become 'custom' type."
         );
 
-        let confirm = inquire::Confirm::new("Delete?")
-            .with_default(false)
-            .prompt()?;
+        // trace:STORY-809 | ai:claude
+        let card = crate::context_prompt::ContextCard {
+            decision: "whether to delete this relationship definition".to_string(),
+            provenance: vec![
+                "existing relationships of this type survive but downgrade to 'custom'".to_string(),
+            ],
+            answers: vec![
+                "y: the definition is removed; existing edges become 'custom' (recreate the definition to restore typing)".to_string(),
+                "n: cancel".to_string(),
+            ],
+            recommended_default: "n unless the type was created in error".to_string(),
+        };
+        let confirm = crate::context_prompt::confirm_with_context("Delete?", false, &card)?;
 
         if !confirm {
             println!("{}", "Cancelled".yellow());

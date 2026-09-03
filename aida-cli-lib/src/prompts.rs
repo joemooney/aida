@@ -84,6 +84,7 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     }
 
     // Prompt for tags
+    // ?-exempt: cosmetic sub-step of the interactive add wizard — no consequence beyond the current form. trace:STORY-809
     let add_tags = Confirm::new("Add tags?").prompt()?;
     if add_tags {
         let tags_input = Text::new("Tags (comma separated):").prompt()?;

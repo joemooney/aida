@@ -1904,14 +1904,25 @@ fn confirm_doctor_category(category: &str, count: usize) -> Result<bool> {
         );
         return Ok(false);
     }
-    print!("Heal {} finding(s) in {}? [y/N] ", count, category);
-    std::io::stdout().flush()?;
-    let mut ans = String::new();
-    std::io::stdin().read_line(&mut ans)?;
-    Ok(matches!(
-        ans.trim().to_ascii_lowercase().as_str(),
-        "y" | "yes"
-    ))
+    // trace:STORY-809 | ai:claude
+    let card = crate::context_prompt::ContextCard {
+        decision: format!("whether doctor may heal the '{category}' findings"),
+        provenance: vec![format!(
+            "`aida doctor` detected {count} finding(s) in category '{category}'"
+        )],
+        answers: vec![
+            format!("y: apply the '{category}' heal to all {count} finding(s) now"),
+            "n: skip this category (findings remain; re-run doctor any time)".to_string(),
+        ],
+        recommended_default:
+            "y for hygiene categories (stale leases, dead registrations); read the findings first for destructive ones"
+                .to_string(),
+    };
+    crate::context_prompt::confirm_with_context(
+        &format!("Heal {count} finding(s) in {category}?"),
+        false,
+        &card,
+    )
 }
 
 fn heal_doctor_finding(
