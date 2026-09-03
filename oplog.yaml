@@ -42603,5 +42603,31 @@ operations:
   timestamp: 2026-09-03T14:29:04.870669142Z
   kind: !SetStatus
     status: In Progress
-clock: 3822
+- id: 01a067b6-b248-7241-ab68-652a3a31ed15
+  target_id: 01a067b6-ae8e-75c2-a7e0-fc1fbc536e58
+  author: aida
+  node_id: '1'
+  lamport: 3823
+  timestamp: 2026-09-03T14:40:21.576268717Z
+  kind: !Create
+    title: 'Review PR-1638: [AI:codex] fix(queue): surface review findings during rework (BUG-814)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a067ab`) for branch `bug-814-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1638>
+      - Branch: `bug-814-2` → `main`
+
+      ## Covers
+
+      - BUG-814
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1638` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3823
 node_id: '1'
