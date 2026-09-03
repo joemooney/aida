@@ -45,12 +45,12 @@ description: |-
   3. --lang rust|python|node delegates to the NATIVE tool (cargo init / uv init / npm init -y). AIDA ships no language templates. Missing tool = clear error naming the install, before any mkdir.
   4. Remote: --github creates the repo via the forge layer (no new direct gh call sites outside forge.rs) — PRIVATE by default, --public is the explicit opt-in — then pushes main and aida-store in that order. --remote <url> is the bring-your-own alternative (sets origin, pushes both legs; covers GitLab push-to-create). Omitting both leaves a local-only project with the push commands printed.
   5. Tests: ordering + refusal logic unit-tested; language-tool integration tests gate on tool presence; a plain-path (no lang, no remote) end-to-end test in a temp dir.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-23T20:00:20.139796022Z
-modified_at: 2026-09-03T14:53:44.009556216Z
+modified_at: 2026-09-03T15:10:45.326881473Z
 req_type: Story
 tags:
 - aida:init
@@ -121,3 +121,21 @@ comments:
   created_at: 2026-09-02T04:52:29.161548768Z
   modified_at: 2026-09-02T04:52:29.161548768Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a067d2-8648-7602-b359-3909907028e7
+  author: aida-auto-bump
+  timestamp: 2026-09-03T15:10:45.320945199Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a067d2-864e-7fe3-9e6e-c4f63b2e9d47
+  timestamp: 2026-09-03T15:10:45.326880777Z
+  agent: aida
+  commit_sha: a4751a90e69e3c9a1e82a71c0ad9e97130d0a9c1
+  summary: Completed via merge a4751a90
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-03T15:10:45.320761335Z
+  completion_sha: a4751a90e69e3c9a1e82a71c0ad9e97130d0a9c1
