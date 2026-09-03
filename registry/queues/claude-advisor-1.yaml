@@ -13,13 +13,6 @@
   added_at: 2026-09-03T14:57:41.866665866Z
   for_role: implementer
 - user_id: claude-advisor-1
-  requirement_id: 01a067c3-e5df-7263-859e-b881632e0583
-  position: 45000
-  added_by: claude-advisor-1
-  added_at: 2026-09-03T14:58:16.520895500Z
-  for_role: advisor
-  added_by_machine: imac
-- user_id: claude-advisor-1
   requirement_id: 01a067c3-fe24-7563-a9c8-3d781bb4cc2b
   position: 46000
   added_by: claude-advisor-1
