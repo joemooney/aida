@@ -6961,10 +6961,10 @@ pub(crate) fn rework_findings_block_for_spec(
         .collect::<Vec<_>>();
     blocking.sort_by(|a, b| a.0.cmp(&b.0));
 
+    // trace:TASK-1191 | ai:codex
     let selected = blocking
         .iter()
-        .find(|(_, v)| verdict_mentions_spec(v, &ids))
-        .or_else(|| (blocking.len() == 1).then(|| &blocking[0]))?;
+        .find(|(_, v)| verdict_mentions_spec(v, &ids))?;
     let review_ref = review_ref_from_verdict_filename(&selected.0);
     review_verdict::rework_findings_comment(display_id, &review_ref, &selected.1)
 }
