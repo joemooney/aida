@@ -35,10 +35,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T15:14:14.960700926Z
-modified_at: 2026-09-03T15:14:14.960700926Z
+modified_at: 2026-09-03T20:09:33.006995116Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - failure-1
 - implementer
+comments:
+- id: 01a068e4-144f-7b20-950f-1e4af7cf13e7
+  author: joe
+  content: 'Advisor triage 2026-09-03: auto-filed record of the transient launch-failure window (08:11-09:20) / interrupted-drive parks; the subject spec is Completed and merged. These records predate the TASK-1192 auto-resolve sweep (which now buries this class automatically — BUG-823/824 were swept by it). Rejecting as overtaken.'
+  created_at: 2026-09-03T20:09:33.006995116Z
+  modified_at: 2026-09-03T20:09:33.006995116Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
