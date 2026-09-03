@@ -74957,10 +74957,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // unaffected; the main worktree is resolved explicitly (that is where
         // `.aida/drain.lock` lives) and a resolution failure is tolerated.
         // trace:BUG-716 | ai:claude
+        // In-crate harness tests (the BUG-826 stub-vendor launch test) drive
+        // `run_implementer` directly with no real drive running; the invariant
+        // is about production spawn paths, so `cfg!(test)` is exempt — the
+        // probe would otherwise read the DEVELOPER's real .aida/drain.lock.
         debug_assert!(
-            find_main_worktree_root()
-                .map(|root| drain_lock::drive_lock_invariant_holds(&drain_lock::probe_lock(&root)))
-                .unwrap_or(true),
+            cfg!(test)
+                || find_main_worktree_root()
+                    .map(|root| {
+                        drain_lock::drive_lock_invariant_holds(&drain_lock::probe_lock(&root))
+                    })
+                    .unwrap_or(true),
             "orchestrated implementer running without a live drain lock — the \
              pr-ship self-merge guard (BUG-716) keys on it; a drive path dropped \
              the lock"
