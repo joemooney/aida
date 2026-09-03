@@ -7,12 +7,12 @@ description: |-
 
   Fix: a rework pickup MUST lead with the blocking findings. Concretely: (1) at rework time, read the recorded verdict for the spec/PR (.aida/review-verdicts/) and the reviewer PR comment, and write them onto the spec as a structured comment ("REVIEW FINDINGS TO ADDRESS (PR #N): 1. ... 2. ...") so the substrate holds them; (2) the queue-work pickup brief for a spec with an open PR + a recorded RequestChanges verdict leads with those findings ahead of the plan context, and the implementer treats them as the acceptance delta; (3) acceptance: a rework drive on a spec with recorded findings produces at least one commit OR an explicit punt naming which finding it disputes — never a silent no-change pass-through.
   Acceptance test: unit — rework on a spec with a recorded RequestChanges verdict writes the findings comment; the derived pickup prompt contains the findings text.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:16:42.166637576Z
-modified_at: 2026-09-03T14:49:00.907602520Z
+modified_at: 2026-09-03T14:54:06.666786786Z
 req_type: Bug
 tags:
 - orchestrator
@@ -45,16 +45,29 @@ comments:
   created_at: 2026-09-03T14:27:01.336033122Z
   modified_at: 2026-09-03T14:27:01.336033122Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a067c3-4944-7023-8d83-76a99459ff85
+  author: aida-auto-bump
+  timestamp: 2026-09-03T14:54:06.660504738Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a067c3-494a-79d2-a6a4-7792032fa01d
+  timestamp: 2026-09-03T14:54:06.666785346Z
+  agent: aida
+  commit_sha: da80f793ca308d372872037239a2ac8fde5a54fa
+  pr: 1638
+  summary: 'Re-implementation supersedes PR-1637: all acceptance covered with end-to-end tests (120 green), prior blocking sed finding structurally moot (prompt prepend, no skill sed), both promoted findings resolved (local-only verdict reads, no FAIL-only filter); CI green'
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  - 'punted: the reviewer session exited 1'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-03T14:40:32.037218163Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: failed
-  detail: the reviewer session exited 1
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-814 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-03T14:49:00.907602520Z
+  completed_at: 2026-09-03T14:54:06.660351549Z
+  completion_sha: da80f793ca308d372872037239a2ac8fde5a54fa
