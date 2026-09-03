@@ -135,9 +135,24 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
                         .yellow()
                 );
                 println!("Current requirements: {}", store.requirements.len());
-                let confirm = inquire::Confirm::new("Are you sure you want to migrate?")
-                    .with_default(false)
-                    .prompt()?;
+                // trace:STORY-809 | ai:claude
+                let card = crate::context_prompt::ContextCard {
+                    decision: "whether to regenerate every requirement ID under the current configuration".to_string(),
+                    provenance: vec![format!(
+                        "{} requirements are in the store; every spec_id may change",
+                        store.requirements.len()
+                    )],
+                    answers: vec![
+                        "y: IDs regenerate — existing trace: comments, commit trailers, and external references keep the OLD ids".to_string(),
+                        "n: cancel; nothing changes".to_string(),
+                    ],
+                    recommended_default: "n — run only on a young store; on an established one this severs code-to-spec traces".to_string(),
+                };
+                let confirm = crate::context_prompt::confirm_with_context(
+                    "Are you sure you want to migrate?",
+                    false,
+                    &card,
+                )?;
                 if !confirm {
                     println!("Migration cancelled.");
                     return Ok(());

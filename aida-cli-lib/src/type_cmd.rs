@@ -59,9 +59,23 @@ pub(crate) fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Resul
                         "About to remove type '{}' (prefix: {})",
                         type_def.name, type_def.prefix
                     );
-                    let confirm = inquire::Confirm::new("Are you sure?")
-                        .with_default(false)
-                        .prompt()?;
+                    // trace:STORY-809 | ai:claude
+                    let card = crate::context_prompt::ContextCard {
+                        decision: format!(
+                            "whether to remove the custom type '{}' (prefix {})",
+                            type_def.name, type_def.prefix
+                        ),
+                        provenance: vec![
+                            "removing a type does not delete requirements already using it, but new ones cannot be filed under it".to_string(),
+                        ],
+                        answers: vec![
+                            "y: the type definition is removed (re-add it to restore)".to_string(),
+                            "n: cancel".to_string(),
+                        ],
+                        recommended_default: "n unless no requirements use this type".to_string(),
+                    };
+                    let confirm =
+                        crate::context_prompt::confirm_with_context("Are you sure?", false, &card)?;
                     if !confirm {
                         println!("Removal cancelled.");
                         return Ok(());
