@@ -42,6 +42,10 @@ This project uses AIDA for its own requirements tracking. **Do NOT maintain a se
 
 ```bash
 aida init                      # Default: distributed git-canonical (RECOMMENDED)
+aida init <DIR> [--lang rust|python|node] [--github [--public] | --remote <url>]
+                               # Bootstrap from NOTHING: create DIR, native-tool scaffold, git init +
+                               # first commit, standard init inside, then remote + ordered pushes
+                               # (code branch, THEN aida-store). Private repo by default (STORY-780)
 aida init --sibling            # Distributed using a sibling repo (multi-repo workspaces)
 aida init --centralized        # Legacy SQLite mode (deprecated, prints warning)
 aida init --no-skills          # Skip .claude/skills/ and .claude/commands/

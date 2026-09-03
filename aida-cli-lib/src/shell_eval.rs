@@ -65,6 +65,14 @@ pub(crate) const EVAL_END: &str = "#aida:eval:end";
 /// knows how to slice the marked block out of stdout.
 pub(crate) const EVAL_BLOCK_CAP: &str = "eval-block";
 
+/// The capability token a wrapper advertises when its `init` case branch can
+/// consume a marked `cd` block from `aida init <DIR>` (STORY-780). Distinct
+/// from `eval-block`: a wrapper may speak the channel for the legacy verbs
+/// yet not route `init` through it at all — emitting markers at such a
+/// wrapper would print them as inert comment noise.
+// trace:STORY-780 | ai:claude
+pub(crate) const INIT_CD_CAP: &str = "init-cd";
+
 /// Nesting depth, so an outer emitter that internally calls another one still
 /// produces exactly ONE block (a nested pair of markers would end the block
 /// early and leak the tail into ordinary stdout).

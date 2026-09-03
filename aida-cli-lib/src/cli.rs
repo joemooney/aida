@@ -10063,6 +10063,38 @@ pub enum Command {
         #[clap(long)]
         minimal: bool,
 
+        /// Bootstrap a BRAND-NEW project: create DIR, optionally scaffold it
+        /// (--lang), git init + first commit, run the standard init inside it,
+        /// then (with --github or --remote) create the remote and push the
+        /// code branch and aida-store in the order that never leaves divergent
+        /// history. Omit DIR to initialize in place, exactly as before.
+        // trace:STORY-780 | ai:claude
+        #[clap(value_name = "DIR")]
+        dir: Option<String>,
+
+        /// Language scaffold for a new DIR, delegated to the native tool:
+        /// rust (cargo init), python (uv init), or node (npm init -y).
+        // trace:STORY-780 | ai:claude
+        #[clap(long, value_name = "LANG", requires = "dir")]
+        lang: Option<String>,
+
+        /// Create the GitHub repo for a new DIR (PRIVATE by default) and push
+        /// both legs. Needs an authenticated `gh`.
+        // trace:STORY-780 | ai:claude
+        #[clap(long, requires = "dir", conflicts_with = "remote")]
+        github: bool,
+
+        /// Make the --github repo public instead of private.
+        // trace:STORY-780 | ai:claude
+        #[clap(long, requires = "github")]
+        public: bool,
+
+        /// Bring-your-own remote URL for a new DIR: set origin and push both
+        /// legs. Covers GitLab and any host with push-to-create.
+        // trace:STORY-780 | ai:claude
+        #[clap(long, value_name = "URL", requires = "dir")]
+        remote: Option<String>,
+
         /// (deprecated, accepted for backwards compat) Initialize in
         /// distributed mode. Distributed is now the default, so this
         /// flag is a no-op. Use `--centralized` to opt out.

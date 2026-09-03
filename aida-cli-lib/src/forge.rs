@@ -139,6 +139,36 @@ impl ForgeKind {
     /// Human name + install URL for this forge's CLI, for "tool not on PATH"
     /// errors. `None` for pure-git (no forge CLI is needed at all).
     /// trace:TASK-651 | ai:claude
+    /// STORY-780: argv for creating a brand-new hosted repo from an existing
+    /// local one (`aida init <DIR> --github`) — the repo-creation analog of
+    /// `create_cmd`, kept here so init does not grow a direct `gh` call site.
+    /// `--source . --push` pushes the CURRENT branch, so the caller controls
+    /// the code-leg/store-leg ordering. GitLab returns None: its native path
+    /// is push-to-create, served by `aida init <DIR> --remote <url>`.
+    // trace:STORY-780 | ai:claude
+    pub fn repo_create_argv(self, name: &str, public: bool) -> Option<Vec<String>> {
+        match self {
+            ForgeKind::GitHub => Some(
+                [
+                    "gh",
+                    "repo",
+                    "create",
+                    name,
+                    if public { "--public" } else { "--private" },
+                    "--source",
+                    ".",
+                    "--remote",
+                    "origin",
+                    "--push",
+                ]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            ),
+            ForgeKind::GitLab | ForgeKind::None => None,
+        }
+    }
+
     pub fn cli_install_hint(self) -> Option<(&'static str, &'static str)> {
         match self {
             ForgeKind::GitHub => Some(("GitHub CLI", "https://cli.github.com")),
