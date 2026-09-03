@@ -1,0 +1,28 @@
+id: 01a0657a-0daa-7ff2-bc99-bf31022d3ff7
+spec_id: BUG-816
+agreed_id: BUG-816
+title: human review open-PR hint emits gh pr create --fill, which fails from main — must pass --head <branch>
+description: |-
+  Observed live 2026-09-02: `aida human review BUG-814` offered "Open a PR from bug-814 first?" and on Yes printed:
+
+    git push -u origin bug-814 && gh pr create --fill
+
+  The push works from anywhere, but `gh pr create --fill` derives title/body/head from the CURRENT branch — and the operator running `aida human review` is standing on main, so gh failed with "could not find any commits between origin/main and main".
+
+  Fix: the hint (and any future auto-open) must be branch-explicit and cwd-independent:
+
+    git push -u origin <branch> && gh pr create --head <branch> --title "$(git log -1 --format=%s <branch>)" --body "$(git log -1 --format=%b <branch>)"
+
+  Better: offer to run it directly (the review flow already knows the branch), falling back to printing the corrected command. Route the command construction through the forge layer (ForgeKind::create_cmd family) rather than hand-assembled gh strings.
+  Acceptance: from a main checkout with a local branch carrying 1 unshipped commit, the review flow's open-PR path produces an open PR without the operator editing any command; unit test pins that the emitted hint contains --head <branch>.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-03T04:14:52.842304112Z
+modified_at: 2026-09-03T04:14:52.842304112Z
+req_type: Bug
+tags:
+- cli
+- papercut
+- ux
