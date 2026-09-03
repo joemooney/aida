@@ -526,6 +526,9 @@ pub struct ScaffoldConfig {
     /// skills. Mirrors the `.codex/skills/` pattern so a second supported
     /// agent inherits the same onboarding parity. trace:TASK-457 | ai:claude
     pub generate_antigravity_skills: bool,
+    /// Generate .mcp.json for Claude Code MCP server discovery.
+    // trace:STORY-807 | ai:codex
+    pub generate_mcp_json: bool,
     /// Include aida-req skill for requirement creation
     pub include_aida_req_skill: bool,
     /// Include aida-plan skill for implementation planning
@@ -623,6 +626,7 @@ impl Default for ScaffoldConfig {
             generate_codex_config: true,
             // trace:TASK-457 | ai:claude
             generate_antigravity_skills: true,
+            generate_mcp_json: true,
             include_aida_req_skill: true,
             include_aida_plan_skill: true,
             include_aida_implement_skill: true,
@@ -1758,7 +1762,7 @@ impl Scaffolder {
         }
 
         // .mcp.json — MCP server configuration for Claude Code
-        {
+        if self.config.generate_mcp_json {
             let mcp_content = r#"{
   "mcpServers": {
     "aida": {

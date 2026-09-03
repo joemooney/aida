@@ -2038,7 +2038,7 @@ fn run() -> Result<()> {
         if *centralized {
             init_cmd::handle_init_command(
                 *no_skills,
-                agent,
+                agent.as_deref(),
                 *no_hooks,
                 *force,
                 *verbose,
@@ -2053,7 +2053,7 @@ fn run() -> Result<()> {
                 *attach,
                 store_path.as_deref(),
                 *no_skills,
-                agent,
+                agent.as_deref(),
                 *no_hooks,
                 *verbose,
                 name.as_deref(),
@@ -2062,7 +2062,7 @@ fn run() -> Result<()> {
             init_cmd::handle_init_distributed_worktree(
                 *force,
                 *no_skills,
-                agent,
+                agent.as_deref(),
                 *no_hooks,
                 *verbose,
                 name.as_deref(),
@@ -2081,6 +2081,10 @@ fn run() -> Result<()> {
         if !*no_roles {
             match scaffold_starter_roles(&statusline_project_root()) {
                 Ok((created, skipped)) => {
+                    println!(
+                        "  {} global roles installed: implementer, advisor, reviewer",
+                        crate::glyph(crate::glyphs::Glyph::Check).green()
+                    );
                     if created.is_empty() {
                         println!(
                             "  {} starter global roles already present at ~/.aida/roles/ ({} role(s))",

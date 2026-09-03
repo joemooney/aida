@@ -369,6 +369,28 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "security-relevant — edit ~/.aida/agents.toml deliberately",
         },
     },
+    // trace:STORY-807 | ai:codex
+    KnobSpec {
+        section: "agents",
+        key: "claude",
+        doc: "Whether future AIDA scaffold/refresh passes manage the Claude Code profile.",
+        default: "enabled",
+        edit: EditSafety::Bool { default: true },
+    },
+    KnobSpec {
+        section: "agents",
+        key: "codex",
+        doc: "Whether future AIDA scaffold/refresh passes manage the Codex profile.",
+        default: "enabled",
+        edit: EditSafety::Bool { default: true },
+    },
+    KnobSpec {
+        section: "agents",
+        key: "antigravity",
+        doc: "Whether future AIDA scaffold/refresh passes manage the Antigravity profile.",
+        default: "enabled",
+        edit: EditSafety::Bool { default: true },
+    },
     // --- [contained] — sandbox + egress posture (read-only: security-relevant). ---
     KnobSpec {
         section: "contained",
@@ -746,9 +768,39 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             value: rendered,
             source,
         });
+        let selection = crate::init_cmd::read_enabled_agent_selection(project_root).unwrap_or(
+            crate::init_cmd::AgentSelection {
+                claude: true,
+                codex: true,
+                antigravity: true,
+            },
+        );
+        for (key, enabled) in [
+            ("claude", selection.claude),
+            ("codex", selection.codex),
+            ("antigravity", selection.antigravity),
+        ] {
+            rows.push(PolicyRow {
+                key,
+                value: if enabled {
+                    "enabled".to_string()
+                } else {
+                    "disabled".to_string()
+                },
+                source: if read_project_config_value(project_root)
+                    .as_ref()
+                    .and_then(|cfg| config_lookup(Some(cfg), "agents", "enabled"))
+                    .is_some()
+                {
+                    PolicySource::ProjectConfig
+                } else {
+                    PolicySource::Default
+                },
+            });
+        }
         PolicySection {
             section: "agents",
-            header: "[agents] — agent permission posture".to_string(),
+            header: "[agents] — enabled project profiles + permission posture".to_string(),
             rows,
         }
     });
@@ -1657,6 +1709,10 @@ fn cli_edit_config_knob(
             .unwrap_or("the env var");
         return EditOutcome::Blocked(format!("overridden by {var} — unset it to edit"));
     }
+    if item.section == "agents" && matches!(item.name.as_str(), "claude" | "codex" | "antigravity")
+    {
+        return cli_edit_agent_profile(project_root, item);
+    }
     let Some(meta) = config_knob_meta(&item.section, &item.name) else {
         return EditOutcome::Blocked(format!("{} is not editable here", item.name));
     };
@@ -1730,6 +1786,98 @@ fn cli_edit_config_knob(
             scope: path.display().to_string(),
         },
     }
+}
+
+#[cfg(feature = "tui")]
+fn cli_edit_agent_profile(
+    project_root: &std::path::Path,
+    item: &aida_tui::ConfigMenuItem,
+) -> aida_tui::EditOutcome {
+    use aida_tui::EditOutcome;
+
+    let mut selection = crate::init_cmd::read_enabled_agent_selection(project_root).unwrap_or(
+        crate::init_cmd::AgentSelection {
+            claude: true,
+            codex: true,
+            antigravity: true,
+        },
+    );
+    let currently_enabled = match item.name.as_str() {
+        "claude" => selection.claude,
+        "codex" => selection.codex,
+        "antigravity" => selection.antigravity,
+        _ => return EditOutcome::Blocked(format!("unknown agent profile {}", item.name)),
+    };
+    let enabling = !currently_enabled;
+    match item.name.as_str() {
+        "claude" => selection.claude = enabling,
+        "codex" => selection.codex = enabling,
+        "antigravity" => selection.antigravity = enabling,
+        _ => {}
+    }
+
+    if let Err(e) = crate::init_cmd::write_enabled_agent_selection(project_root, selection) {
+        return EditOutcome::Blocked(format!("write failed: {e}"));
+    }
+    if enabling {
+        if let Err(e) = scaffold_enabled_agent_profile(project_root, &item.name) {
+            return EditOutcome::Blocked(format!("enabled, but scaffold failed: {e}"));
+        }
+    }
+
+    match resolve_config_menu_row(project_root, &item.section, &item.name) {
+        Some((value, scope)) => EditOutcome::Updated { value, scope },
+        None => EditOutcome::Updated {
+            value: if enabling { "enabled" } else { "disabled" }.to_string(),
+            scope: ".aida/config.toml".to_string(),
+        },
+    }
+}
+
+#[cfg(feature = "tui")]
+fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str) -> Result<()> {
+    let mut selection = crate::init_cmd::AgentSelection {
+        claude: false,
+        codex: false,
+        antigravity: false,
+    };
+    match profile {
+        "claude" => selection.claude = true,
+        "codex" => selection.codex = true,
+        "antigravity" => selection.antigravity = true,
+        _ => return Ok(()),
+    }
+    let mut config = ScaffoldConfig::default();
+    selection.apply_to_scaffold_config(&mut config);
+    let db_path = project_root.join(".aida").join("cache.db");
+    let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
+        project_root.to_path_buf(),
+        config,
+        db_path,
+    );
+    let store = aida_core::RequirementsStore::default();
+    let preview = scaffolder.preview(&store);
+    for artifact in preview.artifacts {
+        let rel = artifact.path.to_string_lossy().replace('\\', "/");
+        let wanted = match profile {
+            "claude" => rel == "CLAUDE.md" || rel == ".mcp.json" || rel.starts_with(".claude/"),
+            "codex" => rel == "AGENTS.md" || rel.starts_with(".codex/"),
+            "antigravity" => rel == "AGENTS.md" || rel.starts_with(".antigravity/"),
+            _ => false,
+        };
+        if !wanted {
+            continue;
+        }
+        let dest = project_root.join(&artifact.path);
+        if dest.exists() {
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(dest, artifact.content)?;
+    }
+    Ok(())
 }
 
 /// Render a freshly-written toml value as the plain fallback display string
@@ -2228,6 +2376,33 @@ mod bug_533_config_show_tests {
         );
     }
 
+    #[test]
+    fn agents_enabled_profiles_appear_in_config_show() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nenabled = [\"codex\"]\n",
+        )
+        .unwrap();
+        let agents = policy_registry(dir.path())
+            .into_iter()
+            .find(|s| s.section == "agents")
+            .expect("agents section");
+        let value_for = |key: &str| {
+            agents
+                .rows
+                .iter()
+                .find(|r| r.key == key)
+                .map(|r| r.value.as_str())
+                .unwrap_or("")
+                .to_string()
+        };
+        assert_eq!(value_for("claude"), "disabled");
+        assert_eq!(value_for("codex"), "enabled");
+        assert_eq!(value_for("antigravity"), "disabled");
+    }
+
     /// The doc table is now a view over the registry (STORY-671): a declared
     /// knob's `(doc, default)` come straight from its `KnobSpec`, never the
     /// generic fallback. Spot-checks the consolidation kept the framing.
@@ -2282,6 +2457,10 @@ mod story_671_edit_kind_tests {
         assert_eq!(
             config_knob_edit_kind("archive", "auto_after_days"),
             aida_tui::EditKind::Integer { min: 7, max: 365 }
+        );
+        assert_eq!(
+            config_knob_edit_kind("agents", "codex"),
+            aida_tui::EditKind::Bool
         );
         // Read-only declarations and undeclared knobs are not editable.
         assert_eq!(

@@ -19,7 +19,7 @@ use crate::*;
 
 pub(crate) fn handle_init_command(
     no_skills: bool,
-    agent: &str,
+    agent: Option<&str>,
     no_hooks: bool,
     force: bool,
     verbose: bool,
@@ -285,6 +285,45 @@ pub(crate) struct AgentSelection {
     pub antigravity: bool,
 }
 
+impl AgentSelection {
+    fn all() -> Self {
+        Self {
+            claude: true,
+            codex: true,
+            antigravity: true,
+        }
+    }
+
+    fn names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        if self.claude {
+            names.push("claude");
+        }
+        if self.codex {
+            names.push("codex");
+        }
+        if self.antigravity {
+            names.push("antigravity");
+        }
+        names
+    }
+
+    pub(crate) fn apply_to_scaffold_config(&self, config: &mut ScaffoldConfig) {
+        config.generate_claude_md = self.claude;
+        config.generate_claude_local_md = self.claude;
+        config.generate_commands = self.claude;
+        config.generate_skills = self.claude;
+        config.generate_claude_code_hooks = self.claude;
+        config.generate_mcp_json = self.claude;
+        // AGENTS.md is the cross-vendor instructions standard — needed by any
+        // non-Claude profile, skipped for Claude-only (matching the old arm).
+        config.generate_agents_md = self.codex || self.antigravity;
+        config.generate_codex_skills = self.codex;
+        config.generate_codex_config = self.codex;
+        config.generate_antigravity_skills = self.antigravity;
+    }
+}
+
 /// Parse `--agent`. Accepted forms:
 ///   - `claude` / `codex` / `antigravity` — that profile only
 ///   - a comma-list (`claude,codex`) — exactly those profiles
@@ -296,13 +335,7 @@ pub(crate) struct AgentSelection {
 pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
     let norm = agent.trim().to_ascii_lowercase();
     match norm.as_str() {
-        "all" => {
-            return Ok(AgentSelection {
-                claude: true,
-                codex: true,
-                antigravity: true,
-            })
-        }
+        "all" => return Ok(AgentSelection::all()),
         "both" => {
             return Ok(AgentSelection {
                 claude: true,
@@ -341,6 +374,96 @@ pub(crate) fn parse_agent_selection(agent: &str) -> Result<AgentSelection> {
         );
     }
     Ok(sel)
+}
+
+fn agent_cli_detected(program: &str) -> bool {
+    std::process::Command::new(program)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn detected_agent_selection() -> AgentSelection {
+    // trace:STORY-807 | ai:codex
+    let claude = agent_cli_detected("claude");
+    let codex = agent_cli_detected("codex");
+    let antigravity = agent_cli_detected("agy") || agent_cli_detected("antigravity");
+    let detected = AgentSelection {
+        claude,
+        codex,
+        antigravity,
+    };
+    if detected.names().is_empty() {
+        AgentSelection::all()
+    } else {
+        detected
+    }
+}
+
+fn parse_agent_selection_list(input: &str) -> Result<AgentSelection> {
+    parse_agent_selection(input)
+}
+
+fn resolve_init_agent_selection(agent: Option<&str>) -> Result<AgentSelection> {
+    if let Some(agent) = agent {
+        return parse_agent_selection(agent);
+    }
+
+    let detected = detected_agent_selection();
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Ok(detected);
+    }
+
+    let default = detected.names().join(",");
+    print!("Scaffold agent support for: {default} — Enter to accept, or edit: ");
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        Ok(detected)
+    } else {
+        parse_agent_selection_list(trimmed)
+    }
+}
+
+pub(crate) fn read_enabled_agent_selection(
+    project_root: &std::path::Path,
+) -> Option<AgentSelection> {
+    let cfg = read_project_config_value(project_root)?;
+    let enabled = config_lookup(Some(&cfg), "agents", "enabled")?.as_array()?;
+    let mut selection = AgentSelection {
+        claude: false,
+        codex: false,
+        antigravity: false,
+    };
+    for item in enabled {
+        match item.as_str()?.trim().to_ascii_lowercase().as_str() {
+            "claude" => selection.claude = true,
+            "codex" => selection.codex = true,
+            "antigravity" | "agy" => selection.antigravity = true,
+            _ => {}
+        }
+    }
+    Some(selection)
+}
+
+pub(crate) fn write_enabled_agent_selection(
+    project_root: &std::path::Path,
+    selection: AgentSelection,
+) -> Result<()> {
+    let mut array = toml_edit::Array::new();
+    for name in selection.names() {
+        array.push(name);
+    }
+    crate::config_edit::set_kv(
+        &config_path_for_project(project_root),
+        "agents",
+        "enabled",
+        toml_edit::Value::Array(array),
+    )
 }
 
 fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
@@ -457,7 +580,7 @@ fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
 fn complete_init_scaffolding(
     root: &std::path::Path,
     store: &RequirementsStore,
-    agent: &str,
+    agent: Option<&str>,
     no_skills: bool,
     no_hooks: bool,
     force: bool,
@@ -479,19 +602,10 @@ fn complete_init_scaffolding(
     // get. Selection is now parsed to a profile set and every agent-facing
     // flag is DERIVED from membership, so an unselected agent cannot leak by
     // omission when the next surface is added.
-    let selection = parse_agent_selection(agent)?;
+    let selection = resolve_init_agent_selection(agent)?;
+    write_enabled_agent_selection(root, selection)?;
     let mut config = ScaffoldConfig::default();
-    config.generate_claude_md = selection.claude;
-    config.generate_commands = selection.claude;
-    config.generate_skills = selection.claude;
-    config.generate_claude_code_hooks = selection.claude;
-    // AGENTS.md is the cross-vendor instructions standard — needed by any
-    // non-Claude profile, skipped for Claude-only (matching the old arm).
-    config.generate_agents_md = selection.codex || selection.antigravity;
-    config.generate_codex_skills = selection.codex;
-    // .codex/config.toml is the Codex-side parallel to .mcp.json. trace:TASK-0424
-    config.generate_codex_config = selection.codex;
-    config.generate_antigravity_skills = selection.antigravity;
+    selection.apply_to_scaffold_config(&mut config);
     // Captured before `config` moves into the Scaffolder; read at the codex
     // hook-scaffold gate below.
     let codex_profile_selected = selection.codex;
@@ -632,12 +746,14 @@ fn complete_init_scaffolding(
         }
     }
 
-    // Auto-configure Codex MCP if codex is installed
-    if std::process::Command::new("codex")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    // Auto-configure Codex MCP if codex is installed and the Codex profile was
+    // selected for this project. trace:STORY-807 | ai:codex
+    if codex_profile_selected
+        && std::process::Command::new("codex")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
     {
         // Check if already configured
         let mcp_list = std::process::Command::new("codex")
@@ -1500,6 +1616,24 @@ mod task_631_init_self_commit_tests {
     }
 
     #[test]
+    fn enabled_agent_selection_round_trips_project_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let selection = AgentSelection {
+            claude: false,
+            codex: true,
+            antigravity: false,
+        };
+        write_enabled_agent_selection(dir.path(), selection).unwrap();
+
+        let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
+        assert!(
+            body.contains("[agents]") && body.contains("enabled = [\"codex\"]"),
+            "canonical enabled array written: {body}"
+        );
+        assert_eq!(read_enabled_agent_selection(dir.path()), Some(selection));
+    }
+
+    #[test]
     fn no_origin_means_nothing_to_say_about_pushing() {
         assert_eq!(unpushed_scaffold_note("main", false, false, 3), None);
     }
@@ -1725,7 +1859,7 @@ mod task_631_init_self_commit_tests {
         complete_init_scaffolding(
             root,
             &store,
-            "claude",
+            Some("claude"),
             false, // no_skills
             true,  // no_hooks — keep the scaffold set lean for the test
             false, // force
@@ -1818,7 +1952,7 @@ mod task_631_init_self_commit_tests {
 pub(crate) fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
-    agent: &str,
+    agent: Option<&str>,
     no_hooks: bool,
     verbose: bool,
     name: Option<&str>,
@@ -2491,7 +2625,7 @@ fn handle_init_post_clone(
     worktree_dir: &str,
     branch_name: &str,
     no_skills: bool,
-    agent: &str,
+    agent: Option<&str>,
     no_hooks: bool,
     verbose: bool,
     // BUG-570: opt-in `--commit-scaffold` to deliberately commit the locally
@@ -2811,7 +2945,7 @@ pub(crate) fn handle_init_distributed_sibling(
     attach: bool,
     store_path_arg: Option<&str>,
     no_skills: bool,
-    agent: &str,
+    agent: Option<&str>,
     no_hooks: bool,
     verbose: bool,
     name: Option<&str>,
