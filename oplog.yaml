@@ -43730,5 +43730,46 @@ operations:
   timestamp: 2026-09-03T18:13:30.009389282Z
   kind: !SetStatus
     status: Needs Attention
-clock: 3887
+- id: 01a06879-dfa3-70b0-b672-44b5b45f7ce9
+  target_id: 01a06879-d9b8-7200-ade0-c0a16ea6f00f
+  author: aida
+  node_id: '1'
+  lamport: 3888
+  timestamp: 2026-09-03T18:13:32.707094078Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on STORY-809'
+    description: |
+      Auto-drafted by `aida queue work STORY-809 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `failed`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-809 --work`
+
+      ## Phase durations
+
+        - phase 1 (implementer): 566623 ms
+        - phase 2 (ci): 5400 ms
+        - phase 3 (reviewer): 261701 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-809","started_at":"2026-09-03T17:59:32.656122153+00:00","completed_at":"2026-09-03T18:13:31.157739519+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":566623},{"phase":2,"slug":"ci","elapsed_ms":5400},{"phase":3,"slug":"reviewer","elapsed_ms":261701}],"total_ms":834653,"binary_sha":"6577177a6"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3888
 node_id: '1'
