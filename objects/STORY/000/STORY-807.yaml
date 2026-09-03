@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:08:44.339302383Z
-modified_at: 2026-09-03T18:52:07.083609428Z
+modified_at: 2026-09-03T19:02:50.250118920Z
 req_type: Story
 tags:
 - codex-parity
@@ -44,3 +44,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-03T18:41:37.524656632Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: no-progress-watchdog
+  detail: the reviewer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
+  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework STORY-807 --work`.'
+  shelved_by: advisor
+  shelved_at: 2026-09-03T19:02:50.250118920Z
