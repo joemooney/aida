@@ -12,3 +12,11 @@
   added_at: 2026-09-03T14:58:18.415823825Z
   for_role: advisor
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a0684e-ee73-7110-91bc-966a906398f5
+  position: 49000
+  added_by: claude-advisor-1
+  note: auto-queued by `aida pr` (01a06848); covers 1 spec
+  added_at: 2026-09-03T17:26:43.870474238Z
+  for_role: reviewer
+  added_by_machine: imac
