@@ -43513,5 +43513,31 @@ operations:
   timestamp: 2026-09-03T16:53:46.571396200Z
   kind: !SetStatus
     status: In Progress
-clock: 3876
+- id: 01a06841-99d0-7e20-b47c-17b731d3fb92
+  target_id: 01a06841-95e9-7d01-89f4-3cc5bea96696
+  author: aida
+  node_id: '1'
+  lamport: 3877
+  timestamp: 2026-09-03T17:12:04.816883205Z
+  kind: !Create
+    title: 'Review PR-1642: [AI:codex] fix(orchestrator): auto-resolve completed phase failures (TASK-1192)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a06830`) for branch `task-1192-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1642>
+      - Branch: `task-1192-2` → `main`
+
+      ## Covers
+
+      - TASK-1192
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1642` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3877
 node_id: '1'
