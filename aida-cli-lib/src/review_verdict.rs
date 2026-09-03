@@ -15,6 +15,7 @@
 //!   - `verdict`   — the verdict word (approved / request-changes / rejected)
 //!   - `reviewed_sha` — the commit the reviewer actually looked at
 //!   - `reviewed_branch` / `recorded_at` / `summary` — context for humans
+//!   - `findings` — concrete reviewer findings for rework handoff
 //!
 //! That file already existed (the `/aida-review` skill writes it via
 //! `AIDA_REVIEW_VERDICT_FILE`); this module adds the sha + timestamp stamp,
@@ -255,6 +256,7 @@ pub fn record_verdict(
     reviewed_sha: Option<&str>,
     reviewed_branch: Option<&str>,
     summary: Option<&str>,
+    findings: &[String],
     recorded_by: &str,
 ) -> std::io::Result<PathBuf> {
     let path = verdict_path(project_root, spec);
@@ -280,6 +282,15 @@ pub fn record_verdict(
         "recorded_at",
         Some(chrono::Utc::now().to_rfc3339().as_str()),
     );
+    let findings: Vec<_> = findings
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| serde_json::Value::String(s.to_string()))
+        .collect();
+    if !findings.is_empty() {
+        obj.insert("findings".to_string(), serde_json::Value::Array(findings));
+    }
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj))
         .unwrap_or_else(|_| "{}".to_string());
     std::fs::write(&path, format!("{body}\n"))?;

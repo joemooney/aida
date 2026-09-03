@@ -29,14 +29,16 @@ Follow the workflow in `.claude/skills/aida-review.md`:
    is only its human-facing projection. Run:
 
    ```
-   aida review record <SPEC> --pr N --verdict approved|request-changes|rejected --summary "one line of why"
+   aida review record <SPEC> --pr N --verdict approved|request-changes|rejected \
+     --summary "one line of why" \
+     --finding "concrete issue for the rework implementer"
    ```
 
    The verb writes both the spec verdict and the handshake file
    `.aida/review-verdicts/PR-N.json` at the DRIVE ROOT — correctly even if you checked the PR
    out into another directory, which is exactly the case where a hand-written file lands
    somewhere the orchestrator never looks. (Hand-writing the JSON — `{"verdict": "Approved",
-   "summary": "…", "mode": "orchestrator-phase-3"}`, verdict one of `Approved` /
+   "summary": "…", "mode": "orchestrator-phase-3", "findings": []}`, verdict one of `Approved` /
    `RequestChanges` / `Rejected` — still works, but only from the original repository root.)
    Under a headless drain, when a merge needs a human (irreversible migration, uncertain
    provenance), add `"merge": "escalated-to-human"` to the handshake file instead of merging.
