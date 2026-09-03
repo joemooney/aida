@@ -207,6 +207,31 @@ fn rework_findings_lookup_reads_pr_keyed_verdict_for_spec() {
     assert!(block.contains("1. BUG-814 prompt omits the RequestChanges text"));
 }
 
+/// TASK-1191: a lone unrelated blocking verdict must not be attributed to the
+/// reworked spec just because it is the only verdict file on disk.
+// trace:TASK-1191 | ai:codex
+#[test]
+fn rework_findings_lookup_ignores_lone_unrelated_blocking_verdict() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida").join("review-verdicts")).unwrap();
+    std::fs::write(
+        root.join(".aida")
+            .join("review-verdicts")
+            .join("PR-1638.json"),
+        r#"{
+            "verdict":"RequestChanges",
+            "summary":"BUG-999 still needs changes",
+            "comment_url":"https://github.com/o/r/pull/1638#issuecomment-1",
+            "findings":["BUG-999 prompt omits the RequestChanges text"]
+        }"#,
+    )
+    .unwrap();
+
+    let block = rework_findings_block_for_spec(root, "TASK-1191", "TASK-1191");
+    assert!(block.is_none(), "{block:?}");
+}
+
 /// Implementer + cluster/head → `/aida-pickup --auto-first`
 /// (manifest carries the context; STORY-42 pre-flight is the consent
 // point so the skill skips its own confirm). trace:TASK-86 | ai:claude
