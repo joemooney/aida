@@ -8,12 +8,12 @@ description: |
   Fix sketch: drop the len==1 unconditional fallback, or require the verdict's PR to resolve to the spec via the forge/queue linkage before attributing.
 
   Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:54:52.964583777Z
-modified_at: 2026-09-03T15:53:46.154407688Z
+modified_at: 2026-09-03T15:57:19.642681926Z
 req_type: Task
 tags:
 - from-review:PR-1638
@@ -24,8 +24,26 @@ relationships:
   target_id: 01a067f9-d3e0-7f32-aa59-675f5e99e2c4
   created_at: 2026-09-03T15:53:46.154401053Z
   created_by: joe
+history:
+- id: 01a067fd-2994-7672-aaba-f2ab662a3ac8
+  author: aida-auto-bump
+  timestamp: 2026-09-03T15:57:19.636414349Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a067fd-299a-78e2-a0bd-31c061b4dcbf
+  timestamp: 2026-09-03T15:57:19.642680871Z
+  agent: aida
+  commit_sha: 752b6ca57d7d2e72e4377b570f6d40b2a1503007
+  summary: Completed via merge 752b6ca5
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-03T15:43:14.793299595Z
   implemented_by: joe
+  completed_at: 2026-09-03T15:57:19.636299862Z
+  completion_sha: 752b6ca57d7d2e72e4377b570f6d40b2a1503007
