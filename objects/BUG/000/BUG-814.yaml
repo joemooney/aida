@@ -12,9 +12,28 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:16:42.166637576Z
-modified_at: 2026-09-02T05:35:52.529003929Z
+modified_at: 2026-09-03T14:27:01.336033122Z
 req_type: Bug
 tags:
 - orchestrator
 - review-loop
+comments:
+- id: 01a067aa-7c58-7383-a672-7f8e1705174c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1637, reviewer verdict: CHANGES REQUESTED — full detail: https://github.com/joemooney/aida/pull/1637#issuecomment-5520342933):
+
+    BLOCKING:
+    1. aida-core/templates/skills/aida-pickup.md — the '## Review findings' sed start-pattern is '/Review findings to address:/' but the manifest renderer emits 'Review findings to address (PR #N):' when a PR is known, so the section renders EMPTY in exactly the common rework case. Fix: match without the trailing colon (e.g. '/Review findings to address/'). Add/adjust a test that pins BOTH heading forms through the extraction.
+
+    ALSO FIX IN THIS PASS (advisor triage of the reviewer's non-blocking findings — same code, same class):
+    2. The comment-scrape fallback matches only FAIL/RequestChanges lines and misses PARTIAL rows — the most common RequestChanges driver. Include PARTIAL.
+    3. rework_review_findings_for fires a gh network call on every aida queue work before any cheap local probe — probe the local verdict file first, network only on miss.
+
+    LEAVE AS-IS THIS PASS (nit, filed in the PR comment): the third separate update_atomically write in the rework handler.
+
+    Contract reminder (this spec's own acceptance): this rework must produce at least one commit or an explicit punt naming which finding it disputes.
+  created_at: 2026-09-03T14:27:01.336033122Z
+  modified_at: 2026-09-03T14:27:01.336033122Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
