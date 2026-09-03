@@ -43214,5 +43214,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3857
+- id: 01a067df-2538-7671-8966-6a3b943a427d
+  target_id: 01a067df-1f60-76d1-a463-738cf5c097e9
+  author: aida
+  node_id: '1'
+  lamport: 3858
+  timestamp: 2026-09-03T15:24:32.440973525Z
+  kind: !Create
+    title: 'Review PR-1639: [AI:codex] fix(queue): state rework commit-or-punt contract (TASK-1190)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a067dc`) for branch `task-1190-3`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1639>
+      - Branch: `task-1190-3` → `main`
+
+      ## Covers
+
+      - TASK-1190
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1639` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3858
 node_id: '1'
