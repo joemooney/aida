@@ -23,12 +23,12 @@ description: |-
   Trojan-horse guard: `?` adds no new command surface — quiet depth at existing prompts. AI is opt-in escalation, never the default answer path.
 
   RE-SCOPE (advisor, 2026-09-03, at the reviewer's PARTIAL verdict): this story is now SLICE 1 ONLY — the deterministic `?` context card. The `a` AI judgment and guided-review shell moved to the slice-2 follow-up story (see relationship/comments). Slice-1 acceptance, binding: `?` is offered at ALL of the named consequential forks — the review branch-without-PR fork, the stale-base rebase fork, session-end confirmations, the rework/re-drive fork, and destructive confirmations — each printing the context card (decision, provenance, per-answer consequences + reversibility, recommended default). Non-TTY flows never see it.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T04:14:02.508850052Z
-modified_at: 2026-09-03T18:13:29.915375377Z
+modified_at: 2026-09-03T18:31:18.788158955Z
 req_type: Story
 tags:
 - cli
@@ -86,16 +86,32 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-03T17:59:27.452350463Z
   modified_at: 2026-09-03T17:59:27.452350463Z
+history:
+- id: 01a0688a-23fd-7b22-92f4-727151508eb2
+  author: aida-auto-bump
+  timestamp: 2026-09-03T18:31:18.781649729Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0688a-2404-75a2-b39f-7a2e65780ab1
+  timestamp: 2026-09-03T18:31:18.788157471Z
+  agent: aida
+  commit_sha: 11cba258a0b0a719830153b98ebd0a6c63a5e115
+  summary: 'Advisor completion after three headless RequestChanges rounds: codex''s ContextCard helper + advisor call-site sweep (8 real cards at consequential/destructive forks, honest ?-exempt annotations elsewhere, source-scan gate enforcing adopt-or-annotate). CI green on 2831805a7.'
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: session end observed 2 commits ahead on branch `story-809-3` with no open PR; work may need manual push/PR recovery'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: session end observed 2 commits ahead on branch `story-809-4` with no open PR; work may need manual push/PR recovery'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-03T17:26:52.890278687Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: failed
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-809 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-03T18:13:29.915375377Z
+  completed_at: 2026-09-03T18:31:18.781437583Z
+  completion_sha: 11cba258a0b0a719830153b98ebd0a6c63a5e115
