@@ -1,7 +1,9 @@
 use super::{
     build_auto_punt_args, build_integrate_rebase_args, build_phase3_auto_rebase_args,
-    find_orchestrated_lease, orchestrator_phase_child_env, RealPhaseDriver,
+    find_orchestrated_lease, headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
+    RealPhaseDriver,
 };
+use crate::auto_complete::PhaseDriver;
 
 /// Mint a session lease + its manifest under `<root>/.aida/sessions/`,
 /// exactly as `aida queue work --session-id` would, so lease discovery has
@@ -12,7 +14,14 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
     std::fs::write(
         sessions.join(format!("{lease_id}.toml")),
         format!(
-            "id = \"{lease_id}\"\nbranch = \"{branch}\"\nworktree_path = \"/tmp/{lease_id}\"\n"
+            "id = \"{lease_id}\"\n\
+             scope = \"{branch}\"\n\
+             slug = \"{branch}\"\n\
+             owner = \"test\"\n\
+             worktree_path = \"/tmp/{lease_id}\"\n\
+             branch = \"{branch}\"\n\
+             started_at = \"2026-09-03T00:00:00Z\"\n\
+             hostname = \"test\"\n"
         ),
     )
     .unwrap();
@@ -192,5 +201,140 @@ fn discover_lease_n_candidates_unmatched_id_lists_them_diagnostically() {
         err.reason.contains("019e1111-aaaa") && err.reason.contains("019e2222-bbbb"),
         "N-candidate failure should list the live lease ids; got {:?}",
         err.reason
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn headless_implementer_empty_launch_retries_and_releases_leases() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let stub = root.join("aida-stub");
+    std::fs::write(
+        &stub,
+        r#"#!/usr/bin/env bash
+set -eu
+if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
+  lease="${3:-}"
+  rm -f ".aida/sessions/${lease}.toml" ".aida/sessions/${lease}.manifest.toml"
+  exit 0
+fi
+spec=""
+sid=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "work" ]; then
+    spec="$arg"
+    prev=""
+    continue
+  fi
+  if [ "$prev" = "--session-id" ]; then
+    sid="$arg"
+    prev=""
+    continue
+  fi
+  prev="$arg"
+done
+lease="lease-${sid//-/}"
+worktree="$PWD/worktrees/$lease"
+mkdir -p .aida/sessions .aida/headless-logs "$worktree"
+: > ".aida/headless-logs/bug-826-${sid}.jsonl"
+cat > ".aida/sessions/${lease}.toml" <<EOF
+id = "$lease"
+scope = "$spec"
+slug = "bug-826"
+owner = "test"
+worktree_path = "$worktree"
+branch = "bug-826-stub"
+started_at = "2026-09-03T00:00:00Z"
+hostname = "test"
+EOF
+cat > ".aida/sessions/${lease}.manifest.toml" <<EOF
+session_id = "$lease"
+planned_at = "2026-09-03T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+printf '%s\n' "$sid" >> .aida/attempts
+exit 1
+"#,
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&stub, permissions).unwrap();
+
+    let mut d = driver(root, "BUG-826");
+    d.aida_exe = stub;
+    d.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+    d.drain_tuning.no_progress = std::time::Duration::ZERO;
+    d.drain_tuning.ceiling = std::time::Duration::ZERO;
+
+    let err = d.run_implementer().unwrap_err();
+    assert!(
+        err.reason.contains("before emitting any output"),
+        "final failure should name the empty-log launch death: {}",
+        err.reason
+    );
+    let attempts = std::fs::read_to_string(root.join(".aida/attempts")).unwrap();
+    assert_eq!(
+        attempts.lines().count(),
+        3,
+        "the empty-log launch schedule should retry twice before failing"
+    );
+    assert!(
+        list_leases(root).is_empty(),
+        "empty launch cleanup must leave no surviving lease"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn empty_launch_release_removes_the_matching_lease() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let session_id = "bbbbbbbb-2222-7000-8000-000000000000";
+    mint_lease(root, "019e3333-empty", "bug-826-branch", Some(session_id));
+    std::fs::create_dir_all(root.join(".aida").join("headless-logs")).unwrap();
+    std::fs::write(
+        root.join(".aida")
+            .join("headless-logs")
+            .join(format!("bug-826-{session_id}.jsonl")),
+        "",
+    )
+    .unwrap();
+
+    assert!(headless_log_is_zero_bytes(root, session_id));
+    let mut d = driver(root, "BUG-826");
+    let stub = root.join("aida-session-end-stub");
+    std::fs::write(
+        &stub,
+        r#"#!/usr/bin/env bash
+set -eu
+if [ "${1:-}" = "session" ] && [ "${2:-}" = "end" ]; then
+  lease="${3:-}"
+  rm -f ".aida/sessions/${lease}.toml" ".aida/sessions/${lease}.manifest.toml"
+  exit 0
+fi
+exit 1
+"#,
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    let mut permissions = std::fs::metadata(&stub).unwrap().permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&stub, permissions).unwrap();
+    d.aida_exe = stub;
+    d.release_empty_launch_lease(session_id);
+    assert!(
+        find_orchestrated_lease(root, session_id).is_none(),
+        "released empty launch must not be discoverable as a live lease"
+    );
+    assert!(
+        list_leases(root).is_empty(),
+        "released empty launch must not leave a scope-blocking lease"
     );
 }

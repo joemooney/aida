@@ -31364,6 +31364,14 @@ fn phase1_empty_launch_retry_delay(attempts_used: usize) -> Option<std::time::Du
         .map(std::time::Duration::from_secs)
 }
 
+#[cfg(not(test))]
+fn phase1_empty_launch_retry_sleep(delay: std::time::Duration) {
+    std::thread::sleep(delay);
+}
+
+#[cfg(test)]
+fn phase1_empty_launch_retry_sleep(_delay: std::time::Duration) {}
+
 /// TASK-298: scan one headless `claude -p --output-format stream-json` JSONL
 /// *line* for a hard "the session bailed at a gate" signal and, when present,
 /// return a specific human-readable reason. SPIKE-7 found `claude -p`'s exit
@@ -75154,7 +75162,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 self.empty_launch_retries_used,
                             );
                         }
-                        std::thread::sleep(delay);
+                        phase1_empty_launch_retry_sleep(delay);
                         return self.run_implementer();
                     }
                     return Err(auto_complete::PhaseFailure::of(
