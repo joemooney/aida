@@ -43563,5 +43563,31 @@ operations:
   timestamp: 2026-09-03T17:19:50.511580392Z
   kind: !SetStatus
     status: In Progress
-clock: 3880
+- id: 01a0684e-f24c-74e1-8a4b-b47a5f1a932f
+  target_id: 01a0684e-ee73-7110-91bc-966a906398f5
+  author: aida
+  node_id: '1'
+  lamport: 3881
+  timestamp: 2026-09-03T17:26:39.436886386Z
+  kind: !Create
+    title: 'Review PR-1643: [AI:codex] feat(review): add context help to review prompts (STORY-809)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a06848`) for branch `story-809-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1643>
+      - Branch: `story-809-2` → `main`
+
+      ## Covers
+
+      - STORY-809
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1643` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3881
 node_id: '1'
