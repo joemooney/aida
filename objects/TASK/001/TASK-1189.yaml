@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:54:30.947027985Z
-modified_at: 2026-09-03T16:05:24.104326823Z
+modified_at: 2026-09-03T16:17:22.675503523Z
 req_type: Task
 tags:
 - from-review:PR-1638
@@ -23,8 +23,8 @@ execution_mode: drain
 failure_reason:
   phase: implementer
   phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-1189 --resume`'
+  kind: no-progress-watchdog
+  detail: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
+  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework TASK-1189 --work`.'
   shelved_by: advisor
-  shelved_at: 2026-09-03T16:05:24.104326823Z
+  shelved_at: 2026-09-03T16:17:22.675503523Z
