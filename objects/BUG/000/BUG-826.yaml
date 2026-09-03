@@ -10,12 +10,12 @@ description: |-
   2. LEASE LITTER: each failed drive left its just-created lease orphaned, so the NEXT attempt on the same spec failed with "scope held by lease whose owning session is no longer running" and needed a human --force-claim. When the orchestrator itself created the lease this run and the session died with zero output, it must release that lease on the way out — the next attempt should start clean.
 
   Acceptance: simulate a vendor binary that exits 1 instantly (stub script) — the drive retries with backoff, and after final failure the spec parks with NO surviving lease (a fresh drive needs no --force-claim); a unit test pins the empty-log-detection + lease-release path.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T15:22:10.883746321Z
-modified_at: 2026-09-03T19:49:37.269227537Z
+modified_at: 2026-09-03T20:05:47.649614696Z
 req_type: Bug
 tags:
 - orchestrator
@@ -36,15 +36,27 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-03T19:30:43.743256845Z
   modified_at: 2026-09-03T19:30:43.743256845Z
+history:
+- id: 01a068e0-a3fb-7ab2-81ba-69f03f8e2fd1
+  author: aida-auto-bump
+  timestamp: 2026-09-03T20:05:47.643253071Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a068e0-a401-72f0-b9e6-78c6ea89086e
+  timestamp: 2026-09-03T20:05:47.649613866Z
+  agent: advisor
+  commit_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
+  summary: Findings-led rework added the stub-vendor E2E and the no-surviving-lease pin; advisor added the cfg(test) exemption for the BUG-716 lock assert the new harness tripped. CI green.
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: CI is red on PR-1645: Build (ubuntu-latest)'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-09-03T19:15:06.472794289Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1645: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 33798036004 — view it: `gh run view 33798036004`. Push fixups to the same branch: `aida queue work BUG-826 --branch bug-826 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-03T19:49:37.269227537Z
+  completed_at: 2026-09-03T20:05:47.643120721Z
+  completion_sha: 652af2c293e2d97b71ad90ef33c8fcd21c582adf
