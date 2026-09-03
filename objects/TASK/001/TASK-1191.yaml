@@ -1,0 +1,21 @@
+id: 01a067c3-fe24-7563-a9c8-3d781bb4cc2b
+spec_id: TASK-1191
+agreed_id: TASK-1191
+title: rework findings lookup can attribute another spec's verdict (len==1 fallback)
+description: |
+  rework_findings_block_for_spec (queue_cmd.rs, PR-1638) resolves a verdict by: spec-keyed file, then a scan of all blocking verdicts filtered by verdict_mentions_spec, then — when exactly one blocking verdict exists — that verdict regardless of whether it mentions the spec. Multiplicity edge: rework of spec A while spec B's RequestChanges verdict is the only blocking file on disk attributes B's findings to A's pickup. Low likelihood (per-spec file usually exists; mention-check runs first) but the failure mode is confidently-wrong context fed to an implementer.
+
+  Fix sketch: drop the len==1 unconditional fallback, or require the verdict's PR to resolve to the spec via the forge/queue linkage before attributing.
+
+  Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-03T14:54:52.964583777Z
+modified_at: 2026-09-03T14:54:52.964583777Z
+req_type: Task
+tags:
+- from-review:PR-1638
+- review-loop
+- severity:minor
