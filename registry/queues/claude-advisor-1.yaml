@@ -48,3 +48,11 @@
   added_at: 2026-09-03T14:28:15.676933074Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a067b6-ae8e-75c2-a7e0-fc1fbc536e58
+  position: 42000
+  added_by: claude-advisor-1
+  note: auto-queued by `aida pr` (01a067ab); covers 1 spec
+  added_at: 2026-09-03T14:40:26.579933352Z
+  for_role: reviewer
+  added_by_machine: imac
