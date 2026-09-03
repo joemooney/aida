@@ -20,3 +20,10 @@
   added_at: 2026-09-03T18:52:07.801999162Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a067dc-fc43-74a2-b478-e5a6eee39fa7
+  position: 52000
+  added_by: claude-advisor-1
+  added_at: 2026-09-03T19:04:36.341482547Z
+  for_role: implementer
+  added_by_machine: imac
