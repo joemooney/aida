@@ -270,6 +270,28 @@ fn seed_done_spec(store_path: &std::path::Path, spec_id: &str) -> String {
     seed_spec_at(store_path, spec_id, "Done")
 }
 
+fn seed_auto_complete_failure_bug(
+    store_path: &std::path::Path,
+    bug_id: &str,
+    about_spec: &str,
+) -> String {
+    let storage = Storage::new(store_path);
+    let mut store = storage.load().unwrap_or_default();
+    let mut req = aida_core::Requirement::new(
+        format!("auto-complete failure: phase 1 (implementer) on {about_spec}"),
+        String::new(),
+    );
+    req.spec_id = Some(bug_id.to_string());
+    req.req_type = aida_core::RequirementType::Bug;
+    req.set_status_from_str("Draft");
+    for tag in ["auto-complete", "failure-1", "auto-drafted", "implementer"] {
+        req.tags.insert(tag.to_string());
+    }
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    bug_id.to_string()
+}
+
 fn has_flip(flips: &[AutoBumpFlip], spec_id: &str) -> bool {
     flips.iter().any(|f| f.spec_id == spec_id)
 }
@@ -319,6 +341,69 @@ fn auto_bump_picks_up_subject_refs_on_default_branch() {
         "completion_sha should match landing commit"
     );
     assert!(info.completed_at.is_some(), "completed_at should be set");
+}
+
+/// TASK-1192: when a spec reaches Completed via the merge auto-bump, stale
+/// auto-drafted failure findings about that spec leave the open findings lens
+/// automatically, but hand-filed BUGs and failures about other specs stay open.
+// trace:TASK-1192 | ai:codex
+#[test]
+fn auto_bump_rejects_matching_auto_drafted_failure_bug() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    let spec_id = seed_done_spec(&store_path, "TASK-91192");
+    let matching_bug = seed_auto_complete_failure_bug(&store_path, "BUG-911920", &spec_id);
+    let other_bug = seed_auto_complete_failure_bug(&store_path, "BUG-911921", "TASK-91193");
+
+    let storage = Storage::new(&store_path);
+    let mut store = storage.load().unwrap();
+    let mut hand_filed = aida_core::Requirement::new(
+        format!("auto-complete failure: phase 1 (implementer) on {spec_id}"),
+        "Looks similar, but is missing the auto-drafted marker.".to_string(),
+    );
+    hand_filed.spec_id = Some("BUG-911922".to_string());
+    hand_filed.req_type = aida_core::RequirementType::Bug;
+    hand_filed.set_status_from_str("Draft");
+    hand_filed.tags.insert("auto-complete".to_string());
+    hand_filed.tags.insert("failure-1".to_string());
+    store.requirements.push(hand_filed);
+    storage.save(&store).unwrap();
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+    run_git(&project_root, &["add", "file.txt"]);
+    run_git(
+        &project_root,
+        &["commit", "-m", &format!("fix: land work ({spec_id})")],
+    );
+    let merge_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert_eq!(flips.len(), 1);
+
+    let after = storage.load().unwrap();
+    let shipped = after.get_requirement_by_spec_id(&spec_id).unwrap();
+    assert!(matches!(shipped.status, RequirementStatus::Completed));
+    let resolved = after.get_requirement_by_spec_id(&matching_bug).unwrap();
+    assert!(matches!(resolved.status, RequirementStatus::Rejected));
+    assert!(
+        resolved
+            .comments
+            .iter()
+            .any(|c| c.content.contains(&merge_sha[..7]) && c.content.contains(&spec_id)),
+        "resolved failure finding should name the completing commit and spec"
+    );
+    assert!(matches!(
+        after.get_requirement_by_spec_id(&other_bug).unwrap().status,
+        RequirementStatus::Draft
+    ));
+    assert!(matches!(
+        after
+            .get_requirement_by_spec_id("BUG-911922")
+            .unwrap()
+            .status,
+        RequirementStatus::Draft
+    ));
 }
 
 /// BUG-477: the merge-driven Done→Completed auto-bump must record the

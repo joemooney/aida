@@ -54742,6 +54742,109 @@ impl AutoBumpFlip {
     }
 }
 
+fn completing_ref_label(project_root: &std::path::Path, sha: &str) -> String {
+    if sha.is_empty() {
+        return "completion evidence".to_string();
+    }
+    let short = if sha.len() >= 7 { &sha[..7] } else { sha };
+    let subject = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["show", "-s", "--format=%s", sha])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+    match extract_pr_number_from_commit_subject(&subject) {
+        Some(pr_n) => format!("commit {short} / PR #{pr_n}"),
+        None => format!("commit {short}"),
+    }
+}
+
+fn is_auto_complete_failure_bug_about(req: &aida_core::Requirement, completed_spec: &str) -> bool {
+    if !matches!(req.req_type, aida_core::RequirementType::Bug) {
+        return false;
+    }
+    if !matches!(req.status, RequirementStatus::Draft) {
+        return false;
+    }
+    let has_auto_marker = req.tags.iter().any(|t| t == "auto-complete")
+        && req.tags.iter().any(|t| t == "auto-drafted")
+        && req.tags.iter().any(|t| t.starts_with("failure-"));
+    if !has_auto_marker {
+        return false;
+    }
+    req.title.starts_with("auto-complete failure:")
+        && req
+            .title
+            .trim_end()
+            .ends_with(&format!(" on {completed_spec}"))
+}
+
+fn reject_resolved_auto_complete_failure_bug(
+    req: &mut aida_core::Requirement,
+    completed_spec: &str,
+    completion_ref: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    let Some(finding_id) = req.spec_id.as_deref().or(req.agreed_id.as_deref()) else {
+        return false;
+    };
+    let finding_id = finding_id.to_string();
+    if !is_auto_complete_failure_bug_about(req, completed_spec) {
+        return false;
+    }
+    let prior = req.status.clone();
+    req.set_status_from_str("Rejected");
+    req.record_change(
+        "aida-auto-bump".to_string(),
+        vec![aida_core::Requirement::field_change(
+            "status",
+            format!("{:?}", prior),
+            format!("{:?}", req.status),
+        )],
+    );
+    req.modified_at = now;
+    req.add_comment(aida_core::Comment::new(
+        "aida-auto-bump".to_string(),
+        format!(
+            "Auto-resolved: {completed_spec} reached Completed via {completion_ref}; \
+             rejecting auto-drafted phase-failure finding {finding_id}."
+        ),
+    ));
+    true
+}
+
+// trace:TASK-1192 | ai:codex
+fn auto_resolve_failure_bugs_for_completed_specs(
+    store: &aida_core::RequirementsStore,
+    completed: &[(String, String)],
+    project_root: &std::path::Path,
+) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for (completed_spec, sha) in completed {
+        let completion_ref = completing_ref_label(project_root, sha);
+        for req in &store.requirements {
+            if !is_auto_complete_failure_bug_about(req, completed_spec) {
+                continue;
+            }
+            let Some(finding_id) = req.spec_id.as_deref().or(req.agreed_id.as_deref()) else {
+                continue;
+            };
+            out.push((
+                finding_id.to_string(),
+                completed_spec.clone(),
+                completion_ref.clone(),
+            ));
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// BUG-219 / TASK-246: collect review stories stranded short of
 /// `Completed` because their PR merged before the review lifecycle ever
 /// finished. `/aida-pr` auto-queues a `Review PR-N` story at `Approved`
@@ -55686,6 +55789,65 @@ fn auto_bump_done_to_completed(
     // ── Step 6: activity log ──
     for flip in &confirmed {
         record_role_activity(&flip.spec_id, "auto-completed");
+    }
+
+    let mut completed_events: Vec<(String, String)> = confirmed
+        .iter()
+        .map(|f| (f.spec_id.clone(), f.sha.clone()))
+        .collect();
+    completed_events.extend(
+        confirmed_stale
+            .iter()
+            .map(|(spec_id, sha, _, _)| (spec_id.clone(), sha.clone())),
+    );
+    let auto_resolved_failures =
+        auto_resolve_failure_bugs_for_completed_specs(&after, &completed_events, project_root);
+    if !auto_resolved_failures.is_empty() {
+        if store_path.is_dir() {
+            use aida_core::db::DatabaseBackend;
+            let backend = aida_core::db::GitBackend::new(store_path)?;
+            for (finding_id, completed_spec, completion_ref) in &auto_resolved_failures {
+                let Some(mut r) = backend.get_requirement_by_spec_id(finding_id)? else {
+                    continue;
+                };
+                if reject_resolved_auto_complete_failure_bug(
+                    &mut r,
+                    completed_spec,
+                    completion_ref,
+                    now,
+                ) {
+                    backend.update_requirement(&r)?;
+                }
+            }
+        } else {
+            let resolved_for_write = auto_resolved_failures.clone();
+            storage.update_atomically(|s| {
+                for (finding_id, completed_spec, completion_ref) in &resolved_for_write {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| {
+                        r.spec_id.as_deref() == Some(finding_id.as_str())
+                            || r.agreed_id.as_deref() == Some(finding_id.as_str())
+                    }) {
+                        reject_resolved_auto_complete_failure_bug(
+                            r,
+                            completed_spec,
+                            completion_ref,
+                            now,
+                        );
+                    }
+                }
+            })?;
+        }
+        println!(
+            "  {} {} auto-complete failure finding{} → {}",
+            "auto-resolved".cyan(),
+            auto_resolved_failures.len(),
+            if auto_resolved_failures.len() == 1 {
+                ""
+            } else {
+                "s"
+            },
+            "Rejected".green().bold()
+        );
     }
 
     // ── Step 7: plan followups ── TASK-96: file followup TASKs for each
