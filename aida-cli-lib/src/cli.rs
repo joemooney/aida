@@ -10036,10 +10036,10 @@ pub enum Command {
         /// agents' surfaces are written. Accepts `claude`, `codex`,
         /// `antigravity`, a comma-list (`claude,codex`), `both`
         /// (= claude,codex exactly — no antigravity), or `all` (every
-        /// profile; the default, matching an unflagged init).
+        /// profile). Omit to use PATH detection.
         // trace:BUG-794 | ai:claude
-        #[clap(long, default_value = "all")]
-        agent: String,
+        #[clap(long)]
+        agent: Option<String>,
 
         /// Skip generating commit validation hooks
         #[clap(long)]

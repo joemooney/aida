@@ -59,7 +59,11 @@ pub(crate) fn refresh_agent_packs(
     // so refresh can never drift from what `init` / `scaffold apply` write.
     // An empty store is fine: none of the pack files interpolate requirements
     // (only CLAUDE.md / AGENTS.md / the tree docs do, and those are excluded).
-    let config = aida_core::scaffolding::ScaffoldConfig::default();
+    let mut config = aida_core::scaffolding::ScaffoldConfig::default();
+    // trace:STORY-807 | ai:codex
+    if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(project_root) {
+        selection.apply_to_scaffold_config(&mut config);
+    }
     let db_path = project_root.join(".aida").join("cache.db");
     let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
         project_root.to_path_buf(),
@@ -229,6 +233,37 @@ mod tests {
         // Nothing that was not already installed gets created.
         assert!(!root.join(".codex").exists());
         assert!(!root.join(".antigravity").exists());
+    }
+
+    #[test]
+    fn project_pack_refresh_respects_enabled_agent_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let skills = root.join(".claude/skills");
+        std::fs::create_dir_all(&skills).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[agents]\nenabled = [\"codex\"]\n",
+        )
+        .unwrap();
+
+        let stale = wrap_with_aida_header(
+            Path::new(".claude/skills/aida-req.md"),
+            "---\nname: aida-req\n---\n# Old\n\nstale body\n",
+        );
+        std::fs::write(skills.join("aida-req.md"), &stale).unwrap();
+
+        let packs = refresh_agent_packs(root, None);
+        assert!(
+            packs.iter().all(|p| p.label != "Claude skills"),
+            "disabled Claude pack should not refresh: {:?}",
+            packs.iter().map(|p| &p.label).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            std::fs::read_to_string(skills.join("aida-req.md")).unwrap(),
+            stale
+        );
     }
 
     /// The delivery gap this closes: a `~/.codex/prompts` deployed by an older
