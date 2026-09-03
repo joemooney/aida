@@ -22,12 +22,12 @@ description: |-
   - aida init --agent claude,codex: no prompt, flag wins, config records the flag selection.
   - aida config menu: Agents section shows all profiles + state; enabling codex on a claude-only project offers and performs the codex pack scaffold; disabling never deletes files.
   - aida init <DIR> bootstrap (STORY-780) composes: the prompt appears at the same point in the inner init flow.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-02T05:08:44.339302383Z
-modified_at: 2026-09-03T15:17:17.637733959Z
+modified_at: 2026-09-03T18:22:12.882632194Z
 req_type: Story
 tags:
 - codex-parity
@@ -35,11 +35,3 @@ tags:
 - init
 - ux
 execution_mode: drain
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-807 --resume`'
-  shelved_by: advisor
-  shelved_at: 2026-09-03T15:17:17.637733959Z
