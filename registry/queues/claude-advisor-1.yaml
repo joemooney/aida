@@ -28,3 +28,9 @@
   added_at: 2026-09-03T19:15:00.767396181Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-advisor-1
+  requirement_id: 01a067dc-fc43-74a2-b478-e5a6eee39fa7
+  position: 54000
+  added_by: claude-advisor-1
+  added_at: 2026-09-03T19:30:44.887580186Z
+  for_role: advisor
