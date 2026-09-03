@@ -43926,5 +43926,31 @@ operations:
   timestamp: 2026-09-03T19:04:28.104842402Z
   kind: !SetStatus
     status: Rejected
-clock: 3901
+- id: 01a068b2-145d-7762-bb7a-a70afcc4cd0e
+  target_id: 01a068b2-10b7-71c0-abf6-38565657f8e2
+  author: aida
+  node_id: '1'
+  lamport: 3902
+  timestamp: 2026-09-03T19:14:56.221489554Z
+  kind: !Create
+    title: 'Review PR-1645: [AI:codex] fix(queue): retry empty headless launches (BUG-826)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a068a8`) for branch `bug-826`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1645>
+      - Branch: `bug-826` → `main`
+
+      ## Covers
+
+      - BUG-826
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1645` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3902
 node_id: '1'
