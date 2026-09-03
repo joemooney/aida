@@ -1,0 +1,22 @@
+id: 01a067dc-fc43-74a2-b478-e5a6eee39fa7
+spec_id: BUG-826
+agreed_id: BUG-826
+title: 'phase-1 launch resilience: retry an instant vendor death with backoff; auto-release the lease a zero-output session leaves behind'
+description: |-
+  Observed 2026-09-03 08:11-08:17: six sequential drives each failed phase 1 in ~40s — the codex process died at exec with a ZERO-BYTE headless log (transient vendor-side hiccup, likely auth/rate; the identical drive succeeded minutes later). Two compounding gaps:
+
+  1. NO LAUNCH RETRY: a vendor process that exits nonzero having emitted zero output is a launch failure, not a work failure — the orchestrator parked the spec immediately. It should distinguish empty-log instant death from a real errored session and retry the launch (e.g. 2 retries, 30s/60s backoff) before parking. Six specs parked in six minutes for one transient is the "failures must not halt the fleet" case.
+
+  2. LEASE LITTER: each failed drive left its just-created lease orphaned, so the NEXT attempt on the same spec failed with "scope held by lease whose owning session is no longer running" and needed a human --force-claim. When the orchestrator itself created the lease this run and the session died with zero output, it must release that lease on the way out — the next attempt should start clean.
+
+  Acceptance: simulate a vendor binary that exits 1 instantly (stub script) — the drive retries with backoff, and after final failure the spec parks with NO surviving lease (a fresh drive needs no --force-claim); a unit test pins the empty-log-detection + lease-release path.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-03T15:22:10.883746321Z
+modified_at: 2026-09-03T15:22:10.883746321Z
+req_type: Bug
+tags:
+- orchestrator
+- resilience
