@@ -42720,5 +42720,22 @@ operations:
   timestamp: 2026-09-03T14:54:07.302593749Z
   kind: !SetStatus
     status: Completed
-clock: 3828
+- id: 01a067c3-ae47-78f2-85f1-82185718f4c9
+  target_id: 01a067c3-a823-74c2-b40e-e0e4241a944b
+  author: aida
+  node_id: '1'
+  lamport: 3829
+  timestamp: 2026-09-03T14:54:32.519515339Z
+  kind: !Create
+    title: review verdict findings[] has a consumer but no producer
+    description: |
+      PR-1638 (BUG-814) taught the rework path to parse a findings[] array from .aida/review-verdicts/*.json and surface it to the rework implementer — but nothing produces it: aida review record has no --finding flag, and no skill documents writing the key. Real-world verdicts therefore carry only summary, so a rework surfaces a one-line fallback plus the comment URL instead of the reviewer's concrete findings (the exact STORY-790 scenario BUG-814 was filed about).
+
+      Fix sketch: add a repeatable --finding flag to aida review record (writes findings[]), and document the field in the aida-review skill template step 6a (PR-1637's dead branch had a doc hunk for this, but under the key blocking_findings — align on findings). Optionally salvage PR-1637's session-manifest persistence so findings survive into aida session show --plan.
+
+      Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 3829
 node_id: '1'
