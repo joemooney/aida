@@ -8,23 +8,15 @@ description: |
   Fix sketch: add a repeatable --finding flag to aida review record (writes findings[]), and document the field in the aida-review skill template step 6a (PR-1637's dead branch had a doc hunk for this, but under the key blocking_findings — align on findings). Optionally salvage PR-1637's session-manifest persistence so findings survive into aida session show --plan.
 
   Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:54:30.947027985Z
-modified_at: 2026-09-03T16:17:22.675503523Z
+modified_at: 2026-09-03T16:19:09.869285510Z
 req_type: Task
 tags:
 - from-review:PR-1638
 - review-loop
 - severity:minor
 execution_mode: drain
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: no-progress-watchdog
-  detail: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
-  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework TASK-1189 --work`.'
-  shelved_by: advisor
-  shelved_at: 2026-09-03T16:17:22.675503523Z
