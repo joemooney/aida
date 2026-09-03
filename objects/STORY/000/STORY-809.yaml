@@ -21,12 +21,12 @@ description: |-
   Non-TTY behavior: `?`/`a` are TTY-only affordances; headless flows never see them.
 
   Trojan-horse guard: `?` adds no new command surface — quiet depth at existing prompts. AI is opt-in escalation, never the default answer path.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T04:14:02.508850052Z
-modified_at: 2026-09-03T14:58:01.766755979Z
+modified_at: 2026-09-03T15:16:12.971056389Z
 req_type: Story
 tags:
 - cli
