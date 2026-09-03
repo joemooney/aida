@@ -42670,5 +42670,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3824
+- id: 01a067c2-e328-78a2-90e2-b34fbb684785
+  target_id: 01a067c2-df40-78e1-8206-5bdb6bcc07a0
+  author: aida
+  node_id: '1'
+  lamport: 3825
+  timestamp: 2026-09-03T14:53:40.520400045Z
+  kind: !Create
+    title: 'Review PR-1635: [AI:claude] feat(init): bootstrap a project from nothing — aida init <DIR> (STORY-780)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0606d`) for branch `story-780-work`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1635>
+      - Branch: `story-780-work` → `main`
+
+      ## Covers
+
+      - STORY-780
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1635` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3825
 node_id: '1'
