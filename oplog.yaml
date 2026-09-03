@@ -43827,5 +43827,31 @@ operations:
   timestamp: 2026-09-03T18:31:22.787104241Z
   kind: !SetStatus
     status: Rejected
-clock: 3895
+- id: 01a0689d-2283-7d31-8aaf-82cdc42346af
+  target_id: 01a0689d-2018-7ec0-a9a1-0ddd410d74f1
+  author: aida
+  node_id: '1'
+  lamport: 3896
+  timestamp: 2026-09-03T18:52:03.587008961Z
+  kind: !Create
+    title: 'Review PR-1644: [AI:codex] feat(init): persist selectable agent profiles (STORY-807)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a06881`) for branch `story-807-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1644>
+      - Branch: `story-807-2` → `main`
+
+      ## Covers
+
+      - STORY-807
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1644` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3896
 node_id: '1'
