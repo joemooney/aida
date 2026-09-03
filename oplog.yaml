@@ -43630,5 +43630,20 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3882
+- id: 01a0685f-1880-7102-8131-7c23c0964a36
+  target_id: 01a0685f-14c7-7283-951d-4d2ac2b13970
+  author: aida
+  node_id: '1'
+  lamport: 3883
+  timestamp: 2026-09-03T17:44:17.792550543Z
+  kind: !Create
+    title: 'Ask-AI escalation at prompts: `a` one-shot vendor judgment + guided-review agent shell (STORY-809 slice 2)'
+    description: |-
+      Split from STORY-809 (advisor re-scope 2026-09-03, at the reviewer's PARTIAL verdict on PR for story-809-2): slice 1 (`?` deterministic context card at consequential forks) ships alone; THIS story is slice 2, held for an interactive/keyboard session because it spawns live vendor sessions and its UX forks deserve operator presence.
+
+      Scope (from STORY-809's original acceptance): (a) `a` at the same prompts bundles the slice-1 context card + spec acceptance + diffstat into a one-shot headless vendor call ([agents] vendor adapter — claude -p / codex exec) and prints the recommendation, then re-asks; (b) `aida human review --guided` (or `g`): spawn an interactive advisor session pre-loaded with a review context snapshot (agent-new role-context machinery) — the reviewer-side sibling of /aida-guided-implement. TTY-only; headless flows never see either option.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3883
 node_id: '1'
