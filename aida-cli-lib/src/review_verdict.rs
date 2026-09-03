@@ -95,6 +95,13 @@ pub struct RecordedVerdict {
     pub recorded_at: Option<String>,
     /// One-line rationale.
     pub summary: Option<String>,
+    /// URL of the PR comment carrying the full review, when the reviewer
+    /// backfilled it.
+    pub comment_url: Option<String>,
+    /// Optional richer review body, preserved when a newer reviewer writes it.
+    pub review_comment: Option<String>,
+    /// Optional structured findings, preserved when a newer reviewer writes it.
+    pub findings: Vec<String>,
 }
 
 /// Path of the per-spec verdict file. Spec ids are upper-cased so
@@ -119,6 +126,19 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
             .map(str::to_string)
     };
     let raw = str_field("verdict")?;
+    let findings = obj
+        .get("findings")
+        .and_then(|v| v.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
     Some(RecordedVerdict {
         kind: VerdictKind::parse(&raw),
         raw,
@@ -126,7 +146,85 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         reviewed_branch: str_field("reviewed_branch"),
         recorded_at: str_field("recorded_at"),
         summary: str_field("summary"),
+        comment_url: str_field("comment_url"),
+        review_comment: str_field("review_comment")
+            .or_else(|| str_field("comment_body"))
+            .or_else(|| str_field("body")),
+        findings,
     })
+}
+
+/// Render the review delta a rework implementer must address.
+///
+/// The verdict file is the durable hand-off between reviewer and rework. Older
+/// files only carry `summary` + optional `comment_url`; newer files may carry
+/// `findings[]` or a fuller comment body. Keep the renderer tolerant so a
+/// rework session always sees the blocking review instead of silently looping.
+// trace:BUG-814 | ai:codex
+pub fn rework_findings_comment(
+    spec_id: &str,
+    review_ref: &str,
+    verdict: &RecordedVerdict,
+) -> Option<String> {
+    if !verdict.kind.blocks_done() {
+        return None;
+    }
+    let mut out = format!(
+        "REVIEW FINDINGS TO ADDRESS ({}):\nVerdict: {}",
+        review_ref,
+        verdict.kind.label()
+    );
+    if let Some(sha) = verdict.reviewed_sha.as_deref() {
+        out.push_str(&format!("\nReviewed commit: {}", short_sha(sha)));
+    }
+    if let Some(at) = verdict.recorded_at.as_deref() {
+        out.push_str(&format!("\nRecorded: {at}"));
+    }
+    if let Some(url) = verdict.comment_url.as_deref() {
+        out.push_str(&format!("\nReview comment: {url}"));
+    }
+
+    let mut items: Vec<String> = verdict.findings.clone();
+    if items.is_empty() {
+        if let Some(body) = verdict.review_comment.as_deref() {
+            items.extend(
+                body.lines()
+                    .map(str::trim)
+                    .filter(|line| {
+                        !line.is_empty()
+                            && !line.starts_with('|')
+                            && !line.starts_with("##")
+                            && !line.starts_with("**CI**")
+                            && !line.starts_with("**Recommendation**")
+                    })
+                    .map(|line| {
+                        line.trim_start_matches(['-', '*'])
+                            .trim()
+                            .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.')
+                            .trim()
+                            .to_string()
+                    })
+                    .filter(|line| !line.is_empty()),
+            );
+        }
+    }
+    if items.is_empty() {
+        if let Some(summary) = verdict.summary.as_deref() {
+            items.push(summary.to_string());
+        }
+    }
+    if items.is_empty() {
+        items.push(format!(
+            "{} has a blocking review verdict; inspect the review comment before changing code.",
+            spec_id
+        ));
+    }
+
+    out.push_str("\nFindings:");
+    for (idx, item) in items.iter().enumerate() {
+        out.push_str(&format!("\n{}. {}", idx + 1, item));
+    }
+    Some(out)
 }
 
 /// Read the recorded verdict for `spec`, if any.

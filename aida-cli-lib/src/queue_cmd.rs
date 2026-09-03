@@ -5756,6 +5756,28 @@ pub(crate) fn handle_queue_rework(
         );
     }
 
+    // A reviewer RequestChanges/Rejection is the actual acceptance delta for a
+    // rework pickup. Persist it onto the spec before queueing so every later
+    // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
+    if let Ok(root) = find_project_root() {
+        if let Some(block) = rework_findings_block_for_spec(&root, &display_id, &spec_id) {
+            let author = get_default_author();
+            let comment = aida_core::Comment::new(author, block.clone());
+            let mut added = false;
+            storage.update_atomically(|s| {
+                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                    if !r.comments.iter().any(|c| c.content == block) {
+                        r.add_comment(comment);
+                        added = true;
+                    }
+                }
+            })?;
+            if added {
+                println!("  {} review findings captured as comment", "·".dimmed());
+            }
+        }
+    }
+
     // Route resolution: --for wins, else the active role, else error if
     // queueing requires a role (we let the queue_add path stay unrouted
     // — that's a legitimate state too, matching `aida queue add` default
@@ -6837,6 +6859,7 @@ pub(crate) fn derive_queue_work_prompt(
     role: &str,
     plan_only: bool,
     guided: bool,
+    review_findings: Option<&str>,
 ) -> String {
     let role_lower = role.to_ascii_lowercase();
     if role_lower == "reviewer" {
@@ -6863,11 +6886,87 @@ pub(crate) fn derive_queue_work_prompt(
     }
     // Implementer (and unknown roles): /aida-pickup with optional focus.
     if plan.mode == QueueWorkMode::Item {
-        return format!("/aida-pickup {}", plan.anchor_display);
+        let pickup = format!("/aida-pickup {}", plan.anchor_display);
+        if let Some(findings) = review_findings {
+            return format!("{findings}\n\n{pickup}");
+        }
+        return pickup;
     }
     // Cluster / Head: drain-intent already confirmed by the queue work
     // pre-flight; pass --auto-first so the skill skips its own confirm.
-    "/aida-pickup --auto-first".to_string()
+    let pickup = "/aida-pickup --auto-first".to_string();
+    if let Some(findings) = review_findings {
+        return format!("{findings}\n\n{pickup}");
+    }
+    pickup
+}
+
+fn review_ref_from_verdict_filename(path: &std::path::Path) -> String {
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("review");
+    if let Some(n) = stem.strip_prefix("PR-") {
+        return format!("PR #{n}");
+    }
+    if let Some(n) = stem.strip_prefix("MR-") {
+        return format!("MR #{n}");
+    }
+    stem.to_string()
+}
+
+fn verdict_mentions_spec(verdict: &review_verdict::RecordedVerdict, ids: &[&str]) -> bool {
+    let haystack = [
+        verdict.summary.as_deref(),
+        verdict.review_comment.as_deref(),
+        verdict.comment_url.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .chain(verdict.findings.iter().map(String::as_str))
+    .collect::<Vec<_>>()
+    .join("\n")
+    .to_ascii_uppercase();
+    ids.iter()
+        .filter(|id| !id.trim().is_empty() && **id != "???")
+        .any(|id| haystack.contains(&id.to_ascii_uppercase()))
+}
+
+pub(crate) fn rework_findings_block_for_spec(
+    project_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+) -> Option<String> {
+    let ids = [display_id, spec_id];
+    for id in ids
+        .iter()
+        .filter(|id| !id.trim().is_empty() && **id != "???")
+    {
+        if let Some(v) = review_verdict::read_recorded_verdict(project_root, id) {
+            return review_verdict::rework_findings_comment(id, id, &v);
+        }
+    }
+
+    let dir = project_root.join(".aida").join("review-verdicts");
+    let mut blocking = std::fs::read_dir(dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
+        .filter_map(|path| {
+            let body = std::fs::read_to_string(&path).ok()?;
+            let verdict = review_verdict::parse_recorded_verdict(&body)?;
+            verdict.kind.blocks_done().then_some((path, verdict))
+        })
+        .collect::<Vec<_>>();
+    blocking.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let selected = blocking
+        .iter()
+        .find(|(_, v)| verdict_mentions_spec(v, &ids))
+        .or_else(|| (blocking.len() == 1).then(|| &blocking[0]))?;
+    let review_ref = review_ref_from_verdict_filename(&selected.0);
+    review_verdict::rework_findings_comment(display_id, &review_ref, &selected.1)
 }
 
 /// BUG-225: render the copy-pasteable `claude` command line for a
@@ -7192,7 +7291,20 @@ pub(crate) fn handle_queue_work(
         maybe_show_faithful_launcher_notice();
     }
 
-    let mut prompt = derive_queue_work_prompt(&plan, &role, plan_only, guided);
+    let review_findings = (!role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided)
+        .then(|| {
+            project_root_for_config.as_deref().and_then(|root| {
+                let spec_id = plan
+                    .entries
+                    .first()
+                    .map(|entry| entry.spec_id.as_str())
+                    .unwrap_or(plan.anchor_display.as_str());
+                rework_findings_block_for_spec(root, &plan.anchor_display, spec_id)
+            })
+        })
+        .flatten();
+    let mut prompt =
+        derive_queue_work_prompt(&plan, &role, plan_only, guided, review_findings.as_deref());
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {

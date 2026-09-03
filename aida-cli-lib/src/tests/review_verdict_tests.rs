@@ -15,6 +15,9 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
         reviewed_branch: Some("task-5".to_string()),
         recorded_at: Some("2026-07-21T10:00:00Z".to_string()),
         summary: Some("three blocking defects".to_string()),
+        comment_url: None,
+        review_comment: None,
+        findings: Vec::new(),
     }
 }
 
@@ -59,6 +62,28 @@ fn parses_verdict_file_with_and_without_the_new_fields() {
     let v = parse_recorded_verdict(stamped).expect("stamped file parses");
     assert_eq!(v.reviewed_sha.as_deref(), Some("e49317ecafe"));
     assert_eq!(v.reviewed_branch.as_deref(), Some("task-5"));
+}
+
+#[test]
+fn parses_review_comment_metadata_for_rework() {
+    let body = r#"{
+        "verdict":"RequestChanges",
+        "summary":"BUG-814 has two issues",
+        "comment_url":"https://github.com/o/r/pull/1637#issuecomment-1",
+        "findings":["BUG-814 prompt omits review findings", "silent no-change pass-through"]
+    }"#;
+    let v = parse_recorded_verdict(body).expect("verdict parses");
+    assert_eq!(
+        v.comment_url.as_deref(),
+        Some("https://github.com/o/r/pull/1637#issuecomment-1")
+    );
+    assert_eq!(v.findings.len(), 2);
+
+    let rendered = rework_findings_comment("BUG-814", "PR #1637", &v).expect("blocking verdict");
+    assert!(rendered.contains("REVIEW FINDINGS TO ADDRESS (PR #1637)"));
+    assert!(rendered.contains("1. BUG-814 prompt omits review findings"));
+    assert!(rendered.contains("2. silent no-change pass-through"));
+    assert!(rendered.contains("Review comment: https://github.com/o/r/pull/1637#issuecomment-1"));
 }
 
 #[test]

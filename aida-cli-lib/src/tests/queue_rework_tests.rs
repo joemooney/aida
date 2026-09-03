@@ -96,3 +96,68 @@ fn covers_every_status_variant() {
         let _ = rework_smart_target(s);
     }
 }
+
+/// BUG-814: rework must persist the blocking review findings onto the spec,
+/// not merely requeue it. That durable comment is what prevents the next
+/// implementer from seeing only already-satisfied acceptance and producing a
+/// no-change loop.
+// trace:BUG-814 | ai:codex
+#[test]
+fn rework_writes_blocking_review_findings_comment() {
+    let _guard = crate::test_env::env_lock();
+    let prev_cwd = std::env::current_dir().unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    std::fs::create_dir_all(root.join(".aida").join("review-verdicts")).unwrap();
+    std::fs::write(
+        root.join(".aida")
+            .join("review-verdicts")
+            .join("PR-1637.json"),
+        r#"{
+            "verdict":"RequestChanges",
+            "summary":"BUG-814 hides the review findings",
+            "findings":["BUG-814 pickup prompt omits the RequestChanges detail"]
+        }"#,
+    )
+    .unwrap();
+
+    let store_root = root.join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+    let mut req = aida_core::Requirement::new("queue rework loop".to_string(), String::new());
+    req.spec_id = Some("BUG-814".to_string());
+    req.status = RequirementStatus::Done;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+
+    std::env::set_current_dir(root).unwrap();
+    let result = handle_queue_rework(
+        &storage,
+        "BUG-814",
+        false,
+        Some("implementer"),
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    );
+    std::env::set_current_dir(prev_cwd).unwrap();
+    result.unwrap();
+
+    let updated = storage.load().unwrap();
+    let req = updated.get_requirement_by_spec_id("BUG-814").unwrap();
+    let comment = req
+        .comments
+        .iter()
+        .find(|c| c.content.contains("REVIEW FINDINGS TO ADDRESS (PR #1637)"))
+        .expect("rework should persist review findings");
+    assert!(comment
+        .content
+        .contains("1. BUG-814 pickup prompt omits the RequestChanges detail"));
+}

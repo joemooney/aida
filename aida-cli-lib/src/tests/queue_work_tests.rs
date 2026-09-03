@@ -124,7 +124,7 @@ fn prompt_reviewer_pr_passes_number() {
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "reviewer", false, false),
+        derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review --pr 11"
     );
 }
@@ -135,7 +135,7 @@ fn prompt_reviewer_non_pr_is_bare() {
     let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "reviewer", false, false),
+        derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review"
     );
 }
@@ -153,9 +153,58 @@ fn prompt_implementer_item_passes_focus() {
         anchor_title: "title".into(),
     };
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, false),
+        derive_queue_work_prompt(&plan, "implementer", false, false, None),
         "/aida-pickup BUG-83"
     );
+}
+
+/// BUG-814: a rework pickup with a blocking review verdict must lead with the
+/// findings before `/aida-pickup`, so the implementer treats the review as the
+/// acceptance delta instead of silently passing the same commit back.
+// trace:BUG-814 | ai:codex
+#[test]
+fn prompt_implementer_item_leads_with_review_findings() {
+    let e = resolved("BUG-814", entry(Uuid::now_v7(), Some("implementer"), None));
+    let plan = QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![e],
+        scope: "BUG-814".into(),
+        review_target: None,
+        anchor_display: "BUG-814".into(),
+        anchor_title: "title".into(),
+    };
+    let findings = "REVIEW FINDINGS TO ADDRESS (PR #1637):\nFindings:\n1. fix the prompt";
+    let prompt = derive_queue_work_prompt(&plan, "implementer", false, false, Some(findings));
+    assert!(prompt.starts_with(findings), "{prompt}");
+    assert!(prompt.ends_with("/aida-pickup BUG-814"), "{prompt}");
+}
+
+/// BUG-814: orchestrated reviews record PR-keyed verdict files, while rework is
+/// invoked with the spec id. The lookup must bridge that key mismatch when the
+/// reviewer summary/findings name the spec.
+// trace:BUG-814 | ai:codex
+#[test]
+fn rework_findings_lookup_reads_pr_keyed_verdict_for_spec() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida").join("review-verdicts")).unwrap();
+    std::fs::write(
+        root.join(".aida")
+            .join("review-verdicts")
+            .join("PR-1637.json"),
+        r#"{
+            "verdict":"RequestChanges",
+            "summary":"BUG-814 still hides review findings",
+            "comment_url":"https://github.com/o/r/pull/1637#issuecomment-1",
+            "findings":["BUG-814 prompt omits the RequestChanges text"]
+        }"#,
+    )
+    .unwrap();
+
+    let block = rework_findings_block_for_spec(root, "BUG-814", "BUG-814")
+        .expect("PR-keyed verdict should be found");
+    assert!(block.contains("REVIEW FINDINGS TO ADDRESS (PR #1637)"));
+    assert!(block.contains("1. BUG-814 prompt omits the RequestChanges text"));
 }
 
 /// Implementer + cluster/head → `/aida-pickup --auto-first`
@@ -166,7 +215,7 @@ fn prompt_implementer_cluster_is_auto_first() {
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, false),
+        derive_queue_work_prompt(&plan, "implementer", false, false, None),
         "/aida-pickup --auto-first"
     );
 }
@@ -180,7 +229,7 @@ fn prompt_implementer_head_is_auto_first() {
     let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
     let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, false),
+        derive_queue_work_prompt(&plan, "implementer", false, false, None),
         "/aida-pickup --auto-first"
     );
 }
@@ -199,7 +248,7 @@ fn prompt_plan_only_runs_aida_plan() {
         anchor_title: "title".into(),
     };
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", true, false),
+        derive_queue_work_prompt(&plan, "implementer", true, false, None),
         "/aida-plan BUG-83"
     );
 }
@@ -218,7 +267,7 @@ fn prompt_guided_runs_guided_implement() {
         anchor_title: "title".into(),
     };
     assert_eq!(
-        derive_queue_work_prompt(&plan, "implementer", false, true),
+        derive_queue_work_prompt(&plan, "implementer", false, true, None),
         "/aida-guided-implement STORY-7"
     );
 }
@@ -1488,7 +1537,7 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
         "PR-N pickup must set review_target so it routes to the reviewer"
     );
     assert_eq!(
-        derive_queue_work_prompt(&plan, "reviewer", false, false),
+        derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review --pr 457"
     );
 }
