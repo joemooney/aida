@@ -42811,5 +42811,20 @@ operations:
   timestamp: 2026-09-03T14:57:35.449883560Z
   kind: !SetStatus
     status: Rejected
-clock: 3836
+- id: 01a067c6-8464-7071-acbb-5dcca467c2af
+  target_id: 01a067c6-7c7f-7f91-bb84-3dcdae944bae
+  author: aida
+  node_id: '1'
+  lamport: 3837
+  timestamp: 2026-09-03T14:57:38.404266599Z
+  kind: !Create
+    title: auto-filed phase-failure drafts should auto-resolve when their spec completes
+    description: |-
+      Every shelved drain phase auto-files a draft BUG ("auto-complete failure: phase N on SPEC"). When SPEC later reaches Completed (or the failure is otherwise resolved and the spec merges), these records linger as drafts needing manual advisor burial — 5 rejected by hand on 2026-09-03 alone (BUG-812/813/815/817/818), each pointing at an already-resolved cause.
+
+      Fix: on pull auto-bump (or any transition of SPEC to Completed), sweep open auto-filed failure records ABOUT that spec and resolve them automatically — rejected with an auto-comment naming the completing commit/PR. Only touch records carrying the auto-filed marker (title pattern/tag), never hand-filed bugs. Acceptance: drive a spec to a shelved phase, let it auto-file, then complete the spec via merge+pull; the failure record leaves the open lens without human action, with an audit comment.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3837
 node_id: '1'
