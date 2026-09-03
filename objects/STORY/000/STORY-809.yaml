@@ -21,12 +21,14 @@ description: |-
   Non-TTY behavior: `?`/`a` are TTY-only affordances; headless flows never see them.
 
   Trojan-horse guard: `?` adds no new command surface — quiet depth at existing prompts. AI is opt-in escalation, never the default answer path.
+
+  RE-SCOPE (advisor, 2026-09-03, at the reviewer's PARTIAL verdict): this story is now SLICE 1 ONLY — the deterministic `?` context card. The `a` AI judgment and guided-review shell moved to the slice-2 follow-up story (see relationship/comments). Slice-1 acceptance, binding: `?` is offered at ALL of the named consequential forks — the review branch-without-PR fork, the stale-base rebase fork, session-end confirmations, the rework/re-drive fork, and destructive confirmations — each printing the context card (decision, provenance, per-answer consequences + reversibility, recommended default). Non-TTY flows never see it.
 status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T04:14:02.508850052Z
-modified_at: 2026-09-03T17:40:36.139349232Z
+modified_at: 2026-09-03T17:44:21.358024015Z
 req_type: Story
 tags:
 - cli
