@@ -43722,5 +43722,13 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3886
+- id: 01a06879-d519-7702-b18e-8b290729d628
+  target_id: 01a06579-490c-7030-b68f-4d93d171bf4b
+  author: aida
+  node_id: '1'
+  lamport: 3887
+  timestamp: 2026-09-03T18:13:30.009389282Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 3887
 node_id: '1'
