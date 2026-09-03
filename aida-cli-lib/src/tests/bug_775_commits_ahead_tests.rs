@@ -259,6 +259,7 @@ fn recorded_request_changes_blocks_until_a_commit_lands() {
         Some(&reviewed),
         Some("feat"),
         Some("three blocking defects"),
+        &[],
         "test",
     )
     .unwrap();

@@ -717,6 +717,14 @@ pub enum ReviewCommand {
         /// the verdict surfaces.
         #[clap(long, value_name = "TEXT")]
         summary: Option<String>,
+
+        /// Concrete review finding to hand to the rework implementer. Repeat
+        /// for multiple findings; omitted findings preserve any existing
+        /// findings[] in the verdict record.
+        // trace:TASK-1189 | ai:codex
+        #[clap(long, value_name = "TEXT")]
+        finding: Vec<String>,
+
         /// Also write the orchestrator's phase-3 handshake file
         /// (`.aida/review-verdicts/PR-<N>.json`) for this PR number, at the
         /// drive root. This is what lets a headless drain's phase 4 proceed.

@@ -114,6 +114,10 @@ fn record_round_trips_and_preserves_unknown_fields() {
         Some("deadbeefdeadbeefdeadbeef"),
         Some("task-5"),
         Some("three blocking defects"),
+        &[
+            "BUG-775 gate has no finding details".to_string(),
+            "Rework prompt falls back to summary only".to_string(),
+        ],
         "test",
     )
     .unwrap();
@@ -127,6 +131,13 @@ fn record_round_trips_and_preserves_unknown_fields() {
     let v = read_recorded_verdict(root, "task-5").expect("record reads back");
     assert_eq!(v.kind, VerdictKind::RequestChanges);
     assert_eq!(v.reviewed_sha.as_deref(), Some("deadbeefdeadbeefdeadbeef"));
+    assert_eq!(
+        v.findings,
+        vec![
+            "BUG-775 gate has no finding details".to_string(),
+            "Rework prompt falls back to summary only".to_string(),
+        ]
+    );
     assert!(v.recorded_at.is_some(), "a timestamp is always stamped");
 }
 
@@ -134,11 +145,48 @@ fn record_round_trips_and_preserves_unknown_fields() {
 fn read_any_tries_each_id_form() {
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
-    record_verdict(root, "BUG-775", Some("approved"), None, None, None, "test").unwrap();
+    record_verdict(
+        root,
+        "BUG-775",
+        Some("approved"),
+        None,
+        None,
+        None,
+        &[],
+        "test",
+    )
+    .unwrap();
     // Agreed-id form misses, spec-id form hits.
     let v = read_recorded_verdict_any(root, &["BUG-9999", "BUG-775"]).expect("found via 2nd id");
     assert_eq!(v.kind, VerdictKind::Approved);
     assert!(read_recorded_verdict_any(root, &["???", ""]).is_none());
+}
+
+#[test]
+fn record_without_findings_preserves_existing_findings() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida").join("review-verdicts")).unwrap();
+    std::fs::write(
+        verdict_path(root, "TASK-5"),
+        r#"{"verdict":"RequestChanges","findings":["keep this finding"]}"#,
+    )
+    .unwrap();
+
+    record_verdict(
+        root,
+        "TASK-5",
+        Some("request-changes"),
+        None,
+        None,
+        Some("fresh summary"),
+        &[],
+        "test",
+    )
+    .unwrap();
+
+    let v = read_recorded_verdict(root, "TASK-5").expect("record reads back");
+    assert_eq!(v.findings, vec!["keep this finding".to_string()]);
 }
 
 // ---- tip relation ------------------------------------------------------

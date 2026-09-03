@@ -566,7 +566,12 @@ posted in step 7:
 ```bash
 mkdir -p "$(dirname "$AIDA_REVIEW_VERDICT_FILE")"
 cat > "$AIDA_REVIEW_VERDICT_FILE" <<'EOF'
-{"verdict": "Approved", "summary": "<one-line rationale>", "mode": "standalone"}
+{
+  "verdict": "Approved",
+  "summary": "<one-line rationale>",
+  "mode": "standalone",
+  "findings": []
+}
 EOF
 ```
 
@@ -574,6 +579,10 @@ EOF
 - `summary` — a one-line rationale.
 - `mode` — `standalone` or `orchestrator-phase-3` (corroborated above); lets
   a consumer tell a one-off review from an orchestrator handshake artifact.
+- `findings` — an array of concrete review findings for the rework handoff.
+  Use `[]` for a clean approval; for `RequestChanges` / `Rejected`, include
+  one string per actionable issue. These are what the rework implementer sees
+  before `/aida-pickup`; do not use `blocking_findings`.
 - `comment_url` — filled in by step 7a after step 7 posts the comment.
   Omit here; the orchestrator's `read_verdict_file` does not require it
   (only `verdict` is load-bearing).
@@ -693,8 +702,8 @@ the orchestrator only reads the file after the session exits.
 if [ -n "${AIDA_REVIEW_VERDICT_FILE:-}" ] && [ -f "$AIDA_REVIEW_VERDICT_FILE" ]; then
   # COMMENT_URL holds the URL captured from `gh pr comment` in step 7.
   # Re-emit the JSON keeping every field 6a wrote (verdict, summary, mode,
-  # optional merge), adding "comment_url". Skip the rewrite if no URL was
-  # captured (e.g. --merge-only, or the comment post failed).
+  # findings, optional merge), adding "comment_url". Skip the rewrite if no
+  # URL was captured (e.g. --merge-only, or the comment post failed).
   :
 fi
 ```

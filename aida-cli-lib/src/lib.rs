@@ -66260,6 +66260,7 @@ fn handle_review_spec(
             reviewed_sha.as_deref(),
             reviewed_branch.as_deref(),
             v.summary.as_deref(),
+            &[],
             "aida review",
         );
     }
@@ -66415,6 +66416,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             sha,
             branch,
             summary,
+            finding,
             pr,
         } => handle_review_record(
             spec,
@@ -66422,6 +66424,7 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             sha.as_deref(),
             branch.as_deref(),
             summary.as_deref(),
+            finding,
             *pr,
         ),
         // trace:BUG-775 | ai:claude
@@ -66458,6 +66461,7 @@ fn handle_review_record(
     sha: Option<&str>,
     branch: Option<&str>,
     summary: Option<&str>,
+    findings: &[String],
     pr: Option<u64>,
 ) -> Result<()> {
     let project_root = drive_root_or_project_root()?;
@@ -66488,6 +66492,7 @@ fn handle_review_record(
         resolved_sha.as_deref(),
         branch.as_deref(),
         summary,
+        findings,
         "aida review record",
     )
     .with_context(|| "could not write the review verdict")?;
@@ -66521,11 +66526,19 @@ fn handle_review_record(
         let dir = project_root.join(".aida").join("review-verdicts");
         std::fs::create_dir_all(&dir)?;
         let handshake = dir.join(format!("PR-{n}.json"));
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
             "mode": "orchestrator-phase-3",
         });
+        let findings: Vec<_> = findings
+            .iter()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !findings.is_empty() {
+            body["findings"] = serde_json::json!(findings);
+        }
         std::fs::write(&handshake, format!("{}\n", serde_json::to_string(&body)?))
             .with_context(|| format!("could not write {}", handshake.display()))?;
         println!(
