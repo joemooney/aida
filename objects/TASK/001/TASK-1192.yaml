@@ -6,12 +6,12 @@ description: |-
   Every shelved drain phase auto-files a draft BUG ("auto-complete failure: phase N on SPEC"). When SPEC later reaches Completed (or the failure is otherwise resolved and the spec merges), these records linger as drafts needing manual advisor burial — 5 rejected by hand on 2026-09-03 alone (BUG-812/813/815/817/818), each pointing at an already-resolved cause.
 
   Fix: on pull auto-bump (or any transition of SPEC to Completed), sweep open auto-filed failure records ABOUT that spec and resolve them automatically — rejected with an auto-comment naming the completing commit/PR. Only touch records carrying the auto-filed marker (title pattern/tag), never hand-filed bugs. Acceptance: drive a spec to a shelved phase, let it auto-file, then complete the spec via merge+pull; the failure record leaves the open lens without human action, with an audit comment.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:57:36.383860314Z
-modified_at: 2026-09-03T17:12:09.241734682Z
+modified_at: 2026-09-03T17:16:26.848971344Z
 req_type: Task
 tags:
 - hygiene
@@ -21,6 +21,22 @@ relationships:
   target_id: 01a06841-95e9-7d01-89f4-3cc5bea96696
   created_at: 2026-09-03T17:12:09.241726267Z
   created_by: joe
+history:
+- id: 01a06845-995a-7bd2-822b-81a8b6e16150
+  author: aida-auto-bump
+  timestamp: 2026-09-03T17:16:26.842719533Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a06845-9960-7d42-b68f-514a98b8ddc9
+  timestamp: 2026-09-03T17:16:26.848970062Z
+  agent: aida
+  commit_sha: 6577177a623fdb4e05e5e4fb3a7f084241603e43
+  summary: Completed via merge 6577177a
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
 execution_mode: drain
 implementation_info:
   implemented: true
@@ -30,3 +46,5 @@ implementation_info:
     cargo check -p aida-cli-lib
   implemented_at: 2026-09-03T17:02:48.098003245Z
   implemented_by: joe
+  completed_at: 2026-09-03T17:16:26.842601254Z
+  completion_sha: 6577177a623fdb4e05e5e4fb3a7f084241603e43
