@@ -426,6 +426,11 @@ pub(crate) enum FailureKind {
     /// same way a transient GH-API blip ([`Self::PrVerificationInconclusive`])
     /// is shelved. trace:BUG-455 | ai:claude
     CacheLocked,
+    /// BUG-826: the headless vendor process exited non-zero after creating a
+    /// zero-byte JSONL log. That is a launch-layer transient, not evidence that
+    /// the implementer attempted the work and failed.
+    // trace:BUG-826 | ai:codex
+    LaunchNoOutput,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -446,6 +451,8 @@ impl FailureKind {
             Self::PrVerificationInconclusive => "pr-verification-inconclusive",
             Self::Watchdog => "no-progress-watchdog",
             Self::CacheLocked => "cache-locked",
+            // trace:BUG-826 | ai:codex
+            Self::LaunchNoOutput => "launch-no-output",
             Self::Failed => "failed",
         }
     }
@@ -478,6 +485,8 @@ impl FailureKind {
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
                 | Self::CacheLocked
+                // trace:BUG-826 | ai:codex
+                | Self::LaunchNoOutput
                 | Self::Failed
         )
     }

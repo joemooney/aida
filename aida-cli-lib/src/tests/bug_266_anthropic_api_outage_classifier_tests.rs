@@ -89,6 +89,35 @@ fn clean_session_log_is_not_outage() {
     assert!(claude_log_indicates_api_outage(clean).is_none());
 }
 
+// trace:BUG-826 | ai:codex
+#[test]
+fn zero_byte_headless_log_classifies_as_launch_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".aida").join("headless-logs");
+    std::fs::create_dir_all(&dir).unwrap();
+    let session = "019e0000-0000-7000-8000-000000000826";
+    let log = dir.join(format!("bug-826-{session}.jsonl"));
+    std::fs::write(&log, "").unwrap();
+
+    assert!(headless_log_is_zero_bytes(tmp.path(), session));
+
+    std::fs::write(&log, "{\"type\":\"system\",\"subtype\":\"init\"}\n").unwrap();
+    assert!(
+        !headless_log_is_zero_bytes(tmp.path(), session),
+        "a non-empty log for the same session must not be retried as launch death"
+    );
+}
+
+// trace:BUG-826 | ai:codex
+#[test]
+fn phase1_empty_launch_retry_schedule_is_bounded() {
+    let delays: Vec<u64> = (0..4)
+        .filter_map(phase1_empty_launch_retry_delay)
+        .map(|d| d.as_secs())
+        .collect();
+    assert_eq!(delays, vec![30, 60]);
+}
+
 /// Non-outage failure modes — permission errors, parse errors, in-session
 /// aborts — stay outside the outage classifier. The orchestrator should
 // keep treating these as phase-1 failures. trace:BUG-266 | ai:claude
