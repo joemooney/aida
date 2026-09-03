@@ -31344,6 +31344,34 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
     newest_len
 }
 
+/// BUG-826: a non-zero headless vendor exit with a zero-byte JSONL log is a
+/// launch failure. The model produced no stream events, so the orchestrator
+/// should retry the launch and clean up the just-created lease instead of
+/// treating it as implementer work that failed.
+// trace:BUG-826 | ai:codex
+fn headless_log_is_zero_bytes(project_root: &std::path::Path, session_id: &str) -> bool {
+    headless_log_len(project_root, session_id) == Some(0)
+}
+
+/// BUG-826: bounded launch-retry schedule for empty-log vendor death. Kept
+/// separate from the generic transient-work retry: this retry happens before
+/// phase 1 returns a failure and before the spec is parked.
+// trace:BUG-826 | ai:codex
+fn phase1_empty_launch_retry_delay(attempts_used: usize) -> Option<std::time::Duration> {
+    [30_u64, 60]
+        .get(attempts_used)
+        .copied()
+        .map(std::time::Duration::from_secs)
+}
+
+#[cfg(not(test))]
+fn phase1_empty_launch_retry_sleep(delay: std::time::Duration) {
+    std::thread::sleep(delay);
+}
+
+#[cfg(test)]
+fn phase1_empty_launch_retry_sleep(_delay: std::time::Duration) {}
+
 /// TASK-298: scan one headless `claude -p --output-format stream-json` JSONL
 /// *line* for a hard "the session bailed at a gate" signal and, when present,
 /// return a specific human-readable reason. SPIKE-7 found `claude -p`'s exit
@@ -74132,6 +74160,11 @@ struct RealPhaseDriver {
     /// TASK-136 / BUG-420: GH-verify retry budget + watchdog thresholds,
     /// resolved once from `[drain]` config + env/flag overrides.
     drain_tuning: DrainTuning,
+    /// BUG-826: bounded retry count for an instant headless-vendor death that
+    /// leaves a zero-byte log. This is phase-1 launch resilience, not a retry
+    /// of real implementer work.
+    // trace:BUG-826 | ai:codex
+    empty_launch_retries_used: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -74229,6 +74262,7 @@ impl RealPhaseDriver {
             lifecycle_skip,
             variant,
             drain_tuning,
+            empty_launch_retries_used: 0,
         }
     }
 
@@ -74407,6 +74441,36 @@ impl RealPhaseDriver {
                     ))
                 }
             })
+    }
+
+    /// BUG-826: after an empty-log phase-1 vendor death, release only the lease
+    /// minted for that failed session UUID so the next retry starts clean.
+    // trace:BUG-826 | ai:codex
+    fn release_empty_launch_lease(&mut self, session_uuid: &str) {
+        let Some((lease_id, _branch, worktree, _)) =
+            find_orchestrated_lease(&self.project_root, session_uuid)
+        else {
+            return;
+        };
+        self.implementer_lease = Some(lease_id.clone());
+        self.implementer_worktree = Some(worktree);
+        if let Err(e) = self.end_implementer_session() {
+            if !self.json {
+                eprintln!(
+                    "  {} empty-log launch left lease {}, but auto-release failed ({}) - \
+                     the next retry may need `--force-claim`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    &lease_id[..lease_id.len().min(8)],
+                    e.reason,
+                );
+            }
+        } else if !self.json {
+            eprintln!(
+                "  {} released empty-log launch lease {}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                &lease_id[..lease_id.len().min(8)],
+            );
+        }
     }
 
     /// Ground-truth check for the BUG-241 reconcile: find a *merged* PR that
@@ -74893,10 +74957,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // unaffected; the main worktree is resolved explicitly (that is where
         // `.aida/drain.lock` lives) and a resolution failure is tolerated.
         // trace:BUG-716 | ai:claude
+        // In-crate harness tests (the BUG-826 stub-vendor launch test) drive
+        // `run_implementer` directly with no real drive running; the invariant
+        // is about production spawn paths, so `cfg!(test)` is exempt — the
+        // probe would otherwise read the DEVELOPER's real .aida/drain.lock.
         debug_assert!(
-            find_main_worktree_root()
-                .map(|root| drain_lock::drive_lock_invariant_holds(&drain_lock::probe_lock(&root)))
-                .unwrap_or(true),
+            cfg!(test)
+                || find_main_worktree_root()
+                    .map(|root| {
+                        drain_lock::drive_lock_invariant_holds(&drain_lock::probe_lock(&root))
+                    })
+                    .unwrap_or(true),
             "orchestrated implementer running without a live drain lock — the \
              pr-ship self-merge guard (BUG-716) keys on it; a drive path dropped \
              the lock"
@@ -75079,6 +75150,40 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
+                if headless_impl && headless_log_is_zero_bytes(&self.project_root, &session_uuid) {
+                    self.release_empty_launch_lease(&session_uuid);
+                    if let Some(delay) =
+                        phase1_empty_launch_retry_delay(self.empty_launch_retries_used)
+                    {
+                        self.empty_launch_retries_used += 1;
+                        if !self.json {
+                            eprintln!(
+                                "  {} headless vendor exited {} with a zero-byte log - \
+                                 retrying phase 1 in {}s (attempt {}/2)",
+                                crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
+                                status
+                                    .code()
+                                    .map(|c| c.to_string())
+                                    .unwrap_or_else(|| "with a signal".to_string()),
+                                delay.as_secs(),
+                                self.empty_launch_retries_used,
+                            );
+                        }
+                        phase1_empty_launch_retry_sleep(delay);
+                        return self.run_implementer();
+                    }
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LaunchNoOutput,
+                        format!(
+                            "the headless vendor exited {} before emitting any output - \
+                             retried phase 1 twice and released the empty session lease",
+                            status
+                                .code()
+                                .map(|c| c.to_string())
+                                .unwrap_or_else(|| "with a signal".to_string())
+                        ),
+                    ));
+                }
                 // BUG-266: before classifying this as a phase-1 failure,
                 // inspect the headless `claude -p` JSONL log for telltale
                 // signs that the Anthropic API took the session out

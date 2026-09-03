@@ -251,6 +251,8 @@ pub(crate) fn is_retryable_orchestration(
             failure.kind,
             crate::auto_complete::FailureKind::CacheLocked
                 | crate::auto_complete::FailureKind::PrVerificationInconclusive
+                // trace:BUG-826 | ai:codex
+                | crate::auto_complete::FailureKind::LaunchNoOutput
         );
     }
     false
@@ -373,6 +375,14 @@ mod tests {
             .map(|d| d.as_secs())
             .collect();
         assert_eq!(delays, vec![2, 4, 8, 16, 32]);
+    }
+
+    // trace:BUG-826 | ai:codex
+    #[test]
+    fn launch_no_output_is_retryable() {
+        assert!(is_retryable_orchestration(&retryable_failure(
+            FailureKind::LaunchNoOutput
+        )));
     }
 
     // ── retryable classification ──────────────────────────────────────────────
