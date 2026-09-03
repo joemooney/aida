@@ -36,6 +36,7 @@ mod compete_cmd;
 mod complexity_calibration;
 mod config_cmd;
 mod config_edit;
+mod context_prompt;
 mod coordination;
 mod db_cmd;
 mod decide_cmd;
@@ -65739,6 +65740,75 @@ enum ReviewSurface {
     Local,
 }
 
+fn review_branch_no_change_context_card(
+    spec_id: &str,
+    branch: &str,
+    commits: usize,
+    change_noun: &str,
+) -> context_prompt::ContextCard {
+    context_prompt::ContextCard {
+        decision: format!(
+            "whether to open a {change_noun} from `{branch}` before running `aida review {spec_id}`"
+        ),
+        provenance: vec![
+            format!(
+                "branch `{branch}` has {commits} commit{} linked to {spec_id}",
+                if commits == 1 { "" } else { "s" }
+            ),
+            format!("no open {change_noun} was found for that branch"),
+        ],
+        answers: vec![
+            format!(
+                "y: print `git push -u origin {branch} && gh pr create --fill`; reversible by closing the {change_noun}"
+            ),
+            format!(
+                "n: leave the work held without opening a {change_noun}; reversible by rerunning `aida review {spec_id}`"
+            ),
+        ],
+        recommended_default: format!(
+            "n - avoid creating a {change_noun} until you decide this branch is the review surface"
+        ),
+    }
+}
+
+fn review_rebase_context_card(
+    change_noun: &str,
+    number: u64,
+    behind: u32,
+    overlap: &[String],
+) -> context_prompt::ContextCard {
+    let mut provenance = vec![format!(
+        "{change_noun}-{number} is {behind} commit{} behind its base branch",
+        if behind == 1 { "" } else { "s" }
+    )];
+    if overlap.is_empty() {
+        provenance.push("no changed file overlap was detected".to_string());
+    } else {
+        provenance.push(format!(
+            "changed-file overlap detected: {}",
+            overlap.join(", ")
+        ));
+    }
+    let default = !overlap.is_empty();
+    context_prompt::ContextCard {
+        decision: format!("whether to rebase {change_noun}-{number} before review"),
+        provenance,
+        answers: vec![
+            format!(
+                "y: run `aida pr rebase {number}` now; reversible through normal git/forge recovery if the rebase fails"
+            ),
+            format!(
+                "n: continue reviewing the existing {change_noun} diff against its stale base; reversible by rebasing later"
+            ),
+        ],
+        recommended_default: if default {
+            "y - overlapping files make the stale-base review less reliable".to_string()
+        } else {
+            "n - no file overlap was detected, so the review can proceed".to_string()
+        },
+    }
+}
+
 /// Classify a spec's review surface from its git linkage + (optional) forge
 /// change-lookup. Pure: the side-effecting `collect_git_linkage` /
 /// `change_lookup_for_branch` run at the call site; this is the decision so
@@ -66178,11 +66248,14 @@ fn handle_review_spec(
             );
             // AC-5: offer to (re)open a PR before review.
             if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
-                let reopen =
-                    inquire::Confirm::new(&format!("Open a {change_noun} from `{branch}` first?"))
-                        .with_default(false)
-                        .prompt()
-                        .unwrap_or(false);
+                let card =
+                    review_branch_no_change_context_card(&spec_id, branch, *commits, change_noun);
+                let reopen = context_prompt::confirm_with_context(
+                    &format!("Open a {change_noun} from `{branch}` first?"),
+                    false,
+                    &card,
+                )
+                .unwrap_or(false);
                 if reopen {
                     println!(
                         "  {} run: {}",
@@ -66317,11 +66390,13 @@ fn handle_review_spec(
                 // the review then runs against current code. Defaults to yes
                 // when a file the PR touches has also moved on the base.
                 if interactive {
-                    let rebase_now =
-                        inquire::Confirm::new(&format!("Rebase {change_noun}-{n} now?"))
-                            .with_default(!overlap.is_empty())
-                            .prompt()
-                            .unwrap_or(false);
+                    let card = review_rebase_context_card(change_noun, n, behind, &overlap);
+                    let rebase_now = context_prompt::confirm_with_context(
+                        &format!("Rebase {change_noun}-{n} now?"),
+                        !overlap.is_empty(),
+                        &card,
+                    )
+                    .unwrap_or(false);
                     if rebase_now {
                         if let Err(e) = pr_rebase_handler(n, false, false, false, None, None) {
                             eprintln!(
