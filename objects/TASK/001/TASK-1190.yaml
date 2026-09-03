@@ -8,12 +8,12 @@ description: |
   Fix: append one contract sentence to the rendered block (and pin it in the prompt test).
 
   Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:54:46.751242696Z
-modified_at: 2026-09-03T15:24:44.086771739Z
+modified_at: 2026-09-03T15:37:21.991031479Z
 req_type: Task
 tags:
 - from-review:PR-1638
@@ -24,8 +24,27 @@ relationships:
   target_id: 01a067df-1f60-76d1-a463-738cf5c097e9
   created_at: 2026-09-03T15:24:36.350469539Z
   created_by: joe
+history:
+- id: 01a067ea-e340-7073-9cba-7caf49ee8b0a
+  author: aida-auto-bump
+  timestamp: 2026-09-03T15:37:21.984848197Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a067ea-e347-7060-badb-f1f966b5ac99
+  timestamp: 2026-09-03T15:37:21.991030983Z
+  agent: aida
+  commit_sha: 25995ae13f7d57030848b03ebe568577d8de06be
+  summary: Completed via merge 25995ae1
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-03T15:24:44.086771739Z
   implemented_by: joe
+  completed_at: 2026-09-03T15:37:21.984740626Z
+  completion_sha: 25995ae13f7d57030848b03ebe568577d8de06be
