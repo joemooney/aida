@@ -8,15 +8,19 @@ description: |
   Fix sketch: add a repeatable --finding flag to aida review record (writes findings[]), and document the field in the aida-review skill template step 6a (PR-1637's dead branch had a doc hunk for this, but under the key blocking_findings — align on findings). Optionally salvage PR-1637's session-manifest persistence so findings survive into aida session show --plan.
 
   Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:54:30.947027985Z
-modified_at: 2026-09-03T16:26:32.058051876Z
+modified_at: 2026-09-03T16:33:33.069796938Z
 req_type: Task
 tags:
 - from-review:PR-1638
 - review-loop
 - severity:minor
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-03T16:33:33.069796938Z
+  implemented_by: joe
