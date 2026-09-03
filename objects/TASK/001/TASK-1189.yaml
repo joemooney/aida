@@ -8,12 +8,12 @@ description: |
   Fix sketch: add a repeatable --finding flag to aida review record (writes findings[]), and document the field in the aida-review skill template step 6a (PR-1637's dead branch had a doc hunk for this, but under the key blocking_findings — align on findings). Optionally salvage PR-1637's session-manifest persistence so findings survive into aida session show --plan.
 
   Raised in review of PR-1638: https://github.com/joemooney/aida/pull/1638#issuecomment-5527596055
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:54:30.947027985Z
-modified_at: 2026-09-03T16:44:05.006433047Z
+modified_at: 2026-09-03T16:50:04.975643187Z
 req_type: Task
 tags:
 - from-review:PR-1638
@@ -24,8 +24,30 @@ relationships:
   target_id: 01a06827-e391-75b3-bb0a-9c11b153913d
   created_at: 2026-09-03T16:44:05.006426858Z
   created_by: joe
+history:
+- id: 01a0682d-7629-7d52-930a-455b8bd8cf86
+  author: aida-auto-bump
+  timestamp: 2026-09-03T16:50:04.969448046Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0682d-762f-7960-b999-04ce9be9bbe7
+  timestamp: 2026-09-03T16:50:04.975638834Z
+  agent: aida
+  commit_sha: 64c6eed4dfc5e8665b054a8f72e26198e59c5458
+  summary: 'PASS: --finding now produces findings[] and review docs describe the field; targeted tests and CI pass.'
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  - 'punted: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session'
+  - 'punted: the implementer session exited 1 — it was aborted or errored'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-03T16:33:33.069796938Z
   implemented_by: joe
+  completed_at: 2026-09-03T16:50:04.969341441Z
+  completion_sha: 64c6eed4dfc5e8665b054a8f72e26198e59c5458
