@@ -6,12 +6,12 @@ description: |-
   Every shelved drain phase auto-files a draft BUG ("auto-complete failure: phase N on SPEC"). When SPEC later reaches Completed (or the failure is otherwise resolved and the spec merges), these records linger as drafts needing manual advisor burial — 5 rejected by hand on 2026-09-03 alone (BUG-812/813/815/817/818), each pointing at an already-resolved cause.
 
   Fix: on pull auto-bump (or any transition of SPEC to Completed), sweep open auto-filed failure records ABOUT that spec and resolve them automatically — rejected with an auto-comment naming the completing commit/PR. Only touch records carrying the auto-filed marker (title pattern/tag), never hand-filed bugs. Acceptance: drive a spec to a shelved phase, let it auto-file, then complete the spec via merge+pull; the failure record leaves the open lens without human action, with an audit comment.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T14:57:36.383860314Z
-modified_at: 2026-09-03T14:58:00.436135387Z
+modified_at: 2026-09-03T15:15:37.100260326Z
 req_type: Task
 tags:
 - hygiene
