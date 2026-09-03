@@ -84,6 +84,9 @@ fn parses_review_comment_metadata_for_rework() {
     assert!(rendered.contains("1. BUG-814 prompt omits review findings"));
     assert!(rendered.contains("2. silent no-change pass-through"));
     assert!(rendered.contains("Review comment: https://github.com/o/r/pull/1637#issuecomment-1"));
+    assert!(rendered.contains(
+        "Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes."
+    ));
 }
 
 #[test]

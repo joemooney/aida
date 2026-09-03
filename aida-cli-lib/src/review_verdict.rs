@@ -224,6 +224,10 @@ pub fn rework_findings_comment(
     for (idx, item) in items.iter().enumerate() {
         out.push_str(&format!("\n{}. {}", idx + 1, item));
     }
+    // trace:TASK-1190 | ai:codex
+    out.push_str(
+        "\nContract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.",
+    );
     Some(out)
 }
 
