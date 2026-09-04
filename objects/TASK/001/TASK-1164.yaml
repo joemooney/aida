@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T03:00:33.202541626Z
-modified_at: 2026-07-21T16:33:21.323135564Z
+modified_at: 2026-09-04T05:10:59.070544616Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019f241c-96e4-7760-a3ff-2c8d865429a8
   created_at: 2026-07-20T03:00:34.874483387Z
+comments:
+- id: 01a06ad3-c6fe-76a0-8d7e-f7d3863b0aef
+  author: joe
+  content: 'Partial live validation 2026-09-03 (advisor, real gitlab.joemooney.com): the STORE leg fan-out is verified live — aida db sync --push mirrored aida-store to gitlab via [store.sync] mirror_remotes automatically, and both hubs converged (7485fb9). Main was fast-forwarded manually (git push gitlab origin/main:main), so the CODE-leg fan-out path (TASK-1097 pre-push machinery) remains the unverified half of this spec.'
+  created_at: 2026-09-04T05:10:59.070544616Z
+  modified_at: 2026-09-04T05:10:59.070544616Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: operator
