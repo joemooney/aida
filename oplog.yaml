@@ -44137,5 +44137,20 @@ operations:
   timestamp: 2026-09-03T20:09:33.965320565Z
   kind: !SetStatus
     status: Rejected
-clock: 3917
+- id: 01a06ad3-bab0-7421-92c6-80735e2674de
+  target_id: 01a06ad3-b72c-7f90-a6a3-1e982ccf486a
+  author: aida
+  node_id: '1'
+  lamport: 3918
+  timestamp: 2026-09-04T05:10:55.920791496Z
+  kind: !Create
+    title: remote status labels a pure fast-forward lag as DIVERGED — should say BEHIND and suggest a plain push
+    description: |-
+      Observed 2026-09-03: gitlab was 164 commits behind on main and 2875 behind on aida-store with ZERO unique commits of its own (git rev-list both directions confirmed strict fast-forward), yet `aida remote status` rendered both as "✗ DIVERGED" and the guidance block talked about merge/reconcile. A pure lag is the common mirror state and its remedy is one safe push; calling it DIVERGED sends the operator toward reconcile machinery they do not need.
+
+      Fix: when one remote is strictly behind another (ahead>0, behind==0 in exactly one direction), render "⇡ BEHIND (<n> commits)" and suggest the exact fast-forward push (`git push <remote> <canon>/<branch>:<branch>` or the aida verb). Reserve DIVERGED (and the reconcile guidance) for genuinely two-sided history. Unit test: a behind-only fixture renders BEHIND with the push hint; a two-sided fixture still renders DIVERGED.
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 3918
 node_id: '1'
