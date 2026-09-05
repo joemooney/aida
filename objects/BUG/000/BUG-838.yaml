@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:13:47.951844768Z
-modified_at: 2026-09-05T23:27:18.451973707Z
+modified_at: 2026-09-05T23:27:19.619824007Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -39,6 +39,17 @@ comments:
   created_at: 2026-09-05T21:15:07.560485844Z
   modified_at: 2026-09-05T21:15:07.560485844Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a073e5-dd7a-7542-a911-282a30039938
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1648):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-838 acceptance requires aida scaffold refresh to append the AIDA-AUTOGEN block to an existing AGENTS.md without markers; aida-cli-lib/src/scaffold_refresh.rs still excludes AGENTS.md from refresh processing, so that command remains a no-op for this case.
+    2. BUG-838 describes the post-injection opt-out as [scaffold] agents_md_block = false, but ScaffoldConfig has no such field or config plumbing, so users cannot opt out via the promised policy knob.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-05T23:27:19.418470896Z
+  modified_at: 2026-09-05T23:27:19.418470896Z
 execution_mode: drain
 implementation_info:
   implemented: true
