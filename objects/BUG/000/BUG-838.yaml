@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:13:47.951844768Z
-modified_at: 2026-09-05T21:15:07.560485844Z
+modified_at: 2026-09-05T21:19:52.496649497Z
 req_type: Bug
 comments:
 - id: 01a0736c-d5a8-7893-9d13-6fe696b0364b
@@ -34,3 +34,4 @@ comments:
   created_at: 2026-09-05T21:15:07.560485844Z
   modified_at: 2026-09-05T21:15:07.560485844Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+execution_mode: drain
