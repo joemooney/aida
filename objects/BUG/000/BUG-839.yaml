@@ -11,11 +11,11 @@ description: |-
   - aida queue work --drain --no-human=both --dry-run prints the would-drain plan and exits 0 with no .aida/drain.lock, no drain-state.json, no spawned session, no store pull
   - Unit/integration test asserts the no-side-effects contract (tempdir project, queued stub spec)
   - If a preview is not feasible for this path, the flag combination must be a clap conflict error instead of a silent ignore
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:21:22.228788468Z
-modified_at: 2026-09-05T21:21:32.065119796Z
+modified_at: 2026-09-05T23:00:57.600422840Z
 req_type: Bug
 execution_mode: drain
