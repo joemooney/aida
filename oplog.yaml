@@ -44227,5 +44227,34 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3921
+- id: 01a0736b-a8c5-7e41-b6ba-e075b967307c
+  target_id: 01a0736b-9eaf-7c40-8d00-3021b6f610ba
+  author: aida
+  node_id: '1'
+  lamport: 3922
+  timestamp: 2026-09-05T21:13:50.533618881Z
+  kind: !Create
+    title: init silently skips a pre-existing AGENTS.md — AIDA-AUTOGEN block is never injected
+    description: |-
+      Field report (2026-09-05): running aida init in a repo that already had an AGENTS.md (the normal case in a Codex-standardized environment) left AGENTS.md completely untouched — no AIDA conventions block, no warning. To the operator it looks like init just does not support Codex instructions.
+
+      Mechanism (verified in code):
+      1. The init artifact write loop (aida-cli-lib/src/init_cmd.rs, the exists-and-not-force branch around line 659) skips ANY existing file silently; only .git/hooks/pre-commit is special-cased for managed update.
+      2. The Seed-category design (aida-core/src/scaffolding/mod.rs FileCategory docs, FR-1-035) promises the AIDA-AUTOGEN block inside AGENTS.md is AIDA-owned and auto-upgraded — but the block merge lives only in scaffold upgrade (scaffold_cmd.rs replace-between-markers), and it only fires when the markers are ALREADY present. A pre-existing AGENTS.md with no markers can never acquire the block through any command except --force, which clobbers user content.
+
+      Fix (both init and scaffold refresh/upgrade paths):
+      - Existing AGENTS.md WITH markers: refresh the block content in place (already the upgrade behavior; make init do it too)
+      - Existing AGENTS.md WITHOUT markers: APPEND the delimited AIDA-AUTOGEN block at the end, preserving every user byte outside the block; print one line saying the block was added
+      - No AGENTS.md: unchanged (full seed generated)
+      - User opt-out stays: deleting the markers means hands-off forever after a one-time notice? NO — keep it simple: no markers = append exactly once; removing the block after that is respected only via a config knob [scaffold] agents_md_block = false (configurable-policy convention). Default: inject.
+      - CLAUDE.md keeps today's behavior (pure Seed, imports .claude/AIDA.md via @-import; AGENTS.md is the one file needing inlining because Codex does not follow imports)
+
+      Acceptance:
+      - Unit tests: init over an AGENTS.md without markers appends the block and preserves prior content byte-for-byte outside the markers; init over one with stale markers refreshes only the block; init over one with current markers is a no-op; --force still full-overwrites
+      - aida scaffold refresh gains the same no-markers append
+      - The skip path for AGENTS.md is no longer silent: one info line states what happened
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3922
 node_id: '1'
