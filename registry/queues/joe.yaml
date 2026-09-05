@@ -468,3 +468,11 @@
   note: advisor-cleared at filing
   added_at: 2026-09-05T21:28:02.213311470Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a0737a-de72-7841-b651-bfd409629cad
+  position: 347000
+  added_by: joe
+  note: auto-queued by `session end` (01a07372); covers 1 spec
+  added_at: 2026-09-05T21:30:33.009564318Z
+  for_role: reviewer
+  added_by_machine: imac
