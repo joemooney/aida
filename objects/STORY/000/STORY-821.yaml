@@ -16,12 +16,12 @@ description: |-
   - role enter advisor at a TTY with >=1 advisor session shows the filtered picker; Enter resumes via claude --resume; Esc continues into a fresh shell state
   - Non-interactive role enter behavior is byte-identical to today
   - Picker never appears when no session matches the role
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T19:53:05.613363890Z
-modified_at: 2026-09-05T21:50:28.073722424Z
+modified_at: 2026-09-05T21:50:34.029752253Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -33,3 +33,7 @@ relationships:
   created_at: 2026-09-05T21:50:28.073717984Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-05T21:50:34.029752253Z
+  implemented_by: joe
