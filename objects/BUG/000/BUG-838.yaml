@@ -25,5 +25,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:13:47.951844768Z
-modified_at: 2026-09-05T21:13:47.951844768Z
+modified_at: 2026-09-05T21:15:07.560485844Z
 req_type: Bug
+comments:
+- id: 01a0736c-d5a8-7893-9d13-6fe696b0364b
+  author: joe
+  content: 'Operator confirmed (2026-09-05): the repo already had an AGENTS.md before init ran — the silent-skip path is the confirmed single cause; no STORY-807 profile-selection component. Repro is exactly: init over a markerless pre-existing AGENTS.md.'
+  created_at: 2026-09-05T21:15:07.560485844Z
+  modified_at: 2026-09-05T21:15:07.560485844Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
