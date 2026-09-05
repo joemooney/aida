@@ -18,7 +18,11 @@ use std::io::IsTerminal;
 pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     let project_root = statusline_project_root();
     match cmd {
-        RoleCommand::Enter { name, cd } => handle_role_enter(&project_root, name.as_deref(), *cd),
+        RoleCommand::Enter {
+            name,
+            cd,
+            no_resume,
+        } => handle_role_enter(&project_root, name.as_deref(), *cd, *no_resume),
         RoleCommand::Add {
             name,
             purpose,
@@ -163,7 +167,12 @@ fn print_role_scope(state: &RoleState) {
     }
 }
 
-fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: bool) -> Result<()> {
+fn handle_role_enter(
+    project_root: &std::path::Path,
+    name: Option<&str>,
+    cd: bool,
+    no_resume: bool,
+) -> Result<()> {
     // TASK-644: resolve the role name. When the name is omitted, or names a
     // role that doesn't exist, fall back to an interactive picker — but ONLY
     // when stdin is a TTY. The primary caller is `eval "$(aida role enter)"`,
@@ -218,8 +227,89 @@ fn handle_role_enter(project_root: &std::path::Path, name: Option<&str>, cd: boo
     if canonical_role_name(&resolved) == "advisor" {
         let _ = human_audit::register_pane_from_env(project_root);
     }
-    emit_role_enter_eval(project_root, &state, cd, /* was_existing */ true);
+    let resume = pick_recent_session_for_role(project_root, &state.name, no_resume)?;
+    emit_role_enter_eval(
+        project_root,
+        &state,
+        cd,
+        /* was_existing */ true,
+        resume,
+    );
     Ok(())
+}
+
+/// STORY-821: after a successful interactive role-enter, offer to resume a
+/// recent Claude conversation whose parsed AIDA role matches the entered role.
+/// The picker writes to stderr, leaving stdout as eval-only shell payload.
+// trace:STORY-821 | ai:codex
+fn pick_recent_session_for_role(
+    project_root: &std::path::Path,
+    role: &str,
+    no_resume: bool,
+) -> Result<Option<String>> {
+    if no_resume || !role_resume_prompt_enabled(project_root) {
+        return Ok(None);
+    }
+    if std::env::var("AIDA_HEADLESS").as_deref() == Ok("1") {
+        return Ok(None);
+    }
+    if !(std::io::stdin().is_terminal() && std::io::stderr().is_terminal()) {
+        return Ok(None);
+    }
+
+    let sessions = session::list_role_sessions(role, 8).unwrap_or_default();
+    if sessions.is_empty() {
+        return Ok(None);
+    }
+
+    let fresh_label = "○  start fresh / do nothing".to_string();
+    let mut labels = vec![fresh_label.clone()];
+    labels.extend(
+        sessions
+            .iter()
+            .map(session::format_role_resume_session_line),
+    );
+    let prompt = format!(
+        "{} recent claude session(s) for role `{}` — resume one?",
+        sessions.len(),
+        role
+    );
+    let pick = match inquire::Select::new(&prompt, labels.clone())
+        .with_help_message("arrows to move, type to filter, Enter to choose, Esc to skip")
+        .prompt()
+    {
+        Ok(pick) => pick,
+        Err(inquire::InquireError::OperationCanceled)
+        | Err(inquire::InquireError::OperationInterrupted) => return Ok(None),
+        Err(e) => return Err(anyhow::anyhow!("role resume picker failed: {e}")),
+    };
+    if pick == fresh_label {
+        return Ok(None);
+    }
+    let idx = labels
+        .iter()
+        .position(|l| l == &pick)
+        .map(|p| p.saturating_sub(1))
+        .unwrap_or(0);
+    Ok(Some(sessions[idx].id.clone()))
+}
+
+fn role_resume_prompt_enabled(project_root: &std::path::Path) -> bool {
+    role_resume_prompt_enabled_from(
+        &std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+            .unwrap_or_default(),
+    )
+}
+
+fn role_resume_prompt_enabled_from(content: &str) -> bool {
+    let Ok(value) = content.parse::<toml::Value>() else {
+        return true;
+    };
+    value
+        .get("role")
+        .and_then(|role| role.get("resume_prompt"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
 }
 
 /// TASK-644: interactive role picker for `aida role enter` (no name / unknown
@@ -282,6 +372,7 @@ fn handle_role_add(
         &state,
         /* cd */ false,
         /* was_existing */ false,
+        None,
     );
     Ok(())
 }
@@ -291,6 +382,7 @@ fn emit_role_enter_eval(
     state: &RoleState,
     cd: bool,
     was_existing: bool,
+    resume_session_id: Option<String>,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -497,6 +589,9 @@ fn emit_role_enter_eval(
                 );
             }
         }
+    }
+    if let Some(id) = resume_session_id {
+        println!("claude --resume '{}'", sh_single_quote(&id));
     }
 }
 
@@ -861,4 +956,24 @@ fn handle_role_scaffold() -> Result<()> {
         println!("List all: {}", "aida role list".cyan());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // trace:STORY-821 | ai:codex
+    #[test]
+    fn role_resume_prompt_config_defaults_to_enabled() {
+        assert!(role_resume_prompt_enabled_from(""));
+        assert!(role_resume_prompt_enabled_from("[role]\n"));
+    }
+
+    // trace:STORY-821 | ai:codex
+    #[test]
+    fn role_resume_prompt_config_can_disable_prompt() {
+        assert!(!role_resume_prompt_enabled_from(
+            "[role]\nresume_prompt = false\n"
+        ));
+    }
 }

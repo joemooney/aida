@@ -1645,6 +1645,11 @@ pub enum RoleCommand {
         /// Restore the role's last working directory (cd in the eval output)
         #[clap(long)]
         cd: bool,
+
+        /// Skip the interactive recent-session resume prompt
+        // trace:STORY-821 | ai:codex
+        #[clap(long)]
+        no_resume: bool,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
