@@ -20,5 +20,6 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:34:45.266142364Z
-modified_at: 2026-09-05T22:34:45.266142364Z
+modified_at: 2026-09-05T22:34:49.587627385Z
 req_type: Story
+execution_mode: drain
