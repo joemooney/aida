@@ -1,0 +1,25 @@
+id: 01a073cf-ad89-7773-8c5f-9fe95219d4c8
+spec_id: STORY-835
+agreed_id: STORY-835
+title: 'init''s antigravity profile actually wires agy: AGENTS.md reach check + one-time --add-mcp offer + doctor probe'
+description: |-
+  Field report (2026-09-05): operator ran aida init, started Antigravity, and agy was not using AIDA. Init's antigravity profile today only writes .antigravity/skills/ — it neither ensures the instruction channel (AGENTS.md is what agy reads, per docs/agents/aida-mcp-install-matrix.md) nor performs/offers the MCP registration, which for Antigravity is a MANUAL user-profile-level step: antigravity --add-mcp '{"name":"aida","command":"aida","args":["mcp-serve"]}' (docs/agents/antigravity-mcp-setup.md). So selecting the antigravity profile produces an agent that starts with zero AIDA awareness.
+
+  Design:
+  - At init (and scaffold refresh) with the antigravity profile selected: verify AGENTS.md exists and carries the AIDA block (lands on the BUG-838 machinery; add a BlockedBy). If missing, that path fixes it; if BUG-838 shipped, this is just the check
+  - One-time machine-level registration offer, at a TTY, first time only: detect whether the aida MCP server is already registered in the antigravity user profile (probe the profile config; if not cheaply probeable, keep an ~/.aida/ sentinel like the TASK-698 posture prompt) and offer to run antigravity --add-mcp with command "aida" off PATH (NOT an absolute target/debug path — the setup doc's example pins a stale dev path; fix the doc in the same change). Decline = print the command. Non-TTY: print the command, register nothing
+  - aida doctor gains an agents-wiring probe: antigravity selected in the persisted profile but no MCP registration / no AGENTS.md block -> one actionable finding each with the exact fix command
+  - antigravity binary absent on this machine: skip silently (profile selection may predate install)
+
+  Acceptance:
+  - Fresh TTY init with antigravity profile + no prior registration: the offer appears once; accepting registers (or test-mode captures the argv); a second init does not re-offer
+  - Headless init prints the registration command, executes nothing
+  - doctor reports the two wiring gaps when present, silent when wired
+  - docs/agents/antigravity-mcp-setup.md updated to PATH-resolved command
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T23:03:05.353921619Z
+modified_at: 2026-09-05T23:03:05.353921619Z
+req_type: Story
