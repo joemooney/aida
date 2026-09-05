@@ -44152,5 +44152,29 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 3918
+- id: 01a07321-4c08-72d0-874d-955a2b3babdc
+  target_id: 01a07321-2f72-79e3-8038-44b10eb26830
+  author: aida
+  node_id: '1'
+  lamport: 3919
+  timestamp: 2026-09-05T19:52:37.128316404Z
+  kind: !Create
+    title: session list role column misses AIDA hook-format role markers so known-role sessions show '-'
+    description: |-
+      The session picker (aida session list / resume) derives each row's role by scanning the first 400 JSONL lines for two markers only: AIDA_SESSION_ROLE= and 'Role: ' (scan_session_meta in aida-cli-lib/src/session.rs, FR-1-043). But AIDA's own hooks record the role in two OTHER formats that the parser ignores:
+
+      1. 'AIDA · role: <name>' — the SessionStart/UserPromptSubmit hook_success status line
+      2. 'AIDA active role: <name>' — the SessionStart hook additional-context header
+
+      Live evidence (2026-09-05): session 7363445d shows role '-' in the picker, yet its JSONL contains 'AIDA active role: product'. Session d736c33b logs 'AIDA · role: none' — a truthful no-role launch that should stay '-'.
+
+      Fix: add both hook formats to the marker list (case-sensitive, our own stable strings), canonicalize via canonical_session_role as today, and treat the literal name 'none' as an EXPLICIT no-role sentinel (accept it, stop scanning, render '-') so later stray matches can't overwrite a truthful dash.
+
+      Acceptance:
+      - Unit tests: one JSONL fixture per marker format resolves the role; 'AIDA · role: none' fixture resolves to no-role and stops the scan
+      - A session whose only role evidence is the hook additional-context header shows its role in list/resume instead of '-'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3919
 node_id: '1'
