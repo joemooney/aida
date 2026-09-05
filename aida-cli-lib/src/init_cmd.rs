@@ -674,8 +674,20 @@ fn complete_init_scaffolding(
                     continue;
                 }
             } else if artifact.path == std::path::Path::new("AGENTS.md") {
+                if !crate::scaffold_refresh::agents_md_block_enabled(root) {
+                    println!(
+                        "{} AGENTS.md exists — AIDA block injection disabled by [scaffold] agents_md_block; left untouched",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                    );
+                    skipped_count += 1;
+                    continue;
+                }
                 let existing = std::fs::read_to_string(&full_path)?;
                 let (merged, action) = merge_agents_md_aida_block(&existing, &artifact.content);
+                if merged == existing {
+                    skipped_count += 1;
+                    continue;
+                }
                 std::fs::write(&full_path, merged)?;
                 match action {
                     AgentsMdBlockMerge::Added => println!(
@@ -1950,6 +1962,11 @@ mod task_631_init_self_commit_tests {
         assert!(content.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
         assert!(content.contains("<!-- AIDA-AUTOGEN-END -->"));
         assert!(content.contains("# AIDA Conventions"));
+        // Only the delimited block may be appended — the generated seed's own
+        // framing (its `# AGENTS.md` heading, orientation prose) must not be
+        // spliced into a user-owned file. `original` carries the only H1.
+        assert_eq!(content.matches("# AGENTS.md").count(), 1);
+        assert!(!content.contains("Guidance for Codex and MCP-compatible coding agents"));
     }
 
     /// BUG-570 criterion 2: non-interactive (no TTY, the test harness) init on a

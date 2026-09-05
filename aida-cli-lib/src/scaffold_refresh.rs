@@ -90,11 +90,97 @@ pub(crate) fn refresh_agent_packs(
         }
     }
 
+    if let Some(agents) = agents_md_block_refresh(project_root, &preview) {
+        packs.push(agents);
+    }
+
     if let Some(prompts) = codex_prompts_refresh(codex_prompts_dest) {
         packs.push(prompts);
     }
     packs.retain(|p| p.report != RefreshReport::default());
     packs
+}
+
+/// `[scaffold] agents_md_block` in `.aida/config.toml` — the opt-out for
+/// AIDA's block injection into a user-owned AGENTS.md. Missing file, section,
+/// key, or a parse error all mean enabled: a config problem never blocks init
+/// or refresh, and inject-by-default is the documented policy.
+// trace:BUG-838 | ai:claude
+pub(crate) fn agents_md_block_enabled(project_root: &Path) -> bool {
+    let Ok(content) = std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+    else {
+        return true;
+    };
+    let Ok(doc) = content.parse::<toml::Value>() else {
+        return true;
+    };
+    doc.get("scaffold")
+        .and_then(|s| s.get("agents_md_block"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
+
+/// The AGENTS.md AIDA-AUTOGEN block is part of the refresh contract: an
+/// EXISTING AGENTS.md gets the block appended when it has no markers and the
+/// block content refreshed when it does — user-owned content outside the
+/// delimiters is preserved byte-for-byte. Refresh never installs: a project
+/// with no AGENTS.md, an agent profile that doesn't generate one, a symlinked
+/// destination, or the `[scaffold] agents_md_block = false` opt-out all leave
+/// the file exactly as it is.
+// trace:BUG-838 | ai:claude
+fn agents_md_block_refresh(
+    project_root: &Path,
+    preview: &aida_core::scaffolding::ScaffoldPreview,
+) -> Option<PackRefresh> {
+    if !agents_md_block_enabled(project_root) {
+        return None;
+    }
+    let artifact = preview
+        .artifacts
+        .iter()
+        .find(|a| a.path == Path::new("AGENTS.md"))?;
+    let dest = project_root.join("AGENTS.md");
+    let mut report = RefreshReport::default();
+    if dest
+        .symlink_metadata()
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+    {
+        report.record(
+            Path::new("AGENTS.md"),
+            aida_core::scaffolding::refresh::RefreshOutcome::SkippedSymlink(dest),
+        );
+    } else {
+        let existing = std::fs::read_to_string(&dest).ok()?;
+        let (merged, _) =
+            aida_core::scaffolding::merge_agents_md_aida_block(&existing, &artifact.content);
+        if merged.replace("\r\n", "\n") == existing.replace("\r\n", "\n") {
+            report.record(
+                Path::new("AGENTS.md"),
+                aida_core::scaffolding::refresh::RefreshOutcome::Unchanged,
+            );
+        } else {
+            match std::fs::write(&dest, &merged) {
+                Ok(()) => report.record(
+                    Path::new("AGENTS.md"),
+                    aida_core::scaffolding::refresh::RefreshOutcome::Refreshed,
+                ),
+                Err(e) => {
+                    eprintln!(
+                        "  {} could not refresh AGENTS.md: {}",
+                        "Warning:".yellow(),
+                        e
+                    );
+                    return None;
+                }
+            }
+        }
+    }
+    Some(PackRefresh {
+        label: "AGENTS.md AIDA block".to_string(),
+        location: project_root.display().to_string(),
+        report,
+    })
 }
 
 /// Refresh `~/.codex/prompts` when the machine actually has it installed.
@@ -346,5 +432,105 @@ mod tests {
             original,
             "writing through the symlink would have corrupted the master"
         );
+    }
+
+    /// BUG-838: refresh appends the AIDA-AUTOGEN block to an existing
+    /// AGENTS.md that has no markers — user content preserved byte-for-byte,
+    /// only the delimited block (never the generated seed's framing) added,
+    /// and a second refresh converges to unchanged.
+    #[test]
+    fn refresh_appends_aida_block_to_unmarked_agents_md() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let original = "# My project agents\n\nHouse rules the team wrote.\n";
+        std::fs::write(root.join("AGENTS.md"), original).unwrap();
+
+        let packs = refresh_agent_packs(root, None);
+        let pack = packs
+            .iter()
+            .find(|p| p.label == "AGENTS.md AIDA block")
+            .expect("agents-md pack in refresh report");
+        assert_eq!(pack.report.refreshed.len(), 1, "{:?}", pack.report);
+
+        let content = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+        assert!(content.starts_with(original), "user content must lead");
+        assert_eq!(content.matches("<!-- AIDA-AUTOGEN-BEGIN -->").count(), 1);
+        assert_eq!(content.matches("<!-- AIDA-AUTOGEN-END -->").count(), 1);
+        assert!(content.contains("# AIDA Conventions"));
+        assert!(
+            !content.contains("Guidance for Codex and MCP-compatible coding agents"),
+            "the generated seed's framing must never be spliced into a user file"
+        );
+
+        // Idempotent: the second refresh reports unchanged, content is stable.
+        let packs2 = refresh_agent_packs(root, None);
+        if let Some(pack2) = packs2.iter().find(|p| p.label == "AGENTS.md AIDA block") {
+            assert!(pack2.report.refreshed.is_empty(), "{:?}", pack2.report);
+            assert_eq!(pack2.report.unchanged, 1);
+        }
+        assert_eq!(
+            std::fs::read_to_string(root.join("AGENTS.md")).unwrap(),
+            content
+        );
+    }
+
+    /// BUG-838: no AGENTS.md means refresh installs nothing — the file must
+    /// not appear, and no pack row is reported for it.
+    #[test]
+    fn refresh_never_creates_agents_md() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let packs = refresh_agent_packs(root, None);
+        assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
+        assert!(!root.join("AGENTS.md").exists());
+    }
+
+    /// BUG-838: the `[scaffold] agents_md_block = false` opt-out leaves an
+    /// unmarked AGENTS.md byte-identical through a refresh.
+    #[test]
+    fn refresh_honors_agents_md_block_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let original = "# Agents\n\nNo AIDA here, thanks.\n";
+        std::fs::write(root.join("AGENTS.md"), original).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[scaffold]\nagents_md_block = false\n",
+        )
+        .unwrap();
+
+        let packs = refresh_agent_packs(root, None);
+        assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
+        assert_eq!(
+            std::fs::read_to_string(root.join("AGENTS.md")).unwrap(),
+            original
+        );
+    }
+
+    /// BUG-838: knob parsing — missing file/section/key and parse errors all
+    /// mean enabled; only an explicit `false` disables.
+    #[test]
+    fn agents_md_block_enabled_defaults_and_opt_out() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(agents_md_block_enabled(root), "no config file → enabled");
+
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        let cfg = root.join(".aida/config.toml");
+        std::fs::write(&cfg, "[archive]\nauto_after_days = 30\n").unwrap();
+        assert!(
+            agents_md_block_enabled(root),
+            "no [scaffold] section → enabled"
+        );
+
+        std::fs::write(&cfg, "[scaffold]\nagents_md_block = true\n").unwrap();
+        assert!(agents_md_block_enabled(root));
+
+        std::fs::write(&cfg, "[scaffold]\nagents_md_block = false\n").unwrap();
+        assert!(!agents_md_block_enabled(root));
+
+        std::fs::write(&cfg, "not [ valid toml").unwrap();
+        assert!(agents_md_block_enabled(root), "parse error → enabled");
     }
 }

@@ -347,11 +347,15 @@ pub fn extract_aida_block(content: &str) -> Option<&str> {
 
 /// Merge AIDA's generated conventions block into an existing AGENTS.md while
 /// preserving all user-owned content outside the delimiters.
+///
+/// `generated` may be either the bare delimited block or a full generated
+/// AGENTS.md seed containing one: only the marker-delimited region is ever
+/// spliced into `existing`, so a caller holding the whole seed artifact
+/// cannot accidentally append the seed's framing (a second `# AGENTS.md`
+/// heading, project-orientation prose) into a user-owned file.
 // trace:BUG-838 | ai:codex
-pub fn merge_agents_md_aida_block(
-    existing: &str,
-    generated_block: &str,
-) -> (String, AgentsMdBlockMerge) {
+pub fn merge_agents_md_aida_block(existing: &str, generated: &str) -> (String, AgentsMdBlockMerge) {
+    let generated_block = generated_marker_region(generated).unwrap_or(generated);
     if let Some(begin) = find_marker_at_line_start(existing, AIDA_BLOCK_BEGIN) {
         let after_begin = begin + AIDA_BLOCK_BEGIN.len();
         if let Some(end_rel) = find_marker_at_line_start(&existing[after_begin..], AIDA_BLOCK_END) {
@@ -383,7 +387,25 @@ pub fn merge_agents_md_aida_block(
         }
     }
     merged.push_str(generated_block);
+    if !merged.ends_with('\n') {
+        merged.push('\n');
+    }
     (merged, AgentsMdBlockMerge::Added)
+}
+
+/// The marker-delimited region of a generated AGENTS.md (markers included,
+/// trailing newline included when present), or `None` when the content has
+/// no complete block.
+// trace:BUG-838 | ai:claude
+fn generated_marker_region(generated: &str) -> Option<&str> {
+    let begin = find_marker_at_line_start(generated, AIDA_BLOCK_BEGIN)?;
+    let after_begin = begin + AIDA_BLOCK_BEGIN.len();
+    let end_rel = find_marker_at_line_start(&generated[after_begin..], AIDA_BLOCK_END)?;
+    let mut end = after_begin + end_rel + AIDA_BLOCK_END.len();
+    if generated[end..].starts_with('\n') {
+        end += 1;
+    }
+    Some(&generated[begin..end])
 }
 
 /// Find a marker that's at the start of a line (or start of buffer), with
@@ -452,6 +474,39 @@ mod tests {
         assert_eq!(
             merged,
             "# top\n<!-- AIDA-AUTOGEN-BEGIN -->\nnew body\n<!-- AIDA-AUTOGEN-END -->\n# bottom\n"
+        );
+    }
+
+    /// A caller holding the FULL generated AGENTS.md seed (framing + block +
+    /// tail sections) must splice only the marker-delimited region — never
+    /// the seed's own `# AGENTS.md` heading or surrounding prose.
+    #[test]
+    fn merge_agents_md_aida_block_extracts_block_from_full_seed() {
+        let existing = "# Work file\n\nUser instructions the team owns.\n";
+        let generated = "# AGENTS.md\n\nSeed framing prose.\n\n\
+             <!-- AIDA-AUTOGEN-BEGIN -->\nblock body\n<!-- AIDA-AUTOGEN-END -->\n\n\
+             ## Seed tail section\n\nMore seed prose.\n";
+
+        let (merged, action) = merge_agents_md_aida_block(existing, generated);
+
+        assert_eq!(action, AgentsMdBlockMerge::Added);
+        assert!(merged.starts_with(existing));
+        assert!(!merged.contains("Seed framing prose"));
+        assert!(!merged.contains("## Seed tail section"));
+        assert!(!merged.contains("# AGENTS.md"));
+        assert!(
+            merged.contains("<!-- AIDA-AUTOGEN-BEGIN -->\nblock body\n<!-- AIDA-AUTOGEN-END -->")
+        );
+        assert!(merged.ends_with('\n'));
+
+        // Refresh case with a full seed: only the block region is replaced.
+        let existing_marked =
+            "# top\n<!-- AIDA-AUTOGEN-BEGIN -->\nold\n<!-- AIDA-AUTOGEN-END -->\n# bottom\n";
+        let (remerged, action2) = merge_agents_md_aida_block(existing_marked, generated);
+        assert_eq!(action2, AgentsMdBlockMerge::Refreshed);
+        assert_eq!(
+            remerged,
+            "# top\n<!-- AIDA-AUTOGEN-BEGIN -->\nblock body\n<!-- AIDA-AUTOGEN-END -->\n# bottom\n"
         );
     }
 
