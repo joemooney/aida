@@ -15,11 +15,11 @@ description: |-
   Acceptance:
   - Unit tests: one JSONL fixture per marker format resolves the role; 'AIDA · role: none' fixture resolves to no-role and stops the scan
   - A session whose only role evidence is the hook additional-context header shows its role in list/resume instead of '-'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T19:52:29.810764826Z
-modified_at: 2026-09-05T21:21:05.146658235Z
+modified_at: 2026-09-05T21:21:38.578465714Z
 req_type: Bug
 execution_mode: drain
