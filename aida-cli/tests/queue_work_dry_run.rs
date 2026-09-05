@@ -187,6 +187,159 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     );
 }
 
+#[test]
+fn drain_dry_run_previews_plan_with_no_side_effects() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed (exit {:?}):\n--- stdout ---\n{}\n--- stderr ---\n{}",
+        init.status.code(),
+        String::from_utf8_lossy(&init.stdout),
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "task",
+            "--status",
+            "approved",
+            "--title",
+            "drain preview me",
+        ])
+        .output()
+        .expect("run aida add");
+    assert!(
+        add.status.success(),
+        "aida add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let add_out = String::from_utf8_lossy(&add.stdout);
+    let spec = add_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse spec id from add output:\n{add_out}"))
+        .to_string();
+
+    let queue_add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args(["queue", "add", &spec])
+        .output()
+        .expect("run aida queue add");
+    assert!(
+        queue_add.status.success(),
+        "aida queue add failed: {}",
+        String::from_utf8_lossy(&queue_add.stderr)
+    );
+
+    let sessions_before = list_session_files(&repo);
+    let siblings_before = sibling_worktrees(&base_dir);
+    let drain_lock = repo.join(".aida").join("drain.lock");
+    let drain_state = repo.join(".aida").join("drain-state.json");
+    assert!(
+        !drain_lock.exists(),
+        "test setup should start without drain.lock"
+    );
+    assert!(
+        !drain_state.exists(),
+        "test setup should start without drain-state.json"
+    );
+
+    let dry = aida(&repo, &home)
+        .args(["queue", "work", "--drain", "--no-human=both", "--dry-run"])
+        .output()
+        .expect("run aida queue work --drain --dry-run");
+    assert!(
+        dry.status.success(),
+        "dry-run exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        dry.status.code(),
+        String::from_utf8_lossy(&dry.stderr),
+        String::from_utf8_lossy(&dry.stdout)
+    );
+
+    let out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&dry.stdout),
+        String::from_utf8_lossy(&dry.stderr)
+    );
+    for needle in [
+        "Dry run",
+        "would drain",
+        "phases:",
+        "plan:",
+        &spec,
+        "drain preview me",
+    ] {
+        assert!(
+            out.contains(needle),
+            "drain dry-run output is missing `{needle}`:\n{out}"
+        );
+    }
+
+    assert!(
+        !drain_lock.exists(),
+        "drain dry-run created {}",
+        drain_lock.display()
+    );
+    assert!(
+        !drain_state.exists(),
+        "drain dry-run created {}",
+        drain_state.display()
+    );
+    assert_eq!(
+        sessions_before,
+        list_session_files(&repo),
+        "drain dry-run wrote a session lease"
+    );
+    assert_eq!(
+        siblings_before,
+        sibling_worktrees(&base_dir),
+        "drain dry-run created a worktree sibling"
+    );
+
+    let show = aida(&repo, &home)
+        .args(["show", &spec])
+        .output()
+        .expect("run aida show");
+    let show_out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&show.stdout),
+        String::from_utf8_lossy(&show.stderr)
+    )
+    .to_lowercase();
+    let status_line = show_out
+        .lines()
+        .find(|l| l.trim_start().starts_with("status:"))
+        .unwrap_or_else(|| panic!("no status field in show output:\n{show_out}"));
+    assert!(
+        status_line.contains("approved"),
+        "spec status should still be Approved after a drain dry run, got: `{status_line}`"
+    );
+}
+
 /// A SPEC-ID is `UPPER-<digits>` (e.g. `TASK-1`).
 fn is_spec_id(t: &str) -> bool {
     let mut parts = t.splitn(2, '-');
