@@ -44540,5 +44540,20 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3937
+- id: 01a073a5-32a9-7692-bfaf-dfe50811caaf
+  target_id: 01a073a5-0642-7c80-9e98-84e890573501
+  author: aida
+  node_id: '1'
+  lamport: 3938
+  timestamp: 2026-09-05T22:16:41.385817705Z
+  kind: !Create
+    title: docs/plans/ is created on first use, not at init
+    description: |-
+      Part of shrinking init's main-branch footprint: init pre-creates docs/plans/ + _TEMPLATE.md in every project, which is noise for projects that never write a plan. Create the directory (and drop the template into it) lazily — on the first aida ultraplan, plan verify --fix output, /aida-import-plan landing, or any AIDA surface that writes a plan file. Init stops creating it; ensure_plan_template_scaffold moves behind the first-use call sites. aida init --refresh on a project that already has docs/plans/ leaves it exactly as is.
+
+      Acceptance: fresh init has no docs/ directory at all (unless another artifact needs it); first plan-writing command creates docs/plans/ + _TEMPLATE.md exactly as init used to; existing projects unchanged.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 3938
 node_id: '1'
