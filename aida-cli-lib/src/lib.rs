@@ -296,9 +296,11 @@ use aida_core::{
     check_scaffold_status,
     determine_requirements_path,
     forbidden_attention_transition,
+    merge_agents_md_aida_block,
     seed_meta_requirements,
     // trace:TASK-331 — shared atomic-write util, promoted from BUG-228's local copy
     write_atomic,
+    AgentsMdBlockMerge,
     AttentionReason,
     Comment,
     DatabaseBackend,
