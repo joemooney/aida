@@ -44397,5 +44397,31 @@ operations:
   timestamp: 2026-09-05T21:37:15.504913169Z
   kind: !SetStatus
     status: Completed
-clock: 3930
+- id: 01a0738d-23e5-7613-86cb-a9c2ea24af56
+  target_id: 01a0738d-2066-71f3-aa69-6a0c23f689af
+  author: aida
+  node_id: '1'
+  lamport: 3931
+  timestamp: 2026-09-05T21:50:24.741538952Z
+  kind: !Create
+    title: 'Review PR-1647: [AI:codex] feat(role): offer recent session resume on enter (STORY-821)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07384`) for branch `story-821`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1647>
+      - Branch: `story-821` → `main`
+
+      ## Covers
+
+      - STORY-821
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1647` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3931
 node_id: '1'
