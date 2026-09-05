@@ -5,14 +5,19 @@ title: 'init --footprint minimal: orphan store + .aida/config.toml + .gitignore 
 description: |-
   The strong form of 'AIDA must not bleed into the project': a footprint tier for using AIDA in a repo without the team adopting it. aida init --footprint minimal (config: [scaffold] footprint = "minimal") scaffolds ONLY: the aida-store orphan branch + .aida-store/ worktree, .aida/config.toml, .aida/cache.db, and the .gitignore deny-block. No CLAUDE.md, no AGENTS.md, no .claude/.codex/.antigravity packs, no .mcp.json, no discipline pack, no docs/. Everything skipped is individually addable later (aida scaffold refresh with explicit pack flags, or re-running init with the default footprint).
 
+  FOOTPRINT IS A FIRST-CLASS INIT QUESTION (operator decision 2026-09-05): at a TTY, init asks once — folded into the existing STORY-807 agent-profile prompt flow as a single 'setup style' screen, NOT a separate interrogation. Options: Full (recommended for team adoption — commits agent packs + docs) / Minimal (solo or clean repo — store + config only). The answer persists alongside the STORY-807 profile selection so re-init/--refresh never re-asks. Choosing Minimal at a TTY immediately offers the STORY-831 user-level awareness snippet install ('the repo will not carry AIDA references — put them in your user-level agent settings?'), declinable. Non-TTY: default full, i.e. today's behavior, unless --footprint or config says otherwise.
+
   Notes:
-  - default footprint keeps today's behavior; minimal is opt-in
+  - default footprint keeps today's behavior; minimal is opt-in (flag, config, or the TTY prompt)
   - trace comments + commit trailers remain a per-commit choice, orthogonal to footprint
   - the .gitignore block is the one committed line-set main sees; a follow-up --footprint stealth (nothing committed at all, config local-only, store on a personal remote) is out of scope until real demand — record as a revisit note, do not build
   - interacts with the discipline-pack relocation story: sequence after it so minimal's exclusion list is defined against the new layout
 
   Acceptance:
   - init --footprint minimal on a fresh repo: git status shows only .gitignore modified/created; .aida/config.toml exists but only the allow-listed path is tracked; store branch works (add/list/edit round-trip)
+  - TTY init with no --footprint flag asks the setup-style question once within the profile-prompt flow; the choice persists; a later init/--refresh does not re-ask
+  - Choosing Minimal at a TTY offers the STORY-831 user-instructions install; declining leaves user files untouched
+  - Non-interactive init with no flag/config is byte-identical to today (full)
   - A later default-footprint init over a minimal project adds the full scaffold without disturbing the store
   - --footprint minimal composes with <DIR> bootstrap and --github/--remote
 status: Approved
@@ -20,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:16:50.966235718Z
-modified_at: 2026-09-05T22:20:12.995523949Z
+modified_at: 2026-09-05T22:20:14.071376331Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
