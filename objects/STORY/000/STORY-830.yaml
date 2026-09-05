@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:16:50.966235718Z
-modified_at: 2026-09-05T22:19:11.135736510Z
+modified_at: 2026-09-05T22:20:12.995523949Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -31,4 +31,11 @@ relationships:
   target_id: 01a073a7-64ca-7ab2-87aa-1d89e8eebc03
   created_at: 2026-09-05T22:19:11.135726488Z
   created_by: joe
+comments:
+- id: 01a073a8-6d43-7a73-8832-739f59844a58
+  author: joe
+  content: 'Design refinement (operator, 2026-09-05) — PROMOTED INTO ACCEPTANCE: footprint is asked at init.'
+  created_at: 2026-09-05T22:20:12.995523949Z
+  modified_at: 2026-09-05T22:20:12.995523949Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
