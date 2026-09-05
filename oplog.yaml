@@ -44464,5 +44464,31 @@ operations:
   timestamp: 2026-09-05T22:06:44.765564785Z
   kind: !SetStatus
     status: Completed
-clock: 3934
+- id: 01a0739f-aa41-76d3-92ee-42a98af3fda6
+  target_id: 01a0739f-a3c6-7993-8cdb-875df020d6f1
+  author: aida
+  node_id: '1'
+  lamport: 3935
+  timestamp: 2026-09-05T22:10:38.785404659Z
+  kind: !Create
+    title: init seeds a root README.md and registers the project in ~/.aida/projects.toml
+    description: |-
+      Operator request (2026-09-05): every new AIDA project should start with baseline best practices, not just AIDA plumbing. The two GENERIC pieces belong in core init:
+
+      1. Root README.md (seed-class, only when absent — never touch an existing README):
+      - Project name (dir name / manifest), one-line description placeholder, quickstart section (lang-aware: cargo run / uv run / npm start for the STORY-780 --lang scaffolds), and a short "requirements are tracked with AIDA" pointer (aida list / aida show)
+      - Same Seed category + skip-if-exists semantics as CLAUDE.md; --force overwrites
+
+      2. Machine-global project registry append: ~/.aida/projects.toml already exists as the hand-maintained registry whose own header says it becomes canonical under EPIC-22. init (and init <DIR>) appends a [[project]] entry — name (dir slug), path (absolute), repo (origin URL when a remote was configured) — idempotent: an existing entry with the same path is updated in place, never duplicated. Header comments and user-authored [[relation]] blocks are preserved byte-for-byte. No file -> created with the documented header convention.
+
+      Out of scope: consuming the registry (rest of EPIC-22), run.sh or port registration (machine-personal — see the post-init hooks story).
+
+      Acceptance:
+      - Fresh init: README.md exists with name + lang-correct quickstart; projects.toml gains exactly one [[project]] entry with correct path/repo
+      - Re-init: README untouched, registry entry updated not duplicated, user content elsewhere in projects.toml preserved
+      - init in a dir with an existing README.md: file untouched, no warning spam (one info line max)
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3935
 node_id: '1'
