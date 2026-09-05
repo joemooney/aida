@@ -44629,5 +44629,27 @@ operations:
       - Non-interactive init with no flag/config is byte-identical to today (full)
       - A later default-footprint init over a minimal project adds the full scaffold without disturbing the store
       - --footprint minimal composes with <DIR> bootstrap and --github/--remote
-clock: 3941
+- id: 01a073aa-36db-7bd3-86d3-b8b98725301e
+  target_id: 01a073aa-31a2-76b1-8f4c-ac16ef57f0c8
+  author: aida
+  node_id: '1'
+  lamport: 3942
+  timestamp: 2026-09-05T22:22:10.139671442Z
+  kind: !Create
+    title: aida status leads with a live-drain line when a drain is in flight
+    description: |-
+      Live discovery failure (2026-09-05): with a drain actively running, the operator ran aida status (the natural first command) and got role/queue/counts — zero indication a drain was in flight. They had to ask which command shows what is going on (aida drain status).
+
+      Fix: aida status (the bare sub-second view; --full too) prints one line when a live drain exists, above or beside the queue section:
+        ▶ drain in flight: spec 2/5 STORY-821 (implementer) — watch: aida drain status
+      Source + liveness rules identical to STORY-824 (statusline segment): read .aida/drain-state.json + drain.lock, kill -0 the pid; dead pid renders nothing here (drain status --clear owns stale diagnosis). Same sub-second budget — two local file reads, no store load, no network. Share the probe helper with STORY-824 rather than duplicating it (one drain_liveness_probe used by statusline, statusbar, and status).
+
+      Acceptance:
+      - Live drain: aida status shows the line with correct position/spec/phase; bare status stays sub-second
+      - Stale lock (dead pid) or no drain: output byte-identical to today
+      - Helper is shared with the STORY-824 call sites (unit-tested once)
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 3942
 node_id: '1'
