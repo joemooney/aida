@@ -1,0 +1,26 @@
+id: 01a07321-f887-7b12-9939-21b8fac6ce93
+spec_id: STORY-822
+agreed_id: STORY-822
+title: session list/resume shows the agent (claude/codex/agy) per row and includes non-Claude sessions
+description: |-
+  Operator request (2026-09-05): 'I would like if the session resume also listed the ai agent used (codex, agy, claude).'
+
+  Today aida session list/resume scans only ~/.claude/projects/<slug>/*.jsonl, so every row is implicitly a Claude Code session and codex / antigravity sessions are invisible; resume hardcodes claude --resume.
+
+  Slice 1 (this story): add an 'agent' column to session list and the resume picker. Claude rows come from the existing scan; add a codex source (~/.codex/sessions rollout JSONLs) and an antigravity source if a local session store exists, each mapped into the same SessionMeta shape (id, age, role-if-detectable, spec, cwd, title). Rows from non-Claude stores render their agent name; resume of a non-Claude row prints the correct native resume command (codex resume <id>) instead of running claude --resume with a foreign id.
+
+  Slice 2 (follow-up if slice 1 proves out): actually exec the right vendor CLI on resume, honoring the per-agent launcher posture from ~/.aida/agents.toml.
+
+  Cross-links: the agent registry (.aida/agents/) already records agent_type + native_session_id for AIDA-launched sessions — prefer registry data when a row correlates, fall back to store-scan heuristics.
+
+  Acceptance:
+  - session list shows an agent column; existing Claude rows say claude
+  - A codex session on disk appears as a row with agent codex
+  - Selecting a codex row never invokes claude --resume with a codex id
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T19:53:21.287019869Z
+modified_at: 2026-09-05T19:53:21.287019869Z
+req_type: Story
