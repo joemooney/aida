@@ -44767,5 +44767,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 3946
+- id: 01a073c7-4cec-7633-8dff-9a3ecc5dc6a7
+  target_id: 01a073c7-498f-74c2-8560-592673a2d7ca
+  author: aida
+  node_id: '1'
+  lamport: 3947
+  timestamp: 2026-09-05T22:53:56.332101317Z
+  kind: !Create
+    title: 'Review PR-1649: [AI:codex] feat(init): add forge profiles for bootstrap remotes (STORY-823)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a073b4`) for branch `story-823`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1649>
+      - Branch: `story-823` → `main`
+
+      ## Covers
+
+      - STORY-823
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1649` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3947
 node_id: '1'
