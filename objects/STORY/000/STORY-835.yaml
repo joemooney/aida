@@ -21,6 +21,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T23:03:05.353921619Z
-modified_at: 2026-09-05T23:03:10.836540783Z
+modified_at: 2026-09-05T23:03:13.030486153Z
 req_type: Story
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a0736b-9eaf-7c40-8d00-3021b6f610ba
+  created_at: 2026-09-05T23:03:13.030480978Z
+  created_by: joe
 execution_mode: drain
