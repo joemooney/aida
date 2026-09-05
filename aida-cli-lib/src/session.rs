@@ -2375,36 +2375,6 @@ pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
 /// most-recently-modified `.jsonl` files, so the scan stays fast even with
 /// hundreds of historical sessions. trace:TASK-112 | ai:claude
 pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Claude sessions")?;
-    let projects = home.join(".claude").join("projects");
-    if !projects.is_dir() {
-        return Ok(Vec::new());
-    }
-    let mut entries: Vec<(PathBuf, SystemTime)> = Vec::new();
-    if let Ok(dirs) = std::fs::read_dir(&projects) {
-        for dir in dirs.flatten() {
-            let p = dir.path();
-            if !p.is_dir() {
-                continue;
-            }
-            let Ok(files) = std::fs::read_dir(&p) else {
-                continue;
-            };
-            for f in files.flatten() {
-                let fp = f.path();
-                if fp.extension().and_then(|s| s.to_str()) != Some("jsonl") {
-                    continue;
-                }
-                if let Ok(mtime) = f.metadata().and_then(|m| m.modified()) {
-                    entries.push((fp, mtime));
-                }
-            }
-        }
-    }
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
-    entries.truncate(150);
-
-    let now = SystemTime::now();
     let want = scope.trim();
     // BUG-447: scope the machine-global scan to the CURRENT project. Onboarding
     // seeds the same id (TASK-007) in every project, and the scan keyed on
@@ -2414,18 +2384,70 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
     // current project root or a sibling `<root>-<slug>` worktree. When we can't
     // resolve a project root (not in a project), keep the old global behaviour.
     // trace:BUG-447 | ai:claude
-    let project_root = crate::find_main_worktree_root().ok();
-    let mut out: Vec<SessionMeta> = entries
-        .into_iter()
-        .filter_map(|(path, mtime)| parse_session_meta(&path, mtime, now).ok())
+    let mut out: Vec<SessionMeta> = collect_global_project_sessions(150)?
         .filter(|m| {
             m.spec
                 .as_deref()
                 .map(|s| s.eq_ignore_ascii_case(want))
                 .unwrap_or(false)
         })
-        .filter(|m| match &project_root {
-            // No cwd recorded ⇒ can't confirm it's ours ⇒ exclude when scoped.
+        .collect();
+    out.sort_by_key(|m| m.age_seconds);
+    Ok(out)
+}
+
+/// STORY-821: recent Claude conversations whose detected AIDA role matches
+/// `role`, newest first, scoped to the current project/worktree family. This is
+/// the role-enter view over the same session metadata used by `session resume`.
+// trace:STORY-821 | ai:codex
+pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> {
+    let want = canonical_session_role(role);
+    let mut out: Vec<SessionMeta> = collect_global_project_sessions(150)?
+        .filter(|m| m.role.as_deref().map(canonical_session_role).as_deref() == Some(want.as_str()))
+        .collect();
+    out.sort_by_key(|m| m.age_seconds);
+    out.truncate(limit);
+    fill_branches(&mut out);
+    normalize_specs(&mut out);
+    fill_recent_focus(&mut out);
+    Ok(out)
+}
+
+fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = SessionMeta>> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate Claude sessions")?;
+    let projects = home.join(".claude").join("projects");
+    let mut entries: Vec<(PathBuf, SystemTime)> = Vec::new();
+    if projects.is_dir() {
+        if let Ok(dirs) = std::fs::read_dir(&projects) {
+            for dir in dirs.flatten() {
+                let p = dir.path();
+                if !p.is_dir() {
+                    continue;
+                }
+                let Ok(files) = std::fs::read_dir(&p) else {
+                    continue;
+                };
+                for f in files.flatten() {
+                    let fp = f.path();
+                    if fp.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                        continue;
+                    }
+                    if let Ok(mtime) = f.metadata().and_then(|m| m.modified()) {
+                        entries.push((fp, mtime));
+                    }
+                }
+            }
+        }
+    }
+    entries.sort_by(|a, b| b.1.cmp(&a.1));
+    entries.truncate(limit);
+
+    let now = SystemTime::now();
+    let project_root = crate::find_main_worktree_root().ok();
+    let sessions: Vec<SessionMeta> = entries
+        .into_iter()
+        .filter_map(move |(path, mtime)| parse_session_meta(&path, mtime, now).ok())
+        .filter(move |m| match &project_root {
             Some(root) => m
                 .last_cwd
                 .as_deref()
@@ -2434,8 +2456,7 @@ pub fn list_scope_sessions(scope: &str) -> Result<Vec<SessionMeta>> {
             None => true,
         })
         .collect();
-    out.sort_by_key(|m| m.age_seconds);
-    Ok(out)
+    Ok(sessions.into_iter())
 }
 
 /// BUG-447: is a recorded session's `cwd` within the current project's scope —
@@ -2834,6 +2855,19 @@ fn format_worktree_label(cwd: Option<&str>, branch: Option<&str>, max: usize) ->
     let mut out: String = label.chars().take(max.saturating_sub(1)).collect();
     out.push('…');
     out
+}
+
+pub fn format_role_resume_session_line(m: &SessionMeta) -> String {
+    format!(
+        "{} {:<8}  {:<6}  {:<11}  {:<12}  {:<24}  {}",
+        liveness_indicator(m.age_seconds),
+        &m.id[..m.id.len().min(8)],
+        humanize_age(m.age_seconds),
+        m.role.as_deref().unwrap_or("-"),
+        m.spec.as_deref().unwrap_or("-"),
+        format_worktree_label(m.last_cwd.as_deref(), m.branch.as_deref(), 24),
+        m.title.as_deref().unwrap_or("(untitled)"),
+    )
 }
 
 fn humanize_age(secs: u64) -> String {
@@ -3464,6 +3498,30 @@ mod tests {
             ]),
             None
         );
+    }
+
+    // trace:STORY-821 | ai:codex
+    #[test]
+    fn role_resume_session_line_includes_enriched_columns() {
+        let m = SessionMeta {
+            id: "019e45cf-acea-73c1-9476-abcdef012345".to_string(),
+            age_seconds: 3600,
+            role: Some("implementer".to_string()),
+            spec: Some("STORY-821".to_string()),
+            title: Some("resume prompt work".to_string()),
+            started_at: None,
+            last_cwd: Some("/home/joe/ai/aida-story-821".to_string()),
+            branch: Some("story-821".to_string()),
+            recent_focus: None,
+        };
+
+        let line = format_role_resume_session_line(&m);
+        assert!(line.contains("019e45cf"));
+        assert!(line.contains("1h"));
+        assert!(line.contains("implementer"));
+        assert!(line.contains("STORY-821"));
+        assert!(line.contains("aida-story-821 @ story"));
+        assert!(line.contains("resume prompt work"));
     }
 
     #[test]
