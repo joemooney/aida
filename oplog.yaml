@@ -44516,5 +44516,29 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3936
+- id: 01a073a4-f115-7603-9a9f-d5f7503c564f
+  target_id: 01a073a4-e91c-7cd1-b941-485bceaa28c7
+  author: aida
+  node_id: '1'
+  lamport: 3937
+  timestamp: 2026-09-05T22:16:24.597520095Z
+  kind: !Create
+    title: relocate the discipline pack from docs/aida/discipline/ to .aida/discipline/ (allow-listed)
+    description: |-
+      First-user signal (2026-09-05): aida init writing docs/aida/discipline/README.md into a fresh project reads as AIDA colonizing the project's docs tree. The discipline pack is AIDA-discipline content, not project documentation — it belongs under AIDA's own directory.
+
+      Design:
+      - New canonical location: .aida/discipline/ — committed via the deny-by-default allow-list convention (init's .gitignore block gains !.aida/discipline/, matching the !.aida/config.toml precedent from BUG-73)
+      - generate_claude_md's discipline section and the CLAUDE.md/AGENTS.md pointers reference the new path; only the README @-imports (unchanged rule)
+      - Migration: aida scaffold refresh (and init --refresh) detects an existing docs/aida/discipline/ whose files still match their scaffold checksums, moves them to .aida/discipline/, and removes the empty old tree; user-edited files are moved too but never overwritten (edit-preserving contract, TASK-1170). A one-line note reports the relocation. Projects that already customized paths in their own docs keep working — the old location is read as a fallback for one release with a deprecation note
+      - This dev repo's own docs/aida/discipline/ migrates the same way (dogfood)
+
+      Acceptance:
+      - Fresh init writes .aida/discipline/*, no docs/aida/ directory, .gitignore allow-lists it
+      - scaffold refresh on a project with the old layout relocates cleanly incl. user-edited files, idempotent second run
+      - CLAUDE.md discipline pointer resolves; ensure_discipline_pack_scaffold tests updated
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3937
 node_id: '1'
