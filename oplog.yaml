@@ -44355,5 +44355,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3927
+- id: 01a0737a-e2a1-7850-aeca-11abac1b4abb
+  target_id: 01a0737a-de72-7841-b651-bfd409629cad
+  author: aida
+  node_id: '1'
+  lamport: 3928
+  timestamp: 2026-09-05T21:30:28.385112392Z
+  kind: !Create
+    title: 'Review PR-1646: [AI:codex] fix(session): parse hook role markers (BUG-837)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07372`) for branch `bug-837`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1646>
+      - Branch: `bug-837` → `main`
+
+      ## Covers
+
+      - BUG-837
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1646` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3928
 node_id: '1'
