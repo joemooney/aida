@@ -44718,5 +44718,29 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3944
+- id: 01a073b5-c1ab-7aa1-9171-5da4e2c3ccd3
+  target_id: 01a073b5-bc92-79f2-b977-57ce787c8ac6
+  author: aida
+  node_id: '1'
+  lamport: 3945
+  timestamp: 2026-09-05T22:34:46.571749401Z
+  kind: !Create
+    title: TUI cockpit gains a live drain progress panel
+    description: |-
+      Gap noticed while the operator was choosing a drain-watching surface (2026-09-05): the TUI cockpit has queue scope + per-spec liveness, but no first-class view of a RUNNING drain — docs/tui/README.md's own guidance is to open individual specs' status verbs one at a time. The flagship autonomous feature (the drain) deserves a panel in the flagship surface (the TUI).
+
+      Design:
+      - When .aida/drain-state.json exists with a live orchestrator pid (share the drain_liveness_probe helper from STORY-824/TASK-1194 — one probe, four surfaces), the cockpit shows a drain panel mirroring aida drain status: per-spec rows (checkmark/current-phase/queued/failed + PR number), position i/N, started time, and the on-exit note. Auto-refreshes on the TUI's existing re-read cadence (or the r key)
+      - A failed row surfaces the rework hint (aida queue rework <spec> --work)
+      - No live drain: panel absent entirely (zero cockpit clutter — Trojan-horse rule)
+      - IMPORTANT (Verify-target-surface rule, 2026-07-12 lesson): build against the CURRENT DEFAULT TUI surface — trace the default entry dispatch first (EPIC-54 redesign is the default; legacy board.rs is superseded). Do not add the panel to a superseded surface.
+
+      Acceptance:
+      - With a live drain-state + alive pid, the default TUI entry shows the panel with rows matching aida drain status output for the same state file
+      - Dead pid / no state file: no panel, cockpit byte-identical to today
+      - Refresh reflects a phase change without relaunching the TUI
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3945
 node_id: '1'
