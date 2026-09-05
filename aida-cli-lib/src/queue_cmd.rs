@@ -4325,18 +4325,6 @@ pub(crate) fn handle_queue_command(
             {
                 anyhow::bail!(msg);
             }
-            // STORY-647: team RBAC guardrail — starting an autonomous drain
-            // (`--auto-complete`) is an advisor-gated op by default (tunable via
-            // `[team.permissions] drain_start`). A live-orchestrator re-entry
-            // (`--resume-drain`, and the phase children the orchestrator spawns)
-            // holds advisor authority via `has_advisor_authority()`'s
-            // orchestrator carve-out, so the gate bypasses those and only the
-            // FRESH launch is checked. Advisor authority (TTY / advisor role)
-            // bypasses; there is no `--force` on this path, so a non-advisor
-            // seats the role. trace:STORY-647 | ai:claude
-            if auto_complete.is_some() && !*resume_drain {
-                enforce_team_gate(permissions::GatedOp::DrainStart, false)?;
-            }
             // TASK-307: propagate the headless-tee flag the same way
             // `--zen` propagates via `AIDA_ZEN` — set the env var once at
             // the top and every downstream child (the direct headless
@@ -4516,6 +4504,35 @@ pub(crate) fn handle_queue_command(
             };
             if let Some(ref res) = resolved_spec_id {
                 effective_id = Some(res.as_str());
+            }
+            // BUG-839: `--drain` expands to an autonomous drive, but `--dry-run`
+            // must still be a read-only preview. Route it after target
+            // resolution but before the drain-start RBAC gate, no-human
+            // acknowledgement, global drain lock, drain-state write, db pull, or
+            // session launch.
+            if *drain && *dry_run {
+                return preview_queue_work_drain(
+                    storage,
+                    &user_id,
+                    effective_id,
+                    effective_batch,
+                    effective_batches.as_deref(),
+                    next_kw,
+                    role.as_deref(),
+                    drain_resolution.max,
+                );
+            }
+            // STORY-647: team RBAC guardrail — starting an autonomous drain
+            // (`--auto-complete`) is an advisor-gated op by default (tunable via
+            // `[team.permissions] drain_start`). A live-orchestrator re-entry
+            // (`--resume-drain`, and the phase children the orchestrator spawns)
+            // holds advisor authority via `has_advisor_authority()`'s
+            // orchestrator carve-out, so the gate bypasses those and only the
+            // FRESH launch is checked. Advisor authority (TTY / advisor role)
+            // bypasses; there is no `--force` on this path, so a non-advisor
+            // seats the role. trace:STORY-647 | ai:claude
+            if auto_complete.is_some() && !*resume_drain {
+                enforce_team_gate(permissions::GatedOp::DrainStart, false)?;
             }
             // STORY-246: `--auto-complete` drives the full
             // implementer→CI→reviewer→merge→pull→build lifecycle. It is a
@@ -8908,6 +8925,147 @@ pub(crate) fn resolve_auto_complete_head(
                 if skipped.len() == 1 { "" } else { "s" },
             )
         }
+    }
+}
+
+// BUG-839: read-only preview for `aida queue work --drain --dry-run`. The
+// normal `--drain` alias rewrites into `--auto-complete` and used to enter the
+// live orchestrator before the ordinary pickup dry-run path could run.
+fn preview_queue_work_drain(
+    storage: &Storage,
+    user_id: &str,
+    effective_id: Option<&str>,
+    effective_batch: Option<&str>,
+    effective_batches: Option<&[String]>,
+    next_kw: NextKeyword,
+    role_override: Option<&str>,
+    max: Option<usize>,
+) -> Result<()> {
+    println!("Dry run — would drain, no side effects.");
+    println!("  phases: implementer → CI → reviewer → merge → pull → build");
+
+    if let Some(batch_names) = effective_batches {
+        println!("  target: batches {}", batch_names.join(", "));
+        for batch_name in batch_names {
+            let members = resolve_batch_members(storage, user_id, batch_name, role_override)?;
+            print_drain_preview_members(
+                &format!("batch:{batch_name}"),
+                members
+                    .into_iter()
+                    .map(|(_, id, title, status)| (id, title, status.to_string())),
+                max,
+            );
+        }
+        return Ok(());
+    }
+
+    if let Some(batch_name) = effective_batch {
+        if batch_name.is_empty() {
+            anyhow::bail!(
+                "batch name is empty — pass `--batch NAME` or `aida queue work batch:NAME`"
+            );
+        }
+        let members = resolve_batch_members(storage, user_id, batch_name, role_override)?;
+        println!("  target: batch:{batch_name}");
+        print_drain_preview_members(
+            &format!("batch:{batch_name}"),
+            members
+                .into_iter()
+                .map(|(_, id, title, status)| (id, title, status.to_string())),
+            max,
+        );
+        return Ok(());
+    }
+
+    if let NextKeyword::Count(n) = next_kw {
+        let limit = n.max(1);
+        let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+        println!("  target: next {limit}");
+        print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+        return Ok(());
+    }
+
+    if let Some(spec) = effective_id {
+        let plan = resolve_queue_work_plan(
+            storage,
+            user_id,
+            Some(spec),
+            /* type_filter */ None,
+            /* strict */ false,
+            /* dry_run */ true,
+        )?;
+        println!("  target: {}", plan.anchor_display);
+        let status = plan
+            .entries
+            .first()
+            .map(|entry| entry.status_at_plan.clone())
+            .unwrap_or_else(|| "Approved".to_string());
+        print_drain_preview_members(
+            "explicit spec",
+            std::iter::once((
+                plan.anchor_display.clone(),
+                plan.anchor_title.clone(),
+                status,
+            )),
+            Some(1),
+        );
+        return Ok(());
+    }
+
+    let limit = max.unwrap_or(99).max(1);
+    let members = drain_preview_head_members(storage, user_id, role_override, limit)?;
+    println!("  target: queue head");
+    print_drain_preview_members("queue head", members.into_iter(), Some(limit));
+    Ok(())
+}
+
+fn drain_preview_head_members(
+    storage: &Storage,
+    user_id: &str,
+    role_override: Option<&str>,
+    limit: usize,
+) -> Result<Vec<(String, String, String)>> {
+    let candidates = auto_complete_head_candidates(storage, user_id, role_override)?;
+    let store = storage.load()?;
+    let mut members = Vec::new();
+    for (id, status) in candidates {
+        if !auto_complete_head_drivable(&status) {
+            continue;
+        }
+        let title = store
+            .get_requirement_by_spec_id(&id)
+            .map(|r| r.title.clone())
+            .unwrap_or_default();
+        members.push((id, title, status.to_string()));
+        if members.len() >= limit {
+            break;
+        }
+    }
+    Ok(members)
+}
+
+fn print_drain_preview_members<I>(label: &str, members: I, max: Option<usize>)
+where
+    I: IntoIterator<Item = (String, String, String)>,
+{
+    let limit = max.unwrap_or(usize::MAX);
+    let rows: Vec<(String, String, String)> = members.into_iter().take(limit).collect();
+    if rows.is_empty() {
+        println!("  plan: no drivable queued items for {label}");
+        return;
+    }
+    println!(
+        "  plan: {} item{} in drain order",
+        rows.len(),
+        if rows.len() == 1 { "" } else { "s" }
+    );
+    for (i, (id, title, status)) in rows.iter().enumerate() {
+        let title_suffix = if title.is_empty() {
+            String::new()
+        } else {
+            format!(" — {title}")
+        };
+        println!("    {:>2}. {} [{}]{}", i + 1, id, status, title_suffix);
     }
 }
 
