@@ -1,0 +1,24 @@
+id: 01a073a5-5816-7a11-9156-9d032581a187
+spec_id: STORY-830
+agreed_id: STORY-830
+title: 'init --footprint minimal: orphan store + .aida/config.toml + .gitignore block, nothing else committed'
+description: |-
+  The strong form of 'AIDA must not bleed into the project': a footprint tier for using AIDA in a repo without the team adopting it. aida init --footprint minimal (config: [scaffold] footprint = "minimal") scaffolds ONLY: the aida-store orphan branch + .aida-store/ worktree, .aida/config.toml, .aida/cache.db, and the .gitignore deny-block. No CLAUDE.md, no AGENTS.md, no .claude/.codex/.antigravity packs, no .mcp.json, no discipline pack, no docs/. Everything skipped is individually addable later (aida scaffold refresh with explicit pack flags, or re-running init with the default footprint).
+
+  Notes:
+  - default footprint keeps today's behavior; minimal is opt-in
+  - trace comments + commit trailers remain a per-commit choice, orthogonal to footprint
+  - the .gitignore block is the one committed line-set main sees; a follow-up --footprint stealth (nothing committed at all, config local-only, store on a personal remote) is out of scope until real demand — record as a revisit note, do not build
+  - interacts with the discipline-pack relocation story: sequence after it so minimal's exclusion list is defined against the new layout
+
+  Acceptance:
+  - init --footprint minimal on a fresh repo: git status shows only .gitignore modified/created; .aida/config.toml exists but only the allow-listed path is tracked; store branch works (add/list/edit round-trip)
+  - A later default-footprint init over a minimal project adds the full scaffold without disturbing the store
+  - --footprint minimal composes with <DIR> bootstrap and --github/--remote
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T22:16:50.966235718Z
+modified_at: 2026-09-05T22:16:50.966235718Z
+req_type: Story
