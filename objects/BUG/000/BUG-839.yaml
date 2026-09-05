@@ -1,0 +1,20 @@
+id: 01a07372-8d34-77f1-b493-82819bc98da3
+spec_id: BUG-839
+agreed_id: BUG-839
+title: queue work --drain ignores --dry-run and launches a real drain
+description: |-
+  Verified live (2026-09-05): aida queue work --drain --no-human=both --dry-run started a REAL drain — acquired .aida/drain.lock, wrote drain-state, ran db sync --pull, and launched the phase-1 implementer session for the queue head. When the invoking pipe closed, the killed implementer parked the spec NeedsAttention and left a stale drain.lock + drain-state.json behind. Expected: --dry-run previews the drain plan (item list, order, phases) with zero side effects — no lock, no state file, no sessions, no pulls.
+
+  Note the flag matrix: --drain conflicts with --auto-complete (clap error, correct), but --dry-run composes with --drain silently and is then ignored on this path.
+
+  Acceptance:
+  - aida queue work --drain --no-human=both --dry-run prints the would-drain plan and exits 0 with no .aida/drain.lock, no drain-state.json, no spawned session, no store pull
+  - Unit/integration test asserts the no-side-effects contract (tempdir project, queued stub spec)
+  - If a preview is not feasible for this path, the flag combination must be a clap conflict error instead of a silent ignore
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T21:21:22.228788468Z
+modified_at: 2026-09-05T21:21:22.228788468Z
+req_type: Bug
