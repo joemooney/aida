@@ -2513,6 +2513,7 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
     let mut spec: Option<String> = None;
     let mut started_at: Option<chrono::DateTime<chrono::Utc>> = None;
     let mut last_cwd: Option<String> = None;
+    let mut role_resolved = false;
     for (i, line) in reader.lines().enumerate() {
         if i >= MAX_LINES && title.is_some() && role.is_some() && started_at.is_some() {
             break;
@@ -2547,16 +2548,24 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
             }
         }
 
-        // Role markers — Claude Code doesn't log the SessionStart hook
-        // output as a discrete event, but commands like `aida role show`
-        // and shell echos of $AIDA_SESSION_ROLE that ran early in the
-        // session leave reliable strings:
+        // Role markers — Claude Code logs hook text as ordinary message
+        // content, while commands like `aida role show` and shell echos of
+        // $AIDA_SESSION_ROLE that ran early in the session leave reliable
+        // strings:
         //   - `Role: implementer`     (from aida role show)
         //   - `AIDA_SESSION_ROLE=implementer`
+        //   - `AIDA · role: implementer`
+        //   - `AIDA active role: implementer`
         // Both are checked; the first plausible match wins.
         // trace:FR-1-043 | ai:claude
-        if role.is_none() {
-            for marker in ["AIDA_SESSION_ROLE=", "Role: "] {
+        // trace:BUG-837 | ai:codex
+        if !role_resolved {
+            for marker in [
+                "AIDA_SESSION_ROLE=",
+                "Role: ",
+                "AIDA · role: ",
+                "AIDA active role: ",
+            ] {
                 if let Some(idx) = line.find(marker) {
                     let after = &line[idx + marker.len()..];
                     let name: String = after
@@ -2577,7 +2586,10 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
                     // of confusing the operator mid-recovery.
                     // trace:TASK-402 | ai:claude
                     if !name.is_empty() {
-                        role = Some(canonical_session_role(&name));
+                        role_resolved = true;
+                        if name != "none" {
+                            role = Some(canonical_session_role(&name));
+                        }
                         break;
                     }
                 }
@@ -3409,6 +3421,49 @@ mod tests {
         assert_eq!(canonical_session_role("implementer"), "implementer");
         assert_eq!(canonical_session_role("advisor"), "advisor");
         assert_eq!(canonical_session_role("reviewer"), "reviewer");
+    }
+
+    fn parse_session_role_from_lines(lines: &[&str]) -> Option<String> {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("session-id.jsonl");
+        std::fs::write(&path, lines.join("\n")).unwrap();
+        let now = SystemTime::now();
+        parse_session_meta(&path, now, now).unwrap().role
+    }
+
+    // BUG-837: AIDA's own SessionStart/UserPromptSubmit hooks record role
+    // markers in hook text formats that the session picker must understand.
+    // trace:BUG-837 | ai:codex
+    #[test]
+    fn session_hook_status_role_marker_resolves_role() {
+        assert_eq!(
+            parse_session_role_from_lines(&[r#"{"message":"AIDA · role: product"}"#]),
+            Some("product".to_string())
+        );
+    }
+
+    // BUG-837: the additional-context header is enough role evidence by itself.
+    // trace:BUG-837 | ai:codex
+    #[test]
+    fn session_hook_context_role_marker_resolves_role() {
+        assert_eq!(
+            parse_session_role_from_lines(&[r#"{"message":"AIDA active role: implementer"}"#]),
+            Some("implementer".to_string())
+        );
+    }
+
+    // BUG-837: `none` is an explicit no-role sentinel, not an absent parse.
+    // Once seen, later stray role-shaped strings must not overwrite it.
+    // trace:BUG-837 | ai:codex
+    #[test]
+    fn session_hook_none_role_marker_stops_scan() {
+        assert_eq!(
+            parse_session_role_from_lines(&[
+                r#"{"message":"AIDA · role: none"}"#,
+                r#"{"message":"AIDA_SESSION_ROLE=implementer"}"#,
+            ]),
+            None
+        );
     }
 
     #[test]
