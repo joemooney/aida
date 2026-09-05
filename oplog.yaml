@@ -44579,5 +44579,30 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3939
+- id: 01a073a7-6a31-7391-8eac-57f53003f30d
+  target_id: 01a073a7-64ca-7ab2-87aa-1d89e8eebc03
+  author: aida
+  node_id: '1'
+  lamport: 3940
+  timestamp: 2026-09-05T22:19:06.673500505Z
+  kind: !Create
+    title: 'user-level AIDA awareness: detection-gated snippet in ~/.claude/CLAUDE.md and ~/.codex/AGENTS.md'
+    description: |-
+      Companion to --footprint minimal (STORY-830): today AIDA-awareness for agents rides committed project files (CLAUDE.md / AGENTS.md), which bleeds AIDA into every repo. Move the awareness to the USER level so a repo needs zero committed reference.
+
+      Design:
+      - A short detection-gated instruction snippet: "When working in a project, check whether AIDA is initialized (.aida/config.toml exists, or the aida-store branch/worktree). If yes: requirements live in AIDA — use aida list/search/show/add/edit/comment, add trace comments, use the (SPEC-ID) commit trailer. If no: ignore this section." Modeled on the operator's proven hand-authored global-CLAUDE.md section
+      - Install targets: ~/.claude/CLAUDE.md (Claude Code user-global) and ~/.codex/AGENTS.md (Codex user-global). Marker-block + checksum, edit-preserving refresh via the TASK-1170 machinery (same contract as ~/.codex/prompts); user content outside markers untouched; file created if absent
+      - Surface: aida scaffold user-instructions [--refresh] plus a one-time offer during first-machine setup (~/.aida bootstrap, next to the TASK-698 agent-posture prompt); non-interactive installs nothing
+      - Antigravity target deferred until its user-global instructions path is verified — note in spec, do not guess
+      - Interplay: default-footprint projects keep committed CLAUDE.md/AGENTS.md (team adoption); the user-level snippet is written to coexist (idempotent guidance, no conflict when both present)
+
+      Acceptance:
+      - Install writes both files with markers; re-run is a no-op; refresh overlays only unedited blocks
+      - A minimal-footprint project + installed snippet: a fresh Claude session uses aida CLI for requirements with no committed CLAUDE.md (manual validation note)
+      - Files with pre-existing user content keep every byte outside the markers
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3940
 node_id: '1'
