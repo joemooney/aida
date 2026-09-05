@@ -44490,5 +44490,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3935
+- id: 01a0739f-c6f6-78d0-b9de-949f963e6d43
+  target_id: 01a0739f-c168-7be2-8ffc-b2ca966c3f37
+  author: aida
+  node_id: '1'
+  lamport: 3936
+  timestamp: 2026-09-05T22:10:46.134455131Z
+  kind: !Create
+    title: 'machine-global post-init hooks: ~/.aida/init.d/*.sh run after successful init'
+    description: |-
+      Companion to the README/registry story: the PERSONAL half of "new projects start with my best practices". Port-registry registration (~/.ports via the operator's port manager), aida-hub registration, a run.sh template, an org's license header — these are machine- or person-specific and must NOT be baked into AIDA core for every user. Give them a standard extension point instead.
+
+      Design:
+      - After a fully successful aida init (including init <DIR> bootstrap, after the remote legs), run every executable ~/.aida/init.d/*.sh in lexical order (00-ports.sh, 10-hub.sh, ...)
+      - Contract via env: AIDA_INIT_PROJECT_ROOT, AIDA_INIT_PROJECT_NAME, AIDA_INIT_LANG (empty if none), AIDA_INIT_REMOTE_URL (empty if local-only), AIDA_INIT_FORGE (github|gitlab|none). Hooks run with cwd = project root
+      - Failure policy: a failing hook prints its name + exit code and CONTINUES (init already succeeded; personal hooks must never brick a project bootstrap). Summary line: 'post-init hooks: 2 ok, 1 failed'
+      - --no-post-hooks flag to skip; headless init runs them the same as TTY (they are the owner's own scripts)
+      - Directory absent or empty: zero output, zero behavior change
+      - Document in docs/environment-variables.md (the AIDA_INIT_* rows) and the init help text
+
+      Acceptance:
+      - Fixture hook writing a marker file runs on init with all env vars populated correctly (tempdir HOME)
+      - A hook exiting 1 does not fail init; summary reports it
+      - --no-post-hooks skips; no init.d dir = byte-identical output to today
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3936
 node_id: '1'
