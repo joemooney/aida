@@ -1,0 +1,26 @@
+id: 01a073ad-9ead-7360-a4f2-ee1ce3545941
+spec_id: STORY-832
+agreed_id: STORY-832
+title: 'Review PR-1648: [AI:codex] fix(init): merge AIDA block into existing AGENTS.md (BUG-838)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0739e`) for branch `bug-838`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1648>
+  - Branch: `bug-838` → `main`
+
+  ## Covers
+
+  - BUG-838
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1648` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T22:25:53.325830886Z
+modified_at: 2026-09-05T22:25:53.325830886Z
+req_type: Story
