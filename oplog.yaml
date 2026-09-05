@@ -44884,5 +44884,46 @@ operations:
   timestamp: 2026-09-05T23:44:47.254980238Z
   kind: !SetStatus
     status: Needs Attention
-clock: 3954
+- id: 01a073f5-e302-7c22-9ed2-daf085bad37e
+  target_id: 01a073f5-ddef-7252-9b73-1d79c535672b
+  author: aida
+  node_id: '1'
+  lamport: 3955
+  timestamp: 2026-09-05T23:44:49.410785452Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on BUG-838'
+    description: |
+      Auto-drafted by `aida queue work BUG-838 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `failed`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework BUG-838 --work`
+
+      ## Phase durations
+
+        - phase 1 (implementer): 623210 ms
+        - phase 2 (ci): 5186 ms
+        - phase 3 (reviewer): 392127 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-838","started_at":"2026-09-05T23:27:45.518562291+00:00","completed_at":"2026-09-05T23:44:48.074114561+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":623210},{"phase":2,"slug":"ci","elapsed_ms":5186},{"phase":3,"slug":"reviewer","elapsed_ms":392127}],"total_ms":1021484,"binary_sha":"099096d1a","auto_rebase":[{"phase":3,"pr_number":1648,"outcome":"clean"}]}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3955
 node_id: '1'
