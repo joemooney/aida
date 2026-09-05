@@ -1,0 +1,25 @@
+id: 01a073bd-68b2-7ae3-844a-6770b1f44ab6
+spec_id: BUG-842
+agreed_id: BUG-842
+title: tail drain resolves a weeks-stale burndown log and exits — the live queue-work drain is invisible to it
+description: |-
+  Operator report (2026-09-05): with a drain actively running, aida tail drain printed old content and returned to the prompt — the operator expected it to follow the live drain (follow IS the documented default).
+
+  Verified mechanism: the `drain` keyword resolves only .aida/burndown/<drain-id>.jsonl. A drain launched via aida queue work --drain --no-human=both writes NO burndown log — its phase sessions stream to .aida/headless-logs/<spec>-<uuid>.jsonl (verified live: headless-logs entries for story-823/pr-1648/bug-838 written minutes ago while tail --list's Drains section shows nothing newer than 2026-07-22). So tail drain resolved a six-week-old burndown log, printed its tail, and exited (rc=0). Two defects:
+
+  1. Resolution: the drain keyword must see queue-work drains, not just burndown runs — resolve the LIVE drain first (drain-state.json's current spec -> its active headless log, following across phase/spec transitions as the drain moves to the next session), falling back to newest historical log only when nothing is live. Reuse the drain_liveness_probe (STORY-824/TASK-1194/STORY-833).
+  2. Staleness honesty: when tail falls back to a finished/stale log, SAY so — one header line: "no live drain — showing <id> (finished 2026-07-22)". Never let a stale log impersonate current activity.
+
+  Follow-across-transitions note: a drain is a sequence of per-spec session logs; naive tail -f of one file goes silent at each phase boundary. tail drain should detect the current log changing (drain-state poll) and switch files, printing a "-- phase/spec boundary: now following <spec> phase N --" separator.
+
+  Acceptance:
+  - With a live queue-work drain: aida tail drain follows the CURRENT phase session's stream and keeps following across spec/phase transitions until the drain exits
+  - With no live drain: prints the newest historical drain log WITH the finished-at header, exits per --no-follow semantics as documented
+  - tail --list gains the live drain at the top of the Drains section, marked live
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T22:43:08.082225941Z
+modified_at: 2026-09-05T22:43:08.082225941Z
+req_type: Bug
