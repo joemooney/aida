@@ -20,12 +20,12 @@ description: |-
   - Unit tests: init over an AGENTS.md without markers appends the block and preserves prior content byte-for-byte outside the markers; init over one with stale markers refreshes only the block; init over one with current markers is a no-op; --force still full-overwrites
   - aida scaffold refresh gains the same no-markers append
   - The skip path for AGENTS.md is no longer silent: one info line states what happened
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:13:47.951844768Z
-modified_at: 2026-09-05T21:19:52.496649497Z
+modified_at: 2026-09-05T22:08:57.264164891Z
 req_type: Bug
 comments:
 - id: 01a0736c-d5a8-7893-9d13-6fe696b0364b
