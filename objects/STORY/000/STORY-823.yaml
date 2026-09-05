@@ -33,5 +33,6 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:17:20.383672046Z
-modified_at: 2026-09-05T21:17:20.383672046Z
+modified_at: 2026-09-05T21:19:53.349779595Z
 req_type: Story
+execution_mode: drain
