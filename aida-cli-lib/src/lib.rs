@@ -100,6 +100,7 @@ mod first_run;
 mod focus;
 mod focus_cmd;
 mod forge;
+mod forge_profiles;
 mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
@@ -1995,6 +1996,7 @@ fn run() -> Result<()> {
         github,
         public,
         remote,
+        forge,
     } = &cli.command
     {
         // STORY-757: the markdown-only first run — scaffold just a `specs/`
@@ -2013,7 +2015,7 @@ fn run() -> Result<()> {
         // exists. trace:STORY-780 | ai:claude
         let bootstrap: Option<init_bootstrap::BootstrapPlan> = match dir {
             Some(d) => {
-                let plan = init_bootstrap::BootstrapPlan {
+                let mut plan = init_bootstrap::BootstrapPlan {
                     dir: std::path::PathBuf::from(d),
                     lang: lang
                         .as_deref()
@@ -2022,7 +2024,10 @@ fn run() -> Result<()> {
                     github: *github,
                     public: *public,
                     remote: remote.clone(),
+                    forge: forge.clone(),
+                    github_repo: None,
                 };
+                init_bootstrap::resolve_forge_profile(&mut plan)?;
                 init_bootstrap::preflight(&plan)?;
                 init_bootstrap::create_and_scaffold(&plan)?;
                 std::env::set_current_dir(&plan.dir)

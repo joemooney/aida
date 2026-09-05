@@ -12,6 +12,7 @@
 
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 /// The operator-decided surface: positional DIR, native-tool `--lang`,
@@ -22,6 +23,8 @@ pub(crate) struct BootstrapPlan {
     pub github: bool,
     pub public: bool,
     pub remote: Option<String>,
+    pub forge: Option<String>,
+    pub github_repo: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -95,6 +98,9 @@ fn which_ok(tool: &str) -> bool {
 /// Everything that can refuse must refuse BEFORE the first mkdir, so a failed
 /// pre-flight leaves the filesystem untouched.
 pub(crate) fn preflight(plan: &BootstrapPlan) -> Result<()> {
+    if plan.public && !plan.github && plan.forge.is_none() {
+        bail!("--public only applies with --github or --forge");
+    }
     if !tool_on_path("git") {
         bail!("git is required to bootstrap a project and was not found on PATH");
     }
@@ -124,6 +130,77 @@ pub(crate) fn preflight(plan: &BootstrapPlan) -> Result<()> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn resolve_forge_profile(plan: &mut BootstrapPlan) -> Result<()> {
+    let Some(profiles) = crate::forge_profiles::load_profiles()? else {
+        if let Some(name) = &plan.forge {
+            bail!("--forge `{name}` requested but ~/.aida/forges.toml does not exist");
+        }
+        return Ok(());
+    };
+
+    let selected = if let Some(name) = &plan.forge {
+        Some(name.clone())
+    } else if plan.github || plan.remote.is_some() {
+        None
+    } else if std::env::var("AIDA_HEADLESS").ok().as_deref() == Some("1") {
+        profiles.defaults.profile.clone()
+    } else if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+        prompt_for_forge_profile(&profiles)?
+    } else {
+        profiles.defaults.profile.clone()
+    };
+
+    let Some(name) = selected else {
+        return Ok(());
+    };
+    let profile = profiles.require(&name)?;
+    let repo = repo_name(&plan.dir);
+    match profile.kind {
+        crate::forge_profiles::ForgeProfileKind::GitHub => {
+            plan.github = true;
+            plan.github_repo = Some(profile.github_repo_name(&repo));
+            if !plan.public {
+                plan.public = profile.is_public();
+            }
+        }
+        crate::forge_profiles::ForgeProfileKind::GitLab => {
+            plan.remote = Some(profile.gitlab_remote_url(&repo)?);
+        }
+    }
+    Ok(())
+}
+
+fn prompt_for_forge_profile(
+    profiles: &crate::forge_profiles::ForgeProfiles,
+) -> Result<Option<String>> {
+    if profiles.profile.is_empty() {
+        return Ok(None);
+    }
+    let mut options = profiles.names();
+    options.push("local only (push later)".to_string());
+    let default_index = profiles
+        .defaults
+        .profile
+        .as_deref()
+        .and_then(|name| options.iter().position(|o| o == name))
+        .unwrap_or(options.len() - 1);
+    let selected = inquire::Select::new("Remote forge", options)
+        .with_starting_cursor(default_index)
+        .prompt()
+        .context("reading forge profile selection")?;
+    if selected == "local only (push later)" {
+        Ok(None)
+    } else {
+        Ok(Some(selected))
+    }
+}
+
+fn repo_name(dir: &Path) -> String {
+    dir.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "project".to_string())
 }
 
 fn run_in(dir: &Path, program: &str, args: &[&str]) -> Result<()> {
@@ -241,13 +318,10 @@ fn origin_exists(dir: &Path) -> bool {
 pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
     let dir = std::env::current_dir().context("no current dir")?;
     let branch = current_branch(&dir)?;
-    let name = plan
-        .dir
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "project".to_string());
+    let name = repo_name(&plan.dir);
 
     if plan.github {
+        let repo_arg = plan.github_repo.as_deref().unwrap_or(&name);
         if origin_exists(&dir) {
             println!(
                 "  {} origin already configured — skipping repo creation",
@@ -256,7 +330,7 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
             run_in(&dir, "git", &["push", "-u", "origin", &branch])?;
         } else {
             let argv = crate::forge::ForgeKind::GitHub
-                .repo_create_argv(&name, plan.public)
+                .repo_create_argv(repo_arg, plan.public)
                 .expect("github forge always yields a create argv");
             let argv_refs: Vec<&str> = argv.iter().map(String::as_str).collect();
             run_in(&dir, argv_refs[0], &argv_refs[1..])?;
@@ -264,7 +338,7 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
                 "  {} created {} GitHub repo `{}` and pushed `{}`",
                 "+".green(),
                 if plan.public { "public" } else { "private" },
-                name,
+                repo_arg,
                 branch
             );
         }

@@ -7,6 +7,8 @@ fn plain_plan(dir: std::path::PathBuf) -> BootstrapPlan {
         github: false,
         public: false,
         remote: None,
+        forge: None,
+        github_repo: None,
     }
 }
 
@@ -44,6 +46,92 @@ fn github_repo_create_argv_is_private_by_default() {
         .repo_create_argv("myproj", true)
         .unwrap();
     assert!(public.contains(&"--public".to_string()));
+}
+
+#[test]
+fn forge_profile_github_uses_existing_repo_create_shape() {
+    let profiles = crate::forge_profiles::parse_profiles(
+        r#"
+        [[profile]]
+        name = "home-github"
+        kind = "github"
+        namespace = "joe"
+        visibility = "public"
+        "#,
+    )
+    .unwrap();
+    let profile = profiles.require("home-github").unwrap();
+    let argv = crate::forge::ForgeKind::GitHub
+        .repo_create_argv(&profile.github_repo_name("myproj"), profile.is_public())
+        .unwrap();
+
+    assert_eq!(argv[0], "gh");
+    assert_eq!(argv[1], "repo");
+    assert_eq!(argv[2], "create");
+    assert_eq!(argv[3], "joe/myproj");
+    assert!(argv.contains(&"--public".to_string()));
+    assert!(argv.contains(&"--source".to_string()));
+    assert!(argv.contains(&"--push".to_string()));
+}
+
+#[test]
+fn headless_bootstrap_uses_default_forge_profile() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+    std::fs::write(
+        home.path().join(".aida/forges.toml"),
+        r#"
+        [[profile]]
+        name = "home-gitlab"
+        kind = "gitlab"
+        host = "gitlab.example.test"
+        namespace = "joe"
+        protocol = "https"
+
+        [defaults]
+        profile = "home-gitlab"
+        "#,
+    )
+    .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("HOME", home.path().to_str().unwrap()),
+        ("AIDA_HEADLESS", "1"),
+    ]);
+
+    let mut plan = plain_plan(std::path::PathBuf::from("myproj"));
+    crate::init_bootstrap::resolve_forge_profile(&mut plan).unwrap();
+
+    assert_eq!(
+        plan.remote.as_deref(),
+        Some("https://gitlab.example.test/joe/myproj.git")
+    );
+}
+
+#[test]
+fn explicit_unknown_forge_lists_configured_profiles() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+    std::fs::write(
+        home.path().join(".aida/forges.toml"),
+        r#"
+        [[profile]]
+        name = "home-gitlab"
+        kind = "gitlab"
+        host = "gitlab.example.test"
+        namespace = "joe"
+        "#,
+    )
+    .unwrap();
+    let _env = crate::test_env::EnvVarGuard::set("HOME", home.path());
+
+    let mut plan = plain_plan(std::path::PathBuf::from("myproj"));
+    plan.forge = Some("work-gitlab".to_string());
+    let err = crate::init_bootstrap::resolve_forge_profile(&mut plan)
+        .unwrap_err()
+        .to_string();
+
+    assert!(err.contains("unknown --forge `work-gitlab`"));
+    assert!(err.contains("home-gitlab"));
 }
 
 #[test]
@@ -140,9 +228,32 @@ fn bootstrap_flags_require_the_positional_dir() {
         "git@x:y.git"
     ])
     .is_err());
+    assert!(crate::cli::Cli::try_parse_from([
+        "aida",
+        "init",
+        "proj",
+        "--remote",
+        "git@x:y.git",
+        "--public"
+    ])
+    .is_err());
+    // --github conflicts with --forge too.
+    assert!(crate::cli::Cli::try_parse_from([
+        "aida", "init", "proj", "--github", "--forge", "home"
+    ])
+    .is_err());
     // The full happy shape parses.
     assert!(crate::cli::Cli::try_parse_from([
         "aida", "init", "proj", "--lang", "rust", "--github", "--public"
+    ])
+    .is_ok());
+    assert!(crate::cli::Cli::try_parse_from([
+        "aida",
+        "init",
+        "proj",
+        "--forge",
+        "home-gitlab",
+        "--public"
     ])
     .is_ok());
 }
