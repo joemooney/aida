@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// The canonical `aida solo <action>` verbs. The legacy
@@ -10031,6 +10031,16 @@ pub enum Command {
     Report(ReportCommand),
 
     /// Initialize AIDA in the current project
+    #[clap(group(
+        ArgGroup::new("init_remote")
+            .args(["github", "remote", "forge"])
+            .multiple(false)
+    ))]
+    #[clap(group(
+        ArgGroup::new("init_visibility_target")
+            .args(["github", "forge"])
+            .multiple(false)
+    ))]
     Init {
         /// Skip generating agent skills and commands (.claude/*, .codex/skills/*, and .antigravity/skills/*)
         // trace:TASK-457 | ai:claude
@@ -10094,12 +10104,13 @@ pub enum Command {
         /// Create the GitHub repo for a new DIR (PRIVATE by default) and push
         /// both legs. Needs an authenticated `gh`.
         // trace:STORY-780 | ai:claude
-        #[clap(long, requires = "dir", conflicts_with = "remote")]
+        #[clap(long, requires = "dir")]
         github: bool,
 
         /// Make the --github repo public instead of private.
         // trace:STORY-780 | ai:claude
-        #[clap(long, requires = "github")]
+        // trace:STORY-823 | ai:codex
+        #[clap(long, requires_all = ["dir", "init_visibility_target"])]
         public: bool,
 
         /// Bring-your-own remote URL for a new DIR: set origin and push both
@@ -10107,6 +10118,11 @@ pub enum Command {
         // trace:STORY-780 | ai:claude
         #[clap(long, value_name = "URL", requires = "dir")]
         remote: Option<String>,
+
+        /// Use a named machine-global forge profile from ~/.aida/forges.toml.
+        // trace:STORY-823 | ai:codex
+        #[clap(long, value_name = "NAME", requires = "dir")]
+        forge: Option<String>,
 
         /// (deprecated, accepted for backwards compat) Initialize in
         /// distributed mode. Distributed is now the default, so this
