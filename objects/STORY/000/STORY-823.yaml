@@ -1,0 +1,37 @@
+id: 01a0736e-dc7f-7091-942d-02c56d580c26
+spec_id: STORY-823
+agreed_id: STORY-823
+title: init picks the remote from named machine-global forge profiles (work gitlab / home gitlab / github)
+description: |-
+  Operator request (2026-09-05): creating a new project repo happens on different hubs depending on the machine — a self-hosted GitLab at work, github.com or gitlab.joemooney.com at home. The STORY-780 bootstrap (aida init <DIR> --github | --remote <url>) works but makes the operator remember and retype the host/namespace convention every time, per machine. Make the forge choice a named, persistent, per-machine profile.
+
+  Design (slice 1):
+  - New machine-global file ~/.aida/forges.toml (per-concern file, precedent: ~/.aida/agents.toml):
+    [[profile]]
+    name = "home-gitlab"           # what the picker and --forge show
+    kind = "gitlab"                # github | gitlab
+    host = "gitlab.joemooney.com"  # github kind may omit (github.com)
+    namespace = "joe"              # owner/org/group the repo lands under
+    protocol = "ssh"               # ssh | https (URL templating)
+    visibility = "private"         # default; --public still overrides
+    [defaults]
+    profile = "home-gitlab"        # optional machine default
+  - aida init <DIR> --forge <name> resolves the profile: github kind runs the existing gh repo create argv (forge.rs repo_create_argv); gitlab kind templates the push-to-create URL git@{host}:{namespace}/{dir-name}.git (or https form) and reuses the existing --remote ordered-push path byte-for-byte. No glab dependency in slice 1.
+  - TTY with no remote flag: after the existing bootstrap prompts, offer a picker — each profile by name + "local only (push later)". Preselect [defaults].profile. Headless with no flag: use [defaults].profile if set, else local-only (today's behavior, unchanged).
+  - --github / --remote <url> stay as explicit one-shot overrides and win over profiles. No forges.toml = behavior byte-identical to today.
+  - Bootstrap-ordering invariant (code branch pushed before aida-store) is untouched — profiles only change how origin's URL is derived.
+
+  Out of scope (follow-ups, file only if slice 1 proves demand): aida forge add/list/default management CLI (slice 1 documents hand-editing the TOML); glab-CLI integration for visibility control on GitLab; per-project override in .aida/config.toml.
+
+  Acceptance:
+  - Unit: profile -> URL templating for ssh + https gitlab forms; github profile -> exact repo_create_argv as --github today; unknown --forge name errors listing valid names
+  - aida init <DIR> --forge <gitlab-profile> on a fresh dir ends with origin set to the templated URL and both legs pushed (integration test may stub the push)
+  - No forges.toml: full init byte-identical to current behavior (existing STORY-780 tests stay green)
+  - New AIDA_* env var? none needed; if one is added, docs/environment-variables.md gains the row in the same change
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T21:17:20.383672046Z
+modified_at: 2026-09-05T21:17:20.383672046Z
+req_type: Story
