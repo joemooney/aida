@@ -44423,5 +44423,30 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3931
+- id: 01a0739b-9554-79c1-99e7-40294c0dcb8b
+  target_id: 01a0739b-91bb-7550-82ca-14055e2b2a6d
+  author: aida
+  node_id: '1'
+  lamport: 3932
+  timestamp: 2026-09-05T22:06:11.284528404Z
+  kind: !Create
+    title: role enter full-store load makes entering a role take 30s — route the title lookup through the cache
+    description: |-
+      Operator report (2026-09-05): aida role enter hung ~30s with zero output before the eval payload appeared. Telemetry confirms: usage --events shows role enter at 32,020ms (vs the 7-12ms norm for the same command days earlier).
+
+      Root cause (verified in code): emit_role_enter_eval (aida-cli-lib/src/role_cmd.rs, the TASK-48/TASK-49 section) builds its spec_id/agreed_id -> (title, display_id) lookup via Storage::new(.aida-store).load() — a FULL orphan-store scan of every objects/**.yaml — just to decorate the "Queued for this role" (max 5 rows) and "Last touched" display sections. This is the exact full-store-load anti-pattern BUG-634 measured at 13-20s and STORY-707 removed from bare aida status / aida list; role enter was missed. Concurrent store writes (a live drain) push it past 30s.
+
+      Fix:
+      - Resolve titles/display ids through the SQLite cache (.aida/cache.db) like aida list does — the queue head needs at most a handful of rows, so even N point-lookups beat a full scan by 3 orders of magnitude
+      - Cache unavailable/stale: fall back to rendering bare spec ids (the sections are best-effort decoration by design — failures are already silent); never block role enter on a cache rebuild
+      - Keep the queue YAML read as-is (already cheap)
+
+      Acceptance:
+      - role enter with a warm cache completes in <100ms with a populated store (usage telemetry or a timed test)
+      - No Storage::load() full-store call remains on the role enter path (grep-able assertion or unit test on the lookup helper)
+      - With cache.db deleted, role enter still succeeds fast, rendering ids without titles
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 3932
 node_id: '1'
