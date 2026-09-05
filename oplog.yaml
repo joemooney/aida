@@ -44834,5 +44834,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3950
+- id: 01a073d5-fe11-7a51-81b5-325fe0d7676e
+  target_id: 01a073d5-fa8f-7b21-9d86-ce792fef4345
+  author: aida
+  node_id: '1'
+  lamport: 3951
+  timestamp: 2026-09-05T23:09:59.185134572Z
+  kind: !Create
+    title: 'Review PR-1650: [AI:codex] fix(queue): honor drain dry-run preview (BUG-839)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a073cd`) for branch `bug-839`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1650>
+      - Branch: `bug-839` → `main`
+
+      ## Covers
+
+      - BUG-839
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1650` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3951
 node_id: '1'

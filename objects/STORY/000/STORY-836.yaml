@@ -1,0 +1,26 @@
+id: 01a073d5-fa8f-7b21-9d86-ce792fef4345
+spec_id: STORY-836
+agreed_id: STORY-836
+title: 'Review PR-1650: [AI:codex] fix(queue): honor drain dry-run preview (BUG-839)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a073cd`) for branch `bug-839`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1650>
+  - Branch: `bug-839` → `main`
+
+  ## Covers
+
+  - BUG-839
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1650` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-05T23:09:58.287000255Z
+modified_at: 2026-09-05T23:09:58.287000255Z
+req_type: Story
