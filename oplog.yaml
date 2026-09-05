@@ -44176,5 +44176,30 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3919
+- id: 01a07321-c0e1-7732-bb0a-d9aacd62e8fa
+  target_id: 01a07321-bb4d-7dd0-8b28-5ef6301ed3ab
+  author: aida
+  node_id: '1'
+  lamport: 3920
+  timestamp: 2026-09-05T19:53:07.041962290Z
+  kind: !Create
+    title: role enter offers to resume a recent session for that role
+    description: |-
+      Operator request (2026-09-05): 'I have a hard time knowing which session to resume.' After aida role enter <name> succeeds at a TTY, list that role's recent sessions (same enriched columns as aida session resume: id, age, role, spec, worktree, title) filtered to rows whose detected role matches the entered role, and offer: resume one (claude --resume <id>) or start fresh / do nothing.
+
+      Design notes:
+      - Reuse the existing session-meta scan + picker from session.rs; this is a filtered view, not new machinery
+      - Depends on BUG-837 (hook-format role markers) — without it the role filter misses most rows
+      - Non-TTY / eval-output path unchanged (role enter emits shell code; the prompt must not corrupt the eval channel — print the picker to stderr or run it after the eval block the way the wrapper handles init-cd)
+      - Opt-out: --no-resume flag and [role] resume_prompt = false config
+      - Zero matching sessions: skip the prompt silently
+
+      Acceptance:
+      - role enter advisor at a TTY with >=1 advisor session shows the filtered picker; Enter resumes via claude --resume; Esc continues into a fresh shell state
+      - Non-interactive role enter behavior is byte-identical to today
+      - Picker never appears when no session matches the role
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3920
 node_id: '1'
