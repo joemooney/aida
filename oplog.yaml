@@ -44329,5 +44329,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 3926
+- id: 01a07378-98cc-72f3-89bf-fa2b1979e807
+  target_id: 01a07378-9503-7591-8a68-a07c63d8760b
+  author: aida
+  node_id: '1'
+  lamport: 3927
+  timestamp: 2026-09-05T21:27:58.412838405Z
+  kind: !Create
+    title: statusline and statusbar show a live-drain segment (busy indicator)
+    description: |-
+      Operator request (2026-09-05, asked while a drain was running): reflect 'the orchestrator is busy' in the status line so you can see at a glance that a drain is in flight without running aida drain status.
+
+      Design:
+      - One data source, two renderers. Source: .aida/drain-state.json + .aida/drain.lock (already local + cheap). Liveness check: lock pid must be alive (kill -0); a dead pid renders NOTHING (a stale-drain segment would be noise — aida drain status already diagnoses staleness).
+      - aida statusline gains a segment when a drain is live: 'drain:<i>/<n> <SPEC>(<phase>)' — e.g. drain:2/5 BUG-837(ci). Keep it short; phase names abbreviated (impl|ci|review|merge|pull|build).
+      - aida statusbar (the OSC terminal-title meter, STORY-715) gains the same segment in its line, and --plain output for tmux.
+      - A shelved-count in the live drain ('drain:3/5 !1') only if trivially available from drain-state; otherwise leave to a follow-up.
+      - Budget: statusline must stay sub-50ms — no store load, no git, just the two local files + one kill -0.
+
+      Acceptance:
+      - With a live drain (state file + alive pid): statusline output contains the drain segment with correct position/total, current spec, and phase
+      - With a stale drain (state file present, pid dead): output is byte-identical to no-drain
+      - No drain files: unchanged output (existing tests stay green)
+      - aida statusbar line includes the same segment under the same rules
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3927
 node_id: '1'
