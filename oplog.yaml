@@ -45647,5 +45647,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3993
+- id: 01a07519-d59a-75b0-bae6-86e07c8f50d0
+  target_id: 01a07519-d18e-7e13-b438-c870a6699d00
+  author: aida
+  node_id: '1'
+  lamport: 3994
+  timestamp: 2026-09-06T05:03:42.490548943Z
+  kind: !Create
+    title: 'Review PR-1660: [AI:codex] fix(tail): follow live queue drains (BUG-842)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07508`) for branch `bug-842`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1660>
+      - Branch: `bug-842` → `main`
+
+      ## Covers
+
+      - BUG-842
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1660` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3994
 node_id: '1'
