@@ -2426,9 +2426,23 @@ pub(crate) fn handle_queue_command(
                 // `dialog`→`advisor` and `Human`/`HUMAN`→`human` route
                 // consistently and surface together downstream.
                 Some(role) => Some(canonical_role_name(role)),
+                // No --for: doer roles queue into their own lane, but the
+                // dispatch seats (advisor, human) queue work FOR the doers —
+                // their unflagged adds route to implementer. Without this, an
+                // advisor's plain `queue add` produces an entry every
+                // implementer drain skips under the role-mismatch filter, and
+                // the spec silently never drains (an explicit
+                // `--for advisor` still routes to advisor and is skipped —
+                // that's the intended meaning of explicit routing).
+                // trace:BUG-862 | ai:claude
                 None => std::env::var("AIDA_SESSION_ROLE")
                     .ok()
-                    .filter(|s| !s.is_empty()),
+                    .filter(|s| !s.is_empty())
+                    .map(|s| canonical_role_name(&s))
+                    .map(|role| match role.as_str() {
+                        "advisor" | "human" => "implementer".to_string(),
+                        _ => role,
+                    }),
             };
 
             // STORY-57: default scope routing. When adding inside a session
