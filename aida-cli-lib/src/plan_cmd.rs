@@ -489,8 +489,8 @@ fn plan_capture(pr_arg: &str, stdout: bool) -> Result<()> {
     }
 
     let plans_dir = project_root.join("docs").join("plans");
-    std::fs::create_dir_all(&plans_dir)
-        .with_context(|| format!("could not create {}", plans_dir.display()))?;
+    crate::init_cmd::ensure_plan_template_scaffold(&plans_dir, false)
+        .with_context(|| format!("could not scaffold {}", plans_dir.display()))?;
     let slug = captured_plan_slug(&captured);
     let filename = format!("{date}-{slug}.md");
     let path = plans_dir.join(&filename);
@@ -942,6 +942,12 @@ fn verify_plan(plan_file: &std::path::Path, fix: bool, quiet: bool) -> Result<()
     let warns = report.warn_count();
 
     if fix && !fixes.is_empty() {
+        if let Some(parent) = plan_file.parent() {
+            if parent.ends_with(std::path::Path::new("docs").join("plans")) {
+                crate::init_cmd::ensure_plan_template_scaffold(parent, false)
+                    .with_context(|| format!("could not scaffold {}", parent.display()))?;
+            }
+        }
         let mut patched = lines.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         let mut applied = 0;
         for f in fixes.iter() {
@@ -1021,6 +1027,13 @@ fn plan_helpers(spec_arg: &str, append: Option<&std::path::Path>) -> Result<()> 
     ));
 
     if let Some(path) = append {
+        let plans_dir = project_root.join("docs").join("plans");
+        if path.starts_with(&plans_dir)
+            || path.starts_with(std::path::Path::new("docs").join("plans"))
+        {
+            crate::init_cmd::ensure_plan_template_scaffold(&plans_dir, false)
+                .with_context(|| format!("could not scaffold {}", plans_dir.display()))?;
+        }
         let mut existing = std::fs::read_to_string(path)
             .with_context(|| format!("could not read plan file {}", path.display()))?;
         if !existing.ends_with('\n') {
