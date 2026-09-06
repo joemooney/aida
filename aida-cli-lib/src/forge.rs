@@ -136,6 +136,24 @@ impl ForgeKind {
         }
     }
 
+    /// Open a new change from a specific already-pushed source branch, deriving
+    /// title/body from that branch's head commit in the shell command itself.
+    /// This is for user-facing hints where AIDA knows the branch but is not
+    /// opening the change directly. It must not rely on the caller's cwd branch.
+    // trace:BUG-816 | ai:codex
+    pub fn create_cmd_for_branch(self, branch: &str) -> Option<String> {
+        let branch = crate::shell_quote(branch);
+        match self {
+            ForgeKind::GitHub => Some(format!(
+                "gh pr create --head {branch} --title \"$(git log -1 --format=%s {branch})\" --body \"$(git log -1 --format=%b {branch})\""
+            )),
+            ForgeKind::GitLab => Some(format!(
+                "glab mr create --source-branch {branch} --title \"$(git log -1 --format=%s {branch})\" --description \"$(git log -1 --format=%b {branch})\""
+            )),
+            ForgeKind::None => None,
+        }
+    }
+
     /// Human name + install URL for this forge's CLI, for "tool not on PATH"
     /// errors. `None` for pure-git (no forge CLI is needed at all).
     /// trace:TASK-651 | ai:claude
@@ -2785,6 +2803,15 @@ mod tests {
             Some("glab mr create".to_string())
         );
         assert_eq!(ForgeKind::None.create_cmd(), None);
+        assert_eq!(
+            ForgeKind::GitHub.create_cmd_for_branch("bug-816"),
+            Some("gh pr create --head bug-816 --title \"$(git log -1 --format=%s bug-816)\" --body \"$(git log -1 --format=%b bug-816)\"".to_string())
+        );
+        assert_eq!(
+            ForgeKind::GitLab.create_cmd_for_branch("bug-816"),
+            Some("glab mr create --source-branch bug-816 --title \"$(git log -1 --format=%s bug-816)\" --description \"$(git log -1 --format=%b bug-816)\"".to_string())
+        );
+        assert_eq!(ForgeKind::None.create_cmd_for_branch("bug-816"), None);
         assert_eq!(
             ForgeKind::GitLab.view_cmd("9"),
             Some("glab mr view 9".to_string())
