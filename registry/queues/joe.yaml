@@ -434,13 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 01a076ab-0ef2-7033-a1c7-216c7b1e3e56
-  position: 344000
-  added_by: joe
-  added_at: 2026-09-06T12:22:05.662001914Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a076bf-4419-7bd2-8a33-f60e9f2a95ee
   position: 345000
   added_by: joe
