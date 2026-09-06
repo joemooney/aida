@@ -47516,5 +47516,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4112
+- id: 01a076d3-a61f-7d63-a934-ef66c633cf13
+  target_id: 01a076d3-a1f6-7190-91db-2e1ed300f008
+  author: aida
+  node_id: '1'
+  lamport: 4113
+  timestamp: 2026-09-06T13:06:17.247569019Z
+  kind: !Create
+    title: 'Review PR-1677: [AI:codex] fix(drain): resolve active phase log by session id (BUG-872)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a076c2`) for branch `bug-872`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1677>
+      - Branch: `bug-872` → `main`
+
+      ## Covers
+
+      - BUG-872
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1677` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4113
 node_id: '1'
