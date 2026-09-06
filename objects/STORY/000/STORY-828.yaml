@@ -17,20 +17,37 @@ description: |-
   - Fixture hook writing a marker file runs on init with all env vars populated correctly (tempdir HOME)
   - A hook exiting 1 does not fail init; summary reports it
   - --no-post-hooks skips; no init.d dir = byte-identical output to today
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:10:44.712274781Z
-modified_at: 2026-09-06T01:52:31.614600790Z
+modified_at: 2026-09-06T01:57:20.549122772Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a0746a-b8ba-7e22-9dbc-c4f22a55a8b1
   created_at: 2026-09-06T01:52:31.614593288Z
   created_by: joe
+history:
+- id: 01a0746f-361e-71d3-843a-d8f8e4434dfb
+  author: aida-auto-bump
+  timestamp: 2026-09-06T01:57:20.542482557Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0746f-3625-7cc3-9c0b-f3452023149f
+  timestamp: 2026-09-06T01:57:20.549121633Z
+  agent: aida
+  commit_sha: 9a76accc48f995f5b15b0e3526d423beae69e88d
+  summary: Post-init hooks run after successful init with documented context, skip flag, and non-fatal failure handling verified.
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T01:42:12.204814683Z
   implemented_by: joe
+  completed_at: 2026-09-06T01:57:20.542374301Z
+  completion_sha: 9a76accc48f995f5b15b0e3526d423beae69e88d
