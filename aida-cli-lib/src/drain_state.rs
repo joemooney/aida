@@ -28,6 +28,7 @@
 //! trace:STORY-301 | ai:claude
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
@@ -59,6 +60,12 @@ pub(crate) struct DrainMember {
     /// The PR number once a phase has discovered it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) pr: Option<u32>,
+    /// RFC-3339 timestamp when this spec's drain run started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) started_at: Option<String>,
+    /// RFC-3339 timestamp when this spec reached a terminal drain outcome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) finished_at: Option<String>,
 }
 
 impl DrainMember {
@@ -68,6 +75,8 @@ impl DrainMember {
             spec: spec.into(),
             state: STATE_QUEUED.to_string(),
             pr: None,
+            started_at: None,
+            finished_at: None,
         }
     }
 
@@ -98,6 +107,9 @@ pub(crate) struct DrainState {
     /// The phase the current member is in, e.g. `1 (implementer)`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) current_phase: Option<String>,
+    /// RFC-3339 timestamp when the current phase was entered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) phase_started_at: Option<String>,
     /// PID of the orchestrator process — corroborated by `aida drain status`
     /// to tell a live drain from a stale crashed file.
     pub(crate) orchestrator_pid: u32,
@@ -173,6 +185,7 @@ impl DrainState {
             members: vec![DrainMember::queued(spec)],
             current: Some(spec.to_string()),
             current_phase: None,
+            phase_started_at: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_single(spec),
@@ -194,6 +207,7 @@ impl DrainState {
             members: members.iter().map(DrainMember::queued).collect(),
             current: None,
             current_phase: None,
+            phase_started_at: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_batch(batch_name),
@@ -214,6 +228,7 @@ impl DrainState {
             members: members.iter().map(DrainMember::queued).collect(),
             current: None,
             current_phase: None,
+            phase_started_at: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_next_n(n),
@@ -369,6 +384,12 @@ pub(crate) fn set_run(project_root: &Path, spec: &str, run_uuid: &str, zen: bool
     state.current = Some(spec.to_string());
     state.run_uuid = run_uuid.to_string();
     state.zen = zen;
+    if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
+        member
+            .started_at
+            .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
+        member.finished_at = None;
+    }
     let _ = state.write(project_root);
     // TASK-993: bound the event stream — rotate at this run-started boundary if
     // it has outgrown the size cap, so it can't grow unbounded across many
@@ -414,6 +435,7 @@ pub(crate) fn clear_run(project_root: &Path) {
     state.run_uuid.clear();
     state.zen = false;
     state.current_phase = None;
+    state.phase_started_at = None;
     let _ = state.write(project_root);
 }
 
@@ -427,7 +449,11 @@ pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase
     };
     state.current = Some(spec.to_string());
     state.current_phase = Some(format!("{phase_index} ({phase_slug})"));
+    state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
     if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
+        member
+            .started_at
+            .get_or_insert_with(|| chrono::Utc::now().to_rfc3339());
         member.state = format!("in-phase-{phase_index}");
     }
     let _ = state.write(project_root);
@@ -512,10 +538,12 @@ pub(crate) fn set_member_outcome(
         if pr.is_some() {
             member.pr = pr;
         }
+        member.finished_at = Some(chrono::Utc::now().to_rfc3339());
     }
     // The member is no longer the active pipeline — clear the phase so a stale
     // `current_phase` does not outlive the run that set it.
     state.current_phase = None;
+    state.phase_started_at = None;
     let _ = state.write(project_root);
     // STORY-712: a member that shipped with a PR is an actionable wake (merge /
     // advance). The *shelved* (completed=false) case is emitted from
@@ -577,6 +605,99 @@ fn fmt_local(rfc3339: &str) -> String {
     }
 }
 
+fn fmt_local_time(rfc3339: &str) -> Option<String> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Local).format("%H:%M").to_string())
+}
+
+fn parse_rfc3339_utc(rfc3339: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(rfc3339)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+fn format_duration_short(duration: Duration) -> String {
+    let secs = duration.as_secs();
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 60 * 60 {
+        format!("{}m", secs / 60)
+    } else if secs < 60 * 60 * 24 {
+        let hours = secs / 3600;
+        let mins = (secs % 3600) / 60;
+        if mins == 0 {
+            format!("{hours}h")
+        } else {
+            format!("{hours}h {mins}m")
+        }
+    } else {
+        format!("{}d", secs / 86_400)
+    }
+}
+
+fn duration_between(start: &str, end: chrono::DateTime<chrono::Utc>) -> Option<Duration> {
+    let start = parse_rfc3339_utc(start)?;
+    end.signed_duration_since(start).to_std().ok()
+}
+
+fn duration_between_strings(start: &str, end: &str) -> Option<Duration> {
+    let end = parse_rfc3339_utc(end)?;
+    duration_between(start, end)
+}
+
+fn system_time_rfc3339(t: SystemTime) -> String {
+    chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()
+}
+
+fn drain_quiet_warn_minutes(project_root: Option<&Path>) -> u64 {
+    let Some(project_root) = project_root else {
+        return 5;
+    };
+    crate::config_lookup(
+        crate::read_project_config_value(project_root).as_ref(),
+        "drain",
+        "quiet_warn_minutes",
+    )
+    .and_then(|v| v.as_integer())
+    .and_then(|n| u64::try_from(n).ok())
+    .unwrap_or(5)
+}
+
+fn active_log_mtime(project_root: &Path, spec: &str) -> Option<SystemTime> {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let entries = crate::headless_tail::discover_logs(&dir).ok()?;
+    crate::headless_tail::select_log(&entries, Some(spec))
+        .ok()
+        .map(|entry| entry.mtime)
+}
+
+fn last_activity_time(
+    project_root: Option<&Path>,
+    state: &DrainState,
+    spec: &str,
+) -> Option<(String, &'static str)> {
+    if let Some(root) = project_root {
+        if let Some(mtime) = active_log_mtime(root, spec) {
+            return Some((system_time_rfc3339(mtime), "log_mtime"));
+        }
+    }
+    state
+        .phase_started_at
+        .clone()
+        .or_else(|| member_started_at(state, spec).map(str::to_string))
+        .or_else(|| Some(state.started_at.clone()))
+        .map(|ts| (ts, "phase_or_spec_start"))
+}
+
+fn member_started_at<'a>(state: &'a DrainState, spec: &str) -> Option<&'a str> {
+    state
+        .members
+        .iter()
+        .find(|m| m.spec == spec)
+        .and_then(|m| m.started_at.as_deref())
+}
+
 /// Render a registry glyph honoring the active profile. Default Unicode profile
 /// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
 fn glyph(g: crate::glyphs::Glyph) -> &'static str {
@@ -603,9 +724,102 @@ fn member_line(member: &DrainMember) -> String {
     format!("  {glyph} {:<13} {}{}", member.spec, desc, pr)
 }
 
+fn member_line_with_pacing(
+    member: &DrainMember,
+    state: &DrainState,
+    project_root: Option<&Path>,
+    quiet_warn_minutes: u64,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    let mut line = member_line(member);
+    if member.is_running() {
+        if let Some(phase) = &state.current_phase {
+            line = format!(
+                "  {} {:<13} phase {}",
+                glyph(crate::glyphs::Glyph::FlowActive),
+                member.spec,
+                phase
+            );
+        }
+        let mut bits = Vec::new();
+        if let Some(started_at) = member
+            .started_at
+            .as_deref()
+            .or(Some(state.started_at.as_str()))
+        {
+            if let Some(elapsed) = duration_between(started_at, now) {
+                bits.push(format!("spec {}", format_duration_short(elapsed)));
+            }
+        }
+        if let Some(phase_started_at) = state
+            .phase_started_at
+            .as_deref()
+            .or(member.started_at.as_deref())
+            .or(Some(state.started_at.as_str()))
+        {
+            if let Some(elapsed) = duration_between(phase_started_at, now) {
+                bits.push(format!("phase {}", format_duration_short(elapsed)));
+            }
+        }
+        if let Some((last_at, _source)) = last_activity_time(project_root, state, &member.spec) {
+            if let Some(age) = duration_between(&last_at, now) {
+                bits.push(format!("last output {} ago", format_duration_short(age)));
+                if quiet_warn_minutes > 0
+                    && age >= Duration::from_secs(quiet_warn_minutes.saturating_mul(60))
+                {
+                    bits.push(format!(
+                        "{} quiet {}",
+                        glyph(crate::glyphs::Glyph::Warning),
+                        format_duration_short(age)
+                    ));
+                }
+            }
+        }
+        if !bits.is_empty() {
+            line.push_str(&format!(" · {}", bits.join(" · ")));
+        }
+    } else if matches!(member.state.as_str(), STATE_COMPLETED | STATE_FAILED) {
+        let mut bits = Vec::new();
+        if let Some(finished_at) = member.finished_at.as_deref() {
+            if let Some(time) = fmt_local_time(finished_at) {
+                bits.push(time);
+            }
+            if let Some(started_at) = member.started_at.as_deref() {
+                if let Some(duration) = duration_between_strings(started_at, finished_at) {
+                    bits.push(format!("({})", format_duration_short(duration)));
+                }
+            }
+        }
+        if !bits.is_empty() {
+            line.push_str(&format!(" · {}", bits.join(" ")));
+        }
+    }
+    line
+}
+
 /// Render the human summary for a drain (`stale` adds the crashed-orchestrator
 /// framing + the `--clear` hint). Pure — the command handler does the I/O.
+#[cfg(test)]
 pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
+    render_human_inner(state, stale, None, chrono::Utc::now())
+}
+
+/// Render the human summary with project-local pacing context.
+// trace:STORY-948 | ai:codex
+pub(crate) fn render_human_with_context(
+    state: &DrainState,
+    stale: bool,
+    project_root: &Path,
+) -> String {
+    render_human_inner(state, stale, Some(project_root), chrono::Utc::now())
+}
+
+fn render_human_inner(
+    state: &DrainState,
+    stale: bool,
+    project_root: Option<&Path>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
     let mut out = String::new();
     let scope = match &state.batch {
         Some(name) => format!("batch:{name}"),
@@ -640,20 +854,9 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
         fmt_local(&state.started_at)
     ));
 
+    let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
     for member in &state.members {
-        let mut line = member_line(member);
-        // Annotate the running member with the precise phase + a pointer at
-        // what the orchestrator is waiting on.
-        if member.is_running() {
-            if let Some(phase) = &state.current_phase {
-                line = format!(
-                    "  {} {:<13} phase {}",
-                    glyph(crate::glyphs::Glyph::FlowActive),
-                    member.spec,
-                    phase
-                );
-            }
-        }
+        let line = member_line_with_pacing(member, state, project_root, quiet_warn_minutes, now);
         out.push_str(&line);
         out.push('\n');
     }
@@ -673,6 +876,32 @@ pub(crate) fn render_human(state: &DrainState, stale: bool) -> String {
 
     out.push('\n');
     if !stale {
+        let mut footer = Vec::new();
+        if let Some(elapsed) = duration_between(&state.started_at, now) {
+            footer.push(format!("elapsed {}", format_duration_short(elapsed)));
+        }
+        if let Some((spec, at)) = state
+            .members
+            .iter()
+            .filter(|m| m.state == STATE_COMPLETED)
+            .filter_map(|m| m.finished_at.as_deref().map(|at| (m.spec.as_str(), at)))
+            .max_by_key(|(_, at)| {
+                parse_rfc3339_utc(at)
+                    .map(|dt| dt.timestamp())
+                    .unwrap_or(i64::MIN)
+            })
+        {
+            if let Some(time) = fmt_local_time(at) {
+                footer.push(format!("last ship: {spec} at {time}"));
+            }
+        }
+        if !footer.is_empty() {
+            out.push_str(&format!(
+                "  Drain started {} · {}\n",
+                fmt_local(&state.started_at),
+                footer.join(" · ")
+            ));
+        }
         out.push_str(&format!("  On exit: {}\n", state.on_drain_complete));
     } else {
         out.push_str("  Run `aida drain status --clear` to remove this stale file.\n");
@@ -740,7 +969,22 @@ pub(crate) fn render_lock_json(lock: &crate::drain_lock::DrainLock, stale_state:
 }
 
 /// Render the `--json` payload for `aida drain status`.
+#[cfg(test)]
 pub(crate) fn render_json(status: &DrainStatus) -> String {
+    render_json_inner(status, None, chrono::Utc::now())
+}
+
+/// Render the `--json` payload with project-local pacing context.
+// trace:STORY-948 | ai:codex
+pub(crate) fn render_json_with_context(status: &DrainStatus, project_root: &Path) -> String {
+    render_json_inner(status, Some(project_root), chrono::Utc::now())
+}
+
+fn render_json_inner(
+    status: &DrainStatus,
+    project_root: Option<&Path>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
     let value = match status {
         DrainStatus::None => serde_json::json!({ "status": "none" }),
         DrainStatus::Active(state) | DrainStatus::Stale(state) => {
@@ -752,11 +996,81 @@ pub(crate) fn render_json(status: &DrainStatus) -> String {
                     "stale"
                 };
                 map.insert("status".to_string(), serde_json::json!(word));
+                map.insert("pacing".to_string(), pacing_json(state, project_root, now));
             }
             obj
         }
     };
     serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
+}
+
+fn pacing_json(
+    state: &DrainState,
+    project_root: Option<&Path>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> serde_json::Value {
+    let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
+    let current = state.current.as_deref().map(|spec| {
+        let spec_started_at = member_started_at(state, spec).unwrap_or(&state.started_at);
+        let phase_started_at = state
+            .phase_started_at
+            .as_deref()
+            .or_else(|| member_started_at(state, spec))
+            .unwrap_or(&state.started_at);
+        let (last_output_at, last_output_source) = last_activity_time(project_root, state, spec)
+            .unwrap_or_else(|| (phase_started_at.to_string(), "phase_or_spec_start"));
+        let last_output_age_secs = duration_between(&last_output_at, now).map(|d| d.as_secs());
+        serde_json::json!({
+            "spec": spec,
+            "spec_started_at": spec_started_at,
+            "spec_elapsed_secs": duration_between(spec_started_at, now).map(|d| d.as_secs()),
+            "phase": state.current_phase,
+            "phase_started_at": phase_started_at,
+            "phase_elapsed_secs": duration_between(phase_started_at, now).map(|d| d.as_secs()),
+            "last_output_at": last_output_at,
+            "last_output_source": last_output_source,
+            "last_output_age_secs": last_output_age_secs,
+            "quiet_warn_minutes": quiet_warn_minutes,
+            "quiet": quiet_warn_minutes > 0
+                && last_output_age_secs
+                    .map(|age| age >= quiet_warn_minutes.saturating_mul(60))
+                    .unwrap_or(false),
+        })
+    });
+    let members: Vec<serde_json::Value> = state
+        .members
+        .iter()
+        .map(|member| {
+            serde_json::json!({
+                "spec": member.spec,
+                "state": member.state,
+                "started_at": member.started_at,
+                "finished_at": member.finished_at,
+                "duration_secs": member.started_at.as_deref().zip(member.finished_at.as_deref())
+                    .and_then(|(start, finish)| duration_between_strings(start, finish))
+                    .map(|d| d.as_secs()),
+            })
+        })
+        .collect();
+    let last_ship = state
+        .members
+        .iter()
+        .filter(|m| m.state == STATE_COMPLETED)
+        .filter_map(|m| m.finished_at.as_deref().map(|at| (m.spec.as_str(), at)))
+        .max_by_key(|(_, at)| {
+            parse_rfc3339_utc(at)
+                .map(|dt| dt.timestamp())
+                .unwrap_or(i64::MIN)
+        })
+        .map(|(spec, at)| serde_json::json!({ "spec": spec, "at": at }));
+    serde_json::json!({
+        "started_at": state.started_at,
+        "elapsed_secs": duration_between(&state.started_at, now).map(|d| d.as_secs()),
+        "quiet_warn_minutes": quiet_warn_minutes,
+        "current": current,
+        "members": members,
+        "last_ship": last_ship,
+    })
 }
 
 #[cfg(test)]
@@ -784,6 +1098,7 @@ mod tests {
             members: vec![DrainMember::queued("STORY-301")],
             current: Some("STORY-301".to_string()),
             current_phase: None,
+            phase_started_at: None,
             orchestrator_pid: std::process::id(),
             started_at: "2026-05-18T23:28:00+00:00".to_string(),
             on_drain_complete: predict_single("STORY-301"),
@@ -924,8 +1239,10 @@ mod tests {
         let read = DrainState::read(dir.path()).unwrap();
         assert_eq!(read.current.as_deref(), Some("STORY-285"));
         assert_eq!(read.current_phase.as_deref(), Some("3 (reviewer)"));
+        assert!(read.phase_started_at.is_some());
         let member = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
         assert_eq!(member.state, "in-phase-3");
+        assert!(member.started_at.is_some());
         assert!(member.is_running());
     }
 
@@ -940,9 +1257,12 @@ mod tests {
         let done = read.members.iter().find(|m| m.spec == "STORY-301").unwrap();
         assert_eq!(done.state, "completed");
         assert_eq!(done.pr, Some(82));
+        assert!(done.finished_at.is_some());
         let failed = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
         assert_eq!(failed.state, "failed");
+        assert!(failed.finished_at.is_some());
         assert_eq!(read.current_phase, None);
+        assert_eq!(read.phase_started_at, None);
     }
 
     // set_phase / set_member_outcome / set_run / clear_run on a project with
@@ -980,6 +1300,8 @@ mod tests {
         assert_eq!(read.current.as_deref(), Some("STORY-285"));
         assert_eq!(read.run_uuid, "live-token");
         assert!(read.zen);
+        let member = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
+        assert!(member.started_at.is_some());
     }
 
     // TASK-336: clear_run wipes the run-scoped fields so a stale child token
@@ -995,6 +1317,7 @@ mod tests {
         assert!(read.run_uuid.is_empty());
         assert!(!read.zen);
         assert_eq!(read.current_phase, None);
+        assert_eq!(read.phase_started_at, None);
     }
 
     // TASK-336: a pre-TASK-336 drain-state file (no run_uuid / zen fields)
@@ -1014,6 +1337,9 @@ mod tests {
         let state: DrainState = serde_json::from_str(body).unwrap();
         assert!(state.run_uuid.is_empty());
         assert!(!state.zen);
+        assert_eq!(state.phase_started_at, None);
+        assert_eq!(state.members[0].started_at, None);
+        assert_eq!(state.members[0].finished_at, None);
     }
 
     // TASK-336: AC4 — a stale drain-state file (dead PID) classifies as
@@ -1074,6 +1400,51 @@ mod tests {
         assert!(out.contains("STORY-285 is spec 2 of 3 in this drain."));
     }
 
+    // STORY-948: terminal rows show finish clock + per-spec duration; the
+    // footer repeats total elapsed and the latest completed ship.
+    #[test]
+    fn render_human_shows_finished_time_duration_and_last_ship() {
+        let mut state = batch_state();
+        state.members[0].state = "completed".to_string();
+        state.members[0].started_at = Some("2026-05-18T23:28:00+00:00".to_string());
+        state.members[0].finished_at = Some("2026-05-18T23:55:00+00:00".to_string());
+        let now = parse_rfc3339_utc("2026-05-19T00:10:00+00:00").unwrap();
+
+        let out = render_human_inner(&state, false, None, now);
+
+        assert!(out.contains("completed ·"));
+        assert!(out.contains("(27m)"));
+        assert!(out.contains("elapsed 42m"));
+        assert!(out.contains("last ship: STORY-301"));
+    }
+
+    // STORY-948: without a log, the current row falls back to phase-entry time
+    // for last-output age and applies the configurable quiet threshold.
+    #[test]
+    fn render_human_current_row_shows_elapsed_last_output_and_quiet_warning() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "[drain]\nquiet_warn_minutes = 1\n",
+        )
+        .unwrap();
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("1 (implementer)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:40:00+00:00".to_string());
+        state.members[1].state = "in-phase-1".to_string();
+        state.members[1].started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+        let now = parse_rfc3339_utc("2026-05-18T23:42:00+00:00").unwrap();
+
+        let out = render_human_inner(&state, false, Some(dir.path()), now);
+
+        assert!(out.contains("spec 12m"));
+        assert!(out.contains("phase 2m"));
+        assert!(out.contains("last output 2m ago"));
+        assert!(out.contains("quiet 2m"));
+    }
+
     // AC9 / AC5: drain status output for a stale (crashed) drain.
     #[test]
     fn render_human_stale_reports_crash_and_clear_hint() {
@@ -1094,6 +1465,41 @@ mod tests {
         assert!(active.contains("STORY-301"));
         let stale = render_json(&DrainStatus::Stale(single_state()));
         assert!(stale.contains("\"status\": \"stale\""));
+    }
+
+    // STORY-948: the JSON projection carries the same raw timestamps and
+    // derived durations used by the human renderer.
+    #[test]
+    fn render_json_pacing_carries_raw_timestamps() {
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("1 (implementer)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:40:00+00:00".to_string());
+        state.members[0].state = "completed".to_string();
+        state.members[0].started_at = Some("2026-05-18T23:28:00+00:00".to_string());
+        state.members[0].finished_at = Some("2026-05-18T23:55:00+00:00".to_string());
+        state.members[1].state = "in-phase-1".to_string();
+        state.members[1].started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+        let now = parse_rfc3339_utc("2026-05-18T23:42:00+00:00").unwrap();
+
+        let out = render_json_inner(&DrainStatus::Active(state), None, now);
+        let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+        assert_eq!(
+            value["pacing"]["current"]["spec_started_at"],
+            "2026-05-18T23:30:00+00:00"
+        );
+        assert_eq!(
+            value["pacing"]["current"]["phase_started_at"],
+            "2026-05-18T23:40:00+00:00"
+        );
+        assert_eq!(
+            value["pacing"]["current"]["last_output_source"],
+            "phase_or_spec_start"
+        );
+        assert_eq!(value["pacing"]["current"]["spec_elapsed_secs"], 720);
+        assert_eq!(value["pacing"]["members"][0]["duration_secs"], 1620);
+        assert_eq!(value["pacing"]["last_ship"]["spec"], "STORY-301");
     }
 
     // ── BUG-759: lock-backed report when the launcher holds the drain ──
