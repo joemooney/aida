@@ -1,0 +1,26 @@
+id: 01a075d7-75ca-7353-95d4-458276b2a519
+spec_id: STORY-955
+agreed_id: STORY-955
+title: 'Review PR-1667: [AI:codex] fix(remote): label mirror lag as behind (BUG-836)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a075c8`) for branch `bug-836`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1667>
+  - Branch: `bug-836` → `main`
+
+  ## Covers
+
+  - BUG-836
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1667` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T08:30:49.802877576Z
+modified_at: 2026-09-06T08:30:49.802877576Z
+req_type: Story
