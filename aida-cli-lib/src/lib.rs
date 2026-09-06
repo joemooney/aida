@@ -1881,6 +1881,11 @@ fn run() -> Result<()> {
                 help_catalog::print_command_catalog();
                 return Ok(());
             }
+            // Exact command help keeps clap's native rendering ahead of the
+            // semantic concept/FTS layers. trace:STORY-837 | ai:codex
+            if help_catalog::print_exact_command_help(topic) {
+                return Ok(());
+            }
             return print_help_topic(topic);
         }
         // TASK-970: content-first bare `aida` in AGENT MODE. A human at a TTY
@@ -42004,6 +42009,13 @@ fn print_help_topic(topic: &str) -> Result<()> {
             Ok(())
         }
         Err(valid) => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| find_project_root())
+                .ok();
+            if help_catalog::print_semantic_help_topic(topic, project_root.as_deref()) {
+                return Ok(());
+            }
+            eprintln!();
             eprintln!("Unknown help topic: {}", topic.bold());
             eprintln!();
             eprintln!("Valid topics (try `aida help <topic>`):");
