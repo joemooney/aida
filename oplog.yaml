@@ -45107,5 +45107,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3965
+- id: 01a07439-d3e8-73c0-97c1-ff30f057790d
+  target_id: 01a07439-d08b-73b2-8b48-73c4d57ab356
+  author: aida
+  node_id: '1'
+  lamport: 3966
+  timestamp: 2026-09-06T00:59:01.992805746Z
+  kind: !Create
+    title: 'Review PR-1652: [AI:codex] fix(role): avoid full-store role enter lookup (BUG-840)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07427`) for branch `bug-840`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1652>
+      - Branch: `bug-840` → `main`
+
+      ## Covers
+
+      - BUG-840
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1652` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3966
 node_id: '1'
