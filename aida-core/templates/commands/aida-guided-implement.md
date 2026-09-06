@@ -14,7 +14,7 @@ Follow the workflow in `.claude/skills/aida-guided-implement.md`. The HYBRID flo
 **PHASE 1 — major decisions up front**
 1. Read the spec + its graph (`aida show <SPEC>`, `aida graph <SPEC> --tree --blocked-by --impact`, existing ADRs/comments).
 2. Identify the MAJOR architectural / security / keystone forks (the load-bearing choices) — typically one to four; do not elevate mechanical choices.
-3. Ask EACH fork via a structured `AskUserQuestion`: the decision + why it matters, 2–4 concrete options with their consequences, a recommendation + rationale, and an "enter your own" prose escape (mirror the finish-checkpoint rubric in `docs/aida/discipline/session-discipline.md`).
+3. Ask EACH fork via a structured `AskUserQuestion`: the decision + why it matters, 2–4 concrete options with their consequences, a recommendation + rationale, and an "enter your own" prose escape (mirror the finish-checkpoint rubric in `.aida/discipline/session-discipline.md`).
 4. Record each answer as a traceable ADR: `aida add --type decision` (linked to the spec via `aida rel add <ADR> <SPEC> --type references`), or `aida comment add <SPEC>` for a secondary call.
 5. Summarise + agree the overall approach, then `aida edit <SPEC> --status in-progress` — BEFORE any code.
 

@@ -276,7 +276,7 @@ pub(crate) fn init_scaffold_candidate_paths() -> &'static [&'static str] {
         // trace:TASK-457 | ai:claude
         ".antigravity",
         "docs/plans",
-        "docs/aida",
+        ".aida/discipline",
         "docs/agents",
         "docs/extending-skills.md",
         "docs/competitive-analysis",
@@ -869,9 +869,10 @@ fn complete_init_scaffolding(
         }
     }
 
-    // Scaffold the discipline pack (docs/aida/discipline/) — generic
+    // Scaffold the discipline pack (.aida/discipline/) — generic
     // AIDA-using guidance, written for every init mode. trace:STORY-255 | STORY-443
-    let discipline_written = ensure_discipline_pack_scaffold(root, force).unwrap_or(0);
+    // trace:STORY-829 | ai:codex
+    let discipline_report = ensure_discipline_pack_scaffold(root, force).unwrap_or_default();
 
     // Scaffold a starter ecosystem-watch log so a fresh project's first
     // `scripts/release.sh minor` doesn't trip the missing-file warning
@@ -1038,7 +1039,7 @@ fn complete_init_scaffolding(
         );
         println!(
             "    {}{}AIDA-using discipline guides",
-            "docs/aida/discipline/".white().bold(),
+            ".aida/discipline/".white().bold(),
             " ".repeat(17)
         );
     } else {
@@ -1052,12 +1053,16 @@ fn complete_init_scaffolding(
     // count only under --verbose; the files are on disk either way.
     // trace:BUG-19 | ai:claude
     if verbose {
-        if discipline_written > 0 {
+        if discipline_report.written > 0 {
             println!(
                 "  {} discipline guide{} scaffolded to {}",
-                discipline_written.to_string().green(),
-                if discipline_written == 1 { "" } else { "s" },
-                "docs/aida/discipline/".dimmed(),
+                discipline_report.written.to_string().green(),
+                if discipline_report.written == 1 {
+                    ""
+                } else {
+                    "s"
+                },
+                ".aida/discipline/".dimmed(),
             );
         }
         if ecosystem_watch_written {
@@ -1066,6 +1071,14 @@ fn complete_init_scaffolding(
                 "docs/competitive-analysis/ecosystem-watch.md".dimmed(),
             );
         }
+    }
+    if discipline_report.relocated > 0 {
+        println!(
+            "  {} relocated discipline pack from {} to {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            "docs/aida/discipline/".dimmed(),
+            ".aida/discipline/".dimmed(),
+        );
     }
 
     if skipped_count > 0 {
@@ -1465,7 +1478,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
     let (requirement_uuid, spec_id_display) = if let Some(last) = store.requirements.last_mut() {
         let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1").to_string();
         last.description = format!(
-            "After aida init, the scaffolded files are untracked. Stage only AIDA's own paths (never `git add .` in a repo with unrelated work): git add .gitignore .aida/config.toml .mcp.json CLAUDE.md AGENTS.md .claude docs/plans docs/aida && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + !.aida/config.toml) keep runtime state out. Run 'aida queue done {}' after the commit lands.",
+            "After aida init, the scaffolded files are untracked. Stage only AIDA's own paths (never `git add .` in a repo with unrelated work): git add .gitignore .aida/config.toml .aida/discipline .mcp.json CLAUDE.md AGENTS.md .claude docs/plans && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + allow-listed project files) keep runtime state out. Run 'aida queue done {}' after the commit lands.",
             spec_id
         );
 
@@ -1807,7 +1820,7 @@ mod task_631_init_self_commit_tests {
         std::fs::write(root.join("CLAUDE.md"), "x").unwrap();
         std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
         std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
-        std::fs::create_dir_all(root.join("docs/aida")).unwrap();
+        std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
 
         // An UNRELATED user file must NOT appear in the staged set.
         std::fs::write(root.join("user_wip.rs"), "x").unwrap();
@@ -1817,7 +1830,7 @@ mod task_631_init_self_commit_tests {
         assert!(paths.contains(&".gitignore".to_string()));
         assert!(paths.contains(&"CLAUDE.md".to_string()));
         assert!(paths.contains(&".claude".to_string()));
-        assert!(paths.contains(&"docs/aida".to_string()));
+        assert!(paths.contains(&".aida/discipline".to_string()));
 
         // Candidates that were never written are filtered out.
         assert!(!paths.contains(&"AGENTS.md".to_string()));

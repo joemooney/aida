@@ -143,7 +143,7 @@ mechanically clear. Confirm the approach in one summary and proceed to Phase 2.
 ### 1c. Ask each fork as a structured question
 
 For **each** major fork, present one `AskUserQuestion` that mirrors the
-finish-checkpoint structure (`docs/aida/discipline/session-discipline.md` §
+finish-checkpoint structure (`.aida/discipline/session-discipline.md` §
 *Finish-state communication rubric*):
 
 1. **State + why it matters** — name the decision and the load-bearing

@@ -69,7 +69,7 @@ echo "${AIDA_HEADLESS:-}"
 
   `--no-human` > `--zen` > default. An un-annotated prompt defaults to
   `design-fork` (pause-safe). Author guidance:
-  `docs/aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
+  `.aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
 
 ## Workflow
 

@@ -64,7 +64,7 @@ aida zen status
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
-(pause-safe). Author guidance: `docs/aida/discipline/skill-prompt-kinds.md`.
+(pause-safe). Author guidance: `.aida/discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
 ## Workflow
@@ -537,7 +537,7 @@ naming the user-action (the recommendation in summary form), a per-option
 **downstream consequence + reversibility**, an **advise escape** row,
 and decoupled coupled decisions (the reviewer-queue story is filed
 independently in step 11, not bundled into the exit row). Full rubric:
-`docs/aida/discipline/session-discipline.md` § *Finish-state communication
+`.aida/discipline/session-discipline.md` § *Finish-state communication
 rubric*. Print the State preamble verbatim above the table — silence is
 not an acceptable signal, especially on the conclusion surface.
 
@@ -612,7 +612,7 @@ zen annotation and stop:
 
 In default (non-`$AIDA_ZEN`) interactive mode, do **not** touch the sentinel
 — render the table and let the user press Ctrl+D. Full protocol:
-`docs/aida/discipline/skill-prompt-kinds.md`.
+`.aida/discipline/skill-prompt-kinds.md`.
 
 **Loud closing block — name the next user-action (TASK-359).** After the
 table (interactive) or in place of it (auto-resolved zen / headless), the
@@ -810,4 +810,4 @@ questions; only mechanical confirmations auto-resolve.
 
 ## Ship-time checklist
 
-- Shipped a new CLI slice verb in this batch? Update its parent skill to call it (no re-impl) — see `docs/aida/discipline/skill-cli-symmetry.md`. A skill that re-derives a verb's logic in prose is a second copy that drifts the moment the verb changes; the symmetry is cheapest to honour in the same PR. <!-- trace:TASK-736 -->
+- Shipped a new CLI slice verb in this batch? Update its parent skill to call it (no re-impl) — see `.aida/discipline/skill-cli-symmetry.md`. A skill that re-derives a verb's logic in prose is a second copy that drifts the moment the verb changes; the symmetry is cheapest to honour in the same PR. <!-- trace:TASK-736 -->

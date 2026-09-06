@@ -12,7 +12,7 @@ Follow the workflow in `.claude/skills/aida-learn.md`:
 1. Surface the specific mistake (what happened, what should have happened)
 2. Classify the rule's scope:
    - Project-wide → `CLAUDE.md`
-   - General AIDA → `docs/aida/discipline/<topic>.md`
+   - General AIDA → `.aida/discipline/<topic>.md`
    - User-personal preference → `~/.claude/projects/<slug>/memory/feedback_*.md`
    - Pattern observation awaiting recurrence → `aida findings add`
 3. Search for existing related rules — extend rather than duplicate

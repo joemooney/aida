@@ -125,7 +125,7 @@ summary"* on a feature whose primary caller is a skill (always non-TTY) would
 make the feature never render in its own main use case. Naming the caller
 first catches that at filing time.
 
-See `docs/aida/discipline/session-discipline.md` →
+See `.aida/discipline/session-discipline.md` →
 "Verify acceptance criteria against the primary caller" for the full rule and
 the four worked examples that surfaced it.
 

@@ -53,7 +53,7 @@ echo "${AIDA_HEADLESS:-}"
   untraced file. `--no-human` > `--zen` > default.
 
 An un-annotated prompt defaults to `design-fork` (pause-safe). Author
-guidance: `docs/aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
+guidance: `.aida/discipline/skill-prompt-kinds.md`. trace:TASK-297
 
 ## Commit Message Format
 
@@ -207,7 +207,7 @@ aida comment add <SPEC-ID> "..."
 - Always include REQ-ID for feat/fix commits; add commit hash to requirement comments for bidirectional traceability
 - Use `[AI:claude]` when the commit includes AI-assisted code
 - Don't skip trace comments for substantial code (>20 lines of logic)
-- Shipped a new CLI slice verb? Update its parent skill to call it (no re-impl) — see `docs/aida/discipline/skill-cli-symmetry.md`. <!-- trace:TASK-736 -->
+- Shipped a new CLI slice verb? Update its parent skill to call it (no re-impl) — see `.aida/discipline/skill-cli-symmetry.md`. <!-- trace:TASK-736 -->
 
 ## Related skills / commands
 

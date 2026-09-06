@@ -121,17 +121,18 @@ them.
     /// scaffolded CLAUDE.md. A 3-line stub that `@`-imports the discipline
     /// pack's README so Claude Code expands the canonical pointer list at
     /// session start — no duplicate maintenance between this file and the
-    /// scaffolded `docs/aida/discipline/README.md`.
+    /// scaffolded `.aida/discipline/README.md`.
     /// trace:STORY-255 | ai:claude
     /// trace:TASK-338 | ai:claude — added the machinery-glossary bullet
     /// trace:STORY-443 | ai:claude — pack relocated under docs/aida/ namespace
     /// trace:TASK-573 | ai:claude — collapsed inline bullets to a single @-import
+    // trace:STORY-829 | ai:codex — pack relocated under .aida/ namespace
     fn discipline_section() -> &'static str {
         r#"
 
 ## Discipline for AIDA-using sessions
 
-@docs/aida/discipline/README.md
+@.aida/discipline/README.md
 "#
     }
 
@@ -280,7 +281,7 @@ mod tests {
         // tag-conventions, …) lives in that README; Claude Code expands the
         // import at session start.
         assert!(md.contains("## Discipline for AIDA-using sessions"));
-        assert!(md.contains("@docs/aida/discipline/README.md"));
+        assert!(md.contains("@.aida/discipline/README.md"));
         // The change is additive — the AIDA conventions import still lands.
         assert!(md.contains(CLAUDE_AIDA_IMPORT));
         assert!(md.contains("## Project overview"));

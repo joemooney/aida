@@ -137,7 +137,7 @@ aida zen status
 
 A headless `--no-human` drain (`AIDA_HEADLESS=1`) is the stronger mode and
 overrides `--zen`. An un-annotated prompt defaults to `design-fork`
-(pause-safe). Author guidance: `docs/aida/discipline/skill-prompt-kinds.md`.
+(pause-safe). Author guidance: `.aida/discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
 ## Workflow
@@ -732,7 +732,7 @@ escape** row (`⊕`) when an advisor seat is reachable, and **decoupled
 followup-filing** — when a plan's `## Followups` section has unfiled
 bullets, ask the filing question *after* the path is chosen, not bundled
 into the path row. Full rubric:
-`docs/aida/discipline/session-discipline.md` § *Finish-state
+`.aida/discipline/session-discipline.md` § *Finish-state
 communication rubric*.
 
 The preamble is generated deterministically by `aida state-snapshot --spec
@@ -859,7 +859,7 @@ otherwise-idle REPL. `/aida-pickup` itself must **not** touch the sentinel:
 the hand-off target owns the exit, and a premature touch here would let the
 orchestrator reap the session before `/aida-pr` opens the PR. The sentinel
 is touched exactly once, by whichever skill performs the session's genuinely
-last action. Full protocol: `docs/aida/discipline/skill-prompt-kinds.md`.
+last action. Full protocol: `.aida/discipline/skill-prompt-kinds.md`.
 trace:TASK-329
 
 *Batch mode (`batch:<NAME>` still has queued members) — TASK-272:*

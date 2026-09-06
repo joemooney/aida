@@ -88,6 +88,9 @@ docker/.env
 
 # Tracked exceptions: project-level config that lives in the repo.
 !.aida/config.toml
+# AIDA-using discipline guides are checked in with the project. trace:STORY-829 | ai:codex
+!.aida/discipline/
+!.aida/discipline/**
 # Project-level command aliases are shareable across the team. trace:TASK-877
 !.aida/aliases.toml
 !.aida/reserved-paths.toml

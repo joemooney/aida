@@ -1,24 +1,25 @@
-//! Starter discipline pack — `docs/aida/discipline/` + the opt-in
+//! Starter discipline pack — `.aida/discipline/` + the opt-in
 //! memory pack scaffolded by `aida init --with-memories`.
 //! trace:STORY-255 | STORY-443 | ai:claude
+//! trace:STORY-829 | ai:codex
 use super::*;
 
 /// Verifies the embedded discipline pack scaffolds the full set of canonical
-/// files into a new project's docs/aida/discipline/ directory.
+/// files into a new project's .aida/discipline/ directory.
 ///
 /// TASK-465: STRUCTURAL, not count-based. The expected file set is derived
 /// from the SAME single source `ensure_discipline_pack_scaffold` writes from
-/// — the `docs/aida/discipline/` keys in `EMBEDDED_TEMPLATES` — so adding a
+/// — the `.aida/discipline/` keys in `EMBEDDED_TEMPLATES` — so adding a
 /// doc to the master template can never break this test (the prior hardcoded
 /// `assert_eq!(written, 16)` + hand-maintained file list broke on every pack
 // addition, e.g. PR-193). trace:TASK-465 | ai:claude
 #[test]
 fn discipline_pack_scaffolds_full_set() {
     use aida_core::templates::EMBEDDED_TEMPLATES;
-    // Single source of truth: every embedded `docs/aida/discipline/<file>`.
+    // Single source of truth: every embedded `.aida/discipline/<file>`.
     let expected: Vec<String> = EMBEDDED_TEMPLATES
         .keys()
-        .filter_map(|k| k.strip_prefix("docs/aida/discipline/"))
+        .filter_map(|k| k.strip_prefix(".aida/discipline/"))
         .filter(|n| !n.is_empty())
         .map(|n| n.to_string())
         .collect();
@@ -29,27 +30,35 @@ fn discipline_pack_scaffolds_full_set() {
     );
 
     let root = tempfile::tempdir().unwrap();
-    let written = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
+    let report = ensure_discipline_pack_scaffold(root.path(), false).unwrap();
     assert_eq!(
-        written,
+        report.written,
         expected.len(),
         "scaffolded count must match the embedded discipline pack"
     );
 
-    let dir = root.path().join("docs/aida/discipline");
+    let dir = root.path().join(".aida/discipline");
     for f in &expected {
         assert!(dir.join(f).is_file(), "missing discipline doc: {f}");
     }
+    assert!(
+        !root.path().join("docs/aida").exists(),
+        "fresh scaffold must not create docs/aida/"
+    );
 
     // Idempotent: a second call without --force writes nothing.
     assert_eq!(
-        ensure_discipline_pack_scaffold(root.path(), false).unwrap(),
+        ensure_discipline_pack_scaffold(root.path(), false)
+            .unwrap()
+            .written,
         0
     );
-    // --force re-writes them all.
+    // --force is also edit-preserving for this unmarked markdown pack.
     assert_eq!(
-        ensure_discipline_pack_scaffold(root.path(), true).unwrap(),
-        expected.len()
+        ensure_discipline_pack_scaffold(root.path(), true)
+            .unwrap()
+            .written,
+        0
     );
 }
 
@@ -92,19 +101,77 @@ fn ecosystem_watch_scaffold_writes_with_todays_date_and_is_idempotent() {
 }
 
 #[test]
-fn discipline_pack_lands_under_docs_aida_namespace() {
-    // trace:STORY-443 — pack must land at docs/aida/discipline/, not the
-    // historical docs/aida-discipline/. Guards against accidental
-    // fallback during the namespace reshape.
+fn discipline_pack_lands_under_aida_namespace() {
+    // trace:STORY-829 — pack must land at .aida/discipline/, not project docs.
     let root = tempfile::tempdir().unwrap();
     ensure_discipline_pack_scaffold(root.path(), false).unwrap();
     assert!(
-        root.path().join("docs/aida/discipline/README.md").is_file(),
-        "discipline pack must land at docs/aida/discipline/"
+        root.path().join(".aida/discipline/README.md").is_file(),
+        "discipline pack must land at .aida/discipline/"
+    );
+    assert!(
+        !root.path().join("docs/aida/discipline").exists(),
+        "legacy docs/aida/discipline/ path must not be created"
     );
     assert!(
         !root.path().join("docs/aida-discipline").exists(),
         "historical docs/aida-discipline/ path must not be created"
+    );
+}
+
+#[test]
+fn discipline_pack_refresh_relocates_old_layout_and_is_idempotent() {
+    // trace:STORY-829 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    let old = root.path().join("docs/aida/discipline");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::write(old.join("README.md"), "user edited readme\n").unwrap();
+    std::fs::write(old.join("local-only.md"), "user-only guide\n").unwrap();
+
+    let report = ensure_discipline_pack_scaffold(root.path(), true).unwrap();
+    assert_eq!(report.relocated, 2, "{:?}", report.relocated_paths);
+    assert!(root.path().join(".aida/discipline/README.md").is_file());
+    assert_eq!(
+        std::fs::read_to_string(root.path().join(".aida/discipline/README.md")).unwrap(),
+        "user edited readme\n",
+        "relocation must preserve user edits"
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join(".aida/discipline/local-only.md")).unwrap(),
+        "user-only guide\n",
+        "relocation must preserve non-template user files"
+    );
+    assert!(
+        !root.path().join("docs/aida/discipline").exists(),
+        "empty old tree should be removed"
+    );
+
+    let second = ensure_discipline_pack_scaffold(root.path(), true).unwrap();
+    assert_eq!(second.relocated, 0);
+    assert_eq!(second.written, 0);
+}
+
+#[test]
+fn discipline_pack_migration_never_overwrites_existing_destination() {
+    // trace:STORY-829 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    let old = root.path().join("docs/aida/discipline");
+    let new = root.path().join(".aida/discipline");
+    std::fs::create_dir_all(&old).unwrap();
+    std::fs::create_dir_all(&new).unwrap();
+    std::fs::write(old.join("README.md"), "old content\n").unwrap();
+    std::fs::write(new.join("README.md"), "new content\n").unwrap();
+
+    let report = ensure_discipline_pack_scaffold(root.path(), true).unwrap();
+    assert_eq!(report.relocated, 0);
+    assert_eq!(
+        std::fs::read_to_string(new.join("README.md")).unwrap(),
+        "new content\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(old.join("README.md")).unwrap(),
+        "old content\n",
+        "conflicting old file remains as fallback instead of overwriting"
     );
 }
 

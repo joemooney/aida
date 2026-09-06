@@ -2,7 +2,7 @@
 //!
 //! `/aida-burndown` fans out worktree-isolated implementer subagents over a
 //! ready set, with the main session integrating (see
-//! `docs/aida/discipline/autonomous-burndown.md`). The non-negotiable safety
+//! `.aida/discipline/autonomous-burndown.md`). The non-negotiable safety
 //! property is that only **bounded, unblocked, decision-free** specs are fanned
 //! out — anything needing a human decision is parked, never dragged in. That is
 //! what makes "never stop to ask" safe.

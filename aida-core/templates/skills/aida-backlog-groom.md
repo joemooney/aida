@@ -271,7 +271,7 @@ blessed.
   consumer side
 - `aida burndown plan --candidates` — the read-only "what could I bless
   next" view that opens the prep pass
-- `docs/aida/discipline/backlog-grooming.md` — the discipline doc on
+- `.aida/discipline/backlog-grooming.md` — the discipline doc on
   what "backlog" means in AIDA and how the heuristics work
 
 trace:STORY-558 | ai:claude
