@@ -2,9 +2,9 @@
 // (SPIKE-78 pure-movement extraction). The four init handlers
 // (`handle_init_command`, `handle_init_distributed_worktree`,
 // `handle_init_post_clone`, `handle_init_distributed_sibling`) plus the
-// init-exclusive scaffold helpers (`ensure_plan_template_scaffold`,
-// `complete_init_scaffolding`, the `init_scaffold_*` /`commit_init_scaffolding`
-// family, `build_initial_scaffold_requirement`, `enqueue_initial_scaffold_task`)
+// init-oriented scaffold helpers (`complete_init_scaffolding`, the
+// `init_scaffold_*` /`commit_init_scaffolding` family,
+// `build_initial_scaffold_requirement`, `enqueue_initial_scaffold_task`)
 // live here. The SHARED scaffold machinery — discipline/ecosystem-watch pack
 // scaffolds, `.aida` gitignore helpers, and the whole memory-pack +
 // frontmatter helper block — stays in `main.rs` because `aida scaffold`,
@@ -215,9 +215,13 @@ pub(crate) fn handle_init_command(
     seed_meta_requirements(&mut store)?;
     storage.save(&store)?;
 
-    // Create docs/plans/
-    std::fs::create_dir_all("docs/plans")?;
-    ensure_plan_template_scaffold(std::path::Path::new("docs/plans"), force)?;
+    // Fresh init leaves docs/plans/ to the first plan-writing surface. A
+    // refresh against an existing plan archive can still refresh the template.
+    // trace:TASK-1193 | ai:codex
+    let plans_dir = std::path::Path::new("docs/plans");
+    if plans_dir.exists() {
+        ensure_plan_template_scaffold(plans_dir, force)?;
+    }
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let root = std::env::current_dir().unwrap_or_default();
@@ -240,9 +244,14 @@ pub(crate) fn handle_init_command(
 }
 
 /// Write `docs/plans/_TEMPLATE.md` from the embedded `plan-template.md`
-/// template. Idempotent: skips when the file already exists unless `force`
-// is set. trace:TASK-92
-fn ensure_plan_template_scaffold(plans_dir: &std::path::Path, force: bool) -> Result<()> {
+/// template. Idempotent: creates `plans_dir`, then skips when the file already
+/// exists unless `force` is set.
+// trace:TASK-92 TASK-1193 | ai:codex
+pub(crate) fn ensure_plan_template_scaffold(
+    plans_dir: &std::path::Path,
+    force: bool,
+) -> Result<()> {
+    std::fs::create_dir_all(plans_dir)?;
     let dest = plans_dir.join("_TEMPLATE.md");
     if dest.exists() && !force {
         return Ok(());
@@ -1361,11 +1370,6 @@ fn complete_init_scaffolding(
             );
         }
         println!(
-            "    {}{}Implementation plan archive",
-            "docs/plans/".white().bold(),
-            " ".repeat(27)
-        );
-        println!(
             "    {}{}AIDA-using discipline guides",
             ".aida/discipline/".white().bold(),
             " ".repeat(17)
@@ -1806,7 +1810,7 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
     let (requirement_uuid, spec_id_display) = if let Some(last) = store.requirements.last_mut() {
         let spec_id = last.spec_id.as_deref().unwrap_or("TASK-1").to_string();
         last.description = format!(
-            "After aida init, the scaffolded files are untracked. Stage only AIDA's own paths (never `git add .` in a repo with unrelated work): git add .gitignore .aida/config.toml .aida/discipline .mcp.json CLAUDE.md AGENTS.md .claude docs/plans && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + allow-listed project files) keep runtime state out. Run 'aida queue done {}' after the commit lands.",
+            "After aida init, the scaffolded files are untracked. Stage only AIDA's own paths (never `git add .` in a repo with unrelated work): git add .gitignore .aida/config.toml .aida/discipline .mcp.json CLAUDE.md AGENTS.md .claude && git commit -m 'chore: scaffold AIDA'. The .gitignore deny-by-default rules (.aida/* + allow-listed project files) keep runtime state out. Run 'aida queue done {}' after the commit lands.",
             spec_id
         );
 
@@ -1872,6 +1876,27 @@ mod task_510_init_scaffold_task_tests {
         let mut perms = std::fs::metadata(path).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn plan_template_scaffold_is_lazy_and_idempotent() {
+        let tmp = TempDir::new().unwrap();
+        let plans_dir = tmp.path().join("docs/plans");
+
+        assert!(!tmp.path().join("docs").exists());
+
+        ensure_plan_template_scaffold(&plans_dir, false).unwrap();
+        let template = plans_dir.join("_TEMPLATE.md");
+        assert!(template.exists());
+        let original = std::fs::read_to_string(&template).unwrap();
+        assert!(original.contains("AIDA plan template"));
+
+        std::fs::write(&template, "custom\n").unwrap();
+        ensure_plan_template_scaffold(&plans_dir, false).unwrap();
+        assert_eq!(std::fs::read_to_string(&template).unwrap(), "custom\n");
+
+        ensure_plan_template_scaffold(&plans_dir, true).unwrap();
+        assert_eq!(std::fs::read_to_string(&template).unwrap(), original);
     }
 
     #[cfg(unix)]
@@ -2092,6 +2117,10 @@ mod task_510_init_scaffold_task_tests {
         assert!(
             desc.contains("git add .gitignore"),
             "instruction must stage scoped paths starting with .gitignore (BUG-445 c)"
+        );
+        assert!(
+            !desc.contains(" docs/plans"),
+            "fresh init no longer creates docs/plans, so the onboarding task must not stage it"
         );
     }
 
@@ -3308,10 +3337,14 @@ pub(crate) fn handle_init_distributed_worktree(
         );
     }
 
-    if footprint == crate::cli::InitFootprint::Full {
-        // Create docs/plans/ for plan archive (per CLAUDE.md convention).
-        std::fs::create_dir_all(cwd.join("docs/plans"))?;
-        ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+    // Fresh init leaves docs/plans/ to the first plan-writing surface
+    // (TASK-1193); an existing plan archive may still gain a missing
+    // template (skip-if-exists, never overwrites), and the minimal
+    // footprint (STORY-830) never touches docs/ at all.
+    // trace:TASK-1193 | ai:codex
+    let plans_dir = cwd.join("docs/plans");
+    if footprint == crate::cli::InitFootprint::Full && plans_dir.exists() {
+        ensure_plan_template_scaffold(&plans_dir, force)?;
     }
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
@@ -3575,10 +3608,12 @@ fn handle_init_post_clone(
         println!("  {} {}", "Done".green(), msg);
     }
 
-    if footprint == crate::cli::InitFootprint::Full {
-        // docs/plans/ for plan archive (post-clone attach: never overwrite).
-        std::fs::create_dir_all(cwd.join("docs/plans"))?;
-        ensure_plan_template_scaffold(&cwd.join("docs/plans"), false)?;
+    // Post-clone attach preserves an existing plan archive, but does not
+    // create one until a plan-writing command needs it; the minimal
+    // footprint (STORY-830) never touches docs/ at all. trace:TASK-1193
+    let plans_dir = cwd.join("docs/plans");
+    if footprint == crate::cli::InitFootprint::Full && plans_dir.exists() {
+        ensure_plan_template_scaffold(&plans_dir, false)?;
     }
 
     // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
@@ -4125,10 +4160,14 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
-    if footprint == crate::cli::InitFootprint::Full {
-        // Create docs/plans/ for plan archive (per CLAUDE.md convention).
-        std::fs::create_dir_all(cwd.join("docs/plans"))?;
-        ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+    // Fresh init leaves docs/plans/ to the first plan-writing surface
+    // (TASK-1193); an existing plan archive may still gain a missing
+    // template (skip-if-exists, never overwrites), and the minimal
+    // footprint (STORY-830) never touches docs/ at all.
+    // trace:TASK-1193 | ai:codex
+    let plans_dir = cwd.join("docs/plans");
+    if footprint == crate::cli::InitFootprint::Full && plans_dir.exists() {
+        ensure_plan_template_scaffold(&plans_dir, force)?;
     }
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).

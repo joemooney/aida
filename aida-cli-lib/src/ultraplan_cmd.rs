@@ -90,6 +90,10 @@ pub(crate) fn handle_ultraplan_command(
         !no_comments,
         &reservations,
     );
+    crate::init_cmd::ensure_plan_template_scaffold(
+        &project_root.join("docs").join("plans"),
+        false,
+    )?;
     let mut warnings = warnings;
     warnings.extend(reservation_warnings);
     let token_estimate = prompt.chars().count() / 4;

@@ -16,6 +16,7 @@ use aida_core::Comment;
 use aida_core::DatabaseBackend;
 use uuid::Uuid;
 
+use crate::init_cmd::ensure_plan_template_scaffold;
 use crate::not_found;
 use crate::PLAN_REVIEW_PENDING_TAG;
 use crate::{find_main_worktree_root, get_default_author, resolve_current_session_id, slugify_str};
@@ -85,7 +86,7 @@ pub(crate) fn handle_import_plan_command(
     // source filename stem. The plan dir lives at the main worktree root.
     let main_root = find_main_worktree_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let plans_dir = main_root.join("docs/plans");
-    std::fs::create_dir_all(&plans_dir)?;
+    ensure_plan_template_scaffold(&plans_dir, false)?;
     let date = chrono::Local::now().format("%Y-%m-%d").to_string();
     let slug_source = if req.title.trim().is_empty() {
         src.file_stem().and_then(|s| s.to_str()).unwrap_or("plan")
