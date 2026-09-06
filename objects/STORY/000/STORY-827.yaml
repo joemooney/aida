@@ -17,12 +17,12 @@ description: |-
   - Fresh init: README.md exists with name + lang-correct quickstart; projects.toml gains exactly one [[project]] entry with correct path/repo
   - Re-init: README untouched, registry entry updated not duplicated, user content elsewhere in projects.toml preserved
   - init in a dir with an existing README.md: file untouched, no warning spam (one info line max)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:10:37.126637011Z
-modified_at: 2026-09-05T22:10:43.775929833Z
+modified_at: 2026-09-06T01:06:50.391134723Z
 req_type: Story
 relationships:
 - rel_type: Child
