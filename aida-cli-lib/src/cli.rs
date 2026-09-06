@@ -532,6 +532,18 @@ pub enum ScaffoldCommand {
         force: bool,
     },
 
+    /// Install the user-global AIDA awareness snippet for Claude and Codex.
+    ///
+    /// Writes marker-delimited, edit-preserving blocks to `~/.claude/CLAUDE.md`
+    /// and `~/.codex/AGENTS.md`. Existing content outside the markers is left
+    /// byte-for-byte intact; `--refresh` updates only an unedited AIDA block.
+    // trace:STORY-831 | ai:codex
+    UserInstructions {
+        /// Refresh unedited AIDA blocks to this binary's current snippet.
+        #[clap(long)]
+        refresh: bool,
+    },
+
     /// Bring every installed agent pack level with this binary's templates,
     /// preserving your edits.
     ///

@@ -2135,6 +2135,19 @@ fn run() -> Result<()> {
                 );
             }
         }
+        // STORY-831: minimal-footprint projects intentionally do not commit
+        // agent instruction files, so the machine-global awareness snippet is
+        // the path that lets a fresh agent notice AIDA. Keep every other
+        // first-machine global setup full-only, but offer this idempotent
+        // snippet for both full and minimal TTY init. Non-interactive init and
+        // a declined prompt leave user files untouched.
+        if let Err(e) = maybe_offer_user_aida_instructions() {
+            eprintln!(
+                "  {} user AIDA instructions skipped: {}",
+                "Note:".dimmed(),
+                e
+            );
+        }
         // Starter memory pack — opt-in, orthogonal to storage mode. Failure
         // is non-fatal: it writes outside the project root, so a hiccup
         // there must not abort an otherwise-successful init. trace:STORY-255
@@ -21461,6 +21474,257 @@ fn maybe_prompt_agent_posture() -> Result<()> {
             "[agents] bypass = false".cyan()
         );
     }
+    Ok(())
+}
+
+const USER_AIDA_INSTRUCTIONS_BEGIN: &str = "<!-- AIDA-USER-INSTRUCTIONS-BEGIN";
+const USER_AIDA_INSTRUCTIONS_END: &str = "<!-- AIDA-USER-INSTRUCTIONS-END -->";
+
+// trace:STORY-831 | ai:codex
+fn user_aida_awareness_snippet() -> &'static str {
+    "## AIDA Awareness\n\n\
+     When working in a project, check whether AIDA is initialized: look for \
+     `.aida/config.toml`, a `.aida-store/` worktree, or an `aida-store` branch.\n\n\
+     If AIDA is present, requirements live in AIDA. Use `aida list`, `aida search`, \
+     `aida show`, `aida add`, `aida edit`, and `aida comment` for requirement work; \
+     add `trace:<SPEC-ID>` comments in relevant code; and include the `(SPEC-ID)` \
+     trailer in commits.\n\n\
+     If AIDA is not present, ignore this section.\n"
+}
+
+// trace:STORY-831 | ai:codex
+fn user_aida_checksum(content: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    content.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())[..8].to_string()
+}
+
+// trace:STORY-831 | ai:codex
+fn render_user_aida_instructions_block() -> String {
+    let body = user_aida_awareness_snippet();
+    format!(
+        "{USER_AIDA_INSTRUCTIONS_BEGIN} checksum:{} -->\n{body}{USER_AIDA_INSTRUCTIONS_END}\n",
+        user_aida_checksum(body),
+    )
+}
+
+// trace:STORY-831 | ai:codex
+#[derive(Debug, Default, PartialEq, Eq)]
+struct UserAidaInstructionsReport {
+    written: usize,
+    unchanged: usize,
+    kept_edited: usize,
+}
+
+// trace:STORY-831 | ai:codex
+fn user_aida_block_bounds(content: &str) -> Option<(usize, usize, usize)> {
+    let begin = content.find(USER_AIDA_INSTRUCTIONS_BEGIN)?;
+    let after_begin_line = content[begin..].find('\n').map(|n| begin + n + 1)?;
+    let end_rel = content[after_begin_line..].find(USER_AIDA_INSTRUCTIONS_END)?;
+    let end_start = after_begin_line + end_rel;
+    let mut end = end_start + USER_AIDA_INSTRUCTIONS_END.len();
+    if content[end..].starts_with('\n') {
+        end += 1;
+    }
+    Some((begin, after_begin_line, end))
+}
+
+// trace:STORY-831 | ai:codex
+fn user_aida_block_checksum(header: &str) -> Option<&str> {
+    let marker = "checksum:";
+    let after = header.find(marker)? + marker.len();
+    let tail = &header[after..];
+    let end = tail
+        .find(|c: char| c.is_whitespace() || c == '-')
+        .unwrap_or(tail.len());
+    Some(&tail[..end])
+}
+
+// trace:STORY-831 | ai:codex
+fn merge_user_aida_instructions(
+    existing: Option<&str>,
+    refresh: bool,
+) -> (String, UserAidaInstructionsReport) {
+    let expected = render_user_aida_instructions_block();
+    let Some(existing) = existing else {
+        return (
+            expected,
+            UserAidaInstructionsReport {
+                written: 1,
+                ..Default::default()
+            },
+        );
+    };
+
+    let Some((begin, body_start, end)) = user_aida_block_bounds(existing) else {
+        let separator = if existing.is_empty() || existing.ends_with("\n\n") {
+            ""
+        } else if existing.ends_with('\n') {
+            "\n"
+        } else {
+            "\n\n"
+        };
+        return (
+            format!("{existing}{separator}{expected}"),
+            UserAidaInstructionsReport {
+                written: 1,
+                ..Default::default()
+            },
+        );
+    };
+
+    let old_region = &existing[begin..end];
+    if old_region == expected {
+        return (
+            existing.to_string(),
+            UserAidaInstructionsReport {
+                unchanged: 1,
+                ..Default::default()
+            },
+        );
+    }
+
+    let header = &existing[begin..body_start];
+    let body_end =
+        end - USER_AIDA_INSTRUCTIONS_END.len() - usize::from(existing[..end].ends_with('\n'));
+    let body = &existing[body_start..body_end];
+    let pristine = user_aida_block_checksum(header)
+        .map(|checksum| checksum == user_aida_checksum(body))
+        .unwrap_or(false);
+    if refresh && pristine {
+        let mut merged = String::new();
+        merged.push_str(&existing[..begin]);
+        merged.push_str(&expected);
+        merged.push_str(&existing[end..]);
+        (
+            merged,
+            UserAidaInstructionsReport {
+                written: 1,
+                ..Default::default()
+            },
+        )
+    } else {
+        (
+            existing.to_string(),
+            UserAidaInstructionsReport {
+                kept_edited: 1,
+                ..Default::default()
+            },
+        )
+    }
+}
+
+// trace:STORY-831 | ai:codex
+fn install_user_aida_instructions_at(
+    home: &std::path::Path,
+    refresh: bool,
+) -> Result<UserAidaInstructionsReport> {
+    let targets = [
+        home.join(".claude").join("CLAUDE.md"),
+        home.join(".codex").join("AGENTS.md"),
+    ];
+    let mut total = UserAidaInstructionsReport::default();
+    for target in targets {
+        let existing = std::fs::read_to_string(&target).ok();
+        let (merged, report) = merge_user_aida_instructions(existing.as_deref(), refresh);
+        total.written += report.written;
+        total.unchanged += report.unchanged;
+        total.kept_edited += report.kept_edited;
+        if existing.as_deref() == Some(merged.as_str()) {
+            continue;
+        }
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+        }
+        std::fs::write(&target, merged).with_context(|| format!("writing {}", target.display()))?;
+    }
+    Ok(total)
+}
+
+// trace:STORY-831 | ai:codex
+pub(crate) fn scaffold_user_aida_instructions(refresh: bool) -> Result<()> {
+    let Some(home) = aida_home_dir() else {
+        anyhow::bail!("could not resolve home directory");
+    };
+    let report = install_user_aida_instructions_at(&home, refresh)?;
+    println!(
+        "{} user AIDA instructions: {} written, {} unchanged, {} kept edited",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        report.written,
+        report.unchanged,
+        report.kept_edited,
+    );
+    println!(
+        "  {}",
+        "~/.claude/CLAUDE.md and ~/.codex/AGENTS.md".dimmed()
+    );
+    Ok(())
+}
+
+// trace:STORY-831 | ai:codex
+fn user_aida_instructions_already_installed(home: &std::path::Path) -> bool {
+    [
+        home.join(".claude/CLAUDE.md"),
+        home.join(".codex/AGENTS.md"),
+    ]
+    .into_iter()
+    .all(|path| {
+        std::fs::read_to_string(path)
+            .map(|content| user_aida_block_bounds(&content).is_some())
+            .unwrap_or(false)
+    })
+}
+
+// trace:STORY-831 | ai:codex
+fn install_user_aida_instructions_if_accepted(
+    home: &std::path::Path,
+    accepted: bool,
+) -> Result<Option<UserAidaInstructionsReport>> {
+    if accepted {
+        Ok(Some(install_user_aida_instructions_at(home, false)?))
+    } else {
+        Ok(None)
+    }
+}
+
+// trace:STORY-831 | ai:codex
+fn maybe_offer_user_aida_instructions() -> Result<()> {
+    let Some(home) = aida_home_dir() else {
+        return Ok(());
+    };
+    if user_aida_instructions_already_installed(&home) {
+        return Ok(());
+    }
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Ok(());
+    }
+
+    eprintln!();
+    eprintln!("{}", "Machine setup — AIDA awareness for agents".bold());
+    eprintln!("  Install a small detection-gated AIDA section in:");
+    eprintln!("    ~/.claude/CLAUDE.md");
+    eprintln!("    ~/.codex/AGENTS.md");
+    eprintln!("  It only applies inside projects where AIDA is initialized.");
+    let accepted = prompt_yes_no("  Install user-level AIDA instructions now? [Y/n]: ", true)?;
+    let Some(report) = install_user_aida_instructions_if_accepted(&home, accepted)? else {
+        eprintln!(
+            "  {} user instruction files left untouched; run {} anytime.",
+            "Note:".dimmed(),
+            "aida scaffold user-instructions".cyan()
+        );
+        return Ok(());
+    };
+    eprintln!(
+        "  {} user AIDA instructions installed ({} written, {} unchanged, {} kept edited).",
+        "+".green(),
+        report.written,
+        report.unchanged,
+        report.kept_edited,
+    );
     Ok(())
 }
 
