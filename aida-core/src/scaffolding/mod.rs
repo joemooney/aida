@@ -504,6 +504,10 @@ pub enum FileStatus {
 /// Configuration for what scaffolding artifacts to generate
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScaffoldConfig {
+    /// Generate a root README.md starter document. Seed-class: project-owned
+    /// after init, skipped when present unless --force.
+    // trace:STORY-827 | ai:codex
+    pub generate_readme_md: bool,
     /// Generate CLAUDE.md project instructions
     pub generate_claude_md: bool,
     /// Generate CLAUDE.local.md — per-machine, gitignored companion to
@@ -617,6 +621,7 @@ pub struct ScaffoldConfig {
 impl Default for ScaffoldConfig {
     fn default() -> Self {
         Self {
+            generate_readme_md: true,
             generate_claude_md: true,
             // trace:TASK-572 | ai:claude
             generate_claude_local_md: true,
@@ -745,7 +750,7 @@ impl FileCategory {
             return FileCategory::ManagedMerge;
         }
         // Seed: top-level project docs the user is expected to tailor.
-        if s == "CLAUDE.md" || s == "AGENTS.md" {
+        if s == "README.md" || s == "CLAUDE.md" || s == "AGENTS.md" {
             return FileCategory::Seed;
         }
         // Everything else under templates/ control surfaces is Template.
@@ -868,6 +873,54 @@ impl Scaffolder {
             .unwrap_or_else(|| "requirements.yaml".to_string())
     }
 
+    /// Generate the seed root README.md. This is intentionally small and
+    /// project-owned after init, matching CLAUDE.md/AGENTS.md seed semantics.
+    // trace:STORY-827 | ai:codex
+    fn generate_readme_md(&self, store: &RequirementsStore) -> String {
+        let name = if !store.title.trim().is_empty() {
+            store.title.trim().to_string()
+        } else if !store.name.trim().is_empty() {
+            store.name.trim().to_string()
+        } else {
+            self.project_root
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or_else(|| "Project".to_string())
+        };
+        let quickstart = if self.project_root.join("Cargo.toml").exists() {
+            "cargo run"
+        } else if self.project_root.join("pyproject.toml").exists() {
+            "uv run"
+        } else if self.project_root.join("package.json").exists() {
+            "npm start"
+        } else {
+            "Add your project-specific setup and run commands here."
+        };
+
+        format!(
+            r#"# {name}
+
+One-line project description.
+
+## Quickstart
+
+```bash
+{quickstart}
+```
+
+## Requirements
+
+Requirements are tracked with AIDA:
+
+```bash
+aida list
+aida show <SPEC-ID>
+```
+"#
+        )
+    }
+
     /// Load a template from external sources or embedded, with fallback chain
     #[allow(dead_code)]
     fn load_template(&mut self, key: &str) -> Option<String> {
@@ -917,6 +970,34 @@ impl Scaffolder {
         let mut new_dirs = HashSet::new();
         let mut modified_files = Vec::new();
         let mut upgradeable_files = Vec::new();
+
+        // README.md - Seed-class project starter. It is intentionally plain
+        // markdown with no AIDA header, like CLAUDE.md/AGENTS.md.
+        // trace:STORY-827 | ai:codex
+        if self.config.generate_readme_md {
+            let path = PathBuf::from("README.md");
+            let full_path = self.project_root.join(&path);
+            let exists = full_path.exists();
+            let content = self.generate_readme_md(store);
+
+            if exists {
+                overwrites.push(path.clone());
+            } else {
+                new_files.push(path.clone());
+            }
+
+            artifacts.push(ScaffoldArtifact {
+                path,
+                content,
+                description: "Project README starter".to_string(),
+                exists,
+                file_status: if exists {
+                    FileStatus::NoHeader
+                } else {
+                    FileStatus::New
+                },
+            });
+        }
 
         // CLAUDE.md - Note: CLAUDE.md is user-edited, so no AIDA header
         if self.config.generate_claude_md {
@@ -3007,6 +3088,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = ScaffoldConfig::default();
+        assert!(config.generate_readme_md);
         assert!(config.generate_claude_md);
         assert!(config.generate_agents_md);
         assert!(config.generate_commands);
@@ -3030,6 +3112,15 @@ mod tests {
         // Should have CLAUDE.md, 2 commands, and 2 skills
         assert!(!preview.artifacts.is_empty());
 
+        // Check that README.md is generated
+        let readme_md = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new("README.md"));
+        assert!(readme_md.is_some());
+        assert!(readme_md.unwrap().content.contains("# Test Project"));
+        assert!(readme_md.unwrap().content.contains("aida list"));
+
         // Check that CLAUDE.md is generated
         let claude_md = preview
             .artifacts
@@ -3037,6 +3128,49 @@ mod tests {
             .find(|a| a.path == Path::new("CLAUDE.md"));
         assert!(claude_md.is_some());
         assert!(claude_md.unwrap().content.contains("Test Project"));
+    }
+
+    #[test]
+    fn readme_seed_is_language_aware_and_respects_force() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("Cargo.toml"),
+            "[package]\nname = \"demo\"\n",
+        )
+        .unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        let readme = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new("README.md"))
+            .expect("README.md should be scaffolded");
+        assert!(readme.content.contains("cargo run"));
+
+        scaffolder.apply(&preview).unwrap();
+        let readme_path = temp_dir.path().join("README.md");
+        fs::write(&readme_path, "# Custom\n").unwrap();
+
+        let mut reapply = Scaffolder::new(temp_dir.path().to_path_buf(), ScaffoldConfig::default());
+        let preview = reapply.preview(&store);
+        reapply.apply(&preview).unwrap();
+        assert_eq!(
+            fs::read_to_string(&readme_path).unwrap(),
+            "# Custom\n",
+            "README.md is seed-class and must not overwrite without force"
+        );
+
+        reapply
+            .apply_with_options(&preview, &ApplyOptions { force: true })
+            .unwrap();
+        assert!(
+            fs::read_to_string(&readme_path)
+                .unwrap()
+                .contains("cargo run"),
+            "--force should overwrite README.md like other seed files"
+        );
     }
 
     // trace:BUG-484 — a fresh init must pre-approve its own scaffolded MCP

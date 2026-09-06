@@ -2162,6 +2162,13 @@ fn run() -> Result<()> {
         if let Some(plan) = &bootstrap {
             init_bootstrap::finish_remote(plan)?;
         }
+        // Register the initialized project in the machine-global project
+        // registry after bootstrap remote setup, so `repo` reflects the final
+        // origin URL when one was configured. Best-effort because this writes
+        // outside the project root. trace:STORY-827 | ai:codex
+        if let Err(e) = register_project_in_global_registry(&statusline_project_root()) {
+            eprintln!("  {} project registry skipped: {}", "Note:".dimmed(), e);
+        }
         return Ok(());
     }
 
@@ -9108,6 +9115,124 @@ fn ensure_project_manifest_scaffold(root: &std::path::Path, force: bool) -> Resu
     let facts = pm::derive_facts(root);
     std::fs::write(&dest, pm::render(&facts))?;
     Ok(true)
+}
+
+const PROJECTS_REGISTRY_HEADER: &str = "\
+# AIDA project registry
+# Machine-global index of local projects. Hand-maintained today; EPIC-22 makes this canonical.
+
+";
+
+fn register_project_in_global_registry(root: &std::path::Path) -> Result<bool> {
+    let home =
+        aida_home_dir().context("cannot resolve home directory for ~/.aida/projects.toml")?;
+    register_project_in_registry_at(&home.join(".aida/projects.toml"), root)
+}
+
+fn register_project_in_registry_at(
+    registry_path: &std::path::Path,
+    root: &std::path::Path,
+) -> Result<bool> {
+    use toml_edit::{ArrayOfTables, DocumentMut, Item, Table};
+
+    let existing = match std::fs::read_to_string(registry_path) {
+        Ok(s) => Some(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e).with_context(|| format!("reading {}", registry_path.display())),
+    };
+    let before = existing.as_deref().unwrap_or("");
+    let mut doc: DocumentMut = before
+        .parse()
+        .with_context(|| format!("parsing {}", registry_path.display()))?;
+
+    if doc.get("project").is_none() {
+        doc["project"] = Item::ArrayOfTables(ArrayOfTables::new());
+    }
+    let projects = doc["project"]
+        .as_array_of_tables_mut()
+        .context("~/.aida/projects.toml key `project` must be an array of tables")?;
+
+    let project_path = absolute_project_path(root)?;
+    let project_path_s = project_path.to_string_lossy().to_string();
+    let name = project_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.trim().is_empty())
+        .unwrap_or_else(|| "project".to_string());
+    let repo = git_origin_url(root);
+
+    let mut found = false;
+    for table in projects.iter_mut() {
+        if table
+            .get("path")
+            .and_then(|i| i.as_str())
+            .map(|p| p == project_path_s)
+            .unwrap_or(false)
+        {
+            write_project_registry_table(table, &name, &project_path_s, repo.as_deref());
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        let mut table = Table::new();
+        write_project_registry_table(&mut table, &name, &project_path_s, repo.as_deref());
+        projects.push(table);
+    }
+
+    let mut after = doc.to_string();
+    if existing.is_none() {
+        after = format!("{PROJECTS_REGISTRY_HEADER}{after}");
+    }
+    if after == before {
+        return Ok(false);
+    }
+    if let Some(parent) = registry_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(registry_path, after)?;
+    Ok(true)
+}
+
+fn write_project_registry_table(
+    table: &mut toml_edit::Table,
+    name: &str,
+    path: &str,
+    repo: Option<&str>,
+) {
+    table["name"] = toml_edit::value(name);
+    table["path"] = toml_edit::value(path);
+    if let Some(repo) = repo.filter(|r| !r.trim().is_empty()) {
+        table["repo"] = toml_edit::value(repo);
+    } else {
+        table.remove("repo");
+    }
+}
+
+fn absolute_project_path(root: &std::path::Path) -> Result<std::path::PathBuf> {
+    let abs = if root.is_absolute() {
+        root.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(root)
+    };
+    Ok(abs.canonicalize().unwrap_or(abs))
+}
+
+fn git_origin_url(root: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .current_dir(root)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 fn ensure_ecosystem_watch_scaffold(root: &std::path::Path, force: bool) -> Result<bool> {
@@ -78041,6 +78166,11 @@ mod story_790_drift_brief_tests;
 #[cfg(test)]
 #[path = "tests/story_780_init_bootstrap_tests.rs"]
 mod story_780_init_bootstrap_tests;
+
+// trace:STORY-827 | ai:codex
+#[cfg(test)]
+#[path = "tests/story_827_init_readme_registry_tests.rs"]
+mod story_827_init_readme_registry_tests;
 
 // BUG-777: recovering a lease left behind by an already-exited session — the
 // verifiably-gone + clean-worktree reclaim, the never-reap-a-live-lease floor,
