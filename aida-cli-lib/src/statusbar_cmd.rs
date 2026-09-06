@@ -35,6 +35,8 @@ const MIN_INTERVAL_SECS: u64 = 2;
 pub(crate) struct MeterCounts {
     /// Depth of the queue routed to the effective role (implementer default).
     pub queue_depth: usize,
+    /// Live drain progress segment shared with `aida statusline`.
+    pub drain: Option<String>,
     /// Sessions with a live process backing the lease.
     pub live: usize,
     /// Leaked leases — dead pid / missing worktree. Hidden when zero.
@@ -68,6 +70,9 @@ pub(crate) fn render_meter(c: &MeterCounts) -> String {
         format!("q:{}", c.queue_depth),
         format!("live:{}", c.live),
     ];
+    if let Some(drain) = &c.drain {
+        parts.push(drain.clone());
+    }
     if c.stale > 0 {
         parts.push(format!("STALE:{}", c.stale));
     }
@@ -182,6 +187,7 @@ fn collect_meter(
 
     MeterCounts {
         queue_depth,
+        drain: crate::drain_state::status_segment(project_root),
         live,
         stale,
         you,
@@ -296,6 +302,7 @@ mod tests {
     fn stale_and_you_segments_appear_only_when_nonzero() {
         let c = MeterCounts {
             queue_depth: 5,
+            drain: None,
             live: 2,
             stale: 1,
             you: vec![(2, "mail".to_string()), (1, "punt".to_string())],
@@ -331,6 +338,18 @@ mod tests {
         assert!(
             !line.contains("punt"),
             "fourth channel must collapse: {line}"
+        );
+    }
+
+    #[test]
+    fn drain_segment_appears_when_present() {
+        let c = MeterCounts {
+            drain: Some("drain:2/5 BUG-837(ci)".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            render_meter(&c),
+            "aida · q:0 · live:0 · drain:2/5 BUG-837(ci)"
         );
     }
 
@@ -405,6 +424,7 @@ mod tests {
     fn meter_line_carries_no_control_chars_for_the_osc_title() {
         let c = MeterCounts {
             queue_depth: 9,
+            drain: None,
             live: 3,
             stale: 2,
             you: vec![(1, "mail".to_string())],

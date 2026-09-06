@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::process_probe;
+use crate::{drain_lock, process_probe};
 
 /// File name under `.aida/` holding the live drain's state. Gitignored by the
 /// deny-by-default `.aida/*` rule — pure per-clone runtime state.
@@ -264,6 +264,55 @@ impl DrainState {
             .iter()
             .position(|m| m.spec == spec)
             .map(|i| i + 1)
+    }
+}
+
+/// Short live-drain segment for glance surfaces (`statusline`, `statusbar`).
+///
+/// This intentionally reads only `.aida/drain-state.json` and `.aida/drain.lock`.
+/// The lock PID is the liveness authority; if the lock is absent or stale,
+/// stale state renders as nothing so prompt/title surfaces stay noise-free.
+// trace:STORY-824 | ai:codex
+pub(crate) fn status_segment(project_root: &Path) -> Option<String> {
+    let state = DrainState::read(project_root)?;
+    match drain_lock::probe_lock(project_root) {
+        drain_lock::LockStatus::Running(_) => {}
+        drain_lock::LockStatus::None | drain_lock::LockStatus::Stale(_) => return None,
+    }
+    render_status_segment(&state)
+}
+
+/// Pure renderer for the shared live-drain segment.
+// trace:STORY-824 | ai:codex
+fn render_status_segment(state: &DrainState) -> Option<String> {
+    let spec = state.current.as_deref()?;
+    let position = state.position_of(spec)?;
+    let total = state.members.len();
+    if total == 0 {
+        return None;
+    }
+    let phase = state.current_phase.as_deref().and_then(abbrev_phase);
+    Some(match phase {
+        Some(phase) => format!("drain:{position}/{total} {spec}({phase})"),
+        None => format!("drain:{position}/{total} {spec}"),
+    })
+}
+
+/// Accept both current drain-state spellings (`2 (ci)`) and bare slugs.
+fn abbrev_phase(raw: &str) -> Option<&'static str> {
+    let slug = raw
+        .split_once('(')
+        .and_then(|(_, rest)| rest.split_once(')').map(|(slug, _)| slug))
+        .unwrap_or(raw)
+        .trim();
+    match slug {
+        "implementer" | "impl" => Some("impl"),
+        "ci" => Some("ci"),
+        "reviewer" | "review" => Some("review"),
+        "merge" => Some("merge"),
+        "pull" => Some("pull"),
+        "build" => Some("build"),
+        _ => None,
     }
 }
 
@@ -714,6 +763,19 @@ pub(crate) fn render_json(status: &DrainStatus) -> String {
 mod tests {
     use super::*;
 
+    fn write_lock(dir: &std::path::Path, pid: u32) {
+        let path = drain_lock::drain_lock_path(dir);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let lock = drain_lock::DrainLock {
+            pid,
+            started_at_utc: "2026-09-05T12:00:00+00:00".to_string(),
+            command: "aida queue work --auto-complete".to_string(),
+            host: "test-host".to_string(),
+            specs: Vec::new(),
+        };
+        std::fs::write(path, serde_json::to_string(&lock).unwrap()).unwrap();
+    }
+
     fn single_state() -> DrainState {
         DrainState {
             command: "aida queue work STORY-301 --auto-complete --zen".to_string(),
@@ -743,6 +805,42 @@ mod tests {
         s.orchestrator_pid = std::process::id();
         s.started_at = "2026-05-18T23:28:00+00:00".to_string();
         s
+    }
+
+    #[test]
+    fn status_segment_renders_live_drain_progress() {
+        let dir = tempfile::tempdir().unwrap();
+        write_lock(dir.path(), std::process::id());
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("2 (ci)".to_string());
+        state.members[1].state = "in-phase-2".to_string();
+        state.write(dir.path()).unwrap();
+
+        assert_eq!(
+            status_segment(dir.path()).as_deref(),
+            Some("drain:2/3 STORY-285(ci)")
+        );
+    }
+
+    #[test]
+    fn status_segment_hides_stale_or_missing_drain() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = single_state();
+        state.current_phase = Some("1 (implementer)".to_string());
+        state.write(dir.path()).unwrap();
+        assert_eq!(status_segment(dir.path()), None);
+
+        write_lock(dir.path(), u32::MAX - 1);
+        assert_eq!(status_segment(dir.path()), None);
+    }
+
+    #[test]
+    fn status_segment_abbreviates_phase_names() {
+        assert_eq!(abbrev_phase("1 (implementer)"), Some("impl"));
+        assert_eq!(abbrev_phase("3 (reviewer)"), Some("review"));
+        assert_eq!(abbrev_phase("merge"), Some("merge"));
+        assert_eq!(abbrev_phase("7 (unknown)"), None);
     }
 
     // AC9: single-spec drain state file round-trips through write + read.
