@@ -18358,6 +18358,44 @@ fn collect_doctor_findings(
         }
     }
 
+    // STORY-835: Antigravity's project profile is only useful when both its
+    // instruction channel (AGENTS.md) and user-profile MCP registration are in
+    // place. Skip silently when the wrapper is not installed: a persisted
+    // profile may predate installation on this machine.
+    if init_cmd::read_enabled_agent_selection(project_root).is_some_and(|s| s.antigravity)
+        && init_cmd::antigravity_binary_detected()
+    {
+        let agents_md = project_root.join("AGENTS.md");
+        let agents_md_wired = std::fs::read_to_string(&agents_md)
+            .map(|body| {
+                body.contains("<!-- AIDA-AUTOGEN-BEGIN -->")
+                    && body.contains("<!-- AIDA-AUTOGEN-END -->")
+            })
+            .unwrap_or(false);
+        if !agents_md_wired {
+            push(DoctorFinding {
+                category: "agents-wiring".to_string(),
+                id: "antigravity/agents-md".to_string(),
+                summary:
+                    "Antigravity profile is enabled but AGENTS.md lacks the AIDA-AUTOGEN block"
+                        .to_string(),
+                action: "aida scaffold refresh".to_string(),
+                safe_heal: false,
+            });
+        }
+        if !init_cmd::antigravity_aida_mcp_registered() {
+            push(DoctorFinding {
+                category: "agents-wiring".to_string(),
+                id: "antigravity/mcp".to_string(),
+                summary:
+                    "Antigravity profile is enabled but AIDA MCP is not registered in the user profile"
+                        .to_string(),
+                action: init_cmd::antigravity_aida_mcp_add_command(),
+                safe_heal: false,
+            });
+        }
+    }
+
     // TASK-752: tracked legacy centralized-backend artifacts on a git-canonical
     // project (requirements*.yaml / scaffold-report.html still in the tree while
     // the live store is the orphan aida-store branch). Cheap `git ls-files`
@@ -18510,6 +18548,9 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // TASK-1122: raw machine identity (corporate email/hostname) already in
         // the store despite configured redaction. trace:TASK-1122 | ai:claude
         "store-scrub" | "scrub" | "identity-leak" | "store-identity" => "store-scrub",
+        // STORY-835: enabled agent profile lacks one of its required runtime
+        // wiring surfaces (instruction file or MCP registration).
+        "agents-wiring" | "agent-wiring" | "wiring" => "agents-wiring",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
@@ -18517,7 +18558,7 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
              store-tracked-runtime, remote-drift, vendor-binary, scaffold-drift, \
-             store-scrub)",
+             store-scrub, agents-wiring)",
             other
         ),
     };

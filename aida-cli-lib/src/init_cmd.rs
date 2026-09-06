@@ -544,6 +544,172 @@ fn agent_cli_detected(program: &str) -> bool {
         .unwrap_or(false)
 }
 
+pub(crate) const ANTIGRAVITY_AIDA_MCP_JSON: &str =
+    r#"{"name":"aida","command":"aida","args":["mcp-serve"]}"#;
+const ANTIGRAVITY_MCP_OFFERED_SENTINEL: &str = ".aida/antigravity-mcp-aida.offered";
+const ANTIGRAVITY_MCP_REGISTERED_SENTINEL: &str = ".aida/antigravity-mcp-aida.registered";
+
+pub(crate) fn antigravity_aida_mcp_add_command() -> String {
+    format!("antigravity --add-mcp '{}'", ANTIGRAVITY_AIDA_MCP_JSON)
+}
+
+fn antigravity_mcp_sentinel_path(name: &str) -> Option<std::path::PathBuf> {
+    Some(crate::aida_home_dir()?.join(name))
+}
+
+fn mark_antigravity_mcp_sentinel(name: &str) -> Result<()> {
+    let Some(path) = antigravity_mcp_sentinel_path(name) else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, "aida\n")?;
+    Ok(())
+}
+
+fn antigravity_mcp_sentinel_exists(name: &str) -> bool {
+    antigravity_mcp_sentinel_path(name).is_some_and(|p| p.exists())
+}
+
+fn json_value_has_aida_mcp(value: &serde_json::Value) -> bool {
+    let command_is_aida = |v: &serde_json::Value| {
+        v.get("command").and_then(|c| c.as_str()) == Some("aida")
+            && v.get("args")
+                .and_then(|a| a.as_array())
+                .is_some_and(|args| args.iter().any(|arg| arg.as_str() == Some("mcp-serve")))
+    };
+    if command_is_aida(value) {
+        return true;
+    }
+    if value.get("name").and_then(|n| n.as_str()) == Some("aida") && command_is_aida(value) {
+        return true;
+    }
+    if let Some(server) = value.get("mcpServers").and_then(|m| m.get("aida")) {
+        return command_is_aida(server);
+    }
+    match value {
+        serde_json::Value::Array(items) => items.iter().any(json_value_has_aida_mcp),
+        serde_json::Value::Object(map) => map.values().any(json_value_has_aida_mcp),
+        _ => false,
+    }
+}
+
+fn antigravity_profile_config_paths() -> Vec<std::path::PathBuf> {
+    let Some(home) = crate::aida_home_dir() else {
+        return Vec::new();
+    };
+    vec![
+        home.join(".config/Antigravity/User/settings.json"),
+        home.join(".config/antigravity/settings.json"),
+        home.join(".config/antigravity/mcp.json"),
+        home.join(".gemini/settings.json"),
+        home.join(".gemini/antigravity-cli/settings.json"),
+    ]
+}
+
+fn antigravity_profile_has_aida_mcp() -> bool {
+    antigravity_profile_config_paths().into_iter().any(|path| {
+        let Ok(body) = std::fs::read_to_string(path) else {
+            return false;
+        };
+        serde_json::from_str::<serde_json::Value>(&body)
+            .map(|value| json_value_has_aida_mcp(&value))
+            .unwrap_or(false)
+    })
+}
+
+pub(crate) fn antigravity_aida_mcp_registered() -> bool {
+    match std::env::var("AIDA_TEST_ANTIGRAVITY_MCP_REGISTERED") {
+        Ok(v) => return matches!(v.as_str(), "1" | "true" | "yes" | "on"),
+        Err(_) => {}
+    }
+    antigravity_mcp_sentinel_exists(ANTIGRAVITY_MCP_REGISTERED_SENTINEL)
+        || antigravity_profile_has_aida_mcp()
+}
+
+pub(crate) fn antigravity_binary_detected() -> bool {
+    match std::env::var("AIDA_TEST_ANTIGRAVITY_BINARY") {
+        Ok(v) => return matches!(v.as_str(), "1" | "true" | "yes" | "on"),
+        Err(_) => {}
+    }
+    agent_cli_detected("antigravity")
+}
+
+fn antigravity_mcp_prompt_tty() -> bool {
+    if matches!(
+        std::env::var("AIDA_TEST_ANTIGRAVITY_MCP_TTY").as_deref(),
+        Ok("1" | "true" | "yes" | "on")
+    ) {
+        return true;
+    }
+    std::io::stdin().is_terminal() && std::io::stdout().is_terminal()
+}
+
+fn antigravity_mcp_prompt_accepts() -> Result<bool> {
+    if let Ok(v) = std::env::var("AIDA_TEST_ANTIGRAVITY_MCP_ACCEPT") {
+        return Ok(matches!(v.as_str(), "1" | "true" | "yes" | "on"));
+    }
+    prompt_yes_no("  Register AIDA with Antigravity now? [Y/n] ", true)
+}
+
+fn run_antigravity_mcp_add() -> Result<()> {
+    if let Ok(path) = std::env::var("AIDA_TEST_ANTIGRAVITY_MCP_ARGV_OUT") {
+        std::fs::write(path, antigravity_aida_mcp_add_command())?;
+        return Ok(());
+    }
+    let output = std::process::Command::new("antigravity")
+        .args(["--add-mcp", ANTIGRAVITY_AIDA_MCP_JSON])
+        .output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        anyhow::bail!("antigravity --add-mcp failed")
+    }
+}
+
+// trace:STORY-835 | ai:codex
+fn maybe_offer_antigravity_mcp_registration() -> Result<()> {
+    if !antigravity_binary_detected() || antigravity_aida_mcp_registered() {
+        return Ok(());
+    }
+
+    let command = antigravity_aida_mcp_add_command();
+    if !antigravity_mcp_prompt_tty() {
+        println!("  Antigravity MCP not registered; run: {command}");
+        return Ok(());
+    }
+    if antigravity_mcp_sentinel_exists(ANTIGRAVITY_MCP_OFFERED_SENTINEL) {
+        return Ok(());
+    }
+
+    println!();
+    println!("{}", "Machine setup — Antigravity MCP".bold());
+    println!("  AIDA can register its MCP server in your Antigravity user profile.");
+    println!("  Command: {command}");
+    mark_antigravity_mcp_sentinel(ANTIGRAVITY_MCP_OFFERED_SENTINEL)?;
+    if antigravity_mcp_prompt_accepts()? {
+        match run_antigravity_mcp_add() {
+            Ok(()) => {
+                mark_antigravity_mcp_sentinel(ANTIGRAVITY_MCP_REGISTERED_SENTINEL)?;
+                println!(
+                    "  {} Antigravity MCP server configured",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+            }
+            Err(e) => {
+                println!(
+                    "  {} Antigravity MCP registration failed: {e}; run: {command}",
+                    "Warning:".yellow()
+                );
+            }
+        }
+    } else {
+        println!("  Run when ready: {command}");
+    }
+    Ok(())
+}
+
 fn detected_agent_selection() -> AgentSelection {
     // trace:STORY-807 | ai:codex
     let claude = agent_cli_detected("claude");
@@ -904,6 +1070,7 @@ fn complete_init_scaffolding(
     // Captured before `config` moves into the Scaffolder; read at the codex
     // hook-scaffold gate below.
     let codex_profile_selected = selection.codex;
+    let antigravity_profile_selected = selection.antigravity;
 
     if no_skills {
         config.generate_skills = false;
@@ -1101,6 +1268,16 @@ fn complete_init_scaffolding(
                     // Silently skip — codex mcp add may fail for various reasons
                 }
             }
+        }
+    }
+
+    if antigravity_profile_selected {
+        if let Err(e) = maybe_offer_antigravity_mcp_registration() {
+            eprintln!(
+                "  {} Antigravity MCP setup skipped: {}",
+                "Note:".dimmed(),
+                e
+            );
         }
     }
 
@@ -1947,6 +2124,65 @@ mod task_510_init_scaffold_task_tests {
         assert!(req.description.contains("What bet is this project making?"));
         assert!(req.description.contains("manual upkeep should be suspect"));
         assert!(req.tags.contains("project-thesis"));
+    }
+
+    #[test]
+    fn antigravity_profile_json_detects_aida_mcp_registration() {
+        let value: serde_json::Value = serde_json::from_str(
+            r#"{"mcpServers":{"aida":{"command":"aida","args":["mcp-serve"]}}}"#,
+        )
+        .unwrap();
+        assert!(json_value_has_aida_mcp(&value));
+
+        let stale: serde_json::Value = serde_json::from_str(
+            r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
+        )
+        .unwrap();
+        assert!(!json_value_has_aida_mcp(&stale));
+    }
+
+    #[test]
+    fn antigravity_mcp_offer_captures_command_and_marks_registered_once() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let argv = tmp.path().join("argv.txt");
+        let argv_s = argv.display().to_string();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_HOME", home.to_str().unwrap()),
+            ("AIDA_TEST_ANTIGRAVITY_BINARY", "1"),
+            ("AIDA_TEST_ANTIGRAVITY_MCP_TTY", "1"),
+            ("AIDA_TEST_ANTIGRAVITY_MCP_ACCEPT", "1"),
+            ("AIDA_TEST_ANTIGRAVITY_MCP_ARGV_OUT", &argv_s),
+        ]);
+
+        maybe_offer_antigravity_mcp_registration().unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&argv).unwrap(),
+            antigravity_aida_mcp_add_command()
+        );
+        assert!(antigravity_aida_mcp_registered());
+
+        std::fs::write(&argv, "unchanged").unwrap();
+        maybe_offer_antigravity_mcp_registration().unwrap();
+        assert_eq!(std::fs::read_to_string(&argv).unwrap(), "unchanged");
+    }
+
+    #[test]
+    fn antigravity_mcp_non_tty_does_not_register() {
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path().join("home");
+        let argv = tmp.path().join("argv.txt");
+        let argv_s = argv.display().to_string();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_HOME", home.to_str().unwrap()),
+            ("AIDA_TEST_ANTIGRAVITY_BINARY", "1"),
+            ("AIDA_TEST_ANTIGRAVITY_MCP_ARGV_OUT", &argv_s),
+        ]);
+
+        maybe_offer_antigravity_mcp_registration().unwrap();
+
+        assert!(!argv.exists(), "non-TTY init must not run --add-mcp");
+        assert!(!antigravity_aida_mcp_registered());
     }
 }
 
