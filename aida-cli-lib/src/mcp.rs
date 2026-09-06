@@ -3965,6 +3965,7 @@ impl<'a> McpServer<'a> {
         let id = required_string(args, "id")?;
         let user_id = self.queue_user_id(args);
         let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
+        let tail = args.get("tail").and_then(|v| v.as_bool()).unwrap_or(false);
         let reason = args.get("reason").and_then(|v| v.as_str());
         let status_override = args.get("status").and_then(|v| v.as_str());
 
@@ -4036,18 +4037,38 @@ impl<'a> McpServer<'a> {
                 .map_err(|e| e.to_string())?;
         }
 
-        // Routing: `for` wins, else active role, else unrouted. trace:EPIC-27
+        let existing_queue_entries = self
+            .storage
+            .queue_list(&user_id, true)
+            .map_err(|e| e.to_string())?;
+        let existing_queue_entry = existing_queue_entries
+            .iter()
+            .find(|entry| entry.requirement_id == req_id);
+
+        // Routing: `for` wins; otherwise preserve the current queue route,
+        // falling back to implementer for unrouted/unqueued rework.
+        // trace:EPIC-27 trace:BUG-851
         let for_role: Option<String> = match args.get("for").and_then(|v| v.as_str()) {
             Some("any") => None,
-            Some(role) => Some(role.to_string()),
-            None => std::env::var("AIDA_SESSION_ROLE")
-                .ok()
-                .filter(|s| !s.is_empty()),
+            Some(role) => Some(crate::canonical_role_name(role)),
+            None => existing_queue_entry
+                .and_then(|entry| entry.for_role.as_deref())
+                .filter(|role| !role.trim().is_empty())
+                .map(crate::canonical_role_name)
+                .or_else(|| Some("implementer".to_string())),
+        };
+        let position = if tail {
+            i64::MAX
+        } else {
+            existing_queue_entries
+                .first()
+                .map(|entry| entry.position - 1000)
+                .unwrap_or(1000)
         };
         let entry = aida_core::QueueEntry {
             user_id: user_id.clone(),
             requirement_id: req_id,
-            position: i64::MAX,
+            position,
             added_by: user_id.clone(),
             note: reason.map(|r| r.to_string()),
             added_at: chrono::Utc::now(),
@@ -7401,13 +7422,14 @@ fn queue_tool_descriptors() -> Value {
         },
         {
             "name": "queue_rework",
-            "description": "Re-open a spec: flip its status, route it to a role's queue, and optionally capture a reason. Mirrors `aida queue rework` (metadata-only — it does not launch a session). Smart status transitions (Planned→InProgress, Done→InProgress, Rejected→Approved, …) unless overridden with `status`. Terminal-status and already-InProgress re-opens require `force`.",
+            "description": "Re-open a spec: flip its status, route it to a role's queue, and optionally capture a reason. Mirrors `aida queue rework` (metadata-only — it does not launch a session). Smart status transitions (Planned→InProgress, Done→InProgress, Rejected→Approved, …) unless overridden with `status`. By default, preserves the existing queue route or falls back to implementer, and re-queues at the head. Terminal-status and already-InProgress re-opens require `force`.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "id": { "type": "string", "description": "Requirement id (UUID or SPEC-ID) to rework.", "example": "STORY-42" },
                     "user": { "type": "string", "description": "Override the queue user id.", "example": "alice" },
-                    "for": { "type": "string", "description": "Override the routing role (default: active role).", "example": "implementer" },
+                    "for": { "type": "string", "description": "Override the routing role (default: existing queue route, else implementer).", "example": "implementer" },
+                    "tail": { "type": "boolean", "description": "Re-queue at the tail instead of the default head position.", "example": true },
                     // trace:TASK-1176 | ai:claude — mirrors the CLI status set.
                     "status": { "type": "string", "description": "Override the smart target status.", "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected", "superseded"], "example": "in-progress" },
                     "reason": { "type": "string", "description": "Capture a comment on the spec at rework time (audit trail).", "example": "reviewer requested changes" },

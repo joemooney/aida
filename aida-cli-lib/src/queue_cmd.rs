@@ -5184,6 +5184,7 @@ pub(crate) fn handle_queue_command(
             id,
             work,
             r#for,
+            tail,
             status,
             reason,
             resume,
@@ -5198,6 +5199,7 @@ pub(crate) fn handle_queue_command(
                 id,
                 *work,
                 r#for.as_deref(),
+                *tail,
                 status.as_deref(),
                 reason.as_deref(),
                 *resume,
@@ -5702,6 +5704,7 @@ pub(crate) fn handle_queue_rework(
     id: &str,
     work: bool,
     for_role: Option<&str>,
+    tail: bool,
     status_override: Option<&str>,
     reason: Option<&str>,
     resume: bool,
@@ -5835,16 +5838,31 @@ pub(crate) fn handle_queue_rework(
         }
     }
 
-    // Route resolution: --for wins, else the active role, else error if
-    // queueing requires a role (we let the queue_add path stay unrouted
-    // — that's a legitimate state too, matching `aida queue add` default
-    // when no role is active).
+    let existing_queue_entries = storage.queue_list(&user_id, true)?;
+    let existing_queue_entry = existing_queue_entries
+        .iter()
+        .find(|entry| entry.requirement_id == req_id);
+
+    // Route resolution: --for wins; otherwise rework preserves the existing
+    // queue route so reviewer-requested fixups stay visible to the intended
+    // role. If there is no usable prior route, default to implementer.
+    // trace:BUG-851 | ai:codex
     let for_role_resolved: Option<String> = match for_role {
         Some("any") => None,
-        Some(role) => Some(role.to_string()),
-        None => std::env::var("AIDA_SESSION_ROLE")
-            .ok()
-            .filter(|s| !s.is_empty()),
+        Some(role) => Some(canonical_role_name(role)),
+        None => existing_queue_entry
+            .and_then(|entry| entry.for_role.as_deref())
+            .filter(|role| !role.trim().is_empty())
+            .map(canonical_role_name)
+            .or_else(|| Some("implementer".to_string())),
+    };
+    let position = if tail {
+        i64::MAX // backend resolves to existing_max + 1000
+    } else {
+        existing_queue_entries
+            .first()
+            .map(|entry| entry.position - 1000)
+            .unwrap_or(1000)
     };
 
     // Queue add. queue_add upserts by requirement_id (replaces same-spec
@@ -5852,7 +5870,7 @@ pub(crate) fn handle_queue_rework(
     let entry = aida_core::QueueEntry {
         user_id: user_id.clone(),
         requirement_id: req_id,
-        position: i64::MAX, // backend resolves to existing_max + 1000
+        position,
         added_by: user_id.clone(),
         note: reason.map(|r| r.to_string()),
         added_at: chrono::Utc::now(),

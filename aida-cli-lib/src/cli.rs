@@ -5630,10 +5630,14 @@ pub enum QueueCommand {
         /// Without this, rework is metadata-only: status flip + queue add.
         #[clap(long)]
         work: bool,
-        /// Override the routing role. Default: active role
-        /// (`AIDA_SESSION_ROLE`), matching `aida queue add` semantics.
+        /// Override the routing role. Default: existing queue route,
+        /// falling back to implementer.
         #[clap(long)]
         r#for: Option<String>,
+        /// Re-queue at the tail instead of the default head position.
+        // trace:BUG-851 | ai:codex
+        #[clap(long)]
+        tail: bool,
         /// Override the smart target status. Pass any status string
         /// (`in-progress`, `approved`, `planned`, …); the smart table
         /// above is bypassed.
@@ -10461,9 +10465,14 @@ pub enum Command {
         /// Also launch a session for the spec.
         #[clap(long)]
         work: bool,
-        /// Override the routing role.
+        /// Override the routing role. Default: existing queue route,
+        /// falling back to implementer.
         #[clap(long)]
         r#for: Option<String>,
+        /// Re-queue at the tail instead of the default head position.
+        // trace:BUG-851 | ai:codex
+        #[clap(long)]
+        tail: bool,
         /// Override the smart target status.
         #[clap(long, value_name = "STATE")]
         status: Option<String>,
