@@ -469,6 +469,7 @@ pub(crate) fn handle_drain_resume(
                     start_phase,
                     branch,
                     pr,
+                    from_pr: false,
                 })
             };
             // BUG-438: when we re-enter past phase 1, the crashed implementer's

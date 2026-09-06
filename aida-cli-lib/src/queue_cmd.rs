@@ -6929,6 +6929,48 @@ pub(crate) fn reviewer_verdict_anchor_suffix() -> Option<String> {
     ))
 }
 
+/// BUG-868: a `--from-pr` reviewer is reviewing implementation that shipped
+/// outside the orchestrator. The owning spec being Done is expected, so the
+/// prompt must keep the session on the PR verdict contract instead of queue
+/// hygiene.
+// trace:BUG-868 | ai:codex
+pub(crate) fn reviewer_from_pr_contract_suffix() -> Option<String> {
+    let enabled = std::env::var("AIDA_FROM_PR_REVIEW")
+        .ok()
+        .is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes"));
+    if !enabled {
+        return None;
+    }
+    let pr = std::env::var("AIDA_FROM_PR_NUMBER")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "unknown".to_string());
+    let head_sha = std::env::var("AIDA_FROM_PR_HEAD_SHA")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "unavailable".to_string());
+    let verdict_path = std::env::var("AIDA_REVIEW_VERDICT_FILE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "<AIDA_REVIEW_VERDICT_FILE>".to_string());
+
+    Some(format!(
+        "\n\nFrom-PR review contract: review PR #{pr} at head `{head_sha}` and write the \
+         verdict file at `{verdict_path}`. The owning spec being Done is expected: \
+         implementation shipped outside the orchestrator. Do not treat Done as queue cleanup, \
+         and do not run `aida queue done`; complete this phase by writing the review verdict file."
+    ))
+}
+
+pub(crate) fn append_reviewer_prompt_suffixes(prompt: &mut String) {
+    if let Some(suffix) = reviewer_from_pr_contract_suffix() {
+        prompt.push_str(&suffix);
+    }
+    if let Some(suffix) = reviewer_verdict_anchor_suffix() {
+        prompt.push_str(&suffix);
+    }
+}
+
 pub(crate) fn derive_queue_work_prompt(
     plan: &QueueWorkPlan,
     role: &str,
@@ -7383,9 +7425,7 @@ pub(crate) fn handle_queue_work(
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
-        if let Some(suffix) = reviewer_verdict_anchor_suffix() {
-            prompt.push_str(&suffix);
-        }
+        append_reviewer_prompt_suffixes(&mut prompt);
     }
 
     // STORY-281: reviewer pre-flight stale-base check. Fires only when
@@ -8395,9 +8435,7 @@ pub(crate) fn handle_queue_work(
         std::env::set_var("AIDA_REVIEW_VERDICT_FILE", verdict_path);
         // BUG-809: same prompt-text anchor for the standalone reviewer —
         // the env var was absent at prompt-derivation time above.
-        if let Some(suffix) = reviewer_verdict_anchor_suffix() {
-            prompt.push_str(&suffix);
-        }
+        append_reviewer_prompt_suffixes(&mut prompt);
     }
 
     eprintln!();

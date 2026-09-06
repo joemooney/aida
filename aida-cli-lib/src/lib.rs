@@ -69279,6 +69279,7 @@ fn handle_from_pr(
                 start_phase,
                 branch,
                 pr,
+                from_pr: true,
             });
             let result = run_auto_complete(
                 storage,
@@ -69657,6 +69658,7 @@ fn run_auto_complete(
     let start_phase = match &resume {
         Some(r) => {
             driver.seed_resume_state(r.branch.clone(), r.pr);
+            driver.from_pr = r.from_pr;
             r.start_phase
         }
         None => auto_complete::Phase::Implementer,
@@ -74980,6 +74982,11 @@ struct RealPhaseDriver {
     /// child-session guidance.
     // trace:BUG-742 | ai:codex
     variant: auto_complete::AutoCompleteVariant,
+    /// BUG-868: this drive entered through `queue work --from-pr`, so phase 3
+    /// must tell the reviewer that a Done spec is expected and the concrete
+    /// contract is reviewing the already-open PR, not queue cleanup.
+    // trace:BUG-868 | ai:codex
+    from_pr: bool,
     /// TASK-136 / BUG-420: GH-verify retry budget + watchdog thresholds,
     /// resolved once from `[drain]` config + env/flag overrides.
     drain_tuning: DrainTuning,
@@ -75038,6 +75045,7 @@ struct ResumeEntry {
     start_phase: auto_complete::Phase,
     branch: Option<String>,
     pr: Option<u32>,
+    from_pr: bool,
 }
 
 impl RealPhaseDriver {
@@ -75084,6 +75092,7 @@ impl RealPhaseDriver {
             auto_rebase_events: Vec::new(),
             lifecycle_skip,
             variant,
+            from_pr: false,
             drain_tuning,
             empty_launch_retries_used: 0,
         }
@@ -76675,6 +76684,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         let session_uuid = uuid::Uuid::now_v7().to_string();
         let scope = format!("PR-{pr}");
+        let from_pr_head_sha = if self.from_pr {
+            // BUG-868: prompt text must anchor the from-PR review to the PR head
+            // that the orchestrator is about to gate. This is advisory context,
+            // so a transient forge failure does not block the existing review.
+            let mut sink = crate::network_retry::NoopSink;
+            crate::forge::forge_for(&self.project_root)
+                .change_metadata(pr as u64, &mut sink)
+                .ok()
+                .map(|m| m.head_sha)
+                .filter(|s| !s.trim().is_empty())
+        } else {
+            None
+        };
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root)
             .args([
@@ -76690,6 +76712,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // phase. The reviewer additionally keys off the verdict-file path.
             .env(orchestrator::TOKEN_ENV, &self.run_token)
             .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
+        if self.from_pr {
+            cmd.env("AIDA_FROM_PR_REVIEW", "1")
+                .env("AIDA_FROM_PR_NUMBER", pr.to_string());
+            if let Some(head_sha) = from_pr_head_sha {
+                cmd.env("AIDA_FROM_PR_HEAD_SHA", head_sha);
+            }
+        }
         // TASK-306: phase index + `--no-human` scope for the child statusline,
         // consistent with the implementer phase. The reviewer runs headless
         // under `--no-human` (so usually no statusline renders), but a plain
