@@ -17,12 +17,12 @@ description: |-
   - Fresh init: README.md exists with name + lang-correct quickstart; projects.toml gains exactly one [[project]] entry with correct path/repo
   - Re-init: README untouched, registry entry updated not duplicated, user content elsewhere in projects.toml preserved
   - init in a dir with an existing README.md: file untouched, no warning spam (one info line max)
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:10:37.126637011Z
-modified_at: 2026-09-06T01:23:52.106949565Z
+modified_at: 2026-09-06T01:29:50.092029195Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -32,8 +32,25 @@ relationships:
   target_id: 01a07450-7e98-79a1-861a-1193c84108e9
   created_at: 2026-09-06T01:23:52.106939480Z
   created_by: joe
+history:
+- id: 01a07456-0705-7891-be0a-51dcb134996b
+  author: aida-auto-bump
+  timestamp: 2026-09-06T01:29:50.085495010Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07456-070c-7410-81b0-77856f2dba5d
+  timestamp: 2026-09-06T01:29:50.092027494Z
+  agent: aida
+  commit_sha: 4ee10e396b365b17c6a1ef01fe2d929f32330c28
+  summary: 'STORY-827 passes: init seeds README.md, maintains an idempotent global project registry, preserves existing README/user registry content, and targeted tests plus CI pass.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T01:13:55.418244106Z
   implemented_by: joe
+  completed_at: 2026-09-06T01:29:50.085373288Z
+  completion_sha: 4ee10e396b365b17c6a1ef01fe2d929f32330c28
