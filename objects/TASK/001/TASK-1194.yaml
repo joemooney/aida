@@ -13,12 +13,12 @@ description: |-
   - Live drain: aida status shows the line with correct position/spec/phase; bare status stays sub-second
   - Stale lock (dead pid) or no drain: output byte-identical to today
   - Helper is shared with the STORY-824 call sites (unit-tested once)
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:22:08.802155599Z
-modified_at: 2026-09-06T09:56:47.109876279Z
+modified_at: 2026-09-06T10:14:02.924360753Z
 req_type: Task
 relationships:
 - rel_type: !Custom implemented-by
@@ -45,6 +45,17 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: failed
-  detail: reviewer verdict is RequestChanges — not Approved
+  detail: |-
+    PR-1658 base is 11 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+    Overlapping files:
+      aida-cli-lib/src/lib.rs
+      aida-cli-lib/src/drain_state.rs
+
+    Recover with:
+      aida pr rebase 1658              # clean rebase + force-push-with-lease
+      aida pr rebase 1658 --interactive  # if conflicts need manual resolve
+
+    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code).
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1194 --work`'
-  shelved_at: 2026-09-06T04:25:43.875054756Z
+  shelved_at: 2026-09-06T10:14:02.924360753Z
