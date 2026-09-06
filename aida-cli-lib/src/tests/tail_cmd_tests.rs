@@ -106,6 +106,7 @@ fn drain_keyword_prefers_the_live_queue_work_member_log() {
     idx.live_drain = Some(LiveDrain {
         current: Some("TASK-1167".to_string()),
         phase: Some("1 (implementer)".to_string()),
+        session_id: Some("019e4405-5073-7672-9395-16d4ca8be1a4".to_string()),
     });
     let r = resolve(&idx, Some("drain"));
     assert_eq!(
@@ -116,11 +117,34 @@ fn drain_keyword_prefers_the_live_queue_work_member_log() {
 }
 
 #[test]
+fn drain_keyword_does_not_pick_old_attempt_when_active_session_has_no_log() {
+    let mut idx = index();
+    idx.headless = vec![headless(
+        "task-1167-019e4405-5073-7672-9395-16d4ca8be1a4.jsonl",
+        400,
+    )];
+    idx.live_drain = Some(LiveDrain {
+        current: Some("TASK-1167".to_string()),
+        phase: Some("1 (implementer)".to_string()),
+        session_id: Some("019e9999-0000-7000-8000-000000000000".to_string()),
+    });
+
+    match resolve(&idx, Some("drain")) {
+        Resolution::NoLog { what, hint } => {
+            assert!(what.contains("TASK-1167"), "{what}");
+            assert!(hint.contains("current member"), "{hint}");
+        }
+        other => panic!("expected NoLog, got {other:?}"),
+    }
+}
+
+#[test]
 fn live_drain_without_a_current_member_reports_cleanly() {
     let mut idx = index();
     idx.live_drain = Some(LiveDrain {
         current: None,
         phase: None,
+        session_id: None,
     });
     match resolve(&idx, Some("drain")) {
         Resolution::NoLog { what, hint } => {
