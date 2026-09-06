@@ -17,15 +17,33 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 1668` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T08:42:52.473059427Z
-modified_at: 2026-09-06T08:42:57.168354163Z
+modified_at: 2026-09-06T08:57:06.022940312Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0657a-0daa-7ff2-bc99-bf31022d3ff7
   created_at: 2026-09-06T08:42:57.168349373Z
   created_by: joe
+comments:
+- id: 01a075ef-82e6-7c02-9762-8f9a5cddac8a
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #1668 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-09-06T08:57:06.022939168Z
+  modified_at: 2026-09-06T08:57:06.022939168Z
+history:
+- id: 01a075ef-82e6-7c02-9762-8f8922c0e29a
+  author: aida-auto-bump
+  timestamp: 2026-09-06T08:57:06.022929846Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-06T08:57:05.311013053Z
+  completion_sha: 2c8298cac0782d025177330b1626b5922d876ee1
