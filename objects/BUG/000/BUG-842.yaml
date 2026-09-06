@@ -16,20 +16,37 @@ description: |-
   - With a live queue-work drain: aida tail drain follows the CURRENT phase session's stream and keeps following across spec/phase transitions until the drain exits
   - With no live drain: prints the newest historical drain log WITH the finished-at header, exits per --no-follow semantics as documented
   - tail --list gains the live drain at the top of the Drains section, marked live
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:43:08.082225941Z
-modified_at: 2026-09-06T05:03:46.172333693Z
+modified_at: 2026-09-06T05:09:00.580385441Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07519-d18e-7e13-b438-c870a6699d00
   created_at: 2026-09-06T05:03:46.172327358Z
   created_by: joe
+history:
+- id: 01a0751e-b01d-7c82-87d1-d4e4531d5e33
+  author: aida-auto-bump
+  timestamp: 2026-09-06T05:09:00.573973388Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0751e-b024-7510-bd82-b95192bc70df
+  timestamp: 2026-09-06T05:09:00.580384385Z
+  agent: aida
+  commit_sha: b4ecb75242188ffaebdd2273346cf60773f51a12
+  summary: 'BUG-842 passes: live drain resolution now prefers drain-state headless logs, stale fallback announces the finished drain, tail --list includes live drain, targeted tests and CI are green.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T04:52:52.722622315Z
   implemented_by: joe
+  completed_at: 2026-09-06T05:09:00.573861544Z
+  completion_sha: b4ecb75242188ffaebdd2273346cf60773f51a12
