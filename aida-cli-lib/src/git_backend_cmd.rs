@@ -4445,8 +4445,13 @@ pub(crate) fn handle_git_backend_command(
                 spec,
                 no_agent,
                 allow_stale_base,
+                guided,
             }) => {
-                handle_review_spec(&backend, store_path, spec, *no_agent, *allow_stale_base)?;
+                if *guided {
+                    handle_guided_human_review(spec)?;
+                } else {
+                    handle_review_spec(&backend, store_path, spec, *no_agent, *allow_stale_base)?;
+                }
             }
             _ => {
                 human_cmd::handle_human_command(*short, &backend)?;

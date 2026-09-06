@@ -66574,6 +66574,125 @@ fn review_rebase_context_card(
     }
 }
 
+fn review_diffstat(project_root: &std::path::Path, branch: &str) -> String {
+    let base =
+        resolve_default_branch_ref(project_root).unwrap_or_else(|| "origin/main".to_string());
+    let range = format!("{base}...{branch}");
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["diff", "--stat", &range])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {
+            let stat = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if stat.is_empty() {
+                format!("No diffstat for `{range}`.")
+            } else {
+                stat
+            }
+        }
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            format!("Diffstat unavailable for `{range}`: {err}")
+        }
+        Err(e) => format!("Diffstat unavailable for `{range}`: {e}"),
+    }
+}
+
+fn ask_ai_review_prompt(
+    req: &aida_core::Requirement,
+    spec_id: &str,
+    card: &context_prompt::ContextCard,
+    diffstat: &str,
+) -> String {
+    format!(
+        "You are AIDA's one-shot Ask-AI reviewer at an interactive CLI fork.\n\n\
+         Return a concise recommendation for the operator. Start with exactly one line:\n\
+         RECOMMEND: y|n - <short reason>\n\n\
+         Then add at most three bullets naming the decisive facts. Do not run tools. \
+         Judge only from the context below.\n\n\
+         ## Prompt context\n\
+         {}\n\
+         ## Spec\n\
+         ID: {spec_id}\n\
+         Title: {}\n\
+         Status: {}\n\n\
+         Description and acceptance:\n{}\n\n\
+         ## Diffstat\n{}\n",
+        card.render(),
+        req.title,
+        req.status,
+        req.description.trim(),
+        diffstat.trim(),
+    )
+}
+
+fn ask_ai_review_once<W: std::io::Write + ?Sized>(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+    spec_id: &str,
+    card: &context_prompt::ContextCard,
+    diffstat: &str,
+    output: &mut W,
+) -> Result<()> {
+    let vendor = session::resolve_headless_vendor(project_root);
+    let adapter = match compete::vendor_adapter(vendor.as_str()) {
+        Some(compete::VendorAdapter::Headless {
+            command,
+            args_template,
+        }) => (command, args_template),
+        Some(compete::VendorAdapter::HumanBriefed) | None => {
+            writeln!(
+                output,
+                "\nAsk-AI unavailable: `{}` is not a one-shot headless review vendor here.",
+                vendor.as_str()
+            )?;
+            return Ok(());
+        }
+    };
+    let prompt = ask_ai_review_prompt(req, spec_id, card, diffstat);
+    let mut args = adapter.1;
+    args.push(prompt);
+    writeln!(
+        output,
+        "\nAsk-AI via {}…",
+        format!(
+            "{} {}",
+            adapter.0,
+            args.first().map(String::as_str).unwrap_or("")
+        )
+        .trim()
+    )?;
+    let result = std::process::Command::new(adapter.0)
+        .current_dir(project_root)
+        .args(&args)
+        .output();
+    match result {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            if !stdout.is_empty() {
+                writeln!(output, "{stdout}")?;
+            }
+            if !out.status.success() {
+                writeln!(output, "Ask-AI exited with {status}.", status = out.status)?;
+                if !stderr.is_empty() {
+                    writeln!(output, "{stderr}")?;
+                }
+            }
+        }
+        Err(e) => {
+            writeln!(
+                output,
+                "Ask-AI unavailable: could not spawn `{}` ({e}).",
+                adapter.0
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Classify a spec's review surface from its git linkage + (optional) forge
 /// change-lookup. Pure: the side-effecting `collect_git_linkage` /
 /// `change_lookup_for_branch` run at the call site; this is the decision so
@@ -67021,10 +67140,12 @@ fn handle_review_spec(
                     change_noun,
                     &open_change_cmd,
                 );
-                let reopen = context_prompt::confirm_with_context(
+                let diffstat = review_diffstat(project_root, branch);
+                let reopen = context_prompt::confirm_with_context_and_ai(
                     &format!("Open a {change_noun} from `{branch}` first?"),
                     false,
                     &card,
+                    |out| ask_ai_review_once(project_root, &req, &spec_id, &card, &diffstat, out),
                 )
                 .unwrap_or(false);
                 if reopen {
@@ -67158,10 +67279,14 @@ fn handle_review_spec(
                 // when a file the PR touches has also moved on the base.
                 if interactive {
                     let card = review_rebase_context_card(change_noun, n, behind, &overlap);
-                    let rebase_now = context_prompt::confirm_with_context(
+                    let diffstat = review_diffstat(project_root, &surface_branch);
+                    let rebase_now = context_prompt::confirm_with_context_and_ai(
                         &format!("Rebase {change_noun}-{n} now?"),
                         !overlap.is_empty(),
                         &card,
+                        |out| {
+                            ask_ai_review_once(project_root, &req, &spec_id, &card, &diffstat, out)
+                        },
                     )
                     .unwrap_or(false);
                     if rebase_now {
@@ -67434,6 +67559,64 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
         ),
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
+    }
+}
+
+fn guided_review_prompt(spec: &str) -> String {
+    format!(
+        "Read your AIDA launch context first:\n\
+         cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
+         aida show {spec}\n\
+         aida review {spec} --no-agent\n\n\
+         You are the guided-review advisor for {spec}. Keep this interactive and bounded: \
+         inspect the linked review surface, compare the diff to the spec acceptance criteria, \
+         surface consequential review forks to the operator with concrete options and a \
+         recommendation, and finish by telling the operator whether to approve, request changes, \
+         inspect the diff manually, or defer. Do not auto-merge."
+    )
+}
+
+/// STORY-818: `aida human review <SPEC> --guided` — spawn an interactive
+/// advisor shell for review, using the existing `aida agent new` launch-context
+/// machinery instead of inventing a second session substrate.
+// trace:STORY-818 | ai:codex
+pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        anyhow::bail!("guided review needs an interactive terminal");
+    }
+    let vendor = session::resolve_session_vendor();
+    let prompt = guided_review_prompt(spec);
+    match vendor {
+        session::HeadlessVendor::Claude => agent_new_claude(
+            Some("advisor".to_string()),
+            Some(spec.to_string()),
+            false,
+            None,
+            None,
+            false,
+            AgentContextOptions::new(true, false),
+            AgentPromptOptions::new(Some(prompt), false),
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            Some(format!("guided-review-{}", slugify(spec))),
+            Some(format!("guided review for {spec}")),
+            false,
+        ),
+        session::HeadlessVendor::Codex => agent_new_codex(
+            Some("advisor".to_string()),
+            Some(spec.to_string()),
+            false,
+            None,
+            false,
+            AgentContextOptions::new(true, false),
+            AgentPromptOptions::new(Some(prompt), false),
+            AgentDefaultFlagOptions::new(true, Vec::new()),
+            Some(format!("guided-review-{}", slugify(spec))),
+            Some(format!("guided review for {spec}")),
+        ),
+        session::HeadlessVendor::Agy => anyhow::bail!(
+            "guided review does not run on agy; set the session vendor to claude or codex \
+             (AIDA_HEADLESS_VENDOR=claude|codex, or `[agents] vendor` in agents.toml)."
+        ),
     }
 }
 
