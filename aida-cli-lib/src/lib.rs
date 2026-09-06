@@ -75411,6 +75411,20 @@ impl RealPhaseDriver {
         drain_state::set_phase(&self.project_root, &self.spec, phase.index(), phase.slug());
     }
 
+    /// BUG-872: stamp the phase with the exact headless session id whose log
+    /// should be treated as current. Status/tail readers must not select an
+    /// older retry's log for the same spec while the fresh phase is starting.
+    // trace:BUG-872 | ai:codex
+    fn mark_drain_phase_session(&self, phase: auto_complete::Phase, session_id: &str) {
+        drain_state::set_phase_session(
+            &self.project_root,
+            &self.spec,
+            phase.index(),
+            phase.slug(),
+            session_id,
+        );
+    }
+
     /// STORY-347: spawn one headless advisor (cold-boot OR fork) against the
     /// already-written punt request and collect its [`punt::PuntResponse`] +
     /// JSONL log path. Factored out so the calibration loop can run two
@@ -75813,7 +75827,6 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn run_implementer(
         &mut self,
     ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
-        self.mark_drain_phase(auto_complete::Phase::Implementer);
         // BUG-716 invariant guard: every orchestrated implementer passes through
         // here, and the pr-ship self-merge gate depends on a LIVE drain lock
         // being held while it runs (that is how it tells a drive from a plain
@@ -75839,6 +75852,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
              the lock"
         );
         let session_uuid = uuid::Uuid::now_v7().to_string();
+        self.mark_drain_phase_session(auto_complete::Phase::Implementer, &session_uuid);
         // STORY-306: remember the minted session id — if phase 1 punts and the
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
         // exactly this session. trace:STORY-306 | ai:claude
@@ -76717,6 +76731,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let reviewer_started_at = std::time::SystemTime::now();
 
         let session_uuid = uuid::Uuid::now_v7().to_string();
+        self.mark_drain_phase_session(auto_complete::Phase::Reviewer, &session_uuid);
         let scope = format!("PR-{pr}");
         let from_pr_head_sha = if self.from_pr {
             // BUG-868: prompt text must anchor the from-PR review to the PR head

@@ -110,6 +110,10 @@ pub(crate) struct DrainState {
     /// RFC-3339 timestamp when the current phase was entered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) phase_started_at: Option<String>,
+    /// Headless vendor/session UUID for the current phase, when the phase
+    /// writes a `.aida/headless-logs/*-<session>.jsonl` stream.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) current_session_id: Option<String>,
     /// PID of the orchestrator process — corroborated by `aida drain status`
     /// to tell a live drain from a stale crashed file.
     pub(crate) orchestrator_pid: u32,
@@ -198,6 +202,7 @@ impl DrainState {
             current: Some(spec.to_string()),
             current_phase: None,
             phase_started_at: None,
+            current_session_id: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_single(spec),
@@ -220,6 +225,7 @@ impl DrainState {
             current: None,
             current_phase: None,
             phase_started_at: None,
+            current_session_id: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_batch(batch_name),
@@ -241,6 +247,7 @@ impl DrainState {
             current: None,
             current_phase: None,
             phase_started_at: None,
+            current_session_id: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_next_n(n),
@@ -490,6 +497,7 @@ pub(crate) fn clear_run(project_root: &Path) {
     state.zen = false;
     state.current_phase = None;
     state.phase_started_at = None;
+    state.current_session_id = None;
     let _ = state.write(project_root);
 }
 
@@ -498,12 +506,43 @@ pub(crate) fn clear_run(project_root: &Path) {
 /// `current_phase` and flips the member's own state to `in-phase-N`.
 /// Best-effort — a missing file is a no-op. trace:STORY-301 | ai:claude
 pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase_slug: &str) {
+    set_phase_inner(project_root, spec, phase_index, phase_slug, None);
+}
+
+/// BUG-872: record the concrete phase session id alongside the phase. Drain
+/// status and `aida tail drain` use this id to resolve the active log; retries
+/// for the same spec must never inherit an older sibling attempt's mtime.
+// trace:BUG-872 | ai:codex
+pub(crate) fn set_phase_session(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    session_id: &str,
+) {
+    set_phase_inner(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        Some(session_id),
+    );
+}
+
+fn set_phase_inner(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    session_id: Option<&str>,
+) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
     state.current = Some(spec.to_string());
     state.current_phase = Some(format!("{phase_index} ({phase_slug})"));
     state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
+    state.current_session_id = session_id.map(str::to_string);
     if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
         member
             .started_at
@@ -718,12 +757,21 @@ fn drain_quiet_warn_minutes(project_root: Option<&Path>) -> u64 {
     .unwrap_or(5)
 }
 
-fn active_log_mtime(project_root: &Path, spec: &str) -> Option<SystemTime> {
+fn active_log_mtime(project_root: &Path, state: &DrainState) -> Option<SystemTime> {
     let dir = project_root.join(".aida").join("headless-logs");
     let entries = crate::headless_tail::discover_logs(&dir).ok()?;
-    crate::headless_tail::select_log(&entries, Some(spec))
-        .ok()
-        .map(|entry| entry.mtime)
+    if let Some(session_id) = state.current_session_id.as_deref() {
+        return entries
+            .iter()
+            .find(|entry| entry.lease.as_deref() == Some(session_id))
+            .map(|entry| entry.mtime);
+    }
+    // Legacy drain-state files did not record a phase session id. Falling back
+    // to "newest log for spec" can report a previous retry's log as live
+    // output; prefer the phase-entry timestamp instead.
+    // trace:BUG-872 | ai:codex
+    state.current_phase.as_ref()?;
+    None
 }
 
 fn last_activity_time(
@@ -732,7 +780,7 @@ fn last_activity_time(
     spec: &str,
 ) -> Option<(String, &'static str)> {
     if let Some(root) = project_root {
-        if let Some(mtime) = active_log_mtime(root, spec) {
+        if let Some(mtime) = active_log_mtime(root, state) {
             return Some((system_time_rfc3339(mtime), "log_mtime"));
         }
     }
@@ -1156,6 +1204,7 @@ mod tests {
             current: Some("STORY-301".to_string()),
             current_phase: None,
             phase_started_at: None,
+            current_session_id: None,
             orchestrator_pid: std::process::id(),
             started_at: "2026-05-18T23:28:00+00:00".to_string(),
             on_drain_complete: predict_single("STORY-301"),
@@ -1508,6 +1557,30 @@ mod tests {
         assert!(out.contains("phase 2m"));
         assert!(out.contains("last output 2m ago"));
         assert!(out.contains("quiet 2m"));
+    }
+
+    #[test]
+    fn current_row_ignores_old_attempt_log_for_different_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let logs = dir.path().join(".aida").join("headless-logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        std::fs::write(
+            logs.join("story-285-019e4405-5073-7672-9395-16d4ca8be1a4.jsonl"),
+            "{}\n",
+        )
+        .unwrap();
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("1 (implementer)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:40:00+00:00".to_string());
+        state.current_session_id = Some("019e9999-0000-7000-8000-000000000000".to_string());
+        state.members[1].state = "in-phase-1".to_string();
+        state.members[1].started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+        let now = parse_rfc3339_utc("2026-05-18T23:42:00+00:00").unwrap();
+
+        let out = render_human_inner(&state, false, Some(dir.path()), now);
+
+        assert!(out.contains("last output 2m ago"), "got: {out}");
     }
 
     // BUG-866: spec/phase elapsed are anchored to the current member and phase

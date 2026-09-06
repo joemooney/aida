@@ -98,6 +98,8 @@ pub struct LiveDrain {
     pub current: Option<String>,
     /// Current phase, e.g. `1 (implementer)`.
     pub phase: Option<String>,
+    /// Current headless phase session id, when the live phase writes one.
+    pub session_id: Option<String>,
 }
 
 /// Everything the resolver reads, gathered once so the resolution itself is a
@@ -232,7 +234,11 @@ fn resolve_drain_keyword(index: &TailIndex) -> Resolution {
                 hint: "the drain is live but has not started a member log yet.".to_string(),
             };
         };
-        if let Some(entry) = newest_headless_for_spec(index, spec) {
+        if let Some(entry) = live
+            .session_id
+            .as_deref()
+            .and_then(|session_id| headless_for_session(index, session_id))
+        {
             return Resolution::Found {
                 path: entry.path.clone(),
                 label: live_drain_label(live, entry),
@@ -369,8 +375,12 @@ pub fn session_log<'a>(index: &'a TailIndex, session: &SessionRef) -> Option<&'a
     None
 }
 
-fn newest_headless_for_spec<'a>(index: &'a TailIndex, spec: &str) -> Option<&'a LogEntry> {
-    index.headless.iter().find(|e| entry_matches_spec(e, spec))
+// trace:BUG-872 | ai:codex
+fn headless_for_session<'a>(index: &'a TailIndex, session_id: &str) -> Option<&'a LogEntry> {
+    index
+        .headless
+        .iter()
+        .find(|e| e.lease.as_deref() == Some(session_id))
 }
 
 fn no_log_for_session(index: &TailIndex, session: &SessionRef) -> Resolution {
@@ -491,6 +501,7 @@ pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex 
         crate::drain_state::DrainStatus::Active(state) => Some(LiveDrain {
             current: state.current,
             phase: state.current_phase,
+            session_id: state.current_session_id,
         }),
         crate::drain_state::DrainStatus::None | crate::drain_state::DrainStatus::Stale(_) => None,
     };
@@ -669,9 +680,15 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
             live_drain: Some(LiveDrain {
                 current: Some(spec.to_string()),
                 phase: state.current_phase.clone(),
+                session_id: state.current_session_id.clone(),
             }),
         };
-        let Some(entry) = newest_headless_for_spec(&idx, spec) else {
+        let Some(entry) = idx
+            .live_drain
+            .as_ref()
+            .and_then(|live| live.session_id.as_deref())
+            .and_then(|session_id| headless_for_session(&idx, session_id))
+        else {
             std::thread::sleep(Duration::from_millis(250));
             continue;
         };
