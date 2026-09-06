@@ -45714,5 +45714,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3997
+- id: 01a07523-f9b3-7bf0-a5f6-f2e90e621a25
+  target_id: 01a07523-baa2-70e2-89db-a8d9f6598537
+  author: aida
+  node_id: '1'
+  lamport: 3998
+  timestamp: 2026-09-06T05:14:47.091674521Z
+  kind: !Create
+    title: queue rework re-queues with empty for_role at the queue tail — unroutable and unordered
+    description: 'Observed live (2026-09-05, BUG-838 rework): aida queue rework BUG-838 (no --work) re-queued the spec with for_role EMPTY ("") and at the queue TAIL. Consequences: role-filtered surfaces (queue list --for, role enter queue head, drain drivability) do not see it, and the rework — usually the most urgent item, with a reviewer waiting — lands behind everything queued since. Fix: rework inherits the original queue entry''s for_role (falling back to implementer), and re-queues at the HEAD by default (--tail to opt out). Acceptance: rework of a spec originally routed for implementer shows for_role implementer at position 1 in queue list; a --for override still wins; unit test on the requeue routing.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 3998
 node_id: '1'
