@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:13:47.951844768Z
-modified_at: 2026-09-05T23:44:47.197344119Z
+modified_at: 2026-09-06T00:10:25.047021271Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -56,9 +56,9 @@ implementation_info:
   implemented_at: 2026-09-05T22:16:53.907846499Z
   implemented_by: joe
 failure_reason:
-  phase: reviewer
-  phase_index: 3
+  phase: merge
+  phase_index: 4
   kind: failed
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-838 --work`'
-  shelved_at: 2026-09-05T23:44:47.197344119Z
+  detail: '`gh pr merge 1648` failed: gh pr merge failed for #1648: failed to delete local branch bug-838: failed to run git: error: cannot delete branch ''bug-838'' used by worktree at ''/home/joe/ai/aida-wt-838'''
+  recovery_hint: 'Investigate the merge failure: `gh pr view 1648`'
+  shelved_at: 2026-09-06T00:10:25.047021271Z
