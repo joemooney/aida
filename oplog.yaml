@@ -47147,5 +47147,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4089
+- id: 01a07660-082d-7db3-807f-8a2acef9018a
+  target_id: 01a07660-0462-7bb3-b364-8281cb301ea2
+  author: aida
+  node_id: '1'
+  lamport: 4090
+  timestamp: 2026-09-06T11:00:00.173248091Z
+  kind: !Create
+    title: 'Review PR-1673: [AI:codex] fix(drain): dedupe auto-filed failure bugs (BUG-864)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07659`) for branch `bug-864`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1673>
+      - Branch: `bug-864` → `main`
+
+      ## Covers
+
+      - BUG-864
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1673` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4090
 node_id: '1'
