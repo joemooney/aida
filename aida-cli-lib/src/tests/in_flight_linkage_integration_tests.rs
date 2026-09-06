@@ -458,6 +458,18 @@ fn linkage_for_in_flight_spec() {
     assert_eq!(l.branch.as_deref(), Some("feature/y"));
 }
 
+/// BUG-816: the human-review "open PR" hint must name the branch explicitly.
+/// `gh pr create --fill` infers from the caller's current branch, which fails
+/// when the operator runs `aida review` from main.
+#[test]
+fn human_review_open_change_hint_is_branch_explicit() {
+    let hint = review_open_change_hint(crate::forge::ForgeKind::GitHub, "bug-816");
+    assert!(hint.contains("git push -u origin bug-816"), "{hint}");
+    assert!(hint.contains("gh pr create --head bug-816"), "{hint}");
+    assert!(hint.contains("git log -1 --format=%s bug-816"), "{hint}");
+    assert!(!hint.contains("--fill"), "{hint}");
+}
+
 /// BUG-720: a spec whose ONLY referencing commit lives on the orphan
 /// `aida-store` requirements-store branch — a cross-node store-lineage
 /// merge commit that names the spec in a trailing paren group, exactly

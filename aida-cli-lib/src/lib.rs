@@ -66444,6 +66444,7 @@ fn review_branch_no_change_context_card(
     branch: &str,
     commits: usize,
     change_noun: &str,
+    open_change_cmd: &str,
 ) -> context_prompt::ContextCard {
     context_prompt::ContextCard {
         decision: format!(
@@ -66458,7 +66459,7 @@ fn review_branch_no_change_context_card(
         ],
         answers: vec![
             format!(
-                "y: print `git push -u origin {branch} && gh pr create --fill`; reversible by closing the {change_noun}"
+                "y: print `{open_change_cmd}`; reversible by closing the {change_noun}"
             ),
             format!(
                 "n: leave the work held without opening a {change_noun}; reversible by rerunning `aida review {spec_id}`"
@@ -66467,6 +66468,15 @@ fn review_branch_no_change_context_card(
         recommended_default: format!(
             "n - avoid creating a {change_noun} until you decide this branch is the review surface"
         ),
+    }
+}
+
+// trace:BUG-816 | ai:codex
+fn review_open_change_hint(forge: crate::forge::ForgeKind, branch: &str) -> String {
+    let push = format!("git push -u origin {}", shell_quote(branch));
+    match forge.create_cmd_for_branch(branch) {
+        Some(create) => format!("{push} && {create}"),
+        None => push,
     }
 }
 
@@ -66946,9 +66956,15 @@ fn handle_review_spec(
                 crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
             );
             // AC-5: offer to (re)open a PR before review.
+            let open_change_cmd = review_open_change_hint(forge, branch);
             if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
-                let card =
-                    review_branch_no_change_context_card(&spec_id, branch, *commits, change_noun);
+                let card = review_branch_no_change_context_card(
+                    &spec_id,
+                    branch,
+                    *commits,
+                    change_noun,
+                    &open_change_cmd,
+                );
                 let reopen = context_prompt::confirm_with_context(
                     &format!("Open a {change_noun} from `{branch}` first?"),
                     false,
@@ -66956,11 +66972,7 @@ fn handle_review_spec(
                 )
                 .unwrap_or(false);
                 if reopen {
-                    println!(
-                        "  {} run: {}",
-                        "→".green(),
-                        format!("git push -u origin {branch} && gh pr create --fill").cyan()
-                    );
+                    println!("  {} run: {}", "→".green(), open_change_cmd.cyan());
                     println!(
                         "  {} then re-run {} once the {change_noun} is open.",
                         crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
@@ -66972,7 +66984,7 @@ fn handle_review_spec(
                 println!(
                     "  {} to open one: {}",
                     crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-                    format!("git push -u origin {branch} && gh pr create --fill").cyan()
+                    open_change_cmd.cyan()
                 );
             }
         }
