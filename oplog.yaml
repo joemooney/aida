@@ -47600,5 +47600,31 @@ operations:
   timestamp: 2026-09-06T13:32:46.153403425Z
   kind: !SetStatus
     status: Completed
-clock: 4118
+- id: 01a07888-c018-7211-9951-7532f672bb72
+  target_id: 01a07888-baeb-7393-a1a7-e0e7ba4ad8be
+  author: aida
+  node_id: '1'
+  lamport: 4119
+  timestamp: 2026-09-06T21:03:43.128185811Z
+  kind: !Create
+    title: 'Review PR-1679: [AI:codex] feat(review): add ask-ai and guided review prompts (STORY-818)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0783a`) for branch `story-818`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1679>
+      - Branch: `story-818` → `main`
+
+      ## Covers
+
+      - STORY-818
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1679` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4119
 node_id: '1'
