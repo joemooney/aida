@@ -45689,5 +45689,30 @@ operations:
   timestamp: 2026-09-06T05:09:01.273803453Z
   kind: !SetStatus
     status: Completed
-clock: 3996
+- id: 01a07522-6278-7721-ad86-184a4fa15913
+  target_id: 01a07522-5ea6-71b2-9b23-3fdc1ace8c2c
+  author: aida
+  node_id: '1'
+  lamport: 3997
+  timestamp: 2026-09-06T05:13:02.840906746Z
+  kind: !Create
+    title: 'drain status shows pacing: per-spec finish times, current item elapsed + last-output age, quiet warning'
+    description: |-
+      Operator request (2026-09-05, asked right after having to ask "is the drain still working?"): aida drain status shows position but not pacing — a healthy drain and a wedged one render identically. Add the recency column, sourced from data that already exists:
+
+      - Completed/failed rows: append the finish time (local tz) and per-spec duration — "✓ BUG-840 completed PR-1652 · 18:33 (27m)". Source: drain-state.json phase transitions / .aida/events.jsonl.
+      - Current row: elapsed on this spec AND elapsed in this phase — "▶ STORY-835 phase 1 (implementer) · spec 12m · phase 12m".
+      - "last output" for the current item: mtime of the active session's stream log (the same .aida/headless-logs/<spec>-<uuid>.jsonl file BUG-842 taught tail drain to resolve; share that resolver) — "last output 40s ago". This is THE is-it-stuck signal.
+      - Quiet warning: when last-output age exceeds a threshold (default 5m, config [drain] quiet_warn_minutes) render "⚠ quiet 7m" on the row so a stall is visible at a glance. Display-only — no watchdog action here (the orchestrator's --no-progress-minutes owns intervention).
+      - Footer: drain started / elapsed total (already partly shown) + "last ship: <spec> at <time>".
+      - Same fields in a --json projection for scripts/TUI (STORY-833's panel should reuse this projection rather than re-deriving).
+
+      Acceptance:
+      - Live drain: current row shows spec/phase elapsed + last-output age; completed rows show time + duration; totals footer shows last-ship time
+      - Log-less phase (e.g. merge/pull) falls back to phase-entry time rather than a wrong-but-confident stamp (the TASK-1173 honesty rule)
+      - Quiet threshold configurable; ⚠ appears past it; --json carries the raw timestamps
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3997
 node_id: '1'
