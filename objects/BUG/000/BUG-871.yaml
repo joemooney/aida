@@ -36,15 +36,29 @@ description: |-
 
   Attempts: 2
   Latest recurrence: 2026-09-06T12:13:21.912594523+00:00
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T10:52:46.610193751Z
-modified_at: 2026-09-06T12:13:22.188225010Z
+modified_at: 2026-09-06T12:43:42.862304289Z
 req_type: Bug
 tags:
 - auto-complete
 - auto-drafted
 - ci
 - failure-2
+comments:
+- id: 01a076be-fb8e-7e50-b7de-2814e46cdb2d
+  author: aida-auto-bump
+  content: 'Auto-resolved: BUG-862 reached Completed via commit a45ec36 / PR #1676; rejecting auto-drafted phase-failure finding BUG-871.'
+  created_at: 2026-09-06T12:43:42.862302315Z
+  modified_at: 2026-09-06T12:43:42.862302315Z
+history:
+- id: 01a076be-fb8e-7e50-b7de-2803bb059fde
+  author: aida-auto-bump
+  timestamp: 2026-09-06T12:43:42.862300900Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
