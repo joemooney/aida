@@ -336,8 +336,19 @@ pub(crate) fn handle_status_command_distributed(
     // adds a scan. trace:STORY-673 | ai:claude
     let show_full = all || full;
 
-    let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
-    print_live_drain_status_line(&drain_root);
+    if should_print_rich_live_drain_status_line(RichStatusLiveDrainFlags {
+        json,
+        cleanup,
+        activity,
+        awaiting,
+        short,
+        queue_only,
+        ci_only,
+        show_full,
+    }) {
+        let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+        print_live_drain_status_line(&drain_root);
+    }
 
     // STORY-385: `--cleanup` focuses on the "Needs attention" section.
     // `--cleanup --json` emits the structured report; otherwise we render
@@ -759,6 +770,85 @@ fn print_live_drain_status_line(project_root: &std::path::Path) {
     if let Some(probe) = crate::drain_state::drain_liveness_probe(project_root) {
         println!("{}", probe.status_line().cyan().bold());
         println!();
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RichStatusLiveDrainFlags {
+    json: bool,
+    cleanup: bool,
+    activity: bool,
+    awaiting: bool,
+    short: bool,
+    queue_only: bool,
+    ci_only: bool,
+    show_full: bool,
+}
+
+/// The rich status banner belongs only to the human full-status surface.
+/// Focus modes keep their previous bytes, and JSON must remain byte-valid.
+// trace:TASK-1194 | ai:codex
+fn should_print_rich_live_drain_status_line(flags: RichStatusLiveDrainFlags) -> bool {
+    flags.show_full
+        && !flags.json
+        && !flags.cleanup
+        && !flags.activity
+        && !flags.awaiting
+        && !flags.short
+        && !flags.queue_only
+        && !flags.ci_only
+}
+
+#[cfg(test)]
+mod task_1194_live_drain_status_tests {
+    use super::{should_print_rich_live_drain_status_line, RichStatusLiveDrainFlags};
+
+    fn flags() -> RichStatusLiveDrainFlags {
+        RichStatusLiveDrainFlags {
+            json: false,
+            cleanup: false,
+            activity: false,
+            awaiting: false,
+            short: false,
+            queue_only: false,
+            ci_only: false,
+            show_full: true,
+        }
+    }
+
+    #[test]
+    fn full_human_status_prints_live_drain_line() {
+        assert!(should_print_rich_live_drain_status_line(flags()));
+    }
+
+    #[test]
+    fn json_status_modes_do_not_print_live_drain_line() {
+        let mut plain_json = flags();
+        plain_json.json = true;
+        assert!(!should_print_rich_live_drain_status_line(plain_json));
+
+        let mut cleanup_json = plain_json;
+        cleanup_json.cleanup = true;
+        assert!(!should_print_rich_live_drain_status_line(cleanup_json));
+
+        let mut awaiting_json = plain_json;
+        awaiting_json.awaiting = true;
+        assert!(!should_print_rich_live_drain_status_line(awaiting_json));
+    }
+
+    #[test]
+    fn focused_human_status_modes_keep_existing_bytes() {
+        let mut cleanup = flags();
+        cleanup.cleanup = true;
+        assert!(!should_print_rich_live_drain_status_line(cleanup));
+
+        let mut awaiting = flags();
+        awaiting.awaiting = true;
+        assert!(!should_print_rich_live_drain_status_line(awaiting));
+
+        let mut short = flags();
+        short.short = true;
+        assert!(!should_print_rich_live_drain_status_line(short));
     }
 }
 
