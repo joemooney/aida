@@ -45465,5 +45465,53 @@ operations:
   timestamp: 2026-09-06T03:55:34.917882478Z
   kind: !SetStatus
     status: Rejected
-clock: 3988
+- id: 01a074dd-9175-7492-a974-8b2cc17e081c
+  target_id: 01a074dd-8b90-7ad2-9c7a-895e6895f1f8
+  author: aida
+  node_id: '1'
+  lamport: 3989
+  timestamp: 2026-09-06T03:57:52.885852757Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on TASK-1193'
+    description: |
+      Auto-drafted by `aida queue work TASK-1193 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      PR-1656 base is 2 commits behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+      Overlapping files:
+        aida-cli-lib/src/init_cmd.rs
+
+      Recover with:
+        aida pr rebase 1656              # clean rebase + force-push-with-lease
+        aida pr rebase 1656 --interactive  # if conflicts need manual resolve
+
+      Or pass `--allow-stale-base` to proceed anyway (review will be against stale code).
+
+      Failure kind: `failed`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework TASK-1193 --work`
+
+      ## Phase durations
+
+        - phase 3 (reviewer): 4763 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-1193","started_at":"2026-09-06T03:57:45.344542637+00:00","completed_at":"2026-09-06T03:57:51.302654147+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"PR-1656 base is 2 commits behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  aida-cli-lib/src/init_cmd.rs\n\nRecover with:\n  aida pr rebase 1656              # clean rebase + force-push-with-lease\n  aida pr rebase 1656 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code).","phase_durations":[{"phase":3,"slug":"reviewer","elapsed_ms":4763}],"total_ms":5216,"binary_sha":"5afb02ba7","auto_rebase":[{"phase":3,"pr_number":1656,"outcome":"conflict"}]}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 3989
 node_id: '1'
