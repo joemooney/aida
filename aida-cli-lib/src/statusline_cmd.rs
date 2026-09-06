@@ -133,6 +133,9 @@ pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> 
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
+    if let Some(segment) = crate::drain_state::status_segment(&project_root) {
+        parts.push(segment.cyan().bold().to_string());
+    }
     // TASK-306: orchestrator-context badge. When this interactive session is
     // a corroborated phase of an `--auto-complete` run, surface the phase
     // index, the `--no-human` scope, and a loud `pause-here` cue — so a user
