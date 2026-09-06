@@ -3,11 +3,15 @@ spec_id: BUG-852
 agreed_id: BUG-852
 title: drain exit summary double-counts retried specs and exits 0 despite shelves
 description: 'Observed live (2026-09-05, drain of 12): STORY-830 bounced in phase 3, was retried in-drain, and shipped — but the exit summary listed it BOTH in "already shipped (5)" AND in "3 specs shelved on phase failure", printed "next 12 (mismatched)", and the drain exited 0 even though the summary claimed shelves (EPIC-28 contract: exit 2 when anything shelved/skipped). A spec''s FINAL disposition should appear exactly once: retried-then-shipped is shipped, not shelved; the shelved list must contain only specs still parked at exit; the exit code must reflect the final shelf set (truly-empty = 0). Also fix the "(mismatched)" annotation to say what actually mismatched or drop it. Acceptance: integration test driving a shelve-retry-ship sequence asserts single-listing, correct exit code, and a coherent summary line.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T05:14:49.868472392Z
-modified_at: 2026-09-06T07:28:29.189395865Z
+modified_at: 2026-09-06T07:36:08.314784626Z
 req_type: Bug
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-06T07:36:08.314784626Z
+  implemented_by: joe
