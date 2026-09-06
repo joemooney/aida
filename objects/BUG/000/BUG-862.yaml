@@ -1,0 +1,24 @@
+id: 01a0756d-dc05-7b01-9df5-94fad556265d
+spec_id: BUG-862
+agreed_id: BUG-862
+title: queue drain drives reviewer-routed items with implementer sessions — degenerate 10m watchdog kills
+description: |-
+  Observed live (2026-09-05 23:16 drain): the next-N drain snapshot included queue entries routed for_role=reviewer (the auto-filed "Review PR-N" specs). The orchestrator drove each with a phase-1 IMPLEMENTER session, which has nothing to commit for a review task, so the no-progress watchdog killed attempt 1 at 10m, the BUG-826 retry re-launched it, and attempt 2 exited 1 — burning ~15 minutes and failure-cap slots per item before shelving. Three such items led the overnight queue; the operator's advisor session had to kill the drain and dequeue them by hand.
+
+  Fix (either is acceptable, first preferred):
+  1. The implementer drain SKIPS queue entries whose for_role is not implementer (log one line: "skipped STORY-943 — routed for reviewer"), leaving them for a reviewer-role surface; or
+  2. The orchestrator launches the matching role session for the entry (reviewer items get a reviewer-phase session wired to the existing verdict handshake).
+  Either way a for_role mismatch must never produce a doomed implementer session.
+
+  Also: the auto-filed "Review PR-N" specs should not be typed story/approved in the open backlog once their PR merges — sweep them Completed/Rejected on merge (TASK-1192 auto-burial sibling).
+
+  Acceptance:
+  - A queue with one reviewer-routed entry at the head: implementer drain skips it in <1s with the log line, drives the next implementer item, exit summary counts it skipped not shelved
+  - Unit test on the drivability filter; integration test asserting no implementer session spawns for a reviewer-routed entry
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T06:35:29.157908499Z
+modified_at: 2026-09-06T06:35:29.157908499Z
+req_type: Bug
