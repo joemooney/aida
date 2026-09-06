@@ -45191,5 +45191,31 @@ operations:
   timestamp: 2026-09-06T01:29:50.790259971Z
   kind: !SetStatus
     status: Completed
-clock: 3971
+- id: 01a0746a-bc88-7863-94ce-fbb088d8ec48
+  target_id: 01a0746a-b8ba-7e22-9dbc-c4f22a55a8b1
+  author: aida
+  node_id: '1'
+  lamport: 3972
+  timestamp: 2026-09-06T01:52:27.272247421Z
+  kind: !Create
+    title: 'Review PR-1654: [AI:codex] feat(init): run machine-global post-init hooks (STORY-828)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07459`) for branch `story-828`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1654>
+      - Branch: `story-828` → `main`
+
+      ## Covers
+
+      - STORY-828
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1654` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3972
 node_id: '1'
