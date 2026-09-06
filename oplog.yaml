@@ -45017,5 +45017,28 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 3962
+- id: 01a07413-194a-7e90-ba7c-c2f03cf70ae9
+  target_id: 01a07412-c25b-74c2-a272-1eefce709fbc
+  author: aida
+  node_id: '1'
+  lamport: 3963
+  timestamp: 2026-09-06T00:16:43.850838670Z
+  kind: !SetDescription
+    description: |-
+      Operator request (2026-09-05): aida help inbox should figure out what "inbox" means even with no hardcoded entry. Three layers, cheapest first:
+
+      1. Concept index (slice 1): a compiled-in curated map of concept words -> surfaces, each with a one-line why. Seed set: inbox/mail -> awaiting, mailbox inbox, briefs; busy/running/progress -> drain status, ps, tail, statusline; stuck/blocked -> why, findings list, questions; undo/restore -> unarchive, undefer, cache rebuild; sync -> pull, push, fetch, db sync, remote status. aida help <term> resolves the index first and prints matched surfaces with their why-lines. Unknown term falls to layer 2. Unit-tested; adding a concept is a table row.
+
+      2. FTS over the help corpus (slice 2): index every subcommand's --help text (command path, about line, flag docs) + docs/aida/discipline headings into the existing SQLite FTS5 machinery (rebuilt when the binary SHA changes, like the cache). Output: top 5 ranked hits, each with the matching snippet. No new infra, catches the long tail.
+
+      3. AI escape hatch (slice 3, gated on STORY-818): when layers 1-2 return nothing strong at a TTY, print best guesses and offer the STORY-818 one-shot AI judgment, which gets the failed query + layer output as context. Never auto-spawns an agent; headless prints local results only.
+
+      Also: log missed help queries (term, matched-layer, hit-count) through STORY-122 usage telemetry — store the term itself ONLY if it matches ^[a-z-]{1,24}$, else record "other" — so /aida-insights can mine which concepts deserve index rows.
+
+      Acceptance:
+      - aida help inbox prints the awaiting/mailbox/briefs surfaces with why-lines (no AI, sub-50ms)
+      - A term matching neither index nor FTS prints a clean no-match with the layer-2 nearest misses and (TTY + STORY-818 shipped) the ask-AI offer
+      - aida help <exact-subcommand> keeps today's behavior exactly (clap help wins before any layer)
+      - Concept-index table has a test asserting every referenced surface exists against the clap tree
+clock: 3963
 node_id: '1'
