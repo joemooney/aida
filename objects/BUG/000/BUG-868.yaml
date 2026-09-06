@@ -3,20 +3,36 @@ spec_id: BUG-868
 agreed_id: BUG-868
 title: from-pr reviewer session reviews nothing when the spec is already Done — does queue cleanup instead of reviewing the PR
 description: 'Observed twice (2026-09-06, TASK-1193 retries): aida queue work <spec> --from-pr --auto-complete --no-human=both skips the implementer phase and spawns a phase-3 reviewer session — but that session, seeing the spec already marked Done, concluded its job was queue hygiene, ran aida queue done <spec>, wrote NO verdict file, and exited (9.5k tokens, ~2 min). The orchestrator then failed the phase with ''reviewer session produced no verdict file''. The reviewer prompt for the from-pr path must lead with the concrete review contract — review PR #N at head <sha>, write the verdict file at <path> — and state that the spec being Done is EXPECTED (implementation shipped outside the orchestrator), so the session cannot reinterpret the task as cleanup. Acceptance: from-pr pipeline on a Done spec with an open PR produces a verdict file on the first attempt (integration test may stub the vendor session and assert the prompt contains the PR number, head SHA, verdict path, and the Done-is-expected line).'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T09:25:40.179045543Z
-modified_at: 2026-09-06T11:56:19.470025414Z
+modified_at: 2026-09-06T12:00:29.265882249Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07693-8116-7720-b627-c42fe8bfe1f6
   created_at: 2026-09-06T11:56:19.470011955Z
   created_by: joe
+history:
+- id: 01a07697-684b-77b2-b14f-ffbe4e3a3afe
+  author: aida-auto-bump
+  timestamp: 2026-09-06T12:00:29.259288098Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07697-6851-7401-9665-eb3b033309e5
+  timestamp: 2026-09-06T12:00:29.265881582Z
+  agent: aida
+  commit_sha: 710889b5d897b732e06f37d41e195aeb220d2688
+  summary: Completed via merge 710889b5
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T11:45:47.928788392Z
   implemented_by: joe
+  completed_at: 2026-09-06T12:00:29.259144329Z
+  completion_sha: 710889b5d897b732e06f37d41e195aeb220d2688
