@@ -46684,5 +46684,31 @@ operations:
   timestamp: 2026-09-06T08:34:27.875403121Z
   kind: !SetStatus
     status: Completed
-clock: 4058
+- id: 01a075e2-82e2-7382-b528-01db30136870
+  target_id: 01a075e2-7cb9-7a42-846a-da03c09a8e9b
+  author: aida
+  node_id: '1'
+  lamport: 4059
+  timestamp: 2026-09-06T08:42:54.050907344Z
+  kind: !Create
+    title: 'Review PR-1668: [AI:codex] fix(review): make open PR hint branch-explicit (BUG-816)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a075dc`) for branch `bug-816`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1668>
+      - Branch: `bug-816` → `main`
+
+      ## Covers
+
+      - BUG-816
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1668` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4059
 node_id: '1'
