@@ -51,6 +51,7 @@ fn index() -> TailIndex {
             session("eeff00113344", "TASK-999", "task-999"),
         ],
         drain_live: false,
+        live_drain: None,
     }
 }
 
@@ -74,6 +75,13 @@ fn found_path(r: &Resolution) -> &Path {
     }
 }
 
+fn found_notice(r: &Resolution) -> Option<&str> {
+    match r {
+        Resolution::Found { notice, .. } => notice.as_deref(),
+        other => panic!("expected Found, got {other:?}"),
+    }
+}
+
 #[test]
 fn drain_keyword_selects_the_newest_drain_log() {
     let idx = index();
@@ -82,8 +90,45 @@ fn drain_keyword_selects_the_newest_drain_log() {
         found_path(&r),
         Path::new("/repo/.aida/burndown/20260721T064452Z-019f836b.jsonl")
     );
+    assert!(
+        found_notice(&r)
+            .unwrap_or_default()
+            .starts_with("no live drain"),
+        "{r:?}"
+    );
     // `burndown` is accepted as the same thing.
     assert_eq!(found_path(&resolve(&idx, Some("BURNDOWN"))), found_path(&r));
+}
+
+#[test]
+fn drain_keyword_prefers_the_live_queue_work_member_log() {
+    let mut idx = index();
+    idx.live_drain = Some(LiveDrain {
+        current: Some("TASK-1167".to_string()),
+        phase: Some("1 (implementer)".to_string()),
+    });
+    let r = resolve(&idx, Some("drain"));
+    assert_eq!(
+        found_path(&r),
+        Path::new("/repo/.aida/headless-logs/task-1167-019e4405-5073-7672-9395-16d4ca8be1a4.jsonl")
+    );
+    assert!(found_notice(&r).is_none(), "{r:?}");
+}
+
+#[test]
+fn live_drain_without_a_current_member_reports_cleanly() {
+    let mut idx = index();
+    idx.live_drain = Some(LiveDrain {
+        current: None,
+        phase: None,
+    });
+    match resolve(&idx, Some("drain")) {
+        Resolution::NoLog { what, hint } => {
+            assert!(what.contains("live drain"), "{what}");
+            assert!(hint.contains("has not started"), "{hint}");
+        }
+        other => panic!("expected NoLog, got {other:?}"),
+    }
 }
 
 #[test]

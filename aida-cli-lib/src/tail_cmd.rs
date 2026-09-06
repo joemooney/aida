@@ -32,6 +32,8 @@
 
 use anyhow::{bail, Result};
 use colored::Colorize;
+use std::fs;
+use std::io::{BufRead, BufReader, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -88,6 +90,16 @@ pub struct DrainLog {
     pub mtime: SystemTime,
 }
 
+/// The currently running queue-work drain, projected from drain-state.
+// trace:BUG-842 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveDrain {
+    /// Current member, e.g. `BUG-842`.
+    pub current: Option<String>,
+    /// Current phase, e.g. `1 (implementer)`.
+    pub phase: Option<String>,
+}
+
 /// Everything the resolver reads, gathered once so the resolution itself is a
 /// pure function over in-memory data (and therefore unit-testable with no
 /// filesystem, no cwd, no git).
@@ -105,6 +117,10 @@ pub struct TailIndex {
     /// gathered here so the resolution itself stays pure.
     // trace:BUG-782 | ai:claude
     pub drain_live: bool,
+    /// PID-corroborated live drain-state. Unlike `.aida/burndown/`, this sees
+    /// queue-work drains whose phase logs live under `.aida/headless-logs/`.
+    // trace:BUG-842 | ai:codex
+    pub live_drain: Option<LiveDrain>,
 }
 
 /// What a selector resolved to.
@@ -112,7 +128,11 @@ pub struct TailIndex {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Resolution {
     /// A log file to stream, with a human label for the `==>` header.
-    Found { path: PathBuf, label: String },
+    Found {
+        path: PathBuf,
+        label: String,
+        notice: Option<String>,
+    },
     /// The selector named something real that simply has no log — an
     /// interactive session, or a drain that never ran verbose. Reported
     /// cleanly, not as an error.
@@ -140,16 +160,7 @@ pub fn resolve(index: &TailIndex, selector: Option<&str>) -> Resolution {
     };
 
     if sel.eq_ignore_ascii_case("drain") || sel.eq_ignore_ascii_case("burndown") {
-        return match index.drains.first() {
-            Some(d) => Resolution::Found {
-                path: d.path.clone(),
-                label: format!("drain {}", d.id),
-            },
-            None => Resolution::NoLog {
-                what: "the drain".to_string(),
-                hint: "no drain has written a log in this project yet — a drain only streams to one when it runs with verbose output.".to_string(),
-            },
-        };
+        return resolve_drain_keyword(index);
     }
 
     // A session id from `aida ps`.
@@ -183,6 +194,7 @@ pub fn resolve(index: &TailIndex, selector: Option<&str>) -> Resolution {
         return Resolution::Found {
             path: d.path.clone(),
             label: format!("drain {}", d.id),
+            notice: None,
         };
     }
 
@@ -192,6 +204,7 @@ pub fn resolve(index: &TailIndex, selector: Option<&str>) -> Resolution {
         return Resolution::Found {
             path: entry.path.clone(),
             label: log_label(entry),
+            notice: None,
         };
     }
     if let Some(s) = index
@@ -210,6 +223,45 @@ pub fn resolve(index: &TailIndex, selector: Option<&str>) -> Resolution {
     }
 }
 
+// trace:BUG-842 | ai:codex
+fn resolve_drain_keyword(index: &TailIndex) -> Resolution {
+    if let Some(live) = &index.live_drain {
+        let Some(spec) = live.current.as_deref().filter(|s| !s.is_empty()) else {
+            return Resolution::NoLog {
+                what: "the live drain".to_string(),
+                hint: "the drain is live but has not started a member log yet.".to_string(),
+            };
+        };
+        if let Some(entry) = newest_headless_for_spec(index, spec) {
+            return Resolution::Found {
+                path: entry.path.clone(),
+                label: live_drain_label(live, entry),
+                notice: None,
+            };
+        }
+        return Resolution::NoLog {
+            what: format!("the live drain ({spec})"),
+            hint: "no headless log exists for the drain's current member yet.".to_string(),
+        };
+    }
+
+    match index.drains.first() {
+        Some(d) => Resolution::Found {
+            path: d.path.clone(),
+            label: format!("drain {}", d.id),
+            notice: Some(format!(
+                "no live drain — showing {} (finished {})",
+                d.id,
+                fmt_date(d.mtime)
+            )),
+        },
+        None => Resolution::NoLog {
+            what: "the drain".to_string(),
+            hint: "no drain has written a log in this project yet — a drain only streams to one when it runs with verbose output.".to_string(),
+        },
+    }
+}
+
 /// No selector: the most recently written log of any kind.
 fn resolve_newest(index: &TailIndex) -> Resolution {
     let newest_drain = index.drains.first();
@@ -222,21 +274,25 @@ fn resolve_newest(index: &TailIndex) -> Resolution {
                 Resolution::Found {
                     path: d.path.clone(),
                     label: format!("drain {}", d.id),
+                    notice: None,
                 }
             } else {
                 Resolution::Found {
                     path: e.path.clone(),
                     label: log_label(e),
+                    notice: None,
                 }
             }
         }
         (Some(d), None) => Resolution::Found {
             path: d.path.clone(),
             label: format!("drain {}", d.id),
+            notice: None,
         },
         (None, Some(e)) => Resolution::Found {
             path: e.path.clone(),
             label: log_label(e),
+            notice: None,
         },
         (None, None) => Resolution::NoLog {
             what: "this project".to_string(),
@@ -282,6 +338,7 @@ fn resolve_session(index: &TailIndex, session: &SessionRef) -> Resolution {
         return Resolution::Found {
             path: entry.path.clone(),
             label: format!("{} · {}", session.id, log_label(entry)),
+            notice: None,
         };
     }
     no_log_for_session(index, session)
@@ -310,6 +367,10 @@ pub fn session_log<'a>(index: &'a TailIndex, session: &SessionRef) -> Option<&'a
         }
     }
     None
+}
+
+fn newest_headless_for_spec<'a>(index: &'a TailIndex, spec: &str) -> Option<&'a LogEntry> {
+    index.headless.iter().find(|e| entry_matches_spec(e, spec))
 }
 
 fn no_log_for_session(index: &TailIndex, session: &SessionRef) -> Resolution {
@@ -404,6 +465,20 @@ fn log_label(entry: &LogEntry) -> String {
     }
 }
 
+// trace:BUG-842 | ai:codex
+fn live_drain_label(live: &LiveDrain, entry: &LogEntry) -> String {
+    match (&live.current, &live.phase) {
+        (Some(spec), Some(phase)) => format!("live drain {spec} phase {phase}"),
+        (Some(spec), None) => format!("live drain {spec}"),
+        (None, _) => format!("live drain {}", log_label(entry)),
+    }
+}
+
+fn fmt_date(t: SystemTime) -> String {
+    let when: chrono::DateTime<chrono::Local> = t.into();
+    when.format("%Y-%m-%d").to_string()
+}
+
 // ---------------------------------------------------------------------------
 // Gathering
 // ---------------------------------------------------------------------------
@@ -412,6 +487,13 @@ fn log_label(entry: &LogEntry) -> String {
 /// drain currently holds the lock.
 // trace:TASK-1167 | ai:claude
 pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex {
+    let live_drain = match crate::drain_state::probe(project_root) {
+        crate::drain_state::DrainStatus::Active(state) => Some(LiveDrain {
+            current: state.current,
+            phase: state.current_phase,
+        }),
+        crate::drain_state::DrainStatus::None | crate::drain_state::DrainStatus::Stale(_) => None,
+    };
     TailIndex {
         drains: discover_drain_logs(&project_root.join(".aida").join("burndown")),
         headless: headless_tail::discover_logs(&project_root.join(".aida").join("headless-logs"))
@@ -424,6 +506,7 @@ pub fn build_index(project_root: &Path, sessions: Vec<SessionRef>) -> TailIndex 
             crate::drain_lock::probe_lock(project_root),
             crate::drain_lock::LockStatus::Running(_)
         ),
+        live_drain,
     }
 }
 
@@ -476,7 +559,11 @@ pub fn handle_tail(
     }
 
     match resolve(&index, opts.target.as_deref()) {
-        Resolution::Found { path, label } => {
+        Resolution::Found {
+            path,
+            label,
+            notice,
+        } => {
             let since_cutoff = opts.since.and_then(|d| {
                 chrono::DateTime::<chrono::Utc>::from(SystemTime::now()).checked_sub_signed(
                     chrono::Duration::from_std(d).unwrap_or_else(|_| chrono::Duration::zero()),
@@ -500,12 +587,21 @@ pub fn handle_tail(
                 backlog_lines: opts.lines,
                 raw: opts.json,
             };
+            if let Some(notice) = notice {
+                eprintln!("{notice}");
+            }
             eprintln!(
                 "{} {} {}",
                 "==>".dimmed(),
                 label,
                 path.display().to_string().dimmed()
             );
+            if is_drain_selector(opts.target.as_deref())
+                && stream_opts.follow
+                && index.live_drain.is_some()
+            {
+                return stream_live_drain(project_root, &format_opts, &stream_opts);
+            }
             headless_tail::stream_path(&path, &format_opts, &stream_opts)
         }
         Resolution::NoLog { what, hint } => {
@@ -533,8 +629,162 @@ pub fn handle_tail(
     }
 }
 
+fn is_drain_selector(selector: Option<&str>) -> bool {
+    selector
+        .map(str::trim)
+        .is_some_and(|s| s.eq_ignore_ascii_case("drain") || s.eq_ignore_ascii_case("burndown"))
+}
+
+// Follow the current member log named by drain-state, switching as the drain
+// crosses spec or phase-session boundaries. trace:BUG-842 | ai:codex
+fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Result<()> {
+    let mut current_path: Option<PathBuf> = None;
+    let mut current_spec: Option<String> = None;
+    let mut current_phase: Option<String> = None;
+    let mut pos: u64 = 0;
+    let mut malformed: u64 = 0;
+    let mut emitted: u64 = 0;
+    let mut initial_backlog = stream.backlog_lines;
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+
+    loop {
+        let state = match crate::drain_state::probe(project_root) {
+            crate::drain_state::DrainStatus::Active(state) => state,
+            crate::drain_state::DrainStatus::None | crate::drain_state::DrainStatus::Stale(_) => {
+                break;
+            }
+        };
+        let Some(spec) = state.current.as_deref() else {
+            std::thread::sleep(Duration::from_millis(250));
+            continue;
+        };
+        let logs = headless_tail::discover_logs(&project_root.join(".aida").join("headless-logs"))
+            .unwrap_or_default();
+        let idx = TailIndex {
+            drains: Vec::new(),
+            headless: logs,
+            sessions: Vec::new(),
+            drain_live: true,
+            live_drain: Some(LiveDrain {
+                current: Some(spec.to_string()),
+                phase: state.current_phase.clone(),
+            }),
+        };
+        let Some(entry) = newest_headless_for_spec(&idx, spec) else {
+            std::thread::sleep(Duration::from_millis(250));
+            continue;
+        };
+
+        if current_path.as_deref() != Some(entry.path.as_path()) {
+            if current_path.is_some() {
+                writeln!(
+                    out,
+                    "-- phase/spec boundary: now following {} phase {} --",
+                    spec,
+                    state.current_phase.as_deref().unwrap_or("?")
+                )?;
+            }
+            current_path = Some(entry.path.clone());
+            current_spec = Some(spec.to_string());
+            current_phase = state.current_phase.clone();
+            pos = 0;
+        } else if current_spec.as_deref() != Some(spec)
+            || current_phase.as_deref() != state.current_phase.as_deref()
+        {
+            current_spec = Some(spec.to_string());
+            current_phase = state.current_phase.clone();
+        }
+
+        let _saw_result = stream_path_once(
+            &entry.path,
+            &mut pos,
+            opts,
+            stream.raw,
+            initial_backlog.take(),
+            &mut malformed,
+            &mut emitted,
+            &mut out,
+        )?;
+        std::thread::sleep(Duration::from_millis(250));
+    }
+
+    let _ = out.flush();
+    if malformed > 0 {
+        eprintln!(
+            "{} skipped {} malformed JSONL line{} (emitted {} formatted lines)",
+            "warning:".yellow(),
+            malformed,
+            if malformed == 1 { "" } else { "s" },
+            emitted
+        );
+    }
+    Ok(())
+}
+
+fn stream_path_once(
+    path: &Path,
+    pos: &mut u64,
+    opts: &FormatOpts,
+    raw: bool,
+    backlog_lines: Option<usize>,
+    malformed: &mut u64,
+    emitted: &mut u64,
+    out: &mut std::io::StdoutLock<'_>,
+) -> Result<bool> {
+    let mut file = fs::File::open(path)?;
+    let file_len = file.metadata().map(|m| m.len()).unwrap_or(*pos);
+    if file_len < *pos {
+        *pos = 0;
+    }
+    file.seek(SeekFrom::Start(*pos))?;
+    let mut reader = BufReader::new(file);
+    let mut buf = String::new();
+    let mut rendered = Vec::new();
+    let mut saw_result = false;
+
+    loop {
+        buf.clear();
+        let read = reader.read_line(&mut buf)?;
+        if read == 0 {
+            break;
+        }
+        if !buf.ends_with('\n') {
+            break;
+        }
+        *pos += read as u64;
+        let raw_line = buf.trim_end_matches('\n');
+        if raw {
+            rendered.push(raw_line.to_string());
+            continue;
+        }
+        let fmt = headless_tail::format_line(raw_line, opts);
+        if fmt.malformed {
+            *malformed += 1;
+            continue;
+        }
+        rendered.extend(fmt.lines);
+        if fmt.is_result {
+            saw_result = true;
+        }
+    }
+
+    let start = backlog_lines
+        .map(|keep| rendered.len().saturating_sub(keep))
+        .unwrap_or(0);
+    for line in &rendered[start..] {
+        writeln!(out, "{line}")?;
+        *emitted += 1;
+    }
+    Ok(saw_result)
+}
+
 fn print_list(index: &TailIndex, color: bool) -> Result<()> {
-    if index.drains.is_empty() && index.headless.is_empty() && index.sessions.is_empty() {
+    if index.live_drain.is_none()
+        && index.drains.is_empty()
+        && index.headless.is_empty()
+        && index.sessions.is_empty()
+    {
         println!("Nothing to tail — no drain logs, no session logs, no running sessions.");
         return Ok(());
     }
@@ -547,8 +797,13 @@ fn print_list(index: &TailIndex, color: bool) -> Result<()> {
         }
     };
 
-    if !index.drains.is_empty() {
+    if index.live_drain.is_some() || !index.drains.is_empty() {
         head("Drains");
+        if let Some(live) = &index.live_drain {
+            let current = live.current.as_deref().unwrap_or("-");
+            let phase = live.phase.as_deref().unwrap_or("-");
+            println!("  live  {current}  {phase}");
+        }
         for d in index.drains.iter().take(5) {
             let when: chrono::DateTime<chrono::Local> = d.mtime.into();
             println!("  {}  {}", d.id, when.format("%Y-%m-%d %H:%M:%S"));
