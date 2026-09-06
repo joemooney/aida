@@ -517,3 +517,10 @@
   note: advisor-cleared at filing
   added_at: 2026-09-05T23:03:08.846445269Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a07412-c25b-74c2-a272-1eefce709fbc
+  position: 362000
+  added_by: joe
+  added_at: 2026-09-06T00:16:46.432276475Z
+  for_role: implementer
+  added_by_machine: imac
