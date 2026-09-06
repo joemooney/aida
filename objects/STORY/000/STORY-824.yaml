@@ -17,27 +17,38 @@ description: |-
   - With a stale drain (state file present, pid dead): output is byte-identical to no-drain
   - No drain files: unchanged output (existing tests stay green)
   - aida statusbar line includes the same segment under the same rules
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:27:57.443962320Z
-modified_at: 2026-09-06T00:39:07.124577880Z
+modified_at: 2026-09-06T03:55:33.121815685Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07423-66f9-7ab1-af16-2573e890d99c
   created_at: 2026-09-06T00:34:38.866787608Z
   created_by: joe
+history:
+- id: 01a074db-6f7b-7140-a029-307e883eace3
+  author: aida-auto-bump
+  timestamp: 2026-09-06T03:55:33.115424205Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a074db-6f81-7763-a308-5a7a9939738e
+  timestamp: 2026-09-06T03:55:33.121815025Z
+  agent: aida
+  commit_sha: 5afb02ba7c57d3aea99e5851dfd708c39605c55f
+  summary: Completed via merge 5afb02ba
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T00:23:36.675520876Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: failed
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-824 --work`'
-  shelved_at: 2026-09-06T00:39:07.124577880Z
+  completed_at: 2026-09-06T03:55:33.115302643Z
+  completion_sha: 5afb02ba7c57d3aea99e5851dfd708c39605c55f
