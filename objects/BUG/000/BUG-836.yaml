@@ -11,11 +11,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-04T05:10:55.020879792Z
-modified_at: 2026-09-06T08:20:23.039895965Z
+modified_at: 2026-09-06T08:30:55.697372898Z
 req_type: Bug
 tags:
 - multi-hub
 - ux
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a075d7-75ca-7353-95d4-458276b2a519
+  created_at: 2026-09-06T08:30:55.697358847Z
+  created_by: joe
 execution_mode: drain
 implementation_info:
   implemented: true
