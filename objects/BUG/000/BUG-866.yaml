@@ -3,11 +3,11 @@ spec_id: BUG-866
 agreed_id: BUG-866
 title: drain status pacing anchors spec/phase elapsed to drain start, not spec start
 description: 'Observed minutes after STORY-948 shipped (2026-09-06 00:49): drain status showed BUG-853 at phase 1 with spec 1h 13m and phase 1h 13m when the spec had been running under 20 minutes — 1h13m is exactly the orchestrator''s age (started 23:36). The spec/phase elapsed fields are anchored to drain start instead of the current spec and phase start timestamps from drain-state. The last-output age was correct (6s). Fix the anchors. Acceptance: with a synthesized drain-state.json where the drain started 1h ago and the current spec 5m ago, drain status renders spec ~5m and phase from its own transition timestamp; unit test on the anchor selection.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T07:50:47.750702386Z
-modified_at: 2026-09-06T07:50:52.160104948Z
+modified_at: 2026-09-06T11:15:37.876343936Z
 req_type: Bug
 execution_mode: drain
