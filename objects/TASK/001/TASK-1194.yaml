@@ -13,12 +13,12 @@ description: |-
   - Live drain: aida status shows the line with correct position/spec/phase; bare status stays sub-second
   - Stale lock (dead pid) or no drain: output byte-identical to today
   - Helper is shared with the STORY-824 call sites (unit-tested once)
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:22:08.802155599Z
-modified_at: 2026-09-06T10:14:02.924360753Z
+modified_at: 2026-09-06T10:35:58.852008421Z
 req_type: Task
 relationships:
 - rel_type: !Custom implemented-by
@@ -36,26 +36,28 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-06T05:15:20.123098662Z
   modified_at: 2026-09-06T05:15:20.123098662Z
+history:
+- id: 01a0764a-09fd-79c1-98ab-5ec39d6b9f14
+  author: aida-auto-bump
+  timestamp: 2026-09-06T10:35:58.845261258Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0764a-0a04-79d0-b13e-b2f4b3f57820
+  timestamp: 2026-09-06T10:35:58.852007099Z
+  agent: aida
+  commit_sha: 3ebf6df70876a152f56bd731f7c1bab7001182f6
+  summary: Completed via merge 3ebf6df7
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: session end observed 2 commits ahead on branch `task-1194-review` with no open PR; work may need manual push/PR recovery'
+  - 'punted: PR-1658 base is 11 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: aida-cli-lib/src/lib.rs aida-cli-lib/src/drain_state.rs Recover with: aida pr rebase 1658 # clean rebase + force-push-with-lease aida pr rebase 1658 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code).'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T04:11:54.565764216Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: failed
-  detail: |-
-    PR-1658 base is 11 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code.
-
-    Overlapping files:
-      aida-cli-lib/src/lib.rs
-      aida-cli-lib/src/drain_state.rs
-
-    Recover with:
-      aida pr rebase 1658              # clean rebase + force-push-with-lease
-      aida pr rebase 1658 --interactive  # if conflicts need manual resolve
-
-    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code).
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1194 --work`'
-  shelved_at: 2026-09-06T10:14:02.924360753Z
+  completed_at: 2026-09-06T10:35:58.172090381Z
+  completion_sha: 3ebf6df70876a152f56bd731f7c1bab7001182f6
