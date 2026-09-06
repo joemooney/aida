@@ -3,11 +3,11 @@ spec_id: BUG-851
 agreed_id: BUG-851
 title: queue rework re-queues with empty for_role at the queue tail — unroutable and unordered
 description: 'Observed live (2026-09-05, BUG-838 rework): aida queue rework BUG-838 (no --work) re-queued the spec with for_role EMPTY ("") and at the queue TAIL. Consequences: role-filtered surfaces (queue list --for, role enter queue head, drain drivability) do not see it, and the rework — usually the most urgent item, with a reviewer waiting — lands behind everything queued since. Fix: rework inherits the original queue entry''s for_role (falling back to implementer), and re-queues at the HEAD by default (--tail to opt out). Acceptance: rework of a spec originally routed for implementer shows for_role implementer at position 1 in queue list; a --for override still wins; unit test on the requeue routing.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T05:14:30.946988496Z
-modified_at: 2026-09-06T05:15:00.799491276Z
+modified_at: 2026-09-06T07:03:44.652717074Z
 req_type: Bug
 execution_mode: drain
