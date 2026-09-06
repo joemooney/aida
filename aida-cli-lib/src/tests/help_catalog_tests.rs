@@ -73,3 +73,45 @@ fn catalog_descriptions_carry_no_spec_ids() {
         }
     }
 }
+
+#[test]
+fn concept_index_resolves_inbox_surfaces() {
+    let rows = concept_matches("inbox");
+    let surfaces: Vec<&str> = rows.iter().map(|r| r.surface).collect();
+    assert!(surfaces.contains(&"aida awaiting"));
+    assert!(surfaces.contains(&"aida mailbox inbox"));
+    assert!(surfaces.contains(&"aida brief list"));
+    assert!(rows.iter().all(|r| !r.why.trim().is_empty()));
+}
+
+#[test]
+fn concept_index_surfaces_exist_in_clap_catalog() {
+    let paths: std::collections::HashSet<String> =
+        catalog_rows().into_iter().map(|r| r.path).collect();
+    for row in CONCEPT_INDEX {
+        assert!(
+            paths.contains(row.surface),
+            "concept `{}` references missing surface `{}`",
+            row.concept,
+            row.surface
+        );
+    }
+}
+
+#[test]
+fn help_corpus_search_finds_command_help_long_tail() {
+    let hits = search_help_corpus_in_memory("pickup brief", 5);
+    assert!(
+        hits.iter().any(|hit| hit.path.starts_with("aida brief")),
+        "expected brief help hit, got {hits:?}"
+    );
+}
+
+#[test]
+fn help_query_telemetry_term_privacy_filter() {
+    assert!(is_safe_help_query_term("inbox"));
+    assert!(is_safe_help_query_term("cache-rebuild"));
+    assert!(!is_safe_help_query_term("STORY-837"));
+    assert!(!is_safe_help_query_term("contains/slash"));
+    assert!(!is_safe_help_query_term("this-term-is-far-too-long"));
+}
