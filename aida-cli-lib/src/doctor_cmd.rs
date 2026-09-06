@@ -3299,7 +3299,45 @@ mod story_462_doctor_tests {
             "OBE-briefs"
         );
         assert_eq!(normalize_doctor_category("locks").unwrap(), "stale-locks");
+        assert_eq!(
+            normalize_doctor_category("agent-wiring").unwrap(),
+            "agents-wiring"
+        );
         assert!(normalize_doctor_category("not-a-category").is_err());
+    }
+
+    #[test]
+    fn doctor_reports_antigravity_wiring_gaps_when_profile_enabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let home = tmp.path().join("home");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_HOME", home.to_str().unwrap()),
+            ("AIDA_TEST_ANTIGRAVITY_BINARY", "1"),
+            ("AIDA_TEST_ANTIGRAVITY_MCP_REGISTERED", "0"),
+        ]);
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[agents]\nenabled = [\"antigravity\"]\n",
+        )
+        .unwrap();
+
+        let findings = collect_doctor_findings(
+            root,
+            &aida_core::models::RequirementsStore::new(),
+            Some("agents-wiring"),
+        )
+        .unwrap();
+
+        let ids: std::collections::HashSet<&str> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(findings.len(), 2, "{findings:?}");
+        assert!(ids.contains("antigravity/agents-md"));
+        assert!(ids.contains("antigravity/mcp"));
+        assert!(findings.iter().any(|f| {
+            f.action
+                == "antigravity --add-mcp '{\"name\":\"aida\",\"command\":\"aida\",\"args\":[\"mcp-serve\"]}'"
+        }));
     }
 
     // ---- TASK-673: completed-without-commit integrity tripwire ----

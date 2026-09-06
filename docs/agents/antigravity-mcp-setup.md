@@ -6,7 +6,7 @@ This document records the working local setup for connecting the Antigravity CLI
 
 ## Preconditions
 
-- `aida` is installed and available on `PATH`, or you can substitute an absolute path to the binary (`/home/joe/ai/aida/target/debug/aida`).
+- `aida` is installed and available on `PATH`.
 - The target repository has been initialized with AIDA and contains `.aida/`.
 - Antigravity CLI is installed.
 - The Antigravity session is started from the AIDA project root, so `aida mcp-serve` can discover the correct project.
@@ -32,7 +32,7 @@ x64
 From the AIDA project root, register the MCP server by feeding the JSON definition to `--add-mcp`:
 
 ```bash
-antigravity --add-mcp '{"name":"aida","command":"/home/joe/ai/aida/target/debug/aida","args":["mcp-serve"]}'
+antigravity --add-mcp '{"name":"aida","command":"aida","args":["mcp-serve"]}'
 ```
 
 Expected output:
