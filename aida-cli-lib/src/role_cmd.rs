@@ -377,6 +377,65 @@ fn handle_role_add(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RoleRequirementDisplay {
+    display_id: String,
+    title: String,
+}
+
+fn open_role_enter_cache(project_root: &std::path::Path) -> Option<rusqlite::Connection> {
+    let cache_path = project_root.join(".aida/cache.db");
+    if !cache_path.exists() {
+        return None;
+    }
+    rusqlite::Connection::open_with_flags(cache_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .ok()
+}
+
+// BUG-840: role-enter decoration must use targeted cache reads only. The cache
+// is rebuildable/best-effort, so schema/read errors intentionally collapse to
+// None instead of rebuilding or scanning the YAML store.
+// trace:BUG-840 | ai:codex
+fn lookup_role_requirement_by_uuid(
+    conn: &rusqlite::Connection,
+    uuid: uuid::Uuid,
+) -> Option<RoleRequirementDisplay> {
+    conn.query_row(
+        "SELECT COALESCE(agreed_id, spec_id, ''), title \
+         FROM requirements_cache WHERE id = ?1",
+        [uuid.to_string()],
+        |row| {
+            Ok(RoleRequirementDisplay {
+                display_id: row.get::<_, String>(0)?,
+                title: row.get::<_, String>(1)?,
+            })
+        },
+    )
+    .ok()
+    .filter(|r| !r.display_id.is_empty())
+}
+
+fn lookup_role_requirement_by_key(
+    conn: &rusqlite::Connection,
+    key: &str,
+) -> Option<RoleRequirementDisplay> {
+    conn.query_row(
+        "SELECT COALESCE(agreed_id, spec_id, ''), title \
+         FROM requirements_cache \
+         WHERE spec_id = ?1 COLLATE NOCASE OR agreed_id = ?1 COLLATE NOCASE \
+         LIMIT 1",
+        [key],
+        |row| {
+            Ok(RoleRequirementDisplay {
+                display_id: row.get::<_, String>(0)?,
+                title: row.get::<_, String>(1)?,
+            })
+        },
+    )
+    .ok()
+    .filter(|r| !r.display_id.is_empty())
+}
+
 fn emit_role_enter_eval(
     project_root: &std::path::Path,
     state: &RoleState,
@@ -454,43 +513,13 @@ fn emit_role_enter_eval(
         scope,
         sh_single_quote(&purpose_suffix)
     );
-    // TASK-48 / TASK-49: load store + queue once (best-effort) so both
-    // sections below can resolve spec_id → title and surface the
-    // role's queue head. Failures are silent — falls back to the
-    // legacy minimal rendering. trace:TASK-48 | ai:claude
-    //
-    // BUG-83: the lookup also carries a preferred display id
-    // (agreed_id when assigned, else spec_id) so the "Queued for
-    // this role" and "Last touched" sections render the short form
-    // once `aida db merge-gate` has run. The map is keyed by both
-    // spec_id AND agreed_id so an activity-log entry recorded under
-    // either form resolves to the same row.
-    // trace:BUG-83 | ai:claude
+    // TASK-48 / TASK-49: read the queue YAML (cheap) and resolve the handful of
+    // decorative titles/display ids through the read-only cache. Failures are
+    // silent — falls back to bare ids so entering a role never blocks on a full
+    // orphan-store scan or cache rebuild. trace:TASK-48 trace:BUG-840 | ai:codex
     let store_path = project_root.join(".aida-store");
-    let (lookup, queue_for_role): (
-        std::collections::HashMap<String, (String, String)>,
-        Vec<aida_core::QueueEntry>,
-    ) = if store_path.exists() {
+    let queue_for_role: Vec<aida_core::QueueEntry> = if store_path.exists() {
         let storage = Storage::new(store_path);
-        let lookup = storage
-            .load()
-            .map(|s| {
-                let mut map: std::collections::HashMap<String, (String, String)> =
-                    std::collections::HashMap::new();
-                for r in &s.requirements {
-                    let display = r.display_id();
-                    let title = r.title.clone();
-                    if let Some(sid) = r.spec_id.as_deref() {
-                        map.insert(sid.to_string(), (title.clone(), display.clone()));
-                    }
-                    if let Some(aid) = r.agreed_id.as_deref() {
-                        map.entry(aid.to_string())
-                            .or_insert((title.clone(), display.clone()));
-                    }
-                }
-                map
-            })
-            .unwrap_or_default();
         // BUG-89: route through the canonical helper so the role-show
         // queue head matches what `aida queue list` would show in the
         // same shell (previously this path skipped the USERNAME
@@ -509,10 +538,11 @@ fn emit_role_enter_eval(
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        (lookup, queue_for_role)
+        queue_for_role
     } else {
-        (Default::default(), Vec::new())
+        Vec::new()
     };
+    let role_cache = open_role_enter_cache(project_root);
 
     // TASK-48: queue head, capped at 5, with a "+N more" hint when the
     // role queue is deeper. Empty case still renders so the absence
@@ -526,24 +556,15 @@ fn emit_role_enter_eval(
         } else {
             println!("echo ''");
             println!("echo '  Queued for this role ({}):'", total);
-            // Load store once more to look up reqs by uuid for title
-            // resolution. The queue entry only stores uuid; we need the
-            // spec_id + title from the store.
-            let store_snapshot = if !queue_for_role.is_empty() {
-                let storage = Storage::new(project_root.join(".aida-store"));
-                storage.load().ok()
-            } else {
-                None
-            };
             for entry in queue_for_role.iter().take(show_n) {
                 // BUG-83: prefer agreed_id (short merge-gated id) over
                 // spec_id so this section stops drifting from `aida queue
                 // list` / `aida queue next`. trace:BUG-83 | ai:claude
-                let (display_id, title) = store_snapshot
+                let (display_id, title) = role_cache
                     .as_ref()
-                    .and_then(|s| s.requirements.iter().find(|r| r.id == entry.requirement_id))
-                    .map(|r| (r.display_id(), truncate(&r.title, 60).to_string()))
-                    .unwrap_or_else(|| ("(deleted)".into(), String::new()));
+                    .and_then(|c| lookup_role_requirement_by_uuid(c, entry.requirement_id))
+                    .map(|r| (r.display_id, truncate(&r.title, 60).to_string()))
+                    .unwrap_or_else(|| (entry.requirement_id.to_string(), String::new()));
                 println!("echo '    {:<12} {}'", display_id, sh_single_quote(&title));
             }
             if total > show_n {
@@ -571,10 +592,11 @@ fn emit_role_enter_eval(
             // display id, so merge-gated rows show as the short form here
             // too. Falls back to the raw stored id if the requirement is
             // gone from the store. trace:BUG-83 | ai:claude
-            let (title, display_id) = match lookup.get(&entry.spec_id) {
-                Some((t, d)) => (truncate(t, 60).to_string(), d.clone()),
-                None => (String::new(), entry.spec_id.clone()),
-            };
+            let (title, display_id) = role_cache
+                .as_ref()
+                .and_then(|c| lookup_role_requirement_by_key(c, &entry.spec_id))
+                .map(|r| (truncate(&r.title, 60).to_string(), r.display_id))
+                .unwrap_or_else(|| (String::new(), entry.spec_id.clone()));
             // Match the queue-head column widths so the two sections
             // line up: 12-wide id, then title, then action+time.
             if title.is_empty() {
@@ -961,6 +983,77 @@ fn handle_role_scaffold() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn role_cache_fixture() -> (tempfile::TempDir, uuid::Uuid) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        let id = uuid::Uuid::new_v4();
+        let conn = rusqlite::Connection::open(dir.path().join(".aida/cache.db")).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE requirements_cache (
+                id TEXT PRIMARY KEY NOT NULL,
+                spec_id TEXT,
+                agreed_id TEXT,
+                title TEXT NOT NULL
+             );",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO requirements_cache (id, spec_id, agreed_id, title)
+             VALUES (?1, 'BUG-840', 'BUG-840A', 'Fast role enter')",
+            [id.to_string()],
+        )
+        .unwrap();
+        drop(conn);
+        (dir, id)
+    }
+
+    // trace:BUG-840 | ai:codex
+    #[test]
+    fn role_enter_uuid_lookup_reads_display_from_cache() {
+        let (dir, id) = role_cache_fixture();
+        let conn = open_role_enter_cache(dir.path()).expect("cache opens read-only");
+
+        let row = lookup_role_requirement_by_uuid(&conn, id).expect("row resolves");
+
+        assert_eq!(
+            row,
+            RoleRequirementDisplay {
+                display_id: "BUG-840A".to_string(),
+                title: "Fast role enter".to_string(),
+            }
+        );
+    }
+
+    // trace:BUG-840 | ai:codex
+    #[test]
+    fn role_enter_activity_lookup_accepts_spec_or_agreed_id() {
+        let (dir, _) = role_cache_fixture();
+        let conn = open_role_enter_cache(dir.path()).expect("cache opens read-only");
+
+        let by_spec = lookup_role_requirement_by_key(&conn, "bug-840").expect("spec resolves");
+        let by_agreed =
+            lookup_role_requirement_by_key(&conn, "bug-840a").expect("agreed id resolves");
+
+        assert_eq!(by_spec, by_agreed);
+        assert_eq!(by_spec.display_id, "BUG-840A");
+        assert_eq!(by_spec.title, "Fast role enter");
+    }
+
+    // trace:BUG-840 | ai:codex
+    #[test]
+    fn role_enter_cache_lookup_fails_closed_on_stale_schema() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        let conn = rusqlite::Connection::open(dir.path().join(".aida/cache.db")).unwrap();
+        conn.execute_batch("CREATE TABLE something_else (id TEXT);")
+            .unwrap();
+        drop(conn);
+        let conn = open_role_enter_cache(dir.path()).expect("sqlite file opens");
+
+        assert!(lookup_role_requirement_by_key(&conn, "BUG-840").is_none());
+        assert!(lookup_role_requirement_by_uuid(&conn, uuid::Uuid::new_v4()).is_none());
+    }
 
     // trace:STORY-821 | ai:codex
     #[test]
