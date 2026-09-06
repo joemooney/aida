@@ -45750,5 +45750,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4000
+- id: 01a07534-1709-7770-abc0-7ca7f28377d7
+  target_id: 01a07534-12d9-73f2-8ead-1a797b4eda8a
+  author: aida
+  node_id: '1'
+  lamport: 4001
+  timestamp: 2026-09-06T05:32:23.177931156Z
+  kind: !Create
+    title: 'Review PR-1661: [AI:codex] fix(init): wire antigravity mcp setup (STORY-835)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07521`) for branch `story-835`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1661>
+      - Branch: `story-835` → `main`
+
+      ## Covers
+
+      - STORY-835
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1661` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4001
 node_id: '1'
