@@ -15,12 +15,12 @@ description: |-
   Acceptance:
   - A queue with one reviewer-routed entry at the head: implementer drain skips it in <1s with the log line, drives the next implementer item, exit summary counts it skipped not shelved
   - Unit test on the drivability filter; integration test asserting no implementer session spawns for a reviewer-routed entry
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T06:35:29.157908499Z
-modified_at: 2026-09-06T10:33:47.590730733Z
+modified_at: 2026-09-06T10:46:17.314959982Z
 req_type: Bug
 comments:
 - id: 01a07575-e5cc-7322-a603-4800716ae83b
@@ -30,3 +30,7 @@ comments:
   modified_at: 2026-09-06T06:44:15.948760264Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-06T10:46:17.314959982Z
+  implemented_by: joe
