@@ -45005,5 +45005,17 @@ operations:
   timestamp: 2026-09-06T00:11:05.037920113Z
   kind: !SetStatus
     status: Rejected
-clock: 3961
+- id: 01a07412-c7db-73d1-8c22-223d68c6e694
+  target_id: 01a07412-c25b-74c2-a272-1eefce709fbc
+  author: aida
+  node_id: '1'
+  lamport: 3962
+  timestamp: 2026-09-06T00:16:23.003103101Z
+  kind: !Create
+    title: 'aida help <term>: concept index + FTS over help corpus + AI escape hatch'
+    description: see next edit
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3962
 node_id: '1'
