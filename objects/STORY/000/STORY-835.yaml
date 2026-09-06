@@ -16,12 +16,12 @@ description: |-
   - Headless init prints the registration command, executes nothing
   - doctor reports the two wiring gaps when present, silent when wired
   - docs/agents/antigravity-mcp-setup.md updated to PATH-resolved command
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T23:03:05.353921619Z
-modified_at: 2026-09-05T23:03:13.030486153Z
+modified_at: 2026-09-06T05:11:19.433214283Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
