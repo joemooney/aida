@@ -534,10 +534,147 @@ struct RemoteBranchStanding {
     ahead_behind: Option<(u32, u32)>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RemoteBranchDrift {
+    InSync,
+    Behind(Vec<RemoteBehindHint>),
+    Diverged,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RemoteBehindHint {
+    remote: String,
+    commits: u32,
+    source_remote: String,
+}
+
+fn classify_remote_branch_drift(standings: &[RemoteBranchStanding]) -> RemoteBranchDrift {
+    let present: Vec<&RemoteBranchStanding> =
+        standings.iter().filter(|s| s.head.is_some()).collect();
+    let absent = standings.len() - present.len();
+    if absent > 0 {
+        return if present.is_empty() {
+            RemoteBranchDrift::InSync
+        } else {
+            RemoteBranchDrift::Diverged
+        };
+    }
+
+    let mut heads: Vec<&String> = present.iter().filter_map(|s| s.head.as_ref()).collect();
+    heads.sort();
+    heads.dedup();
+    if heads.len() <= 1 {
+        return RemoteBranchDrift::InSync;
+    }
+
+    // trace:BUG-836 | ai:codex
+    // A mirror that is strictly fast-forwardable from the local/canonical tip is
+    // lagging, not divergent. Two-sided local-vs-remote history is still drift.
+    let up_to_date: Vec<&RemoteBranchStanding> = present
+        .iter()
+        .copied()
+        .filter(|s| matches!(s.ahead_behind, Some((0, 0))))
+        .collect();
+    if up_to_date.is_empty() {
+        return RemoteBranchDrift::Diverged;
+    }
+    let source_remote = up_to_date
+        .iter()
+        .find(|s| s.remote == "origin")
+        .or_else(|| up_to_date.first())
+        .map(|s| s.remote.clone())
+        .unwrap_or_else(|| "origin".to_string());
+
+    let mut hints = Vec::new();
+    for s in present {
+        match s.ahead_behind {
+            Some((ahead, 0)) if ahead > 0 => hints.push(RemoteBehindHint {
+                remote: s.remote.clone(),
+                commits: ahead,
+                source_remote: source_remote.clone(),
+            }),
+            Some((0, 0)) => {}
+            _ => return RemoteBranchDrift::Diverged,
+        }
+    }
+
+    if hints.is_empty() {
+        RemoteBranchDrift::Diverged
+    } else {
+        RemoteBranchDrift::Behind(hints)
+    }
+}
+
+fn remote_branch_verdict(drift: &RemoteBranchDrift) -> String {
+    match drift {
+        RemoteBranchDrift::Diverged => {
+            format!("{} DIVERGED", crate::glyph(crate::glyphs::Glyph::Cross))
+        }
+        RemoteBranchDrift::Behind(hints) => {
+            let commits = hints.iter().map(|h| h.commits).max().unwrap_or(0);
+            format!(
+                "⇡ BEHIND ({commits} commit{})",
+                if commits == 1 { "" } else { "s" }
+            )
+        }
+        RemoteBranchDrift::InSync => {
+            format!("{} in sync", crate::glyph(crate::glyphs::Glyph::Check))
+        }
+    }
+}
+
+fn remote_status_guidance_lines(
+    branch_reports: &[(String, Vec<RemoteBranchStanding>, RemoteBranchDrift)],
+) -> Vec<String> {
+    let any_diverged = branch_reports
+        .iter()
+        .any(|(_, _, drift)| matches!(drift, RemoteBranchDrift::Diverged));
+    let any_behind = branch_reports
+        .iter()
+        .any(|(_, _, drift)| matches!(drift, RemoteBranchDrift::Behind(_)));
+
+    if any_diverged {
+        return vec![
+            format!(
+                "{} remotes disagree on a shared branch. For `aida-store`, run `aida remote reconcile`",
+                crate::glyph(crate::glyphs::Glyph::Cross)
+            ),
+            "  (dry-run plan; add --execute to union-merge and push every hub). For code"
+                .to_string(),
+            "  branches, merge the divergent tips and push to every remote — never".to_string(),
+            "  force-push a shared branch to resolve.".to_string(),
+        ];
+    }
+
+    if any_behind {
+        let mut lines = vec![
+            "⇡ one or more mirror remotes are behind but fast-forwardable. Push the canonical tip:"
+                .to_string(),
+        ];
+        for (branch, _, drift) in branch_reports {
+            if let RemoteBranchDrift::Behind(hints) = drift {
+                for h in hints {
+                    lines.push(format!(
+                        "  git push {} {}/{}:{}",
+                        h.remote, h.source_remote, branch, branch
+                    ));
+                }
+            }
+        }
+        return lines;
+    }
+
+    vec![format!(
+        "{} all remotes agree on every shared branch.",
+        crate::glyph(crate::glyphs::Glyph::Check)
+    )]
+}
+
 /// `aida remote status` — read-only drift readout across all configured
 /// remotes. Best-effort refresh, then compare each remote's tip for the shared
-/// branches; exit 2 when any branch's tips disagree so the command can gate a
-/// hook or CI. Never writes to a remote.
+/// branches; exit 2 only when tips genuinely diverge so the command can gate a
+/// hook or CI without treating a fast-forwardable mirror lag as reconciliation
+/// work. Never writes to a remote.
 // trace:TASK-1095 | ai:claude
 pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> Result<()> {
     // Compare only real remotes. Skip the `all` fan-out pseudo-remote (a single
@@ -589,8 +726,10 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
     }
 
     let mut any_diverged = false;
-    // (branch, standings, diverged) per branch.
-    let mut branch_reports: Vec<(String, Vec<RemoteBranchStanding>, bool)> = Vec::new();
+    let mut any_behind = false;
+    // (branch, standings, drift) per branch.
+    let mut branch_reports: Vec<(String, Vec<RemoteBranchStanding>, RemoteBranchDrift)> =
+        Vec::new();
 
     for b in &DRIFT_BRANCHES {
         let mut standings = Vec::new();
@@ -604,27 +743,19 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                 ahead_behind,
             });
         }
-        // Diverged when the present tips disagree, OR some remotes have the
-        // branch and others don't (mixed presence is drift too).
-        let present: Vec<&String> = standings.iter().filter_map(|s| s.head.as_ref()).collect();
-        let absent = standings.len() - present.len();
-        let distinct = {
-            let mut v: Vec<&String> = present.clone();
-            v.sort();
-            v.dedup();
-            v.len()
-        };
-        let diverged = distinct > 1 || (distinct >= 1 && absent > 0);
-        if diverged {
-            any_diverged = true;
+        let drift = classify_remote_branch_drift(&standings);
+        match drift {
+            RemoteBranchDrift::Diverged => any_diverged = true,
+            RemoteBranchDrift::Behind(_) => any_behind = true,
+            RemoteBranchDrift::InSync => {}
         }
-        branch_reports.push((b.to_string(), standings, diverged));
+        branch_reports.push((b.to_string(), standings, drift));
     }
 
     if json {
         let branches: Vec<serde_json::Value> = branch_reports
             .iter()
-            .map(|(branch, standings, diverged)| {
+            .map(|(branch, standings, drift)| {
                 let rows: Vec<serde_json::Value> = standings
                     .iter()
                     .map(|s| {
@@ -636,21 +767,40 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                         })
                     })
                     .collect();
-                serde_json::json!({ "branch": branch, "diverged": diverged, "remotes": rows })
+                let behind: Vec<serde_json::Value> = match drift {
+                    RemoteBranchDrift::Behind(hints) => hints
+                        .iter()
+                        .map(|h| {
+                            serde_json::json!({
+                                "remote": h.remote,
+                                "commits": h.commits,
+                                "source_remote": h.source_remote,
+                            })
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                serde_json::json!({
+                    "branch": branch,
+                    "state": match drift {
+                        RemoteBranchDrift::InSync => "in_sync",
+                        RemoteBranchDrift::Behind(_) => "behind",
+                        RemoteBranchDrift::Diverged => "diverged",
+                    },
+                    "diverged": matches!(drift, RemoteBranchDrift::Diverged),
+                    "behind": behind,
+                    "remotes": rows
+                })
             })
             .collect();
         println!(
             "{}",
-            serde_json::json!({ "remotes": remotes, "branches": branches, "diverged": any_diverged })
+            serde_json::json!({ "remotes": remotes, "branches": branches, "diverged": any_diverged, "behind": any_behind })
         );
     } else {
         println!("Remote sync status  ({})", remotes.join(", "));
-        for (branch, standings, diverged) in &branch_reports {
-            let verdict = if *diverged {
-                format!("{} DIVERGED", crate::glyph(crate::glyphs::Glyph::Cross))
-            } else {
-                format!("{} in sync", crate::glyph(crate::glyphs::Glyph::Check))
-            };
+        for (branch, standings, drift) in &branch_reports {
+            let verdict = remote_branch_verdict(drift);
             println!();
             println!("{branch:<16} {verdict}");
             for s in standings {
@@ -669,19 +819,8 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
             }
         }
         println!();
-        if any_diverged {
-            println!(
-                "{} remotes disagree on a shared branch. For `aida-store`, run `aida remote reconcile`",
-                crate::glyph(crate::glyphs::Glyph::Cross)
-            );
-            println!("  (dry-run plan; add --execute to union-merge and push every hub). For code");
-            println!("  branches, merge the divergent tips and push to every remote — never");
-            println!("  force-push a shared branch to resolve.");
-        } else {
-            println!(
-                "{} all remotes agree on every shared branch.",
-                crate::glyph(crate::glyphs::Glyph::Check)
-            );
+        for line in remote_status_guidance_lines(&branch_reports) {
+            println!("{line}");
         }
     }
 
@@ -1573,6 +1712,86 @@ mod tests {
         assert!(h.contains("gitlab.corp.com"));
         assert!(h.contains("aida remote attach"));
         assert!(h.contains("projects/new"));
+    }
+
+    fn standing(
+        remote: &str,
+        head: &str,
+        ahead_behind: Option<(u32, u32)>,
+    ) -> RemoteBranchStanding {
+        RemoteBranchStanding {
+            remote: remote.to_string(),
+            head: Some(head.to_string()),
+            ahead_behind,
+        }
+    }
+
+    #[test]
+    fn remote_branch_drift_classifies_fast_forward_lag_as_behind() {
+        let drift = classify_remote_branch_drift(&[
+            standing("origin", SHA_A, Some((0, 0))),
+            standing(
+                "gitlab",
+                "2222222222222222222222222222222222222222",
+                Some((164, 0)),
+            ),
+        ]);
+
+        assert_eq!(
+            drift,
+            RemoteBranchDrift::Behind(vec![RemoteBehindHint {
+                remote: "gitlab".to_string(),
+                commits: 164,
+                source_remote: "origin".to_string(),
+            }])
+        );
+    }
+
+    #[test]
+    fn remote_branch_behind_renders_push_hint_not_divergence_guidance() {
+        let drift = RemoteBranchDrift::Behind(vec![RemoteBehindHint {
+            remote: "gitlab".to_string(),
+            commits: 164,
+            source_remote: "origin".to_string(),
+        }]);
+        let verdict = remote_branch_verdict(&drift);
+        let guidance =
+            remote_status_guidance_lines(&[("main".to_string(), Vec::new(), drift)]).join("\n");
+
+        assert!(verdict.contains("BEHIND (164 commits)"), "{verdict}");
+        assert!(
+            guidance.contains("git push gitlab origin/main:main"),
+            "{guidance}"
+        );
+        assert!(!guidance.contains("remote reconcile"), "{guidance}");
+        assert!(!guidance.contains("DIVERGED"), "{guidance}");
+    }
+
+    #[test]
+    fn remote_branch_drift_keeps_two_sided_history_diverged() {
+        let drift = classify_remote_branch_drift(&[
+            standing("origin", SHA_A, Some((0, 0))),
+            standing(
+                "gitlab",
+                "3333333333333333333333333333333333333333",
+                Some((2, 1)),
+            ),
+        ]);
+
+        assert_eq!(drift, RemoteBranchDrift::Diverged);
+    }
+
+    #[test]
+    fn remote_branch_diverged_keeps_reconcile_guidance() {
+        let guidance = remote_status_guidance_lines(&[(
+            "main".to_string(),
+            Vec::new(),
+            RemoteBranchDrift::Diverged,
+        )])
+        .join("\n");
+
+        assert!(guidance.contains("remote reconcile"), "{guidance}");
+        assert!(guidance.contains("merge the divergent tips"), "{guidance}");
     }
 
     #[test]
