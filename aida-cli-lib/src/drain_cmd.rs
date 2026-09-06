@@ -61,7 +61,10 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 return Ok(());
             }
             if *json {
-                println!("{}", drain_state::render_json(&status));
+                println!(
+                    "{}",
+                    drain_state::render_json_with_context(&status, &project_root)
+                );
                 return Ok(());
             }
             match status {
@@ -69,10 +72,16 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                     println!("No drain in progress.");
                 }
                 drain_state::DrainStatus::Active(state) => {
-                    print!("{}", drain_state::render_human(&state, false));
+                    print!(
+                        "{}",
+                        drain_state::render_human_with_context(&state, false, &project_root)
+                    );
                 }
                 drain_state::DrainStatus::Stale(state) => {
-                    print!("{}", drain_state::render_human(&state, true));
+                    print!(
+                        "{}",
+                        drain_state::render_human_with_context(&state, true, &project_root)
+                    );
                 }
             }
             // TASK-294: equal visibility for the worker control channel —
