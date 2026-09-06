@@ -3,20 +3,36 @@ spec_id: BUG-853
 agreed_id: BUG-853
 title: session-end 'unshipped commits for PR-N with no open PR' warning false-positives on open and merged PRs
 description: 'Observed 3x live (2026-09-05): session end warned "detected N unshipped commit(s) for PR-1648 on branch pr-1648 with no open PR" while PR #1648 was OPEN (head branch bug-838), and again for PR-1650/PR-1657 after their squash-merges landed the content on main. Two defects: (1) the check looks for a PR by the LOCAL alias branch name (pr-<num>) instead of asking the forge about PR number N or the branch''s upstream, so an open PR under its real head branch reads as "no open PR"; (2) after a squash-merge, commits whose CONTENT is on main (empty diff vs main) are not "unshipped" — check patch-equivalence (git cherry / diff vs origin/main) before warning. A true positive (real unshipped work) must still warn. Acceptance: unit/integration coverage for open-PR-real-branch, squash-merged-content, and genuinely-unshipped cases.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T05:14:53.555836175Z
-modified_at: 2026-09-06T08:07:54.218669739Z
+modified_at: 2026-09-06T08:11:42.501683329Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a075c2-5fa7-71b3-8697-3d8d3980b9f1
   created_at: 2026-09-06T08:07:54.218655499Z
   created_by: joe
+history:
+- id: 01a075c5-f41f-7943-801e-e8ea6f61358f
+  author: aida-auto-bump
+  timestamp: 2026-09-06T08:11:42.495140114Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a075c5-f425-7aa2-a725-8fcf058bba7c
+  timestamp: 2026-09-06T08:11:42.501682732Z
+  agent: aida
+  commit_sha: 2e94f49dfd9dfe584a6b39d15d63477d61b3b801
+  summary: Completed via merge 2e94f49d
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T07:57:22.538940737Z
   implemented_by: joe
+  completed_at: 2026-09-06T08:11:42.495025918Z
+  completion_sha: 2e94f49dfd9dfe584a6b39d15d63477d61b3b801
