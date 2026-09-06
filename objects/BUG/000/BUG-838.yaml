@@ -20,12 +20,12 @@ description: |-
   - Unit tests: init over an AGENTS.md without markers appends the block and preserves prior content byte-for-byte outside the markers; init over one with stale markers refreshes only the block; init over one with current markers is a no-op; --force still full-overwrites
   - aida scaffold refresh gains the same no-markers append
   - The skip path for AGENTS.md is no longer silent: one info line states what happened
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:13:47.951844768Z
-modified_at: 2026-09-06T00:10:25.047021271Z
+modified_at: 2026-09-06T00:11:00.657799581Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -50,15 +50,29 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-05T23:27:19.418470896Z
   modified_at: 2026-09-05T23:27:19.418470896Z
+history:
+- id: 01a0740d-dca9-7052-b91c-c9bc43b004af
+  author: aida-auto-bump
+  timestamp: 2026-09-06T00:11:00.649857151Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0740d-dcb1-7c12-8471-507c02d12102
+  timestamp: 2026-09-06T00:11:00.657798183Z
+  agent: aida
+  commit_sha: a0861a6529ee19d9a808e3020db66f7b3edfecf4
+  summary: Completed via merge a0861a65
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: session end observed 1 commit ahead on branch `bug-838-2` with no open PR; work may need manual push/PR recovery'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: `gh pr merge 1648` failed: gh pr merge failed for #1648: failed to delete local branch bug-838: failed to run git: error: cannot delete branch ''bug-838'' used by worktree at ''/home/joe/ai/aida-wt-838'''
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-05T22:16:53.907846499Z
   implemented_by: joe
-failure_reason:
-  phase: merge
-  phase_index: 4
-  kind: failed
-  detail: '`gh pr merge 1648` failed: gh pr merge failed for #1648: failed to delete local branch bug-838: failed to run git: error: cannot delete branch ''bug-838'' used by worktree at ''/home/joe/ai/aida-wt-838'''
-  recovery_hint: 'Investigate the merge failure: `gh pr view 1648`'
-  shelved_at: 2026-09-06T00:10:25.047021271Z
+  completed_at: 2026-09-06T00:11:00.649612453Z
+  completion_sha: a0861a6529ee19d9a808e3020db66f7b3edfecf4
