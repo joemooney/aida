@@ -45233,5 +45233,31 @@ operations:
   timestamp: 2026-09-06T01:57:21.306154725Z
   kind: !SetStatus
     status: Completed
-clock: 3974
+- id: 01a07486-28ad-7f81-b292-8039885dbdc8
+  target_id: 01a07486-24e2-7122-baff-297f3b9c55c9
+  author: aida
+  node_id: '1'
+  lamport: 3975
+  timestamp: 2026-09-06T02:22:24.429426901Z
+  kind: !Create
+    title: 'Review PR-1655: [AI:codex] feat(scaffold): relocate discipline pack (STORY-829)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07471`) for branch `story-829`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1655>
+      - Branch: `story-829` → `main`
+
+      ## Covers
+
+      - STORY-829
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1655` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3975
 node_id: '1'
