@@ -1,0 +1,26 @@
+id: 01a076de-e987-7592-9770-012ef3a5fb44
+spec_id: STORY-965
+agreed_id: STORY-965
+title: 'Review PR-1678: [AI:codex] fix(drain): key reviewer watchdog on output activity (BUG-875)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a076da`) for branch `bug-875`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1678>
+  - Branch: `bug-875` → `main`
+
+  ## Covers
+
+  - BUG-875
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1678` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T13:18:35.399596590Z
+modified_at: 2026-09-06T13:18:35.399596590Z
+req_type: Story
