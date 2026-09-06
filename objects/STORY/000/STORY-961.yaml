@@ -1,0 +1,26 @@
+id: 01a0767a-ef2c-7c32-b1c9-89753db5b995
+spec_id: STORY-961
+agreed_id: STORY-961
+title: 'Review PR-1674: [AI:codex] fix(drain): anchor status pacing to member phase times (BUG-866)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0766e`) for branch `bug-866`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1674>
+  - Branch: `bug-866` → `main`
+
+  ## Covers
+
+  - BUG-866
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1674` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T11:29:23.244366357Z
+modified_at: 2026-09-06T11:29:23.244366357Z
+req_type: Story
