@@ -35,5 +35,6 @@ fn action_aliases_need_storage_so_fall_through_to_main_dispatch() {
         spec: "STORY-1".into(),
         no_agent: false,
         allow_stale_base: false,
+        guided: false,
     }));
 }
