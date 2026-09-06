@@ -118,6 +118,68 @@ fn role_scope_default_non_pr_is_implementer() {
     assert_eq!(origin, "scope-default");
 }
 
+/// BUG-862: an implementer auto-complete drain must skip a reviewer-routed
+/// queue head and select the next implementer-drivable item instead of
+/// launching a doomed phase-1 implementer session for the review row.
+// trace:BUG-862 | ai:codex
+#[test]
+fn auto_complete_head_skips_entries_routed_to_other_roles() {
+    let candidates = vec![
+        AutoCompleteHeadCandidate {
+            id: "STORY-943".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("reviewer".to_string()),
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-944".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+        },
+    ];
+
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .expect("implementer drain should find the implementer-routed item");
+    assert_eq!(pick.spec, "TASK-944");
+    assert_eq!(
+        pick.role_skipped,
+        vec![("STORY-943".to_string(), "reviewer".to_string())]
+    );
+    assert!(pick.status_skipped.is_empty());
+}
+
+/// BUG-862 (reviewer finding, round 2): a drain launched from a DISPATCH
+/// seat works the implementer lane. AIDA_SESSION_ROLE=advisor (or human)
+/// must not become the drain's working role — that filtered out reviewer-
+/// AND implementer-routed entries and reported "no drivable queued items".
+/// An explicit --role override still wins.
+// trace:BUG-862 | ai:claude
+#[test]
+fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
+    let _guard = crate::test_env::env_lock();
+    for (seat, expect) in [
+        ("advisor", "implementer"),
+        ("human", "implementer"),
+        ("dialog", "implementer"), // deprecated alias canonicalizes to advisor
+        ("reviewer", "reviewer"),
+        ("implementer", "implementer"),
+    ] {
+        std::env::set_var("AIDA_SESSION_ROLE", seat);
+        assert_eq!(
+            effective_auto_complete_role(None),
+            expect,
+            "session role {seat}"
+        );
+    }
+    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    assert_eq!(
+        effective_auto_complete_role(Some("reviewer")),
+        "reviewer",
+        "explicit override beats the dispatch-seat mapping"
+    );
+    std::env::remove_var("AIDA_SESSION_ROLE");
+    assert_eq!(effective_auto_complete_role(None), "implementer");
+}
+
 /// Reviewer role + PR scope → `/aida-review --pr N`.
 #[test]
 fn prompt_reviewer_pr_passes_number() {
