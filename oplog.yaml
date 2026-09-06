@@ -46600,5 +46600,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 4052
+- id: 01a075c2-64b7-77c3-a075-76a279010d8c
+  target_id: 01a075c2-5fa7-71b3-8697-3d8d3980b9f1
+  author: aida
+  node_id: '1'
+  lamport: 4053
+  timestamp: 2026-09-06T08:07:49.175360362Z
+  kind: !Create
+    title: 'Review PR-1666: [AI:codex] fix(session): suppress shipped PR alias warnings (BUG-853)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a075b2`) for branch `bug-853`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1666>
+      - Branch: `bug-853` → `main`
+
+      ## Covers
+
+      - BUG-853
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1666` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4053
 node_id: '1'
