@@ -15,20 +15,37 @@ description: |-
   - Fresh init writes .aida/discipline/*, no docs/aida/ directory, .gitignore allow-lists it
   - scaffold refresh on a project with the old layout relocates cleanly incl. user-edited files, idempotent second run
   - CLAUDE.md discipline pointer resolves; ensure_discipline_pack_scaffold tests updated
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:16:22.556468914Z
-modified_at: 2026-09-06T02:22:28.036372392Z
+modified_at: 2026-09-06T02:28:19.392028107Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07486-24e2-7122-baff-297f3b9c55c9
   created_at: 2026-09-06T02:22:28.036364102Z
   created_by: joe
+history:
+- id: 01a0748b-9339-7590-a995-24353a5745fa
+  author: aida-auto-bump
+  timestamp: 2026-09-06T02:28:19.385495099Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0748b-9340-7383-a1f2-1432e1643581
+  timestamp: 2026-09-06T02:28:19.392027163Z
+  agent: aida
+  commit_sha: 24147647e37ab310bde06a6454fb0a4c22275e27
+  summary: 'STORY-829 passes: discipline pack now scaffolds under .aida/discipline, refresh relocates legacy docs/aida/discipline without overwriting edits, pointers and allow-listing are updated, and targeted tests plus CI are green.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T02:12:55.530710170Z
   implemented_by: joe
+  completed_at: 2026-09-06T02:28:19.385383976Z
+  completion_sha: 24147647e37ab310bde06a6454fb0a4c22275e27
