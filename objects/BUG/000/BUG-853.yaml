@@ -1,0 +1,12 @@
+id: 01a07524-12f3-74e1-82e1-e49b0f02f72e
+spec_id: BUG-853
+agreed_id: BUG-853
+title: session-end 'unshipped commits for PR-N with no open PR' warning false-positives on open and merged PRs
+description: 'Observed 3x live (2026-09-05): session end warned "detected N unshipped commit(s) for PR-1648 on branch pr-1648 with no open PR" while PR #1648 was OPEN (head branch bug-838), and again for PR-1650/PR-1657 after their squash-merges landed the content on main. Two defects: (1) the check looks for a PR by the LOCAL alias branch name (pr-<num>) instead of asking the forge about PR number N or the branch''s upstream, so an open PR under its real head branch reads as "no open PR"; (2) after a squash-merge, commits whose CONTENT is on main (empty diff vs main) are not "unshipped" — check patch-equivalence (git cherry / diff vs origin/main) before warning. A true positive (real unshipped work) must still warn. Acceptance: unit/integration coverage for open-PR-real-branch, squash-merged-content, and genuinely-unshipped cases.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T05:14:53.555836175Z
+modified_at: 2026-09-06T05:14:53.555836175Z
+req_type: Bug
