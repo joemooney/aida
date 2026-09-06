@@ -17,15 +17,22 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 1656` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T02:49:43.898286400Z
-modified_at: 2026-09-06T06:17:00.206770461Z
+modified_at: 2026-09-06T06:33:34.779609460Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a073a5-0642-7c80-9e98-84e890573501
   created_at: 2026-09-06T02:49:47.936635689Z
   created_by: joe
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: no-progress-watchdog
+  detail: the implementer phase watchdog stopped the session — no commit or file-change for 10m — likely a degenerate session
+  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework STORY-943 --work`.'
+  shelved_at: 2026-09-06T06:33:34.779609460Z
