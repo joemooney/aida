@@ -138,11 +138,19 @@ impl DrainSummary {
         let t = &self.tallies;
         let iters = t.iterations();
         let mut out = String::new();
+        // BUG-852: avoid the vague `next N (mismatched)` annotation. The
+        // per-drain epilogue carries the exact dispatched/credited IDs; this
+        // durable summary names the mismatch class clearly. trace:BUG-852
+        let outcome = if self.outcome == "mismatched" {
+            "dispatch/PR spec mismatch"
+        } else {
+            self.outcome.as_str()
+        };
         out.push_str("─ drain summary ─\n");
         out.push_str(&format!(
             "  {} ({}) · {} shipped · {} shelved · {} skipped · {} iteration{} · {} elapsed\n",
             self.label,
-            self.outcome,
+            outcome,
             t.shipped,
             t.shelved,
             t.skipped,
@@ -413,6 +421,29 @@ mod tests {
         // Findings → triage hint.
         assert!(out.contains("findings to triage: 1"));
         assert!(out.contains("aida findings list"));
+    }
+
+    // trace:BUG-852 | ai:codex
+    /// BUG-852: the durable summary should not print an unexplained
+    /// `(mismatched)` suffix. The per-drain epilogue has the exact IDs; this
+    /// line names the mismatch class.
+    #[test]
+    fn render_expands_mismatched_outcome_annotation() {
+        let s = DrainSummary {
+            kind: "next-n".into(),
+            label: "next 12".into(),
+            outcome: "mismatched".into(),
+            tallies: tallies(5, 0, 0),
+            cumulative_tokens: 0,
+            diff: DrainDiffStats::default(),
+            elapsed_secs: 0,
+            events: crate::events::EventTally::default(),
+        };
+
+        let out = s.render();
+
+        assert!(out.contains("next 12 (dispatch/PR spec mismatch)"));
+        assert!(!out.contains("next 12 (mismatched)"));
     }
 
     #[test]

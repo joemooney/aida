@@ -3544,6 +3544,7 @@ pub(crate) fn drain_batch_with_caps(
     let mut escalated: Vec<String> = Vec::new();
     let mut shelved: Vec<String> = Vec::new();
     let skipped: Vec<(String, String)> = Vec::new();
+    let mut acted = 0usize;
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -3579,7 +3580,7 @@ pub(crate) fn drain_batch_with_caps(
         // punted, escalated, or shelved each consumed a slot (a full phase
         // attempt).
         if let Some(limit) = max {
-            if shipped.len() + punted.len() + escalated.len() + shelved.len() >= limit {
+            if acted >= limit {
                 return BatchDrainResult {
                     shipped,
                     punted,
@@ -3600,13 +3601,12 @@ pub(crate) fn drain_batch_with_caps(
         // intentional stop: the in-flight head stays queued for the next drain.
         // trace:TASK-966 | ai:claude
         if caps.is_active() {
-            let acted = (shipped.len() + punted.len() + escalated.len() + shelved.len()) as u64;
             let counters = crate::drain_caps::DrainCounters {
                 tokens: caps
                     .max_tokens
                     .map(|_| driver.cumulative_tokens())
                     .unwrap_or(0),
-                iterations: acted,
+                iterations: acted as u64,
                 elapsed: start.elapsed(),
             };
             let stop = caps
@@ -3645,6 +3645,7 @@ pub(crate) fn drain_batch_with_caps(
             };
         }
         let result = driver.run_spec(&head);
+        acted += 1;
         if result.exit_code != 0 {
             let phase = result.failed_phase.unwrap_or(Phase::Implementer);
             // EPIC-28: a shelvable failure parks the spec and the drain
@@ -3656,6 +3657,13 @@ pub(crate) fn drain_batch_with_caps(
                 .map(|cap| shelved.len() + 1 > cap)
                 .unwrap_or(false);
             if result.shelved_reason.is_some() && !over_failure_budget {
+                record_final_disposition(
+                    &head,
+                    &mut shipped,
+                    &mut punted,
+                    &mut escalated,
+                    &mut shelved,
+                );
                 shelved.push(head);
                 continue;
             }
@@ -3719,6 +3727,13 @@ pub(crate) fn drain_batch_with_caps(
         // either stall on it or double-credit the actual shipped spec.
         // trace:BUG-245 | ai:claude
         if let Some(actual) = result.shipped_spec_id.clone() {
+            record_final_disposition(
+                &actual,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
             shipped.push(actual.clone());
             return BatchDrainResult {
                 shipped,
@@ -3739,13 +3754,50 @@ pub(crate) fn drain_batch_with_caps(
         // the batch summary never claims a parked / escalated spec shipped.
         // trace:STORY-276, STORY-306 | ai:claude
         if result.punt_reason.is_some() {
+            record_final_disposition(
+                &head,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
             punted.push(head);
         } else if result.escalation.is_some() {
+            record_final_disposition(
+                &head,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
             escalated.push(head);
         } else {
+            record_final_disposition(
+                &head,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
             shipped.push(head);
         }
     }
+}
+
+// BUG-852: a resilient drain can park a spec, recover it, and re-drive it
+// successfully before exit. The summary is a final-disposition report, not an
+// event log, so a spec belongs in exactly one bucket. trace:BUG-852 | ai:codex
+fn record_final_disposition(
+    spec: &str,
+    shipped: &mut Vec<String>,
+    punted: &mut Vec<String>,
+    escalated: &mut Vec<String>,
+    shelved: &mut Vec<String>,
+) {
+    shipped.retain(|s| s != spec);
+    punted.retain(|s| s != spec);
+    escalated.retain(|s| s != spec);
+    shelved.retain(|s| s != spec);
 }
 
 // --- Single-branch coupled-sequential drain (TASK-1003 / SPIKE-70) ----------
@@ -4075,7 +4127,6 @@ where
     let mut escalated = Vec::new();
     let mut shelved: Vec<String> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
-    let mut any_shelved_or_skipped = false;
 
     for batch_name in batch_names {
         let consumed = shipped.len() + punted.len() + escalated.len() + shelved.len();
@@ -4102,15 +4153,61 @@ where
             &mut batch_cap_stop,
         );
 
-        shipped.extend(result.shipped.iter().cloned());
-        punted.extend(result.punted.iter().cloned());
-        escalated.extend(result.escalated.iter().cloned());
-        shelved.extend(result.shelved.iter().cloned());
-        skipped.extend(result.skipped.iter().cloned());
-        if !result.shelved.is_empty() || !result.skipped.is_empty() {
-            any_shelved_or_skipped = true;
+        for spec in &result.shipped {
+            record_final_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
+            skipped.retain(|(skipped_spec, _)| skipped_spec != spec);
+            shipped.push(spec.clone());
         }
-
+        for spec in &result.punted {
+            record_final_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
+            skipped.retain(|(skipped_spec, _)| skipped_spec != spec);
+            punted.push(spec.clone());
+        }
+        for spec in &result.escalated {
+            record_final_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
+            skipped.retain(|(skipped_spec, _)| skipped_spec != spec);
+            escalated.push(spec.clone());
+        }
+        for spec in &result.shelved {
+            record_final_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
+            skipped.retain(|(skipped_spec, _)| skipped_spec != spec);
+            shelved.push(spec.clone());
+        }
+        for (spec, reason) in &result.skipped {
+            record_final_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+            );
+            skipped.retain(|(skipped_spec, _)| skipped_spec != spec);
+            skipped.push((spec.clone(), reason.clone()));
+        }
         let step = BatchChainStep {
             batch_name: batch_name.clone(),
             result: result.clone(),
@@ -4234,10 +4331,10 @@ where
         }
     }
 
-    // Every batch drained cleanly. EPIC-28: if any individual batch reported
-    // a shelve/skip, the chain summary is `DrainedWithShelved` (exit 2) so the
-    // operator still sees the parked set.
-    let (outcome, exit_code) = if any_shelved_or_skipped {
+    // Every batch drained. EPIC-28 + BUG-852: only the final parked set makes
+    // the chain `DrainedWithShelved` (exit 2); retried-then-shipped specs have
+    // already been removed from `shelved`.
+    let (outcome, exit_code) = if !shelved.is_empty() || !skipped.is_empty() {
         (BatchDrainOutcome::DrainedWithShelved, 2)
     } else {
         (BatchDrainOutcome::Drained, 0)
@@ -7908,6 +8005,33 @@ mod tests {
         assert!(result.steps[1].result.shipped.is_empty());
     }
 
+    // trace:BUG-852 | ai:codex
+    /// BUG-852: chain aggregation also reports final disposition. A spec that
+    /// shelves in one batch and ships from a later retry batch must not keep the
+    /// stale shelf entry or force the final chain exit to `2`.
+    #[test]
+    fn drain_batch_chain_retry_after_shelve_reports_final_shipped_only() {
+        let names = vec!["alpha".to_string(), "retry".to_string()];
+        let result = drain_batch_chain(&names, None, None, |name| match name {
+            "alpha" => Box::new(
+                MockBatchDriver::new(&["STORY-830"]).shelving("STORY-830", Phase::Reviewer),
+            ),
+            "retry" => Box::new(MockBatchDriver::new(&["STORY-830", "TASK-831"])),
+            other => panic!("unexpected batch {other}"),
+        });
+
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.exit_code, DRIVE_EXIT_CLEAN);
+        assert_eq!(
+            result.shipped,
+            vec!["STORY-830".to_string(), "TASK-831".to_string()]
+        );
+        assert!(
+            result.shelved.is_empty(),
+            "later shipped STORY-830 must remove the earlier chain shelf"
+        );
+    }
+
     /// TASK-310: a failure in one batch stops the whole chain and does not
     /// advance into later batches.
     #[test]
@@ -7995,6 +8119,60 @@ mod tests {
         assert_eq!(result.shelved, vec!["TASK-2"]);
         // TASK-3 must have actually run — the whole point of EPIC-28.
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
+    // trace:BUG-852 | ai:codex
+    /// BUG-852: a spec can be shelved, recovered, retried, and shipped before
+    /// the drain exits. The exit summary is a final-disposition report: the
+    /// retried spec is shipped, not shelved, and the clean final shelf set exits
+    /// 0.
+    #[test]
+    fn drain_batch_retry_after_shelve_reports_final_shipped_only() {
+        struct RetryAfterShelveDriver {
+            heads: Vec<String>,
+            runs: Vec<String>,
+            first_story_run: bool,
+        }
+
+        impl BatchDriver for RetryAfterShelveDriver {
+            fn next_head(&mut self) -> Option<String> {
+                self.heads.first().cloned()
+            }
+
+            fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
+                self.runs.push(spec.to_string());
+                self.heads.remove(0);
+                if spec == "STORY-830" && self.first_story_run {
+                    self.first_story_run = false;
+                    return shelve_result(Phase::Reviewer);
+                }
+                ok_result()
+            }
+        }
+
+        let mut driver = RetryAfterShelveDriver {
+            heads: vec![
+                "STORY-830".to_string(),
+                "STORY-830".to_string(),
+                "TASK-831".to_string(),
+            ],
+            runs: Vec::new(),
+            first_story_run: true,
+        };
+
+        let result = drain_batch(&mut driver, None, None);
+
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.exit_code, DRIVE_EXIT_CLEAN);
+        assert_eq!(
+            result.shipped,
+            vec!["STORY-830".to_string(), "TASK-831".to_string()]
+        );
+        assert!(
+            result.shelved.is_empty(),
+            "retried-then-shipped STORY-830 must not remain shelved"
+        );
+        assert_eq!(driver.runs, vec!["STORY-830", "STORY-830", "TASK-831"]);
     }
 
     /// EPIC-28: when a shelving event also makes a downstream member
