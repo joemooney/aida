@@ -6,11 +6,11 @@ description: |-
   Part of shrinking init's main-branch footprint: init pre-creates docs/plans/ + _TEMPLATE.md in every project, which is noise for projects that never write a plan. Create the directory (and drop the template into it) lazily — on the first aida ultraplan, plan verify --fix output, /aida-import-plan landing, or any AIDA surface that writes a plan file. Init stops creating it; ensure_plan_template_scaffold moves behind the first-use call sites. aida init --refresh on a project that already has docs/plans/ leaves it exactly as is.
 
   Acceptance: fresh init has no docs/ directory at all (unless another artifact needs it); first plan-writing command creates docs/plans/ + _TEMPLATE.md exactly as init used to; existing projects unchanged.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:16:30.018118181Z
-modified_at: 2026-09-05T22:16:47.809025985Z
+modified_at: 2026-09-06T02:30:52.117276216Z
 req_type: Task
 execution_mode: drain
