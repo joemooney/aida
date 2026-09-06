@@ -17,11 +17,11 @@ description: |-
   - With a stale drain (state file present, pid dead): output is byte-identical to no-drain
   - No drain files: unchanged output (existing tests stay green)
   - aida statusbar line includes the same segment under the same rules
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T21:27:57.443962320Z
-modified_at: 2026-09-05T21:28:02.820835961Z
+modified_at: 2026-09-06T00:15:30.099587613Z
 req_type: Story
 execution_mode: drain
