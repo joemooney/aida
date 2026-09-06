@@ -94,6 +94,25 @@ pub(crate) fn refresh_agent_packs(
         packs.push(agents);
     }
 
+    if let Ok(report) = crate::ensure_discipline_pack_scaffold(project_root, true) {
+        if report.relocated > 0 || report.written > 0 {
+            let mut refresh = RefreshReport::default();
+            refresh.refreshed = report
+                .relocated_paths
+                .into_iter()
+                .chain(report.written_paths)
+                .collect();
+            if let Ok(true) = crate::ensure_discipline_pack_gitignore_allow_list(project_root) {
+                refresh.refreshed.push(PathBuf::from(".gitignore"));
+            }
+            packs.push(PackRefresh {
+                label: "Discipline pack".to_string(),
+                location: project_root.display().to_string(),
+                report: refresh,
+            });
+        }
+    }
+
     if let Some(prompts) = codex_prompts_refresh(codex_prompts_dest) {
         packs.push(prompts);
     }
@@ -483,6 +502,46 @@ mod tests {
         let packs = refresh_agent_packs(root, None);
         assert!(packs.iter().all(|p| p.label != "AGENTS.md AIDA block"));
         assert!(!root.join("AGENTS.md").exists());
+    }
+
+    #[test]
+    fn refresh_relocates_legacy_discipline_pack() {
+        // trace:STORY-829 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let old = root.join("docs/aida/discipline");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("README.md"), "edited legacy readme\n").unwrap();
+        std::fs::write(
+            root.join(".gitignore"),
+            ".aida-store/\n.aida/*\n!.aida/config.toml\n",
+        )
+        .unwrap();
+
+        let packs = refresh_agent_packs(root, None);
+        let discipline = packs
+            .iter()
+            .find(|p| p.label == "Discipline pack")
+            .expect("discipline pack refresh row");
+        assert!(
+            discipline
+                .report
+                .refreshed
+                .contains(&PathBuf::from(".aida/discipline/README.md")),
+            "{:?}",
+            discipline.report
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.join(".aida/discipline/README.md")).unwrap(),
+            "edited legacy readme\n"
+        );
+        assert!(
+            !root.join("docs/aida/discipline").exists(),
+            "empty legacy tree should be removed"
+        );
+        let gitignore = std::fs::read_to_string(root.join(".gitignore")).unwrap();
+        assert!(gitignore.contains("!.aida/discipline/"), "{gitignore}");
+        assert!(gitignore.contains("!.aida/discipline/**"), "{gitignore}");
     }
 
     /// BUG-838: the `[scaffold] agents_md_block = false` opt-out leaves an

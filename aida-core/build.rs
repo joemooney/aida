@@ -52,12 +52,9 @@ fn main() {
     embed_file(&mut code, "templates/plan-template.md", "plan-template.md");
 
     // Discipline pack — canonical markdown scaffolded into a new project's
-    // docs/aida/discipline/. trace:STORY-255 | STORY-443
-    embed_directory(
-        &mut code,
-        "templates/docs/aida/discipline",
-        "docs/aida/discipline",
-    );
+    // .aida/discipline/. trace:STORY-255 | STORY-443
+    // trace:STORY-829 | ai:codex
+    embed_directory(&mut code, "templates/.aida/discipline", ".aida/discipline");
 
     // Cross-agent onboarding docs — MCP setup and operating guidance for
     // Codex, Antigravity, and other MCP-speaking agents. trace:TASK-485
@@ -99,7 +96,7 @@ fn main() {
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
     code.push_str("    (\"reserved-paths.toml\", \"Reserved namespace baseline for `.aida/reserved-paths.toml`\"),\n");
     code.push_str("    (\"plan-template.md\", \"Plan template - scaffolded into docs/plans/_TEMPLATE.md\"),\n");
-    code.push_str("    (\"docs/aida/discipline\", \"Discipline pack - AIDA-using guidance scaffolded into docs/aida/discipline/\"),\n");
+    code.push_str("    (\".aida/discipline\", \"Discipline pack - AIDA-using guidance scaffolded into .aida/discipline/\"),\n");
     code.push_str(
         "    (\"docs/agents\", \"Cross-agent onboarding docs scaffolded into docs/agents/\"),\n",
     );

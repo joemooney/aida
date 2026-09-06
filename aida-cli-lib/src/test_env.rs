@@ -6,7 +6,7 @@
 //! collide intermittently — symptoms are flaky CI, NotFound at file
 //! unwraps, and tests that pass in serial but fail under `--test-threads`.
 //!
-//! See `docs/aida/discipline/test-isolation.md` for the full pattern and
+//! See `.aida/discipline/test-isolation.md` for the full pattern and
 //! the per-test temp-path variant (Codex's BUG-371 fix) used when the
 //! state crosses a subprocess boundary instead of staying in-process.
 //!

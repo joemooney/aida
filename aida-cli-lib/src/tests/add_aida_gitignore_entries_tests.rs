@@ -13,6 +13,8 @@ fn creates_gitignore_with_both_blocks() {
     assert!(content.contains(".aida-store/"), "{}", content);
     assert!(has_aida_runtime_deny_pattern(&content), "{}", content);
     assert!(content.contains("!.aida/config.toml"), "{}", content);
+    assert!(content.contains("!.aida/discipline/"), "{}", content);
+    assert!(content.contains("!.aida/discipline/**"), "{}", content);
     // trace:BUG-484 — the per-user MCP-trust file must be gitignored so a
     // committed pre-approval can't become a clone-attack vector.
     assert!(
@@ -22,7 +24,7 @@ fn creates_gitignore_with_both_blocks() {
     );
 }
 
-/// Existing .gitignore that already covers ALL SEVEN blocks (store,
+/// Existing .gitignore that already covers all AIDA blocks (store,
 /// runtime, project-manifest allow-line, CLAUDE.local.md,
 /// rules/aida-specs/, docs/plans/_draft/, settings.local.json) → no write,
 /// returns Ok(false). The third block (CLAUDE.local.md) was added in commit
@@ -38,7 +40,7 @@ fn creates_gitignore_with_both_blocks() {
 fn idempotent_when_both_blocks_present() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join(".gitignore");
-    let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
+    let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n!.aida/discipline/\n!.aida/discipline/**\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
     std::fs::write(&path, original).unwrap();
     let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
     assert!(
@@ -47,6 +49,24 @@ fn idempotent_when_both_blocks_present() {
     );
     let content = std::fs::read_to_string(&path).unwrap();
     assert_eq!(content, original);
+}
+
+#[test]
+fn appends_discipline_pack_allow_line_when_missing() {
+    let tmp = TempDir::new().unwrap();
+    let path = tmp.path().join(".gitignore");
+    let original = "target/\n.aida-store/\n.aida-store\n.aida/*\n!.aida/config.toml\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
+    std::fs::write(&path, original).unwrap();
+    let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+    assert!(updated, "missing discipline allow-line -> expected append");
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(content.contains("!.aida/discipline/"), "{content}");
+    assert!(content.contains("!.aida/discipline/**"), "{content}");
+    assert_eq!(
+        content.matches(".aida/*").count(),
+        1,
+        "must not re-append the runtime deny block:\n{content}"
+    );
 }
 
 /// .gitignore lacking only the project-manifest allow-line → that block is

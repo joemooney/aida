@@ -15,7 +15,7 @@ Operationalize the **integrator role** — the "shipping clerk" seat that owns t
 merge cascade so it doesn't sit on the advisor. It takes work an implementer has
 finished and a reviewer has blessed, and lands it on the default branch cleanly,
 one PR at a time. The discipline behind it is
-`docs/aida/discipline/integrator-role.md`; this skill is the runnable recipe.
+`.aida/discipline/integrator-role.md`; this skill is the runnable recipe.
 
 The integrator is a **mechanical** seat by design. Its only authorship is
 conflict resolution any two engineers would make identically; its only judgment

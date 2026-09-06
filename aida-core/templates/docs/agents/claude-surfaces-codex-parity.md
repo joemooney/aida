@@ -91,8 +91,8 @@ shortcuts (`/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`,
 
 | Surface | What it does | Class | Codex equivalent | Gap + coverage |
 |---|---|---|---|---|
-| `CLAUDE.md` (repo root) | Primary durable instruction surface for Claude sessions | guidance | `AGENTS.md` (Codex-native) + `docs/aida/discipline/` | `aida init` already scaffolds both `CLAUDE.md` and `AGENTS.md`. The risk is drift: agent-neutral discipline that lives only in `CLAUDE.md`. Coverage: TASK-0424 (template completeness) + TASK-0426 (positioning/cold-reader clarity) |
-| `CLAUDE.md` `@`-imports (discipline README) | Transitively loads `docs/aida/discipline/README.md` into context | guidance | `AGENTS.md` references; Codex has no identical `@`-import transitive-load semantics | The discipline pack is plain markdown, so it ports as references. The auto-load mechanic is Claude-specific but non-load-bearing. Coverage: TASK-0424 |
+| `CLAUDE.md` (repo root) | Primary durable instruction surface for Claude sessions | guidance | `AGENTS.md` (Codex-native) + `.aida/discipline/` | `aida init` already scaffolds both `CLAUDE.md` and `AGENTS.md`. The risk is drift: agent-neutral discipline that lives only in `CLAUDE.md`. Coverage: TASK-0424 (template completeness) + TASK-0426 (positioning/cold-reader clarity) |
+| `CLAUDE.md` `@`-imports (discipline README) | Transitively loads `.aida/discipline/README.md` into context | guidance | `AGENTS.md` references; Codex has no identical `@`-import transitive-load semantics | The discipline pack is plain markdown, so it ports as references. The auto-load mechanic is Claude-specific but non-load-bearing. Coverage: TASK-0424 |
 
 ## 5. The headless path — `claude -p` vs `codex exec`
 

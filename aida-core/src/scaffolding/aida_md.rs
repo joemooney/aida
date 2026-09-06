@@ -257,7 +257,7 @@ impl Scaffolder {
              - **`aida pull` refusing (divergent branches)?** The code leg is\n\
              \x20  `git pull --ff-only` (won't auto-rebase your tree); the store leg\n\
              \x20  is `--rebase`. Recovery recipe + the one-time `git config` to make\n\
-             \x20  raw `git pull` Just Work: `docs/aida/discipline/git-sync-and-review.md`.\n\
+             \x20  raw `git pull` Just Work: `.aida/discipline/git-sync-and-review.md`.\n\
              - **Reviewing a PR?** `aida review prompt --pr N` lifts each linked\n\
              \x20  spec's `## Acceptance` into a review prompt. Needs `gh`/`glab` for\n\
              \x20  `--pr` mode; write a `## Acceptance` section in every STORY/BUG so\n\

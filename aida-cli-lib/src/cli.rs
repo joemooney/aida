@@ -2774,7 +2774,7 @@ pub enum DocsCommand {
     /// Surfaces the canonical vocabulary (orchestrator, phase, drain, lease,
     /// role, scope, worktree, …) and the spec-lifecycle verbs (committed,
     /// pushed, merged, completed, released) without hunting for the file under
-    /// docs/aida/discipline/ — and stays correct even if the project's
+    /// .aida/discipline/ — and stays correct even if the project's
     /// scaffolded copy is missing or stale. Default prints both sections.
     Glossary {
         /// Print only the machinery glossary (orchestrator, drain, lease, …).
@@ -5973,7 +5973,7 @@ pub enum FindingsCommand {
     /// Increment a finding's recurrence counter. Use when you spot the same
     /// pattern again — the counter survives in the `recurrence:N` tag and
     /// the optional `--note` appends to the audit trail. Recurrence ≥ 3 is
-    /// the promote-it signal (see `docs/aida/discipline/observation-discipline.md`).
+    /// the promote-it signal (see `.aida/discipline/observation-discipline.md`).
     // trace:STORY-467 | ai:claude
     Recur {
         /// The finding's ID (UUID or SPEC-ID).

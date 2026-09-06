@@ -14,7 +14,7 @@ allowed-tools:
 
 Run the autonomous backlog burn-down that empirically works (memory
 `feedback_parallel_implementer_fanout_burndown`; discipline
-`docs/aida/discipline/autonomous-burndown.md`) as one command, so the rules
+`.aida/discipline/autonomous-burndown.md`) as one command, so the rules
 that keep it from stalling are **structural**, not something the driving agent
 must remember. The engine is Claude-Code-native and only the harness can run it:
 fan out implementer subagents in isolated worktrees, integrate their PRs, loop.

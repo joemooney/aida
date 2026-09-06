@@ -316,7 +316,7 @@ step_pause() {
     fi
 }
 
-# Glossary surface — paginates docs/aida/discipline/glossary.yaml so the
+# Glossary surface — paginates .aida/discipline/glossary.yaml so the
 # operator can browse definitions of AIDA's vocabulary (substrate, lease,
 # auto-bump, etc.) and commands (aida pull, aida queue work, etc.) without
 # leaving the demo. The YAML is the structured single source of truth —
@@ -325,21 +325,21 @@ step_pause() {
 run_glossary() {
     # Primary path: the scaffolded copy in the current project. Present when
     # 'aida init' ran from a binary whose templates include glossary.yaml.
-    local glossary="docs/aida/discipline/glossary.yaml"
+    local glossary=".aida/discipline/glossary.yaml"
     if [ ! -f "$glossary" ]; then
         # Fallback: the script's source-tree templates. AIDA_DEMO_SCRIPT_DIR
         # was resolved to an absolute path at script start (before the cd
         # into the demo project) so it's still valid here.
-        local fallback="${AIDA_DEMO_SCRIPT_DIR}/../aida-core/templates/docs/aida/discipline/glossary.yaml"
+        local fallback="${AIDA_DEMO_SCRIPT_DIR}/../aida-core/templates/.aida/discipline/glossary.yaml"
         if [ -n "$AIDA_DEMO_SCRIPT_DIR" ] && [ -f "$fallback" ]; then
-            mkdir -p docs/aida/discipline
+            mkdir -p .aida/discipline
             cp "$fallback" "$glossary"
             ok "glossary scaffolded from source tree (rebuild aida to embed it in init)"
             echo
         else
             fail "glossary file not found at $glossary"
             dim "   try: 'aida init' (with an up-to-date aida binary), or"
-            dim "        cp <aida-src>/aida-core/templates/docs/aida/discipline/glossary.yaml \\"
+            dim "        cp <aida-src>/aida-core/templates/.aida/discipline/glossary.yaml \\"
             dim "           $(pwd)/$glossary"
             return 1
         fi
@@ -509,7 +509,7 @@ note_box --title "What was just scaffolded" \
   "  .claude/skills/ + commands/ + hooks/ (Claude Code integration)" \
   "  .codex/skills/ (Codex integration)" \
   "  CLAUDE.md + AGENTS.md + .mcp.json" \
-  "  docs/aida/discipline/ + docs/plans/" \
+  "  .aida/discipline/ + docs/plans/" \
   "  META requirements + auto-enqueued onboarding task"
 
 # -----------------------------------------------------------------------------

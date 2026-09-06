@@ -30,7 +30,7 @@ AIDA has four distinct substrates for rules. Pick by **scope and audience**:
 | Substrate | Scope | When to use |
 |---|---|---|
 | `CLAUDE.md` (project root) | Project-wide convention every session needs | "Always use `bun`, not `npm`" / "Open PRs against main; never push direct" |
-| `docs/aida/discipline/<topic>.md` | General AIDA-using guidance, beyond this project | Patterns like "verify substrate state before declaring complete", "use `--force-claim` when you mean to take over" |
+| `.aida/discipline/<topic>.md` | General AIDA-using guidance, beyond this project | Patterns like "verify substrate state before declaring complete", "use `--force-claim` when you mean to take over" |
 | `~/.claude/projects/<slug>/memory/feedback_<topic>.md` | User-personal preference / interaction style | "I prefer concise terminal output", "Don't suggest sleep / wellness framing" |
 | `aida findings add` (observation) | Recurring pattern not yet rule-shaped; awaits recurrence-3 promotion | "Saw X behavior twice; if it happens again, it's a real bug" |
 
@@ -55,7 +55,7 @@ Then route:
 
 ```
 THIS PROJECT, technical          → CLAUDE.md
-GENERAL AIDA, technical          → docs/aida/discipline/<topic>.md
+GENERAL AIDA, technical          → .aida/discipline/<topic>.md
 USER-PERSONAL, any kind          → ~/.claude/projects/<slug>/memory/feedback_*.md
 ONCE-OFF observation             → aida findings add (let recurrence promote)
 ```
@@ -69,7 +69,7 @@ Before writing a new rule, search for related ones:
 grep -in "<keyword>" CLAUDE.md
 
 # Discipline pack
-grep -rn "<keyword>" docs/aida/discipline/
+grep -rn "<keyword>" .aida/discipline/
 
 # Memory pack
 grep -rn "<keyword>" ~/.claude/projects/$(basename "$(pwd)")/memory/
@@ -131,10 +131,10 @@ Always include a session trace back so future-you can find where the rule came f
 
 ### Step 6: Commit the rule (project-scoped only)
 
-For CLAUDE.md and `docs/aida/discipline/` changes — these are project artifacts that should ride to the team:
+For CLAUDE.md and `.aida/discipline/` changes — these are project artifacts that should ride to the team:
 
 ```bash
-git add CLAUDE.md docs/aida/discipline/<file>.md
+git add CLAUDE.md .aida/discipline/<file>.md
 git commit -m "[AI:claude] docs: capture rule — <one-line rule> (TASK-N)"
 ```
 
@@ -165,4 +165,4 @@ So the operator can verify it landed in the right place.
 
 - `/aida-capture` — end-of-session sweep for requirements (specs, not rules)
 - `aida findings add` — capture a pattern observation awaiting recurrence
-- `docs/aida/discipline/README.md` — the discipline pack you're updating
+- `.aida/discipline/README.md` — the discipline pack you're updating

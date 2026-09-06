@@ -9072,37 +9072,97 @@ fn handle_init_minimal(force: bool) -> Result<()> {
 #[path = "tests/init_minimal_tests.rs"]
 mod init_minimal_tests;
 
-/// Scaffold the discipline pack — every embedded `docs/aida/discipline/*`
-/// template — into `<root>/docs/aida/discipline/`. Idempotent: an existing
-/// file is left alone unless `force` is set. Returns the count written.
+#[derive(Default)]
+struct DisciplinePackScaffoldReport {
+    written: usize,
+    relocated: usize,
+    written_paths: Vec<std::path::PathBuf>,
+    relocated_paths: Vec<std::path::PathBuf>,
+}
+
+/// Scaffold the discipline pack — every embedded `.aida/discipline/*`
+/// template — into `<root>/.aida/discipline/`. Idempotent: an existing
+/// canonical file is left alone even under refresh.
 ///
-/// The destination is pinned to `docs/aida/discipline/` (not `docs/aida/`
-/// flat) so the pack coexists with `aida docs build`'s graph projection
-/// at `docs/aida/{README,00-*,...}` without colliding on README.md.
+/// Migration: a previous `<root>/docs/aida/discipline/` pack is moved into the
+/// canonical directory first. Existing destination files are never overwritten,
+/// so user edits survive and an old path can remain as the one-release
+/// fallback when there is a destination conflict.
 /// trace:STORY-255 | STORY-443 | ai:claude
-fn ensure_discipline_pack_scaffold(root: &std::path::Path, force: bool) -> Result<usize> {
+// trace:STORY-829 | ai:codex
+fn ensure_discipline_pack_scaffold(
+    root: &std::path::Path,
+    _force: bool,
+) -> Result<DisciplinePackScaffoldReport> {
     use aida_core::templates::EMBEDDED_TEMPLATES;
     let mut pack: Vec<(&str, &str)> = EMBEDDED_TEMPLATES
         .iter()
-        .filter_map(|(k, v)| k.strip_prefix("docs/aida/discipline/").map(|n| (n, *v)))
+        .filter_map(|(k, v)| k.strip_prefix(".aida/discipline/").map(|n| (n, *v)))
         .collect();
     if pack.is_empty() {
-        return Ok(0);
+        return Ok(DisciplinePackScaffoldReport::default());
     }
     pack.sort_by(|a, b| a.0.cmp(b.0));
 
-    let dir = root.join("docs").join("aida").join("discipline");
+    let dir = root.join(".aida").join("discipline");
     std::fs::create_dir_all(&dir)?;
-    let mut written = 0;
+    let mut report = DisciplinePackScaffoldReport::default();
+    let old_dir = root.join("docs").join("aida").join("discipline");
+    if old_dir.is_dir() {
+        let mut old_entries = Vec::new();
+        for entry in std::fs::read_dir(&old_dir)? {
+            old_entries.push(entry?.path());
+        }
+        old_entries.sort();
+        for old_path in old_entries {
+            if !old_path.is_file() {
+                continue;
+            }
+            let Some(name) = old_path.file_name() else {
+                continue;
+            };
+            let dest = dir.join(name);
+            if dest.exists() {
+                continue;
+            }
+            std::fs::rename(&old_path, &dest)?;
+            report.relocated += 1;
+            report
+                .relocated_paths
+                .push(dest.strip_prefix(root).unwrap_or(&dest).to_path_buf());
+        }
+        remove_empty_parent_dirs(root, &old_dir)?;
+    }
+
     for (name, content) in pack {
         let dest = dir.join(name);
-        if dest.exists() && !force {
+        if dest.exists() {
             continue;
         }
         std::fs::write(&dest, format!("{content}\n"))?;
-        written += 1;
+        report.written += 1;
+        report
+            .written_paths
+            .push(dest.strip_prefix(root).unwrap_or(&dest).to_path_buf());
     }
-    Ok(written)
+    Ok(report)
+}
+
+fn remove_empty_parent_dirs(root: &std::path::Path, start: &std::path::Path) -> Result<()> {
+    let mut dir = start.to_path_buf();
+    while dir.starts_with(root) && dir != root {
+        match std::fs::remove_dir(&dir) {
+            Ok(()) => {
+                dir.pop();
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                dir.pop();
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::DirectoryNotEmpty => break,
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(())
 }
 
 /// Scaffold a starter `docs/competitive-analysis/ecosystem-watch.md` with
@@ -9807,8 +9867,8 @@ fn print_status_memory_drift_section() {
 /// - `<worktree_dir>/` (+ bare symlink form) — the orphan-branch worktree
 ///   (`.aida-store/` by default). Bare-name pattern needed because session
 ///   worktrees link to the canonical store. trace:EPIC-21 | ai:claude
-/// - `.aida/*` deny-by-default + `!.aida/config.toml` + `!.aida/aliases.toml`
-///   allow-list — covers every per-clone runtime file under `.aida/` (sessions,
+/// - `.aida/*` deny-by-default + config allow-list entries — covers every
+///   per-clone runtime file under `.aida/` (sessions,
 ///   roles, cache, session-env, server data, review prompts, future runtime
 ///   additions) without per-file whack-a-mole, while keeping team-shareable
 ///   project config tracked. trace:BUG-73 trace:TASK-877 | ai:claude
@@ -9837,7 +9897,6 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          \n\
          # Tracked exceptions: project-level config that lives in the repo.\n\
          !.aida/config.toml\n\
-         \n\
          # Project-level command aliases are shareable across the team.\n\
          # trace:TASK-877 | ai:claude\n\
          !.aida/aliases.toml\n\
@@ -9863,6 +9922,12 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          # project IS (description, why it exists, liveness, stage, owner) and\n\
          # is meant to travel with the repository. trace:STORY-781 | ai:claude\n\
          !.aida/project.toml\n";
+
+    let discipline_pack_entry =
+        "\n# AIDA-using discipline guides are checked in with the project.\n\
+         # trace:STORY-829 | ai:codex\n\
+         !.aida/discipline/\n\
+         !.aida/discipline/**\n";
 
     // trace:TASK-572 | ai:claude — CLAUDE.local.md is per-machine,
     // gitignored. Pattern mirrors CLAUDE.md but personal notes are
@@ -9909,10 +9974,11 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
         std::fs::write(
             &gitignore_path,
             format!(
-                "{}{}{}{}{}{}{}",
+                "{}{}{}{}{}{}{}{}",
                 store_entry,
                 runtime_entry,
                 project_manifest_entry,
+                discipline_pack_entry,
                 claude_local_entry,
                 rules_sync_entry,
                 plans_draft_entry,
@@ -9945,6 +10011,10 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
             .ends_with(".aida/project.toml")
     }) {
         file.write_all(project_manifest_entry.as_bytes())?;
+        wrote = true;
+    }
+    if !gitignore_has_discipline_pack_allow_list(&content) {
+        file.write_all(discipline_pack_entry.as_bytes())?;
         wrote = true;
     }
     // trace:TASK-572 | ai:claude — only append if not already covered.
@@ -9996,6 +10066,37 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
 /// comments and surrounding whitespace). trace:BUG-73 | ai:claude
 fn has_aida_runtime_deny_pattern(content: &str) -> bool {
     content.lines().any(|line| line.trim() == ".aida/*")
+}
+
+fn gitignore_has_discipline_pack_allow_list(content: &str) -> bool {
+    content.lines().any(|line| {
+        line.trim()
+            .trim_start_matches('!')
+            .trim_end_matches('/')
+            .ends_with(".aida/discipline/**")
+    })
+}
+
+fn ensure_discipline_pack_gitignore_allow_list(cwd: &std::path::Path) -> Result<bool> {
+    use std::io::Write;
+
+    let gitignore_path = cwd.join(".gitignore");
+    let Ok(content) = std::fs::read_to_string(&gitignore_path) else {
+        return Ok(false);
+    };
+    if gitignore_has_discipline_pack_allow_list(&content) {
+        return Ok(false);
+    }
+    let discipline_pack_entry =
+        "\n# AIDA-using discipline guides are checked in with the project.\n\
+         # trace:STORY-829 | ai:codex\n\
+         !.aida/discipline/\n\
+         !.aida/discipline/**\n";
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&gitignore_path)?;
+    file.write_all(discipline_pack_entry.as_bytes())?;
+    Ok(true)
 }
 
 // trace:BUG-588 | ai:claude
@@ -15757,7 +15858,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
 /// TASK-589: assemble the discipline-pack glossary from the binary's embedded
 /// templates — the machinery glossary and/or the lifecycle vocabulary. Reads
 /// the embedded copy (not the project's scaffolded files), so it is correct
-/// even when a project's `docs/aida/discipline/` is missing or stale. With
+/// even when a project's `.aida/discipline/` is missing or stale. With
 /// neither flag (or both) it returns both sections, machinery first.
 /// trace:TASK-589 | ai:claude
 fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Result<String> {
@@ -15776,13 +15877,13 @@ fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Result<String
 
     let mut out = String::new();
     if show_machinery {
-        out.push_str(&embedded("docs/aida/discipline/machinery-glossary.md")?);
+        out.push_str(&embedded(".aida/discipline/machinery-glossary.md")?);
     }
     if show_machinery && show_lifecycle {
         out.push_str("\n\n");
     }
     if show_lifecycle {
-        out.push_str(&embedded("docs/aida/discipline/lifecycle-vocabulary.md")?);
+        out.push_str(&embedded(".aida/discipline/lifecycle-vocabulary.md")?);
     }
     Ok(out)
 }
