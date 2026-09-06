@@ -61562,11 +61562,14 @@ fn handle_bare_agent_status() -> Result<()> {
     // handler is already agent-only, but AIDA_AGENT_OUTPUT=0 force-selects the
     // human shape for parity with the explicit `aida status`). STORY-730: lead
     // with the morning-after drain banner. trace:TASK-964 trace:STORY-730
+    let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
     if agent_output_mode() {
+        print_live_drain_status_line(&drain_root);
         print_morning_after_toon(&project_root);
         print_toon_status(&snap, &project_root);
         return Ok(());
     }
+    print_live_drain_status_line(&drain_root);
     print_morning_after_banner(&project_root);
     print_fast_status(&snap);
 
@@ -61595,6 +61598,17 @@ fn handle_bare_agent_status() -> Result<()> {
     }
     println!();
     Ok(())
+}
+
+/// Surface an in-flight drain at the top of `aida status` using the same
+/// local-only liveness probe as `statusline` and `statusbar`. Stale/no drain
+/// renders nothing, preserving existing bytes on quiet projects.
+// trace:TASK-1194 | ai:codex
+fn print_live_drain_status_line(project_root: &std::path::Path) {
+    if let Some(probe) = crate::drain_state::drain_liveness_probe(project_root) {
+        println!("{}", probe.status_line().cyan().bold());
+        println!();
+    }
 }
 
 #[cfg(test)]

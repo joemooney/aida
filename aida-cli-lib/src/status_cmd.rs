@@ -286,6 +286,8 @@ pub(crate) fn handle_status_command_distributed(
         if let Some(stranded) = detect_stranded_primary(&project_root) {
             print_stranded_primary_banner(&stranded);
         }
+        let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+        print_live_drain_status_line(&drain_root);
         let snap = collect_fast_status_snapshot(&project_root);
         // TASK-964: AGENT-MODE renders the token-efficient TOON snapshot; the
         // human TTY path keeps the byte-identical emoji/rule snapshot.
@@ -333,6 +335,9 @@ pub(crate) fn handle_status_command_distributed(
     // probes BUG-613 introduced; the collapse only changes RENDERING, never
     // adds a scan. trace:STORY-673 | ai:claude
     let show_full = all || full;
+
+    let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+    print_live_drain_status_line(&drain_root);
 
     // STORY-385: `--cleanup` focuses on the "Needs attention" section.
     // `--cleanup --json` emits the structured report; otherwise we render
@@ -744,6 +749,17 @@ pub(crate) fn handle_status_command_distributed(
     }
 
     Ok(())
+}
+
+/// Surface an in-flight drain at the top of `aida status` using the same
+/// local-only liveness probe as `statusline` and `statusbar`. Stale/no drain
+/// renders nothing, preserving existing bytes on quiet projects.
+// trace:TASK-1194 | ai:codex
+fn print_live_drain_status_line(project_root: &std::path::Path) {
+    if let Some(probe) = crate::drain_state::drain_liveness_probe(project_root) {
+        println!("{}", probe.status_line().cyan().bold());
+        println!();
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -222,6 +222,16 @@ fn read_lock(path: &Path) -> Option<DrainLock> {
     serde_json::from_str(&raw).ok()
 }
 
+/// Read the local drain lock and return it only when its recorded PID is alive.
+/// Unlike [`probe_lock`], this does not apply the age backstop: status surfaces
+/// are reporting an existing in-flight drain, not deciding whether a new drain
+/// may reclaim the lock.
+// trace:TASK-1194 | ai:codex
+pub(crate) fn read_pid_live_lock(project_root: &Path) -> Option<DrainLock> {
+    let lock = read_lock(&drain_lock_path(project_root))?;
+    process_probe::pid_is_alive(lock.pid).then_some(lock)
+}
+
 /// Resolve the staleness horizon from `AIDA_DRAIN_LOCK_STALE_SECS`, falling
 /// back to [`DEFAULT_STALE_SECS`]. A non-numeric value falls back too.
 fn stale_secs() -> u64 {
