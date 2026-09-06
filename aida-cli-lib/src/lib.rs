@@ -27641,6 +27641,42 @@ fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32
     }
 }
 
+fn branch_unshipped_patch_count_default(repo: &std::path::Path, branch: &str) -> Option<u32> {
+    let Some(default_ref) = resolve_default_branch_ref(repo) else {
+        return None;
+    };
+    // trace:BUG-853 | ai:codex
+    // A squash-merged branch can still be ahead by commit id while its tree is
+    // identical to the default branch. Treat that as shipped content.
+    let tree_diff = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["diff", "--quiet", &default_ref, branch])
+        .status()
+        .ok()?;
+    match tree_diff.code() {
+        Some(0) => return Some(0),
+        Some(1) => {}
+        _ => return None,
+    }
+
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["cherry", &default_ref, branch])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter(|line| line.starts_with("+ "))
+            .count() as u32,
+    )
+}
+
 /// Count how many commits `branch` is ahead of the repo's DEFAULT branch, and
 /// say WHY when the answer can't be produced.
 ///
@@ -30407,6 +30443,37 @@ fn classify_session_end_unshipped_work(
     })
 }
 
+fn session_end_pr_state_for_scope_or_branch(
+    project_root: &std::path::Path,
+    scope: &str,
+    branch: &str,
+) -> workflow_hints::PrState {
+    // trace:BUG-853 | ai:codex
+    // Reviewer/fixup sessions may use a local alias branch like `pr-1648`
+    // while the forge PR head is still the implementation branch. In that
+    // shape, branch-keyed lookup misses; the PR/MR scope is the durable id.
+    match change_lookup_for_branch(project_root, branch) {
+        crate::forge::ChangeLookup::Found(c) => return workflow_hints::PrState::Open(c.id),
+        crate::forge::ChangeLookup::NoChange => {}
+        crate::forge::ChangeLookup::CliMissing
+        | crate::forge::ChangeLookup::CliFailed(_)
+        | crate::forge::ChangeLookup::Unreachable(_) => return workflow_hints::PrState::Unknown,
+    }
+
+    let Some(pr_number) = pr_number_from_scope(scope) else {
+        return workflow_hints::PrState::Absent;
+    };
+    let mut sink = network_retry::NoopSink;
+    match crate::forge::forge_for(project_root).change_metadata(pr_number, &mut sink) {
+        Ok(metadata) => match metadata.state {
+            crate::forge::ChangeState::Open => workflow_hints::PrState::Open(pr_number),
+            crate::forge::ChangeState::Merged => workflow_hints::PrState::Open(pr_number),
+            crate::forge::ChangeState::Closed => workflow_hints::PrState::Absent,
+        },
+        Err(_) => workflow_hints::PrState::Absent,
+    }
+}
+
 fn session_end_unshipped_warning_lines(work: &SessionEndUnshippedWork) -> Vec<String> {
     vec![
         format!(
@@ -30624,15 +30691,10 @@ fn session_end(
     // the operator's next sweep sees the unshipped branch. This only fires when
     // GH confirms no open PR; unknown GH states never assert "missing PR".
     // trace:BUG-361
-    let commits_ahead = branch_commits_ahead_main(&project_root, &target.branch);
-    // STORY-516: forge-routed. trace:STORY-516 | ai:claude
-    let pr_state = match change_lookup_for_branch(&project_root, &target.branch) {
-        crate::forge::ChangeLookup::Found(c) => workflow_hints::PrState::Open(c.id),
-        crate::forge::ChangeLookup::NoChange => workflow_hints::PrState::Absent,
-        crate::forge::ChangeLookup::CliMissing
-        | crate::forge::ChangeLookup::CliFailed(_)
-        | crate::forge::ChangeLookup::Unreachable(_) => workflow_hints::PrState::Unknown,
-    };
+    let commits_ahead = branch_unshipped_patch_count_default(&project_root, &target.branch)
+        .or_else(|| branch_commits_ahead_main(&project_root, &target.branch));
+    let pr_state =
+        session_end_pr_state_for_scope_or_branch(&project_root, &target.scope, &target.branch);
     // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
     // for this branch has already been squash-merged / merged, the work is shipped
     // regardless of what the local branch looks like. Suppress warning.

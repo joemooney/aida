@@ -1,4 +1,5 @@
 use super::*;
+use std::process::Command;
 
 fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionLease {
     SessionLease {
@@ -26,6 +27,42 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
         claim_verb: false,
         manual_enter_at: None,
     }
+}
+
+fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+    Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@t")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@t")
+        .output()
+        .expect("git runs")
+}
+
+fn git_ok(repo: &std::path::Path, args: &[&str]) {
+    let out = git(repo, args);
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn write_file(path: &std::path::Path, content: &str) {
+    std::fs::write(path, content).unwrap();
+}
+
+fn init_patch_repo() -> tempfile::TempDir {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = tmp.path();
+    git_ok(repo, &["init", "--initial-branch=main", "--quiet"]);
+    write_file(&repo.join("tracked.txt"), "base\n");
+    git_ok(repo, &["add", "tracked.txt"]);
+    git_ok(repo, &["commit", "-m", "root", "--quiet"]);
+    tmp
 }
 
 /// BUG-361: session end warns only on the verified risk state:
@@ -153,6 +190,109 @@ fn session_end_unshipped_work_appends_to_punt_ledger() {
         Some("UNSHIPPED-SESSION-END")
     );
     assert!(records[0].detail.contains("3 commits ahead"),);
+}
+
+/// BUG-853: after a squash merge, commit ids may remain local-only while the
+/// branch contributes no patch delta relative to the default branch.
+// trace:BUG-853 | ai:codex
+#[test]
+fn session_end_unshipped_patch_count_suppresses_squash_merged_content() {
+    let tmp = init_patch_repo();
+    let repo = tmp.path();
+    git_ok(repo, &["checkout", "-q", "-b", "bug-853"]);
+    write_file(&repo.join("tracked.txt"), "shipped\n");
+    git_ok(repo, &["add", "tracked.txt"]);
+    git_ok(repo, &["commit", "-m", "feature", "--quiet"]);
+    assert_eq!(branch_commits_ahead_main(repo, "bug-853"), Some(1));
+
+    git_ok(repo, &["checkout", "-q", "main"]);
+    write_file(&repo.join("tracked.txt"), "shipped\n");
+    git_ok(repo, &["add", "tracked.txt"]);
+    git_ok(repo, &["commit", "-m", "squash merge", "--quiet"]);
+
+    assert_eq!(
+        branch_unshipped_patch_count_default(repo, "bug-853"),
+        Some(0)
+    );
+    assert!(classify_session_end_unshipped_work(
+        "lease",
+        "BUG-853",
+        "bug-853",
+        branch_unshipped_patch_count_default(repo, "bug-853"),
+        workflow_hints::PrState::Absent,
+    )
+    .is_none());
+}
+
+/// BUG-853: a branch with a real patch delta and no open PR remains a true
+/// positive.
+// trace:BUG-853 | ai:codex
+#[test]
+fn session_end_unshipped_patch_count_keeps_genuine_unshipped_work() {
+    let tmp = init_patch_repo();
+    let repo = tmp.path();
+    git_ok(repo, &["checkout", "-q", "-b", "bug-853"]);
+    write_file(&repo.join("tracked.txt"), "unshipped\n");
+    git_ok(repo, &["add", "tracked.txt"]);
+    git_ok(repo, &["commit", "-m", "feature", "--quiet"]);
+
+    let commits = branch_unshipped_patch_count_default(repo, "bug-853");
+    assert_eq!(commits, Some(1));
+    assert!(classify_session_end_unshipped_work(
+        "lease",
+        "BUG-853",
+        "bug-853",
+        commits,
+        workflow_hints::PrState::Absent,
+    )
+    .is_some());
+}
+
+/// BUG-853: a `PR-N` scoped session may be on a local alias branch (`pr-N`)
+/// while the open PR's actual head branch is different. Branch lookup can
+/// miss; the PR number is authoritative.
+// trace:BUG-853 | ai:codex
+#[cfg(unix)]
+#[test]
+fn session_end_pr_state_uses_pr_scope_when_alias_branch_has_no_branch_pr() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = tmp.path();
+    std::fs::create_dir_all(repo.join(".aida")).unwrap();
+    write_file(
+        &repo.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    );
+
+    let gh = repo.join("fake-gh");
+    write_file(
+        &gh,
+        r#"#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo "gh version fake"
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "list" ]; then
+  exit 0
+fi
+if [ "$1" = "pr" ] && [ "$2" = "view" ] && [ "$3" = "1648" ]; then
+  printf '%s\n' '{"state":"OPEN","title":"BUG-838","baseRefName":"main","headRefName":"bug-838","headRefOid":"abc","isCrossRepository":false,"headRepository":{"nameWithOwner":"o/r"},"isDraft":false}'
+  exit 0
+fi
+exit 1
+"#,
+    );
+    let mut perms = std::fs::metadata(&gh).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&gh, perms).unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
+
+    assert_eq!(
+        session_end_pr_state_for_scope_or_branch(repo, "PR-1648", "pr-1648"),
+        workflow_hints::PrState::Open(1648)
+    );
 }
 
 /// BUG-59: on a direct (TTY) `session end` that removes the worktree the
