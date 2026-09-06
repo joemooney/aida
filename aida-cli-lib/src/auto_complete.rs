@@ -3466,6 +3466,25 @@ pub(crate) struct BatchChainDrainResult {
     pub(crate) exit_code: i32,
 }
 
+/// Remove `spec` from every final-disposition bucket before recording its latest
+/// drain outcome. A spec can be shelved, retried later in the same drain, and
+/// then ship; the exit summary must report only the final state.
+// trace:BUG-852 | ai:codex
+fn forget_batch_disposition(
+    spec: &str,
+    shipped: &mut Vec<String>,
+    punted: &mut Vec<String>,
+    escalated: &mut Vec<String>,
+    shelved: &mut Vec<String>,
+    skipped: &mut Vec<(String, String)>,
+) {
+    shipped.retain(|s| s != spec);
+    punted.retain(|s| s != spec);
+    escalated.retain(|s| s != spec);
+    shelved.retain(|s| s != spec);
+    skipped.retain(|(s, _)| s != spec);
+}
+
 /// Drives a batch drain: yields the current batch head and runs one spec's
 /// full `--auto-complete` orchestration. The real implementation re-resolves
 /// the `batch:NAME` tag against the queue and calls `run_auto_complete`; the
@@ -3543,7 +3562,8 @@ pub(crate) fn drain_batch_with_caps(
     let mut punted: Vec<String> = Vec::new();
     let mut escalated: Vec<String> = Vec::new();
     let mut shelved: Vec<String> = Vec::new();
-    let skipped: Vec<(String, String)> = Vec::new();
+    let mut skipped: Vec<(String, String)> = Vec::new();
+    let mut acted = 0usize;
     loop {
         // Resolve the head first: a `--max` of exactly the batch size should
         // report `Drained` (the batch genuinely emptied), not `MaxReached`.
@@ -3579,7 +3599,7 @@ pub(crate) fn drain_batch_with_caps(
         // punted, escalated, or shelved each consumed a slot (a full phase
         // attempt).
         if let Some(limit) = max {
-            if shipped.len() + punted.len() + escalated.len() + shelved.len() >= limit {
+            if acted >= limit {
                 return BatchDrainResult {
                     shipped,
                     punted,
@@ -3600,13 +3620,12 @@ pub(crate) fn drain_batch_with_caps(
         // intentional stop: the in-flight head stays queued for the next drain.
         // trace:TASK-966 | ai:claude
         if caps.is_active() {
-            let acted = (shipped.len() + punted.len() + escalated.len() + shelved.len()) as u64;
             let counters = crate::drain_caps::DrainCounters {
                 tokens: caps
                     .max_tokens
                     .map(|_| driver.cumulative_tokens())
                     .unwrap_or(0),
-                iterations: acted,
+                iterations: acted as u64,
                 elapsed: start.elapsed(),
             };
             let stop = caps
@@ -3645,6 +3664,7 @@ pub(crate) fn drain_batch_with_caps(
             };
         }
         let result = driver.run_spec(&head);
+        acted += 1;
         if result.exit_code != 0 {
             let phase = result.failed_phase.unwrap_or(Phase::Implementer);
             // EPIC-28: a shelvable failure parks the spec and the drain
@@ -3656,6 +3676,14 @@ pub(crate) fn drain_batch_with_caps(
                 .map(|cap| shelved.len() + 1 > cap)
                 .unwrap_or(false);
             if result.shelved_reason.is_some() && !over_failure_budget {
+                forget_batch_disposition(
+                    &head,
+                    &mut shipped,
+                    &mut punted,
+                    &mut escalated,
+                    &mut shelved,
+                    &mut skipped,
+                );
                 shelved.push(head);
                 continue;
             }
@@ -3719,6 +3747,14 @@ pub(crate) fn drain_batch_with_caps(
         // either stall on it or double-credit the actual shipped spec.
         // trace:BUG-245 | ai:claude
         if let Some(actual) = result.shipped_spec_id.clone() {
+            forget_batch_disposition(
+                &actual,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
             shipped.push(actual.clone());
             return BatchDrainResult {
                 shipped,
@@ -3739,10 +3775,34 @@ pub(crate) fn drain_batch_with_caps(
         // the batch summary never claims a parked / escalated spec shipped.
         // trace:STORY-276, STORY-306 | ai:claude
         if result.punt_reason.is_some() {
+            forget_batch_disposition(
+                &head,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
             punted.push(head);
         } else if result.escalation.is_some() {
+            forget_batch_disposition(
+                &head,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
             escalated.push(head);
         } else {
+            forget_batch_disposition(
+                &head,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
             shipped.push(head);
         }
     }
@@ -4075,7 +4135,6 @@ where
     let mut escalated = Vec::new();
     let mut shelved: Vec<String> = Vec::new();
     let mut skipped: Vec<(String, String)> = Vec::new();
-    let mut any_shelved_or_skipped = false;
 
     for batch_name in batch_names {
         let consumed = shipped.len() + punted.len() + escalated.len() + shelved.len();
@@ -4102,14 +4161,51 @@ where
             &mut batch_cap_stop,
         );
 
-        shipped.extend(result.shipped.iter().cloned());
-        punted.extend(result.punted.iter().cloned());
-        escalated.extend(result.escalated.iter().cloned());
-        shelved.extend(result.shelved.iter().cloned());
-        skipped.extend(result.skipped.iter().cloned());
-        if !result.shelved.is_empty() || !result.skipped.is_empty() {
-            any_shelved_or_skipped = true;
+        for spec in &result.shipped {
+            forget_batch_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
+            shipped.push(spec.clone());
         }
+        for spec in &result.punted {
+            forget_batch_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
+            punted.push(spec.clone());
+        }
+        for spec in &result.escalated {
+            forget_batch_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
+            escalated.push(spec.clone());
+        }
+        for spec in &result.shelved {
+            forget_batch_disposition(
+                spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
+            shelved.push(spec.clone());
+        }
+        skipped.extend(result.skipped.iter().cloned());
 
         let step = BatchChainStep {
             batch_name: batch_name.clone(),
@@ -4235,9 +4331,11 @@ where
     }
 
     // Every batch drained cleanly. EPIC-28: if any individual batch reported
-    // a shelve/skip, the chain summary is `DrainedWithShelved` (exit 2) so the
-    // operator still sees the parked set.
-    let (outcome, exit_code) = if any_shelved_or_skipped {
+    // a final shelve/skip, the chain summary is `DrainedWithShelved` (exit 2)
+    // so the operator still sees the parked set. A retried-then-shipped spec is
+    // no longer parked and therefore returns to the clean `Drained` path.
+    // trace:BUG-852 | ai:codex
+    let (outcome, exit_code) = if !shelved.is_empty() || !skipped.is_empty() {
         (BatchDrainOutcome::DrainedWithShelved, 2)
     } else {
         (BatchDrainOutcome::Drained, 0)
@@ -7534,6 +7632,10 @@ mod tests {
         /// `resolve_batch_members` filter that would skip the freshly-
         /// shelved spec on the next iteration. trace:EPIC-28 | ai:claude
         shelve_at: Vec<(String, Phase)>,
+        /// BUG-852: specs that shelve once without leaving the head, then rerun
+        /// successfully later in the same drain. Models a recover-and-retry path
+        /// where the final disposition should replace the earlier shelve.
+        shelve_once_retry: Vec<(String, Phase)>,
         /// EPIC-28: specs the *test* wants treated as blocked-by a
         /// just-shelved spec. The mock drops them from `heads` *after* the
         /// named blocker is shelved, and records each as a skipped row.
@@ -7556,6 +7658,7 @@ mod tests {
                 mismatch: None,
                 escalate_spec: None,
                 shelve_at: Vec::new(),
+                shelve_once_retry: Vec::new(),
                 skip_dependent_of: Vec::new(),
                 skipped: Vec::new(),
                 runs: Vec::new(),
@@ -7607,6 +7710,13 @@ mod tests {
             self
         }
 
+        /// BUG-852: return a shelved failure once while leaving `spec` at the
+        /// head so the next iteration retries and can ship it.
+        fn shelving_once_then_retry(mut self, spec: &str, phase: Phase) -> Self {
+            self.shelve_once_retry.push((spec.to_string(), phase));
+            self
+        }
+
         /// EPIC-28: when `blocker` is shelved, also drop `dependent` from
         /// the head queue and record the skip with `reason`. Simulates
         /// `resolve_batch_members`'s pickability filter: a member with
@@ -7638,6 +7748,14 @@ mod tests {
             // (the orchestrator wrote the FailureReason), and the next head
             // pickup would skip it. Mirror that here by consuming the head.
             // Dependents of this spec drop off too. trace:EPIC-28 | ai:claude
+            if let Some(pos) = self
+                .shelve_once_retry
+                .iter()
+                .position(|(shelve_spec, _)| shelve_spec == spec)
+            {
+                let (_shelve_spec, phase) = self.shelve_once_retry.remove(pos);
+                return shelve_result(phase);
+            }
             for (shelve_spec, phase) in self.shelve_at.clone() {
                 if shelve_spec == spec {
                     self.heads.retain(|h| h != spec);
@@ -7946,6 +8064,27 @@ mod tests {
         assert_eq!(result.stopped_batch.as_deref(), Some("beta"));
     }
 
+    /// BUG-852: chain aggregation honors the final disposition. A spec shelved
+    /// in an earlier batch and shipped in a later retry batch must not remain
+    /// in the final shelved list or force exit 2.
+    // trace:BUG-852 | ai:codex
+    #[test]
+    fn drain_batch_chain_retry_then_ship_reports_final_clean_state() {
+        let names = vec!["first".to_string(), "retry".to_string()];
+        let result = drain_batch_chain(&names, None, None, |name| match name {
+            "first" => Box::new(
+                MockBatchDriver::new(&["STORY-830"]).shelving("STORY-830", Phase::Reviewer),
+            ),
+            "retry" => Box::new(MockBatchDriver::new(&["STORY-830"])),
+            other => panic!("unexpected batch {other}"),
+        });
+
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["STORY-830"]);
+        assert!(result.shelved.is_empty());
+    }
+
     /// STORY-276: a punted member advances the drain — it leaves the queue
     /// (`NeedsAttention`), so the batch keeps going — but it lands in `punted`,
     /// not `shipped`, so the summary does not claim a parked spec shipped.
@@ -7995,6 +8134,22 @@ mod tests {
         assert_eq!(result.shelved, vec!["TASK-2"]);
         // TASK-3 must have actually run — the whole point of EPIC-28.
         assert_eq!(driver.runs, vec!["TASK-1", "TASK-2", "TASK-3"]);
+    }
+
+    /// BUG-852: a spec can shelve, be retried in the same drain, and then ship.
+    /// The final disposition wins: it must appear only in `shipped`, not also
+    /// in `shelved`, and the drain exits cleanly because nothing remains parked.
+    // trace:BUG-852 | ai:codex
+    #[test]
+    fn drain_batch_retry_then_ship_removes_prior_shelve() {
+        let mut driver = MockBatchDriver::new(&["STORY-830"])
+            .shelving_once_then_retry("STORY-830", Phase::Reviewer);
+        let result = drain_batch(&mut driver, None, None);
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["STORY-830"]);
+        assert!(result.shelved.is_empty());
+        assert_eq!(driver.runs, vec!["STORY-830", "STORY-830"]);
     }
 
     /// EPIC-28: when a shelving event also makes a downstream member
