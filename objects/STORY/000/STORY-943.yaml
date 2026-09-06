@@ -17,22 +17,15 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 1656` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T02:49:43.898286400Z
-modified_at: 2026-09-06T06:33:47.766241924Z
+modified_at: 2026-09-06T06:33:49.580219529Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a073a5-0642-7c80-9e98-84e890573501
   created_at: 2026-09-06T02:49:47.936635689Z
   created_by: joe
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: failed
-  detail: the implementer session exited 1 — it was aborted or errored
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-943 --resume`'
-  shelved_at: 2026-09-06T06:33:47.766241924Z
