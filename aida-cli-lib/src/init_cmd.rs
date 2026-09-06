@@ -3616,7 +3616,8 @@ fn handle_init_post_clone(
 
     // Post-clone attach preserves an existing plan archive, but does not
     // create one until a plan-writing command needs it; the minimal
-    // footprint (STORY-830) never touches docs/ at all. trace:TASK-1193
+    // footprint (STORY-830) never touches docs/ at all.
+    // trace:TASK-1193 | ai:codex
     let plans_dir = cwd.join("docs/plans");
     if footprint == crate::cli::InitFootprint::Full && plans_dir.exists() {
         ensure_plan_template_scaffold(&plans_dir, false)?;
