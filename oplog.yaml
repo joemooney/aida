@@ -45792,5 +45792,31 @@ operations:
   timestamp: 2026-09-06T05:36:16.796943991Z
   kind: !SetStatus
     status: Completed
-clock: 4003
+- id: 01a0754c-1802-7031-bcb1-e565f52197b6
+  target_id: 01a0754c-147b-75c0-b2a3-eb2d84871002
+  author: aida
+  node_id: '1'
+  lamport: 4004
+  timestamp: 2026-09-06T05:58:36.290158764Z
+  kind: !Create
+    title: 'Review PR-1662: [AI:codex] feat(help): add semantic help lookup (STORY-837)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0753a`) for branch `story-837`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1662>
+      - Branch: `story-837` → `main`
+
+      ## Covers
+
+      - STORY-837
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1662` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4004
 node_id: '1'
