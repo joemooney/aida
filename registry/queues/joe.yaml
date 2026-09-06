@@ -434,13 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 01a073aa-31a2-76b1-8f4c-ac16ef57f0c8
-  position: 356000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-09-05T22:22:12.704188265Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a073b5-bc92-79f2-b977-57ce787c8ac6
   position: 358000
   added_by: joe
