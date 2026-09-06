@@ -47338,5 +47338,31 @@ operations:
 
       Attempts: 2
       Latest recurrence: 2026-09-06T12:13:21.912594523+00:00
-clock: 4102
+- id: 01a076aa-536e-7d43-9e57-0c88c2e9f7a8
+  target_id: 01a076aa-4d81-7c32-a1fc-f885613e0cc2
+  author: aida
+  node_id: '1'
+  lamport: 4103
+  timestamp: 2026-09-06T12:21:09.102763328Z
+  kind: !Create
+    title: 'Review PR-1676: [AI:codex] fix(queue): skip reviewer-routed drain entries (BUG-862)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a076aa`) for branch `bug-862-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1676>
+      - Branch: `bug-862-2` → `main`
+
+      ## Covers
+
+      - BUG-862
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1676` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4103
 node_id: '1'
