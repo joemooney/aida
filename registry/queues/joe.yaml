@@ -440,12 +440,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 01a073aa-31a2-76b1-8f4c-ac16ef57f0c8
-  position: 381000
-  added_by: joe
-  added_at: 2026-09-06T05:15:21.141251866Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a07609-aad3-7b73-8729-143c97ebe5d6
   position: 389000
   added_by: joe
@@ -458,13 +452,5 @@
   added_by: joe
   note: auto-queued by `aida pr` (01a07647); covers 1 spec
   added_at: 2026-09-06T10:46:33.777411580Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07660-0462-7bb3-b364-8281cb301ea2
-  position: 391000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a07659); covers 1 spec
-  added_at: 2026-09-06T11:00:05.839503796Z
   for_role: reviewer
   added_by_machine: imac
