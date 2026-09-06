@@ -340,6 +340,146 @@ fn drain_dry_run_previews_plan_with_no_side_effects() {
     );
 }
 
+#[test]
+fn drain_dry_run_skips_reviewer_routed_head() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    let add_reviewer = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "story",
+            "--status",
+            "approved",
+            "--title",
+            "Review PR-943: routed review",
+        ])
+        .output()
+        .expect("run aida add reviewer");
+    assert!(
+        add_reviewer.status.success(),
+        "aida add reviewer failed: {}",
+        String::from_utf8_lossy(&add_reviewer.stderr)
+    );
+    let reviewer_out = String::from_utf8_lossy(&add_reviewer.stdout);
+    let reviewer_spec = reviewer_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse reviewer spec id:\n{reviewer_out}"))
+        .to_string();
+
+    let add_impl = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "task",
+            "--status",
+            "approved",
+            "--title",
+            "implementer work after review",
+        ])
+        .output()
+        .expect("run aida add implementer");
+    assert!(
+        add_impl.status.success(),
+        "aida add implementer failed: {}",
+        String::from_utf8_lossy(&add_impl.stderr)
+    );
+    let impl_out = String::from_utf8_lossy(&add_impl.stdout);
+    let impl_spec = impl_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse implementer spec id:\n{impl_out}"))
+        .to_string();
+
+    let queue_reviewer = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args(["queue", "add", &reviewer_spec, "--for", "reviewer"])
+        .output()
+        .expect("run aida queue add reviewer");
+    assert!(
+        queue_reviewer.status.success(),
+        "aida queue add reviewer failed: {}",
+        String::from_utf8_lossy(&queue_reviewer.stderr)
+    );
+    let queue_impl = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args(["queue", "add", &impl_spec, "--for", "implementer"])
+        .output()
+        .expect("run aida queue add implementer");
+    assert!(
+        queue_impl.status.success(),
+        "aida queue add implementer failed: {}",
+        String::from_utf8_lossy(&queue_impl.stderr)
+    );
+
+    let sessions_before = list_session_files(&repo);
+    let siblings_before = sibling_worktrees(&base_dir);
+
+    let dry = aida(&repo, &home)
+        .args(["queue", "work", "--drain", "--dry-run", "--max", "2"])
+        .output()
+        .expect("run aida queue work --drain --dry-run --max 2");
+    assert!(
+        dry.status.success(),
+        "dry-run exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        dry.status.code(),
+        String::from_utf8_lossy(&dry.stderr),
+        String::from_utf8_lossy(&dry.stdout)
+    );
+    let out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&dry.stdout),
+        String::from_utf8_lossy(&dry.stderr)
+    );
+    assert!(
+        out.contains(&impl_spec),
+        "drain preview must plan the implementer item:\n{out}"
+    );
+    assert!(
+        !out.contains(&format!("    1. {reviewer_spec}")),
+        "drain preview must not plan the reviewer item for an implementer drain:\n{out}"
+    );
+    assert_eq!(
+        sessions_before,
+        list_session_files(&repo),
+        "dry-run wrote a session lease"
+    );
+    assert_eq!(
+        siblings_before,
+        sibling_worktrees(&base_dir),
+        "dry-run created a worktree sibling"
+    );
+}
+
 /// A SPEC-ID is `UPPER-<digits>` (e.g. `TASK-1`).
 fn is_spec_id(t: &str) -> bool {
     let mut parts = t.splitn(2, '-');

@@ -8835,6 +8835,96 @@ pub(crate) fn pick_auto_complete_head(
     Err(skipped)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AutoCompleteHeadCandidate {
+    pub(crate) id: String,
+    pub(crate) status: RequirementStatus,
+    pub(crate) for_role: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AutoCompleteHeadPick {
+    pub(crate) spec: String,
+    pub(crate) status_skipped: Vec<(String, RequirementStatus)>,
+    pub(crate) role_skipped: Vec<(String, String)>,
+}
+
+/// The auto-complete engine always starts with a phase-1 implementer unless
+/// the caller explicitly asked for another role. Treat an absent shell role as
+/// implementer so reviewer-routed queue rows are not accidentally driven by an
+/// implementer lifecycle.
+// trace:BUG-862 | ai:codex
+pub(crate) fn effective_auto_complete_role(role_override: Option<&str>) -> String {
+    role_override
+        .filter(|s| !s.is_empty())
+        .map(canonical_role_name)
+        .or_else(|| {
+            std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .map(|s| canonical_role_name(&s))
+        })
+        .unwrap_or_else(|| "implementer".to_string())
+}
+
+/// Role-aware head selection for auto-complete drains. Entries explicitly
+/// routed to a different role are skipped before status drivability is tested,
+/// because the phase-1 lifecycle this command launches would be the wrong
+/// session type for them. Unrouted entries remain drivable by the effective
+/// role for backwards compatibility.
+// trace:BUG-862 | ai:codex
+pub(crate) fn pick_auto_complete_head_for_role(
+    candidates: &[AutoCompleteHeadCandidate],
+    effective_role: &str,
+) -> Option<AutoCompleteHeadPick> {
+    let effective_role = canonical_role_name(effective_role);
+    let mut status_skipped = Vec::new();
+    let mut role_skipped = Vec::new();
+    for candidate in candidates {
+        if let Some(for_role) = candidate.for_role.as_deref() {
+            let routed = canonical_role_name(for_role);
+            if routed != effective_role {
+                role_skipped.push((candidate.id.clone(), routed));
+                continue;
+            }
+        }
+        if auto_complete_head_drivable(&candidate.status) {
+            return Some(AutoCompleteHeadPick {
+                spec: candidate.id.clone(),
+                status_skipped,
+                role_skipped,
+            });
+        }
+        status_skipped.push((candidate.id.clone(), candidate.status.clone()));
+    }
+    None
+}
+
+pub(crate) fn auto_complete_head_candidates_with_roles(
+    storage: &Storage,
+    user_id: &str,
+) -> Result<Vec<AutoCompleteHeadCandidate>> {
+    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    let store = storage.load()?;
+    let mut ordered: Vec<&aida_core::QueueEntry> = entries.iter().collect();
+    ordered.sort_by_key(|e| e.position);
+
+    Ok(ordered
+        .iter()
+        .filter_map(|e| {
+            store
+                .requirements
+                .iter()
+                .find(|r| r.id == e.requirement_id)
+                .map(|r| AutoCompleteHeadCandidate {
+                    id: r.display_id(),
+                    status: r.status.clone(),
+                    for_role: e.for_role.clone(),
+                })
+        })
+        .collect())
+}
+
 /// Build the `(display_id, status)` candidate list for the active role's
 /// queue in pickup order (queue position ascending, same as `aida queue
 /// next`) — the shared input to [`pick_auto_complete_head`] for both
@@ -8845,35 +8935,17 @@ pub(crate) fn auto_complete_head_candidates(
     user_id: &str,
     role_override: Option<&str>,
 ) -> Result<Vec<(String, RequirementStatus)>> {
-    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
-    let store = storage.load()?;
-    let role_filter: Option<String> = role_override
-        .filter(|s| !s.is_empty())
-        .map(canonical_role_name)
-        .or_else(|| {
-            std::env::var("AIDA_SESSION_ROLE")
-                .ok()
-                .filter(|s| !s.is_empty())
-        });
-
-    let mut ordered: Vec<&aida_core::QueueEntry> = entries
-        .iter()
-        .filter(|e| match &role_filter {
-            Some(r) => e.for_role.as_deref() == Some(r.as_str()),
-            None => true,
+    let effective_role = effective_auto_complete_role(role_override);
+    Ok(auto_complete_head_candidates_with_roles(storage, user_id)?
+        .into_iter()
+        .filter(|candidate| {
+            candidate
+                .for_role
+                .as_deref()
+                .map(|r| canonical_role_name(r) == effective_role)
+                .unwrap_or(true)
         })
-        .collect();
-    ordered.sort_by_key(|e| e.position);
-
-    Ok(ordered
-        .iter()
-        .filter_map(|e| {
-            store
-                .requirements
-                .iter()
-                .find(|r| r.id == e.requirement_id)
-                .map(|r| (r.display_id(), r.status.clone()))
-        })
+        .map(|candidate| (candidate.id, candidate.status))
         .collect())
 }
 
@@ -8889,22 +8961,17 @@ pub(crate) fn resolve_auto_complete_head(
     user_id: &str,
     role_override: Option<&str>,
 ) -> Result<String> {
-    let role_label = role_override
-        .filter(|s| !s.is_empty())
-        .map(canonical_role_name)
-        .or_else(|| {
-            std::env::var("AIDA_SESSION_ROLE")
-                .ok()
-                .filter(|s| !s.is_empty())
-        })
-        .unwrap_or_else(|| "any role".to_string());
-    let candidates = auto_complete_head_candidates(storage, user_id, role_override)?;
+    let role_label = effective_auto_complete_role(role_override);
+    let candidates = auto_complete_head_candidates_with_roles(storage, user_id)?;
 
-    match pick_auto_complete_head(&candidates) {
-        Ok((spec, skipped)) => {
+    match pick_auto_complete_head_for_role(&candidates, &role_label) {
+        Some(pick) => {
+            for (id, routed) in &pick.role_skipped {
+                eprintln!("skipped {id} — routed for {routed}");
+            }
             // Acceptance criterion: name each item skipped to reach the
             // drivable head so the pickup is never silently surprising.
-            for (id, status) in &skipped {
+            for (id, status) in &pick.status_skipped {
                 eprintln!(
                     "  {} skipping {} ({}) — the orchestrator drives a full \
                      lifecycle from scratch and cannot resume it",
@@ -8913,13 +8980,34 @@ pub(crate) fn resolve_auto_complete_head(
                     status
                 );
             }
-            Ok(spec)
+            Ok(pick.spec)
         }
-        Err(skipped) if skipped.is_empty() => anyhow::bail!(
+        None if candidates.is_empty() => anyhow::bail!(
             "queue is empty for {role_label}; nothing to drive{}",
             auto_complete_sibling_role_hint(storage, user_id, &role_label).unwrap_or_default()
         ),
-        Err(skipped) => {
+        None => {
+            let skipped: Vec<(String, RequirementStatus)> = candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate
+                        .for_role
+                        .as_deref()
+                        .map(|r| canonical_role_name(r) == role_label)
+                        .unwrap_or(true)
+                })
+                .map(|candidate| (candidate.id.clone(), candidate.status.clone()))
+                .collect();
+            let role_skipped: Vec<(String, String)> = candidates
+                .iter()
+                .filter_map(|candidate| {
+                    let routed = candidate.for_role.as_deref().map(canonical_role_name)?;
+                    (routed != role_label).then(|| (candidate.id.clone(), routed))
+                })
+                .collect();
+            for (id, routed) in &role_skipped {
+                eprintln!("skipped {id} — routed for {routed}");
+            }
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
             // drive, without dumping a long stale list.
@@ -8936,12 +9024,20 @@ pub(crate) fn resolve_auto_complete_head(
             } else {
                 String::new()
             };
-            anyhow::bail!(
-                "no drivable item in the queue for {role_label}; nothing to drive — \
-                 {} queued item{} in-flight or terminal: {detail}{suffix}",
-                skipped.len(),
-                if skipped.len() == 1 { "" } else { "s" },
-            )
+            if skipped.is_empty() {
+                anyhow::bail!(
+                    "queue is empty for {role_label}; nothing to drive{}",
+                    auto_complete_sibling_role_hint(storage, user_id, &role_label)
+                        .unwrap_or_default()
+                )
+            } else {
+                anyhow::bail!(
+                    "no drivable item in the queue for {role_label}; nothing to drive — \
+                     {} queued item{} in-flight or terminal: {detail}{suffix}",
+                    skipped.len(),
+                    if skipped.len() == 1 { "" } else { "s" },
+                )
+            }
         }
     }
 }

@@ -71518,11 +71518,23 @@ fn resolve_next_n_head(
     storage: &Storage,
     user_id: &str,
     role_override: Option<&str>,
-) -> Option<String> {
-    match auto_complete_head_candidates(storage, user_id, role_override) {
-        Ok(candidates) => pick_auto_complete_head(&candidates)
-            .ok()
-            .map(|(spec, _skipped)| spec),
+) -> (Option<AutoCompleteHeadPick>, Vec<(String, String)>) {
+    let effective_role = effective_auto_complete_role(role_override);
+    match auto_complete_head_candidates_with_roles(storage, user_id) {
+        Ok(candidates) => {
+            let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
+            let role_skipped = match &pick {
+                Some(pick) => pick.role_skipped.clone(),
+                None => candidates
+                    .iter()
+                    .filter_map(|candidate| {
+                        let routed = candidate.for_role.as_deref().map(canonical_role_name)?;
+                        (routed != effective_role).then(|| (candidate.id.clone(), routed))
+                    })
+                    .collect(),
+            };
+            (pick, role_skipped)
+        }
         Err(e) => {
             eprintln!(
                 "{} could not resolve the queue head: {}",
@@ -71542,12 +71554,18 @@ fn drivable_queued_count(
     user_id: &str,
     role_override: Option<&str>,
 ) -> Result<usize> {
-    Ok(
-        auto_complete_head_candidates(storage, user_id, role_override)?
-            .iter()
-            .filter(|(_, status)| auto_complete_head_drivable(status))
-            .count(),
-    )
+    let effective_role = effective_auto_complete_role(role_override);
+    Ok(auto_complete_head_candidates_with_roles(storage, user_id)?
+        .iter()
+        .filter(|candidate| {
+            candidate
+                .for_role
+                .as_deref()
+                .map(|r| canonical_role_name(r) == effective_role)
+                .unwrap_or(true)
+                && auto_complete_head_drivable(&candidate.status)
+        })
+        .count())
 }
 
 /// TASK-966: process-exit code a drain uses when a hard budget cap
@@ -71766,11 +71784,24 @@ struct RealNextNDriver<'a> {
     /// TASK-966: project root + drain-start, for the `--max-tokens` meter. `None`
     /// when no token cap is active, so the headless-log scan is skipped.
     token_meter: Option<(std::path::PathBuf, std::time::SystemTime)>,
+    /// BUG-862: entries routed to a different role that this implementer drain
+    /// skipped before launching any phase-1 session.
+    role_skipped: Vec<(String, String)>,
+    seen_role_skips: std::collections::HashSet<String>,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     fn next_head(&mut self) -> Option<String> {
-        resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref())
+        let (pick, role_skipped) =
+            resolve_next_n_head(self.storage, &self.user_id, self.role_override.as_deref());
+        for (spec, role) in &role_skipped {
+            if self.seen_role_skips.insert(spec.clone()) {
+                eprintln!("skipped {spec} — routed for {role}");
+                self.role_skipped
+                    .push((spec.clone(), format!("routed for {role}")));
+            }
+        }
+        pick.map(|pick| pick.spec)
     }
 
     fn run_spec(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
@@ -71902,6 +71933,8 @@ fn handle_auto_complete_next_n(
         allow_stale_base,
         no_auto_rebase,
         token_meter,
+        role_skipped: Vec::new(),
+        seen_role_skips: std::collections::HashSet::new(),
     };
     // EPIC-28: apply the same default failure cap as the batch path.
     // trace:EPIC-28 | ai:claude
@@ -71909,7 +71942,7 @@ fn handle_auto_complete_next_n(
     // TASK-966: thread the hard budget caps through the drain. A cap stop is a
     // clean `MaxReached` carrying the reason in `cap_stop`. trace:TASK-966
     let mut cap_stop = None;
-    let result = auto_complete::drain_batch_with_caps(
+    let mut result = auto_complete::drain_batch_with_caps(
         &mut driver,
         Some(n),
         max_failures,
@@ -71917,6 +71950,7 @@ fn handle_auto_complete_next_n(
         drain_clock,
         &mut cap_stop,
     );
+    result.skipped.extend(driver.role_skipped);
     // An empty queue (nothing shipped, nothing punted, nothing to drain) is a
     // user error — surface it with a non-zero exit even though `drain_batch`
     // reports it as a clean `Drained`, matching the `--batch` drain. A drain
