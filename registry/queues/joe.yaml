@@ -434,13 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 01a073a7-64ca-7ab2-87aa-1d89e8eebc03
-  position: 355000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-09-05T22:19:09.468900621Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a073aa-31a2-76b1-8f4c-ac16ef57f0c8
   position: 356000
   added_by: joe
@@ -484,50 +477,10 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a07439-d08b-73b2-8b48-73c4d57ab356
-  position: 364000
-  added_by: joe
-  note: auto-queued by `session end` (01a07427); covers 1 spec
-  added_at: 2026-09-06T00:59:05.872866167Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07450-7e98-79a1-861a-1193c84108e9
-  position: 365000
-  added_by: joe
-  note: auto-queued by `session end` (01a07441); covers 1 spec
-  added_at: 2026-09-06T01:23:53.287905027Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0746a-b8ba-7e22-9dbc-c4f22a55a8b1
-  position: 366000
-  added_by: joe
-  note: auto-queued by `session end` (01a07459); covers 1 spec
-  added_at: 2026-09-06T01:52:32.320868502Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07486-24e2-7122-baff-297f3b9c55c9
-  position: 367000
-  added_by: joe
-  note: auto-queued by `session end` (01a07471); covers 1 spec
-  added_at: 2026-09-06T02:22:28.860249019Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0749f-2cda-7013-aee0-22be5e46a52d
   position: 368000
   added_by: joe
   note: auto-queued by `session end` (01a0748e); covers 1 spec
   added_at: 2026-09-06T02:49:49.584708049Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a074b9-0ebf-70f0-a7ed-6ea1a52e6945
-  position: 369000
-  added_by: joe
-  note: auto-queued by `session end` (01a074a2); covers 1 spec
-  added_at: 2026-09-06T03:18:06.771492985Z
   for_role: reviewer
   added_by_machine: imac
