@@ -1,0 +1,26 @@
+id: 01a074b9-0ebf-70f0-a7ed-6ea1a52e6945
+spec_id: STORY-944
+agreed_id: STORY-944
+title: 'Review PR-1657: [AI:codex] feat(init): add minimal footprint mode (STORY-830)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a074a2`) for branch `story-830`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1657>
+  - Branch: `story-830` → `main`
+
+  ## Covers
+
+  - STORY-830
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1657` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T03:18:00.127735536Z
+modified_at: 2026-09-06T03:18:00.127735536Z
+req_type: Story
