@@ -1,0 +1,11 @@
+scope = "PR-1660"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 561754
+agent = "reviewer"
+started_at = "2026-09-06T05:03:57.020142853+00:00"
+heartbeat_at = "2026-09-06T05:03:57.020142853+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = true
