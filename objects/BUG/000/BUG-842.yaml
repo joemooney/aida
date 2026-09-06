@@ -16,11 +16,15 @@ description: |-
   - With a live queue-work drain: aida tail drain follows the CURRENT phase session's stream and keeps following across spec/phase transitions until the drain exits
   - With no live drain: prints the newest historical drain log WITH the finished-at header, exits per --no-follow semantics as documented
   - tail --list gains the live drain at the top of the Drains section, marked live
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:43:08.082225941Z
-modified_at: 2026-09-06T04:45:19.695429564Z
+modified_at: 2026-09-06T04:52:52.722622315Z
 req_type: Bug
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-06T04:52:52.722622315Z
+  implemented_by: joe
