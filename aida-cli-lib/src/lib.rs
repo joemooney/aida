@@ -72336,11 +72336,11 @@ fn record_auto_complete_run(
         lifecycle_skips: lifecycle_skip.active_tokens(),
     };
 
-    // On a phase failure, attach a Draft BUG. Reuse the BUG from a recent
-    // identical failure (same spec / phase / kind, within 24h) rather than
-    // spamming the backlog when a still-broken `--auto-complete` is re-run.
+    // On a phase failure, attach a Draft BUG. Reuse an open BUG for the same
+    // spec / phase / kind rather than spamming the backlog when a still-broken
+    // `--auto-complete` is re-run. trace:BUG-864 | ai:codex
     if let (Some(phase), Some(failure)) = (result.failed_phase, result.failure.as_ref()) {
-        match existing_failure_bug(spec, phase, failure) {
+        match absorb_open_failure_bug(project_root, spec, phase, failure, &completed_at) {
             Some(existing) => {
                 if !json {
                     eprintln!(
@@ -72410,26 +72410,163 @@ fn record_auto_complete_run(
     );
 }
 
-/// TASK-266 / BUG-657: find the Draft BUG already auto-filed for an identical
-/// recent failure — same spec, same phase, same failure kind, within the last
-/// 24h — so re-running a still-broken `--auto-complete` reuses one BUG instead
-/// of spamming the backlog. The dedup decision is the pure
-/// [`auto_complete_telemetry::dedup_failure_bug`] over the read events; this
-/// wrapper just supplies the global JSONL log + the 24h cutoff.
-// trace:TASK-266 trace:BUG-657 | ai:claude
-fn existing_failure_bug(
+const AUTO_FAILURE_ATTEMPTS_PREFIX: &str = "Attempts:";
+const AUTO_FAILURE_LATEST_PREFIX: &str = "Latest recurrence:";
+
+/// BUG-864: absorb a recurring phase failure into the open auto-drafted BUG
+/// already tracking that `(spec, phase, failure-kind)` signature. The store is
+/// authoritative for the dedupe window: Draft/Approved records absorb, while a
+/// triaged Rejected/Completed record ends the window and lets the next failure
+/// file fresh. The older JSONL dedupe remains only as a fallback and is verified
+/// against the same open-status rule before reuse.
+// trace:TASK-266 trace:BUG-657 trace:BUG-864 | ai:codex
+fn absorb_open_failure_bug(
+    project_root: &std::path::Path,
     spec: &str,
     phase: auto_complete::Phase,
     failure: &auto_complete::PhaseFailure,
+    completed_at: &chrono::DateTime<chrono::Utc>,
 ) -> Option<String> {
+    if let Some(id) = absorb_open_failure_bug_from_store(
+        project_root,
+        spec,
+        phase.index() as u8,
+        phase.slug(),
+        failure.kind.slug(),
+        &completed_at.to_rfc3339(),
+    ) {
+        return Some(id);
+    }
+
     let cutoff = chrono::Utc::now() - chrono::Duration::hours(24);
-    auto_complete_telemetry::dedup_failure_bug(
+    let candidate = auto_complete_telemetry::dedup_failure_bug(
         &auto_complete_telemetry::read_events(),
         spec,
         phase.index() as u8,
         failure.kind.slug(),
         cutoff,
-    )
+    )?;
+    open_auto_failure_bug_by_id(project_root, &candidate).map(|_| candidate)
+}
+
+fn absorb_open_failure_bug_from_store(
+    project_root: &std::path::Path,
+    spec: &str,
+    phase_index: u8,
+    phase_slug: &str,
+    failure_kind: &str,
+    latest_at: &str,
+) -> Option<String> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return None;
+    };
+    let dispenser = load_dispenser(&store_path).ok()?;
+    let inner = aida_core::GitBackend::new(&store_path)
+        .ok()?
+        .with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path).ok()?;
+    let mut candidate = backend
+        .list_requirements(false)
+        .ok()?
+        .into_iter()
+        .filter(|req| auto_failure_bug_matches(req, spec, phase_index, phase_slug, failure_kind))
+        .max_by_key(|req| req.modified_at)?;
+    let id = candidate.display_id();
+    candidate.description = increment_auto_failure_attempts(&candidate.description, latest_at);
+    candidate.modified_at = chrono::Utc::now();
+    backend.update_requirement(&candidate).ok()?;
+    Some(id)
+}
+
+fn open_auto_failure_bug_by_id(
+    project_root: &std::path::Path,
+    spec_id: &str,
+) -> Option<aida_core::Requirement> {
+    let store_path = detect_distributed_store_from(project_root)?;
+    let dispenser = load_dispenser(&store_path).ok()?;
+    let inner = aida_core::GitBackend::new(&store_path)
+        .ok()?
+        .with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path).ok()?;
+    let req = backend.get_requirement_by_spec_id(spec_id).ok()??;
+    if is_open_auto_failure_bug(&req) {
+        Some(req)
+    } else {
+        None
+    }
+}
+
+fn auto_failure_bug_matches(
+    req: &aida_core::Requirement,
+    spec: &str,
+    phase_index: u8,
+    phase_slug: &str,
+    failure_kind: &str,
+) -> bool {
+    let expected_title =
+        format!("auto-complete failure: phase {phase_index} ({phase_slug}) on {spec}");
+    is_open_auto_failure_bug(req)
+        && req.title == expected_title
+        && auto_failure_kind_matches(req, failure_kind)
+}
+
+fn is_open_auto_failure_bug(req: &aida_core::Requirement) -> bool {
+    matches!(
+        req.status,
+        aida_core::RequirementStatus::Draft | aida_core::RequirementStatus::Approved
+    ) && !req.archived
+        && req.req_type == aida_core::RequirementType::Bug
+        && req.tags.contains("auto-complete")
+        && req.tags.contains("auto-drafted")
+}
+
+fn auto_failure_kind_matches(req: &aida_core::Requirement, failure_kind: &str) -> bool {
+    req.tags.contains(&format!("failure-kind:{failure_kind}"))
+        || req
+            .description
+            .contains(&format!("Failure kind: `{failure_kind}`"))
+}
+
+fn increment_auto_failure_attempts(description: &str, latest_at: &str) -> String {
+    let mut attempts_seen = false;
+    let mut latest_seen = false;
+    let mut current_attempts = 1;
+    for line in description.lines() {
+        if let Some(raw) = line.trim().strip_prefix(AUTO_FAILURE_ATTEMPTS_PREFIX) {
+            current_attempts = raw.trim().parse::<u32>().unwrap_or(1);
+            break;
+        }
+    }
+    let next_attempts = current_attempts.saturating_add(1);
+    let mut lines = Vec::new();
+    for line in description.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with(AUTO_FAILURE_ATTEMPTS_PREFIX) {
+            lines.push(format!("{AUTO_FAILURE_ATTEMPTS_PREFIX} {next_attempts}"));
+            attempts_seen = true;
+        } else if trimmed.starts_with(AUTO_FAILURE_LATEST_PREFIX) {
+            lines.push(format!("{AUTO_FAILURE_LATEST_PREFIX} {latest_at}"));
+            latest_seen = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    if !attempts_seen || !latest_seen {
+        if !lines.is_empty() && lines.last().is_some_and(|l| !l.trim().is_empty()) {
+            lines.push(String::new());
+        }
+        lines.push("## Recurrence".to_string());
+        lines.push(String::new());
+        if !attempts_seen {
+            lines.push(format!("{AUTO_FAILURE_ATTEMPTS_PREFIX} {next_attempts}"));
+        }
+        if !latest_seen {
+            lines.push(format!("{AUTO_FAILURE_LATEST_PREFIX} {latest_at}"));
+        }
+    }
+    lines.join("\n")
 }
 
 /// TASK-266: auto-file a Draft BUG for an `--auto-complete` phase failure.
@@ -72448,7 +72585,10 @@ fn draft_auto_complete_failure_bug(
     let phase_n = phase.index();
     let phase_name = phase.slug();
     let title = format!("auto-complete failure: phase {phase_n} ({phase_name}) on {spec}");
-    let tags = format!("auto-complete,failure-{phase_n},auto-drafted,{phase_name}");
+    let tags = format!(
+        "auto-complete,failure-{phase_n},auto-drafted,{phase_name},failure-kind:{}",
+        failure.kind.slug()
+    );
     let json_line = serde_json::to_string(event).unwrap_or_default();
     let durations = if event.phase_durations.is_empty() {
         "  (none recorded)".to_string()
@@ -72470,6 +72610,9 @@ is intentionally left in Draft and NOT queued. (TASK-266)\n\n\
 Failure kind: `{kind}`\n\n\
 ## Recovery hint shown to the user\n\n\
 {hint}\n\n\
+## Recurrence\n\n\
+Attempts: 1\n\
+Latest recurrence: {latest_at}\n\n\
 ## Phase durations\n\n\
 {durations}\n\n\
 ## Telemetry entry\n\n\
@@ -72481,6 +72624,7 @@ Once triaged and promoted, this BUG can itself be driven by the orchestrator: \
 operational.\n",
         reason = failure.reason,
         kind = failure.kind.slug(),
+        latest_at = event.completed_at,
     );
 
     // Re-resolve the binary fresh (a phase-6 `cargo build` may have replaced
