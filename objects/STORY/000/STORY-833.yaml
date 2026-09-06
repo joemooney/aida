@@ -15,12 +15,12 @@ description: |-
   - With a live drain-state + alive pid, the default TUI entry shows the panel with rows matching aida drain status output for the same state file
   - Dead pid / no state file: no panel, cockpit byte-identical to today
   - Refresh reflects a phase change without relaunching the TUI
-status: Done
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:34:45.266142364Z
-modified_at: 2026-09-06T04:44:41.386372656Z
+modified_at: 2026-09-06T05:15:22.891888930Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
