@@ -31989,6 +31989,48 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
     newest_len
 }
 
+/// BUG-875: activity signature for a headless phase stream. Length catches
+/// normal JSONL growth; mtime also catches a stream file that is touched or
+/// rewritten without a length change. Reviewer phases key no-progress on this
+/// output activity because they are read-then-verdict and normally make no
+/// commits or file changes until the final verdict write.
+// trace:BUG-875 | ai:codex
+fn headless_log_activity_signature(
+    project_root: &std::path::Path,
+    session_id: &str,
+) -> Option<String> {
+    let dir = project_root.join(".aida").join("headless-logs");
+    let suffix = format!("-{session_id}.jsonl");
+    let mut newest: Option<(std::time::SystemTime, u64)> = None;
+    for entry in std::fs::read_dir(&dir).ok()?.flatten() {
+        let is_match = entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|n| n.ends_with(&suffix))
+            .unwrap_or(false);
+        if !is_match {
+            continue;
+        }
+        if let Ok(meta) = entry.metadata() {
+            let mtime = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+            if newest
+                .as_ref()
+                .map(|(best, _)| mtime >= *best)
+                .unwrap_or(true)
+            {
+                newest = Some((mtime, meta.len()));
+            }
+        }
+    }
+    let (mtime, len) = newest?;
+    let mtime_nanos = mtime
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    Some(format!("log:{len}:{mtime_nanos}"))
+}
+
 /// BUG-826: a non-zero headless vendor exit with a zero-byte JSONL log is a
 /// launch failure. The model produced no stream events, so the orchestrator
 /// should retry the launch and clean up the just-created lease instead of
@@ -74564,12 +74606,30 @@ fn phase_heartbeat_line(
     )
 }
 
+/// BUG-875: progress signals are phase-shaped. Implementers can prove progress
+/// through the worktree or the stream log; reviewers are read-then-verdict, so
+/// their no-progress watchdog must key on stream output activity only.
+// trace:BUG-875 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WatchdogProgressSignal {
+    WorktreeAndOutput,
+    OutputOnly,
+}
+
+// trace:BUG-875 | ai:codex
+fn watchdog_progress_signal_for_phase(phase: auto_complete::Phase) -> WatchdogProgressSignal {
+    match phase {
+        auto_complete::Phase::Reviewer => WatchdogProgressSignal::OutputOnly,
+        _ => WatchdogProgressSignal::WorktreeAndOutput,
+    }
+}
+
 /// BUG-420: a phase-scoped no-progress + wall-clock-ceiling watchdog for a
 /// *headless* orchestrator phase. While the `claude -p` child runs, the
 /// orchestrator's [`exit_signal::spawn_and_wait_watched`] poll loop calls
 /// [`PhaseWatchdog::check`]; it (rate-limited) probes the phase worktree for
-/// new commits / file changes and trips when both stall for `no_progress` or
-/// when wall-clock exceeds `ceiling`. The pure verdict is
+/// the phase-appropriate progress signal and trips when it stalls for
+/// `no_progress` or when wall-clock exceeds `ceiling`. The pure verdict is
 /// [`auto_complete::watchdog_verdict`]; this struct is just the I/O shell that
 /// gathers the facts and remembers the last-progress timestamp.
 ///
@@ -74590,6 +74650,7 @@ struct PhaseWatchdog {
     ceiling: std::time::Duration,
     worktree: Option<std::path::PathBuf>,
     pr_ship_wait_seen: bool,
+    progress_signal: WatchdogProgressSignal,
     /// STORY-726: when `Some((actor, spec))`, the watchdog also emits a
     /// liveness heartbeat to stderr on each poll tick where it does NOT trip —
     /// reassurance that an otherwise-silent headless phase is alive. Set only
@@ -74625,8 +74686,27 @@ impl PhaseWatchdog {
             ceiling,
             worktree: None,
             pr_ship_wait_seen: false,
+            progress_signal: WatchdogProgressSignal::WorktreeAndOutput,
             heartbeat: None,
         }
+    }
+
+    // trace:BUG-875 | ai:codex
+    fn new_for_phase(
+        project_root: std::path::PathBuf,
+        session_id: String,
+        no_progress: std::time::Duration,
+        ceiling: std::time::Duration,
+        phase: auto_complete::Phase,
+    ) -> Self {
+        Self::new(project_root, session_id, no_progress, ceiling)
+            .with_progress_signal(watchdog_progress_signal_for_phase(phase))
+    }
+
+    // trace:BUG-875 | ai:codex
+    fn with_progress_signal(mut self, progress_signal: WatchdogProgressSignal) -> Self {
+        self.progress_signal = progress_signal;
+        self
     }
 
     /// STORY-726: arm the periodic liveness heartbeat. `actor` is the phase
@@ -74690,6 +74770,33 @@ impl PhaseWatchdog {
         Some(format!("{sha}|{}|{newest}", porcelain.len()))
     }
 
+    // trace:BUG-875 | ai:codex
+    fn select_progress_signature(
+        progress_signal: WatchdogProgressSignal,
+        worktree_sig: Option<String>,
+        output_sig: Option<String>,
+    ) -> Option<String> {
+        match progress_signal {
+            WatchdogProgressSignal::OutputOnly => output_sig,
+            WatchdogProgressSignal::WorktreeAndOutput => match (worktree_sig, output_sig) {
+                (Some(w), Some(o)) => Some(format!("{w}|{o}")),
+                (Some(w), None) => Some(w),
+                (None, Some(o)) => Some(o),
+                (None, None) => None,
+            },
+        }
+    }
+
+    // trace:BUG-875 | ai:codex
+    fn observed_progress_signature(&self, worktree: &std::path::Path) -> Option<String> {
+        let output_sig = headless_log_activity_signature(&self.project_root, &self.session_id);
+        let worktree_sig = match self.progress_signal {
+            WatchdogProgressSignal::WorktreeAndOutput => Self::progress_signature(worktree),
+            WatchdogProgressSignal::OutputOnly => None,
+        };
+        Self::select_progress_signature(self.progress_signal, worktree_sig, output_sig)
+    }
+
     /// Probe (rate-limited) and return `Some(reason)` if the watchdog should
     /// trip — the caller then reaps the child. trace:BUG-420 | ai:claude
     fn check(&mut self) -> Option<String> {
@@ -74730,21 +74837,10 @@ impl PhaseWatchdog {
         }
         let worktree = self.worktree.clone().unwrap();
 
-        // BUG-453: progress = worktree change OR headless-log growth. The log
-        // grows whenever the session emits events (reads, thoughts, edits), so a
-        // productive-but-currently-reading implementer keeps resetting the timer
-        // and is no longer false-killed; a genuinely hung/crashed session stops
-        // emitting (log static) and the worktree stays static, so the no-progress
-        // check still trips, and the wall-clock ceiling backstops a runaway.
-        // trace:BUG-453 | ai:claude
-        let wt_sig = Self::progress_signature(&worktree);
-        let log_len = headless_log_len(&self.project_root, &self.session_id);
-        let combined = match (wt_sig, log_len) {
-            (Some(w), Some(l)) => Some(format!("{w}|log:{l}")),
-            (Some(w), None) => Some(w),
-            (None, Some(l)) => Some(format!("log:{l}")),
-            (None, None) => None,
-        };
+        // BUG-453 / BUG-875: implementers use worktree change OR output
+        // activity; reviewers use output activity only because their normal
+        // work is read-then-verdict with no intermediate file edits.
+        let combined = self.observed_progress_signature(&worktree);
         if let Some(sig) = combined {
             if self.last_sig.as_deref() != Some(sig.as_str()) {
                 self.last_sig = Some(sig);
@@ -74796,10 +74892,16 @@ impl PhaseWatchdog {
 
     fn trip_reason(&self, trip: auto_complete::WatchdogTrip) -> String {
         match trip {
-            auto_complete::WatchdogTrip::NoProgress => format!(
-                "no commit or file-change for {}m — likely a degenerate session",
-                self.no_progress.as_secs() / 60
-            ),
+            auto_complete::WatchdogTrip::NoProgress => match self.progress_signal {
+                WatchdogProgressSignal::OutputOnly => format!(
+                    "no session output for {}m — likely a degenerate session",
+                    self.no_progress.as_secs() / 60
+                ),
+                WatchdogProgressSignal::WorktreeAndOutput => format!(
+                    "no commit, file-change, or session output for {}m — likely a degenerate session",
+                    self.no_progress.as_secs() / 60
+                ),
+            },
             auto_complete::WatchdogTrip::Ceiling if self.pr_ship_wait_seen => format!(
                 "phase exceeded the {}m wall-clock ceiling while `aida pr ship` was waiting on CI",
                 self.ceiling.as_secs() / 60
@@ -75931,11 +76033,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // owns its own coarse git-poll cadence; the spawn loop just consults it.
         // trace:BUG-420 | ai:claude
         let mut watchdog = headless_impl.then(|| {
-            let wd = PhaseWatchdog::new(
+            let wd = PhaseWatchdog::new_for_phase(
                 self.project_root.clone(),
                 session_uuid.clone(),
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
+                auto_complete::Phase::Implementer,
             );
             // STORY-726: a headless implementer with teeing off (`--no-tee-headless`
             // / `AIDA_TEE_HEADLESS=0`) runs in TOTAL silence until it exits or the
@@ -76812,11 +76915,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // interactive `--zen` reviewer is left unwatched — it may sit at the
         // REPL legitimately. trace:BUG-420 | ai:claude
         let mut watchdog = self.no_human.is_some().then(|| {
-            PhaseWatchdog::new(
+            PhaseWatchdog::new_for_phase(
                 self.project_root.clone(),
                 session_uuid.clone(),
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
+                auto_complete::Phase::Reviewer,
             )
         });
         let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
