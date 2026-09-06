@@ -78488,7 +78488,7 @@ fn resolve_queue_work_launch(
             }
             let pick = inquire::Select::new(
                 &format!(
-                    "{} prior claude session(s) for {} — resume one?",
+                    "{} prior session(s) for {} — resume one?",
                     prior.len(),
                     scope
                 ),
@@ -78512,23 +78512,24 @@ fn resolve_queue_work_launch(
 }
 
 /// TASK-112: `aida queue work <scope> --list-sessions` — print recorded
-/// claude conversations for the scope, newest first. trace:TASK-112
+/// conversations for the scope, newest first.
+// trace:TASK-112
 fn print_scope_sessions(scope: &str) -> Result<()> {
     let sessions = session::list_scope_sessions(scope)?;
     if sessions.is_empty() {
         println!(
             "{}",
-            format!("(no recorded claude sessions for scope `{}`)", scope).dimmed()
+            format!("(no recorded sessions for scope `{}`)", scope).dimmed()
         );
         println!(
             "  {}",
-            "a session is recorded the first time `aida queue work` launches claude for this scope"
+            "a session is recorded the first time `aida queue work` launches an agent for this scope"
                 .dimmed()
         );
         return Ok(());
     }
     println!(
-        "{} claude session(s) for {} (most recent first):",
+        "{} session(s) for {} (most recent first):",
         sessions.len(),
         scope.cyan()
     );

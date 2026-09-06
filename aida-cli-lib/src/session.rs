@@ -27,6 +27,7 @@ fn glyph(g: crate::glyphs::Glyph) -> &'static str {
 
 #[derive(Debug, Clone)]
 pub struct SessionMeta {
+    pub agent: String,
     pub id: String,
     pub age_seconds: u64,
     pub role: Option<String>,
@@ -123,6 +124,8 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     }
     fill_branches(&mut here);
     fill_branches(&mut parent);
+    enrich_from_agent_registry(&mut here);
+    enrich_from_agent_registry(&mut parent);
     normalize_specs(&mut here);
     normalize_specs(&mut parent);
     fill_recent_focus(&mut here);
@@ -326,6 +329,7 @@ mod normalize_specs_tests {
 
     fn meta(spec: Option<&str>) -> SessionMeta {
         SessionMeta {
+            agent: "claude".to_string(),
             id: "deadbeef".to_string(),
             age_seconds: 10,
             role: None,
@@ -438,10 +442,10 @@ fn resolve_branch(cwd: &str) -> Option<String> {
 
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
     let target = match id {
-        Some(prefix) => resolve_id(&prefix)?,
+        Some(prefix) => resolve_resume_target(&prefix)?,
         None => pick_interactive(limit)?,
     };
-    exec_claude_resume(&target, None, false)
+    exec_resume_command(&target, None, false)
 }
 
 /// `aida session new` — capture role + title up-front, append a record
@@ -2297,32 +2301,19 @@ fn collect_sessions(limit: usize) -> Result<Vec<SessionMeta>> {
 /// Claude Code session storage when it's invoked inside a session worktree.
 /// trace:STORY-58 | ai:claude
 fn collect_sessions_from_cwd(cwd: &Path, limit: usize) -> Result<Vec<SessionMeta>> {
-    let dir = claude_project_dir(cwd)?;
-    if !dir.is_dir() {
-        return Ok(Vec::new());
-    }
-
-    // Sort .jsonl files by mtime desc; only parse the top `limit`.
-    let mut entries: Vec<(PathBuf, SystemTime)> = std::fs::read_dir(&dir)?
-        .filter_map(|e| e.ok())
-        .filter_map(|e| {
-            let path = e.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
-                return None;
-            }
-            let mtime = e.metadata().ok()?.modified().ok()?;
-            Some((path, mtime))
-        })
-        .collect();
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
-    entries.truncate(limit);
+    let mut entries = claude_entries_for_cwd(cwd)?;
+    entries.extend(codex_entries()?);
+    entries.extend(antigravity_entries()?);
+    entries.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+    entries.truncate(session_scan_limit(limit));
 
     let now = SystemTime::now();
     let launches = read_launches_for_cwd(cwd);
-    let metas = entries
+    let mut metas: Vec<SessionMeta> = entries
         .into_iter()
-        .filter_map(|(path, mtime)| {
-            let mut meta = parse_session_meta(&path, mtime, now).ok()?;
+        .filter_map(|entry| {
+            let mut meta =
+                parse_session_meta_for_agent(&entry.path, entry.mtime, now, entry.agent).ok()?;
             // FR-1-044: try to attribute the session to a launch
             // record. The .jsonl's FIRST event timestamp is the right
             // anchor — file mtime updates on every event so it drifts
@@ -2339,8 +2330,90 @@ fn collect_sessions_from_cwd(cwd: &Path, limit: usize) -> Result<Vec<SessionMeta
             }
             Some(meta)
         })
+        .filter(|m| {
+            m.agent == "claude"
+                || m.last_cwd
+                    .as_deref()
+                    .map(|session_cwd| session_cwd_in_project(session_cwd, cwd))
+                    .unwrap_or(false)
+        })
         .collect();
+    enrich_from_agent_registry(&mut metas);
+    metas.sort_by_key(|m| m.age_seconds);
+    metas.truncate(limit);
     Ok(metas)
+}
+
+#[derive(Debug, Clone)]
+struct SessionLogEntry {
+    path: PathBuf,
+    mtime: SystemTime,
+    agent: &'static str,
+}
+
+fn jsonl_entries_in_dir(dir: &Path, agent: &'static str) -> Result<Vec<SessionLogEntry>> {
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    Ok(std::fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let path = e.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                return None;
+            }
+            let mtime = e.metadata().ok()?.modified().ok()?;
+            Some(SessionLogEntry { path, mtime, agent })
+        })
+        .collect())
+}
+
+fn claude_entries_for_cwd(cwd: &Path) -> Result<Vec<SessionLogEntry>> {
+    jsonl_entries_in_dir(&claude_project_dir(cwd)?, "claude")
+}
+
+fn codex_entries() -> Result<Vec<SessionLogEntry>> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate Codex sessions")?;
+    let root = home.join(".codex").join("sessions");
+    if !root.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut dirs = vec![root];
+    let mut entries = Vec::new();
+    while let Some(dir) = dirs.pop() {
+        let Ok(read) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path.extension().and_then(|s| s.to_str()) == Some("jsonl") {
+                if let Ok(mtime) = entry.metadata().and_then(|m| m.modified()) {
+                    entries.push(SessionLogEntry {
+                        path,
+                        mtime,
+                        agent: "codex",
+                    });
+                }
+            }
+        }
+    }
+    Ok(entries)
+}
+
+fn antigravity_entries() -> Result<Vec<SessionLogEntry>> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate Antigravity sessions")?;
+    let candidates = [
+        home.join(".antigravity").join("sessions"),
+        home.join(".config").join("Antigravity").join("sessions"),
+        home.join(".config").join("Antigravity").join("Sessions"),
+    ];
+    let mut entries = Vec::new();
+    for dir in candidates {
+        entries.extend(jsonl_entries_in_dir(&dir, "antigravity")?);
+    }
+    Ok(entries)
 }
 
 /// Encode a project path the way Claude Code does — replace each `/`
@@ -2414,9 +2487,9 @@ pub fn list_role_sessions(role: &str, limit: usize) -> Result<Vec<SessionMeta>> 
 }
 
 fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = SessionMeta>> {
-    let home = dirs::home_dir().context("HOME not set; cannot locate Claude sessions")?;
+    let home = dirs::home_dir().context("HOME not set; cannot locate sessions")?;
     let projects = home.join(".claude").join("projects");
-    let mut entries: Vec<(PathBuf, SystemTime)> = Vec::new();
+    let mut entries: Vec<SessionLogEntry> = Vec::new();
     if projects.is_dir() {
         if let Ok(dirs) = std::fs::read_dir(&projects) {
             for dir in dirs.flatten() {
@@ -2433,20 +2506,28 @@ fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = 
                         continue;
                     }
                     if let Ok(mtime) = f.metadata().and_then(|m| m.modified()) {
-                        entries.push((fp, mtime));
+                        entries.push(SessionLogEntry {
+                            path: fp,
+                            mtime,
+                            agent: "claude",
+                        });
                     }
                 }
             }
         }
     }
-    entries.sort_by(|a, b| b.1.cmp(&a.1));
-    entries.truncate(limit);
+    entries.extend(codex_entries()?);
+    entries.extend(antigravity_entries()?);
+    entries.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+    entries.truncate(session_scan_limit(limit));
 
     let now = SystemTime::now();
     let project_root = crate::find_main_worktree_root().ok();
     let sessions: Vec<SessionMeta> = entries
         .into_iter()
-        .filter_map(move |(path, mtime)| parse_session_meta(&path, mtime, now).ok())
+        .filter_map(move |entry| {
+            parse_session_meta_for_agent(&entry.path, entry.mtime, now, entry.agent).ok()
+        })
         .filter(move |m| match &project_root {
             Some(root) => m
                 .last_cwd
@@ -2456,7 +2537,45 @@ fn collect_global_project_sessions(limit: usize) -> Result<impl Iterator<Item = 
             None => true,
         })
         .collect();
+    let mut sessions = sessions;
+    enrich_from_agent_registry(&mut sessions);
+    sessions.sort_by_key(|m| m.age_seconds);
+    sessions.truncate(limit);
     Ok(sessions.into_iter())
+}
+
+fn session_scan_limit(limit: usize) -> usize {
+    limit.saturating_mul(10).max(150)
+}
+
+/// Registry records know the authoritative launcher agent and native session id
+/// for AIDA-spawned sessions. Let that beat store-scan heuristics when a row
+/// correlates.
+// trace:STORY-822 | ai:codex
+fn enrich_from_agent_registry(sessions: &mut [SessionMeta]) {
+    let Ok(project_root) = crate::find_main_worktree_root() else {
+        return;
+    };
+    let ctx = crate::agent_registry::AgentClassifyContext::new(chrono::Utc::now(), 30, vec![]);
+    let agents = crate::agent_registry::list_agent_views(&project_root, &ctx);
+    for session in sessions {
+        let Some(view) = agents.iter().find(|agent| {
+            agent
+                .native_session_id
+                .as_deref()
+                .map(|id| id == session.id)
+                .unwrap_or(false)
+        }) else {
+            continue;
+        };
+        session.agent = view.agent_type.clone();
+        if session.role.is_none() {
+            session.role = view.role.clone();
+        }
+        if session.spec.is_none() {
+            session.spec = view.current_spec.clone();
+        }
+    }
 }
 
 /// BUG-447: is a recorded session's `cwd` within the current project's scope —
@@ -2504,22 +2623,38 @@ fn canonical_session_role(raw: &str) -> String {
 /// <role>  <title>`. trace:TASK-112 | ai:claude
 pub fn format_session_line(m: &SessionMeta) -> String {
     format!(
-        "{} {:<8}  {:>4}  {:<11}  {}",
+        "{} {:<8}  {:>4}  {:<11}  {:<11}  {}",
         liveness_indicator(m.age_seconds),
         &m.id[..m.id.len().min(8)],
         humanize_age(m.age_seconds),
+        m.agent,
         m.role.as_deref().unwrap_or("-"),
         m.title.as_deref().unwrap_or("(untitled)"),
     )
 }
 
+#[cfg(test)]
 fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result<SessionMeta> {
+    parse_session_meta_for_agent(path, mtime, now, "claude")
+}
+
+fn parse_session_meta_for_agent(
+    path: &Path,
+    mtime: SystemTime,
+    now: SystemTime,
+    agent: &'static str,
+) -> Result<SessionMeta> {
     use std::io::{BufRead, BufReader};
-    let file_name = path
+    let mut file_name = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("?")
         .to_string();
+    if agent == "codex" {
+        if let Some(id) = codex_id_from_rollout_stem(&file_name) {
+            file_name = id;
+        }
+    }
     let age_seconds = now.duration_since(mtime).map(|d| d.as_secs()).unwrap_or(0);
 
     // Parse only the first chunk of lines — `ai-title` appears within
@@ -2548,6 +2683,30 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         // cwd. Cheap because it's just a substring scan per line.
         if let Some(cwd) = extract_str(&line, "\"cwd\":\"") {
             last_cwd = Some(cwd);
+        }
+
+        // Codex emits a structured `session_meta` payload on the first line.
+        // Prefer it over filename heuristics when present. trace:STORY-822 | ai:codex
+        if agent == "codex" && i == 0 {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+                if let Some(payload) = value.get("payload") {
+                    if let Some(id) = payload
+                        .get("session_id")
+                        .or_else(|| payload.get("id"))
+                        .and_then(|v| v.as_str())
+                    {
+                        file_name = id.to_string();
+                    }
+                    if let Some(cwd) = payload.get("cwd").and_then(|v| v.as_str()) {
+                        last_cwd = Some(cwd.to_string());
+                    }
+                    if let Some(ts) = payload.get("timestamp").and_then(|v| v.as_str()) {
+                        if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(ts) {
+                            started_at = Some(parsed.with_timezone(&chrono::Utc));
+                        }
+                    }
+                }
+            }
         }
 
         // First event with a `"timestamp":"..."` field — gives us a
@@ -2631,6 +2790,7 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
     }
 
     Ok(SessionMeta {
+        agent: agent.to_string(),
         id: file_name,
         age_seconds,
         role,
@@ -2641,6 +2801,17 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         branch: None,
         recent_focus: None,
     })
+}
+
+fn codex_id_from_rollout_stem(stem: &str) -> Option<String> {
+    let rest = stem.strip_prefix("rollout-")?;
+    let parts: Vec<&str> = rest.rsplitn(6, '-').collect();
+    if parts.len() < 5 {
+        return None;
+    }
+    let mut uuid_parts = parts[..5].to_vec();
+    uuid_parts.reverse();
+    Some(uuid_parts.join("-"))
 }
 
 /// Find a JSON string-value for `"<key>":"...` and return the (unescaped
@@ -2740,6 +2911,7 @@ fn first_spec_id(line: &str) -> Option<String> {
 struct TableWidths {
     id_w: usize,
     age_w: usize,
+    agent_w: usize,
     role_w: usize,
     spec_w: usize,
     worktree_w: usize,
@@ -2753,13 +2925,16 @@ impl TableWidths {
     fn compute<'a, I: Iterator<Item = &'a SessionMeta>>(sessions: I) -> Self {
         let mut role_w = 4usize;
         let mut spec_w = 4usize;
+        let mut agent_w = 5usize;
         for s in sessions {
+            agent_w = agent_w.max(s.agent.len());
             role_w = role_w.max(s.role.as_deref().unwrap_or("-").len());
             spec_w = spec_w.max(s.spec.as_deref().unwrap_or("-").len());
         }
         Self {
             id_w: 8,
             age_w: 6,
+            agent_w,
             role_w,
             spec_w,
             worktree_w: Self::WORKTREE_W,
@@ -2779,15 +2954,17 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
     println!(
         "{}",
         format!(
-            " {:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            " {:<id_w$}  {:<age_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
             "ID",
             "AGE",
+            "AGENT",
             "ROLE",
             "SPEC",
             "WORKTREE",
             "RECENT FOCUS",
             id_w = w.id_w,
             age_w = w.age_w,
+            agent_w = w.agent_w,
             role_w = w.role_w,
             spec_w = w.spec_w,
             wt_w = w.worktree_w,
@@ -2817,16 +2994,18 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             live.dimmed().to_string()
         };
         println!(
-            "{} {:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            "{} {:<id_w$}  {:<age_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
             live_colored,
             id_short.bold(),
             age,
+            s.agent.as_str().blue(),
             role.yellow(),
             spec.cyan(),
             worktree.cyan(),
             focus.cyan(),
             id_w = w.id_w,
             age_w = w.age_w,
+            agent_w = w.agent_w,
             role_w = w.role_w,
             spec_w = w.spec_w,
             wt_w = w.worktree_w,
@@ -2859,10 +3038,11 @@ fn format_worktree_label(cwd: Option<&str>, branch: Option<&str>, max: usize) ->
 
 pub fn format_role_resume_session_line(m: &SessionMeta) -> String {
     format!(
-        "{} {:<8}  {:<6}  {:<11}  {:<12}  {:<24}  {}",
+        "{} {:<8}  {:<6}  {:<11}  {:<11}  {:<12}  {:<24}  {}",
         liveness_indicator(m.age_seconds),
         &m.id[..m.id.len().min(8)],
         humanize_age(m.age_seconds),
+        m.agent,
         m.role.as_deref().unwrap_or("-"),
         m.spec.as_deref().unwrap_or("-"),
         format_worktree_label(m.last_cwd.as_deref(), m.branch.as_deref(), 24),
@@ -2884,7 +3064,13 @@ fn humanize_age(secs: u64) -> String {
     }
 }
 
-fn pick_interactive(limit: usize) -> Result<String> {
+#[derive(Debug, Clone)]
+struct ResumeTarget {
+    agent: String,
+    id: String,
+}
+
+fn pick_interactive(limit: usize) -> Result<ResumeTarget> {
     let mut sessions = collect_sessions(limit)?;
     if sessions.is_empty() {
         anyhow::bail!("no past sessions in this directory");
@@ -2895,10 +3081,11 @@ fn pick_interactive(limit: usize) -> Result<String> {
         .iter()
         .map(|s| {
             format!(
-                "{} {:<8}  {:<6}  {:<10}  {:<12}  {:<24}  {}",
+                "{} {:<8}  {:<6}  {:<11}  {:<10}  {:<12}  {:<24}  {}",
                 liveness_indicator(s.age_seconds),
                 &s.id[..s.id.len().min(8)],
                 humanize_age(s.age_seconds),
+                s.agent,
                 s.role.as_deref().unwrap_or("-"),
                 s.spec.as_deref().unwrap_or("-"),
                 format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), 24),
@@ -2920,25 +3107,61 @@ fn pick_interactive(limit: usize) -> Result<String> {
         .iter()
         .find(|s| s.id.starts_with(id_prefix.trim()))
         .ok_or_else(|| anyhow::anyhow!("could not match picked label back to a session id"))?;
-    Ok(chosen.id.clone())
+    Ok(ResumeTarget {
+        agent: chosen.agent.clone(),
+        id: chosen.id.clone(),
+    })
 }
 
 /// Resolve a (possibly truncated) session id prefix to a full id. Errors
 /// when the prefix matches zero or multiple sessions.
-fn resolve_id(prefix: &str) -> Result<String> {
+fn resolve_resume_target(prefix: &str) -> Result<ResumeTarget> {
     // Allow a generous walk — user might have written down the id from a
     // weeks-old session; collect everything and filter.
-    let all = collect_sessions(usize::MAX)?;
+    let all: Vec<SessionMeta> = collect_global_project_sessions(usize::MAX)?.collect();
     let matches: Vec<&SessionMeta> = all.iter().filter(|s| s.id.starts_with(prefix)).collect();
     match matches.len() {
         0 => anyhow::bail!("no session matches id prefix `{}`", prefix),
-        1 => Ok(matches[0].id.clone()),
+        1 => Ok(ResumeTarget {
+            agent: matches[0].agent.clone(),
+            id: matches[0].id.clone(),
+        }),
         _ => anyhow::bail!(
             "{} sessions match `{}` — use a longer prefix",
             matches.len(),
             prefix
         ),
     }
+}
+
+fn resume_command_for(target: &ResumeTarget) -> (String, Vec<String>) {
+    match target.agent.as_str() {
+        "codex" => (
+            "codex".to_string(),
+            vec!["resume".to_string(), target.id.clone()],
+        ),
+        "antigravity" => (
+            "antigravity".to_string(),
+            vec!["resume".to_string(), target.id.clone()],
+        ),
+        _ => (
+            "claude".to_string(),
+            vec!["--resume".to_string(), target.id.clone()],
+        ),
+    }
+}
+
+fn exec_resume_command(
+    target: &ResumeTarget,
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    if target.agent == "claude" {
+        return exec_claude_resume(&target.id, permission_mode, contained);
+    }
+    let (program, args) = resume_command_for(target);
+    println!("{} {}", program, crate::shell_join_display(&args));
+    Ok(())
 }
 
 /// Replace this process with `claude --resume <id>`. Falls back to spawn
@@ -3500,10 +3723,76 @@ mod tests {
         );
     }
 
+    // trace:STORY-822 | ai:codex
+    #[test]
+    fn codex_rollout_session_meta_supplies_agent_id_and_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp
+            .path()
+            .join("rollout-2026-09-03T08-39-39-01a067ec-facc-71a0-9a69-1476568e1f1e.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-09-03T15:39:39.268Z","type":"session_meta","payload":{"session_id":"01a067ec-facc-71a0-9a69-1476568e1f1e","timestamp":"2026-09-03T15:39:39.093Z","cwd":"/home/joe/ai/aida-story-822"}}"#,
+        )
+        .unwrap();
+        let now = SystemTime::now();
+        let meta = parse_session_meta_for_agent(&path, now, now, "codex").unwrap();
+
+        assert_eq!(meta.agent, "codex");
+        assert_eq!(meta.id, "01a067ec-facc-71a0-9a69-1476568e1f1e");
+        assert_eq!(
+            meta.last_cwd.as_deref(),
+            Some("/home/joe/ai/aida-story-822")
+        );
+        assert!(meta.started_at.is_some());
+    }
+
+    // trace:STORY-822 | ai:codex
+    #[test]
+    fn format_session_line_includes_agent_column() {
+        let m = SessionMeta {
+            agent: "codex".to_string(),
+            id: "01a067ec-facc-71a0-9a69-1476568e1f1e".to_string(),
+            age_seconds: 90,
+            role: Some("implementer".to_string()),
+            spec: Some("STORY-822".to_string()),
+            title: Some("agent-aware sessions".to_string()),
+            started_at: None,
+            last_cwd: None,
+            branch: None,
+            recent_focus: None,
+        };
+
+        let line = format_session_line(&m);
+        assert!(line.contains("01a067ec"));
+        assert!(line.contains("codex"));
+        assert!(line.contains("implementer"));
+    }
+
+    // trace:STORY-822 | ai:codex
+    #[test]
+    fn non_claude_resume_target_uses_native_command_shape() {
+        let target = ResumeTarget {
+            agent: "codex".to_string(),
+            id: "01a067ec-facc-71a0-9a69-1476568e1f1e".to_string(),
+        };
+
+        let (program, args) = resume_command_for(&target);
+        assert_eq!(program, "codex");
+        assert_eq!(
+            args,
+            vec![
+                "resume".to_string(),
+                "01a067ec-facc-71a0-9a69-1476568e1f1e".to_string()
+            ]
+        );
+    }
+
     // trace:STORY-821 | ai:codex
     #[test]
     fn role_resume_session_line_includes_enriched_columns() {
         let m = SessionMeta {
+            agent: "claude".to_string(),
             id: "019e45cf-acea-73c1-9476-abcdef012345".to_string(),
             age_seconds: 3600,
             role: Some("implementer".to_string()),
