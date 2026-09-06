@@ -16,6 +16,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T06:44:36.233542806Z
-modified_at: 2026-09-06T10:53:26.259713841Z
+modified_at: 2026-09-06T11:00:05.045784052Z
 req_type: Bug
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a07660-0462-7bb3-b364-8281cb301ea2
+  created_at: 2026-09-06T11:00:05.045774264Z
+  created_by: joe
 execution_mode: drain
