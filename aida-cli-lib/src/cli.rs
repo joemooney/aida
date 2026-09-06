@@ -30,6 +30,15 @@ pub enum OutputFormat {
     Json,
 }
 
+// trace:STORY-830 | ai:codex
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitFootprint {
+    /// Full team-adoption scaffold: agent packs, docs, hooks, MCP config.
+    Full,
+    /// Minimal project footprint: git-canonical store, config, cache, gitignore.
+    Minimal,
+}
+
 #[derive(Parser, Debug)]
 #[clap(
     author,
@@ -10083,6 +10092,12 @@ pub enum Command {
         /// Overwrite existing files if already initialized
         #[clap(long)]
         force: bool,
+
+        /// Project footprint for git-canonical init. `minimal` writes only the
+        /// store, .aida/config.toml, .aida/cache.db, and AIDA .gitignore block.
+        // trace:STORY-830 | ai:codex
+        #[clap(long, value_enum, value_name = "full|minimal")]
+        footprint: Option<InitFootprint>,
 
         /// Markdown-only first run: scaffold just a `specs/` folder + a runnable
         /// `aida why` demo — no orphan branch, cache, MCP, skills, or roles. The

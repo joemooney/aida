@@ -1979,6 +1979,7 @@ fn run() -> Result<()> {
         no_roles,
         no_agent_config,
         force,
+        footprint,
         distributed: _,
         centralized,
         sibling,
@@ -2051,6 +2052,7 @@ fn run() -> Result<()> {
                 *force,
                 *verbose,
                 name.as_deref(),
+                *footprint,
             )?;
         } else if *sibling || store_path.is_some() {
             // STORY-676: --store-path implies the sibling storage model at an
@@ -2065,6 +2067,7 @@ fn run() -> Result<()> {
                 *no_hooks,
                 *verbose,
                 name.as_deref(),
+                *footprint,
             )?;
         } else {
             init_cmd::handle_init_distributed_worktree(
@@ -2077,6 +2080,7 @@ fn run() -> Result<()> {
                 *git_init,
                 *commit_scaffold,
                 node_name.as_deref(),
+                *footprint,
             )?;
         }
         // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
@@ -2086,7 +2090,9 @@ fn run() -> Result<()> {
         // from a project-scoped command, so report it explicitly. Non-fatal:
         // a hiccup writing global state must not abort an otherwise-successful
         // init. trace:TASK-638 | ai:claude
-        if !*no_roles {
+        let init_footprint =
+            init_cmd::resolve_init_footprint(&statusline_project_root(), *footprint)?;
+        if !*no_roles && init_footprint == cli::InitFootprint::Full {
             match scaffold_starter_roles(&statusline_project_root()) {
                 Ok((created, skipped)) => {
                     println!(
@@ -2120,7 +2126,7 @@ fn run() -> Result<()> {
         // absent; the native (faithful) posture is the safe default. Non-fatal:
         // a hiccup writing global state must not abort an otherwise-successful
         // init. trace:TASK-698 | ai:claude
-        if !*no_agent_config {
+        if !*no_agent_config && init_footprint == cli::InitFootprint::Full {
             if let Err(e) = maybe_prompt_agent_posture() {
                 eprintln!(
                     "  {} agent permission posture skipped: {}",
@@ -2132,7 +2138,7 @@ fn run() -> Result<()> {
         // Starter memory pack — opt-in, orthogonal to storage mode. Failure
         // is non-fatal: it writes outside the project root, so a hiccup
         // there must not abort an otherwise-successful init. trace:STORY-255
-        if *with_memories || *refresh {
+        if (*with_memories || *refresh) && init_footprint == cli::InitFootprint::Full {
             // STORY-362: --focus <subsystem> scopes the pack to universal
             // (untagged) memories plus those whose `subsystem:` frontmatter
             // matches. trace:STORY-362 | ai:claude
@@ -2145,7 +2151,7 @@ fn run() -> Result<()> {
         // (Claude skills/commands, Codex skills, Antigravity skills, and the
         // machine-global Codex custom prompts) onto this binary's templates,
         // so a template fix reaches a non-Claude agent without --force.
-        if *refresh {
+        if *refresh && init_footprint == cli::InitFootprint::Full {
             let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
             scaffold_refresh::print_refresh_summary(&packs);
         }
@@ -2155,8 +2161,10 @@ fn run() -> Result<()> {
         // mirroring the agent-posture prompt above — non-interactive init writes
         // nothing and keeps every default. Non-fatal: a hiccup here must not
         // abort an otherwise-successful init. trace:TASK-859 | ai:claude
-        if let Err(e) = maybe_prompt_init_config(&statusline_project_root()) {
-            eprintln!("  {} config prompts skipped: {}", "Note:".dimmed(), e);
+        if init_footprint == cli::InitFootprint::Full {
+            if let Err(e) = maybe_prompt_init_config(&statusline_project_root()) {
+                eprintln!("  {} config prompts skipped: {}", "Note:".dimmed(), e);
+            }
         }
         // STORY-780: remote + ordered pushes, only for a bootstrap init and
         // only now that the store branch exists. trace:STORY-780 | ai:claude
@@ -2167,13 +2175,15 @@ fn run() -> Result<()> {
         // registry after bootstrap remote setup, so `repo` reflects the final
         // origin URL when one was configured. Best-effort because this writes
         // outside the project root. trace:STORY-827 | ai:codex
-        if let Err(e) = register_project_in_global_registry(&statusline_project_root()) {
-            eprintln!("  {} project registry skipped: {}", "Note:".dimmed(), e);
+        if init_footprint == cli::InitFootprint::Full {
+            if let Err(e) = register_project_in_global_registry(&statusline_project_root()) {
+                eprintln!("  {} project registry skipped: {}", "Note:".dimmed(), e);
+            }
         }
         // STORY-828: machine-global personal hooks run only after the whole
         // init lifecycle has succeeded, including bootstrap remote setup and
         // the best-effort global project registry write.
-        if !*no_post_hooks {
+        if !*no_post_hooks && init_footprint == cli::InitFootprint::Full {
             let project_root = statusline_project_root();
             let remote_url = init_cmd::git_origin_url(&project_root).unwrap_or_default();
             let preferred_forge = bootstrap.as_ref().and_then(|plan| {
