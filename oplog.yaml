@@ -45149,5 +45149,31 @@ operations:
   timestamp: 2026-09-06T01:03:39.611338986Z
   kind: !SetStatus
     status: Completed
-clock: 3968
+- id: 01a07450-8259-7cf1-ad5f-1e13190b13ba
+  target_id: 01a07450-7e98-79a1-861a-1193c84108e9
+  author: aida
+  node_id: '1'
+  lamport: 3969
+  timestamp: 2026-09-06T01:23:48.441383629Z
+  kind: !Create
+    title: 'Review PR-1653: [AI:codex] feat(init): seed readme and project registry (STORY-827)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07441`) for branch `story-827`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1653>
+      - Branch: `story-827` → `main`
+
+      ## Covers
+
+      - STORY-827
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1653` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3969
 node_id: '1'
