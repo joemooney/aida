@@ -673,6 +673,34 @@ fn complete_init_scaffolding(
                     skipped_count += 1;
                     continue;
                 }
+            } else if artifact.path == std::path::Path::new("AGENTS.md") {
+                if !crate::scaffold_refresh::agents_md_block_enabled(root) {
+                    println!(
+                        "{} AGENTS.md exists — AIDA block injection disabled by [scaffold] agents_md_block; left untouched",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan()
+                    );
+                    skipped_count += 1;
+                    continue;
+                }
+                let existing = std::fs::read_to_string(&full_path)?;
+                let (merged, action) = merge_agents_md_aida_block(&existing, &artifact.content);
+                if merged == existing {
+                    skipped_count += 1;
+                    continue;
+                }
+                std::fs::write(&full_path, merged)?;
+                match action {
+                    AgentsMdBlockMerge::Added => println!(
+                        "{} Added AIDA-AUTOGEN block to existing AGENTS.md",
+                        crate::glyph(crate::glyphs::Glyph::Check).green()
+                    ),
+                    AgentsMdBlockMerge::Refreshed => println!(
+                        "{} Refreshed AIDA-AUTOGEN block in existing AGENTS.md",
+                        crate::glyph(crate::glyphs::Glyph::Check).green()
+                    ),
+                }
+                updated_count += 1;
+                continue;
             } else {
                 skipped_count += 1;
                 continue;
@@ -1901,6 +1929,44 @@ mod task_631_init_self_commit_tests {
             !String::from_utf8_lossy(&status.stdout).trim().is_empty(),
             "the written scaffold files should leave the working tree dirty (uncommitted)"
         );
+    }
+
+    /// BUG-838: init must not silently skip a user-owned AGENTS.md. The
+    /// AIDA-AUTOGEN block is AIDA-owned, so non-force init appends it while
+    /// preserving the existing user content.
+    // trace:BUG-838 | ai:codex
+    #[test]
+    fn init_appends_aida_block_to_existing_agents_md() {
+        let tmp = TempDir::new().unwrap();
+        let (root, _) = setup_clone_like_repo(&tmp);
+        let original = "# AGENTS.md\n\nExisting Codex instructions.\n";
+        std::fs::write(root.join("AGENTS.md"), original).unwrap();
+
+        let store = aida_core::models::RequirementsStore::new();
+        complete_init_scaffolding(
+            &root,
+            &store,
+            None,  // default all-agent profile generates AGENTS.md
+            false, // no_skills
+            true,  // no_hooks
+            false, // force
+            root.join(".aida-store"),
+            "test store",
+            false, // verbose
+            true,  // suppress bootstrap commit
+        )
+        .unwrap();
+
+        let content = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+        assert!(content.starts_with(original));
+        assert!(content.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
+        assert!(content.contains("<!-- AIDA-AUTOGEN-END -->"));
+        assert!(content.contains("# AIDA Conventions"));
+        // Only the delimited block may be appended — the generated seed's own
+        // framing (its `# AGENTS.md` heading, orientation prose) must not be
+        // spliced into a user-owned file. `original` carries the only H1.
+        assert_eq!(content.matches("# AGENTS.md").count(), 1);
+        assert!(!content.contains("Guidance for Codex and MCP-compatible coding agents"));
     }
 
     /// BUG-570 criterion 2: non-interactive (no TTY, the test harness) init on a

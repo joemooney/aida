@@ -21,7 +21,9 @@ pub mod mcp_translate;
 pub mod refresh;
 mod settings;
 
-pub use aida_md::{aida_md_matches, extract_aida_block};
+pub use aida_md::{
+    aida_md_matches, extract_aida_block, merge_agents_md_aida_block, AgentsMdBlockMerge,
+};
 pub use claude_md::{claude_md_has_import, insert_claude_md_import, CLAUDE_AIDA_IMPORT};
 pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
 
@@ -2297,10 +2299,12 @@ impl Scaffolder {
                 FileStatus::OlderVersion { .. } => true, // Always upgrade
                 FileStatus::Modified { .. } => match category {
                     FileCategory::Template => true,
+                    FileCategory::Seed if artifact.path == Path::new("AGENTS.md") => true,
                     FileCategory::Seed | FileCategory::ManagedMerge => options.force,
                 },
                 FileStatus::NoHeader => match category {
                     FileCategory::Template => true,
+                    FileCategory::Seed if artifact.path == Path::new("AGENTS.md") => true,
                     FileCategory::Seed | FileCategory::ManagedMerge => options.force,
                 },
             };
@@ -2317,6 +2321,20 @@ impl Scaffolder {
             // Skip + record instead. trace:BUG-718 | ai:claude
             if symlink_target(&full_path).is_some() {
                 skipped_files.push(artifact.path.clone());
+                continue;
+            }
+            if artifact.path == Path::new("AGENTS.md") && full_path.exists() && !options.force {
+                let existing =
+                    fs::read_to_string(&full_path).map_err(|e| ScaffoldError::IoError {
+                        path: full_path.clone(),
+                        message: e.to_string(),
+                    })?;
+                let (merged, _) = merge_agents_md_aida_block(&existing, &artifact.content);
+                fs::write(&full_path, merged).map_err(|e| ScaffoldError::IoError {
+                    path: full_path.clone(),
+                    message: e.to_string(),
+                })?;
+                written_files.push(artifact.path.clone());
                 continue;
             }
             fs::write(&full_path, &artifact.content).map_err(|e| ScaffoldError::IoError {
@@ -3150,6 +3168,25 @@ mod tests {
             serde_json::json!(["aida"]),
             "fresh init must pre-approve the aida MCP server"
         );
+    }
+
+    #[test]
+    fn apply_appends_aida_block_to_existing_agents_md_without_force() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let original = "# AGENTS.md\n\nUser-owned setup.\n";
+        std::fs::write(temp_dir.path().join("AGENTS.md"), original).unwrap();
+
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let content = std::fs::read_to_string(temp_dir.path().join("AGENTS.md")).unwrap();
+        assert!(content.starts_with(original));
+        assert!(content.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
+        assert!(content.contains("# AIDA Conventions"));
+        assert!(content.contains("<!-- AIDA-AUTOGEN-END -->"));
     }
 
     #[test]
