@@ -3,20 +3,36 @@ spec_id: BUG-851
 agreed_id: BUG-851
 title: queue rework re-queues with empty for_role at the queue tail — unroutable and unordered
 description: 'Observed live (2026-09-05, BUG-838 rework): aida queue rework BUG-838 (no --work) re-queued the spec with for_role EMPTY ("") and at the queue TAIL. Consequences: role-filtered surfaces (queue list --for, role enter queue head, drain drivability) do not see it, and the rework — usually the most urgent item, with a reviewer waiting — lands behind everything queued since. Fix: rework inherits the original queue entry''s for_role (falling back to implementer), and re-queues at the HEAD by default (--tail to opt out). Acceptance: rework of a spec originally routed for implementer shows for_role implementer at position 1 in queue list; a --for override still wins; unit test on the requeue routing.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T05:14:30.946988496Z
-modified_at: 2026-09-06T07:21:11.587739004Z
+modified_at: 2026-09-06T07:25:52.482278854Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07597-a2c1-78e0-a4c4-b678535e1fe5
   created_at: 2026-09-06T07:21:11.587734246Z
   created_by: joe
+history:
+- id: 01a0759b-fddb-7f11-aa47-e34d7dd5aed8
+  author: aida-auto-bump
+  timestamp: 2026-09-06T07:25:52.475706916Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0759b-fde2-7bd3-a896-350565c75c9b
+  timestamp: 2026-09-06T07:25:52.482278226Z
+  agent: aida
+  commit_sha: dc7739297a1f2d26d94e91c37fb861be4c9f6c36
+  summary: Completed via merge dc773929
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T07:11:15.368324508Z
   implemented_by: joe
+  completed_at: 2026-09-06T07:25:52.475599779Z
+  completion_sha: dc7739297a1f2d26d94e91c37fb861be4c9f6c36
