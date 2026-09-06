@@ -46479,5 +46479,31 @@ operations:
   timestamp: 2026-09-06T07:01:12.921546315Z
   kind: !SetStatus
     status: Completed
-clock: 4046
+- id: 01a07597-a699-7fc1-beb2-7966bd0a342a
+  target_id: 01a07597-a2c1-78e0-a4c4-b678535e1fe5
+  author: aida
+  node_id: '1'
+  lamport: 4047
+  timestamp: 2026-09-06T07:21:07.993736646Z
+  kind: !Create
+    title: 'Review PR-1664: [AI:codex] fix(queue): preserve rework routing at head (BUG-851)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07587`) for branch `bug-851`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1664>
+      - Branch: `bug-851` → `main`
+
+      ## Covers
+
+      - BUG-851
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1664` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4047
 node_id: '1'
