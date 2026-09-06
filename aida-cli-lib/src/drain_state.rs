@@ -140,6 +140,18 @@ pub(crate) struct DrainState {
     pub(crate) retries: Vec<DrainRetry>,
 }
 
+/// Corroborated live-drain facts shared by glance/status surfaces. This is the
+/// one local-only probe result for `.aida/drain-state.json` + `.aida/drain.lock`;
+/// renderers choose their own phrasing without reparsing the files.
+// trace:TASK-1194 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiveDrainProbe {
+    pub(crate) position: usize,
+    pub(crate) total: usize,
+    pub(crate) spec: String,
+    pub(crate) phase: Option<String>,
+}
+
 /// BUG-286: one orchestrator-side retry event recorded against the drain.
 /// Mirrors the [`crate::network_retry::RetryEvent`] shape with the spec /
 /// phase context the orchestrator carries.
@@ -287,39 +299,81 @@ impl DrainState {
 /// This intentionally reads only `.aida/drain-state.json` and `.aida/drain.lock`.
 /// The lock PID is the liveness authority; if the lock is absent or stale,
 /// stale state renders as nothing so prompt/title surfaces stay noise-free.
-// trace:STORY-824 | ai:codex
+// trace:STORY-824 TASK-1194 | ai:codex
 pub(crate) fn status_segment(project_root: &Path) -> Option<String> {
-    let state = DrainState::read(project_root)?;
-    match drain_lock::probe_lock(project_root) {
-        drain_lock::LockStatus::Running(_) => {}
-        drain_lock::LockStatus::None | drain_lock::LockStatus::Stale(_) => return None,
-    }
-    render_status_segment(&state)
+    drain_liveness_probe(project_root).map(|probe| probe.status_segment())
 }
 
-/// Pure renderer for the shared live-drain segment.
-// trace:STORY-824 | ai:codex
-fn render_status_segment(state: &DrainState) -> Option<String> {
-    let spec = state.current.as_deref()?;
-    let position = state.position_of(spec)?;
-    let total = state.members.len();
-    if total == 0 {
-        return None;
+/// One shared local-only live-drain probe for `statusline`, `statusbar`, and
+/// `status`. Reads the drain-state payload and corroborates liveness through
+/// the drain lock's pid; stale/missing/corrupt inputs all fail closed to `None`.
+// trace:TASK-1194 | ai:codex
+pub(crate) fn drain_liveness_probe(project_root: &Path) -> Option<LiveDrainProbe> {
+    let state = DrainState::read(project_root)?;
+    drain_lock::read_pid_live_lock(project_root)?;
+    LiveDrainProbe::from_state(&state)
+}
+
+impl LiveDrainProbe {
+    fn from_state(state: &DrainState) -> Option<Self> {
+        let spec = state.current.as_deref()?;
+        let position = state.position_of(spec)?;
+        let total = state.members.len();
+        if total == 0 {
+            return None;
+        }
+        Some(Self {
+            position,
+            total,
+            spec: spec.to_string(),
+            phase: state
+                .current_phase
+                .as_deref()
+                .and_then(phase_slug)
+                .map(str::to_string),
+        })
     }
-    let phase = state.current_phase.as_deref().and_then(abbrev_phase);
-    Some(match phase {
-        Some(phase) => format!("drain:{position}/{total} {spec}({phase})"),
-        None => format!("drain:{position}/{total} {spec}"),
-    })
+
+    /// Compact segment for glance surfaces.
+    // trace:STORY-824 TASK-1194 | ai:codex
+    pub(crate) fn status_segment(&self) -> String {
+        match self.phase.as_deref().and_then(abbrev_phase) {
+            Some(phase) => format!(
+                "drain:{}/{} {}({})",
+                self.position, self.total, self.spec, phase
+            ),
+            None => format!("drain:{}/{} {}", self.position, self.total, self.spec),
+        }
+    }
+
+    /// Human line for `aida status`.
+    // trace:TASK-1194 | ai:codex
+    pub(crate) fn status_line(&self) -> String {
+        let phase = self
+            .phase
+            .as_deref()
+            .map(|p| format!(" ({p})"))
+            .unwrap_or_default();
+        format!(
+            "▶ drain in flight: spec {}/{} {}{} — watch: aida drain status",
+            self.position, self.total, self.spec, phase
+        )
+    }
 }
 
 /// Accept both current drain-state spellings (`2 (ci)`) and bare slugs.
-fn abbrev_phase(raw: &str) -> Option<&'static str> {
+fn phase_slug(raw: &str) -> Option<&str> {
     let slug = raw
         .split_once('(')
         .and_then(|(_, rest)| rest.split_once(')').map(|(slug, _)| slug))
         .unwrap_or(raw)
         .trim();
+    (!slug.is_empty()).then_some(slug)
+}
+
+/// Accept both current drain-state spellings (`2 (ci)`) and bare slugs.
+fn abbrev_phase(raw: &str) -> Option<&'static str> {
+    let slug = phase_slug(raw)?;
     match slug {
         "implementer" | "impl" => Some("impl"),
         "ci" => Some("ci"),
@@ -1136,6 +1190,12 @@ mod tests {
             status_segment(dir.path()).as_deref(),
             Some("drain:2/3 STORY-285(ci)")
         );
+        assert_eq!(
+            drain_liveness_probe(dir.path()).map(|probe| probe.status_line()),
+            Some(
+                "▶ drain in flight: spec 2/3 STORY-285 (ci) — watch: aida drain status".to_string()
+            )
+        );
     }
 
     #[test]
@@ -1145,9 +1205,11 @@ mod tests {
         state.current_phase = Some("1 (implementer)".to_string());
         state.write(dir.path()).unwrap();
         assert_eq!(status_segment(dir.path()), None);
+        assert_eq!(drain_liveness_probe(dir.path()), None);
 
         write_lock(dir.path(), u32::MAX - 1);
         assert_eq!(status_segment(dir.path()), None);
+        assert_eq!(drain_liveness_probe(dir.path()), None);
     }
 
     #[test]

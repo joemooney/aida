@@ -187,7 +187,9 @@ fn collect_meter(
 
     MeterCounts {
         queue_depth,
-        drain: crate::drain_state::status_segment(project_root),
+        drain: crate::drain_state::status_segment(
+            &find_main_worktree_root().unwrap_or_else(|_| project_root.to_path_buf()),
+        ),
         live,
         stale,
         you,

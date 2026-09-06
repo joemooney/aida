@@ -133,7 +133,8 @@ pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> 
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
-    if let Some(segment) = crate::drain_state::status_segment(&project_root) {
+    let drain_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+    if let Some(segment) = crate::drain_state::status_segment(&drain_root) {
         parts.push(segment.cyan().bold().to_string());
     }
     // TASK-306: orchestrator-context badge. When this interactive session is
