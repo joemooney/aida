@@ -46417,5 +46417,25 @@ operations:
   timestamp: 2026-09-06T06:44:35.081142777Z
   kind: !SetStatus
     status: Rejected
-clock: 4042
+- id: 01a07576-3ec3-7cb2-a689-d7380752a8df
+  target_id: 01a07576-3509-7b23-b719-08bb81b67cbc
+  author: aida
+  node_id: '1'
+  lamport: 4043
+  timestamp: 2026-09-06T06:44:38.723647842Z
+  kind: !Create
+    title: auto-filed phase-failure drafts do not dedupe — one doomed retry loop filed 7 duplicate records
+    description: |-
+      Observed live (2026-09-05 overnight): the orchestrator files a draft BUG per phase failure as an auto-capture record. A single root cause (BUG-862, reviewer-routed item driven by implementer sessions) failed repeatedly across retries and filed SEVEN near-identical drafts for STORY-943 (BUG-854, 856-861), plus earlier duplicates for the same spec+phase (BUG-846/848 both "phase 3 on TASK-1193"). The operator opened their backlog to a wall of identical drafts and could not tell what it meant; the advisor rejected 12 records by hand.
+
+      Fix: dedupe by (spec, phase, failure-class) within a window — the first failure files the draft; subsequent identical failures UPDATE that record (attempt count + latest timestamp in a comment or description line) instead of filing a new one. A different failure-class on the same spec+phase still files fresh. Window: while the draft is open (Draft/Approved); a rejected/completed record stops absorbing and a new failure files fresh.
+
+      Acceptance:
+      - Integration/unit: three consecutive identical phase failures on one spec = exactly one open draft with attempt count 3
+      - A different failure-class files a second record
+      - After the record is rejected, the next failure files fresh
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 4043
 node_id: '1'
