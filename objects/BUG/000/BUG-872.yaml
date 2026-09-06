@@ -3,20 +3,36 @@ spec_id: BUG-872
 agreed_id: BUG-872
 title: pacing last-output age resolves the previous attempt's log — current session id must win
 description: 'Observed 2026-09-06 05:38: drain status showed phase 3 spec 12s but ''last output 14m ago / quiet 14m'' while the reviewer session was demonstrably alive — the last-output probe picked .aida/headless-logs/bug-862-2-<old-session>.jsonl from the PREVIOUS attempt (mtime 05:07) because it resolves newest-file-matching-spec instead of the CURRENT session id from drain-state. A retried spec always has older sibling logs, so every retry shows a false quiet warning until the new session writes. Fix: resolve the stream log by the active session id recorded in drain-state (the tail-drain resolver should take the same rule); fall back to phase-entry time, never an older session''s mtime. Acceptance: synthesized state with an old attempt log + a newer active session id shows last-output from the active session''s log or the phase-entry fallback; unit test on the resolver choice.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T12:21:57.106299001Z
-modified_at: 2026-09-06T13:06:21.392103073Z
+modified_at: 2026-09-06T13:10:55.446016147Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a076d3-a1f6-7190-91db-2e1ed300f008
   created_at: 2026-09-06T13:06:21.392094954Z
   created_by: joe
+history:
+- id: 01a076d7-e4cf-7951-b3b6-7864ca26ed82
+  author: aida-auto-bump
+  timestamp: 2026-09-06T13:10:55.439506475Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a076d7-e4d6-74b3-80bc-96ba0f1f12b3
+  timestamp: 2026-09-06T13:10:55.446015398Z
+  agent: aida
+  commit_sha: d3ea24193ac86e9a9f786e5a0905cb48e835cdd4
+  summary: Completed via merge d3ea2419
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T12:56:07.337162996Z
   implemented_by: joe
+  completed_at: 2026-09-06T13:10:55.439397746Z
+  completion_sha: d3ea24193ac86e9a9f786e5a0905cb48e835cdd4
