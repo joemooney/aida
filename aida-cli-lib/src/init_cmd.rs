@@ -2921,8 +2921,14 @@ pub(crate) fn handle_init_distributed_worktree(
             let store = backend
                 .load()
                 .unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
-            std::fs::create_dir_all(cwd.join("docs/plans"))?;
-            ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+            // Minimal→full expansion follows the same lazy rule as fresh
+            // init: docs/plans/ appears on first plan use, and only an
+            // already-existing archive gains a missing template.
+            // trace:TASK-1193 | ai:claude
+            let plans_dir = cwd.join("docs/plans");
+            if plans_dir.exists() {
+                ensure_plan_template_scaffold(&plans_dir, force)?;
+            }
             let storage_label = format!(
                 "{}{}your specs live here (git-tracked, synced with your code)",
                 worktree_dir.white().bold(),
