@@ -18,12 +18,12 @@ description: |-
   - A term matching neither index nor FTS prints a clean no-match with the layer-2 nearest misses and (TTY + STORY-818 shipped) the ask-AI offer
   - aida help <exact-subcommand> keeps today's behavior exactly (clap help wins before any layer)
   - Concept-index table has a test asserting every referenced surface exists against the clap tree
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-06T00:16:21.595208649Z
-modified_at: 2026-09-06T05:58:39.378554697Z
+modified_at: 2026-09-06T06:03:52.529141765Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -34,8 +34,24 @@ relationships:
   target_id: 01a0754c-147b-75c0-b2a3-eb2d84871002
   created_at: 2026-09-06T05:58:39.378549938Z
   created_by: joe
+history:
+- id: 01a07550-eb4a-77b3-94ae-bf90a2cec971
+  author: aida-auto-bump
+  timestamp: 2026-09-06T06:03:52.522579927Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07550-eb51-7851-b35d-4063dc8eb5d5
+  timestamp: 2026-09-06T06:03:52.529139478Z
+  agent: aida
+  commit_sha: 88136e36869455cbd034fb27d613b7a690bc37a3
+  summary: Completed via merge 88136e36
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T05:48:34.920670126Z
   implemented_by: joe
+  completed_at: 2026-09-06T06:03:52.522453911Z
+  completion_sha: 88136e36869455cbd034fb27d613b7a690bc37a3
