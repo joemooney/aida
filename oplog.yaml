@@ -45513,5 +45513,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3989
+- id: 01a074ea-3ef2-73a1-b7b1-d3f045619c9e
+  target_id: 01a074ea-3b2d-7b61-9b75-250a84e952bd
+  author: aida
+  node_id: '1'
+  lamport: 3990
+  timestamp: 2026-09-06T04:11:43.730684936Z
+  kind: !Create
+    title: 'Review PR-1658: [AI:codex] fix(status): surface live drain in status (TASK-1194)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a074dd`) for branch `task-1194`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1658>
+      - Branch: `task-1194` → `main`
+
+      ## Covers
+
+      - TASK-1194
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1658` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3990
 node_id: '1'
