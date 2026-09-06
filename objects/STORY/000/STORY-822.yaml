@@ -17,11 +17,11 @@ description: |-
   - session list shows an agent column; existing Claude rows say claude
   - A codex session on disk appears as a row with agent codex
   - Selecting a codex row never invokes claude --resume with a codex id
-status: InProgress
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T19:53:21.287019869Z
-modified_at: 2026-09-06T08:59:12.150435904Z
+modified_at: 2026-09-06T09:22:35.999813196Z
 req_type: Story
 execution_mode: drain
