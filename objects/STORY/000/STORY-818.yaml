@@ -6,12 +6,12 @@ description: |-
   Split from STORY-809 (advisor re-scope 2026-09-03, at the reviewer's PARTIAL verdict on PR for story-809-2): slice 1 (`?` deterministic context card at consequential forks) ships alone; THIS story is slice 2, held for an interactive/keyboard session because it spawns live vendor sessions and its UX forks deserve operator presence.
 
   Scope (from STORY-809's original acceptance): (a) `a` at the same prompts bundles the slice-1 context card + spec acceptance + diffstat into a one-shot headless vendor call ([agents] vendor adapter — claude -p / codex exec) and prints the recommendation, then re-asks; (b) `aida human review --guided` (or `g`): spawn an interactive advisor session pre-loaded with a review context snapshot (agent-new role-context machinery) — the reviewer-side sibling of /aida-guided-implement. TTY-only; headless flows never see either option.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T17:44:16.839409276Z
-modified_at: 2026-09-03T17:44:16.839409276Z
+modified_at: 2026-09-06T19:38:47.523502573Z
 req_type: Story
 tags:
 - cli
