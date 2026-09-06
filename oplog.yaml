@@ -45580,5 +45580,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 3991
+- id: 01a07505-5d41-7e71-b28e-5bef024a658e
+  target_id: 01a07505-5987-7060-ba70-826c1a201428
+  author: aida
+  node_id: '1'
+  lamport: 3992
+  timestamp: 2026-09-06T04:41:20.961088246Z
+  kind: !Create
+    title: 'Review PR-1659: [AI:codex] feat(tui): show live drain progress panel (STORY-833)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a074f7`) for branch `story-833`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1659>
+      - Branch: `story-833` → `main`
+
+      ## Covers
+
+      - STORY-833
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1659` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3992
 node_id: '1'
