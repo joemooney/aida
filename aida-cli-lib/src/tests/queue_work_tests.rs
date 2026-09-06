@@ -118,6 +118,35 @@ fn role_scope_default_non_pr_is_implementer() {
     assert_eq!(origin, "scope-default");
 }
 
+/// BUG-862: an implementer auto-complete drain must skip a reviewer-routed
+/// queue head and select the next implementer-drivable item instead of
+/// launching a doomed phase-1 implementer session for the review row.
+// trace:BUG-862 | ai:codex
+#[test]
+fn auto_complete_head_skips_entries_routed_to_other_roles() {
+    let candidates = vec![
+        AutoCompleteHeadCandidate {
+            id: "STORY-943".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("reviewer".to_string()),
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-944".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+        },
+    ];
+
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .expect("implementer drain should find the implementer-routed item");
+    assert_eq!(pick.spec, "TASK-944");
+    assert_eq!(
+        pick.role_skipped,
+        vec![("STORY-943".to_string(), "reviewer".to_string())]
+    );
+    assert!(pick.status_skipped.is_empty());
+}
+
 /// Reviewer role + PR scope → `/aida-review --pr N`.
 #[test]
 fn prompt_reviewer_pr_passes_number() {
