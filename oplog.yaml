@@ -47107,5 +47107,45 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4088
+- id: 01a07659-7057-7893-9b31-d628760df888
+  target_id: 01a07659-6a92-7fa3-85e7-9dc8fc88ee2f
+  author: aida
+  node_id: '1'
+  lamport: 4089
+  timestamp: 2026-09-06T10:52:48.087148704Z
+  kind: !Create
+    title: 'auto-complete failure: phase 2 (ci) on BUG-862'
+    description: |
+      Auto-drafted by `aida queue work BUG-862 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      CI is red on PR-1672: Build (ubuntu-latest)
+
+      Failure kind: `ci-red`
+
+      ## Recovery hint shown to the user
+
+      CI failed on run 34028337886 — view it: `gh run view 34028337886`. Push fixups to the same branch: `aida queue work BUG-862 --branch bug-862 --steal`
+
+      ## Phase durations
+
+        - phase 1 (implementer): 814024 ms
+        - phase 2 (ci): 346948 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-862","started_at":"2026-09-06T10:33:20.896833411+00:00","completed_at":"2026-09-06T10:52:46.517808946+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-1672: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":814024},{"phase":2,"slug":"ci","elapsed_ms":346948}],"total_ms":1161580,"binary_sha":"ee0daaf6f"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4089
 node_id: '1'
