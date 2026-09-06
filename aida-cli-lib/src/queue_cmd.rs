@@ -8915,6 +8915,17 @@ pub(crate) fn effective_auto_complete_role(role_override: Option<&str>) -> Strin
                 .ok()
                 .filter(|s| !s.is_empty())
                 .map(|s| canonical_role_name(&s))
+                // Dispatch seats (advisor, human) LAUNCH drains for the doers
+                // — an advisor shell's drain works the implementer lane, the
+                // same principle as the dispatch-seat queue-add default above.
+                // Without this, AIDA_SESSION_ROLE=advisor makes the drain
+                // skip reviewer- AND implementer-routed entries and report
+                // "no drivable queued items". An explicit --role still wins.
+                // trace:BUG-862 | ai:claude
+                .map(|role| match role.as_str() {
+                    "advisor" | "human" => "implementer".to_string(),
+                    _ => role,
+                })
         })
         .unwrap_or_else(|| "implementer".to_string())
 }

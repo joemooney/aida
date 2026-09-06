@@ -147,6 +147,39 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
     assert!(pick.status_skipped.is_empty());
 }
 
+/// BUG-862 (reviewer finding, round 2): a drain launched from a DISPATCH
+/// seat works the implementer lane. AIDA_SESSION_ROLE=advisor (or human)
+/// must not become the drain's working role — that filtered out reviewer-
+/// AND implementer-routed entries and reported "no drivable queued items".
+/// An explicit --role override still wins.
+// trace:BUG-862 | ai:claude
+#[test]
+fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
+    let _guard = crate::test_env::env_lock();
+    for (seat, expect) in [
+        ("advisor", "implementer"),
+        ("human", "implementer"),
+        ("dialog", "implementer"), // deprecated alias canonicalizes to advisor
+        ("reviewer", "reviewer"),
+        ("implementer", "implementer"),
+    ] {
+        std::env::set_var("AIDA_SESSION_ROLE", seat);
+        assert_eq!(
+            effective_auto_complete_role(None),
+            expect,
+            "session role {seat}"
+        );
+    }
+    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    assert_eq!(
+        effective_auto_complete_role(Some("reviewer")),
+        "reviewer",
+        "explicit override beats the dispatch-seat mapping"
+    );
+    std::env::remove_var("AIDA_SESSION_ROLE");
+    assert_eq!(effective_auto_complete_role(None), "implementer");
+}
+
 /// Reviewer role + PR scope → `/aida-review --pr N`.
 #[test]
 fn prompt_reviewer_pr_passes_number() {
