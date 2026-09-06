@@ -45040,5 +45040,31 @@ operations:
       - A term matching neither index nor FTS prints a clean no-match with the layer-2 nearest misses and (TTY + STORY-818 shipped) the ask-AI offer
       - aida help <exact-subcommand> keeps today's behavior exactly (clap help wins before any layer)
       - Concept-index table has a test asserting every referenced surface exists against the clap tree
-clock: 3963
+- id: 01a07423-6fee-77c3-9d8c-2a340c501364
+  target_id: 01a07423-66f9-7ab1-af16-2573e890d99c
+  author: aida
+  node_id: '1'
+  lamport: 3964
+  timestamp: 2026-09-06T00:34:34.606642460Z
+  kind: !Create
+    title: 'Review PR-1651: [AI:codex] feat(statusline): show live drain progress (STORY-824)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07412`) for branch `story-824`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1651>
+      - Branch: `story-824` → `main`
+
+      ## Covers
+
+      - STORY-824
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1651` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 3964
 node_id: '1'

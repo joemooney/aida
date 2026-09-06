@@ -1,0 +1,26 @@
+id: 01a07423-66f9-7ab1-af16-2573e890d99c
+spec_id: STORY-838
+agreed_id: STORY-838
+title: 'Review PR-1651: [AI:codex] feat(statusline): show live drain progress (STORY-824)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a07412`) for branch `story-824`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1651>
+  - Branch: `story-824` → `main`
+
+  ## Covers
+
+  - STORY-824
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1651` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T00:34:32.313339187Z
+modified_at: 2026-09-06T00:34:32.313339187Z
+req_type: Story
