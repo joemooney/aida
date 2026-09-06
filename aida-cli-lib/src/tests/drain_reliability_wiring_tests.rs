@@ -90,6 +90,93 @@ fn watchdog_trip_reason_names_the_threshold_minutes() {
         .contains("45m"));
 }
 
+// trace:BUG-875 | ai:codex
+#[test]
+fn watchdog_progress_signal_is_phase_specific() {
+    use auto_complete::Phase;
+
+    assert_eq!(
+        watchdog_progress_signal_for_phase(Phase::Implementer),
+        WatchdogProgressSignal::WorktreeAndOutput,
+    );
+    assert_eq!(
+        watchdog_progress_signal_for_phase(Phase::Reviewer),
+        WatchdogProgressSignal::OutputOnly,
+    );
+
+    assert_eq!(
+        PhaseWatchdog::select_progress_signature(
+            WatchdogProgressSignal::OutputOnly,
+            Some("worktree-changed".into()),
+            Some("log:10:20".into()),
+        ),
+        Some("log:10:20".into()),
+        "reviewer watchdog progress must ignore worktree-only movement",
+    );
+    assert_eq!(
+        PhaseWatchdog::select_progress_signature(
+            WatchdogProgressSignal::WorktreeAndOutput,
+            Some("worktree-changed".into()),
+            Some("log:10:20".into()),
+        ),
+        Some("worktree-changed|log:10:20".into()),
+        "implementer watchdog progress keeps the combined signal",
+    );
+}
+
+// trace:BUG-875 | ai:codex
+#[test]
+fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let worktree = root.join("review-wt");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let log_dir = root.join(".aida/headless-logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let session_id = "review-session";
+    let log = log_dir.join(format!("review-{session_id}.jsonl"));
+    std::fs::write(&log, "{}\n").unwrap();
+
+    let old_progress = std::time::Instant::now() - std::time::Duration::from_secs(20 * 60);
+    let old_poll = std::time::Instant::now() - std::time::Duration::from_secs(31);
+    let mut streaming = PhaseWatchdog::new_for_phase(
+        root.to_path_buf(),
+        session_id.to_string(),
+        std::time::Duration::from_secs(10 * 60),
+        std::time::Duration::from_secs(45 * 60),
+        auto_complete::Phase::Reviewer,
+    );
+    streaming.worktree = Some(worktree.clone());
+    streaming.last_progress = old_progress;
+    streaming.last_poll = old_poll;
+    streaming.last_sig = Some("log:0:0".into());
+
+    assert_eq!(
+        streaming.check(),
+        None,
+        "fresh reviewer stream output is progress even with no file changes",
+    );
+
+    let current_sig = headless_log_activity_signature(root, session_id).unwrap();
+    let mut silent = PhaseWatchdog::new_for_phase(
+        root.to_path_buf(),
+        session_id.to_string(),
+        std::time::Duration::from_secs(10 * 60),
+        std::time::Duration::from_secs(45 * 60),
+        auto_complete::Phase::Reviewer,
+    );
+    silent.worktree = Some(worktree);
+    silent.last_progress = old_progress;
+    silent.last_poll = old_poll;
+    silent.last_sig = Some(current_sig);
+
+    let reason = silent.check().expect("silent reviewer should trip");
+    assert!(
+        reason.contains("no session output for 10m"),
+        "reviewer trip reason should name output silence, got {reason:?}",
+    );
+}
+
 #[test]
 fn resume_start_phase_clamp_bumps_ci_to_reviewer_only() {
     use auto_complete::Phase;
