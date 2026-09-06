@@ -752,6 +752,22 @@ fn member_started_at<'a>(state: &'a DrainState, spec: &str) -> Option<&'a str> {
         .and_then(|m| m.started_at.as_deref())
 }
 
+// BUG-866: current-row pacing is anchored to drain-state's per-spec and
+// per-phase timestamps. The drain start is only a legacy-file fallback when
+// those newer anchors are absent.
+// trace:BUG-866 | ai:codex
+fn current_spec_started_at<'a>(state: &'a DrainState, spec: &str) -> Option<&'a str> {
+    member_started_at(state, spec).or(Some(state.started_at.as_str()))
+}
+
+fn current_phase_started_at<'a>(state: &'a DrainState, spec: &str) -> Option<&'a str> {
+    state
+        .phase_started_at
+        .as_deref()
+        .or_else(|| member_started_at(state, spec))
+        .or(Some(state.started_at.as_str()))
+}
+
 /// Render a registry glyph honoring the active profile. Default Unicode profile
 /// reproduces the historical literals byte-for-byte. trace:TASK-840 | ai:claude
 fn glyph(g: crate::glyphs::Glyph) -> &'static str {
@@ -796,21 +812,12 @@ fn member_line_with_pacing(
             );
         }
         let mut bits = Vec::new();
-        if let Some(started_at) = member
-            .started_at
-            .as_deref()
-            .or(Some(state.started_at.as_str()))
-        {
+        if let Some(started_at) = current_spec_started_at(state, &member.spec) {
             if let Some(elapsed) = duration_between(started_at, now) {
                 bits.push(format!("spec {}", format_duration_short(elapsed)));
             }
         }
-        if let Some(phase_started_at) = state
-            .phase_started_at
-            .as_deref()
-            .or(member.started_at.as_deref())
-            .or(Some(state.started_at.as_str()))
-        {
+        if let Some(phase_started_at) = current_phase_started_at(state, &member.spec) {
             if let Some(elapsed) = duration_between(phase_started_at, now) {
                 bits.push(format!("phase {}", format_duration_short(elapsed)));
             }
@@ -1065,12 +1072,8 @@ fn pacing_json(
 ) -> serde_json::Value {
     let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
     let current = state.current.as_deref().map(|spec| {
-        let spec_started_at = member_started_at(state, spec).unwrap_or(&state.started_at);
-        let phase_started_at = state
-            .phase_started_at
-            .as_deref()
-            .or_else(|| member_started_at(state, spec))
-            .unwrap_or(&state.started_at);
+        let spec_started_at = current_spec_started_at(state, spec).unwrap_or(&state.started_at);
+        let phase_started_at = current_phase_started_at(state, spec).unwrap_or(&state.started_at);
         let (last_output_at, last_output_source) = last_activity_time(project_root, state, spec)
             .unwrap_or_else(|| (phase_started_at.to_string(), "phase_or_spec_start"));
         let last_output_age_secs = duration_between(&last_output_at, now).map(|d| d.as_secs());
@@ -1505,6 +1508,27 @@ mod tests {
         assert!(out.contains("phase 2m"));
         assert!(out.contains("last output 2m ago"));
         assert!(out.contains("quiet 2m"));
+    }
+
+    // BUG-866: spec/phase elapsed are anchored to the current member and phase
+    // timestamps, not to the older drain start timestamp.
+    #[test]
+    fn render_human_current_row_uses_member_and_phase_elapsed_anchors() {
+        let mut state = batch_state();
+        state.started_at = "2026-05-18T22:35:00+00:00".to_string();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("1 (implementer)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:35:00+00:00".to_string());
+        state.members[1].state = "in-phase-1".to_string();
+        state.members[1].started_at = Some("2026-05-18T23:35:00+00:00".to_string());
+        let now = parse_rfc3339_utc("2026-05-18T23:40:00+00:00").unwrap();
+
+        let out = render_human_inner(&state, false, None, now);
+
+        assert!(out.contains("spec 5m"), "got: {out}");
+        assert!(out.contains("phase 5m"), "got: {out}");
+        assert!(!out.contains("spec 1h"), "got: {out}");
+        assert!(!out.contains("phase 1h"), "got: {out}");
     }
 
     // AC9 / AC5: drain status output for a stale (crashed) drain.
