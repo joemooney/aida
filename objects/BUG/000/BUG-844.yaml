@@ -1,0 +1,45 @@
+id: 01a0740d-549c-75a2-a143-be9639a757fc
+spec_id: BUG-844
+agreed_id: BUG-844
+title: 'auto-complete failure: phase 4 (merge) on BUG-838'
+description: |
+  Auto-drafted by `aida queue work BUG-838 --auto-complete` after phase 4 (merge) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  `gh pr merge 1648` failed: gh pr merge failed for #1648: failed to delete local branch bug-838: failed to run git: error: cannot delete branch 'bug-838' used by worktree at '/home/joe/ai/aida-wt-838'
+
+  Failure kind: `failed`
+
+  ## Recovery hint shown to the user
+
+  Investigate the merge failure: `gh pr view 1648`
+
+  ## Phase durations
+
+    - phase 3 (reviewer): 621045 ms
+    - phase 4 (merge): 3485 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-838","started_at":"2026-09-06T00:00:00.010772090+00:00","completed_at":"2026-09-06T00:10:25.638514947+00:00","outcome":"failed","variant":"full","failed_phase":4,"failure_kind":"failed","failure_message":"`gh pr merge 1648` failed: gh pr merge failed for #1648: failed to delete local branch bug-838: failed to run git: error: cannot delete branch 'bug-838' used by worktree at '/home/joe/ai/aida-wt-838'","phase_durations":[{"phase":3,"slug":"reviewer","elapsed_ms":621045},{"phase":4,"slug":"merge","elapsed_ms":3485}],"total_ms":624760,"binary_sha":"099096d1a"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T00:10:25.820984999Z
+modified_at: 2026-09-06T00:10:25.820984999Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-4
+- merge
