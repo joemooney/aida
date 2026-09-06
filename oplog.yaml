@@ -46521,5 +46521,31 @@ operations:
   timestamp: 2026-09-06T07:25:53.220545397Z
   kind: !SetStatus
     status: Completed
-clock: 4049
+- id: 01a075ad-bc7f-7bd0-94cc-1e0c33e75c3e
+  target_id: 01a075ad-b8a5-77a3-b36e-6141932a1fb9
+  author: aida
+  node_id: '1'
+  lamport: 4050
+  timestamp: 2026-09-06T07:45:15.391268375Z
+  kind: !Create
+    title: 'Review PR-1665: [AI:codex] fix(drain): report final retried dispositions (BUG-852)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0759e`) for branch `bug-852`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1665>
+      - Branch: `bug-852` → `main`
+
+      ## Covers
+
+      - BUG-852
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1665` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4050
 node_id: '1'
