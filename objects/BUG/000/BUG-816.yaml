@@ -15,12 +15,12 @@ description: |-
 
   Better: offer to run it directly (the review flow already knows the branch), falling back to printing the corrected command. Route the command construction through the forge layer (ForgeKind::create_cmd family) rather than hand-assembled gh strings.
   Acceptance: from a main checkout with a local branch carrying 1 unshipped commit, the review flow's open-PR path produces an open PR without the operator editing any command; unit test pins that the emitted hint contains --head <branch>.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T04:14:52.842304112Z
-modified_at: 2026-09-06T08:43:03.963443469Z
+modified_at: 2026-09-06T08:57:05.317504102Z
 req_type: Bug
 tags:
 - cli
@@ -31,8 +31,24 @@ relationships:
   target_id: 01a075e2-7cb9-7a42-846a-da03c09a8e9b
   created_at: 2026-09-06T08:42:57.955494966Z
   created_by: joe
+history:
+- id: 01a075ef-801f-7f41-ba78-4368b427b8f6
+  author: aida-auto-bump
+  timestamp: 2026-09-06T08:57:05.311128872Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a075ef-8025-7822-abea-60d2ee3ea9a5
+  timestamp: 2026-09-06T08:57:05.317503462Z
+  agent: aida
+  commit_sha: 2c8298cac0782d025177330b1626b5922d876ee1
+  summary: Completed via merge 2c8298ca
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T08:43:03.963443469Z
   implemented_by: joe
+  completed_at: 2026-09-06T08:57:05.311013053Z
+  completion_sha: 2c8298cac0782d025177330b1626b5922d876ee1
