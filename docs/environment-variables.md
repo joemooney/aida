@@ -43,6 +43,23 @@ shell until cleared; *compile-time* = baked into the binary at build.
 
 ---
 
+## Init post-hooks
+
+These variables are set by `aida init` only for executable
+`~/.aida/init.d/*.sh` scripts. Hooks run after a successful init with their
+working directory set to the initialized project root; `--no-post-hooks` skips
+them.
+
+| Variable | What it does | Default | Who sets it | Scope |
+| --- | --- | --- | --- | --- |
+| `AIDA_INIT_PROJECT_ROOT` | Absolute path to the project that just finished `aida init`. | set for post-init hook children only. | launch-path (`aida init`) | child process env |
+| `AIDA_INIT_PROJECT_NAME` | Project name from `--name`, otherwise the project directory basename. | set for post-init hook children only. | launch-path (`aida init`) | child process env |
+| `AIDA_INIT_LANG` | Language requested by `aida init <DIR> --lang` (`rust`, `python`, `node`); empty for in-place/local init without a language bootstrap. | empty when no language was requested. | launch-path (`aida init`) | child process env |
+| `AIDA_INIT_REMOTE_URL` | Final `origin` URL after bootstrap remote setup; empty for local-only projects. | empty when no `origin` remote exists. | launch-path (`aida init`) | child process env |
+| `AIDA_INIT_FORGE` | Detected forge family for the final origin URL: `github`, `gitlab`, or `none`. | `none` when no known forge is detected. | launch-path (`aida init`) | child process env |
+
+---
+
 ## Identity & session
 
 Who the caller is, and which session/role/spec the work belongs to. Most of

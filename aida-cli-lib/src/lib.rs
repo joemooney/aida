@@ -1975,6 +1975,7 @@ fn run() -> Result<()> {
         no_skills,
         agent,
         no_hooks,
+        no_post_hooks,
         no_roles,
         no_agent_config,
         force,
@@ -2168,6 +2169,33 @@ fn run() -> Result<()> {
         // outside the project root. trace:STORY-827 | ai:codex
         if let Err(e) = register_project_in_global_registry(&statusline_project_root()) {
             eprintln!("  {} project registry skipped: {}", "Note:".dimmed(), e);
+        }
+        // STORY-828: machine-global personal hooks run only after the whole
+        // init lifecycle has succeeded, including bootstrap remote setup and
+        // the best-effort global project registry write.
+        if !*no_post_hooks {
+            let project_root = statusline_project_root();
+            let remote_url = init_cmd::git_origin_url(&project_root).unwrap_or_default();
+            let preferred_forge = bootstrap.as_ref().and_then(|plan| {
+                if plan.github {
+                    Some("github")
+                } else if plan.forge.is_some() && plan.remote.is_some() {
+                    Some("gitlab")
+                } else {
+                    None
+                }
+            });
+            let forge = init_cmd::detect_init_forge(preferred_forge, &remote_url);
+            let context = init_cmd::PostInitHookContext {
+                project_root,
+                project_name: init_cmd::init_project_name(name.as_deref()),
+                lang: lang.clone().unwrap_or_default(),
+                remote_url,
+                forge,
+            };
+            if let Err(e) = init_cmd::run_post_init_hooks(&context) {
+                eprintln!("  {} post-init hooks skipped: {}", "Note:".dimmed(), e);
+            }
         }
         return Ok(());
     }

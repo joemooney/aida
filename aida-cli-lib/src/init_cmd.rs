@@ -17,6 +17,150 @@ use colored::Colorize;
 
 use crate::*;
 
+#[derive(Debug, Clone)]
+pub(crate) struct PostInitHookContext {
+    pub project_root: std::path::PathBuf,
+    pub project_name: String,
+    pub lang: String,
+    pub remote_url: String,
+    pub forge: String,
+}
+
+pub(crate) fn init_project_name(explicit: Option<&str>) -> String {
+    explicit
+        .map(str::to_string)
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|p| p.file_name().and_then(|n| n.to_str()).map(str::to_string))
+        })
+        .unwrap_or_default()
+}
+
+pub(crate) fn git_origin_url(root: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if url.is_empty() {
+        None
+    } else {
+        Some(url)
+    }
+}
+
+pub(crate) fn detect_init_forge(preferred: Option<&str>, remote_url: &str) -> String {
+    if matches!(preferred, Some("github" | "gitlab")) {
+        return preferred.unwrap().to_string();
+    }
+    let lower = remote_url.to_ascii_lowercase();
+    if lower.contains("github.com") {
+        "github".to_string()
+    } else if lower.contains("gitlab.com") {
+        "gitlab".to_string()
+    } else {
+        "none".to_string()
+    }
+}
+
+fn user_home_dir() -> Result<std::path::PathBuf> {
+    std::env::var_os("HOME")
+        .map(std::path::PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("HOME is unset"))
+}
+
+#[cfg(unix)]
+fn is_executable_file(path: &std::path::Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    path.is_file()
+        && std::fs::metadata(path)
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable_file(path: &std::path::Path) -> bool {
+    path.is_file()
+}
+
+fn post_init_hooks_dir() -> Result<std::path::PathBuf> {
+    Ok(user_home_dir()?.join(".aida/init.d"))
+}
+
+// trace:STORY-828 | ai:codex
+pub(crate) fn run_post_init_hooks(context: &PostInitHookContext) -> Result<()> {
+    let hooks_dir = post_init_hooks_dir()?;
+    run_post_init_hooks_from_dir(context, &hooks_dir)
+}
+
+fn run_post_init_hooks_from_dir(
+    context: &PostInitHookContext,
+    hooks_dir: &std::path::Path,
+) -> Result<()> {
+    if !hooks_dir.is_dir() {
+        return Ok(());
+    }
+
+    let mut hooks = Vec::new();
+    for entry in std::fs::read_dir(&hooks_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("sh") && is_executable_file(&path) {
+            hooks.push(path);
+        }
+    }
+    hooks.sort();
+    if hooks.is_empty() {
+        return Ok(());
+    }
+
+    let mut ok = 0usize;
+    let mut failed = 0usize;
+    for hook in hooks {
+        let status = std::process::Command::new(&hook)
+            .current_dir(&context.project_root)
+            .env("AIDA_INIT_PROJECT_ROOT", &context.project_root)
+            .env("AIDA_INIT_PROJECT_NAME", &context.project_name)
+            .env("AIDA_INIT_LANG", &context.lang)
+            .env("AIDA_INIT_REMOTE_URL", &context.remote_url)
+            .env("AIDA_INIT_FORGE", &context.forge)
+            .status();
+        match status {
+            Ok(status) if status.success() => ok += 1,
+            Ok(status) => {
+                failed += 1;
+                let code = status
+                    .code()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "signal".to_string());
+                let name = hook
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("<unknown>");
+                eprintln!("post-init hook {name} failed with exit code {code}");
+            }
+            Err(e) => {
+                failed += 1;
+                let name = hook
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("<unknown>");
+                eprintln!("post-init hook {name} failed to run: {e}");
+            }
+        }
+    }
+
+    println!("post-init hooks: {ok} ok, {failed} failed");
+    Ok(())
+}
+
 pub(crate) fn handle_init_command(
     no_skills: bool,
     agent: Option<&str>,
@@ -1379,6 +1523,118 @@ mod task_510_init_scaffold_task_tests {
     use super::*;
     use aida_core::{RequirementPriority, RequirementStatus, RequirementType, Storage};
     use tempfile::TempDir;
+
+    #[cfg(unix)]
+    fn make_executable(path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn post_init_hooks_run_executable_sh_files_in_lexical_order_with_context() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("project");
+        let hooks = tmp.path().join("home/.aida/init.d");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&hooks).unwrap();
+
+        let first = hooks.join("00-first.sh");
+        std::fs::write(
+            &first,
+            "#!/bin/sh\nprintf '1:%s:%s:%s:%s:%s:%s\\n' \"$PWD\" \"$AIDA_INIT_PROJECT_ROOT\" \"$AIDA_INIT_PROJECT_NAME\" \"$AIDA_INIT_LANG\" \"$AIDA_INIT_REMOTE_URL\" \"$AIDA_INIT_FORGE\" >> order.txt\n",
+        )
+        .unwrap();
+        make_executable(&first);
+
+        let second = hooks.join("10-second.sh");
+        std::fs::write(&second, "#!/bin/sh\nprintf '2\\n' >> order.txt\n").unwrap();
+        make_executable(&second);
+
+        let ignored = hooks.join("05-ignored.sh");
+        std::fs::write(&ignored, "#!/bin/sh\nprintf 'ignored\\n' >> order.txt\n").unwrap();
+        let ignored_ext = hooks.join("06-ignored.txt");
+        std::fs::write(
+            &ignored_ext,
+            "#!/bin/sh\nprintf 'ignored\\n' >> order.txt\n",
+        )
+        .unwrap();
+        make_executable(&ignored_ext);
+
+        let context = PostInitHookContext {
+            project_root: root.clone(),
+            project_name: "demo".to_string(),
+            lang: "rust".to_string(),
+            remote_url: "git@github.com:org/demo.git".to_string(),
+            forge: "github".to_string(),
+        };
+        run_post_init_hooks_from_dir(&context, &hooks).unwrap();
+
+        let out = std::fs::read_to_string(root.join("order.txt")).unwrap();
+        let mut lines = out.lines();
+        let first_line = lines.next().unwrap();
+        assert!(
+            first_line.starts_with(&format!("1:{}:{}", root.display(), root.display())),
+            "cwd and project root env must point at the project: {first_line}"
+        );
+        assert!(
+            first_line.ends_with(":demo:rust:git@github.com:org/demo.git:github"),
+            "hook context env should be complete: {first_line}"
+        );
+        assert_eq!(lines.next(), Some("2"));
+        assert_eq!(lines.next(), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn post_init_hook_failure_continues_to_later_hooks() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path().join("project");
+        let hooks = tmp.path().join("home/.aida/init.d");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&hooks).unwrap();
+
+        let bad = hooks.join("00-bad.sh");
+        std::fs::write(&bad, "#!/bin/sh\nexit 7\n").unwrap();
+        make_executable(&bad);
+        let good = hooks.join("10-good.sh");
+        std::fs::write(&good, "#!/bin/sh\nprintf 'still ran\\n' > marker.txt\n").unwrap();
+        make_executable(&good);
+
+        let context = PostInitHookContext {
+            project_root: root.clone(),
+            project_name: "demo".to_string(),
+            lang: String::new(),
+            remote_url: String::new(),
+            forge: "none".to_string(),
+        };
+        run_post_init_hooks_from_dir(&context, &hooks).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(root.join("marker.txt")).unwrap(),
+            "still ran\n"
+        );
+    }
+
+    #[test]
+    fn init_forge_detection_uses_known_remote_hosts_and_none_otherwise() {
+        assert_eq!(
+            detect_init_forge(None, "git@github.com:org/demo.git"),
+            "github"
+        );
+        assert_eq!(
+            detect_init_forge(None, "https://gitlab.com/org/demo.git"),
+            "gitlab"
+        );
+        assert_eq!(
+            detect_init_forge(None, "ssh://example.com/demo.git"),
+            "none"
+        );
+        assert_eq!(detect_init_forge(Some("github"), ""), "github");
+    }
 
     #[test]
     fn test_enqueue_initial_scaffold_task_success_and_idempotency() {
