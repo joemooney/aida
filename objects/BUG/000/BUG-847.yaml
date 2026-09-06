@@ -1,0 +1,46 @@
+id: 01a074be-1092-7fb3-bdbd-8f1e1deeb406
+spec_id: BUG-847
+agreed_id: BUG-847
+title: 'auto-complete failure: phase 3 (reviewer) on STORY-830'
+description: |
+  Auto-drafted by `aida queue work STORY-830 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `failed`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework STORY-830 --work`
+
+  ## Phase durations
+
+    - phase 1 (implementer): 905198 ms
+    - phase 2 (ci): 579932 ms
+    - phase 3 (reviewer): 319701 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"STORY-830","started_at":"2026-09-06T02:53:21.355533888+00:00","completed_at":"2026-09-06T03:23:28.153783082+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":905198},{"phase":2,"slug":"ci","elapsed_ms":579932},{"phase":3,"slug":"reviewer","elapsed_ms":319701}],"total_ms":1805916,"binary_sha":"a0861a652"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T03:23:28.274091896Z
+modified_at: 2026-09-06T03:23:28.274091896Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- reviewer
