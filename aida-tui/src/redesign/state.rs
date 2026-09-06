@@ -1316,6 +1316,10 @@ pub struct RedesignState {
     /// probe lands.
     // trace:TASK-978 | ai:claude
     pub liveness: super::liveness::LivenessProbe,
+    /// Live drain progress for the cockpit's optional drain panel. `None`
+    /// keeps the panel absent entirely when no PID-corroborated drain is live.
+    // trace:STORY-833 | ai:codex
+    pub drain: Option<super::drain_panel::DrainPanel>,
 }
 
 impl RedesignState {
@@ -1350,6 +1354,7 @@ impl RedesignState {
             status: None,
             theme: crate::theme::Theme::default(),
             liveness: super::liveness::LivenessProbe::default(),
+            drain: None,
         }
     }
 

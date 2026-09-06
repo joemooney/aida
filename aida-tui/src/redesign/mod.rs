@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-690 | ai:claude
 
+mod drain_panel;
 mod list_row;
 mod liveness;
 mod mail;
@@ -323,8 +324,10 @@ fn refresh(
     cache: &mut HashMap<Scope, Vec<TargetItem>>,
     loaded: &mut Scope,
     focus_set: &mut Option<std::collections::HashSet<String>>,
+    project_root: &std::path::Path,
 ) {
     invalidate_scope_cache(cache, loaded);
+    st.drain = drain_panel::probe(project_root);
     // Recompute the focus closure + progress so externally-added children and
     // status flips inside the focus epic surface too. A now-empty closure
     // leaves the existing focus untouched (mirrors apply_focus's guard).
@@ -555,6 +558,7 @@ fn event_loop(
             .refresh_if_due(project_root, liveness_visible, || {
                 store.map(|s| s.liveness_inputs()).unwrap_or_default()
             });
+        st.drain = drain_panel::probe(project_root);
         terminal.draw(|f| render(f, st, loaded_spec.as_ref(), pending.as_ref().map(|p| &p.op)))?;
 
         // Drain a finished background verb (BUG-633): on completion set the
@@ -944,7 +948,7 @@ fn handle_key(
         // appear without relaunch. Unconditional hotkey in normal mode.
         // trace:TASK-934 | ai:claude
         KeyCode::Char('r') => {
-            refresh(st, store, cache, loaded, focus_set);
+            refresh(st, store, cache, loaded, focus_set, project_root);
             // Also force a fresh liveness read on the next visible tick — the
             // manual refresh should override the (now-long, BUG-676) probe TTL so
             // the glyphs re-sync on demand, not only every 20s. trace:BUG-676
@@ -2373,18 +2377,35 @@ fn render(
 ) {
     let theme = &st.theme;
 
-    let rows = Layout::vertical([
-        Constraint::Length(1), // status / breadcrumb line
-        Constraint::Min(0),    // top panel (list)
-        Constraint::Min(0),    // bottom panel (targets)
-        Constraint::Length(1), // key hint
-    ])
-    .split(f.area());
+    let rows = if st.drain.is_some() {
+        Layout::vertical([
+            Constraint::Length(1),                             // status / breadcrumb line
+            Constraint::Length(drain_panel_height(st).min(8)), // live drain
+            Constraint::Min(0),                                // top panel (list)
+            Constraint::Min(0),                                // bottom panel (targets)
+            Constraint::Length(1),                             // key hint
+        ])
+        .split(f.area())
+    } else {
+        Layout::vertical([
+            Constraint::Length(1), // status / breadcrumb line
+            Constraint::Min(0),    // top panel (list)
+            Constraint::Min(0),    // bottom panel (targets)
+            Constraint::Length(1), // key hint
+        ])
+        .split(f.area())
+    };
 
     render_status(f, rows[0], st, theme);
-    render_top(f, rows[1], st, theme);
-    render_bottom(f, rows[2], st, theme);
-    render_hint(f, rows[3], st, theme, pending);
+    let offset = if let Some(drain) = &st.drain {
+        render_drain_panel(f, rows[1], theme, drain);
+        1
+    } else {
+        0
+    };
+    render_top(f, rows[1 + offset], st, theme);
+    render_bottom(f, rows[2 + offset], st, theme);
+    render_hint(f, rows[3 + offset], st, theme, pending);
 
     // The item modal renders the spec loaded IN-PROCESS (`loaded_spec`):
     // structured fields + native body. trace:STORY-693 | ai:claude
@@ -2443,6 +2464,91 @@ fn render(
     if st.help_open() {
         render_help(f, f.area(), theme, &st.help_content());
     }
+}
+
+fn drain_panel_height(st: &RedesignState) -> u16 {
+    let Some(drain) = &st.drain else {
+        return 0;
+    };
+    (drain.members.len() as u16).saturating_add(4).clamp(4, 8)
+}
+
+fn render_drain_panel(f: &mut Frame, area: Rect, theme: &Theme, drain: &drain_panel::DrainPanel) {
+    let position = drain
+        .current_position()
+        .map(|pos| format!(" · {pos}/{}", drain.members.len()))
+        .unwrap_or_else(|| format!(" · 0/{}", drain.members.len()));
+    let block = Block::bordered()
+        .border_style(Style::default().fg(theme.info))
+        .title(format!(
+            " Drain: {}{} · pid {} · started {} ",
+            drain.scope,
+            position,
+            drain.orchestrator_pid,
+            drain.started_local()
+        ));
+    let inner_h = area.height.saturating_sub(2) as usize;
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(Line::from(Span::styled(
+        drain.command.clone(),
+        Style::default().fg(theme.dim),
+    )));
+    for member in drain.members.iter().take(inner_h.saturating_sub(2)) {
+        let (glyph, style) = if member.is_failed() {
+            (
+                "✗",
+                Style::default()
+                    .fg(theme.error)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else if member.is_running() {
+            (
+                "●",
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else if member.state == "completed" {
+            (
+                "✓",
+                Style::default().fg(theme.info).add_modifier(Modifier::BOLD),
+            )
+        } else {
+            ("○", Style::default().fg(theme.dim))
+        };
+        let label = if member.is_running() && drain.current.as_deref() == Some(&member.spec) {
+            drain
+                .current_phase
+                .as_ref()
+                .map(|phase| format!("phase {phase}"))
+                .unwrap_or_else(|| member.label())
+        } else {
+            member.label()
+        };
+        let pr = member.pr.map(|n| format!("  PR-{n}")).unwrap_or_default();
+        let mut spans = vec![
+            Span::styled(format!("  {glyph} "), style),
+            Span::styled(
+                format!("{:<13}", member.spec),
+                Style::default().fg(theme.fg).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(label, Style::default().fg(theme.fg)),
+            Span::styled(pr, Style::default().fg(theme.info)),
+        ];
+        if member.is_failed() {
+            spans.push(Span::styled(
+                format!("  rework: aida queue rework {} --work", member.spec),
+                Style::default().fg(theme.warn),
+            ));
+        }
+        lines.push(Line::from(spans));
+    }
+    lines.push(Line::from(vec![
+        Span::styled("On exit: ", Style::default().fg(theme.dim)),
+        Span::styled(drain.on_exit.clone(), Style::default().fg(theme.fg)),
+    ]));
+    lines.truncate(inner_h.max(1));
+    f.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 /// Render the context-sensitive '?' help popup: a header (where you are /
@@ -3764,7 +3870,14 @@ mod refresh_tests {
         let mut loaded = Scope::Backlog;
         let mut focus_set: Option<std::collections::HashSet<String>> = None;
 
-        refresh(&mut st, None, &mut cache, &mut loaded, &mut focus_set);
+        refresh(
+            &mut st,
+            None,
+            &mut cache,
+            &mut loaded,
+            &mut focus_set,
+            std::path::Path::new("."),
+        );
 
         // The in-memory scope rows are dropped so the next sync re-fetches…
         assert!(cache.is_empty(), "scope cache emptied");
@@ -3780,7 +3893,14 @@ mod refresh_tests {
         let mut loaded = Scope::Backlog;
         let mut focus_set: Option<std::collections::HashSet<String>> = None;
 
-        refresh(&mut st, None, &mut cache, &mut loaded, &mut focus_set);
+        refresh(
+            &mut st,
+            None,
+            &mut cache,
+            &mut loaded,
+            &mut focus_set,
+            std::path::Path::new("."),
+        );
 
         assert_eq!(st.status.as_deref(), Some("refresh: store unavailable"));
         // With no store the focus closure recompute is skipped, leaving the lens
@@ -4061,6 +4181,52 @@ mod render_tests {
             out.push_str(cell.symbol());
         }
         out
+    }
+
+    #[test]
+    fn renders_live_drain_panel_when_present() {
+        let mut st = sample(3);
+        st.drain = Some(drain_panel::DrainPanel {
+            scope: "batch:demo".into(),
+            command: "aida queue work --batch demo --auto-complete".into(),
+            orchestrator_pid: 42,
+            started_at: "2026-09-05T12:00:00Z".into(),
+            current: Some("TASK-2".into()),
+            current_phase: Some("2 (ci)".into()),
+            members: vec![
+                drain_panel::DrainPanelMember {
+                    spec: "TASK-1".into(),
+                    state: "completed".into(),
+                    pr: Some(10),
+                },
+                drain_panel::DrainPanelMember {
+                    spec: "TASK-2".into(),
+                    state: "in-phase-2".into(),
+                    pr: None,
+                },
+                drain_panel::DrainPanelMember {
+                    spec: "TASK-3".into(),
+                    state: "failed".into(),
+                    pr: Some(11),
+                },
+            ],
+            on_exit: "review remaining queued work".into(),
+        });
+
+        let out = rendered_text(&st, 120, 32);
+        assert!(out.contains("Drain: batch:demo"));
+        assert!(out.contains("2/3"));
+        assert!(out.contains("phase 2 (ci)"));
+        assert!(out.contains("PR-10"));
+        assert!(out.contains("aida queue rework TASK-3 --work"));
+        assert!(out.contains("On exit:"));
+    }
+
+    #[test]
+    fn omits_drain_panel_without_live_drain() {
+        let st = sample(3);
+        let out = rendered_text(&st, 120, 32);
+        assert!(!out.contains("Drain:"));
     }
 
     /// The `/query` find prompt renders ONLY in find mode (TASK-945): a
