@@ -46437,5 +46437,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4043
+- id: 01a07581-7b08-7280-aff8-29511582c145
+  target_id: 01a07581-738f-71e2-b429-de44f5fa4650
+  author: aida
+  node_id: '1'
+  lamport: 4044
+  timestamp: 2026-09-06T06:56:55.048595677Z
+  kind: !Create
+    title: 'Review PR-1663: [AI:codex] feat(drain): show pacing in status (STORY-948)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0756f`) for branch `story-948`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1663>
+      - Branch: `story-948` → `main`
+
+      ## Covers
+
+      - STORY-948
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1663` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4044
 node_id: '1'
