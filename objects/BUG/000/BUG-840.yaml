@@ -16,11 +16,15 @@ description: |-
   - role enter with a warm cache completes in <100ms with a populated store (usage telemetry or a timed test)
   - No Storage::load() full-store call remains on the role enter path (grep-able assertion or unit test on the lookup helper)
   - With cache.db deleted, role enter still succeeds fast, rendering ids without titles
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:06:10.363853041Z
-modified_at: 2026-09-06T00:39:41.828361629Z
+modified_at: 2026-09-06T00:48:47.587285344Z
 req_type: Bug
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-06T00:48:47.587285344Z
+  implemented_by: joe
