@@ -1,0 +1,26 @@
+id: 01a07616-2fb6-79d0-ba85-f7cdce45a6b4
+spec_id: STORY-958
+agreed_id: STORY-958
+title: 'Review PR-1670: [AI:codex] feat(session): show agent-aware conversations (STORY-822)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07608`) for branch `story-822`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1670>
+  - Branch: `story-822` → `main`
+
+  ## Covers
+
+  - STORY-822
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1670` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-06T09:39:20.630277851Z
+modified_at: 2026-09-06T09:39:20.630277851Z
+req_type: Story
