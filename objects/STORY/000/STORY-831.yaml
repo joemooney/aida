@@ -16,12 +16,12 @@ description: |-
   - Install writes both files with markers; re-run is a no-op; refresh overlays only unedited blocks
   - A minimal-footprint project + installed snippet: a fresh Claude session uses aida CLI for requirements with no committed CLAUDE.md (manual validation note)
   - Files with pre-existing user content keep every byte outside the markers
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T22:19:05.290803932Z
-modified_at: 2026-09-06T03:23:43.289994659Z
+modified_at: 2026-09-06T03:48:11.710575872Z
 req_type: Story
 comments:
 - id: 01a07416-7b45-7b73-a3ee-c1d2fc813b8f
@@ -30,4 +30,24 @@ comments:
   created_at: 2026-09-06T00:20:25.540992657Z
   modified_at: 2026-09-06T00:20:25.540992657Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a074d4-b337-7203-9e39-2d7442a6433c
+  author: aida-auto-bump
+  timestamp: 2026-09-06T03:48:11.703920430Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a074d4-b33e-7f33-a8d6-c8d1385fd58a
+  timestamp: 2026-09-06T03:48:11.710574370Z
+  agent: aida
+  commit_sha: 3267bb6132c4fc2de91ac100fa4f4d77f7ff2271
+  summary: Completed via merge 3267bb61
+  punted:
+  - 'punted: session end observed 2 commits ahead on branch `story-830-pr1657` with no open PR; work may need manual push/PR recovery'
 execution_mode: drain
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-06T03:48:11.077055214Z
+  completion_sha: 3267bb6132c4fc2de91ac100fa4f4d77f7ff2271
