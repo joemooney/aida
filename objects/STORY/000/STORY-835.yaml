@@ -16,12 +16,12 @@ description: |-
   - Headless init prints the registration command, executes nothing
   - doctor reports the two wiring gaps when present, silent when wired
   - docs/agents/antigravity-mcp-setup.md updated to PATH-resolved command
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-05T23:03:05.353921619Z
-modified_at: 2026-09-06T05:32:26.784008852Z
+modified_at: 2026-09-06T05:36:16.154243093Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -32,8 +32,24 @@ relationships:
   target_id: 01a07534-12d9-73f2-8ead-1a797b4eda8a
   created_at: 2026-09-06T05:32:26.783995821Z
   created_by: joe
+history:
+- id: 01a07537-a513-70a3-a5ca-d1c927392fb6
+  author: aida-auto-bump
+  timestamp: 2026-09-06T05:36:16.147736092Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07537-a51a-7373-8307-d63a2fdf2bbe
+  timestamp: 2026-09-06T05:36:16.154241737Z
+  agent: aida
+  commit_sha: 03f70b9c60ae8d51c8eba8ac4b3fe85aeb87e73d
+  summary: Completed via merge 03f70b9c
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-06T05:22:15.839100772Z
   implemented_by: joe
+  completed_at: 2026-09-06T05:36:16.147601664Z
+  completion_sha: 03f70b9c60ae8d51c8eba8ac4b3fe85aeb87e73d
