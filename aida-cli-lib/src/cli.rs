@@ -30,6 +30,15 @@ pub enum OutputFormat {
     Json,
 }
 
+// trace:STORY-830 | ai:codex
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitFootprint {
+    /// Full team-adoption scaffold: agent packs, docs, hooks, MCP config.
+    Full,
+    /// Minimal project footprint: git-canonical store, config, cache, gitignore.
+    Minimal,
+}
+
 #[derive(Parser, Debug)]
 #[clap(
     author,
@@ -521,6 +530,18 @@ pub enum ScaffoldCommand {
         /// Overwrite existing prompt files
         #[clap(long)]
         force: bool,
+    },
+
+    /// Install the user-global AIDA awareness snippet for Claude and Codex.
+    ///
+    /// Writes marker-delimited, edit-preserving blocks to `~/.claude/CLAUDE.md`
+    /// and `~/.codex/AGENTS.md`. Existing content outside the markers is left
+    /// byte-for-byte intact; `--refresh` updates only an unedited AIDA block.
+    // trace:STORY-831 | ai:codex
+    UserInstructions {
+        /// Refresh unedited AIDA blocks to this binary's current snippet.
+        #[clap(long)]
+        refresh: bool,
     },
 
     /// Bring every installed agent pack level with this binary's templates,
@@ -10083,6 +10104,12 @@ pub enum Command {
         /// Overwrite existing files if already initialized
         #[clap(long)]
         force: bool,
+
+        /// Project footprint for git-canonical init. `minimal` writes only the
+        /// store, .aida/config.toml, .aida/cache.db, and AIDA .gitignore block.
+        // trace:STORY-830 | ai:codex
+        #[clap(long, value_enum, value_name = "full|minimal")]
+        footprint: Option<InitFootprint>,
 
         /// Markdown-only first run: scaffold just a `specs/` folder + a runnable
         /// `aida why` demo — no orphan branch, cache, MCP, skills, or roles. The

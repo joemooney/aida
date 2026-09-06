@@ -458,6 +458,11 @@ pub(crate) fn handle_scaffold_command(
             }
         }
 
+        // trace:STORY-831 | ai:codex
+        ScaffoldCommand::UserInstructions { refresh } => {
+            crate::scaffold_user_aida_instructions(*refresh)?;
+        }
+
         // trace:TASK-1170 | ai:claude
         ScaffoldCommand::Refresh { project_root, dest } => {
             let root = project_root

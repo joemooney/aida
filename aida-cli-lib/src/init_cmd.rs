@@ -168,6 +168,7 @@ pub(crate) fn handle_init_command(
     force: bool,
     verbose: bool,
     _name: Option<&str>,
+    footprint: Option<crate::cli::InitFootprint>,
 ) -> Result<()> {
     eprintln!(
         "{}: --centralized initializes a SQLite-canonical store, which is deprecated.",
@@ -220,6 +221,7 @@ pub(crate) fn handle_init_command(
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let root = std::env::current_dir().unwrap_or_default();
+    let footprint = resolve_init_footprint(&root, footprint)?;
     complete_init_scaffolding(
         &root,
         &store,
@@ -230,6 +232,7 @@ pub(crate) fn handle_init_command(
         db_path.clone(),
         "Requirements database (SQLite)",
         verbose,
+        footprint,
         // Legacy centralized first-init: commit scaffolding as before (BUG-570
         // suppression is the bootstrap-clone path only). trace:BUG-570
         false,
@@ -283,12 +286,25 @@ pub(crate) fn init_scaffold_candidate_paths() -> &'static [&'static str] {
     ]
 }
 
+// trace:STORY-830 | ai:codex
+pub(crate) fn init_scaffold_candidate_paths_for_footprint(
+    footprint: crate::cli::InitFootprint,
+) -> &'static [&'static str] {
+    match footprint {
+        crate::cli::InitFootprint::Full => init_scaffold_candidate_paths(),
+        crate::cli::InitFootprint::Minimal => &[".gitignore", ".aida/config.toml"],
+    }
+}
+
 /// Filter [`init_scaffold_candidate_paths`] to the ones that actually exist
 /// on disk under `root`. Pure (modulo filesystem reads) so it can be unit
 /// tested against a temp dir. Returns paths relative to `root`, suitable for
 // passing straight to `git add`. trace:TASK-631 | ai:claude
-fn init_scaffold_commit_paths(root: &std::path::Path) -> Vec<String> {
-    init_scaffold_candidate_paths()
+fn init_scaffold_commit_paths(
+    root: &std::path::Path,
+    footprint: crate::cli::InitFootprint,
+) -> Vec<String> {
+    init_scaffold_candidate_paths_for_footprint(footprint)
         .iter()
         .filter(|p| root.join(p).exists())
         .map(|p| p.to_string())
@@ -573,6 +589,90 @@ fn resolve_init_agent_selection(agent: Option<&str>) -> Result<AgentSelection> {
     }
 }
 
+// trace:STORY-830 | ai:codex
+fn parse_init_footprint(raw: &str) -> Option<crate::cli::InitFootprint> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "full" | "default" | "team" => Some(crate::cli::InitFootprint::Full),
+        "minimal" | "min" | "clean" => Some(crate::cli::InitFootprint::Minimal),
+        _ => None,
+    }
+}
+
+// trace:STORY-830 | ai:codex
+pub(crate) fn read_init_footprint(
+    project_root: &std::path::Path,
+) -> Option<crate::cli::InitFootprint> {
+    let cfg = read_project_config_value(project_root)?;
+    let raw = config_lookup(Some(&cfg), "scaffold", "footprint")?.as_str()?;
+    parse_init_footprint(raw)
+}
+
+// trace:STORY-830 | ai:codex
+pub(crate) fn write_init_footprint(
+    project_root: &std::path::Path,
+    footprint: crate::cli::InitFootprint,
+) -> Result<()> {
+    let value = match footprint {
+        crate::cli::InitFootprint::Full => "full",
+        crate::cli::InitFootprint::Minimal => "minimal",
+    };
+    crate::config_edit::set_kv(
+        &config_path_for_project(project_root),
+        "scaffold",
+        "footprint",
+        toml_edit::Value::from(value),
+    )
+}
+
+// trace:STORY-830 | ai:codex
+pub(crate) fn resolve_init_footprint(
+    project_root: &std::path::Path,
+    explicit: Option<crate::cli::InitFootprint>,
+) -> Result<crate::cli::InitFootprint> {
+    if let Some(fp) = explicit {
+        return Ok(fp);
+    }
+    if let Some(fp) = read_init_footprint(project_root) {
+        return Ok(fp);
+    }
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Ok(crate::cli::InitFootprint::Full);
+    }
+
+    println!("Setup style:");
+    println!(
+        "  [1] Full - team adoption scaffold: agent packs, docs, hooks, MCP config (recommended)"
+    );
+    println!("  [2] Minimal - clean repo: store + config only");
+    print!("Choose setup style [1]: ");
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    std::io::stdin().read_line(&mut line)?;
+    let trimmed = line.trim();
+    if trimmed == "2" || trimmed.eq_ignore_ascii_case("minimal") {
+        Ok(crate::cli::InitFootprint::Minimal)
+    } else {
+        Ok(crate::cli::InitFootprint::Full)
+    }
+}
+
+// trace:STORY-830 | ai:codex
+fn ensure_minimal_cache(root: &std::path::Path, db_path: &std::path::Path) {
+    let cache_path = root.join(".aida").join("cache.db");
+    if cache_path.exists() {
+        return;
+    }
+    let source = if db_path.is_absolute() {
+        db_path.to_path_buf()
+    } else {
+        root.join(db_path)
+    };
+    if let Ok(store) = Storage::new(&source).load() {
+        let _ = Storage::new(&cache_path).save(&store);
+    }
+}
+
 pub(crate) fn read_enabled_agent_selection(
     project_root: &std::path::Path,
 ) -> Option<AgentSelection> {
@@ -610,10 +710,13 @@ pub(crate) fn write_enabled_agent_selection(
     )
 }
 
-fn commit_init_scaffolding(root: &std::path::Path) -> Result<bool> {
+fn commit_init_scaffolding(
+    root: &std::path::Path,
+    footprint: crate::cli::InitFootprint,
+) -> Result<bool> {
     use aida_core::git_ops;
 
-    let paths = init_scaffold_commit_paths(root);
+    let paths = init_scaffold_commit_paths(root, footprint);
     if paths.is_empty() {
         return Ok(false);
     }
@@ -731,6 +834,7 @@ fn complete_init_scaffolding(
     db_path: std::path::PathBuf,
     storage_label: &str,
     verbose: bool,
+    footprint: crate::cli::InitFootprint,
     // BUG-570: when true, write the scaffold files but do NOT create a
     // code-branch commit. The bootstrap-clone path (existing AIDA store on
     // origin) passes this so `aida init` on a clone never auto-commits a
@@ -739,6 +843,53 @@ fn complete_init_scaffolding(
     // commits its own scaffolding as before. trace:BUG-570 | ai:claude
     suppress_scaffold_commit: bool,
 ) -> Result<()> {
+    write_init_footprint(root, footprint)?;
+    if footprint == crate::cli::InitFootprint::Minimal {
+        ensure_minimal_cache(root, &db_path);
+        println!();
+        println!(
+            "{}",
+            format!(
+                "AIDA initialized {}",
+                crate::glyph(crate::glyphs::Glyph::Check)
+            )
+            .green()
+            .bold()
+        );
+        println!("  Storage: {}", storage_label.dimmed());
+        println!("  Footprint: {}", "minimal".dimmed());
+        let scaffolding_committed = if suppress_scaffold_commit {
+            let paths = init_scaffold_commit_paths(root, footprint);
+            if !paths.is_empty() {
+                println!(
+                    "  {} wrote minimal AIDA setup and left it uncommitted — commit deliberately with `git add {} && git commit` if you want it on this clone's branch.",
+                    "Note:".dimmed(),
+                    paths.join(" "),
+                );
+            }
+            false
+        } else {
+            commit_init_scaffolding(root, footprint).unwrap_or(false)
+        };
+        if scaffolding_committed {
+            use aida_core::git_ops;
+            if let Ok(branch) = git_ops::current_branch(root) {
+                let has_origin = git_ops::has_remote(root, "origin");
+                let remote_ref = format!("origin/{branch}");
+                let ab = git_ops::ahead_behind(root, &branch, &remote_ref);
+                if let Some(note) = unpushed_scaffold_note(
+                    &branch,
+                    has_origin,
+                    ab.is_some(),
+                    ab.map(|(a, _)| a).unwrap_or(0),
+                ) {
+                    println!("  {} {}", "Note:".yellow().bold(), note);
+                }
+            }
+        }
+        first_run::after_init(root);
+        return Ok(());
+    }
     // BUG-794: `--agent` is a STRICT allow-list. The old subtractive arms
     // leaked: `--agent codex` disabled the Claude surfaces but forgot
     // Antigravity, so a compliance-driven "codex only" init still scaffolded
@@ -1262,7 +1413,7 @@ fn complete_init_scaffolding(
     // theirs to make deliberately (or opt in with `aida init --commit-scaffold`).
     // trace:BUG-570 | ai:claude
     let scaffolding_committed = if suppress_scaffold_commit {
-        let paths = init_scaffold_commit_paths(root);
+        let paths = init_scaffold_commit_paths(root, footprint);
         if !paths.is_empty() {
             println!(
                 "  {} wrote AIDA scaffold files and left them uncommitted — commit deliberately with `git add {} && git commit` if you want them on this clone's branch.",
@@ -1272,7 +1423,7 @@ fn complete_init_scaffolding(
         }
         false
     } else {
-        commit_init_scaffolding(root).unwrap_or(false)
+        commit_init_scaffolding(root, footprint).unwrap_or(false)
     };
 
     // BUG-789: having just made a commit on the code branch, say plainly
@@ -1811,7 +1962,7 @@ mod task_631_init_self_commit_tests {
         let root = tmp.path();
 
         // Nothing written yet → empty list.
-        assert!(init_scaffold_commit_paths(root).is_empty());
+        assert!(init_scaffold_commit_paths(root, crate::cli::InitFootprint::Full).is_empty());
 
         // Write a representative subset of init-owned paths.
         std::fs::create_dir_all(root.join(".aida")).unwrap();
@@ -1825,7 +1976,7 @@ mod task_631_init_self_commit_tests {
         // An UNRELATED user file must NOT appear in the staged set.
         std::fs::write(root.join("user_wip.rs"), "x").unwrap();
 
-        let paths = init_scaffold_commit_paths(root);
+        let paths = init_scaffold_commit_paths(root, crate::cli::InitFootprint::Full);
         assert!(paths.contains(&".aida/config.toml".to_string()));
         assert!(paths.contains(&".gitignore".to_string()));
         assert!(paths.contains(&"CLAUDE.md".to_string()));
@@ -1848,6 +1999,30 @@ mod task_631_init_self_commit_tests {
                 "staged path {p} is not in the init allow-list"
             );
         }
+    }
+
+    // trace:STORY-830 | ai:codex
+    #[test]
+    fn minimal_footprint_commit_allow_list_is_only_gitignore_and_config() {
+        assert_eq!(
+            init_scaffold_candidate_paths_for_footprint(crate::cli::InitFootprint::Minimal),
+            &[".gitignore", ".aida/config.toml"]
+        );
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
+        std::fs::write(root.join(".aida/config.toml"), "x").unwrap();
+        std::fs::write(root.join(".gitignore"), "x").unwrap();
+        std::fs::write(root.join("CLAUDE.md"), "x").unwrap();
+        std::fs::create_dir_all(root.join(".claude/skills")).unwrap();
+        std::fs::write(root.join(".claude/skills/foo.md"), "x").unwrap();
+
+        let paths = init_scaffold_commit_paths(root, crate::cli::InitFootprint::Minimal);
+        assert_eq!(
+            paths,
+            vec![".gitignore".to_string(), ".aida/config.toml".to_string()]
+        );
     }
 
     // BUG-789: init reports the orphan-store push, then makes a second commit
@@ -1928,6 +2103,29 @@ mod task_631_init_self_commit_tests {
             "canonical enabled array written: {body}"
         );
         assert_eq!(read_enabled_agent_selection(dir.path()), Some(selection));
+    }
+
+    // trace:STORY-830 | ai:codex
+    #[test]
+    fn init_footprint_round_trips_project_config() {
+        let dir = tempfile::tempdir().unwrap();
+
+        write_init_footprint(dir.path(), crate::cli::InitFootprint::Minimal).unwrap();
+        let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
+        assert!(
+            body.contains("[scaffold]") && body.contains("footprint = \"minimal\""),
+            "canonical footprint persisted: {body}"
+        );
+        assert_eq!(
+            read_init_footprint(dir.path()),
+            Some(crate::cli::InitFootprint::Minimal)
+        );
+
+        write_init_footprint(dir.path(), crate::cli::InitFootprint::Full).unwrap();
+        assert_eq!(
+            read_init_footprint(dir.path()),
+            Some(crate::cli::InitFootprint::Full)
+        );
     }
 
     #[test]
@@ -2085,7 +2283,7 @@ mod task_631_init_self_commit_tests {
 
         // Force the auto-commit branch (env override beats the TTY heuristic).
         std::env::set_var("AIDA_INIT_COMMIT_SCAFFOLD", "1");
-        let committed = commit_init_scaffolding(root).unwrap();
+        let committed = commit_init_scaffolding(root, crate::cli::InitFootprint::Full).unwrap();
         std::env::remove_var("AIDA_INIT_COMMIT_SCAFFOLD");
 
         // The remainder was committed → onboarding task is de-stranded.
@@ -2163,6 +2361,7 @@ mod task_631_init_self_commit_tests {
             db_path,
             "test store",
             false, // verbose
+            crate::cli::InitFootprint::Full,
             suppress,
         )
         .unwrap();
@@ -2222,7 +2421,8 @@ mod task_631_init_self_commit_tests {
             root.join(".aida-store"),
             "test store",
             false, // verbose
-            true,  // suppress bootstrap commit
+            crate::cli::InitFootprint::Full,
+            true, // suppress bootstrap commit
         )
         .unwrap();
 
@@ -2299,6 +2499,7 @@ pub(crate) fn handle_init_distributed_worktree(
     // computed default (`<host>-<user>-<seq>`); at a TTY we prompt with the
     // default pre-filled. trace:STORY-652
     node_name: Option<&str>,
+    footprint: Option<crate::cli::InitFootprint>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2306,6 +2507,8 @@ pub(crate) fn handle_init_distributed_worktree(
     let aida_dir = cwd.join(".aida");
     let worktree_dir = ".aida-store";
     let branch_name = "aida-store";
+    let explicit_footprint = footprint;
+    let footprint = resolve_init_footprint(&cwd, footprint)?;
 
     // STORY-552: complete the onboarding funnel at the FRONT. A new user in a
     // fresh folder who hasn't run `git init` shouldn't have to learn the recipe
@@ -2399,6 +2602,7 @@ pub(crate) fn handle_init_distributed_worktree(
             verbose,
             commit_scaffold,
             node_name,
+            Some(footprint),
         );
     }
 
@@ -2437,7 +2641,42 @@ pub(crate) fn handle_init_distributed_worktree(
                 verbose,
                 commit_scaffold,
                 node_name,
+                Some(footprint),
             );
+        }
+        if explicit_footprint == Some(crate::cli::InitFootprint::Full)
+            && read_init_footprint(&cwd) == Some(crate::cli::InitFootprint::Minimal)
+        {
+            println!(
+                "{} Expanding AIDA from minimal to full scaffold...",
+                "Note:".dimmed()
+            );
+            let store_path = cwd.join(worktree_dir);
+            let backend = aida_core::GitBackend::new(&store_path)?;
+            let store = backend
+                .load()
+                .unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
+            std::fs::create_dir_all(cwd.join("docs/plans"))?;
+            ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+            let storage_label = format!(
+                "{}{}your specs live here (git-tracked, synced with your code)",
+                worktree_dir.white().bold(),
+                " ".repeat(20),
+            );
+            complete_init_scaffolding(
+                &cwd,
+                &store,
+                agent,
+                no_skills,
+                no_hooks,
+                false,
+                std::path::PathBuf::from(worktree_dir),
+                &storage_label,
+                verbose,
+                crate::cli::InitFootprint::Full,
+                false,
+            )?;
+            return Ok(());
         }
         eprintln!(
             "{} AIDA distributed mode is already initialized (.aida/config.toml exists).",
@@ -2833,9 +3072,11 @@ pub(crate) fn handle_init_distributed_worktree(
         );
     }
 
-    // Create docs/plans/ for plan archive (per CLAUDE.md convention).
-    std::fs::create_dir_all(cwd.join("docs/plans"))?;
-    ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+    if footprint == crate::cli::InitFootprint::Full {
+        // Create docs/plans/ for plan archive (per CLAUDE.md convention).
+        std::fs::create_dir_all(cwd.join("docs/plans"))?;
+        ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+    }
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
@@ -2853,6 +3094,7 @@ pub(crate) fn handle_init_distributed_worktree(
         std::path::PathBuf::from(worktree_dir),
         &storage_label,
         verbose,
+        footprint,
         // Genuinely-new first-init: commit the scaffolding as before (BUG-570
         // suppression applies only to the bootstrap-clone path).
         false,
@@ -2883,7 +3125,9 @@ pub(crate) fn handle_init_distributed_worktree(
     // /aida-... works in Codex sessions from the first init. Idempotent and
     // conservative (skip-existing), best-effort — a failure here must not
     // fail init.
-    maybe_scaffold_codex_prompts_on_init(std::path::Path::new("."));
+    if footprint == crate::cli::InitFootprint::Full {
+        maybe_scaffold_codex_prompts_on_init(std::path::Path::new("."));
+    }
 
     Ok(())
 }
@@ -2971,6 +3215,7 @@ fn handle_init_post_clone(
     // STORY-652: friendly node name for the clone's node acquisition. None →
     // computed default; prompted at a TTY. trace:STORY-652
     node_name: Option<&str>,
+    footprint: Option<crate::cli::InitFootprint>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2979,6 +3224,7 @@ fn handle_init_post_clone(
         "".cyan().bold(),
         branch_name
     );
+    let footprint = resolve_init_footprint(cwd, footprint)?;
 
     // Fetch + create local tracking branch for the orphan — UNLESS the
     // worktree is already attached. A read command may have auto-attached it
@@ -3093,9 +3339,11 @@ fn handle_init_post_clone(
         println!("  {} {}", "Done".green(), msg);
     }
 
-    // docs/plans/ for plan archive (post-clone attach: never overwrite).
-    std::fs::create_dir_all(cwd.join("docs/plans"))?;
-    ensure_plan_template_scaffold(&cwd.join("docs/plans"), false)?;
+    if footprint == crate::cli::InitFootprint::Full {
+        // docs/plans/ for plan archive (post-clone attach: never overwrite).
+        std::fs::create_dir_all(cwd.join("docs/plans"))?;
+        ensure_plan_template_scaffold(&cwd.join("docs/plans"), false)?;
+    }
 
     // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
     // Load the store via GitBackend just for scaffolding metadata.
@@ -3118,6 +3366,7 @@ fn handle_init_post_clone(
         std::path::PathBuf::from(worktree_dir),
         &storage_label,
         verbose,
+        footprint,
         // BUG-570: bootstrap-clone → suppress the scaffold commit by default.
         // Only `--commit-scaffold` opts into a deliberate code-branch commit.
         // trace:BUG-570 | ai:claude
@@ -3284,11 +3533,13 @@ pub(crate) fn handle_init_distributed_sibling(
     no_hooks: bool,
     verbose: bool,
     name: Option<&str>,
+    footprint: Option<crate::cli::InitFootprint>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
     let cwd = std::env::current_dir()?;
     let aida_dir = cwd.join(".aida");
+    let footprint = resolve_init_footprint(&cwd, footprint)?;
     // BUG-608/STORY-676: the store is a separate repo at an explicit relative (or
     // absolute) path. `--sibling` defaults it to `../aida-store` — a TRUE SIBLING
     // of the code repo (not nested: a nested store can't be reached by a second
@@ -3584,6 +3835,12 @@ pub(crate) fn handle_init_distributed_sibling(
         store
     };
 
+    // Keep project runtime state out of the code repo for sibling stores too.
+    // The sibling store itself usually lives outside this repo, but the
+    // standard AIDA deny block is still the tracked project footprint.
+    // trace:STORY-830 | ai:codex
+    add_aida_gitignore_entries(&cwd, ".aida-store")?;
+
     // Create .aida/ config in the project root (not the store)
     std::fs::create_dir_all(&aida_dir)?;
     let config_content = format!(
@@ -3632,9 +3889,11 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
-    // Create docs/plans/ for plan archive (per CLAUDE.md convention).
-    std::fs::create_dir_all(cwd.join("docs/plans"))?;
-    ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+    if footprint == crate::cli::InitFootprint::Full {
+        // Create docs/plans/ for plan archive (per CLAUDE.md convention).
+        std::fs::create_dir_all(cwd.join("docs/plans"))?;
+        ensure_plan_template_scaffold(&cwd.join("docs/plans"), force)?;
+    }
 
     // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
     let storage_label = format!(
@@ -3650,9 +3909,10 @@ pub(crate) fn handle_init_distributed_sibling(
         no_skills,
         no_hooks,
         force,
-        std::path::PathBuf::from("aida-store"),
+        std::path::PathBuf::from(store_rel),
         &storage_label,
         verbose,
+        footprint,
         // Genuinely-new sibling first-init: commit scaffolding as before (no
         // bootstrap-clone path here). trace:BUG-570
         false,
