@@ -4108,6 +4108,7 @@ fn run() -> Result<()> {
             id,
             work,
             r#for,
+            tail,
             status,
             reason,
             resume,
@@ -4122,6 +4123,7 @@ fn run() -> Result<()> {
                 id,
                 *work,
                 r#for.as_deref(),
+                *tail,
                 status.as_deref(),
                 reason.as_deref(),
                 *resume,
@@ -67229,7 +67231,8 @@ fn handle_review_spec(
         // Route to rework in-process (reuse the existing handler).
         let storage = Storage::new(store_path);
         handle_queue_rework(
-            &storage, &spec_id, false, None, None, None, false, false, false, None, false, None,
+            &storage, &spec_id, false, None, false, None, None, false, false, false, None, false,
+            None,
         )?;
     } else if choice == diff_label {
         match pr_number {

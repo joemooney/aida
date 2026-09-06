@@ -6,6 +6,33 @@
 //! trace:TASK-218 | ai:claude
 use super::*;
 
+fn queue_entry_for_test(
+    user_id: &str,
+    requirement_id: uuid::Uuid,
+    position: i64,
+    for_role: Option<&str>,
+) -> aida_core::QueueEntry {
+    aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id,
+        position,
+        added_by: user_id.to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: for_role.map(|role| role.to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    }
+}
+
+fn req_for_test(spec_id: &str, status: RequirementStatus) -> aida_core::Requirement {
+    let mut req = aida_core::Requirement::new(spec_id.to_string(), String::new());
+    req.spec_id = Some(spec_id.to_string());
+    req.status = status;
+    req
+}
+
 /// Approved → no flip. The spec is ready to be queued as-is, so
 /// rework just queues it.
 #[test]
@@ -138,6 +165,7 @@ fn rework_writes_blocking_review_findings_comment() {
         "BUG-814",
         false,
         Some("implementer"),
+        false,
         None,
         None,
         false,
@@ -160,4 +188,163 @@ fn rework_writes_blocking_review_findings_comment() {
     assert!(comment
         .content
         .contains("1. BUG-814 pickup prompt omits the RequestChanges detail"));
+}
+
+/// BUG-851: reviewer-driven rework must stay routed to the role that owned the
+/// original queue entry, and it should jump to the queue head by default.
+// trace:BUG-851 | ai:codex
+#[test]
+fn rework_inherits_existing_route_and_requeues_at_head() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let rework_req = req_for_test("BUG-851", RequirementStatus::Done);
+    let other_req = req_for_test("TASK-852", RequirementStatus::Approved);
+    let rework_id = rework_req.id;
+    let other_id = other_req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(rework_req);
+    store.requirements.push(other_req);
+    backend.save(&store).unwrap();
+    storage
+        .queue_add(queue_entry_for_test(
+            "codex",
+            other_id,
+            1000,
+            Some("implementer"),
+        ))
+        .unwrap();
+    storage
+        .queue_add(queue_entry_for_test(
+            "codex",
+            rework_id,
+            2000,
+            Some("implementer"),
+        ))
+        .unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-851",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries[0].requirement_id, rework_id);
+    assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
+    assert_eq!(entries[0].position, 0);
+    assert_eq!(entries[1].requirement_id, other_id);
+}
+
+/// BUG-851: an explicit --for remains authoritative over inherited routing.
+// trace:BUG-851 | ai:codex
+#[test]
+fn rework_for_override_wins_over_existing_route() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let req = req_for_test("BUG-851", RequirementStatus::Done);
+    let req_id = req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    backend.save(&store).unwrap();
+    storage
+        .queue_add(queue_entry_for_test(
+            "codex",
+            req_id,
+            1000,
+            Some("implementer"),
+        ))
+        .unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-851",
+        false,
+        Some("reviewer"),
+        false,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries[0].for_role.as_deref(), Some("reviewer"));
+}
+
+/// BUG-851: --tail opts out of the urgent-head default.
+// trace:BUG-851 | ai:codex
+#[test]
+fn rework_tail_keeps_append_semantics() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let rework_req = req_for_test("BUG-851", RequirementStatus::Done);
+    let other_req = req_for_test("TASK-852", RequirementStatus::Approved);
+    let rework_id = rework_req.id;
+    let other_id = other_req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(rework_req);
+    store.requirements.push(other_req);
+    backend.save(&store).unwrap();
+    storage
+        .queue_add(queue_entry_for_test("codex", rework_id, 1000, Some("")))
+        .unwrap();
+    storage
+        .queue_add(queue_entry_for_test(
+            "codex",
+            other_id,
+            2000,
+            Some("implementer"),
+        ))
+        .unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-851",
+        false,
+        None,
+        true,
+        None,
+        None,
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries[0].requirement_id, other_id);
+    assert_eq!(entries[1].requirement_id, rework_id);
+    assert_eq!(entries[1].position, 3000);
+    assert_eq!(entries[1].for_role.as_deref(), Some("implementer"));
 }
