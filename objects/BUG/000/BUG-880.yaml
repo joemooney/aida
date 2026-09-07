@@ -3,20 +3,36 @@ spec_id: BUG-880
 agreed_id: BUG-880
 title: tail drain resolves a finished pipeline as live and exits silently on plain-text logs
 description: 'Operator repro (2026-09-06 20:49): with an active drain on BUG-879 phase 1, aida tail drain printed ''live drain BUG-876 phase 3'' (the PREVIOUS, completed from-pr pipeline in the same chained shell) and its pr-1680 reviewer log, then ''warning: skipped 11 malformed JSONL lines (emitted 0 formatted lines)'' and exited. Defect 1 — liveness resolution: a completed pipeline must not be reported live while a newer orchestrator holds drain-state (drain status read the correct current state at the same moment; tail must use the same source + pid-liveness check). Defect 2 — renderer: that reviewer session log is PLAIN TEXT (first line: ''Approved PR #1680. I found no blocking issues...''), not stream-JSONL — some sessions (codex exec output, and whatever wrote this one) log prose. When most/all lines fail JSON parsing, tail must fall back to raw line passthrough (with its timestamp prefix) and KEEP FOLLOWING, never warn-and-exit with zero output. Acceptance: tail drain during an active drain always names the same spec/phase drain status does; a plain-text log renders raw and follows; a mixed log renders JSON lines formatted and non-JSON lines raw; unit tests on both the resolver source and the renderer fallback.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T03:51:18.981461636Z
-modified_at: 2026-09-07T04:21:51.115080020Z
+modified_at: 2026-09-07T04:34:46.833572278Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07a19-c885-7960-8fdd-a13ddfa8923b
   created_at: 2026-09-07T04:21:51.115075822Z
   created_by: joe
+history:
+- id: 01a07a25-b5aa-7e33-83b2-11e369ff9408
+  author: aida-auto-bump
+  timestamp: 2026-09-07T04:34:46.826225135Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07a25-b5b1-7580-8b62-d4957b8c2e8b
+  timestamp: 2026-09-07T04:34:46.833570581Z
+  agent: aida
+  commit_sha: 58824af372ab9c27c8088191cb8390ebaa70cd8f
+  summary: Completed via merge 58824af3
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T04:21:25.055100766Z
   implemented_by: joe
+  completed_at: 2026-09-07T04:34:46.826049711Z
+  completion_sha: 58824af372ab9c27c8088191cb8390ebaa70cd8f
