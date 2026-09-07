@@ -66895,6 +66895,24 @@ fn classify_review_surface_forge_first(
     }
 }
 
+/// BUG-881: shared forge-first review-surface resolver for human review and
+/// PR-only drains. A lease/local branch is only an accelerator; a standalone
+/// `queue work --from-pr` must see the same open PR that `aida review` sees
+/// when the PR is discoverable by spec trailer or spec-named head branch.
+// trace:BUG-881 | ai:codex
+fn resolve_review_surface_forge_first(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    linkage: &GitLinkage,
+) -> ReviewSurface {
+    let spec_change = change_lookup_for_spec(project_root, spec_id);
+    let branch_change = linkage
+        .branch
+        .as_deref()
+        .map(|b| change_lookup_for_branch(project_root, b));
+    classify_review_surface_forge_first(linkage, Some(spec_change), branch_change)
+}
+
 /// BUG-582: the robust invariant guarding the `aida human` reviews-awaiting
 /// bucket — a finished spec can NEVER be resurrected onto the operator's seat
 /// by a lingering local branch / stale review surface.
@@ -67261,16 +67279,10 @@ fn handle_review_spec(
         return Ok(());
     }
 
-    // BUG-876: look for an open PR by spec before relying on lease/local branch
-    // linkage. Releasing the implementer's lease must not change a pushed PR
-    // into "built locally, never pushed".
-    // trace:BUG-876 | ai:codex
-    let spec_change = change_lookup_for_spec(project_root, &spec_id);
-    let branch_change = linkage
-        .branch
-        .as_deref()
-        .map(|b| change_lookup_for_branch(project_root, b));
-    let surface = classify_review_surface_forge_first(&linkage, Some(spec_change), branch_change);
+    // BUG-876 / BUG-881: use the shared forge-first review-surface resolver so
+    // `aida review` and `queue work --from-pr` agree after the implementer
+    // lease is gone. trace:BUG-881 | ai:codex
+    let surface = resolve_review_surface_forge_first(project_root, &spec_id, &linkage);
 
     let change_noun = forge.change_noun();
 

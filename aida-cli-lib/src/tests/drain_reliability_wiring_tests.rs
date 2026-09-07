@@ -215,6 +215,74 @@ fn probe_resume_facts_is_conservative_when_nothing_exists() {
     assert_eq!(pr, None);
 }
 
+// trace:BUG-881 | ai:codex
+#[test]
+fn probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let storage = Storage::new(root.join("requirements.db"));
+    let fake_gh = root.join("gh");
+    std::fs::write(
+        &fake_gh,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "--version" ]]; then
+  echo "gh version 0.0.0"
+  exit 0
+fi
+if [[ "${1:-}" == "pr" && "${2:-}" == "list" ]]; then
+  if [[ "$*" == *"--search TASK-4"* ]]; then
+    exit 0
+  fi
+  if [[ "$*" == *"--state open"* ]]; then
+    printf '3\t[AI:codex] fix: shipped elsewhere (TASK-4)\thttps://example/pr/3\ttask-4\n'
+    exit 0
+  fi
+fi
+if [[ "${1:-}" == "pr" && "${2:-}" == "view" ]]; then
+  if [[ "$*" == *"headRefName"* ]]; then
+    echo "task-4"
+    exit 0
+  fi
+  if [[ "$*" == *"commits"* ]]; then
+    printf '[AI:codex] fix: shipped elsewhere (TASK-4)\n'
+    exit 0
+  fi
+fi
+exit 1
+"#,
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_gh, perms).unwrap();
+    }
+
+    let prev = std::env::var("AIDA_TEST_GH_BINARY").ok();
+    std::env::set_var("AIDA_TEST_GH_BINARY", &fake_gh);
+    let (facts, branch, pr) = probe_resume_facts(root, &storage, "TASK-4", None);
+    match prev {
+        Some(value) => std::env::set_var("AIDA_TEST_GH_BINARY", value),
+        None => std::env::remove_var("AIDA_TEST_GH_BINARY"),
+    }
+
+    assert_eq!(pr, Some(3));
+    assert_eq!(branch.as_deref(), Some("task-4"));
+    assert!(
+        facts.branch_exists,
+        "an open PR should satisfy the branch-exists postcondition"
+    );
+}
+
 #[test]
 fn progress_signature_changes_when_a_file_is_edited_then_committed() {
     // A real worktree: an edit and a commit each move the signature, so the

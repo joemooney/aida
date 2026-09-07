@@ -4560,3 +4560,11 @@ Picked up `BUG-880` from the implementer queue. The bug had two surfaces: `aida 
 Changed the shared headless tail formatter so non-JSON lines pass through raw, with the same arrival timestamp prefix used by `aida tail` rendered output, and removed the end-of-stream skipped-malformed warning path. Applied the same raw fallback behavior to the live drain follow loop. Added `// trace:BUG-880 | ai:codex` on the formatter behavior and tests covering plain-text logs, mixed JSON/plain text rendering, timestamped raw fallback, and a drain resolver regression where live drain-state beats a newer finished burndown log.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib tail_cmd_tests`; `cargo test -p aida-cli-lib headless_tail::tests`.
+
+## Session 2026-09-07 — BUG-881 from-pr forge-first PR resolution
+
+Picked up `BUG-881` from the implementer queue. The bug was that `aida queue work <SPEC> --auto-complete --from-pr` could report no open PR after the implementer lease was gone, even when the forge had an open PR with a spec-named head branch and a `(SPEC-ID)` trailer.
+
+Extracted the human-review forge-first review surface resolution into a shared helper and routed both `aida review` and `probe_resume_facts` through it. The drain probe now seeds the PR number and branch from that shared surface when no drain-state member recorded a PR, so standalone `--from-pr` drives phases 3-6 against the same open PR that the human-review surface sees. Added `// trace:BUG-881 | ai:codex` comments and a fake-`gh` regression for an open PR discovered by head branch/trailered title with no lease.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface -- --nocapture`; `cargo test -p aida-cli-lib review_surface_ -- --nocapture`; `cargo test -p aida-cli-lib from_pr -- --nocapture`.
