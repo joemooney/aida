@@ -1,7 +1,7 @@
 id: 01a04eeb-7263-7113-84b1-f577a9bc63d6
 spec_id: TASK-1182
 agreed_id: TASK-1182
-title: Execute the codex validation runbook in a genuinely codex-mandated environment
+title: 'Codex end-to-end validation: home codex-pinned testbed (phase 1) + work-machine environment smoke (phase 2)'
 description: |-
   STORY-762 closed with an explicit, honest ceiling:
 
@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:07:28.227419728Z
-modified_at: 2026-09-07T02:17:10.475708853Z
+modified_at: 2026-09-07T02:17:11.336565143Z
 req_type: Task
 tags:
 - codex validation operator-action
