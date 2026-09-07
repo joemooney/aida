@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-03T17:44:16.839409276Z
-modified_at: 2026-09-07T01:45:07.343594379Z
+modified_at: 2026-09-07T01:46:29.601865247Z
 req_type: Story
 tags:
 - cli
@@ -43,4 +43,4 @@ failure_reason:
   kind: failed
   detail: the reviewer session exited 1
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-818 --work`'
-  shelved_at: 2026-09-07T01:45:07.343594379Z
+  shelved_at: 2026-09-07T01:46:29.601865247Z
