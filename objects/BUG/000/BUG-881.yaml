@@ -1,0 +1,12 @@
+id: 01a07a15-a6c7-7323-8d6c-5b31c8190274
+spec_id: BUG-881
+agreed_id: BUG-881
+title: from-pr resolver misses open PRs and must share the forge-first resolution
+description: 'Repro twice on 2026-09-06 (STORY-818 PR-1679 and testbed TASK-4 PR-3): queue work SPEC --from-pr reports no open PR found while an OPEN PR exists with the spec trailer in its title and a head branch named for the spec. The human-review surface resolution was fixed to be forge-first (open PRs by head branch and commit trailer, lease as accelerator only) but --from-pr has its own resolver still missing the same cases. Unify them behind one helper. Acceptance: from-pr on a spec whose open PR exists with trailered title and spec-named branch and NO lease drives phases 3-6; regression fixture mirrors the two live repros.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-07T04:17:14.439421148Z
+modified_at: 2026-09-07T04:17:14.439421148Z
+req_type: Bug

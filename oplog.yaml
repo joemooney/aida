@@ -48080,5 +48080,17 @@ operations:
   timestamp: 2026-09-07T04:09:55.748960201Z
   kind: !SetStatus
     status: Completed
-clock: 4150
+- id: 01a07a15-ad70-7af0-b860-8002fb1df74e
+  target_id: 01a07a15-a6c7-7323-8d6c-5b31c8190274
+  author: aida
+  node_id: '1'
+  lamport: 4151
+  timestamp: 2026-09-07T04:17:16.144406661Z
+  kind: !Create
+    title: from-pr resolver misses open PRs and must share the forge-first resolution
+    description: 'Repro twice on 2026-09-06 (STORY-818 PR-1679 and testbed TASK-4 PR-3): queue work SPEC --from-pr reports no open PR found while an OPEN PR exists with the spec trailer in its title and a head branch named for the spec. The human-review surface resolution was fixed to be forge-first (open PRs by head branch and commit trailer, lease as accelerator only) but --from-pr has its own resolver still missing the same cases. Unify them behind one helper. Acceptance: from-pr on a spec whose open PR exists with trailered title and spec-named branch and NO lease drives phases 3-6; regression fixture mirrors the two live repros.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 4151
 node_id: '1'
