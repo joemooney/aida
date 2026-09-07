@@ -47860,5 +47860,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4133
+- id: 01a079b0-f9de-7603-b156-424b3bfe614f
+  target_id: 01a079b0-e943-78e0-8e21-ca1224bb1c90
+  author: aida
+  node_id: '1'
+  lamport: 4134
+  timestamp: 2026-09-07T02:27:16.574978893Z
+  kind: !Create
+    title: 'work-machine environment smoke for codex: proxy, work gitlab remote, employer codex config, claude-absent reality'
+    description: 'The residual 10-minute half of TASK-1182 after the 2026-09-06 home-testbed validation proved everything else: on the actual work machine, update aida, aida init in the work repo (AGENTS.md block now injects — BUG-838), confirm [agents] vendor pin honored, run one aida-managed codex task end-to-end, and note anything environment-specific (proxy, work gitlab, employer codex build, Claude genuinely absent). Evidence goes on this task; findings become specs.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 4134
 node_id: '1'

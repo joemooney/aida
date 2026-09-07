@@ -1,0 +1,12 @@
+id: 01a079b0-e943-78e0-8e21-ca1224bb1c90
+spec_id: TASK-1196
+agreed_id: TASK-1196
+title: 'work-machine environment smoke for codex: proxy, work gitlab remote, employer codex config, claude-absent reality'
+description: 'The residual 10-minute half of TASK-1182 after the 2026-09-06 home-testbed validation proved everything else: on the actual work machine, update aida, aida init in the work repo (AGENTS.md block now injects — BUG-838), confirm [agents] vendor pin honored, run one aida-managed codex task end-to-end, and note anything environment-specific (proxy, work gitlab, employer codex build, Claude genuinely absent). Evidence goes on this task; findings become specs.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-07T02:27:12.323674694Z
+modified_at: 2026-09-07T02:27:12.323674694Z
+req_type: Task
