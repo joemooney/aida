@@ -47900,5 +47900,31 @@ operations:
   timestamp: 2026-09-07T02:28:08.787834811Z
   kind: !SetStatus
     status: Rejected
-clock: 4137
+- id: 01a079c3-7695-7fa1-a48b-6b3402468474
+  target_id: 01a079c3-6e94-78a3-a8c8-b5073a9e9459
+  author: aida
+  node_id: '1'
+  lamport: 4138
+  timestamp: 2026-09-07T02:47:28.149113145Z
+  kind: !Create
+    title: 'Review PR-1680: [AI:codex] fix(review): resolve open PRs without leases (BUG-876)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0799b`) for branch `bug-876`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1680>
+      - Branch: `bug-876` → `main`
+
+      ## Covers
+
+      - BUG-876
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1680` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4138
 node_id: '1'
