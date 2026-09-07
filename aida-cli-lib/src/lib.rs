@@ -24436,13 +24436,16 @@ fn lease_state_for(
     live_sessions: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
-    // BUG-511 review leases AND TASK-957 claim leases are advisory locks with
-    // no worktree of their own — the standard worktree/claude/age matrix would
-    // always call them stale. Their real liveness signal is the process that
-    // minted them, recorded in `creator_pid`: alive → Live, dead/absent →
-    // Stale (never Dormant; an advisory lock's lifetime is exactly its
-    // process's lifetime). trace:BUG-511 trace:TASK-957 | ai:claude
-    if l.review_verb || l.claim_verb {
+    // BUG-511 review leases AND TASK-957 claim leases are advisory locks when
+    // they have no worktree of their own — the standard worktree/claude/age
+    // matrix would always call them stale. Their real liveness signal is the
+    // process that minted them, recorded in `creator_pid`: alive → Live,
+    // dead/absent → Stale (never Dormant; an advisory lock's lifetime is
+    // exactly its process's lifetime). BUG-882 lets reviewer worktree sessions
+    // carry review_verb too; those must still use normal worktree liveness.
+    // trace:BUG-511 trace:TASK-957 | ai:claude
+    // trace:BUG-882 | ai:codex
+    if (l.review_verb || l.claim_verb) && l.worktree_path.as_os_str().is_empty() {
         let alive = l
             .creator_pid
             .map(process_probe::pid_is_alive)
@@ -26231,6 +26234,21 @@ fn preflight_spec_status_review_aware(
     preflight_spec_status(owns, status, force_claim)
 }
 
+// BUG-882: reviewer-scoped queue work can reach `session_start` with `owns`
+// still set to the backing spec id rather than `PR-N`. Role intent must still
+// classify the launch as review-shaped so Done-backed open PRs are reviewable.
+// trace:BUG-882 | ai:codex
+fn session_start_is_review_session(
+    review_target: Option<(ReviewForge, u64)>,
+    launch_role: Option<&str>,
+) -> bool {
+    review_target.is_some()
+        || launch_role.is_some_and(|role| role.eq_ignore_ascii_case("reviewer"))
+        || std::env::var("AIDA_REVIEW_VERDICT_FILE")
+            .ok()
+            .is_some_and(|v| !v.trim().is_empty())
+}
+
 /// TASK-619: outcome of the pull-then-re-check guard that runs immediately
 /// before `aida queue work` claims a spec. Session leases live under
 /// `.aida/sessions/` and are machine-local (gitignored), so they cannot stop
@@ -26521,6 +26539,7 @@ fn session_start(
         };
         (resolved_forge, n)
     });
+    let is_review_session = session_start_is_review_session(review_target, launch_role.as_deref());
 
     // STORY-65: auto-branch with collision-aware naming. If --branch isn't
     // given (and we're not in review mode, which has its own deterministic
@@ -26650,7 +26669,7 @@ fn session_start(
             owns,
             &project_root,
             &claim_role,
-            /* review_verb */ review_target.is_some(),
+            /* review_verb */ is_review_session,
             force_claim || orchestrated,
         ) {
             Ok(coordination::AcquireOutcome::Acquired) => {}
@@ -26700,15 +26719,6 @@ fn session_start(
     let orchestrator_corroborated = orchestrator::detect(&project_root).is_orchestrated();
     let force_claim_effective =
         effective_force_claim_for_session_start(force_claim, orchestrator_corroborated);
-    // BUG-436: a review session reviews a PR, it doesn't implement the spec, so
-    // the Done/Completed implement-guard must not block it. The orchestrator's
-    // reviewer phase always exports `AIDA_REVIEW_VERDICT_FILE`; `review_target`
-    // covers any path where the scope reached here still PR-shaped. Without this,
-    // resume-to-reviewer (and any drain whose spec reached Done before phase 3)
-    // dies with "spec is Done — refusing to start a new session".
-    // trace:BUG-436 | ai:claude
-    let is_review_session =
-        review_target.is_some() || std::env::var("AIDA_REVIEW_VERDICT_FILE").is_ok();
     match preflight_spec_status_review_aware(
         owns,
         preflight_status.as_ref(),
@@ -27302,7 +27312,7 @@ fn session_start(
         // origin/main" path. trace:STORY-248 | ai:claude
         parent_branch: stack_parent_branch.clone(),
         parent_branch_sha: stack_parent_sha.clone(),
-        review_verb: false,
+        review_verb: is_review_session,
         claim_verb: false,
         manual_enter_at: None,
     };
@@ -78921,11 +78931,13 @@ fn auto_release_decision_for_lease(
     lease: &SessionLease,
     config: &orchestrator::OrchestratorConfig,
 ) -> orchestrator::AutoReleaseDecision {
-    // BUG-511: review-verb leases are advisory PID locks — no worktree, no
-    // uncommitted work to lose — so liveness is the creator process, full
-    // stop. Decided BEFORE the config gate and the mtime clock: a dead
-    // review lease is always safe to release, a live one always refuses.
-    if lease.review_verb {
+    // BUG-511: worktree-less review-verb leases are advisory PID locks — no
+    // worktree, no uncommitted work to lose — so liveness is the creator
+    // process, full stop. Decided BEFORE the config gate and the mtime clock:
+    // a dead advisory review lease is always safe to release, a live one
+    // always refuses. BUG-882 reviewer worktree leases carry review_verb as
+    // metadata but still use the normal worktree cleanup gates below.
+    if lease.review_verb && lease.worktree_path.as_os_str().is_empty() {
         let pid_alive = lease
             .creator_pid
             .map(process_probe::pid_is_alive)

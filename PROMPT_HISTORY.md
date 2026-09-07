@@ -4568,3 +4568,19 @@ Picked up `BUG-881` from the implementer queue. The bug was that `aida queue wor
 Extracted the human-review forge-first review surface resolution into a shared helper and routed both `aida review` and `probe_resume_facts` through it. The drain probe now seeds the PR number and branch from that shared surface when no drain-state member recorded a PR, so standalone `--from-pr` drives phases 3-6 against the same open PR that the human-review surface sees. Added `// trace:BUG-881 | ai:codex` comments and a fake-`gh` regression for an open PR discovered by head branch/trailered title with no lease.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface -- --nocapture`; `cargo test -p aida-cli-lib review_surface_ -- --nocapture`; `cargo test -p aida-cli-lib from_pr -- --nocapture`.
+
+## Session 2026-09-07 — BUG-882 reviewer role shipped-work preflight
+
+Picked up `BUG-882` from the implementer queue. The bug was that reviewer-scoped queue work could reach `session_start` with the backing spec id as `owns`, so a Done-backed open PR was rejected by the implementer shipped-work preflight.
+
+Added a single `session_start_is_review_session` classifier that treats PR/MR scopes, verdict-file reviewer children, and explicit reviewer role launches as review-shaped. That classifier now feeds the cross-clone claim metadata, the Done/Completed status preflight bypass, and local lease metadata. Tightened advisory review-lease liveness so only worktree-less review locks use PID-only cleanup; reviewer worktree sessions keep normal worktree liveness.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib preflight_spec_status_tests -- --nocapture`; `cargo test -p aida-cli-lib queue_work_tests -- --nocapture`; `cargo test -p aida-cli-lib bug_511_review_lease_tests -- --nocapture`. A read-only smoke of `aida queue work PR-3 --role reviewer --no-human --dry-run --no-pull` reached the repository's existing ambiguous-PR diagnostic (`PR-3 has multiple backing specs`) before the fixed status gate.
+
+## Session 2026-09-07 — PR-1686 review fix-forward
+
+Reviewed PR-1686 for `BUG-882`. The implementation satisfied the reviewer-role preflight behavior, but the new role-classifier unit test inherited `AIDA_REVIEW_VERDICT_FILE` from reviewer sessions and failed its implementer-control assertion in that environment.
+
+Fix-forwarded the test by taking the shared env lock, temporarily clearing `AIDA_REVIEW_VERDICT_FILE`, and restoring the prior value after the role-only assertions.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib preflight_spec_status_tests -- --nocapture`; `cargo test -p aida-cli-lib queue_work_tests -- --nocapture`; `cargo test -p aida-cli-lib bug_511_review_lease_tests -- --nocapture`.
