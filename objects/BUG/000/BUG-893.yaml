@@ -3,28 +3,38 @@ spec_id: BUG-893
 agreed_id: BUG-893
 title: orchestrator opens the PR itself when the branch is pushed but no PR exists
 description: 'TASK-1198 validation is failing on exactly this gap: codex implementers reliably commit without opening a PR. BUG-878 auto-pushes the branch, BUG-879 correctly refuses PR-0, and STORY-975 retries once with the typed no-pr cause — but the retry cannot succeed because nothing ever creates the PR, so every codex spec parks at the reviewer preflight (TASK-7, 2 minutes, no-pr, attempt 2/2). Phase 2 or the phase-3 preflight must open the PR when the spec branch exists on origin with commits ahead of main and no open PR: title from the head commit subject which carries the trailer, body noting the orchestrator opened it, then proceed to review. The phase contract must not depend on vendor skill compliance. Acceptance: a pipeline whose implementer commits and pushes but never opens a PR proceeds through review and merge on an orchestrator-opened PR; regression test on the fallback; the 3-spec codex validation passes end-to-end after this.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T20:51:40.468354503Z
-modified_at: 2026-09-07T21:16:38.117027886Z
+modified_at: 2026-09-07T21:18:00.383217833Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07db5-7b5b-7613-b6f7-fc8b53474b02
   created_at: 2026-09-07T21:10:47.852732131Z
   created_by: joe
+history:
+- id: 01a07dbc-30b8-7e11-9f3f-b386e0785b61
+  author: aida-auto-bump
+  timestamp: 2026-09-07T21:18:00.376797211Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07dbc-30bf-7711-9dfe-d6bf4003c99f
+  timestamp: 2026-09-07T21:18:00.383217237Z
+  agent: aida
+  commit_sha: b957f89b8dfe694574e5a6c1d5ec5477f0014521
+  summary: Completed via merge b957f89b
+  punted:
+  - 'punted: `aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint) (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T20:59:47.707638719Z
   implemented_by: joe
-failure_reason:
-  phase: pull
-  phase_index: 5
-  kind: tool-exit
-  detail: '`aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint) (attempt 2/2)'
-  recovery_hint: 'Classify the divergence: `aida rebase --dry-run --json`'
-  shelved_by: advisor
-  shelved_at: 2026-09-07T21:16:38.117027886Z
+  completed_at: 2026-09-07T21:18:00.376676334Z
+  completion_sha: b957f89b8dfe694574e5a6c1d5ec5477f0014521
