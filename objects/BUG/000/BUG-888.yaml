@@ -3,20 +3,36 @@ spec_id: BUG-888
 agreed_id: BUG-888
 title: node-qualified spec ids (TASK-1-127) are mangled to a different id (TASK-151) by resolvers and branch/trailer derivation
 description: 'Observed live (2026-09-07): spec TASK-1-127 (node-qualified pre-merge-gate id) was driven by the drain, which derived branch task-151 and PR title trailer (TASK-151) — a DIFFERENT id — and aida why TASK-1-127 answers about TASK-151 as well. One shared normalization is dropping/collapsing the node segment. Consequences: the merge trailer would auto-complete the wrong spec (or none), why answers lie, and any node-qualified id is unsafe on every derived surface. Fix the id parsing/normalization to treat TYPE-<node>-<n> as atomic; audit branch naming, trailer generation, why resolution, and queue matching; regression tests with node-qualified ids across those four surfaces. Until fixed, agreed short ids (aida db merge-gate) mask the issue on this repo but any fresh node writes hit it.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T18:54:31.667231524Z
-modified_at: 2026-09-07T19:19:31.539360164Z
+modified_at: 2026-09-07T19:32:55.838915406Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07d4f-92ff-7ea3-a2eb-e71ff7799e07
   created_at: 2026-09-07T19:19:26.910621191Z
   created_by: joe
+history:
+- id: 01a07d5b-fd98-76f1-8950-5f172b3c7492
+  author: aida-auto-bump
+  timestamp: 2026-09-07T19:32:55.832283408Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07d5b-fd9e-7363-b044-2cce1009c097
+  timestamp: 2026-09-07T19:32:55.838914820Z
+  agent: aida
+  commit_sha: 49c7ba859222732f8745aa59bc30015679440e21
+  summary: Completed via merge 49c7ba85
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T19:19:31.539360164Z
   implemented_by: joe
+  completed_at: 2026-09-07T19:32:55.832174244Z
+  completion_sha: 49c7ba859222732f8745aa59bc30015679440e21
