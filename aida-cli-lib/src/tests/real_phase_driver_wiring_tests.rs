@@ -1,8 +1,8 @@
 use super::{
     branch_commits_ahead_main, build_auto_punt_args, build_integrate_rebase_args,
     build_phase3_auto_rebase_args, ensure_implementer_branch_pushed, find_orchestrated_lease,
-    headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
-    orchestrator_pr_title_and_body, RealPhaseDriver,
+    head_commit_message, headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
+    orchestrator_pr_title_and_body, pushed_branch_commits_ahead_default, RealPhaseDriver,
 };
 use crate::auto_complete::PhaseDriver;
 use std::process::Command;
@@ -303,6 +303,75 @@ fn phase1_no_pr_recovery_uses_implementer_worktree_branch_state() {
         git(&remote, &["rev-parse", "bug-893"]),
         git(&implementer, &["rev-parse", "HEAD"])
     );
+}
+
+#[test]
+fn phase3_no_pr_recovery_uses_pushed_branch_after_worktree_teardown() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    let implementer = tmp.path().join("implementer");
+
+    git(tmp.path(), &["init", "--bare", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&root, "file.txt", "base\n", "base");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+
+    git(
+        tmp.path(),
+        &["clone", "-q", remote.to_str().unwrap(), "implementer"],
+    );
+    git(
+        &implementer,
+        &["config", "user.email", "aida@example.invalid"],
+    );
+    git(&implementer, &["config", "user.name", "AIDA Test"]);
+    git(
+        &implementer,
+        &["checkout", "-q", "-b", "bug-895", "origin/main"],
+    );
+    write_commit(
+        &implementer,
+        "file.txt",
+        "base\nphase3\n",
+        "[AI:codex] fix(orchestrator): recover pushed branch PR (BUG-895)",
+    );
+    ensure_implementer_branch_pushed(&implementer, "bug-895", true).unwrap();
+
+    std::fs::remove_dir_all(&implementer).unwrap();
+    git(
+        &root,
+        &[
+            "fetch",
+            "-q",
+            "origin",
+            "bug-895:refs/remotes/origin/bug-895",
+        ],
+    );
+
+    // Phase 3 no longer has the implementer worktree, so recovery must prove
+    // origin/<branch> is ahead from the orchestrator checkout and derive the
+    // PR title/body from that pushed head. trace:BUG-895 | ai:codex
+    assert_eq!(
+        pushed_branch_commits_ahead_default(&root, "bug-895")
+            .expect("pushed branch should be comparable"),
+        1
+    );
+    let commit_msg = head_commit_message(&root, "origin/bug-895").unwrap();
+    let (title, body) = orchestrator_pr_title_and_body(&commit_msg).unwrap();
+    assert_eq!(
+        title,
+        "[AI:codex] fix(orchestrator): recover pushed branch PR (BUG-895)"
+    );
+    assert!(body.contains("Opened by the AIDA orchestrator"));
 }
 
 #[test]
