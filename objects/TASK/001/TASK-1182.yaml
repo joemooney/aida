@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:07:28.227419728Z
-modified_at: 2026-09-07T02:27:31.840006931Z
+modified_at: 2026-09-07T04:18:54.929719927Z
 req_type: Task
 tags:
 - codex validation operator-action
@@ -62,4 +62,10 @@ comments:
   content: 'Closed on phase-1 evidence (operator close-out decision 2026-09-06): the home codex-pinned testbed validated bootstrap, vendor pin, codex implementer end-to-end, and lifecycle auto-bump (see prior comment); the codex-reviewer pipeline leg lands tonight behind BUG-876/879. The residual work-machine environment smoke is split to TASK-1215 (deferred: next time at the work machine).'
   created_at: 2026-09-07T02:27:30.599096699Z
   modified_at: 2026-09-07T02:27:30.599096699Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a07a17-2f51-7223-8af4-1fb3813670fc
+  author: joe
+  content: 'Reviewer-leg addendum (2026-09-06 21:20): second codex cycle (TASK-4) — codex implemented + BUG-878 auto-pushed the branch (fix verified live) + BUG-879 guard refused PR-0 cleanly (fix verified live). PR review-by-pipeline remains blocked by two NEW filed bugs, neither codex-specific: BUG-881 (--from-pr resolver misses open PRs) and BUG-882 (reviewer-scoped launch refused on Done specs). Codex-as-reviewer through the pipeline re-validates once those land; merged PR-3 on advisor verification meanwhile — TASK-4 auto-bumped Completed via trailer.'
+  created_at: 2026-09-07T04:18:54.929719927Z
+  modified_at: 2026-09-07T04:18:54.929719927Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
