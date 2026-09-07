@@ -3,20 +3,36 @@ spec_id: BUG-881
 agreed_id: BUG-881
 title: from-pr resolver misses open PRs and must share the forge-first resolution
 description: 'Repro twice on 2026-09-06 (STORY-818 PR-1679 and testbed TASK-4 PR-3): queue work SPEC --from-pr reports no open PR found while an OPEN PR exists with the spec trailer in its title and a head branch named for the spec. The human-review surface resolution was fixed to be forge-first (open PRs by head branch and commit trailer, lease as accelerator only) but --from-pr has its own resolver still missing the same cases. Unify them behind one helper. Acceptance: from-pr on a spec whose open PR exists with trailered title and spec-named branch and NO lease drives phases 3-6; regression fixture mirrors the two live repros.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T04:17:14.439421148Z
-modified_at: 2026-09-07T04:46:51.244496211Z
+modified_at: 2026-09-07T05:01:53.055685340Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07a30-9071-70d1-8b75-f6ff8757a16f
   created_at: 2026-09-07T04:46:43.816880503Z
   created_by: joe
+history:
+- id: 01a07a3e-8619-7be3-bd53-aa5ceecb587a
+  author: aida-auto-bump
+  timestamp: 2026-09-07T05:01:53.049102797Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07a3e-861f-75e1-876d-7625db5fd84b
+  timestamp: 2026-09-07T05:01:53.055684377Z
+  agent: aida
+  commit_sha: d38262286b10395c664483ab81027461ad34e3ac
+  summary: Completed via merge d3826228
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T04:46:51.244496211Z
   implemented_by: joe
+  completed_at: 2026-09-07T05:01:53.048998127Z
+  completion_sha: d38262286b10395c664483ab81027461ad34e3ac
