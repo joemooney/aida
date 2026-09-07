@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   Blocked by the typed-cause story (retry policy keys off the cause). Do not ship before it.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:44.799090636Z
-modified_at: 2026-09-07T06:32:34.424527058Z
+modified_at: 2026-09-07T16:57:49.114395628Z
 req_type: Story
 tags:
 - drain
