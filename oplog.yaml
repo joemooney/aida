@@ -48026,5 +48026,17 @@ operations:
   timestamp: 2026-09-07T03:42:22.216508836Z
   kind: !SetStatus
     status: Completed
-clock: 4146
+- id: 01a079fd-f0ff-78c0-bc4b-e4343bc03bd2
+  target_id: 01a079fd-eac5-7821-bfaf-db8336082237
+  author: aida
+  node_id: '1'
+  lamport: 4147
+  timestamp: 2026-09-07T03:51:20.575988655Z
+  kind: !Create
+    title: tail drain resolves a finished pipeline as live and exits silently on plain-text logs
+    description: 'Operator repro (2026-09-06 20:49): with an active drain on BUG-879 phase 1, aida tail drain printed ''live drain BUG-876 phase 3'' (the PREVIOUS, completed from-pr pipeline in the same chained shell) and its pr-1680 reviewer log, then ''warning: skipped 11 malformed JSONL lines (emitted 0 formatted lines)'' and exited. Defect 1 — liveness resolution: a completed pipeline must not be reported live while a newer orchestrator holds drain-state (drain status read the correct current state at the same moment; tail must use the same source + pid-liveness check). Defect 2 — renderer: that reviewer session log is PLAIN TEXT (first line: ''Approved PR #1680. I found no blocking issues...''), not stream-JSONL — some sessions (codex exec output, and whatever wrote this one) log prose. When most/all lines fail JSON parsing, tail must fall back to raw line passthrough (with its timestamp prefix) and KEEP FOLLOWING, never warn-and-exit with zero output. Acceptance: tail drain during an active drain always names the same spec/phase drain status does; a plain-text log renders raw and follows; a mixed log renders JSON lines formatted and non-JSON lines raw; unit tests on both the resolver source and the renderer fallback.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 4147
 node_id: '1'
