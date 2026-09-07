@@ -47666,5 +47666,51 @@ operations:
   timestamp: 2026-09-07T01:45:07.423367335Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4123
+- id: 01a0798a-6c70-7ad0-bc83-6f1ca457992f
+  target_id: 01a0798a-66f1-72b2-b524-2476ef2ea270
+  author: aida
+  node_id: '1'
+  lamport: 4124
+  timestamp: 2026-09-07T01:45:10.000300193Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on STORY-818'
+    description: |
+      Auto-drafted by `aida queue work STORY-818 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the reviewer session exited 1
+
+      Failure kind: `failed`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-818 --work`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-07T01:45:08.282732193+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 253130 ms
+        - phase 2 (ci): 10912 ms
+        - phase 3 (reviewer): 11208 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-818","started_at":"2026-09-07T01:40:29.826008689+00:00","completed_at":"2026-09-07T01:45:08.282732193+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"the reviewer session exited 1","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":253130},{"phase":2,"slug":"ci","elapsed_ms":10912},{"phase":3,"slug":"reviewer","elapsed_ms":11208}],"total_ms":277482,"binary_sha":"344f086b8"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4124
 node_id: '1'
