@@ -11,12 +11,12 @@ description: |-
   - Run aida queue work --batch or aida burndown run with retry_transient at default once that ships; otherwise run as-is and record every manual relaunch.
   - Result recorded as a comment on this task: number of runs launched by a human, specs merged, median first-touch to merge, and every shelve cause. Attach the burndown log path.
   - Pass condition: three merges, zero human relaunches. If it fails, file one BUG per distinct cause and link them here; this task stays open until the pass condition is met on a rerun.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:49.397599124Z
-modified_at: 2026-09-07T16:57:56.809705180Z
+modified_at: 2026-09-07T18:41:32.596890042Z
 req_type: Task
 tags:
 - dogfood
