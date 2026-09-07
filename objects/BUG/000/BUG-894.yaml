@@ -1,0 +1,54 @@
+id: 01a07dba-f321-7162-bfbc-8ec8217290e6
+spec_id: BUG-894
+agreed_id: BUG-894
+title: 'auto-complete failure: phase 5 (pull) on BUG-893'
+description: |
+  Auto-drafted by `aida queue work BUG-893 --auto-complete` after phase 5 (pull) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  `aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint) (attempt 2/2)
+
+  Failure kind: `tool-exit`
+
+  ## Recovery hint shown to the user
+
+  Classify the divergence: `aida rebase --dry-run --json`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-07T21:16:38.765871666+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 507359 ms
+    - phase 2 (ci): 620437 ms
+    - phase 3 (reviewer): 338228 ms
+    - phase 4 (merge): 3688 ms
+    - phase 5 (pull): 6956 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"BUG-893","started_at":"2026-09-07T20:52:00.764930313+00:00","completed_at":"2026-09-07T21:16:38.765871666+00:00","outcome":"failed","variant":"full","failed_phase":5,"failure_kind":"tool-exit","failure_message":"`aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint) (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":507359},{"phase":2,"slug":"ci","elapsed_ms":620437},{"phase":3,"slug":"reviewer","elapsed_ms":338228},{"phase":4,"slug":"merge","elapsed_ms":3688},{"phase":5,"slug":"pull","elapsed_ms":6956}],"total_ms":1477339,"binary_sha":"66c8d6c0d"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-07T21:16:39.073226102Z
+modified_at: 2026-09-07T21:16:39.073226102Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-5
+- failure-kind:tool-exit
+- pull
