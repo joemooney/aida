@@ -48802,5 +48802,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 4190
+- id: 01a07d4f-96d1-7832-8bbf-7ef171b1073f
+  target_id: 01a07d4f-92ff-7ea3-a2eb-e71ff7799e07
+  author: aida
+  node_id: '1'
+  lamport: 4191
+  timestamp: 2026-09-07T19:19:23.089331034Z
+  kind: !Create
+    title: 'Review PR-1690: [AI:codex] fix(ids): preserve node-qualified spec ids (BUG-888)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07d44`) for branch `bug-888`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1690>
+      - Branch: `bug-888` → `main`
+
+      ## Covers
+
+      - BUG-888
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1690` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4191
 node_id: '1'
