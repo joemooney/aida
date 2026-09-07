@@ -49230,5 +49230,17 @@ operations:
   timestamp: 2026-09-07T21:46:20.960884080Z
   kind: !SetStatus
     status: Completed
-clock: 4216
+- id: 01a07ddf-0d35-7d82-9843-bcf01d594a7d
+  target_id: 01a07dde-ff2f-7bf0-8e1b-5564d69b5e94
+  author: aida
+  node_id: '1'
+  lamport: 4217
+  timestamp: 2026-09-07T21:56:05.045145132Z
+  kind: !Create
+    title: auto-open resolves the forge-less provider in the phase-3 recovery context — no-op open_change returns id 0 as success
+    description: 'TASK-1198 attempt 3 (2026-09-07 14:53): the BUG-895 recovery fired, pushed branch confirmed, but open_change returned Ok with id 0 and EMPTY url and no PR exists on the forge — the PureGitForge (ForgeKind::None default) no-op. In the phase-3 recovery context forge_for(project_root) is not resolving GitHubForge for a project whose origin is github.com (the same testbed repo where hand-run gh pr create works). Two fixes: (1) find why forge resolution falls through in this context (cwd vs project_root, config read, or detection ordering) and make it resolve from the TARGET project''s origin host; (2) the forge-less provider must be an explicit unsupported ERROR for auto-open (and any surface needing a real change id) — never an Ok(id 0) that downstream code has to sniff. Acceptance: recovery in a github-origin project opens a real PR (integration test may stub the gh argv and assert invocation); ForgeKind::None reaching auto-open produces a typed error naming the forge-less mode; the 3-spec codex validation finally ships 3/3.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4217
 node_id: '1'
