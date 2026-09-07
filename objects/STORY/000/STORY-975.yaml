@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:44.799090636Z
-modified_at: 2026-09-07T19:02:40.693363507Z
+modified_at: 2026-09-07T20:30:26.278164067Z
 req_type: Story
 tags:
 - drain
@@ -58,6 +58,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-07T18:22:25.660048741Z
   modified_at: 2026-09-07T18:22:25.660048741Z
+- id: 01a07d90-a3e6-7083-9bdd-847ce275fa31
+  author: joe
+  content: 'Dogfood evidence recorded on PR #1688 (2026-09-07): 3-spec drain on this repo with retry_transient=1 on the branch binary — BUG-888/BUG-890/STORY-976 all shipped, 0 phase failures, 0 manual relaunches, exit 0. Retry gate armed throughout; no transient occurred to consume it.'
+  created_at: 2026-09-07T20:30:26.278164067Z
+  modified_at: 2026-09-07T20:30:26.278164067Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 failure_reason:
   phase: ci
