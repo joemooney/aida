@@ -1081,23 +1081,25 @@ fn render_auto_complete_failures(
         let phase_label = auto_complete::Phase::from_index(i32::from(phase_n))
             .map(|p| p.slug())
             .unwrap_or("?");
-        let bug_cell = match &ev.drafted_bug {
-            Some(bug) => {
-                let status = store.and_then(|s| bug_status(s, bug));
-                match status {
-                    Some(st) => format!("→ {} [{}]", bug.cyan(), st),
-                    None => format!("→ {}", bug.cyan()),
-                }
+        let cause = auto_complete_telemetry::failure_cause_label(ev.failure_kind.as_deref());
+        let detail =
+            auto_complete_telemetry::failure_detail_first_line(ev.failure_message.as_deref());
+        let bug_cell = ev.drafted_bug.as_ref().map(|bug| {
+            let status = store.and_then(|s| bug_status(s, bug));
+            match status {
+                Some(st) => format!(" · {}", format!("{} [{}]", bug, st).cyan()),
+                None => format!(" · {}", bug.cyan()),
             }
-            None => "(no BUG drafted)".dimmed().to_string(),
-        };
+        });
         println!(
-            "    {}  {:<12} phase {} ({})  {}",
+            "    {}  {:<12} phase {} ({})  {} — {}{}",
             when.dimmed(),
             ev.spec_id.bold(),
             phase_n,
             phase_label,
-            bug_cell,
+            cause.yellow(),
+            detail,
+            bug_cell.unwrap_or_default(),
         );
     }
 
@@ -1122,15 +1124,15 @@ fn render_auto_complete_failures(
         println!();
         println!(
             "  {}",
-            "`aida usage --auto-complete --pattern` — which phases fail most often".dimmed()
+            "`aida usage --auto-complete --pattern` — which causes fail most often".dimmed()
         );
     }
     Ok(())
 }
 
-/// Render the per-phase failure histogram — the signal for where to invest
+/// Render the per-cause failure histogram — the signal for where to invest
 /// orchestrator fixes.
-// trace:TASK-266 | ai:claude
+// trace:TASK-266 trace:STORY-974 | ai:codex
 fn render_auto_complete_pattern(
     events: &[auto_complete_telemetry::AutoCompleteEvent],
     json_out: bool,
@@ -1141,11 +1143,9 @@ fn render_auto_complete_pattern(
     if json_out {
         let arr: Vec<serde_json::Value> = hist
             .iter()
-            .map(|(phase, count)| {
+            .map(|(cause, count)| {
                 serde_json::json!({
-                    "phase": phase,
-                    "phase_slug": auto_complete::Phase::from_index(i32::from(*phase))
-                        .map(|p| p.slug()),
+                    "cause": cause,
                     "failures": count,
                 })
             })
@@ -1155,7 +1155,7 @@ fn render_auto_complete_pattern(
     }
 
     println!(
-        "{} phase-failure frequency — {} failed of {} runs",
+        "{} failure-cause frequency — {} failed of {} runs",
         "Auto-complete:".bold(),
         summary.failed,
         summary.total,
@@ -1165,19 +1165,10 @@ fn render_auto_complete_pattern(
         return Ok(());
     }
     let max = hist.iter().map(|(_, c)| *c).max().unwrap_or(1);
-    for (phase, count) in &hist {
-        let label = auto_complete::Phase::from_index(i32::from(*phase))
-            .map(|p| p.slug())
-            .unwrap_or("?");
+    for (cause, count) in &hist {
         // Scale the bar to a 24-column field; never empty for a nonzero count.
         let width = ((*count * 24) / max).max(1);
-        println!(
-            "  phase {} {:<12} {} {}",
-            phase,
-            label,
-            "█".repeat(width).red(),
-            count,
-        );
+        println!("  {:<24} {} {}", cause, "█".repeat(width).red(), count,);
     }
     Ok(())
 }

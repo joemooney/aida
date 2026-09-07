@@ -1297,7 +1297,7 @@ mod tests {
         let fr = aida_core::FailureReason {
             phase: "build".into(),
             phase_index: 6,
-            kind: "build-failed".into(),
+            kind: "tool-exit".into(),
             detail: "cargo build exit 101".into(),
             recovery_hint: None,
             shelved_by: None,

@@ -4584,3 +4584,11 @@ Reviewed PR-1686 for `BUG-882`. The implementation satisfied the reviewer-role p
 Fix-forwarded the test by taking the shared env lock, temporarily clearing `AIDA_REVIEW_VERDICT_FILE`, and restoring the prior value after the role-only assertions.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib preflight_spec_status_tests -- --nocapture`; `cargo test -p aida-cli-lib queue_work_tests -- --nocapture`; `cargo test -p aida-cli-lib bug_511_review_lease_tests -- --nocapture`.
+
+## Session 2026-09-07 — STORY-974 typed auto-complete failure causes
+
+Picked up `STORY-974` from the implementer queue. The story required replacing ambiguous persisted auto-complete failure labels with a closed cause vocabulary, while keeping legacy `"failed"` event rows readable as `failed (untyped)`.
+
+Added typed shelve causes for reviewer request-changes/reject verdicts, CI red, tool exits, no verdict, no PR, watchdog, cache lock, environmental failures, and internal failures. Routed `SpecShelved` events, stored `FailureReason.kind`, telemetry, usage reports, drain status, findings, status JSON, watch output, and health distributions through the same cause/detail helpers. Updated `aida usage --auto-complete --failures` to show the cause and first detail line per row, changed pattern grouping to failure cause, and kept historical event parsing compatible.
+
+Verification: `cargo fmt --all -- --check`; targeted `cargo test -p aida-cli-lib` cases for telemetry, reviewer verdict causes, closed cause coverage, shelved inconclusive PR verification, failure-reason rendering, and lease warning behavior; `env -u AIDA_AUTO_COMPLETE cargo test -p aida-cli-lib --lib`. The full lib suite needed `AIDA_AUTO_COMPLETE` cleared because the pickup environment exports it for the orchestrated drain.

@@ -115,6 +115,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
                 // STORY-732: inline the orchestrator failure for machine consumers.
                 "failure_reason": req.failure_reason.as_ref().map(|fr| serde_json::json!({
                     "phase": fr.phase,
+                    "cause": crate::auto_complete_telemetry::failure_cause_label(Some(&fr.kind)),
                     "detail": fr.detail,
                     "hint": fr.recovery_hint,
                 })),

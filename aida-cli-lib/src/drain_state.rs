@@ -902,8 +902,29 @@ fn member_line_with_pacing(
         if !bits.is_empty() {
             line.push_str(&format!(" · {}", bits.join(" ")));
         }
+        if member.state == STATE_FAILED {
+            if let Some(summary) = failed_member_reason(project_root, &member.spec) {
+                line.push_str(&format!(" · {summary}"));
+            }
+        }
     }
     line
+}
+
+// trace:STORY-974 | ai:codex
+fn failed_member_reason(project_root: Option<&Path>, spec: &str) -> Option<String> {
+    let root = project_root?;
+    let store = crate::load_store_for_lookup(root)?;
+    let req = store.requirements.iter().find(|r| {
+        [r.agreed_id.as_deref(), r.spec_id.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|id| id.eq_ignore_ascii_case(spec))
+    })?;
+    let fr = req.failure_reason.as_ref()?;
+    let cause = crate::auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
+    let detail = crate::auto_complete_telemetry::failure_detail_first_line(Some(&fr.detail));
+    Some(format!("{cause} — {detail}"))
 }
 
 /// Render the human summary for a drain (`stale` adds the crashed-orchestrator
