@@ -8,8 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T03:51:18.981461636Z
-modified_at: 2026-09-07T04:21:25.055100766Z
+modified_at: 2026-09-07T04:21:51.115080020Z
 req_type: Bug
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a07a19-c885-7960-8fdd-a13ddfa8923b
+  created_at: 2026-09-07T04:21:51.115075822Z
+  created_by: joe
 execution_mode: drain
 implementation_info:
   implemented: true
