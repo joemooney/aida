@@ -67576,42 +67576,68 @@ fn guided_review_prompt(spec: &str) -> String {
     )
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GuidedReviewLaunchRequest {
+    role: Option<String>,
+    spec: Option<String>,
+    prompt: String,
+    name: Option<String>,
+    description: Option<String>,
+}
+
+fn guided_review_launch_request(spec: &str) -> GuidedReviewLaunchRequest {
+    GuidedReviewLaunchRequest {
+        role: Some("advisor".to_string()),
+        // A guided review shell is an advisor reviewing an already-held surface,
+        // not a new implementation claim. Keep the spec in the prompt/name only
+        // so `agent new` does not run `session_start` for a Done spec.
+        // trace:STORY-818 | ai:codex
+        spec: None,
+        prompt: guided_review_prompt(spec),
+        name: Some(format!("guided-review-{}", slugify(spec))),
+        description: Some(format!("guided review for {spec}")),
+    }
+}
+
 /// STORY-818: `aida human review <SPEC> --guided` — spawn an interactive
 /// advisor shell for review, using the existing `aida agent new` launch-context
-/// machinery instead of inventing a second session substrate.
+/// machinery instead of inventing a second session substrate. The launched
+/// agent deliberately has no `--spec` scope: review normally runs while the spec
+/// is Done, and a spec-scoped `agent new` means implementation lease/worktree
+/// semantics.
 // trace:STORY-818 | ai:codex
 pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         anyhow::bail!("guided review needs an interactive terminal");
     }
     let vendor = session::resolve_session_vendor();
-    let prompt = guided_review_prompt(spec);
+    let launch = guided_review_launch_request(spec);
     match vendor {
         session::HeadlessVendor::Claude => agent_new_claude(
-            Some("advisor".to_string()),
-            Some(spec.to_string()),
+            launch.role,
+            launch.spec,
             false,
             None,
             None,
             false,
             AgentContextOptions::new(true, false),
-            AgentPromptOptions::new(Some(prompt), false),
+            AgentPromptOptions::new(Some(launch.prompt), false),
             AgentDefaultFlagOptions::new(true, Vec::new()),
-            Some(format!("guided-review-{}", slugify(spec))),
-            Some(format!("guided review for {spec}")),
+            launch.name,
+            launch.description,
             false,
         ),
         session::HeadlessVendor::Codex => agent_new_codex(
-            Some("advisor".to_string()),
-            Some(spec.to_string()),
+            launch.role,
+            launch.spec,
             false,
             None,
             false,
             AgentContextOptions::new(true, false),
-            AgentPromptOptions::new(Some(prompt), false),
+            AgentPromptOptions::new(Some(launch.prompt), false),
             AgentDefaultFlagOptions::new(true, Vec::new()),
-            Some(format!("guided-review-{}", slugify(spec))),
-            Some(format!("guided review for {spec}")),
+            launch.name,
+            launch.description,
         ),
         session::HeadlessVendor::Agy => anyhow::bail!(
             "guided review does not run on agy; set the session vendor to claude or codex \

@@ -120,6 +120,61 @@ fn dry_launch_plan_creates_no_lease_or_worktree() {
 }
 
 #[test]
+fn guided_review_launch_carries_spec_only_in_prompt_metadata() {
+    let launch = guided_review_launch_request("STORY-818");
+
+    assert_eq!(launch.role.as_deref(), Some("advisor"));
+    assert!(
+        launch.spec.is_none(),
+        "guided review must not request spec-scoped session_start semantics"
+    );
+    assert_eq!(launch.name.as_deref(), Some("guided-review-story-818"));
+    assert_eq!(
+        launch.description.as_deref(),
+        Some("guided review for STORY-818")
+    );
+    assert!(launch.prompt.contains("aida show STORY-818"));
+    assert!(launch.prompt.contains("aida review STORY-818 --no-agent"));
+}
+
+#[test]
+fn guided_review_real_launch_plan_leaves_done_spec_and_leases_untouched() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+    let storage = Storage::new(root.join(".aida-store"));
+    let mut req = Requirement::new("guided review fixture".into(), String::new());
+    req.spec_id = Some("STORY-818".into());
+    req.status = RequirementStatus::Done;
+    let mut store = aida_core::models::RequirementsStore::new();
+    store.requirements = vec![req];
+    storage.save(&store).unwrap();
+
+    let launch = guided_review_launch_request("STORY-818");
+    let plan = prepare_agent_launch(root, launch.role, launch.spec, "codex", launch.name).unwrap();
+
+    assert_eq!(plan.role.as_deref(), Some("advisor"));
+    assert!(
+        plan.current_spec.is_none(),
+        "guided review advisor shell should not own the reviewed spec"
+    );
+    assert_eq!(plan.launch_cwd, root);
+    assert!(plan.lease_id.is_none());
+    assert!(
+        list_leases(root).is_empty(),
+        "guided review launch planning must not write a spec lease"
+    );
+    let after = storage.load().unwrap();
+    let status = after
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some("STORY-818"))
+        .map(|r| r.status.clone());
+    assert_eq!(status, Some(RequirementStatus::Done));
+}
+
+#[test]
 fn parses_agent_new_codex_flags() {
     let cli = Cli::try_parse_from([
         "aida",
