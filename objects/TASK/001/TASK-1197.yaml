@@ -3,12 +3,12 @@ spec_id: TASK-1197
 agreed_id: TASK-1197
 title: work-machine environment smoke for codex
 description: 'The residual 10-minute half of TASK-1182 after the 2026-09-06 home-testbed validation proved everything else: on the actual work machine, update aida, run aida init in the work repo (AGENTS.md block now injects per BUG-838), confirm the [agents] vendor pin is honored, run one aida-managed codex task end-to-end, and note anything environment-specific: proxy, work gitlab, employer codex build, Claude genuinely absent. Evidence goes on this task; findings become specs.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:27:47.533454113Z
-modified_at: 2026-09-07T02:27:54.658344708Z
+modified_at: 2026-09-07T02:28:08.728284217Z
 req_type: Task
 relationships:
 - rel_type: Child
