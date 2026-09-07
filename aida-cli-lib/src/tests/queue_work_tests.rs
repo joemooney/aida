@@ -515,6 +515,20 @@ fn spec_matches_covers_uuid_and_ids() {
     assert!(!spec_matches(&r, "BUG-99"));
 }
 
+#[test]
+fn queue_work_identity_preserves_node_qualified_spec_id() {
+    let r = req("TASK-1-127", Some("TASK-151"), RequirementType::Task);
+    assert!(spec_matches(&r, "TASK-1-127"));
+    assert!(spec_matches(&r, "TASK-151"));
+
+    let (scope, review_target) = derive_scope_from_req_id(&r);
+    assert_eq!(scope, "TASK-1-127");
+    assert_eq!(review_target, None);
+
+    let resolved = build_resolved_entry(entry(r.id, Some("implementer"), None), &r);
+    assert_eq!(resolved.spec_id, "TASK-1-127");
+}
+
 /// BUG-366: the "awaiting review" hint must be an unambiguous reviewer
 /// pickup, not a bare `aida queue work PR-N` that invites implementer-drain
 // flags the PR-N path can't resolve. trace:BUG-366 | ai:claude

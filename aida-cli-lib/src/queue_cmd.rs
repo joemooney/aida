@@ -6009,7 +6009,9 @@ pub(crate) struct QueueWorkEntry {
     /// The underlying queue entry (carries position, for_role,
     /// for_scope so the role tally and ordering work).
     pub(crate) queue: aida_core::QueueEntry,
-    /// Display SPEC-ID for the manifest (agreed_id → spec_id → "?").
+    /// Provenance SPEC-ID for the manifest (spec_id → agreed_id → "?").
+    /// Queue-work implementation surfaces must preserve node-qualified origin
+    /// ids until the merge gate intentionally promotes them.
     pub(crate) spec_id: String,
     /// Status at plan time, formatted as the manifest field expects
     /// ("Approved", "In Progress", …).
@@ -6566,9 +6568,9 @@ pub(crate) fn build_resolved_entry(
     req: &aida_core::Requirement,
 ) -> QueueWorkEntry {
     let spec_id = req
-        .agreed_id
+        .spec_id
         .clone()
-        .or_else(|| req.spec_id.clone())
+        .or_else(|| req.agreed_id.clone())
         .unwrap_or_else(|| "?".to_string());
     let status_at_plan = format!("{}", req.status);
     QueueWorkEntry {
@@ -6797,10 +6799,11 @@ pub(crate) fn derive_scope_from_req_id(
     // *display* clustering elsewhere (planned-cluster manifest, queue
     // grouping) — that is separate from the lease scope and unaffected.
     // trace:BUG-431 | ai:claude
+    // trace:BUG-888 | ai:codex
     let fallback = req
-        .agreed_id
+        .spec_id
         .clone()
-        .or_else(|| req.spec_id.clone())
+        .or_else(|| req.agreed_id.clone())
         .unwrap_or_else(|| "scope".to_string());
     let target = parse_review_scope(&fallback);
     (fallback, target)

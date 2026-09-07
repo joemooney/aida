@@ -98,28 +98,30 @@ pub fn valid_spec_id_format(spec_id: &str) -> bool {
 /// - "FEAT-3-1500" → ("FEAT", 1500)
 fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
     let parts: Vec<&str> = spec_id.split('-').collect();
-    match parts.len() {
-        // Centralized: TYPE-SEQ (e.g., "FR-042")
-        2 => {
-            let type_prefix = parts[0].to_uppercase();
-            let seq: u32 = parts[1]
-                .parse()
-                .with_context(|| format!("Invalid sequence in spec_id: {}", spec_id))?;
-            Ok((type_prefix, seq))
-        }
-        // Distributed: TYPE-NODEID-SEQ (e.g., "FR-7-042")
-        3 => {
-            let type_prefix = parts[0].to_uppercase();
-            let seq: u32 = parts[2]
-                .parse()
-                .with_context(|| format!("Invalid sequence in spec_id: {}", spec_id))?;
-            Ok((type_prefix, seq))
-        }
-        _ => anyhow::bail!(
+    if parts.len() < 2 {
+        anyhow::bail!(
             "Invalid spec_id format: {} (expected TYPE-SEQ or TYPE-NODE-SEQ)",
             spec_id
-        ),
+        );
     }
+    let type_prefix = parts[0].to_uppercase();
+    if type_prefix.is_empty() || !type_prefix.chars().all(|c| c.is_ascii_alphabetic()) {
+        anyhow::bail!(
+            "Invalid spec_id format: {} (expected TYPE-SEQ or TYPE-NODE-SEQ)",
+            spec_id
+        );
+    }
+    if parts.len() > 2 && parts[1..parts.len() - 1].iter().any(|p| p.is_empty()) {
+        anyhow::bail!(
+            "Invalid spec_id format: {} (expected TYPE-SEQ or TYPE-NODE-SEQ)",
+            spec_id
+        );
+    }
+    let seq_part = parts.last().copied().unwrap_or_default();
+    let seq: u32 = seq_part
+        .parse()
+        .with_context(|| format!("Invalid sequence in spec_id: {}", spec_id))?;
+    Ok((type_prefix, seq))
 }
 
 /// Write a single requirement to the object store.
@@ -433,6 +435,8 @@ mod tests {
     fn test_valid_spec_id_format() {
         assert!(valid_spec_id_format("STORY-1"));
         assert!(valid_spec_id_format("FR-7-42"));
+        assert!(valid_spec_id_format("TASK-abc-127"));
+        assert!(valid_spec_id_format("TASK-node-a-127"));
         assert!(valid_spec_id_format("story-1")); // case-insensitive
         assert!(!valid_spec_id_format("not-a-real-id"));
         assert!(!valid_spec_id_format("BADID"));
@@ -465,6 +469,12 @@ mod tests {
         assert_eq!(
             path,
             PathBuf::from("/repo/objects/FEAT/001/FEAT-3-1500.yaml")
+        );
+
+        let path = object_path(root, "TASK-node-a-127").unwrap();
+        assert_eq!(
+            path,
+            PathBuf::from("/repo/objects/TASK/000/TASK-NODE-A-127.yaml")
         );
     }
 
