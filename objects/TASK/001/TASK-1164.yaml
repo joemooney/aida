@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-20T03:00:33.202541626Z
-modified_at: 2026-09-04T05:10:59.070544616Z
+modified_at: 2026-09-07T01:58:11.325719764Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,5 +20,11 @@ comments:
   content: 'Partial live validation 2026-09-03 (advisor, real gitlab.joemooney.com): the STORE leg fan-out is verified live — aida db sync --push mirrored aida-store to gitlab via [store.sync] mirror_remotes automatically, and both hubs converged (7485fb9). Main was fast-forwarded manually (git push gitlab origin/main:main), so the CODE-leg fan-out path (TASK-1097 pre-push machinery) remains the unverified half of this spec.'
   created_at: 2026-09-04T05:10:59.070544616Z
   modified_at: 2026-09-04T05:10:59.070544616Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a07996-587d-79f2-8067-475f9d1fde17
+  author: joe
+  content: 'Live verification executed 2026-09-06 18:57-18:59 (advisor, operator-directed): ran aida remote mirror gitlab (idempotent, installed .git/hooks/pre-push), pushed throwaway branch task-1164-verify to origin — the pre-push hook fanned it to gitlab automatically (ls-remote confirmed ref 344f086b8 on gitlab). aida-store untouched by the code push. Store drift from the day''s writes cleared via db sync --push mirror leg. Final aida remote status: main + aida-store both in-sync on both hubs. Test refs deleted from origin, gitlab, and local. Both halves of the TASK-1097 machinery are now verified live (store leg 2026-09-03, code leg today).'
+  created_at: 2026-09-07T01:58:11.325719764Z
+  modified_at: 2026-09-07T01:58:11.325719764Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: operator
