@@ -76646,6 +76646,84 @@ fn ensure_implementer_branch_pushed(
     }
 }
 
+fn orchestrator_pr_title_and_body(commit_msg: &str) -> Result<(String, String)> {
+    // trace:BUG-893 | ai:codex
+    let title = pr_ship::derive_pr_title_from_commit(commit_msg);
+    if title.is_empty() {
+        anyhow::bail!("could not derive a non-empty PR title from the latest commit");
+    }
+    let commit_body = pr_ship::derive_pr_body_from_commit(commit_msg);
+    let note = "Opened by the AIDA orchestrator because the implementer completed with committed work but no open PR.";
+    let body = if commit_body.trim().is_empty() {
+        note.to_string()
+    } else {
+        format!("{note}\n\n{commit_body}")
+    };
+    Ok((title, body))
+}
+
+fn open_orchestrator_pr_for_implementer_worktree(
+    project_root: &std::path::Path,
+    worktree: &std::path::Path,
+    branch: &str,
+) -> Result<u64> {
+    // trace:BUG-893 | ai:codex
+    push_branch_from_implementer_worktree(worktree, branch)
+        .map_err(|e| anyhow::anyhow!("{}", e.reason))?;
+    let commit_msg_out = std::process::Command::new("git")
+        .current_dir(worktree)
+        .args(["log", "-1", "--format=%B"])
+        .output()
+        .context("could not invoke `git log` to derive orchestrator PR title/body")?;
+    if !commit_msg_out.status.success() {
+        anyhow::bail!(
+            "`git log -1 --format=%B` failed: {}",
+            String::from_utf8_lossy(&commit_msg_out.stderr).trim()
+        );
+    }
+    let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
+    let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
+    let change = crate::forge::forge_for(project_root)
+        .open_change(crate::forge::OpenChange {
+            branch: branch.to_string(),
+            base: crate::forge::default_branch_of(project_root),
+            title,
+            body,
+            draft: false,
+        })
+        .context("could not open orchestrator-created pull request")?;
+    if change.id == 0 {
+        anyhow::bail!(
+            "the orchestrator-created pull request opened but no number was found in its output: {}",
+            change.url
+        );
+    }
+    Ok(change.id)
+}
+
+fn try_open_orchestrator_pr_for_no_pr_worktree(
+    project_root: &std::path::Path,
+    worktree: &std::path::Path,
+    branch: &str,
+) -> Option<(u32, u64)> {
+    // trace:BUG-893 | ai:codex
+    let ahead = branch_commits_ahead_main(worktree, branch).unwrap_or(0);
+    if ahead == 0 {
+        return None;
+    }
+    match open_orchestrator_pr_for_implementer_worktree(project_root, worktree, branch) {
+        Ok(pr) => Some((ahead, pr)),
+        Err(e) => {
+            eprintln!(
+                "  {} could not auto-open a PR for the committed work \
+                 ({e:#}) — falling back to punt/fail",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            None
+        }
+    }
+}
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     /// BUG-770: the real driver already knows the project it is driving, so it
     /// hands the orchestrator that root rather than letting the escalation
@@ -77117,6 +77195,28 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     // Retry budget exhausted and still unreachable. The
                     // batch-vs-single shelve/pause decision is made upstream in
                     // `orchestrate_with_lifecycle_skip` from this Inconclusive.
+                    if let Some((ahead, pr)) = try_open_orchestrator_pr_for_no_pr_worktree(
+                        &self.project_root,
+                        &worktree_path,
+                        &branch,
+                    ) {
+                        if !self.json {
+                            eprintln!(
+                                "  {} implementer left {} commit(s) with no PR after PR lookup retries — opened PR-{} \
+                                 for it (BUG-893 recovery)",
+                                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                                ahead,
+                                pr
+                            );
+                        }
+                        self.pr_number = Some(pr as u32);
+                        break Some(OpenPrInfo {
+                            number: pr,
+                            title: String::new(),
+                            url: String::new(),
+                            head_branch: Some(branch.clone()),
+                        });
+                    }
                     return Ok(auto_complete::ImplementerOutcome::Inconclusive {
                         reason,
                         retry_hint: None,
@@ -77131,40 +77231,30 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
-                // BUG-459: substrate-as-bouncer for the "implementer committed
-                // its work but asked 'want me to push + open a PR?' instead of
-                // acting" headless no-op. The skill already forbids this, but a
-                // confident model still does it occasionally — so don't depend on
-                // model compliance: if the branch has real commits ahead of main,
-                // the work IS there and recoverable, so the ORCHESTRATOR opens the
-                // PR itself (reusing the forge-routed pr_ship_create_pr) rather
-                // than failing/punting. trace:BUG-459 | ai:claude
-                let ahead = branch_commits_ahead_main(&self.project_root, &branch).unwrap_or(0);
-                if ahead > 0 {
-                    match pr_ship_create_pr(&self.project_root, &branch) {
-                        Ok(pr) => {
-                            if !self.json {
-                                eprintln!(
-                                    "  {} implementer left {} commit(s) with no PR — opened PR-{} \
-                                     for it (BUG-459 recovery)",
-                                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                                    ahead,
-                                    pr
-                                );
-                            }
-                            self.pr_number = Some(pr as u32);
-                            return Ok(auto_complete::ImplementerOutcome::PrOpened);
-                        }
-                        Err(e) => {
-                            if !self.json {
-                                eprintln!(
-                                    "  {} could not auto-open a PR for the committed work \
-                                     ({e:#}) — falling back to punt/fail",
-                                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                                );
-                            }
-                        }
+                // BUG-893: substrate-as-bouncer for the "implementer committed
+                // work but exited without opening a PR" gap. The committed HEAD
+                // lives in the implementer worktree; the main orchestrator
+                // checkout often has no local copy of the branch, so a
+                // project-root ahead check reads as zero and leaves the later
+                // reviewer phase stuck at PR-0. Use the worktree as ground
+                // truth, push it, open the PR with the head commit subject, and
+                // continue into CI/review. trace:BUG-893 | ai:codex
+                if let Some((ahead, pr)) = try_open_orchestrator_pr_for_no_pr_worktree(
+                    &self.project_root,
+                    &worktree_path,
+                    &branch,
+                ) {
+                    if !self.json {
+                        eprintln!(
+                            "  {} implementer left {} commit(s) with no PR — opened PR-{} \
+                             for it (BUG-893 recovery)",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            ahead,
+                            pr
+                        );
                     }
+                    self.pr_number = Some(pr as u32);
+                    return Ok(auto_complete::ImplementerOutcome::PrOpened);
                 }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
                     return Ok(auto_complete::ImplementerOutcome::Punted { reason });

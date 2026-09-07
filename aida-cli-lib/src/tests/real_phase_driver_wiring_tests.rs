@@ -1,7 +1,8 @@
 use super::{
-    build_auto_punt_args, build_integrate_rebase_args, build_phase3_auto_rebase_args,
-    ensure_implementer_branch_pushed, find_orchestrated_lease, headless_log_is_zero_bytes,
-    list_leases, orchestrator_phase_child_env, RealPhaseDriver,
+    branch_commits_ahead_main, build_auto_punt_args, build_integrate_rebase_args,
+    build_phase3_auto_rebase_args, ensure_implementer_branch_pushed, find_orchestrated_lease,
+    headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
+    orchestrator_pr_title_and_body, RealPhaseDriver,
 };
 use crate::auto_complete::PhaseDriver;
 use std::process::Command;
@@ -226,6 +227,82 @@ fn phase2_push_guard_failure_leaves_worktree_intact_and_ahead() {
     assert!(err.reason.contains("could not push implementer branch"));
     assert!(worktree.exists());
     assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "1");
+}
+
+#[test]
+fn orchestrator_pr_body_names_orchestrator_opened_fallback() {
+    let (title, body) = orchestrator_pr_title_and_body(
+        "[AI:codex] fix(orchestrator): recover missing PR (BUG-893)\n\n\
+         Test plan:\n\
+         - cargo test -p aida-cli-lib real_phase_driver_wiring_tests",
+    )
+    .unwrap();
+
+    assert_eq!(
+        title,
+        "[AI:codex] fix(orchestrator): recover missing PR (BUG-893)"
+    );
+    assert!(
+        body.contains("Opened by the AIDA orchestrator"),
+        "body should make orchestrator authorship explicit: {body}"
+    );
+    assert!(
+        body.contains("Test plan:"),
+        "body should preserve the commit body beneath the orchestrator note: {body}"
+    );
+}
+
+#[test]
+fn phase1_no_pr_recovery_uses_implementer_worktree_branch_state() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    let implementer = tmp.path().join("implementer");
+
+    git(tmp.path(), &["init", "--bare", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&root, "file.txt", "base\n", "base");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+
+    git(
+        tmp.path(),
+        &["clone", "-q", remote.to_str().unwrap(), "implementer"],
+    );
+    git(
+        &implementer,
+        &["config", "user.email", "aida@example.invalid"],
+    );
+    git(&implementer, &["config", "user.name", "AIDA Test"]);
+    git(
+        &implementer,
+        &["checkout", "-q", "-b", "bug-893", "origin/main"],
+    );
+    write_commit(
+        &implementer,
+        "file.txt",
+        "base\nfix\n",
+        "[AI:codex] fix(orchestrator): recover missing PR (BUG-893)",
+    );
+
+    // The orchestrator's main checkout does not have the implementer branch,
+    // so the old root-based BUG-459 fallback could not see recoverable work.
+    // The BUG-893 path reads the implementer worktree instead, then pushes it
+    // before opening the orchestrator-owned PR. trace:BUG-893 | ai:codex
+    assert_eq!(branch_commits_ahead_main(&root, "bug-893"), None);
+    assert_eq!(branch_commits_ahead_main(&implementer, "bug-893"), Some(1));
+    ensure_implementer_branch_pushed(&implementer, "bug-893", true).unwrap();
+    assert_eq!(
+        git(&remote, &["rev-parse", "bug-893"]),
+        git(&implementer, &["rev-parse", "HEAD"])
+    );
 }
 
 #[test]

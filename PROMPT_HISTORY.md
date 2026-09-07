@@ -4640,3 +4640,11 @@ Picked up `STORY-975` after PR-1688 review requested changes. The review found t
 Moved the reviewer PR-resolution preflight inside the phase-3 retry loop. A missing or zero PR now records a `no-pr` transient retry and rechecks the reviewer phase until the retry budget is exhausted; only then does it route through the normal failure/shelve path with the attempt count in the failure detail. Added a regression test proving the pre-launch missing-PR path spends the retry budget without calling `run_reviewer` against PR-0.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib reviewer_phase_missing_pr_spends_transient_retry_budget_before_parking -- --nocapture`; `cargo test -p aida-cli-lib transient_retry -- --nocapture`. Dogfood evidence remains blocked in this worktree by an already-active single-spec `STORY-975` drain lock and an insufficient safe queue for a new three-spec repo drain.
+
+## Session 2026-09-07 — BUG-893 orchestrator-created missing PR recovery
+
+Picked up `BUG-893` from the implementer queue. The bug was that Codex implementers could commit and exit without opening a PR; the orchestrator's phase-1 PR lookup then either concluded no PR before phase 2's push guard ran, or exhausted empty-lookup retries when the branch was already on origin, leaving reviewer handoff stuck at no PR / PR-0.
+
+Moved the recovery to the implementer worktree, which is the checkout that actually owns the committed branch. When phase 1 has no PR but the worktree branch is ahead of the default branch, the orchestrator now pushes that branch, opens a forge-routed PR using the head commit subject as the title, prefixes the PR body with an explicit AIDA-orchestrator note, and proceeds into CI/review. The same fallback now runs both on a definitive no-PR result and after empty PR-lookup retry exhaustion. Added `// trace:BUG-893 | ai:codex` comments on the helper and recovery path.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib real_phase_driver_wiring_tests -- --nocapture`; `cargo test -p aida-cli-lib drain_reliability_wiring_tests -- --nocapture`; `cargo test -p aida-cli-lib bug_775_commits_ahead_tests -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
