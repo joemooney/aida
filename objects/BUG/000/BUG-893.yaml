@@ -3,11 +3,15 @@ spec_id: BUG-893
 agreed_id: BUG-893
 title: orchestrator opens the PR itself when the branch is pushed but no PR exists
 description: 'TASK-1198 validation is failing on exactly this gap: codex implementers reliably commit without opening a PR. BUG-878 auto-pushes the branch, BUG-879 correctly refuses PR-0, and STORY-975 retries once with the typed no-pr cause — but the retry cannot succeed because nothing ever creates the PR, so every codex spec parks at the reviewer preflight (TASK-7, 2 minutes, no-pr, attempt 2/2). Phase 2 or the phase-3 preflight must open the PR when the spec branch exists on origin with commits ahead of main and no open PR: title from the head commit subject which carries the trailer, body noting the orchestrator opened it, then proceed to review. The phase contract must not depend on vendor skill compliance. Acceptance: a pipeline whose implementer commits and pushes but never opens a PR proceeds through review and merge on an orchestrator-opened PR; regression test on the fallback; the 3-spec codex validation passes end-to-end after this.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T20:51:40.468354503Z
-modified_at: 2026-09-07T20:52:30.498425280Z
+modified_at: 2026-09-07T20:59:47.707638719Z
 req_type: Bug
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-07T20:59:47.707638719Z
+  implemented_by: joe
