@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:39.998154458Z
-modified_at: 2026-09-07T16:57:47.570711203Z
+modified_at: 2026-09-07T16:57:52.212959855Z
 req_type: Story
 tags:
 - drain
@@ -30,3 +30,4 @@ tags:
 - orchestrator
 - recommend:approve
 - risk:low
+execution_mode: drain
