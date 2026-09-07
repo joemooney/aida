@@ -362,25 +362,34 @@ impl HaltBreakdown {
     }
 }
 
-/// `true` when a `failure_kind` slug is a *shelvable* (park-and-continue) kind.
-/// Mirrors `auto_complete::FailureKind::is_shelvable` over the stable slugs so
-/// this module stays free of the orchestrator's internal types. trace:STORY-530
+/// `true` when a `failure_kind` cause is a *shelvable* (park-and-continue) kind.
+/// Accepts both STORY-974 causes and historical internal slugs so older
+/// telemetry rows keep classifying.
+// trace:STORY-974 | ai:codex
 pub fn failure_kind_is_shelvable(slug: &str) -> bool {
     matches!(
         slug,
-        "no-pr"
+        "verdict:request-changes"
+            | "verdict:reject"
+            | "no-pr"
             | "ci-red"
+            | "watchdog"
+            | "tool-exit"
+            | "environmental"
+            | "cache-locked"
             | "ci-timeout"
             | "no-verdict"
             | "pr-verification-inconclusive"
             | "no-progress-watchdog"
-            | "cache-locked"
             | "failed"
+            | "launch-no-output"
     )
 }
 
-/// `true` when a `failure_kind` slug is a *non-shelvable* (batch-halting)
-/// environment failure. trace:STORY-530
+/// `true` when a `failure_kind` cause is a *non-shelvable* (batch-halting)
+/// internal failure. Historical `spawn`/`missing-tool` rows stay classified
+/// as halting; new rows use `environmental` and are shelvable retry parks.
+// trace:STORY-974 | ai:codex
 pub fn failure_kind_is_halting(slug: &str) -> bool {
     matches!(slug, "spawn" | "missing-tool" | "internal")
 }
@@ -818,14 +827,20 @@ mod tests {
     #[test]
     fn shelvable_and_halting_slugs_are_disjoint_and_complete() {
         for s in [
+            "verdict:request-changes",
+            "verdict:reject",
             "no-pr",
             "ci-red",
+            "watchdog",
+            "tool-exit",
+            "environmental",
             "ci-timeout",
             "no-verdict",
             "pr-verification-inconclusive",
             "no-progress-watchdog",
             "cache-locked",
             "failed",
+            "launch-no-output",
         ] {
             assert!(failure_kind_is_shelvable(s), "{s} should be shelvable");
             assert!(!failure_kind_is_halting(s), "{s} should not be halting");

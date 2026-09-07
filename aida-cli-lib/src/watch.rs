@@ -322,9 +322,14 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             if *green { "CI green" } else { "CI red" }.to_string(),
         ),
         EventKind::PhaseDonePr { pr } => ("phase-done-pr", format!("PR #{} open", pr)),
-        EventKind::SpecShelved { phase, kind } => {
-            ("spec-shelved", format!("shelved at {} ({})", phase, kind))
-        }
+        EventKind::SpecShelved { phase, kind } => (
+            "spec-shelved",
+            format!(
+                "shelved at {} ({})",
+                phase,
+                crate::auto_complete_telemetry::failure_cause_label(Some(kind))
+            ),
+        ),
         EventKind::PuntFiled { .. } => {
             ("punt-filed", "design-fork at .aida/punts.jsonl".to_string())
         }

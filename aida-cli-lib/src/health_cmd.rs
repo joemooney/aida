@@ -12,7 +12,7 @@ use colored::Colorize;
 
 use aida_core::RequirementsStore;
 
-use crate::{auto_complete, auto_complete_telemetry, health_metrics, parse_days_arg};
+use crate::{auto_complete_telemetry, health_metrics, parse_days_arg};
 
 /// Convert a `DateTime<Utc>` to an ordinal calendar day.
 // trace:STORY-530
@@ -130,11 +130,9 @@ pub(crate) fn handle_health_command(
     if json_out {
         let phase_arr: Vec<serde_json::Value> = phase_hist
             .iter()
-            .map(|(phase, count)| {
+            .map(|(cause, count)| {
                 serde_json::json!({
-                    "phase": phase,
-                    "phase_slug": auto_complete::Phase::from_index(i32::from(*phase))
-                        .map(|p| p.slug()),
+                    "cause": cause,
                     "failures": count,
                 })
             })
@@ -189,11 +187,11 @@ pub(crate) fn handle_health_command(
         since_raw.cyan(),
     );
 
-    // Metric 1 — phase-failure distribution.
+    // Metric 1 — cause-failure distribution.
     println!();
     println!(
         "  {} ({} failed of {} drain runs)",
-        "Phase-failure distribution:".bold(),
+        "Failure-cause distribution:".bold(),
         drain_summary.failed,
         drain_summary.total,
     );
@@ -201,18 +199,9 @@ pub(crate) fn handle_health_command(
         println!("    {}", "no drain failures in the window".green());
     } else {
         let max = phase_hist.iter().map(|(_, c)| *c).max().unwrap_or(1);
-        for (phase, count) in &phase_hist {
-            let label = auto_complete::Phase::from_index(i32::from(*phase))
-                .map(|p| p.slug())
-                .unwrap_or("?");
+        for (cause, count) in &phase_hist {
             let width = ((*count * 20) / max).max(1);
-            println!(
-                "    phase {} {:<12} {} {}",
-                phase,
-                label,
-                "█".repeat(width).red(),
-                count,
-            );
+            println!("    {:<24} {} {}", cause, "█".repeat(width).red(), count,);
         }
     }
 

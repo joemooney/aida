@@ -402,6 +402,14 @@ pub(crate) enum FailureKind {
     /// Phase 3: the reviewer session wrote no verdict file, or an unreadable
     /// one — the review never produced a usable decision.
     NoVerdict,
+    /// Phase 3: the reviewer produced a RequestChanges verdict. This is a
+    /// typed shelve cause, not a crash.
+    // trace:STORY-974 | ai:codex
+    VerdictRequestChanges,
+    /// Phase 3: the reviewer produced a Rejected verdict. This is a typed
+    /// shelve cause, not a crash.
+    // trace:STORY-974 | ai:codex
+    VerdictReject,
     /// TASK-136: phase 1 ended *inconclusively* — the orchestrator could not
     /// confirm or deny a PR (a transient GH-API outage) even after the bounded
     /// `gh_verify_backoff_schedule` retry. In a *batch* drain this is shelved
@@ -437,26 +445,6 @@ pub(crate) enum FailureKind {
 }
 
 impl FailureKind {
-    /// Stable machine slug for `--json` failure events (failure-pattern
-    /// telemetry — TASK-266 refines hints from these). trace:BUG-218 | ai:claude
-    pub(crate) fn slug(self) -> &'static str {
-        match self {
-            Self::Spawn => "spawn",
-            Self::MissingTool => "missing-tool",
-            Self::Internal => "internal",
-            Self::NoPr => "no-pr",
-            Self::CiRed => "ci-red",
-            Self::CiTimeout => "ci-timeout",
-            Self::NoVerdict => "no-verdict",
-            Self::PrVerificationInconclusive => "pr-verification-inconclusive",
-            Self::Watchdog => "no-progress-watchdog",
-            Self::CacheLocked => "cache-locked",
-            // trace:BUG-826 | ai:codex
-            Self::LaunchNoOutput => "launch-no-output",
-            Self::Failed => "failed",
-        }
-    }
-
     /// EPIC-28: should an `--auto-complete` batch drain shelve a spec
     /// on this failure kind, or stop the batch entirely?
     ///
@@ -482,6 +470,8 @@ impl FailureKind {
                 | Self::CiRed
                 | Self::CiTimeout
                 | Self::NoVerdict
+                | Self::VerdictRequestChanges
+                | Self::VerdictReject
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
                 | Self::CacheLocked
@@ -489,6 +479,27 @@ impl FailureKind {
                 | Self::LaunchNoOutput
                 | Self::Failed
         )
+    }
+
+    /// STORY-974: closed public cause vocabulary for persisted shelvings and
+    /// operator-facing telemetry. Legacy `slug()` values stay available for
+    /// old dedupe tags/tests, but new FailureReason/SpecShelved rows use this.
+    pub(crate) fn cause_slug(self) -> &'static str {
+        match self {
+            Self::VerdictRequestChanges => "verdict:request-changes",
+            Self::VerdictReject => "verdict:reject",
+            Self::CiRed => "ci-red",
+            Self::NoVerdict => "no-verdict",
+            Self::NoPr => "no-pr",
+            Self::Watchdog | Self::CiTimeout => "watchdog",
+            Self::CacheLocked => "cache-locked",
+            Self::Internal => "internal",
+            Self::Spawn
+            | Self::MissingTool
+            | Self::PrVerificationInconclusive
+            | Self::LaunchNoOutput => "environmental",
+            Self::Failed => "tool-exit",
+        }
     }
 }
 
@@ -2155,7 +2166,7 @@ fn finish_inconclusive_shelved(
                 spec,
                 elapsed,
                 Some(phase.index()),
-                &[("kind", failure.kind.slug())],
+                &[("kind", failure.kind.cause_slug())],
             )
         );
     } else {
@@ -2372,7 +2383,7 @@ fn finish_failure(
                 Some(code),
                 &[
                     ("reason", failure.reason.as_str()),
-                    ("kind", failure.kind.slug()),
+                    ("kind", failure.kind.cause_slug()),
                     ("hint", hint.as_str()),
                 ],
             )
@@ -3191,10 +3202,15 @@ pub(crate) fn orchestrate_with_resume(
             }
             Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
                 durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-                let f = PhaseFailure::new(format!(
-                    "reviewer verdict is {} — not Approved",
-                    verdict.label()
-                ));
+                let kind = match verdict {
+                    Verdict::RequestChanges => FailureKind::VerdictRequestChanges,
+                    Verdict::Rejected => FailureKind::VerdictReject,
+                    Verdict::Approved => FailureKind::Failed,
+                };
+                let f = PhaseFailure::of(
+                    kind,
+                    format!("reviewer verdict is {} — not Approved", verdict.label()),
+                );
                 return resolve_phase_failure(
                     driver,
                     Phase::Reviewer,
@@ -5055,7 +5071,7 @@ mod tests {
             Ok(Some(aida_core::FailureReason {
                 phase: phase.slug().to_string(),
                 phase_index: phase.index() as u8,
-                kind: failure.kind.slug().to_string(),
+                kind: failure.kind.cause_slug().to_string(),
                 detail: failure.reason.clone(),
                 recovery_hint: Some(recovery_hint.to_string()),
                 shelved_by: None,
@@ -6095,8 +6111,8 @@ mod tests {
             .as_ref()
             .expect("a batch-mode inconclusive must shelve, not pause");
         assert_eq!(
-            fr.kind, "pr-verification-inconclusive",
-            "the shelve records the inconclusive-verify kind for triage"
+            fr.kind, "environmental",
+            "the shelve records the closed environmental cause for triage"
         );
         assert_eq!(result.failed_phase, Some(Phase::Implementer));
         assert_eq!(
@@ -7105,6 +7121,8 @@ mod tests {
             FailureKind::CiRed,
             FailureKind::CiTimeout,
             FailureKind::NoVerdict,
+            FailureKind::VerdictRequestChanges,
+            FailureKind::VerdictReject,
             FailureKind::Failed,
         ];
         for phase in [Phase::Reviewer, Phase::Merge, Phase::Pull, Phase::Build] {
@@ -7549,6 +7567,67 @@ mod tests {
             .expect("failure set")
             .reason
             .contains("not Approved"));
+    }
+
+    // trace:STORY-974 | ai:codex
+    #[test]
+    fn reviewer_verdict_failures_record_typed_causes() {
+        for (verdict, cause) in [
+            (Verdict::RequestChanges, "verdict:request-changes"),
+            (Verdict::Rejected, "verdict:reject"),
+        ] {
+            let mut driver = MockPhaseDriver::with_verdict(verdict);
+            let result = orchestrate(
+                &mut driver,
+                "TASK-247",
+                AutoCompleteVariant::Full,
+                false,
+                EscalateMode::Blocks,
+            );
+            assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+            assert_eq!(
+                result.failure.as_ref().map(|f| f.kind.cause_slug()),
+                Some(cause)
+            );
+        }
+    }
+
+    // trace:STORY-974 | ai:codex
+    #[test]
+    fn every_real_failure_kind_maps_to_closed_shelve_cause() {
+        let allowed = [
+            "verdict:request-changes",
+            "verdict:reject",
+            "ci-red",
+            "tool-exit",
+            "no-verdict",
+            "no-pr",
+            "watchdog",
+            "cache-locked",
+            "environmental",
+            "internal",
+        ];
+        for kind in [
+            FailureKind::Spawn,
+            FailureKind::MissingTool,
+            FailureKind::Internal,
+            FailureKind::NoPr,
+            FailureKind::CiRed,
+            FailureKind::CiTimeout,
+            FailureKind::NoVerdict,
+            FailureKind::VerdictRequestChanges,
+            FailureKind::VerdictReject,
+            FailureKind::PrVerificationInconclusive,
+            FailureKind::Watchdog,
+            FailureKind::CacheLocked,
+            FailureKind::LaunchNoOutput,
+            FailureKind::Failed,
+        ] {
+            assert!(
+                allowed.contains(&kind.cause_slug()),
+                "{kind:?} mapped outside the closed cause set"
+            );
+        }
     }
 
     // --- Batch drain (TASK-285) -------------------------------------------
@@ -9150,7 +9229,7 @@ mod tests {
             Ok(Some(aida_core::FailureReason {
                 phase: phase.slug().to_string(),
                 phase_index: phase.index() as u8,
-                kind: failure.kind.slug().to_string(),
+                kind: failure.kind.cause_slug().to_string(),
                 detail: failure.reason.clone(),
                 recovery_hint: Some(recovery_hint.to_string()),
                 shelved_by: None,

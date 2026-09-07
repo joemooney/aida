@@ -211,17 +211,41 @@ pub fn summarize(events: &[AutoCompleteEvent]) -> Summary {
     s
 }
 
-/// Count failures per phase, descending by count then ascending phase
-/// index. The signal for "which phases of the orchestrator break most
-/// often" — used by `aida usage --auto-complete --pattern`.
-pub fn failure_histogram(events: &[AutoCompleteEvent]) -> Vec<(u8, usize)> {
-    let mut counts: std::collections::HashMap<u8, usize> = std::collections::HashMap::new();
+/// Render a persisted failure kind as the public cause label. `failed` is the
+/// pre-STORY-974 legacy value; keep parsing it, but make the missing taxonomy
+/// visible to operators instead of pretending it was typed.
+// trace:STORY-974 | ai:codex
+pub fn failure_cause_label(kind: Option<&str>) -> String {
+    match kind {
+        Some("failed") => "failed (untyped)".to_string(),
+        Some(k) if !k.trim().is_empty() => k.to_string(),
+        _ => "unknown".to_string(),
+    }
+}
+
+/// First line of the persisted failure detail, compact for tabular views.
+// trace:STORY-974 | ai:codex
+pub fn failure_detail_first_line(message: Option<&str>) -> String {
+    message
+        .and_then(|m| m.lines().map(str::trim).find(|l| !l.is_empty()))
+        .unwrap_or("(no detail)")
+        .to_string()
+}
+
+/// Count failures per cause, descending by count then cause label. The signal
+/// for "which orchestrator failure causes occur most often" — used by
+/// `aida usage --auto-complete --pattern`.
+// trace:STORY-974 | ai:codex
+pub fn failure_histogram(events: &[AutoCompleteEvent]) -> Vec<(String, usize)> {
+    let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for ev in events {
-        if let Some(phase) = ev.failed_phase {
-            *counts.entry(phase).or_insert(0) += 1;
+        if ev.is_failure() {
+            *counts
+                .entry(failure_cause_label(ev.failure_kind.as_deref()))
+                .or_insert(0) += 1;
         }
     }
-    let mut rows: Vec<(u8, usize)> = counts.into_iter().collect();
+    let mut rows: Vec<(String, usize)> = counts.into_iter().collect();
     rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     rows
 }
@@ -311,23 +335,40 @@ mod tests {
     }
 
     #[test]
-    fn failure_histogram_ranks_phases_by_count() {
-        let events = vec![
+    fn failure_histogram_ranks_causes_by_count() {
+        let mut events = vec![
             ev("A", "failed", Some(2)),
             ev("B", "failed", Some(2)),
             ev("C", "failed", Some(1)),
             ev("D", "success", None),
         ];
+        events[2].failure_kind = Some("no-pr".to_string());
         let hist = failure_histogram(&events);
-        // phase 2 (×2) ranks above phase 1 (×1); successes are ignored.
-        assert_eq!(hist, vec![(2, 2), (1, 1)]);
+        // ci-red (x2) ranks above no-pr (x1); successes are ignored.
+        assert_eq!(
+            hist,
+            vec![("ci-red".to_string(), 2), ("no-pr".to_string(), 1)]
+        );
     }
 
     #[test]
-    fn failure_histogram_breaks_count_ties_by_phase_index() {
-        let events = vec![ev("A", "failed", Some(5)), ev("B", "failed", Some(3))];
-        // Equal counts → lower phase index first.
-        assert_eq!(failure_histogram(&events), vec![(3, 1), (5, 1)]);
+    fn failure_histogram_breaks_count_ties_by_cause_label() {
+        let mut events = vec![ev("A", "failed", Some(5)), ev("B", "failed", Some(3))];
+        events[0].failure_kind = Some("tool-exit".to_string());
+        events[1].failure_kind = Some("ci-red".to_string());
+        // Equal counts -> lexical cause order for stable output.
+        assert_eq!(
+            failure_histogram(&events),
+            vec![("ci-red".to_string(), 1), ("tool-exit".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn legacy_failed_kind_renders_as_untyped() {
+        assert_eq!(
+            failure_cause_label(Some("failed")),
+            "failed (untyped)".to_string()
+        );
     }
 
     fn far_cutoff() -> chrono::DateTime<chrono::Utc> {

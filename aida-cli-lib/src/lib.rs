@@ -4526,8 +4526,12 @@ fn handle_findings_command(
                         .unwrap_or("?");
                     match &r.failure_reason {
                         Some(fr) => {
-                            let prefix = format!("failure:{}", fr.phase);
-                            println!("  {:<20} {:<14} {}", prefix, did, fr.detail);
+                            let cause =
+                                auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
+                            let detail = auto_complete_telemetry::failure_detail_first_line(Some(
+                                &fr.detail,
+                            ));
+                            println!("  {:<20} {:<14} {}", cause, did, detail);
                             if let Some(hint) = &fr.recovery_hint {
                                 println!(
                                     "  {:<20} {:<14} {}",
@@ -48134,7 +48138,9 @@ fn terminal_why_text(status: aida_core::RequirementStatus, status_label: &str) -
 /// site) so the inlining is unit-testable without a store.
 // trace:STORY-732 | ai:claude
 fn failure_reason_lines(fr: &aida_core::FailureReason) -> Vec<String> {
-    let mut out = vec![format!("failure: {} — {}", fr.phase, fr.detail)];
+    let cause = auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
+    let detail = auto_complete_telemetry::failure_detail_first_line(Some(&fr.detail));
+    let mut out = vec![format!("failure: {} at {} — {}", cause, fr.phase, detail)];
     if let Some(hint) = fr.recovery_hint.as_deref() {
         out.push(format!(
             "{} hint: {hint}",
@@ -72810,7 +72816,10 @@ fn record_auto_complete_run(
         },
         variant: variant.slug().to_string(),
         failed_phase: result.failed_phase.map(|p| p.index() as u8),
-        failure_kind: result.failure.as_ref().map(|f| f.kind.slug().to_string()),
+        failure_kind: result
+            .failure
+            .as_ref()
+            .map(|f| f.kind.cause_slug().to_string()),
         failure_message: result.failure.as_ref().map(|f| f.reason.clone()),
         phase_durations,
         total_ms: result.total_ms as u64,
@@ -72880,7 +72889,7 @@ fn record_auto_complete_run(
     // privacy-floor-preserving, best-effort. trace:SPIKE-67 | ai:claude
     let outcome = rule_violation::DrainOutcome {
         failed_phase_slug: result.failed_phase.map(|p| p.slug()),
-        failure_kind: result.failure.as_ref().map(|f| f.kind.slug()),
+        failure_kind: result.failure.as_ref().map(|f| f.kind.cause_slug()),
         failure_message: result.failure.as_ref().map(|f| f.reason.as_str()),
         punt_reason: result.punt_reason.as_deref(),
     };
@@ -72916,7 +72925,7 @@ fn absorb_open_failure_bug(
         spec,
         phase.index() as u8,
         phase.slug(),
-        failure.kind.slug(),
+        failure.kind.cause_slug(),
         &completed_at.to_rfc3339(),
     ) {
         return Some(id);
@@ -72927,7 +72936,7 @@ fn absorb_open_failure_bug(
         &auto_complete_telemetry::read_events(),
         spec,
         phase.index() as u8,
-        failure.kind.slug(),
+        failure.kind.cause_slug(),
         cutoff,
     )?;
     open_auto_failure_bug_by_id(project_root, &candidate).map(|_| candidate)
@@ -73071,7 +73080,7 @@ fn draft_auto_complete_failure_bug(
     let title = format!("auto-complete failure: phase {phase_n} ({phase_name}) on {spec}");
     let tags = format!(
         "auto-complete,failure-{phase_n},auto-drafted,{phase_name},failure-kind:{}",
-        failure.kind.slug()
+        failure.kind.cause_slug()
     );
     let json_line = serde_json::to_string(event).unwrap_or_default();
     let durations = if event.phase_durations.is_empty() {
@@ -73107,7 +73116,7 @@ Once triaged and promoted, this BUG can itself be driven by the orchestrator: \
 `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes \
 operational.\n",
         reason = failure.reason,
-        kind = failure.kind.slug(),
+        kind = failure.kind.cause_slug(),
         latest_at = event.completed_at,
     );
 
@@ -78362,7 +78371,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             spec,
             phase.slug(),
             phase.index() as u8,
-            failure.kind.slug(),
+            failure.kind.cause_slug(),
             &failure.reason,
             recovery_hint,
         )
