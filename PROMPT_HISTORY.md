@@ -4656,3 +4656,11 @@ Picked up `BUG-895` from the implementer queue. The bug was a BUG-893 follow-up:
 Added a `PhaseDriver::recover_missing_review_pr` hook that the phase-3 reviewer preflight calls before constructing the `NoPr` failure. The real driver implements it by verifying `origin/<branch>` exists and is ahead of the origin default branch from the project root, deriving the PR title/body from the pushed branch head commit, opening the forge-routed PR, seeding `self.pr_number`, and continuing into the reviewer phase. Added `// trace:BUG-895 | ai:codex` comments on the hook, remote-branch comparison, PR opener, real driver recovery, and regression tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib reviewer_phase_recovers_missing_pr_before_launch`; `cargo test -p aida-cli-lib phase3_no_pr_recovery_uses_pushed_branch_after_worktree_teardown`; `cargo test -p aida-cli-lib real_phase_driver_wiring_tests`; `cargo test -p aida-cli-lib reviewer_phase_refuses_missing_pr_before_launch`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-07 — BUG-896 auto-open forge resolution
+
+Picked up `BUG-896` from the implementer queue. The bug was that the BUG-895 recovery could route auto-open through the forge-less pure-git provider, which returned `Ok(ChangeRef { id: 0, url: "" })`; downstream saw success even though no forge PR existed.
+
+Added an auto-open-specific forge resolver that prefers a recognized target repo `origin` host for real change creation, even when stale config says pure-git. Routed PR creation, queue recovery auto-open, single-branch cluster PR creation, and phase-3 orchestrator PR recovery through that resolver. Changed `PureGitForge::open_change` to return an explicit unsupported error for forge-less mode instead of synthetic success, and made recovery print the underlying auto-open failure. Added `// trace:BUG-896 | ai:codex` comments on the resolver and regression tests.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib open_change_resolution_prefers_recognized_origin_over_stale_pure_git_config`; `cargo test -p aida-cli-lib pure_git_ci_is_none_and_open_change_is_unsupported`; `cargo test -p aida-cli-lib recover_open_change_uses_github_origin_even_with_stale_pure_git_config`. Existing unrelated Rust warnings remain in the test output.
