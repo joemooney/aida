@@ -48673,5 +48673,49 @@ operations:
   timestamp: 2026-09-07T18:52:08.988499255Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4184
+- id: 01a07d36-b1d8-7590-b80a-649b38e7277e
+  target_id: 01a07d36-abef-7661-8cde-d21139202fd3
+  author: aida
+  node_id: '1'
+  lamport: 4185
+  timestamp: 2026-09-07T18:52:11.608520382Z
+  kind: !Create
+    title: 'auto-complete failure: phase 1 (implementer) on TASK-1198'
+    description: |
+      Auto-drafted by `aida queue work TASK-1198 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the implementer phase watchdog stopped the session — no commit, file-change, or session output for 10m — likely a degenerate session
+
+      Failure kind: `no-progress-watchdog`
+
+      ## Recovery hint shown to the user
+
+      The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework TASK-1198 --work`.
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-07T18:52:09.822670928+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 631520 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-1198","started_at":"2026-09-07T18:41:34.019084107+00:00","completed_at":"2026-09-07T18:52:09.822670928+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"no-progress-watchdog","failure_message":"the implementer phase watchdog stopped the session — no commit, file-change, or session output for 10m — likely a degenerate session","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":631520}],"total_ms":631520,"binary_sha":"3cedf3917"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4185
 node_id: '1'
