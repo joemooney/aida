@@ -1,0 +1,12 @@
+id: 01a0798b-cba5-7903-a393-cbe90791fc23
+spec_id: BUG-878
+agreed_id: BUG-878
+title: phase-2 session teardown proceeds with unpushed implementer commits — CI and review run on the stale head
+description: 'Observed 2026-09-06 18:45 (STORY-818 rework pipeline): the phase-1 implementer committed 74506bf9c on the PR branch in its worktree but never pushed; phase 2 deleted the lease and REMOVED THE WORKTREE anyway, then waited on CI for the PR''s OLD head (instant green) and phase 3''s reviewer crashed (exit 1) on the head/verdict mismatch. The commit survived only via the kept local branch, recovered by hand. Fix: before phase-2 teardown, if the session branch has commits ahead of its upstream (or no upstream), PUSH the branch (orchestrator-owned branch, safe) — or fail the phase loudly; never tear down and continue the pipeline on a head that does not include phase-1''s work. Acceptance: integration test where the implementer commits without pushing — phase 2 pushes and CI targets the new head; a push failure fails phase 2 with the branch and worktree left intact.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-07T01:46:39.909620358Z
+modified_at: 2026-09-07T01:46:39.909620358Z
+req_type: Bug

@@ -47754,5 +47754,17 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4125
+- id: 01a0798b-d153-7251-8549-b875b412e011
+  target_id: 01a0798b-cba5-7903-a393-cbe90791fc23
+  author: aida
+  node_id: '1'
+  lamport: 4126
+  timestamp: 2026-09-07T01:46:41.363731386Z
+  kind: !Create
+    title: phase-2 session teardown proceeds with unpushed implementer commits — CI and review run on the stale head
+    description: 'Observed 2026-09-06 18:45 (STORY-818 rework pipeline): the phase-1 implementer committed 74506bf9c on the PR branch in its worktree but never pushed; phase 2 deleted the lease and REMOVED THE WORKTREE anyway, then waited on CI for the PR''s OLD head (instant green) and phase 3''s reviewer crashed (exit 1) on the head/verdict mismatch. The commit survived only via the kept local branch, recovered by hand. Fix: before phase-2 teardown, if the session branch has commits ahead of its upstream (or no upstream), PUSH the branch (orchestrator-owned branch, safe) — or fail the phase loudly; never tear down and continue the pipeline on a head that does not include phase-1''s work. Acceptance: integration test where the implementer commits without pushing — phase 2 pushes and CI targets the new head; a push failure fails phase 2 with the branch and worktree left intact.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4126
 node_id: '1'
