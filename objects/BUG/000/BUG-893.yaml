@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T20:51:40.468354503Z
-modified_at: 2026-09-07T21:10:47.852738368Z
+modified_at: 2026-09-07T21:16:38.117027886Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -20,3 +20,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-07T20:59:47.707638719Z
   implemented_by: joe
+failure_reason:
+  phase: pull
+  phase_index: 5
+  kind: tool-exit
+  detail: '`aida pull` failed — the code or store leg did not advance (see the subprocess output above for the recovery hint) (attempt 2/2)'
+  recovery_hint: 'Classify the divergence: `aida rebase --dry-run --json`'
+  shelved_by: advisor
+  shelved_at: 2026-09-07T21:16:38.117027886Z
