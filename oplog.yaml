@@ -48092,5 +48092,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4151
+- id: 01a07a16-b1f7-77a2-97f4-a6ff760b6ff0
+  target_id: 01a07a16-ad96-71c0-aa12-018e5cb712ff
+  author: aida
+  node_id: '1'
+  lamport: 4152
+  timestamp: 2026-09-07T04:18:22.839138312Z
+  kind: !Create
+    title: reviewer-scoped queue work on a Done spec is refused by the implementer preflight
+    description: 'Found completing the codex testbed validation (2026-09-06): aida queue work PR-3 --role reviewer --no-human refused with spec TASK-4 is Done — work already shipped, refusing to start a new session. A Done spec with an open PR is THE normal review state — the refusal is implementer-shaped preflight applied to a reviewer-scoped launch. Same disease the PR-1679 review found in the guided path (fixed there via specless launch); the generic PR/reviewer launch path needs the equivalent: role reviewer (or PR scope) skips the shipped-work preflight and takes a review-shaped lease that never flips spec status. Acceptance: queue work PR-N --role reviewer on a Done-backed open PR launches the reviewer; the spec status and implementer leases are untouched; regression test beside the guided-launch tests.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4152
 node_id: '1'
