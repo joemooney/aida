@@ -8,8 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T01:18:43.423642416Z
-modified_at: 2026-09-07T02:12:58.000740349Z
+modified_at: 2026-09-07T02:47:31.699782145Z
 req_type: Bug
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a079c3-6e94-78a3-a8c8-b5073a9e9459
+  created_at: 2026-09-07T02:47:31.699777057Z
+  created_by: joe
 execution_mode: drain
 implementation_info:
   implemented: true
