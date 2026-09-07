@@ -1,4 +1,10 @@
 - user_id: joe
+  requirement_id: 01a0685f-14c7-7283-951d-4d2ac2b13970
+  position: 0
+  added_by: joe
+  added_at: 2026-09-07T01:40:20.119908376Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 019e31d1-687d-70d1-97f2-f02a19f093cc
   position: 1000
   added_by: joe
@@ -433,12 +439,6 @@
   note: auto-queued by `session end` (019e9171); covers 1 spec
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
-- user_id: joe
-  requirement_id: 01a0685f-14c7-7283-951d-4d2ac2b13970
-  position: 341000
-  added_by: joe
-  added_at: 2026-09-06T19:38:31.406942154Z
-  for_role: product
 - user_id: joe
   requirement_id: 01a07888-baeb-7393-a1a7-e0e7ba4ad8be
   position: 342000
