@@ -75132,6 +75132,10 @@ struct DrainTuning {
     /// Default 0 (off — red CI shelves immediately, the pre-TASK-975
     /// behaviour).
     ci_auto_fix: usize,
+    /// STORY-975: whole-phase retry budget for transient shelve causes.
+    /// Default 1 retry, clamped to 3.
+    // trace:STORY-975 | ai:codex
+    retry_transient: usize,
 }
 
 impl DrainTuning {
@@ -75158,11 +75162,17 @@ impl DrainTuning {
         let ci_auto_fix = env_usize("AIDA_CI_AUTO_FIX")
             .or(cfg.ci_auto_fix)
             .unwrap_or(0);
+        let retry_transient = auto_complete::clamp_transient_retry_budget(
+            env_usize("AIDA_RETRY_TRANSIENT")
+                .or(cfg.retry_transient)
+                .unwrap_or(1),
+        );
         Self {
             gh_verify_retries,
             no_progress: std::time::Duration::from_secs(no_progress_min.saturating_mul(60)),
             ceiling: std::time::Duration::from_secs(ceiling_min.saturating_mul(60)),
             ci_auto_fix,
+            retry_transient,
         }
     }
 }
@@ -75577,6 +75587,10 @@ struct DrainConfigToml {
     /// phase 2 may attempt on a red CI run before shelving. Also arms the
     /// phase-4 merge-conflict rebase when > 0. Absent/0 = off.
     ci_auto_fix: Option<usize>,
+    /// STORY-975: `[drain] retry_transient = N` — whole-phase retries for
+    /// transient typed shelve causes. Default 1, max 3.
+    // trace:STORY-975 | ai:codex
+    retry_transient: Option<usize>,
 }
 
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
@@ -75611,6 +75625,7 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 "phase_ceiling_minutes" => out.phase_ceiling_minutes = val.parse().ok(),
                 // trace:TASK-975 | ai:claude
                 "ci_auto_fix" => out.ci_auto_fix = val.parse().ok(),
+                "retry_transient" => out.retry_transient = val.parse().ok(),
                 _ => {}
             }
         }
@@ -78551,6 +78566,45 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     // trace:TASK-975 | ai:claude
     fn ci_fix_budget(&self) -> usize {
         self.drain_tuning.ci_auto_fix
+    }
+
+    // trace:STORY-975 | ai:codex
+    fn transient_retry_budget(&self) -> usize {
+        self.drain_tuning.retry_transient
+    }
+
+    // trace:STORY-975 | ai:codex
+    fn record_transient_retry(
+        &mut self,
+        spec: &str,
+        phase: auto_complete::Phase,
+        cause: &str,
+        attempt: u32,
+        max: u32,
+    ) {
+        let phase_label = format!("{} ({})", phase.index(), phase.slug());
+        drain_state::append_phase_retry(
+            &self.project_root,
+            spec,
+            &phase_label,
+            cause,
+            attempt,
+            max,
+        );
+        let (_, run_uuid) = drain_state::current_context(&self.project_root);
+        events::emit(
+            &self.project_root,
+            &events::Event::new(
+                Some(spec.to_string()),
+                run_uuid,
+                events::EventKind::SpecRetried {
+                    phase: phase.slug().to_string(),
+                    cause: cause.to_string(),
+                    attempt,
+                    max,
+                },
+            ),
+        );
     }
 
     /// TASK-975: one in-drain CI-fix cycle — spawn a headless fix session

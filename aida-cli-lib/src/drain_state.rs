@@ -174,6 +174,11 @@ pub(crate) struct DrainRetry {
     pub(crate) attempt: u32,
     /// Configured max attempts (so a reader can tell "1/3" from "1/5").
     pub(crate) max: u32,
+    /// STORY-975: typed cause for a whole-phase drain retry, e.g. `watchdog`.
+    /// Network subprocess retries predate this field and omit it.
+    // trace:STORY-975 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cause: Option<String>,
     /// Backoff before the next attempt, in milliseconds.
     pub(crate) backoff_ms: u64,
     /// First non-empty stderr line, trimmed to 180 chars.
@@ -601,12 +606,41 @@ impl crate::network_retry::RetrySink for DrainStateSink<'_> {
                 phase: self.phase.clone(),
                 attempt: ev.attempt,
                 max: ev.max,
+                cause: None,
                 backoff_ms: ev.backoff_ms,
                 stderr_snippet: ev.stderr_snippet.clone(),
                 at: chrono::Utc::now().to_rfc3339(),
             },
         );
     }
+}
+
+/// STORY-975: append a whole-phase retry to drain state. Kept separate from
+/// network retry sinks so transient spec retries can carry the typed cause and
+/// current attempt without pretending they are subprocess backoffs.
+// trace:STORY-975 | ai:codex
+pub(crate) fn append_phase_retry(
+    project_root: &Path,
+    spec: &str,
+    phase: &str,
+    cause: &str,
+    attempt: u32,
+    max: u32,
+) {
+    append_retry(
+        project_root,
+        DrainRetry {
+            label: "phase retry".to_string(),
+            spec: spec.to_string(),
+            phase: Some(phase.to_string()),
+            attempt,
+            max,
+            cause: Some(cause.to_string()),
+            backoff_ms: 0,
+            stderr_snippet: String::new(),
+            at: chrono::Utc::now().to_rfc3339(),
+        },
+    );
 }
 
 /// Record a member's terminal outcome — `completed` (its full lifecycle
@@ -884,6 +918,9 @@ fn member_line_with_pacing(
                 }
             }
         }
+        if let Some(retry) = latest_phase_retry_for_member(state, &member.spec) {
+            bits.push(format!("attempt {}/{}", retry.attempt, retry.max));
+        }
         if !bits.is_empty() {
             line.push_str(&format!(" · {}", bits.join(" · ")));
         }
@@ -909,6 +946,17 @@ fn member_line_with_pacing(
         }
     }
     line
+}
+
+// trace:STORY-975 | ai:codex
+fn latest_phase_retry_for_member<'a>(state: &'a DrainState, spec: &str) -> Option<&'a DrainRetry> {
+    let phase = state.current_phase.as_deref()?;
+    state.retries.iter().rev().find(|retry| {
+        retry.spec == spec
+            && retry.cause.is_some()
+            && retry.phase.as_deref() == Some(phase)
+            && retry.max > 1
+    })
 }
 
 // trace:STORY-974 | ai:codex
@@ -1437,6 +1485,34 @@ mod tests {
         assert!(read.zen);
         let member = read.members.iter().find(|m| m.spec == "STORY-285").unwrap();
         assert!(member.started_at.is_some());
+    }
+
+    // trace:STORY-975 | ai:codex
+    #[test]
+    fn render_human_shows_current_phase_retry_attempt() {
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("3 (reviewer)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:40:00+00:00".to_string());
+        if let Some(member) = state.members.iter_mut().find(|m| m.spec == "STORY-285") {
+            member.state = "in-phase-3".to_string();
+            member.started_at = Some("2026-05-18T23:35:00+00:00".to_string());
+        }
+        state.retries.push(DrainRetry {
+            label: "phase retry".to_string(),
+            spec: "STORY-285".to_string(),
+            phase: Some("3 (reviewer)".to_string()),
+            attempt: 2,
+            max: 2,
+            cause: Some("watchdog".to_string()),
+            backoff_ms: 0,
+            stderr_snippet: String::new(),
+            at: "2026-05-18T23:41:00+00:00".to_string(),
+        });
+
+        let rendered = render_human(&state, false);
+        assert!(rendered.contains("STORY-285"));
+        assert!(rendered.contains("attempt 2/2"));
     }
 
     // TASK-336: clear_run wipes the run-scoped fields so a stale child token

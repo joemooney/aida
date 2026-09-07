@@ -37,3 +37,7 @@ mirror_remotes = ["gitlab"]
 # lands) a `--vendor`/`--agent` flag on the drive command.
 [agents]
 vendor = "codex"
+
+[drain]
+# STORY-975: retry a transient phase failure once before parking NeedsAttention.
+retry_transient = 1

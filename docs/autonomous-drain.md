@@ -34,6 +34,27 @@ which role queue to read. If the selected queue is empty while sibling role
 queues hold work, AIDA names those queues and prints the exact rerun command.
 trace:BUG-795
 
+### Transient self-retries
+
+Before a phase failure parks a spec in `NeedsAttention`, the drain retries a
+closed set of transient causes once by default:
+
+```toml
+[drain]
+retry_transient = 1
+```
+
+The value is a retry budget, not total attempts, and is capped at `3`. Retried
+causes are `watchdog`, `no-verdict`, `no-pr`, `tool-exit`, and `cache-locked`.
+Non-transient decisions are never retried: `verdict:request-changes`,
+`verdict:reject`, `ci-red`, `environmental`, and `internal`.
+
+A retry re-enters only the failed phase. Reviewer retries do not rerun the
+implementer; an implementer retry repeats phase 1 against the same branch
+state. `aida drain status` shows the current retry as `attempt 2/2`, and the
+drain appends a `SpecRetried` event to `.aida/events.jsonl`.
+trace:STORY-975
+
 > **This serial engine is the vendor-agnostic drain.** `aida queue work
 > --auto-complete` drives one spec at a time and the **orchestrator** owns the
 > drive, so it runs under any vendor (Codex, Cursor, Amp, a bare `claude -p`

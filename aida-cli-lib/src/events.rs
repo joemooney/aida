@@ -83,6 +83,19 @@ pub enum EventKind {
         /// Failure kind, e.g. `ci-red`.
         kind: String,
     },
+    /// A transient phase failure spent retry budget and is being re-driven.
+    /// Actionable: an overnight watcher should know the drain recovered itself.
+    // trace:STORY-975 | ai:codex
+    SpecRetried {
+        /// Phase that is being retried, e.g. `reviewer`.
+        phase: String,
+        /// Typed transient failure cause, e.g. `watchdog`.
+        cause: String,
+        /// 1-based attempt now being run.
+        attempt: u32,
+        /// Maximum attempts for this phase, including the first try.
+        max: u32,
+    },
     /// A design-fork punt hit the cascade — the load-bearing case.
     /// **Actionable.**
     PuntFiled {
@@ -156,6 +169,7 @@ impl EventKind {
             EventKind::CiTerminal { .. }
             | EventKind::PhaseDonePr { .. }
             | EventKind::SpecShelved { .. }
+            | EventKind::SpecRetried { .. }
             | EventKind::PuntFiled { .. }
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }
