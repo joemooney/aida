@@ -48717,5 +48717,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4185
+- id: 01a07d38-d8b6-7730-a69e-5c28b384b8cb
+  target_id: 01a07d38-d4f3-7712-bea5-aa341383baab
+  author: aida
+  node_id: '1'
+  lamport: 4186
+  timestamp: 2026-09-07T18:54:32.630864436Z
+  kind: !Create
+    title: node-qualified spec ids (TASK-1-127) are mangled to a different id (TASK-151) by resolvers and branch/trailer derivation
+    description: 'Observed live (2026-09-07): spec TASK-1-127 (node-qualified pre-merge-gate id) was driven by the drain, which derived branch task-151 and PR title trailer (TASK-151) — a DIFFERENT id — and aida why TASK-1-127 answers about TASK-151 as well. One shared normalization is dropping/collapsing the node segment. Consequences: the merge trailer would auto-complete the wrong spec (or none), why answers lie, and any node-qualified id is unsafe on every derived surface. Fix the id parsing/normalization to treat TYPE-<node>-<n> as atomic; audit branch naming, trailer generation, why resolution, and queue matching; regression tests with node-qualified ids across those four surfaces. Until fixed, agreed short ids (aida db merge-gate) mask the issue on this repo but any fresh node writes hit it.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4186
 node_id: '1'
