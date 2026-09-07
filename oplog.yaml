@@ -48188,5 +48188,31 @@ operations:
   timestamp: 2026-09-07T05:01:53.755720232Z
   kind: !SetStatus
     status: Completed
-clock: 4158
+- id: 01a07a50-6307-7b62-8c19-71a6b9069ff0
+  target_id: 01a07a50-5e65-7b63-b23c-1d58dbb461e7
+  author: aida
+  node_id: '1'
+  lamport: 4159
+  timestamp: 2026-09-07T05:21:23.719418242Z
+  kind: !Create
+    title: 'Review PR-1686: [AI:codex] fix(queue): honor reviewer role in shipped-work preflight (BUG-882)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07a40`) for branch `bug-882`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1686>
+      - Branch: `bug-882` → `main`
+
+      ## Covers
+
+      - BUG-882
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1686` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4159
 node_id: '1'
