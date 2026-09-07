@@ -76701,6 +76701,116 @@ fn open_orchestrator_pr_for_implementer_worktree(
     Ok(change.id)
 }
 
+fn origin_branch_ref(branch: &str) -> String {
+    format!("origin/{branch}")
+}
+
+fn origin_default_ref_for_branch_recovery(project_root: &std::path::Path) -> Option<String> {
+    resolve_default_branch_ref(project_root).map(|r| {
+        if r.starts_with("origin/") {
+            r
+        } else {
+            format!("origin/{r}")
+        }
+    })
+}
+
+fn pushed_branch_commits_ahead_default(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Result<u32, auto_complete::PhaseFailure> {
+    // trace:BUG-895 | ai:codex
+    let branch_ref = origin_branch_ref(branch);
+    git_output_checked(
+        project_root,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{branch_ref}^{{commit}}"),
+        ],
+    )
+    .map_err(|e| {
+        auto_complete::PhaseFailure::new(format!(
+            "could not verify pushed branch `{branch_ref}` before phase-3 PR recovery: {e}"
+        ))
+    })?;
+    let default_ref = origin_default_ref_for_branch_recovery(project_root).ok_or_else(|| {
+        auto_complete::PhaseFailure::new(
+            "could not resolve origin default branch before phase-3 PR recovery",
+        )
+    })?;
+    git_output_checked(
+        project_root,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{default_ref}^{{commit}}"),
+        ],
+    )
+    .map_err(|e| {
+        auto_complete::PhaseFailure::new(format!(
+            "could not verify origin default branch `{default_ref}` before phase-3 PR recovery: {e}"
+        ))
+    })?;
+    let range = format!("{default_ref}..{branch_ref}");
+    let ahead = git_output_checked(project_root, &["rev-list", "--count", &range]).map_err(|e| {
+        auto_complete::PhaseFailure::new(format!(
+            "could not compare pushed branch `{branch_ref}` to `{default_ref}` before phase-3 PR recovery: {e}"
+        ))
+    })?;
+    parse_git_count(&ahead, "pushed-branch-ahead-default")
+}
+
+fn head_commit_message(project_root: &std::path::Path, rev: &str) -> Result<String> {
+    let commit_msg_out = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["log", "-1", "--format=%B", rev])
+        .output()
+        .context("could not invoke `git log` to derive orchestrator PR title/body")?;
+    if !commit_msg_out.status.success() {
+        anyhow::bail!(
+            "`git log -1 --format=%B {rev}` failed: {}",
+            String::from_utf8_lossy(&commit_msg_out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&commit_msg_out.stdout).to_string())
+}
+
+fn open_orchestrator_pr_for_pushed_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Result<u64> {
+    // BUG-895: phase 2 may have already pushed and removed the implementer
+    // worktree. Recover from origin/<branch> without trying to push again.
+    // trace:BUG-895 | ai:codex
+    let ahead = pushed_branch_commits_ahead_default(project_root, branch)
+        .map_err(|e| anyhow::anyhow!("{}", e.reason))?;
+    if ahead == 0 {
+        anyhow::bail!("pushed branch `origin/{branch}` has no commits ahead of origin default");
+    }
+    let branch_ref = origin_branch_ref(branch);
+    let commit_msg = head_commit_message(project_root, &branch_ref)?;
+    let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
+    let change = crate::forge::forge_for(project_root)
+        .open_change(crate::forge::OpenChange {
+            branch: branch.to_string(),
+            base: crate::forge::default_branch_of(project_root),
+            title,
+            body,
+            draft: false,
+        })
+        .context("could not open orchestrator-created pull request")?;
+    if change.id == 0 {
+        anyhow::bail!(
+            "the orchestrator-created pull request opened but no number was found in its output: {}",
+            change.url
+        );
+    }
+    Ok(change.id)
+}
+
 fn try_open_orchestrator_pr_for_no_pr_worktree(
     project_root: &std::path::Path,
     worktree: &std::path::Path,
@@ -76717,6 +76827,28 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
             eprintln!(
                 "  {} could not auto-open a PR for the committed work \
                  ({e:#}) — falling back to punt/fail",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+            None
+        }
+    }
+}
+
+fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<(u32, u64)> {
+    // trace:BUG-895 | ai:codex
+    let ahead = match pushed_branch_commits_ahead_default(project_root, branch) {
+        Ok(ahead) if ahead > 0 => ahead,
+        _ => return None,
+    };
+    match open_orchestrator_pr_for_pushed_branch(project_root, branch) {
+        Ok(pr) => Some((ahead, pr)),
+        Err(e) => {
+            eprintln!(
+                "  {} could not auto-open a PR for pushed branch `{branch}` \
+                 ({e:#}) — falling back to phase-3 NoPr",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow()
             );
             None
@@ -77266,6 +77398,28 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 ))
             }
         }
+    }
+
+    fn recover_missing_review_pr(&mut self) -> Option<u32> {
+        // By phase 3 the implementer worktree may already be torn down, but
+        // phase 2 pushed `self.branch` before teardown. Open from the pushed
+        // branch and seed the PR number so the reviewer preflight proceeds.
+        // trace:BUG-895 | ai:codex
+        let branch = self.branch.clone()?;
+        let (ahead, pr) =
+            try_open_orchestrator_pr_for_no_pr_pushed_branch(&self.project_root, &branch)?;
+        if !self.json {
+            eprintln!(
+                "  {} pushed branch `{}` is {} commit(s) ahead with no review PR — opened PR-{} \
+                 for it (BUG-895 recovery)",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                branch,
+                ahead,
+                pr
+            );
+        }
+        self.pr_number = Some(pr as u32);
+        self.pr_number
     }
 
     fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {

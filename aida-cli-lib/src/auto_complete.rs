@@ -1163,6 +1163,14 @@ pub(crate) trait PhaseDriver {
     fn review_pr_number(&self) -> Option<u32> {
         self.hint_context().pr_number.filter(|n| *n > 0)
     }
+    /// BUG-895: phase 3 gets one last chance to recover a missing review PR
+    /// after phase 2 has ended the implementer session. The default is
+    /// fail-closed; only a driver that can prove a pushed branch has
+    /// reviewable commits should return a positive PR number.
+    // trace:BUG-895 | ai:codex
+    fn recover_missing_review_pr(&mut self) -> Option<u32> {
+        None
+    }
     /// Phase-agnostic reality check (BUG-241). Before the orchestrator
     /// declares `phase` a failure, it asks the driver whether ground truth — a
     /// merged PR, a Completed spec — shows the work shipped anyway. Two real
@@ -3318,6 +3326,9 @@ pub(crate) fn orchestrate_with_resume(
         loop {
             // trace:STORY-975 | ai:codex
             if driver.review_pr_number().is_none() {
+                if driver.recover_missing_review_pr().is_some() {
+                    continue;
+                }
                 let f = PhaseFailure::of(
                     FailureKind::NoPr,
                     "no open PR resolved before the reviewer phase — refusing to launch reviewer for PR-0",
@@ -4990,6 +5001,9 @@ mod tests {
         transient_retry_budget: usize,
         /// STORY-975: retry records captured by `record_transient_retry`.
         transient_retry_events: Vec<(Phase, String, u32, u32)>,
+        /// BUG-895: phase-3 missing-PR recovery result.
+        // trace:BUG-895 | ai:codex
+        recover_review_pr: Option<u32>,
     }
 
     impl MockPhaseDriver {
@@ -5025,6 +5039,7 @@ mod tests {
                 reviewer_watchdog_failures: 0,
                 transient_retry_budget: 0,
                 transient_retry_events: Vec::new(),
+                recover_review_pr: None,
             }
         }
 
@@ -5136,6 +5151,14 @@ mod tests {
         // trace:BUG-879 | ai:codex
         fn with_pr_number(mut self, pr_number: Option<u32>) -> Self {
             self.pr_number = pr_number;
+            self
+        }
+
+        /// BUG-895: simulate the real driver opening a PR from the branch
+        /// phase 2 already pushed after the implementer worktree is gone.
+        // trace:BUG-895 | ai:codex
+        fn recovering_review_pr(mut self, pr_number: u32) -> Self {
+            self.recover_review_pr = Some(pr_number);
             self
         }
 
@@ -5314,6 +5337,11 @@ mod tests {
         }
         fn terminal_status(&mut self) -> Option<&'static str> {
             self.terminal
+        }
+        fn recover_missing_review_pr(&mut self) -> Option<u32> {
+            let pr = self.recover_review_pr.filter(|n| *n > 0)?;
+            self.pr_number = Some(pr);
+            Some(pr)
         }
         fn shipped_spec_id(&mut self) -> Option<String> {
             self.shipped_spec_id.clone()
@@ -7068,6 +7096,34 @@ mod tests {
             Some(FailureKind::NoPr)
         );
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+    }
+
+    #[test]
+    fn reviewer_phase_recovers_missing_pr_before_launch() {
+        let mut driver = MockPhaseDriver::all_ok()
+            .with_pr_number(None)
+            .recovering_review_pr(77);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(result.failed_phase, None);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+        assert_eq!(driver.pr_number, Some(77));
     }
 
     #[test]
