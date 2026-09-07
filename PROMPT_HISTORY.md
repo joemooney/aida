@@ -4592,3 +4592,11 @@ Picked up `STORY-974` from the implementer queue. The story required replacing a
 Added typed shelve causes for reviewer request-changes/reject verdicts, CI red, tool exits, no verdict, no PR, watchdog, cache lock, environmental failures, and internal failures. Routed `SpecShelved` events, stored `FailureReason.kind`, telemetry, usage reports, drain status, findings, status JSON, watch output, and health distributions through the same cause/detail helpers. Updated `aida usage --auto-complete --failures` to show the cause and first detail line per row, changed pattern grouping to failure cause, and kept historical event parsing compatible.
 
 Verification: `cargo fmt --all -- --check`; targeted `cargo test -p aida-cli-lib` cases for telemetry, reviewer verdict causes, closed cause coverage, shelved inconclusive PR verification, failure-reason rendering, and lease warning behavior; `env -u AIDA_AUTO_COMPLETE cargo test -p aida-cli-lib --lib`. The full lib suite needed `AIDA_AUTO_COMPLETE` cleared because the pickup environment exports it for the orchestrated drain.
+
+## Session 2026-09-07 — TASK-151 product-role add refusal investigation
+
+Picked up `TASK-151` from the implementer queue. The task reported five fast `aida add` exit-1 events from a product-role session on 2026-09-06 and asked to reproduce the argv before promoting to a bug.
+
+Investigated the `aida add --queue` path and found current `main` already has the request-route carve-out from `BUG-631`: draft work routed with `--for advisor` is triage intake, so it bypasses execution-dispatch advisor authority. Added an end-to-end regression in `aida-cli/tests/queue_work_dry_run.rs` that drives the real binary from `AIDA_SESSION_ROLE=product` with draft status, product provenance tags, `--queue`, and `--for advisor`. The command exits 0, files the requirement as Draft, and leaves it visible at `aida queue next --for advisor`.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli --test queue_work_dry_run product_role_add_queue_for_advisor_files_draft_request -- --nocapture`; `cargo test -p aida-cli-lib queue_at_filing -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
