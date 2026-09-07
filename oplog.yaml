@@ -48336,5 +48336,30 @@ operations:
   timestamp: 2026-09-07T05:46:27.562748229Z
   kind: !SetStatus
     status: Rejected
-clock: 4165
+- id: 01a07a90-c02e-7102-8498-470a73efb5d8
+  target_id: 01a07a90-b8de-71c3-8a91-b030e25c8a93
+  author: aida
+  node_id: '1'
+  lamport: 4166
+  timestamp: 2026-09-07T06:31:41.870380326Z
+  kind: !Create
+    title: Every drain shelve names a typed cause that a stranger can read
+    description: |-
+      ## Why
+      In the last 30 days the drain recorded 62 phase failures. 60 of them render in aida usage --auto-complete --failures as "phase 3 (reviewer) (no BUG drafted)" and in events.jsonl as kind "failed". The FailureReason already carries a detail string and a recovery_hint, but neither surface shows it, and the kind does not distinguish a reviewer RequestChanges verdict (a correct outcome) from a tool crash, a watchdog timeout, or a no-verdict exit. The operator can only tell by rereading the session log. A new user cannot tell at all. This is the single largest gap between "alpha the author trusts" and "beta someone else trusts" (assessment 2026-09-06).
+
+      ## Acceptance
+      - SpecShelved events and FailureReason.kind use a closed set of causes: verdict:request-changes, verdict:reject, ci-red, tool-exit (with exit code), no-verdict, no-pr, watchdog, cache-locked, environmental, internal. "failed" is no longer emitted by any real code path (mock/test helpers excepted).
+      - aida usage --auto-complete --failures prints the cause and the first line of detail per row instead of "(no BUG drafted)".
+      - aida findings list and aida drain status show the same cause + detail for every parked spec.
+      - aida usage --auto-complete --pattern groups by cause, not only by phase.
+      - Existing events.jsonl rows with kind "failed" still parse (read as legacy, rendered as "failed (untyped)").
+      - A unit test asserts each real FailureReason construction site (auto_complete.rs, punt.rs, lib.rs, watch.rs, events.rs) sets a typed cause.
+
+      ## Related
+      Depends-on for the self-retry story: retry policy keys off these causes.
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 4166
 node_id: '1'
