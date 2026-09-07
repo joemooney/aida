@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   Depends-on for the self-retry story: retry policy keys off these causes.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:39.998154458Z
-modified_at: 2026-09-07T17:23:59.762178606Z
+modified_at: 2026-09-07T17:42:20.633639155Z
 req_type: Story
 tags:
 - drain
@@ -35,8 +35,24 @@ relationships:
   target_id: 01a07ce5-bd50-7bf0-9111-d763b7ace010
   created_at: 2026-09-07T17:23:52.120572977Z
   created_by: joe
+history:
+- id: 01a07cf6-bdd2-7431-8c7e-bbc5a6f16861
+  author: aida-auto-bump
+  timestamp: 2026-09-07T17:42:20.370632163Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07cf6-bed9-7e61-b828-ea5c61f10077
+  timestamp: 2026-09-07T17:42:20.633635272Z
+  agent: aida
+  commit_sha: c073b74d1eaa1e587de5b68497492bc3b714d239
+  summary: Completed via merge c073b74d
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T17:23:59.762178606Z
   implemented_by: joe
+  completed_at: 2026-09-07T17:42:20.370510103Z
+  completion_sha: c073b74d1eaa1e587de5b68497492bc3b714d239
