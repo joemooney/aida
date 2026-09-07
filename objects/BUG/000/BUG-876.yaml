@@ -3,20 +3,36 @@ spec_id: BUG-876
 agreed_id: BUG-876
 title: human review loses the spec's open PR once the lease is released — claims 'never pushed' despite trailered commit and open PR
 description: 'Repro live (2026-09-06 18:17, STORY-818): with the implementing session''s lease HELD, aida human review STORY-818 correctly resolved ''Surface open PR-1679 on branch story-818''. After aida session end released the stale lease (branch kept, PR untouched), the same command resolved ''Surface built locally, never pushed (no commits reference this spec)'' — while origin/story-818 exists, commit a33d661e9 carries the (STORY-818) trailer in its subject, and PR #1679 is OPEN with green CI. The surface resolution is keying off the lease/worktree linkage; when it is gone the fallback commit/PR scan misses both the trailered branch commit and the open PR. Fix: resolution order forge-first — search open PRs whose head branch or commits reference the spec (gh pr list / branch-name convention), then local branch refs for the trailer, with the lease as an accelerator only; releasing a lease must never change the answer. Acceptance: fixture with a trailered commit on a pushed branch + open PR and NO lease resolves to the PR; lease-present and lease-absent runs produce identical surface lines; unit test on the resolution order.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T01:18:43.423642416Z
-modified_at: 2026-09-07T02:47:31.699782145Z
+modified_at: 2026-09-07T02:52:29.491567285Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a079c3-6e94-78a3-a8c8-b5073a9e9459
   created_at: 2026-09-07T02:47:31.699777057Z
   created_by: joe
+history:
+- id: 01a079c8-0fac-7f03-9068-ac5c82e62373
+  author: aida-auto-bump
+  timestamp: 2026-09-07T02:52:29.484881202Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a079c8-0fb3-7231-949f-81dd813a85ba
+  timestamp: 2026-09-07T02:52:29.491566150Z
+  agent: aida
+  commit_sha: 4e6b20e17179738553754b28a5d26298da3c1a03
+  summary: Completed via merge 4e6b20e1
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T02:12:58.000740349Z
   implemented_by: joe
+  completed_at: 2026-09-07T02:52:29.484767390Z
+  completion_sha: 4e6b20e17179738553754b28a5d26298da3c1a03
