@@ -1,0 +1,26 @@
+id: 01a07db5-7b5b-7613-b6f7-fc8b53474b02
+spec_id: STORY-983
+agreed_id: STORY-983
+title: 'Review PR-1693: [AI:codex] fix(orchestrator): open missing implementer PR (BUG-893)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a07da4`) for branch `bug-893`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1693>
+  - Branch: `bug-893` → `main`
+
+  ## Covers
+
+  - BUG-893
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1693` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-07T21:10:40.731148880Z
+modified_at: 2026-09-07T21:10:40.731148880Z
+req_type: Story
