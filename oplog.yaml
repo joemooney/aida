@@ -48146,5 +48146,31 @@ operations:
   timestamp: 2026-09-07T04:34:47.570497179Z
   kind: !SetStatus
     status: Completed
-clock: 4155
+- id: 01a07a30-9412-7a13-bdb1-b2c99db588a4
+  target_id: 01a07a30-9071-70d1-8b75-f6ff8757a16f
+  author: aida
+  node_id: '1'
+  lamport: 4156
+  timestamp: 2026-09-07T04:46:39.122838405Z
+  kind: !Create
+    title: 'Review PR-1685: [AI:codex] fix(queue): share forge-first from-pr resolution (BUG-881)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07a29`) for branch `bug-881`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1685>
+      - Branch: `bug-881` → `main`
+
+      ## Covers
+
+      - BUG-881
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1685` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4156
 node_id: '1'
