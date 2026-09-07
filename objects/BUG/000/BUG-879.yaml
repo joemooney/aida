@@ -3,12 +3,12 @@ spec_id: BUG-879
 agreed_id: BUG-879
 title: phase 3 fabricates PR-0 when the implementer never opened a PR — reviewer launches against a nonexistent PR
 description: 'Found by the codex testbed validation (2026-09-06, TASK-1182 phase 1): a codex phase-1 implementer committed locally but never pushed its branch or opened a PR. Phase 2 passed anyway, and phase 3 launched a reviewer against PR NUMBER ZERO, erroring ''PR-0 has no backing specs''. Sibling of BUG-878 (teardown must push unpushed commits): even with that fixed, a missing PR must be detected — phase 2 (or the phase-3 preflight) should verify an open PR exists for the spec''s branch and, when absent, either OPEN it (branch pushed + aida pr machinery, the orchestrator owns the branch) or park the spec with a clear ''no PR for branch <b>'' failure and hint. PR number 0 must never reach a reviewer launch. Also capture the vendor-parity note: the codex implementer skill pack completed code+commit but skipped the push/PR step the claude flow performs — the phase contract must not depend on vendor skill compliance. Acceptance: pipeline with an implementer that commits without pushing ends with either an auto-opened PR reviewed normally or a parked spec naming the missing-PR cause; a reviewer session can never spawn with pr_number == 0; regression test on the phase-2/3 PR-resolution guard.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:23:19.119125265Z
-modified_at: 2026-09-07T03:53:15.617264629Z
+modified_at: 2026-09-07T04:09:55.117814467Z
 req_type: Bug
 relationships:
 - rel_type: References
@@ -19,8 +19,25 @@ relationships:
   target_id: 01a079ff-6e2c-74d0-91d7-77ac8f4f958b
   created_at: 2026-09-07T03:53:03.169046056Z
   created_by: joe
+history:
+- id: 01a07a0e-f2a7-7150-bf0e-9ec9869ece9b
+  author: aida-auto-bump
+  timestamp: 2026-09-07T04:09:55.111384388Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07a0e-f2ad-72f3-90dd-f24d308124c7
+  timestamp: 2026-09-07T04:09:55.117813126Z
+  agent: aida
+  commit_sha: 075940c9ec120ac80ae5920fdf6f3a3d0a8b55bc
+  summary: 'PASS: reviewer phase now refuses missing or zero PR numbers before launch, with CI parser and orchestrator regression coverage.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T03:53:15.617264629Z
   implemented_by: joe
+  completed_at: 2026-09-07T04:09:55.111257697Z
+  completion_sha: 075940c9ec120ac80ae5920fdf6f3a3d0a8b55bc
