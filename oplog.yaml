@@ -48386,5 +48386,25 @@ operations:
     req_type: Story
     status: Draft
     priority: High
-clock: 4167
+- id: 01a07a90-e164-79e3-8d71-e5c4ccdcb567
+  target_id: 01a07a90-dd95-7e62-b932-05b078029e40
+  author: aida
+  node_id: '1'
+  lamport: 4168
+  timestamp: 2026-09-07T06:31:50.372942560Z
+  kind: !Create
+    title: Drain three specs end-to-end on a project that is not this repo, with zero manual relaunch
+    description: |-
+      ## Why
+      All drain evidence to date is from the aida repo itself. The global usage log for 2026-09-06 shows two drain attempts on a project with fresh ids (TASK-1, TASK-4); both failed at the implementer and reviewer phases. aida-hub has no burndown log. The claim "usable on other projects" is unproven until one such log exists.
+
+      ## Acceptance
+      - Pick a real non-aida project (aida-hub is the candidate). Approve and queue three small, decision-free specs.
+      - Run aida queue work --batch or aida burndown run with retry_transient at default once that ships; otherwise run as-is and record every manual relaunch.
+      - Result recorded as a comment on this task: number of runs launched by a human, specs merged, median first-touch to merge, and every shelve cause. Attach the burndown log path.
+      - Pass condition: three merges, zero human relaunches. If it fails, file one BUG per distinct cause and link them here; this task stays open until the pass condition is met on a rerun.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 4168
 node_id: '1'
