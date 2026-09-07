@@ -42,6 +42,7 @@ enum ContextPromptAnswer {
     Yes,
     No,
     Help,
+    AskAi,
     Empty,
     Invalid,
 }
@@ -51,16 +52,18 @@ fn parse_context_prompt_answer(raw: &str) -> ContextPromptAnswer {
         "y" | "yes" => ContextPromptAnswer::Yes,
         "n" | "no" => ContextPromptAnswer::No,
         "?" => ContextPromptAnswer::Help,
+        "a" | "ai" | "ask-ai" => ContextPromptAnswer::AskAi,
         "" => ContextPromptAnswer::Empty,
         _ => ContextPromptAnswer::Invalid,
     }
 }
 
-fn prompt_suffix(default: bool) -> &'static str {
-    if default {
-        "[Y/n/?]"
+fn prompt_suffix(default: bool, ask_ai: bool) -> String {
+    let base = if default { "Y/n/?" } else { "y/N/?" };
+    if ask_ai {
+        format!("[{base}/a]")
     } else {
-        "[y/N/?]"
+        format!("[{base}]")
     }
 }
 
@@ -73,7 +76,30 @@ pub(crate) fn confirm_with_context(
     let mut input = stdin.lock();
     let stdout = std::io::stdout();
     let mut output = stdout.lock();
-    confirm_with_context_io(question, default, card, &mut input, &mut output)
+    confirm_with_context_io(question, default, card, &mut input, &mut output, None)
+}
+
+pub(crate) fn confirm_with_context_and_ai<F>(
+    question: &str,
+    default: bool,
+    card: &ContextCard,
+    mut ask_ai: F,
+) -> Result<bool>
+where
+    F: FnMut(&mut dyn Write) -> Result<()>,
+{
+    let stdin = std::io::stdin();
+    let mut input = stdin.lock();
+    let stdout = std::io::stdout();
+    let mut output = stdout.lock();
+    confirm_with_context_io(
+        question,
+        default,
+        card,
+        &mut input,
+        &mut output,
+        Some(&mut ask_ai),
+    )
 }
 
 fn confirm_with_context_io<R: BufRead, W: Write>(
@@ -82,9 +108,15 @@ fn confirm_with_context_io<R: BufRead, W: Write>(
     card: &ContextCard,
     input: &mut R,
     output: &mut W,
+    mut ask_ai: Option<&mut dyn FnMut(&mut dyn Write) -> Result<()>>,
 ) -> Result<bool> {
     loop {
-        write!(output, "{} {} ", question, prompt_suffix(default))?;
+        write!(
+            output,
+            "{} {} ",
+            question,
+            prompt_suffix(default, ask_ai.is_some())
+        )?;
         output.flush()?;
 
         let mut answer = String::new();
@@ -96,8 +128,19 @@ fn confirm_with_context_io<R: BufRead, W: Write>(
             ContextPromptAnswer::Help => {
                 writeln!(output, "{}", card.render())?;
             }
+            ContextPromptAnswer::AskAi => match ask_ai.as_mut() {
+                Some(callback) => {
+                    callback(output)?;
+                    writeln!(output)?;
+                }
+                None => writeln!(output, "Please answer y, n, or ? for context.")?,
+            },
             ContextPromptAnswer::Invalid => {
-                writeln!(output, "Please answer y, n, or ? for context.")?;
+                if ask_ai.is_some() {
+                    writeln!(output, "Please answer y, n, ?, or a for Ask-AI.")?;
+                } else {
+                    writeln!(output, "Please answer y, n, or ? for context.")?;
+                }
             }
         }
     }
@@ -132,6 +175,7 @@ mod tests {
             &card(),
             &mut input,
             &mut output,
+            None,
         )
         .unwrap();
 
@@ -151,9 +195,15 @@ mod tests {
         let mut input = Cursor::new(b"\n".to_vec());
         let mut output = Vec::new();
 
-        let accepted =
-            confirm_with_context_io("Rebase PR-7 now?", true, &card(), &mut input, &mut output)
-                .unwrap();
+        let accepted = confirm_with_context_io(
+            "Rebase PR-7 now?",
+            true,
+            &card(),
+            &mut input,
+            &mut output,
+            None,
+        )
+        .unwrap();
 
         assert!(accepted);
         assert!(String::from_utf8(output).unwrap().contains("[Y/n/?]"));
@@ -170,12 +220,45 @@ mod tests {
             &card(),
             &mut input,
             &mut output,
+            None,
         )
         .unwrap();
 
         let rendered = String::from_utf8(output).unwrap();
         assert!(!accepted);
         assert!(rendered.contains("Please answer y, n, or ? for context."));
+        assert_eq!(
+            rendered.matches("Open a PR from `bug-814` first?").count(),
+            2
+        );
+    }
+
+    #[test]
+    fn ask_ai_callback_prints_and_reasks() {
+        let mut input = Cursor::new(b"a\nn\n".to_vec());
+        let mut output = Vec::new();
+        let mut called = false;
+        let mut ask = |out: &mut dyn Write| {
+            called = true;
+            writeln!(out, "AI says no")?;
+            Ok(())
+        };
+
+        let accepted = confirm_with_context_io(
+            "Open a PR from `bug-814` first?",
+            false,
+            &card(),
+            &mut input,
+            &mut output,
+            Some(&mut ask),
+        )
+        .unwrap();
+
+        let rendered = String::from_utf8(output).unwrap();
+        assert!(!accepted);
+        assert!(called);
+        assert!(rendered.contains("[y/N/?/a]"));
+        assert!(rendered.contains("AI says no"));
         assert_eq!(
             rendered.matches("Open a PR from `bug-814` first?").count(),
             2

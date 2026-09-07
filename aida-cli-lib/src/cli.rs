@@ -11129,6 +11129,11 @@ pub enum HumanCommand {
         /// Proceed even if the PR's base branch is stale.
         #[clap(long)]
         allow_stale_base: bool,
+        /// Launch an interactive advisor shell for a guided review instead of
+        /// running the inline review prompt.
+        // trace:STORY-818 | ai:codex
+        #[clap(long, short = 'g', conflicts_with_all = ["no_agent", "allow_stale_base"])]
+        guided: bool,
     },
 
     /// Trigger the human-audit reconcile pass at the advisor session.
@@ -12267,6 +12272,22 @@ mod tests {
                 }
                 other => panic!("expected human {word}, got {other:?}"),
             }
+        }
+    }
+
+    // trace:STORY-818 | ai:codex
+    #[test]
+    fn human_review_guided_short_flag_parses() {
+        let cli = Cli::try_parse_from(["aida", "human", "review", "TASK-123", "-g"]).unwrap();
+        match cli.command {
+            Command::Human {
+                command: Some(HumanCommand::Review { spec, guided, .. }),
+                ..
+            } => {
+                assert_eq!(spec, "TASK-123");
+                assert!(guided);
+            }
+            other => panic!("expected human review --guided, got {other:?}"),
         }
     }
 
