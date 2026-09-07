@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:07:28.227419728Z
-modified_at: 2026-09-07T02:17:11.336565143Z
+modified_at: 2026-09-07T02:24:53.919235196Z
 req_type: Task
 tags:
 - codex validation operator-action
@@ -50,4 +50,10 @@ comments:
   content: 'Rescoped (operator + advisor, 2026-09-06): the work machine is NOT needed as the primary testbed — [agents] vendor = codex (project-level, STORY-761 precedence chain) pins every headless spawn to codex in an isolated home project, and AIDA_AGENT_CMD can prove no claude exec occurs. Phase 1 (home, autonomous): throwaway project + vendor=codex + full --no-human=both drain lifecycle — running now. Phase 2 (work machine, residual): 10-minute smoke of environment specifics only — proxy, work GitLab remote, employer codex config, Claude-absent reality.'
   created_at: 2026-09-07T02:17:10.475708853Z
   modified_at: 2026-09-07T02:17:10.475708853Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a079ae-cc9f-7881-ab59-53f5be551fb2
+  author: joe
+  content: 'PHASE 1 (home codex testbed) EXECUTED 2026-09-06 19:10-19:30 — ~/ai/aida-codex-test (github.com/joemooney/aida-codex-test), [agents] vendor = codex committed. VERIFIED: STORY-780 bootstrap clean; codex exec spawned as the drain phase-1 implementer (no claude); codex implemented TASK-1 end-to-end in ~90s — correct code, unit tests, cargo test/fmt run, trace comment, (TASK-1) trailer, aida queue done; merge + aida pull auto-bumped Done → Completed; auto-failure findings self-swept. GAPS FILED: codex implementer skill skips push/PR-open (BUG-878 push half, BUG-879 PR-0 fabrication + phase contract); --from-pr could not resolve the open PR by spec (BUG-876 family); vendor pin must be COMMITTED (worktree-inherited config) — runbook note. PENDING: codex REVIEWER leg via pipeline (blocked on 876/879 fixes), and phase-2 work-machine environment smoke (proxy, work gitlab, claude-absent).'
+  created_at: 2026-09-07T02:24:53.919235196Z
+  modified_at: 2026-09-07T02:24:53.919235196Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
