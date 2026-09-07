@@ -48539,5 +48539,31 @@ operations:
   timestamp: 2026-09-07T17:42:21.486575883Z
   kind: !SetStatus
     status: Completed
-clock: 4179
+- id: 01a07d15-4523-7443-8fc8-a3167725240d
+  target_id: 01a07d15-410b-71c3-ae40-158bccfc8bea
+  author: aida
+  node_id: '1'
+  lamport: 4180
+  timestamp: 2026-09-07T18:15:41.091412350Z
+  kind: !Create
+    title: 'Review PR-1688: [AI:codex] feat(drain): retry transient phase failures (STORY-975)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07cf9`) for branch `story-975`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1688>
+      - Branch: `story-975` → `main`
+
+      ## Covers
+
+      - STORY-975
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1688` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4180
 node_id: '1'
