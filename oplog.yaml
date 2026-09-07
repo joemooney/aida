@@ -47984,5 +47984,31 @@ operations:
   timestamp: 2026-09-07T03:16:41.661150007Z
   kind: !SetStatus
     status: Completed
-clock: 4143
+- id: 01a079e9-bd43-7611-9d18-94c926e549ae
+  target_id: 01a079e9-b924-7492-8a6a-2372b0aa15d1
+  author: aida
+  node_id: '1'
+  lamport: 4144
+  timestamp: 2026-09-07T03:29:16.611527546Z
+  kind: !Create
+    title: 'Review PR-1682: [AI:codex] fix(orchestrator): push implementer branch before phase-2 teardown (BUG-878)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a079e1`) for branch `bug-878`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1682>
+      - Branch: `bug-878` → `main`
+
+      ## Covers
+
+      - BUG-878
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1682` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4144
 node_id: '1'
