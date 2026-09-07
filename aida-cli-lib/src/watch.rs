@@ -330,6 +330,19 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 crate::auto_complete_telemetry::failure_cause_label(Some(kind))
             ),
         ),
+        // trace:STORY-975 | ai:codex
+        EventKind::SpecRetried {
+            phase,
+            cause,
+            attempt,
+            max,
+        } => (
+            "spec-retried",
+            format!(
+                "retrying {} after {} (attempt {}/{})",
+                phase, cause, attempt, max
+            ),
+        ),
         EventKind::PuntFiled { .. } => {
             ("punt-filed", "design-fork at .aida/punts.jsonl".to_string())
         }

@@ -853,6 +853,33 @@ pub(crate) fn should_attempt_conflict_rebase(budget: usize, attempted: bool, rea
     budget > 0 && !attempted && is_merge_conflict_failure(reason)
 }
 
+/// STORY-975: closed transient cause set eligible for a bounded whole-phase
+/// retry before a spec is parked `NeedsAttention`.
+// trace:STORY-975 | ai:codex
+pub(crate) fn is_transient_retry_cause(cause: &str) -> bool {
+    matches!(
+        cause,
+        "watchdog" | "no-verdict" | "no-pr" | "tool-exit" | "cache-locked"
+    )
+}
+
+/// STORY-975: clamp `[drain] retry_transient` to the supported retry budget.
+/// The value is retries, not total attempts: default `1` means attempt `2/2`.
+// trace:STORY-975 | ai:codex
+pub(crate) fn clamp_transient_retry_budget(n: usize) -> usize {
+    n.min(3)
+}
+
+/// STORY-975: should this phase failure spend another transient retry?
+// trace:STORY-975 | ai:codex
+pub(crate) fn should_retry_transient_failure(
+    kind: FailureKind,
+    retries_used: usize,
+    retry_budget: usize,
+) -> bool {
+    retries_used < retry_budget && is_transient_retry_cause(kind.cause_slug())
+}
+
 /// The outcome of phase 3 — the reviewer session. The reviewer either
 /// reaches a [`Verdict`] (the normal path — `Approved` continues to merge,
 /// anything else stops the pipeline), or *escalates the merge decision to a
@@ -1300,6 +1327,26 @@ pub(crate) trait PhaseDriver {
     // trace:TASK-975 | ai:claude
     fn attempt_merge_conflict_rebase(&mut self, _failure: &PhaseFailure) -> bool {
         false
+    }
+
+    /// STORY-975: whole-phase transient retry budget from `[drain]
+    /// retry_transient`, clamped to 3. Default one retry.
+    // trace:STORY-975 | ai:codex
+    fn transient_retry_budget(&self) -> usize {
+        1
+    }
+
+    /// STORY-975: record that a transient phase failure is being retried.
+    /// Default no-op keeps pure/mock drivers file-free unless they opt in.
+    // trace:STORY-975 | ai:codex
+    fn record_transient_retry(
+        &mut self,
+        _spec: &str,
+        _phase: Phase,
+        _cause: &str,
+        _attempt: u32,
+        _max: u32,
+    ) {
     }
 }
 
@@ -2530,6 +2577,77 @@ fn resolve_phase_failure(
     }
 }
 
+/// STORY-975: central retry gate for transient phase failures. The caller owns
+/// re-running only the failed phase; this helper records state/event side
+/// effects and returns whether to continue the phase loop.
+// trace:STORY-975 | ai:codex
+fn maybe_retry_transient_failure(
+    driver: &mut dyn PhaseDriver,
+    phase: Phase,
+    spec: &str,
+    failure: &PhaseFailure,
+    retries_used: &mut usize,
+    json: bool,
+    start: &Instant,
+) -> bool {
+    let failure = failure.clone().reclassify_transient();
+    let budget = clamp_transient_retry_budget(driver.transient_retry_budget());
+    if !should_retry_transient_failure(failure.kind, *retries_used, budget) {
+        return false;
+    }
+    *retries_used += 1;
+    let attempt = (*retries_used + 1) as u32;
+    let max = (budget + 1) as u32;
+    let cause = failure.kind.cause_slug();
+    driver.record_transient_retry(spec, phase, cause, attempt, max);
+    if json {
+        let attempt_s = attempt.to_string();
+        let max_s = max.to_string();
+        println!(
+            "{}",
+            phase_event(
+                phase.slug(),
+                "retrying",
+                spec,
+                start.elapsed().as_millis(),
+                None,
+                &[
+                    ("kind", cause),
+                    ("attempt", attempt_s.as_str()),
+                    ("max", max_s.as_str()),
+                ],
+            )
+        );
+    } else {
+        eprintln!(
+            "  {} transient {} failure ({cause}); retrying phase {} attempt {attempt}/{max}",
+            glyph(crate::glyphs::Glyph::Info).cyan(),
+            phase.slug(),
+            phase.index(),
+        );
+    }
+    true
+}
+
+/// STORY-975: when retry budget is exhausted, the eventual NeedsAttention
+/// failure should carry the attempt count in its finding detail.
+// trace:STORY-975 | ai:codex
+fn failure_with_retry_attempt(
+    driver: &dyn PhaseDriver,
+    failure: &PhaseFailure,
+    retries_used: usize,
+) -> PhaseFailure {
+    let failure = failure.clone().reclassify_transient();
+    if retries_used == 0 || !is_transient_retry_cause(failure.kind.cause_slug()) {
+        return failure;
+    }
+    let max = clamp_transient_retry_budget(driver.transient_retry_budget()) + 1;
+    PhaseFailure::of(
+        failure.kind,
+        format!("{} (attempt {}/{})", failure.reason, retries_used + 1, max),
+    )
+}
+
 /// The result of routing a phase-1 punt through the advisor tier
 /// ([`resolve_punt_via_advisor`]). Either the drain *proceeds* — the advisor
 /// resolved the fork and the resumed implementer opened a PR, so phases 2-6
@@ -2980,97 +3098,113 @@ pub(crate) fn orchestrate_with_resume(
         // trace:STORY-276, STORY-306 | ai:claude
         emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
-        match driver.run_implementer() {
-            Err(f) => {
-                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                return resolve_phase_failure(
-                    driver,
-                    Phase::Implementer,
-                    spec,
-                    json,
-                    &start,
-                    &f,
-                    durations,
-                );
-            }
-            Ok(ImplementerOutcome::Punted { reason }) => {
-                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                match resolve_punt_via_advisor(
-                    driver,
-                    spec,
-                    json,
-                    &start,
-                    &durations,
-                    &reason,
-                    escalate_mode,
-                    batch,
-                ) {
-                    PuntFlow::Terminal(result) => return *result,
-                    // The advisor resolved the fork and the implementer resumed
-                    // with a PR — the pipeline continues to CI.
-                    PuntFlow::Proceed => {
-                        emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        let mut retries_used = 0usize;
+        loop {
+            match driver.run_implementer() {
+                Err(f) => {
+                    if maybe_retry_transient_failure(
+                        driver,
+                        Phase::Implementer,
+                        spec,
+                        &f,
+                        &mut retries_used,
+                        json,
+                        &start,
+                    ) {
+                        continue;
+                    }
+                    let f = failure_with_retry_attempt(driver, &f, retries_used);
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Implementer,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+                Ok(ImplementerOutcome::Punted { reason }) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    match resolve_punt_via_advisor(
+                        driver,
+                        spec,
+                        json,
+                        &start,
+                        &durations,
+                        &reason,
+                        escalate_mode,
+                        batch,
+                    ) {
+                        PuntFlow::Terminal(result) => return *result,
+                        // The advisor resolved the fork and the implementer resumed
+                        // with a PR — the pipeline continues to CI.
+                        PuntFlow::Proceed => {
+                            emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                        }
                     }
                 }
-            }
-            Ok(ImplementerOutcome::PrOpened) => {
-                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
-            }
-            // BUG-709: the implementer already merged its own PR (it ran the
-            // full ship itself). There is nothing left for phases 2-5 to do —
-            // the spec already auto-bumped on merge — so complete cleanly
-            // instead of shepherding a merged PR through CI/review/merge again.
-            // trace:BUG-709 | ai:claude
-            Ok(ImplementerOutcome::AlreadyMerged { pr_number }) => {
-                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                if !json {
-                    eprintln!(
-                        "  {} PR-{} already merged by the implementer — work shipped; \
+                Ok(ImplementerOutcome::PrOpened) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                }
+                // BUG-709: the implementer already merged its own PR (it ran the
+                // full ship itself). There is nothing left for phases 2-5 to do —
+                // the spec already auto-bumped on merge — so complete cleanly
+                // instead of shepherding a merged PR through CI/review/merge again.
+                // trace:BUG-709 | ai:claude
+                Ok(ImplementerOutcome::AlreadyMerged { pr_number }) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    if !json {
+                        eprintln!(
+                            "  {} PR-{} already merged by the implementer — work shipped; \
                          completing (skipping CI/review/merge/pull)",
-                        glyph(crate::glyphs::Glyph::Check).green(),
-                        pr_number,
+                            glyph(crate::glyphs::Glyph::Check).green(),
+                            pr_number,
+                        );
+                    }
+                    emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                    return finish_success(spec, spec, json, &start, durations);
+                }
+                // BUG-257 / BUG-266: the orchestrator could not determine whether a
+                // PR was opened — either a transient GH-API blip during the PR
+                // lookup (BUG-257) or a transient Anthropic-API outage that killed
+                // the headless `claude -p` mid-session (BUG-266). The pipeline halts
+                // cleanly — exit `0`, no `failed_phase` — and the spec is left in
+                // its current state for the next drain. Distinct from a punt (no
+                // design-fork was raised) and from a failure (nothing is broken).
+                // trace:BUG-257 BUG-266
+                Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    // TASK-136: in a batch drain, shelve-and-advance instead of pausing
+                    // the whole batch at this head; single-spec keeps the pause.
+                    if batch {
+                        return finish_inconclusive_shelved(
+                            driver, spec, json, &start, durations, &reason,
+                        );
+                    }
+                    return finish_inconclusive(
+                        spec,
+                        json,
+                        &start,
+                        durations,
+                        &reason,
+                        retry_hint.as_deref(),
                     );
                 }
-                emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
-                return finish_success(spec, spec, json, &start, durations);
-            }
-            // BUG-257 / BUG-266: the orchestrator could not determine whether a
-            // PR was opened — either a transient GH-API blip during the PR
-            // lookup (BUG-257) or a transient Anthropic-API outage that killed
-            // the headless `claude -p` mid-session (BUG-266). The pipeline halts
-            // cleanly — exit `0`, no `failed_phase` — and the spec is left in
-            // its current state for the next drain. Distinct from a punt (no
-            // design-fork was raised) and from a failure (nothing is broken).
-            // trace:BUG-257 BUG-266
-            Ok(ImplementerOutcome::Inconclusive { reason, retry_hint }) => {
-                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                // TASK-136: in a batch drain, shelve-and-advance instead of pausing
-                // the whole batch at this head; single-spec keeps the pause.
-                if batch {
-                    return finish_inconclusive_shelved(
-                        driver, spec, json, &start, durations, &reason,
-                    );
+                // BUG-250: the implementer deliberately held the PR (branch pushed, PR
+                // intentionally not opened, pending a manual gate). A clean non-failure
+                // stop — exit `0`, no `failed_phase` — distinct from a punt (no
+                // design-fork) and a failure (nothing broke). The drain halts at phase
+                // 1 with the correct "open the PR when your gate passes" hint.
+                // trace:BUG-250
+                Ok(ImplementerOutcome::Held { reason, branch }) => {
+                    durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    return finish_held(spec, json, &start, durations, reason.as_deref(), &branch);
                 }
-                return finish_inconclusive(
-                    spec,
-                    json,
-                    &start,
-                    durations,
-                    &reason,
-                    retry_hint.as_deref(),
-                );
             }
-            // BUG-250: the implementer deliberately held the PR (branch pushed, PR
-            // intentionally not opened, pending a manual gate). A clean non-failure
-            // stop — exit `0`, no `failed_phase` — distinct from a punt (no
-            // design-fork) and a failure (nothing broke). The drain halts at phase
-            // 1 with the correct "open the PR when your gate passes" hint.
-            // trace:BUG-250
-            Ok(ImplementerOutcome::Held { reason, branch }) => {
-                durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                return finish_held(spec, json, &start, durations, reason.as_deref(), &branch);
-            }
+            break;
         }
 
         // BUG-245: before running phases 2-6 on the PR, ask the driver whose
@@ -3119,6 +3253,7 @@ pub(crate) fn orchestrate_with_resume(
         // attempt; shelve stays the terminal fallback either way.
         // trace:TASK-975 | ai:claude
         let mut ci_fix_attempts = 0usize;
+        let mut retries_used = 0usize;
         loop {
             match driver.finish_ci() {
                 Ok(()) => break,
@@ -3133,6 +3268,18 @@ pub(crate) fn orchestrate_with_resume(
                             continue;
                         }
                     }
+                    if maybe_retry_transient_failure(
+                        driver,
+                        Phase::Ci,
+                        spec,
+                        &f,
+                        &mut retries_used,
+                        json,
+                        &start,
+                    ) {
+                        continue;
+                    }
+                    let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
                     return resolve_phase_failure(
                         driver,
@@ -3167,61 +3314,77 @@ pub(crate) fn orchestrate_with_resume(
     } else if driver.review_pr_number().is_some() {
         emit_start(Phase::Reviewer, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
-        match driver.run_reviewer() {
-            Err(f) => {
-                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-                return resolve_phase_failure(
-                    driver,
-                    Phase::Reviewer,
-                    spec,
-                    json,
-                    &start,
-                    &f,
-                    durations,
-                );
+        let mut retries_used = 0usize;
+        loop {
+            match driver.run_reviewer() {
+                Err(f) => {
+                    if maybe_retry_transient_failure(
+                        driver,
+                        Phase::Reviewer,
+                        spec,
+                        &f,
+                        &mut retries_used,
+                        json,
+                        &start,
+                    ) {
+                        continue;
+                    }
+                    let f = failure_with_retry_attempt(driver, &f, retries_used);
+                    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Reviewer,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+                // STORY-306: the reviewer escalated the merge decision to a human
+                // rather than auto-deciding it (uncertain zen provenance, an
+                // irreversible call). A clean stop, not a failure — exit `0`, no
+                // merge runs, the PR is left for a human. Distinct from a
+                // non-Approved verdict (which still fails the phase below) and from a
+                // crashed reviewer. trace:STORY-306 | ai:claude
+                Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
+                    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                    // trace:BUG-770 | ai:claude — the driver names the event root.
+                    let events_root = driver.events_root();
+                    return finish_escalated(
+                        spec,
+                        json,
+                        &start,
+                        durations,
+                        EscalationKind::MergeDecision,
+                        &reason,
+                        events_root.as_deref(),
+                    );
+                }
+                Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
+                    durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                    let kind = match verdict {
+                        Verdict::RequestChanges => FailureKind::VerdictRequestChanges,
+                        Verdict::Rejected => FailureKind::VerdictReject,
+                        Verdict::Approved => FailureKind::Failed,
+                    };
+                    let f = PhaseFailure::of(
+                        kind,
+                        format!("reviewer verdict is {} — not Approved", verdict.label()),
+                    );
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Reviewer,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+                Ok(ReviewerOutcome::Verdict(_)) => {}
             }
-            // STORY-306: the reviewer escalated the merge decision to a human
-            // rather than auto-deciding it (uncertain zen provenance, an
-            // irreversible call). A clean stop, not a failure — exit `0`, no
-            // merge runs, the PR is left for a human. Distinct from a
-            // non-Approved verdict (which still fails the phase below) and from a
-            // crashed reviewer. trace:STORY-306 | ai:claude
-            Ok(ReviewerOutcome::EscalatedToHuman { reason }) => {
-                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-                // trace:BUG-770 | ai:claude — the driver names the event root.
-                let events_root = driver.events_root();
-                return finish_escalated(
-                    spec,
-                    json,
-                    &start,
-                    durations,
-                    EscalationKind::MergeDecision,
-                    &reason,
-                    events_root.as_deref(),
-                );
-            }
-            Ok(ReviewerOutcome::Verdict(verdict)) if verdict != Verdict::Approved => {
-                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
-                let kind = match verdict {
-                    Verdict::RequestChanges => FailureKind::VerdictRequestChanges,
-                    Verdict::Rejected => FailureKind::VerdictReject,
-                    Verdict::Approved => FailureKind::Failed,
-                };
-                let f = PhaseFailure::of(
-                    kind,
-                    format!("reviewer verdict is {} — not Approved", verdict.label()),
-                );
-                return resolve_phase_failure(
-                    driver,
-                    Phase::Reviewer,
-                    spec,
-                    json,
-                    &start,
-                    &f,
-                    durations,
-                );
-            }
-            Ok(ReviewerOutcome::Verdict(_)) => {}
+            break;
         }
         durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
         emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
@@ -3280,6 +3443,7 @@ pub(crate) fn orchestrate_with_resume(
         // auto-rebase) and retries the merge exactly once before the failure
         // falls through to shelve. trace:TASK-975 | ai:claude
         let mut conflict_rebase_attempted = false;
+        let mut retries_used = 0usize;
         loop {
             match driver.merge() {
                 Ok(()) => break,
@@ -3295,6 +3459,18 @@ pub(crate) fn orchestrate_with_resume(
                             continue;
                         }
                     }
+                    if maybe_retry_transient_failure(
+                        driver,
+                        Phase::Merge,
+                        spec,
+                        &f,
+                        &mut retries_used,
+                        json,
+                        &start,
+                    ) {
+                        continue;
+                    }
+                    let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
                     return resolve_phase_failure(
                         driver,
@@ -3326,9 +3502,35 @@ pub(crate) fn orchestrate_with_resume(
     } else {
         emit_start(Phase::Pull, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
-        if let Err(f) = driver.pull() {
-            durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
-            return resolve_phase_failure(driver, Phase::Pull, spec, json, &start, &f, durations);
+        let mut retries_used = 0usize;
+        loop {
+            match driver.pull() {
+                Ok(()) => break,
+                Err(f) => {
+                    if maybe_retry_transient_failure(
+                        driver,
+                        Phase::Pull,
+                        spec,
+                        &f,
+                        &mut retries_used,
+                        json,
+                        &start,
+                    ) {
+                        continue;
+                    }
+                    let f = failure_with_retry_attempt(driver, &f, retries_used);
+                    durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Pull,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+            }
         }
         durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
         emit_done(Phase::Pull, spec, json, start.elapsed().as_millis());
@@ -3346,9 +3548,35 @@ pub(crate) fn orchestrate_with_resume(
     } else {
         emit_start(Phase::Build, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
-        if let Err(f) = driver.build() {
-            durations.push((Phase::Build, phase_start.elapsed().as_millis()));
-            return resolve_phase_failure(driver, Phase::Build, spec, json, &start, &f, durations);
+        let mut retries_used = 0usize;
+        loop {
+            match driver.build() {
+                Ok(()) => break,
+                Err(f) => {
+                    if maybe_retry_transient_failure(
+                        driver,
+                        Phase::Build,
+                        spec,
+                        &f,
+                        &mut retries_used,
+                        json,
+                        &start,
+                    ) {
+                        continue;
+                    }
+                    let f = failure_with_retry_attempt(driver, &f, retries_used);
+                    durations.push((Phase::Build, phase_start.elapsed().as_millis()));
+                    return resolve_phase_failure(
+                        driver,
+                        Phase::Build,
+                        spec,
+                        json,
+                        &start,
+                        &f,
+                        durations,
+                    );
+                }
+            }
         }
         durations.push((Phase::Build, phase_start.elapsed().as_millis()));
         emit_done(Phase::Build, spec, json, start.elapsed().as_millis());
@@ -4732,6 +4960,13 @@ mod tests {
         /// must fail before `run_reviewer` is called.
         // trace:BUG-879 | ai:codex
         pr_number: Option<u32>,
+        /// STORY-975: mock reviewer failures that classify as watchdog before
+        /// succeeding.
+        reviewer_watchdog_failures: usize,
+        /// STORY-975: whole-phase transient retry budget returned by the mock.
+        transient_retry_budget: usize,
+        /// STORY-975: retry records captured by `record_transient_retry`.
+        transient_retry_events: Vec<(Phase, String, u32, u32)>,
     }
 
     impl MockPhaseDriver {
@@ -4764,6 +4999,9 @@ mod tests {
                 conflict_rebase_calls: 0,
                 merge_hold: None,
                 pr_number: Some(46),
+                reviewer_watchdog_failures: 0,
+                transient_retry_budget: 0,
+                transient_retry_events: Vec::new(),
             }
         }
 
@@ -4876,6 +5114,15 @@ mod tests {
         fn with_pr_number(mut self, pr_number: Option<u32>) -> Self {
             self.pr_number = pr_number;
             self
+        }
+
+        // trace:STORY-975 | ai:codex
+        fn reviewer_watchdog_then_succeeds(failures: usize) -> Self {
+            Self {
+                reviewer_watchdog_failures: failures,
+                transient_retry_budget: 1,
+                ..Self::base()
+            }
         }
 
         /// STORY-306: make `run_reviewer` escalate the merge decision —
@@ -4994,6 +5241,13 @@ mod tests {
                 "BUG-879: reviewer must never launch without a positive PR number",
             );
             self.record(Phase::Reviewer)?;
+            if self.reviewer_watchdog_failures > 0 {
+                self.reviewer_watchdog_failures -= 1;
+                return Err(PhaseFailure::of(
+                    FailureKind::Watchdog,
+                    "the reviewer phase watchdog stopped the session",
+                ));
+            }
             match &self.reviewer_escalates {
                 Some(reason) => Ok(ReviewerOutcome::EscalatedToHuman {
                     reason: reason.clone(),
@@ -5094,6 +5348,20 @@ mod tests {
         fn attempt_merge_conflict_rebase(&mut self, _failure: &PhaseFailure) -> bool {
             self.conflict_rebase_calls += 1;
             self.conflict_rebase_ok
+        }
+        fn transient_retry_budget(&self) -> usize {
+            self.transient_retry_budget
+        }
+        fn record_transient_retry(
+            &mut self,
+            _spec: &str,
+            phase: Phase,
+            cause: &str,
+            attempt: u32,
+            max: u32,
+        ) {
+            self.transient_retry_events
+                .push((phase, cause.to_string(), attempt, max));
         }
     }
 
@@ -5274,6 +5542,113 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    // --- STORY-975: transient whole-phase self-retry ----------------------
+
+    #[test]
+    fn transient_retry_policy_is_closed_and_bounded() {
+        for cause in [
+            "watchdog",
+            "no-verdict",
+            "no-pr",
+            "tool-exit",
+            "cache-locked",
+        ] {
+            assert!(is_transient_retry_cause(cause), "{cause}");
+        }
+        for cause in [
+            "verdict:request-changes",
+            "verdict:reject",
+            "ci-red",
+            "environmental",
+            "internal",
+        ] {
+            assert!(!is_transient_retry_cause(cause), "{cause}");
+        }
+        assert_eq!(clamp_transient_retry_budget(0), 0);
+        assert_eq!(clamp_transient_retry_budget(1), 1);
+        assert_eq!(clamp_transient_retry_budget(99), 3);
+        assert!(should_retry_transient_failure(FailureKind::Watchdog, 0, 1));
+        assert!(!should_retry_transient_failure(FailureKind::Watchdog, 1, 1));
+        assert!(!should_retry_transient_failure(
+            FailureKind::VerdictRequestChanges,
+            0,
+            1
+        ));
+    }
+
+    #[test]
+    fn orchestrate_retries_watchdog_reviewer_once_then_ships() {
+        let mut driver = MockPhaseDriver::reviewer_watchdog_then_succeeds(1);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.exit_code, 0);
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Ci,
+                Phase::Reviewer,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
+        assert_eq!(
+            driver.transient_retry_events,
+            vec![(Phase::Reviewer, "watchdog".to_string(), 2, 2)]
+        );
+    }
+
+    #[test]
+    fn orchestrate_does_not_retry_request_changes_verdict() {
+        let mut driver = MockPhaseDriver::with_verdict(Verdict::RequestChanges);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::VerdictRequestChanges)
+        );
+        assert_eq!(
+            driver.calls,
+            vec![Phase::Implementer, Phase::Ci, Phase::Reviewer]
+        );
+        assert!(driver.transient_retry_events.is_empty());
+    }
+
+    #[test]
+    fn exhausted_transient_retry_carries_attempt_count_in_failure() {
+        let mut driver = MockPhaseDriver::reviewer_watchdog_then_succeeds(2);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        let failure = result.failure.as_ref().expect("failure recorded");
+        assert_eq!(failure.kind, FailureKind::Watchdog);
+        assert!(failure.reason.contains("attempt 2/2"), "{}", failure.reason);
+        let shelved = result.shelved_reason.as_ref().expect("shelved");
+        assert!(shelved.detail.contains("attempt 2/2"), "{}", shelved.detail);
     }
 
     // --- TASK-975: CI auto-fix loop + in-drain merge-conflict rebase -------
@@ -9215,6 +9590,10 @@ mod tests {
         }
         fn mark_implementer_lease_escalated(&mut self) {
             self.mark_escalated_calls += 1;
+        }
+        // trace:STORY-975 | ai:codex
+        fn transient_retry_budget(&self) -> usize {
+            0
         }
         fn shelve_on_failure(
             &mut self,
