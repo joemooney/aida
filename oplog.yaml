@@ -47646,5 +47646,17 @@ operations:
   timestamp: 2026-09-07T01:22:39.284278532Z
   kind: !SetStatus
     status: In Progress
-clock: 4121
+- id: 01a07985-eb23-73d2-8888-56e33b07ab2b
+  target_id: 01a07985-e58a-7bd2-916b-8ad4c7ebe08c
+  author: aida
+  node_id: '1'
+  lamport: 4122
+  timestamp: 2026-09-07T01:40:14.755180138Z
+  kind: !Create
+    title: one-shot Ask-AI arm should run with a read-only tool posture
+    description: 'PR-1679 reviewer follow-up (non-blocking, 2026-09-06): the STORY-818 one-shot Ask-AI call inherits the compete adapter''s bypass-permissions argv while its prompt says ''do not run tools''. Give that arm a read-only tool posture (plan/readonly permission mode or vendor equivalent) so the judgment call cannot mutate anything even if the prompt is ignored. Acceptance: the ask-ai argv for each vendor carries the read-only/tool-restricted flags; unit test on the argv builder.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 4122
 node_id: '1'
