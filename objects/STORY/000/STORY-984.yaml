@@ -1,0 +1,26 @@
+id: 01a07dd1-438b-71d1-bf39-568817ce1f42
+spec_id: STORY-984
+agreed_id: STORY-984
+title: 'Review PR-1694: [AI:codex] fix(orchestrator): recover phase-3 missing PR from pushed branch (BUG-895)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a07dc2`) for branch `bug-895`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1694>
+  - Branch: `bug-895` → `main`
+
+  ## Covers
+
+  - BUG-895
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1694` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-07T21:41:01.451303838Z
+modified_at: 2026-09-07T21:41:01.451303838Z
+req_type: Story
