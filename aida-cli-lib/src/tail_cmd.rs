@@ -653,7 +653,6 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
     let mut current_spec: Option<String> = None;
     let mut current_phase: Option<String> = None;
     let mut pos: u64 = 0;
-    let mut malformed: u64 = 0;
     let mut emitted: u64 = 0;
     let mut initial_backlog = stream.backlog_lines;
     let stdout = std::io::stdout();
@@ -719,7 +718,6 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
             opts,
             stream.raw,
             initial_backlog.take(),
-            &mut malformed,
             &mut emitted,
             &mut out,
         )?;
@@ -727,15 +725,6 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
     }
 
     let _ = out.flush();
-    if malformed > 0 {
-        eprintln!(
-            "{} skipped {} malformed JSONL line{} (emitted {} formatted lines)",
-            "warning:".yellow(),
-            malformed,
-            if malformed == 1 { "" } else { "s" },
-            emitted
-        );
-    }
     Ok(())
 }
 
@@ -745,7 +734,6 @@ fn stream_path_once(
     opts: &FormatOpts,
     raw: bool,
     backlog_lines: Option<usize>,
-    malformed: &mut u64,
     emitted: &mut u64,
     out: &mut std::io::StdoutLock<'_>,
 ) -> Result<bool> {
@@ -776,10 +764,7 @@ fn stream_path_once(
             continue;
         }
         let fmt = headless_tail::format_line(raw_line, opts);
-        if fmt.malformed {
-            *malformed += 1;
-            continue;
-        }
+        let _raw_fallback = fmt.malformed;
         rendered.extend(fmt.lines);
         if fmt.is_result {
             saw_result = true;

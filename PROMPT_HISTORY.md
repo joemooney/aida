@@ -4552,3 +4552,11 @@ Picked up `BUG-879` from the implementer queue. The bug was the sibling failure 
 Implemented a phase-3 PR-resolution guard in `auto_complete::PhaseDriver`: the orchestration loop now requires a positive PR number before emitting the reviewer phase or calling `run_reviewer`; `None` or `0` fails phase 3 as `NoPr` and preserves the existing shelve/recovery path. Also hardened CI probe normalization so forge or `gh` responses with change/PR number `0` become `NoSignal` instead of a reviewable PR. Added `// trace:BUG-879 | ai:codex` comments on the guard and mock coverage.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib reviewer_phase_refuses`; `cargo test -p aida-cli-lib parse_zero_pr_number_is_no_signal`; `cargo test -p aida-cli-lib auto_complete::tests`; `cargo test -p aida-cli-lib ci_action_tests`.
+
+## Session 2026-09-07 — BUG-880 tail drain liveness + plain-text logs
+
+Picked up `BUG-880` from the implementer queue. The bug had two surfaces: `aida tail drain` could appear to follow a completed burndown log instead of the PID-corroborated live drain-state current phase, and plain-text reviewer/session logs were treated as malformed JSONL, producing no useful output.
+
+Changed the shared headless tail formatter so non-JSON lines pass through raw, with the same arrival timestamp prefix used by `aida tail` rendered output, and removed the end-of-stream skipped-malformed warning path. Applied the same raw fallback behavior to the live drain follow loop. Added `// trace:BUG-880 | ai:codex` on the formatter behavior and tests covering plain-text logs, mixed JSON/plain text rendering, timestamped raw fallback, and a drain resolver regression where live drain-state beats a newer finished burndown log.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib tail_cmd_tests`; `cargo test -p aida-cli-lib headless_tail::tests`.

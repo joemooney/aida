@@ -3,6 +3,7 @@
 // trace:TASK-1167 | ai:claude
 
 use super::*;
+use std::fs;
 use std::time::{Duration as StdDuration, UNIX_EPOCH};
 
 fn t(secs: u64) -> SystemTime {
@@ -82,6 +83,13 @@ fn found_notice(r: &Resolution) -> Option<&str> {
     }
 }
 
+fn found_label(r: &Resolution) -> &str {
+    match r {
+        Resolution::Found { label, .. } => label,
+        other => panic!("expected Found, got {other:?}"),
+    }
+}
+
 #[test]
 fn drain_keyword_selects_the_newest_drain_log() {
     let idx = index();
@@ -113,6 +121,40 @@ fn drain_keyword_prefers_the_live_queue_work_member_log() {
         found_path(&r),
         Path::new("/repo/.aida/headless-logs/task-1167-019e4405-5073-7672-9395-16d4ca8be1a4.jsonl")
     );
+    assert!(found_notice(&r).is_none(), "{r:?}");
+}
+
+#[test]
+fn build_index_drain_keyword_uses_live_drain_state_over_newer_finished_burndown() {
+    let dir = tempfile::tempdir().unwrap();
+    let aida = dir.path().join(".aida");
+    let burndown = aida.join("burndown");
+    let headless = aida.join("headless-logs");
+    fs::create_dir_all(&burndown).unwrap();
+    fs::create_dir_all(&headless).unwrap();
+
+    let live_session = "019e9999-5073-7672-9395-16d4ca8be1a4";
+    let live_log = headless.join(format!("bug-879-{live_session}.jsonl"));
+    fs::write(&live_log, "live prose line\n").unwrap();
+    fs::write(
+        burndown.join("20260906T204800Z-previous-completed.jsonl"),
+        "old drain log\n",
+    )
+    .unwrap();
+
+    let mut state =
+        crate::drain_state::DrainState::new_batch("chain", &["BUG-876".into(), "BUG-879".into()]);
+    state.current = Some("BUG-879".to_string());
+    state.current_phase = Some("1 (implementer)".to_string());
+    state.current_session_id = Some(live_session.to_string());
+    state.orchestrator_pid = std::process::id();
+    state.write(dir.path()).unwrap();
+
+    let idx = build_index(dir.path(), Vec::new());
+    let r = resolve(&idx, Some("drain"));
+
+    assert_eq!(found_path(&r), live_log.as_path());
+    assert_eq!(found_label(&r), "live drain BUG-879 phase 1 (implementer)");
     assert!(found_notice(&r).is_none(), "{r:?}");
 }
 

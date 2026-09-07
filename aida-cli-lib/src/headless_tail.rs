@@ -410,19 +410,22 @@ pub fn event_stamp(event_ts: Option<&str>, arrival: DateTime<Local>) -> String {
     when.format("%H:%M:%S").to_string()
 }
 
-/// Outcome of formatting a single JSONL line.
+/// Outcome of formatting one log line.
 #[derive(Debug, Default)]
 pub struct FormatResult {
     /// Zero or more output lines (already styled when `opts.color`).
     pub lines: Vec<String>,
-    /// True when this line failed to parse and should bump the malformed counter.
+    /// True when this line was not stream-JSONL and was passed through raw.
     pub malformed: bool,
     /// True when this line was a `type=="result"` final event — caller can
     /// emit a discreet end-of-session marker once stdout drains.
     pub is_result: bool,
 }
 
-/// Format one JSONL line into zero or more printable strings.
+/// Format one stream-JSONL line into zero or more printable strings. Some
+/// headless producers write plain text logs; those lines pass through raw
+/// instead of being skipped.
+// trace:BUG-880 | ai:codex
 pub fn format_line(line: &str, opts: &FormatOpts) -> FormatResult {
     let trimmed = line.trim();
     if trimmed.is_empty() {
@@ -431,8 +434,24 @@ pub fn format_line(line: &str, opts: &FormatOpts) -> FormatResult {
     let parsed: Value = match serde_json::from_str(trimmed) {
         Ok(v) => v,
         Err(_) => {
+            let mut raw = if opts.color {
+                line.normal().to_string()
+            } else {
+                line.to_string()
+            };
+            if opts.timestamps {
+                let stamp = event_stamp(None, Local::now());
+                let prefix = format!("[{stamp}] ");
+                let prefix = if opts.color {
+                    prefix.dimmed().to_string()
+                } else {
+                    prefix
+                };
+                raw.insert_str(0, &prefix);
+            }
             return FormatResult {
                 malformed: true,
+                lines: vec![raw],
                 ..FormatResult::default()
             };
         }
@@ -674,8 +693,7 @@ pub struct StreamOpts {
 }
 
 /// Open `entry.path`, stream existing content, and (when `follow`) keep
-/// reading new bytes appended to the file. Counts malformed JSONL lines and
-/// reports a summary on stderr at end-of-stream.
+/// reading new bytes appended to the file.
 fn stream_log(entry: &LogEntry, opts: &FormatOpts, follow: bool) -> Result<()> {
     stream_path(
         &entry.path,
@@ -699,8 +717,6 @@ pub fn stream_path(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Resul
 
 fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Result<()> {
     let mut pos: u64 = 0;
-    let mut malformed: u64 = 0;
-    let mut emitted: u64 = 0;
     let mut seen_result = false;
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
@@ -749,16 +765,11 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
                     backlog.push(raw_line.to_string());
                 } else if writeln!(out, "{}", raw_line).is_err() {
                     break 'outer;
-                } else {
-                    emitted += 1;
                 }
                 continue;
             }
             let fmt = format_line(raw_line, opts);
-            if fmt.malformed {
-                malformed += 1;
-                continue;
-            }
+            let _raw_fallback = fmt.malformed;
             for line in &fmt.lines {
                 if buffering {
                     backlog.push(line.clone());
@@ -767,7 +778,6 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
                 if writeln!(out, "{}", line).is_err() {
                     break 'outer;
                 }
-                emitted += 1;
             }
             if fmt.is_result {
                 seen_result = true;
@@ -782,7 +792,6 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
                 if writeln!(out, "{}", line).is_err() {
                     break 'outer;
                 }
-                emitted += 1;
             }
             backlog.clear();
         }
@@ -799,20 +808,11 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
         }
         std::thread::sleep(FOLLOW_POLL);
     }
-    finish(out, malformed, emitted)
+    finish(out)
 }
 
-fn finish(mut out: std::io::StdoutLock<'_>, malformed: u64, emitted: u64) -> Result<()> {
+fn finish(mut out: std::io::StdoutLock<'_>) -> Result<()> {
     let _ = out.flush();
-    if malformed > 0 {
-        eprintln!(
-            "{} skipped {} malformed JSONL line{} (emitted {} formatted lines)",
-            "warning:".yellow(),
-            malformed,
-            if malformed == 1 { "" } else { "s" },
-            emitted
-        );
-    }
     Ok(())
 }
 
@@ -1081,9 +1081,38 @@ mod tests {
 
     #[test]
     fn format_malformed_line_marked() {
-        let res = format_line("{not-json", &opts_default());
+        let mut opts = opts_default();
+        opts.color = false;
+        let res = format_line("{not-json", &opts);
         assert!(res.malformed);
-        assert!(res.lines.is_empty());
+        assert_eq!(res.lines, vec!["{not-json".to_string()]);
+    }
+
+    #[test]
+    fn format_plain_text_line_passes_through_raw() {
+        let mut opts = opts_default();
+        opts.color = false;
+        let line = "Approved PR #1680. I found no blocking issues.";
+        let res = format_line(line, &opts);
+        assert!(res.malformed);
+        assert_eq!(res.lines, vec![line.to_string()]);
+    }
+
+    #[test]
+    fn format_mixed_json_and_plain_text_lines_are_both_renderable() {
+        let mut opts = opts_default();
+        opts.color = false;
+        let json =
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"formatted"}]}}"#;
+        let prose = "plain reviewer note";
+
+        let json_res = format_line(json, &opts);
+        let prose_res = format_line(prose, &opts);
+
+        assert!(!json_res.malformed);
+        assert_eq!(json_res.lines[0], "formatted");
+        assert!(prose_res.malformed);
+        assert_eq!(prose_res.lines, vec![prose.to_string()]);
     }
 
     #[test]
@@ -1252,6 +1281,22 @@ mod tests {
         let res = format_line(line, &opts);
         let rendered = &res.lines[0];
         assert!(rendered.ends_with(" hello"), "{rendered}");
+        let stamp = &rendered[1..rendered.find(']').expect("a closing bracket")];
+        assert!(
+            chrono::NaiveTime::parse_from_str(stamp, "%H:%M:%S").is_ok(),
+            "{stamp} is not a clock time"
+        );
+    }
+
+    #[test]
+    fn format_plain_text_line_gets_arrival_timestamp_prefix() {
+        let mut opts = opts_default();
+        opts.color = false;
+        opts.timestamps = true;
+        let res = format_line("plain reviewer note", &opts);
+        assert!(res.malformed);
+        let rendered = &res.lines[0];
+        assert!(rendered.ends_with(" plain reviewer note"), "{rendered}");
         let stamp = &rendered[1..rendered.find(']').expect("a closing bracket")];
         assert!(
             chrono::NaiveTime::parse_from_str(stamp, "%H:%M:%S").is_ok(),
