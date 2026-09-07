@@ -197,15 +197,26 @@ pub(crate) fn probe_resume_facts(
 ) -> (drain_resume::ResumeFacts, Option<String>, Option<u32>) {
     let mut sink = network_retry::StderrSink;
 
-    // PR number: prefer what drain-state recorded; else look it up by spec.
+    // PR number: prefer what drain-state recorded; else resolve the same
+    // forge-first review surface that `aida review` uses. A PR-only
+    // `queue work --from-pr` has no lease/drain member, so the open PR must be
+    // discoverable by spec trailer or spec-named head branch alone.
+    // trace:BUG-881 | ai:codex
     let mut pr = member.and_then(|m| m.pr);
+    let mut resolved_branch: Option<String> = None;
     if pr.is_none() {
-        if let PrLookup::Found(p) = detect_open_pr_for_spec_via_forge(project_root, spec) {
-            pr = Some(p.number as u32);
+        let ids = vec![spec.to_string()];
+        let linkage = collect_git_linkage_opts(project_root, &ids, false);
+        if let ReviewSurface::OpenChange { branch, number, .. } =
+            resolve_review_surface_forge_first(project_root, spec, &linkage)
+        {
+            pr = Some(number as u32);
+            resolved_branch = Some(branch);
         }
     }
     // The PR's head branch (the merge / CI phases probe against it).
-    let branch = pr.and_then(|n| pr_head_branch(project_root, n as u64));
+    let branch =
+        resolved_branch.or_else(|| pr.and_then(|n| pr_head_branch(project_root, n as u64)));
 
     // pr_merged — ACCURATE (gates skipping the irreversible merge).
     let pr_merged = pr
