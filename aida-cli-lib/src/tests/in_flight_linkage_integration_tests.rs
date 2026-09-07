@@ -209,6 +209,70 @@ fn review_surface_local_when_no_branch() {
     ));
 }
 
+// BUG-876: a pushed branch with an open PR is still the review surface after
+// the implementing lease/worktree is gone. The forge spec lookup carries the
+// PR head branch, so missing local branch linkage must not degrade to Local.
+#[test]
+fn review_surface_open_pr_by_spec_beats_missing_local_linkage() {
+    let l = linkage(false, None, None, 0);
+    let found = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 1679,
+        url: "https://example/pr/1679".to_string(),
+        branch: "story-818".to_string(),
+        base: "main".to_string(),
+        title: Some("[AI:codex] feat: work (STORY-818)".to_string()),
+    });
+
+    match classify_review_surface_forge_first(&l, Some(found), None) {
+        ReviewSurface::OpenChange { branch, number, .. } => {
+            assert_eq!(branch, "story-818");
+            assert_eq!(number, 1679);
+        }
+        other => panic!("expected OpenChange from forge spec lookup, got {other:?}"),
+    }
+}
+
+// BUG-876: holding vs releasing the lease must produce the same open-PR
+// surface when the PR references the spec.
+#[test]
+fn review_surface_lease_present_and_absent_both_resolve_open_pr() {
+    let spec_found = || {
+        crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 1679,
+            url: "https://example/pr/1679".to_string(),
+            branch: "story-818".to_string(),
+            base: "main".to_string(),
+            title: None,
+        })
+    };
+    let branch_found = || {
+        crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 1679,
+            url: "https://example/pr/1679".to_string(),
+            branch: "story-818".to_string(),
+            base: "main".to_string(),
+            title: None,
+        })
+    };
+
+    let lease_present = classify_review_surface_forge_first(
+        &linkage(false, None, Some("story-818"), 1),
+        Some(spec_found()),
+        Some(branch_found()),
+    );
+    let lease_absent = classify_review_surface_forge_first(
+        &linkage(false, None, None, 0),
+        Some(spec_found()),
+        None,
+    );
+
+    let surface_key = |surface: ReviewSurface| match surface {
+        ReviewSurface::OpenChange { branch, number, .. } => (branch, number),
+        other => panic!("expected OpenChange, got {other:?}"),
+    };
+    assert_eq!(surface_key(lease_present), surface_key(lease_absent));
+}
+
 // BUG-582: a finished (`Completed`) spec is NEVER reviews-awaiting, even
 // when a lingering local branch still classifies as an OPEN review surface
 // (the stale-Agent-tool-worktree false positive that put already-merged
