@@ -871,6 +871,23 @@ pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
         .unwrap_or(ForgeKind::None)
 }
 
+/// Resolve the forge for operations that must create a real forge change.
+///
+/// A stale `[forge] provider = "pure-git"` can be inherited into a worktree
+/// before the target repo's GitHub/GitLab `origin` is present. Auto-open must
+/// recover from that by resolving against the target repository's current
+/// origin host before accepting forge-less mode.
+// trace:BUG-896 | ai:codex
+pub fn resolve_open_change_forge_kind(project_root: &Path) -> ForgeKind {
+    if let Some(detected) = origin_url(project_root)
+        .map(|u| detect_forge_kind(&u))
+        .filter(|k| *k != ForgeKind::None)
+    {
+        return detected;
+    }
+    read_forge_config(project_root).unwrap_or(ForgeKind::None)
+}
+
 /// The `[forge]` config block to scaffold at `aida init`, with the provider
 /// auto-detected from `origin`'s host. Written so a GitLab-origin project is
 /// GitLab-aware out of the box and an unknown remote degrades to pure-git —
@@ -927,6 +944,15 @@ pub fn init_forge_detection_message(project_root: &Path) -> (ForgeKind, String) 
 /// The forge provider for a project (config → detect → pure-git).
 pub fn forge_for(project_root: &Path) -> Box<dyn Forge> {
     match resolve_forge_kind(project_root) {
+        ForgeKind::GitHub => Box::new(GitHubForge::new(project_root)),
+        ForgeKind::GitLab => Box::new(GitLabForge::new(project_root)),
+        ForgeKind::None => Box::new(PureGitForge::new(project_root)),
+    }
+}
+
+/// The forge provider for opening a real PR/MR/change request.
+pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
+    match resolve_open_change_forge_kind(project_root) {
         ForgeKind::GitHub => Box::new(GitHubForge::new(project_root)),
         ForgeKind::GitLab => Box::new(GitLabForge::new(project_root)),
         ForgeKind::None => Box::new(PureGitForge::new(project_root)),
@@ -1810,14 +1836,11 @@ impl Forge for PureGitForge {
     }
 
     fn open_change(&self, req: OpenChange) -> Result<ChangeRef> {
-        // No forge: the branch IS the change. Synthetic ref, id == 0.
-        Ok(ChangeRef {
-            id: 0,
-            url: String::new(),
-            branch: req.branch,
-            base: req.base,
-            title: Some(req.title),
-        })
+        anyhow::bail!(
+            "pure-git forge-less mode cannot open a real change request for branch `{}`; add a \
+             GitHub/GitLab origin or set `[forge] provider` before auto-open",
+            req.branch
+        )
     }
 
     fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -2962,6 +2985,38 @@ mod tests {
         assert_eq!(resolve_forge_kind(tmp.path()), ForgeKind::None);
     }
 
+    #[test]
+    fn open_change_resolution_prefers_recognized_origin_over_stale_pure_git_config() {
+        // trace:BUG-896 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        Command::new("git")
+            .current_dir(root)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap();
+        Command::new("git")
+            .current_dir(root)
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/repo.git",
+            ])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+
+        assert_eq!(resolve_forge_kind(root), ForgeKind::None);
+        assert_eq!(resolve_open_change_forge_kind(root), ForgeKind::GitHub);
+        assert_eq!(forge_for_open_change(root).kind(), ForgeKind::GitHub);
+    }
+
     /// Pure-git `change_status`: merged iff the branch is an ancestor of base.
     #[test]
     fn pure_git_status_reflects_ancestry() {
@@ -3013,14 +3068,15 @@ mod tests {
     }
 
     #[test]
-    fn pure_git_ci_is_none_and_open_change_is_synthetic() {
+    fn pure_git_ci_is_none_and_open_change_is_unsupported() {
+        // trace:BUG-896 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let forge = PureGitForge::new(tmp.path());
         assert_eq!(
             forge.ci_status(CiTarget::Branch("x".into())).unwrap().state,
             CiState::None
         );
-        let cr = forge
+        let err = forge
             .open_change(OpenChange {
                 branch: "feat".into(),
                 base: "main".into(),
@@ -3028,9 +3084,10 @@ mod tests {
                 body: "b".into(),
                 draft: false,
             })
-            .unwrap();
-        assert_eq!(cr.id, 0, "pure-git change is synthetic");
-        assert_eq!(cr.branch, "feat");
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("pure-git forge-less mode"), "{err}");
+        assert!(err.contains("cannot open a real change request"), "{err}");
     }
 
     /// STORY-516: pure-git squash merge must actually COMMIT (advance base,

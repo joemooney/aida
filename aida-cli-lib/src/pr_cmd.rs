@@ -2059,9 +2059,9 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
         body,
         draft: false,
     };
-    let change = crate::forge::forge_for(project_root)
+    let change = crate::forge::forge_for_open_change(project_root)
         .open_change(req)
-        .context("could not invoke `gh pr create`")?;
+        .context("could not open a forge change request")?;
     if change.id == 0 {
         anyhow::bail!(
             "`gh pr create` succeeded but no PR number found in its output: {}",
@@ -2080,7 +2080,7 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
 // trace:TASK-961 trace:STORY-621 | ai:claude
 pub(crate) fn recover_open_change(probe_repo: &std::path::Path, branch: &str) -> bool {
     use pr_ship::{derive_pr_body_from_commit, derive_pr_title_from_commit};
-    let hint = crate::forge::resolve_forge_kind(probe_repo)
+    let hint = crate::forge::resolve_open_change_forge_kind(probe_repo)
         .create_cmd()
         .unwrap_or_else(|| "open change".to_string());
     println!(
@@ -2107,7 +2107,16 @@ pub(crate) fn recover_open_change(probe_repo: &std::path::Path, branch: &str) ->
         body: derive_pr_body_from_commit(&commit_msg),
         draft: false,
     };
-    crate::forge::forge_for(probe_repo).open_change(req).is_ok()
+    match crate::forge::forge_for_open_change(probe_repo).open_change(req) {
+        Ok(_) => true,
+        Err(e) => {
+            eprintln!(
+                "{} auto-open failed: {e:#}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+            );
+            false
+        }
+    }
 }
 
 /// TASK-140: the full HEAD commit message of a BRANCH (not the local cwd HEAD).
@@ -3012,6 +3021,73 @@ mod pr_ship_environment_tests {
         let mut perms = std::fs::metadata(path).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn recover_open_change_uses_github_origin_even_with_stale_pure_git_config() {
+        // trace:BUG-896 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&bin).unwrap();
+        init_repo(&repo);
+        git(
+            &repo,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/repo.git",
+            ],
+        );
+        std::fs::create_dir_all(repo.join(".aida")).unwrap();
+        std::fs::write(
+            repo.join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        git(&repo, &["checkout", "-b", "bug-896", "--quiet"]);
+        std::fs::write(repo.join("work.txt"), "work\n").unwrap();
+        git(&repo, &["add", "work.txt"]);
+        git(
+            &repo,
+            &[
+                "commit",
+                "-m",
+                "[AI:codex] fix(test): recover open change (BUG-896)",
+                "--quiet",
+            ],
+        );
+
+        let marker = tmp.path().join("gh-args");
+        let gh = bin.join("gh");
+        make_executable(
+            &gh,
+            &format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = repo ] && [ \"$2\" = view ]; then\n\
+                   echo main\n\
+                   exit 0\n\
+                 fi\n\
+                 printf '%s\\n' \"$*\" > '{}'\n\
+                 test \"$1\" = pr\n\
+                 test \"$2\" = create\n\
+                 echo 'https://github.com/acme/repo/pull/896'\n",
+                marker.display()
+            ),
+        );
+        let old_path = std::env::var_os("PATH").unwrap_or_default();
+        let mut path_entries = vec![bin.clone()];
+        path_entries.extend(std::env::split_paths(&old_path));
+        let path = std::env::join_paths(path_entries).unwrap();
+        let _env = crate::test_env::EnvVarGuard::set("PATH", path);
+
+        assert!(recover_open_change(&repo, "bug-896"));
+        let args = std::fs::read_to_string(marker).unwrap();
+        assert!(args.contains("pr create"), "{args}");
+        assert!(args.contains("--base main"), "{args}");
+        assert!(args.contains("--head bug-896"), "{args}");
     }
 
     #[test]

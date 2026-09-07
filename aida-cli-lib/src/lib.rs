@@ -71067,7 +71067,7 @@ fn open_cluster_pr(
     if !push.success() {
         anyhow::bail!("`git push -u origin {branch}` failed — investigate before retrying");
     }
-    let change = crate::forge::forge_for(project_root)
+    let change = crate::forge::forge_for_open_change(project_root)
         .open_change(crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
@@ -76683,7 +76683,7 @@ fn open_orchestrator_pr_for_implementer_worktree(
     }
     let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
-    let change = crate::forge::forge_for(project_root)
+    let change = crate::forge::forge_for_open_change(project_root)
         .open_change(crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
@@ -76793,7 +76793,7 @@ fn open_orchestrator_pr_for_pushed_branch(
     let branch_ref = origin_branch_ref(branch);
     let commit_msg = head_commit_message(project_root, &branch_ref)?;
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
-    let change = crate::forge::forge_for(project_root)
+    let change = crate::forge::forge_for_open_change(project_root)
         .open_change(crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
