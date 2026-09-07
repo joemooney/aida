@@ -48573,5 +48573,51 @@ operations:
   timestamp: 2026-09-07T18:21:21.337973099Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4181
+- id: 01a07d1a-80d1-7873-9f46-daba30016de6
+  target_id: 01a07d1a-7af4-7831-bb42-d6cef08fd802
+  author: aida
+  node_id: '1'
+  lamport: 4182
+  timestamp: 2026-09-07T18:21:24.049599990Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on STORY-975'
+    description: |
+      Auto-drafted by `aida queue work STORY-975 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `failed`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-975 --work`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-07T18:21:22.157588408+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 1280627 ms
+        - phase 2 (ci): 574414 ms
+        - phase 3 (reviewer): 324540 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-975","started_at":"2026-09-07T17:44:50.361308414+00:00","completed_at":"2026-09-07T18:21:22.157588408+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"failed","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":1280627},{"phase":2,"slug":"ci","elapsed_ms":574414},{"phase":3,"slug":"reviewer","elapsed_ms":324540}],"total_ms":2180611,"binary_sha":"3cedf3917"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4182
 node_id: '1'
