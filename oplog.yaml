@@ -48406,5 +48406,27 @@ operations:
     req_type: Task
     status: Draft
     priority: High
-clock: 4168
+- id: 01a07a90-f3ee-7c73-a5d5-c52c8561dcfd
+  target_id: 01a07a90-ed25-7e12-818a-fa7a0997f47c
+  author: aida
+  node_id: '1'
+  lamport: 4169
+  timestamp: 2026-09-07T06:31:55.118194742Z
+  kind: !Create
+    title: aida status leads with a welcome-back digest after a long absence
+    description: |-
+      ## Why
+      The product direction (2026-09-06) is a vendor-neutral memory you can come back to after weeks or months. Today aida status, awaiting, history and digest all exist, but nothing says "you were last here 11 weeks ago and here is what changed". A returning human or agent has to know which four commands to run and in what order.
+
+      ## Acceptance
+      - aida status detects absence: wall-clock since the newest of (last aida-store commit, last events.jsonl row, last usage.jsonl row for this project). Threshold under [status] absence_days, default 14; AIDA_ABSENCE_DAYS overrides.
+      - When absent, the report leads with one block: "Last activity: <local time>, <N> days ago", then what changed since (specs created / completed / rejected counts with the top 5 titles, from aida history --since <last-activity>), then live-vs-stale leases, then the normal Awaiting-you section.
+      - Below threshold the output is byte-identical to today.
+      - Cache/local only, no network; sub-200ms cold on this repo (aida status is 0.12s today).
+      - --json includes absence_days and last_activity_at; the UserPromptSubmit notice adds one line "back after N days, run aida status" when over threshold.
+      - Unit test with a synthetic store whose newest commit is 30 days old.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4169
 node_id: '1'
