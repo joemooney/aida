@@ -480,6 +480,114 @@ fn drain_dry_run_skips_reviewer_routed_head() {
     );
 }
 
+#[test]
+fn product_role_add_queue_for_advisor_files_draft_request() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+
+    // trace:TASK-151 | ai:codex
+    // Product-seat draft dumps are intake requests, not execution dispatch.
+    // This pins the observed product-role `aida add` failure class: a draft
+    // routed to advisor triage must be captured and queued without requiring
+    // advisor authority.
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        .args([
+            "add",
+            "--title",
+            "Capture product draft",
+            "--type",
+            "task",
+            "--status",
+            "draft",
+            "--description",
+            "Product-originated draft that should be reviewed before execution.",
+            "--tags",
+            "from-product:pm,recommend:approve,risk:low",
+            "--queue",
+            "--for",
+            "advisor",
+        ])
+        .output()
+        .expect("run product-role aida add --queue --for advisor");
+    let add_out = String::from_utf8_lossy(&add.stdout);
+    let add_err = String::from_utf8_lossy(&add.stderr);
+    assert!(
+        add.status.success(),
+        "product-role draft dump must succeed, got exit {:?}\nstdout={add_out}\nstderr={add_err}",
+        add.status.code()
+    );
+    let spec = add_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse spec id from:\n{add_out}"))
+        .to_string();
+    assert!(
+        add_out.contains("Queued") && add_out.contains("advisor queue"),
+        "draft request should be queued to advisor triage:\nstdout={add_out}\nstderr={add_err}"
+    );
+
+    let show = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        .args(["show", &spec])
+        .output()
+        .expect("show product-filed draft");
+    assert!(
+        show.status.success(),
+        "show failed: {}",
+        String::from_utf8_lossy(&show.stderr)
+    );
+    let shown = String::from_utf8_lossy(&show.stdout);
+    let shown_lower = shown.to_lowercase();
+    assert!(
+        shown_lower
+            .lines()
+            .any(|line| line.trim() == "status: draft"),
+        "filed request must remain Draft:\n{shown}"
+    );
+
+    let queue = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "product")
+        .args(["queue", "next", "--for", "advisor"])
+        .output()
+        .expect("queue next advisor");
+    assert!(
+        queue.status.success(),
+        "queue next failed: {}",
+        String::from_utf8_lossy(&queue.stderr)
+    );
+    let queue_out = String::from_utf8_lossy(&queue.stdout);
+    assert!(
+        queue_out.contains(&spec),
+        "advisor queue should contain the product-filed draft:\n{queue_out}"
+    );
+}
+
 /// A SPEC-ID is `UPPER-<digits>` (e.g. `TASK-1`).
 fn is_spec_id(t: &str) -> bool {
     let mut parts = t.splitn(2, '-');
