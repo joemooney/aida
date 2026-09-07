@@ -48886,5 +48886,31 @@ operations:
   timestamp: 2026-09-07T19:53:38.103180304Z
   kind: !SetStatus
     status: Completed
-clock: 4196
+- id: 01a07d85-bccd-7372-9488-e0977c7c5d0e
+  target_id: 01a07d85-b8df-7803-8eb5-3e3f98022d25
+  author: aida
+  node_id: '1'
+  lamport: 4197
+  timestamp: 2026-09-07T20:18:31.757203199Z
+  kind: !Create
+    title: 'Review PR-1692: [AI:codex] feat(status): add welcome-back absence digest (STORY-976)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07d71`) for branch `story-976`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1692>
+      - Branch: `story-976` → `main`
+
+      ## Covers
+
+      - STORY-976
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1692` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4197
 node_id: '1'
