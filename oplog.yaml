@@ -48497,5 +48497,31 @@ operations:
   timestamp: 2026-09-07T16:57:50.957335073Z
   kind: !SetPriority
     priority: Low
-clock: 4176
+- id: 01a07ce5-c19f-7223-9940-0572cbb19bce
+  target_id: 01a07ce5-bd50-7bf0-9111-d763b7ace010
+  author: aida
+  node_id: '1'
+  lamport: 4177
+  timestamp: 2026-09-07T17:23:47.231062984Z
+  kind: !Create
+    title: 'Review PR-1687: [AI:codex] fix(drain): type shelved failure causes (STORY-974)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07cd0`) for branch `story-974`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1687>
+      - Branch: `story-974` → `main`
+
+      ## Covers
+
+      - STORY-974
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1687` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4177
 node_id: '1'
