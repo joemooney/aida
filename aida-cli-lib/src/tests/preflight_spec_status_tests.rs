@@ -1,7 +1,8 @@
 use super::{
     dup_pickup_recheck, effective_force_claim_for_session_start, preflight_spec_status,
-    preflight_spec_status_review_aware, session_start_status_bump_preconditions_met,
-    DupPickupDecision, PreflightDecision, RequirementStatus,
+    preflight_spec_status_review_aware, session_start_is_review_session,
+    session_start_status_bump_preconditions_met, DupPickupDecision, PreflightDecision,
+    RequirementStatus,
 };
 use tempfile::TempDir;
 
@@ -196,6 +197,38 @@ fn review_session_does_not_loosen_other_states() {
         preflight_spec_status_review_aware("TASK-1", Some(&RequirementStatus::Draft), false, true,),
         PreflightDecision::Refuse(_)
     ));
+}
+
+// BUG-882: `aida queue work PR-N --role reviewer` can route through
+// `session_start` with the backing spec id as `owns`. The reviewer role itself
+// must still classify the launch as review-shaped so Done remains reviewable.
+// trace:BUG-882 | ai:codex
+#[test]
+fn reviewer_role_marks_spec_scoped_session_as_review() {
+    assert!(
+        session_start_is_review_session(None, Some("reviewer")),
+        "explicit reviewer role must be enough even without a PR-shaped scope"
+    );
+    assert!(
+        session_start_is_review_session(None, Some("ReViEwEr")),
+        "role check should be case-insensitive"
+    );
+    assert!(
+        !session_start_is_review_session(None, Some("implementer")),
+        "implementer sessions keep the shipped-work preflight"
+    );
+}
+
+// trace:BUG-882 | ai:codex
+#[test]
+fn reviewer_role_allows_done_backing_spec_without_status_bump() {
+    let decision = preflight_spec_status_review_aware(
+        "TASK-4",
+        Some(&RequirementStatus::Done),
+        false,
+        session_start_is_review_session(None, Some("reviewer")),
+    );
+    assert_eq!(decision, PreflightDecision::Allow);
 }
 
 // trace:TASK-1-108 | ai:claude
