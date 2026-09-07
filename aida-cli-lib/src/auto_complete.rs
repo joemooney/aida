@@ -1118,6 +1118,13 @@ pub(crate) trait PhaseDriver {
     fn build(&mut self) -> Result<(), PhaseFailure>;
     /// Snapshot of what the driver has discovered, for the recovery hint.
     fn hint_context(&self) -> HintContext;
+    /// BUG-879: PR number the reviewer/merge phases are allowed to drive.
+    /// `None` or zero means there is no reviewable PR, so phase 3 must fail
+    /// before a reviewer session can be spawned.
+    // trace:BUG-879 | ai:codex
+    fn review_pr_number(&self) -> Option<u32> {
+        self.hint_context().pr_number.filter(|n| *n > 0)
+    }
     /// Phase-agnostic reality check (BUG-241). Before the orchestrator
     /// declares `phase` a failure, it asks the driver whether ground truth — a
     /// merged PR, a Completed spec — shows the work shipped anyway. Two real
@@ -3146,7 +3153,7 @@ pub(crate) fn orchestrate_with_resume(
         if !json {
             eprintln!("  {} skipping reviewer phase per lifecycle tag", "↷".cyan());
         }
-    } else {
+    } else if driver.review_pr_number().is_some() {
         emit_start(Phase::Reviewer, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
         match driver.run_reviewer() {
@@ -3202,6 +3209,12 @@ pub(crate) fn orchestrate_with_resume(
         }
         durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
         emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
+    } else {
+        let f = PhaseFailure::of(
+            FailureKind::NoPr,
+            "no open PR resolved before the reviewer phase — refusing to launch reviewer for PR-0",
+        );
+        return resolve_phase_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
     }
     // Latent-defect guard (review finding): mirror the <=2/<=4/<=5 caps so a
     // future variant with last_phase()==3 (e.g. a "through-reviewer" mode)
@@ -4699,6 +4712,10 @@ mod tests {
         /// gate fires before phase 4. `None` (default) keeps every
         /// pre-BUG-727 flow unchanged.
         merge_hold: Option<String>,
+        /// BUG-879: PR resolved by the phase-1/2 handoff. `None` or `Some(0)`
+        /// must fail before `run_reviewer` is called.
+        // trace:BUG-879 | ai:codex
+        pr_number: Option<u32>,
     }
 
     impl MockPhaseDriver {
@@ -4730,6 +4747,7 @@ mod tests {
                 conflict_rebase_ok: false,
                 conflict_rebase_calls: 0,
                 merge_hold: None,
+                pr_number: Some(46),
             }
         }
 
@@ -4834,6 +4852,14 @@ mod tests {
                 held: Some(reason.to_string()),
                 ..Self::base()
             }
+        }
+
+        /// BUG-879: simulate phase 2 failing to resolve a real PR before the
+        /// reviewer handoff.
+        // trace:BUG-879 | ai:codex
+        fn with_pr_number(mut self, pr_number: Option<u32>) -> Self {
+            self.pr_number = pr_number;
+            self
         }
 
         /// STORY-306: make `run_reviewer` escalate the merge decision —
@@ -4947,6 +4973,10 @@ mod tests {
             Ok(())
         }
         fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure> {
+            assert!(
+                self.review_pr_number().is_some(),
+                "BUG-879: reviewer must never launch without a positive PR number",
+            );
             self.record(Phase::Reviewer)?;
             match &self.reviewer_escalates {
                 Some(reason) => Ok(ReviewerOutcome::EscalatedToHuman {
@@ -4980,7 +5010,7 @@ mod tests {
             HintContext {
                 spec: "TASK-247".to_string(),
                 branch: Some("task-247".to_string()),
-                pr_number: Some(46),
+                pr_number: self.pr_number,
                 implementer_session: Some("019e2f423e7c".to_string()),
                 ci_run_id: Some("9988776655".to_string()),
                 forge: crate::forge::ForgeKind::GitHub,
@@ -6606,6 +6636,44 @@ mod tests {
     }
 
     // --- Reviewer verdict gating ------------------------------------------
+
+    #[test]
+    fn reviewer_phase_refuses_missing_pr_before_launch() {
+        let mut driver = MockPhaseDriver::all_ok().with_pr_number(None);
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::NoPr)
+        );
+        assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+    }
+
+    #[test]
+    fn reviewer_phase_refuses_pr_zero_before_launch() {
+        let mut driver = MockPhaseDriver::all_ok().with_pr_number(Some(0));
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::NoPr)
+        );
+        assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+    }
 
     #[test]
     fn reviewer_rejected_stops_at_phase_3() {

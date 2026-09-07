@@ -29429,19 +29429,22 @@ pub(crate) fn decide_ci_action(probe: &CiProbe, wait_ci: bool, yes: bool) -> CiA
 fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiProbe {
     match r {
         Ok(crate::forge::CiProbeResult::NoSignal(why)) => CiProbe::NoSignal(why),
-        Ok(crate::forge::CiProbeResult::NoChecks { change }) => CiProbe::PrNoChecks {
+        Ok(crate::forge::CiProbeResult::NoChecks { change }) if change > 0 => CiProbe::PrNoChecks {
             pr_number: change as u32,
         },
-        Ok(crate::forge::CiProbeResult::InProgress { change }) => CiProbe::InProgress {
+        Ok(crate::forge::CiProbeResult::InProgress { change }) if change > 0 => {
+            CiProbe::InProgress {
+                pr_number: change as u32,
+            }
+        }
+        Ok(crate::forge::CiProbeResult::Green { change }) if change > 0 => CiProbe::Green {
             pr_number: change as u32,
         },
-        Ok(crate::forge::CiProbeResult::Green { change }) => CiProbe::Green {
-            pr_number: change as u32,
-        },
-        Ok(crate::forge::CiProbeResult::Failed { change, summary }) => CiProbe::Red {
+        Ok(crate::forge::CiProbeResult::Failed { change, summary }) if change > 0 => CiProbe::Red {
             pr_number: change as u32,
             failed_summary: summary,
         },
+        Ok(_) => CiProbe::NoSignal("forge returned no open PR".to_string()),
         Err(e) => CiProbe::NoSignal(format!("{e:#}")),
     }
 }
@@ -29531,7 +29534,8 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
     };
     let pr_number = pr.get("number").and_then(|n| n.as_u64()).map(|n| n as u32);
     let pr_number = match pr_number {
-        Some(n) => n,
+        Some(n) if n > 0 => n,
+        Some(_) => return CiProbe::NoSignal("gh json PR number was 0".to_string()),
         None => return CiProbe::NoSignal("gh json missing PR number".to_string()),
     };
     let rollup = pr.get("statusCheckRollup").and_then(|v| v.as_array());

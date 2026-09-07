@@ -4544,3 +4544,11 @@ Picked up `BUG-878` from the implementer queue. The bug was that phase 2 could p
 Implemented a phase-2 guard in `RealPhaseDriver::finish_ci`: before CI probing or `aida session end`, the driver verifies the recorded implementer worktree is on the expected branch, checks its upstream state, and runs `git push -u origin HEAD:refs/heads/<branch>` when the branch is ahead of upstream or has no upstream. Push failure is a hard phase failure before teardown, leaving the lease/worktree intact for recovery. Added `// trace:BUG-878 | ai:codex` comments to the push guard and targeted Git-backed tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib real_phase_driver_wiring_tests::phase2_push_guard -- --nocapture`; `cargo test -p aida-cli-lib real_phase_driver_wiring_tests -- --nocapture`.
+
+## Session 2026-09-07 — BUG-879 phase-3 PR-0 guard
+
+Picked up `BUG-879` from the implementer queue. The bug was the sibling failure to `BUG-878`: if an implementer committed locally but no real PR existed, the autonomous drain could proceed into phase 3 with a fabricated `PR-0`, launching a reviewer against a nonexistent review surface.
+
+Implemented a phase-3 PR-resolution guard in `auto_complete::PhaseDriver`: the orchestration loop now requires a positive PR number before emitting the reviewer phase or calling `run_reviewer`; `None` or `0` fails phase 3 as `NoPr` and preserves the existing shelve/recovery path. Also hardened CI probe normalization so forge or `gh` responses with change/PR number `0` become `NoSignal` instead of a reviewable PR. Added `// trace:BUG-879 | ai:codex` comments on the guard and mock coverage.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib reviewer_phase_refuses`; `cargo test -p aida-cli-lib parse_zero_pr_number_is_no_signal`; `cargo test -p aida-cli-lib auto_complete::tests`; `cargo test -p aida-cli-lib ci_action_tests`.

@@ -143,6 +143,15 @@ fn parse_empty_array_is_no_signal() {
 }
 
 #[test]
+fn parse_zero_pr_number_is_no_signal() {
+    let probe = parse_ci_probe(r#"[{"number": 0, "statusCheckRollup": []}]"#);
+    assert!(
+        matches!(probe, CiProbe::NoSignal(_)),
+        "PR-0 must not be treated as a reviewable PR: {probe:?}"
+    );
+}
+
+#[test]
 fn parse_pr_no_checks() {
     let json = r#"[{"number": 42, "statusCheckRollup": []}]"#;
     match parse_ci_probe(json) {
