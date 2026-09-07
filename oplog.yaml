@@ -48844,5 +48844,31 @@ operations:
   timestamp: 2026-09-07T19:32:56.550602463Z
   kind: !SetStatus
     status: Completed
-clock: 4193
+- id: 01a07d66-ee0d-7d10-9104-8b5134eb7b74
+  target_id: 01a07d66-e9de-74e2-b4d2-c93cb88a73eb
+  author: aida
+  node_id: '1'
+  lamport: 4194
+  timestamp: 2026-09-07T19:44:52.749499718Z
+  kind: !Create
+    title: 'Review PR-1691: [AI:codex] fix(review): prompt before releasing stale human-review leases (BUG-890)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07d5e`) for branch `bug-890`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1691>
+      - Branch: `bug-890` → `main`
+
+      ## Covers
+
+      - BUG-890
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1691` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4194
 node_id: '1'
