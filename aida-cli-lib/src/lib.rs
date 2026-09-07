@@ -58936,6 +58936,7 @@ fn print_status_json(
     queue_only: bool,
     ci_only: bool,
     awaiting: &awaiting_you::AwaitingReport,
+    absence: Option<serde_json::Value>,
 ) -> Result<()> {
     use serde_json::json;
 
@@ -59010,6 +59011,27 @@ fn print_status_json(
         // STORY-465: lead the JSON the same way the text view leads —
         // human-gate items first. Always present (even when empty) so
         // consumers can detect "no items" without a key-absence guard.
+        let absence_json = absence.unwrap_or_else(|| {
+            json!({
+                "absence_days": serde_json::Value::Null,
+                "last_activity_at": serde_json::Value::Null,
+            })
+        });
+        out.insert(
+            "absence_days".to_string(),
+            absence_json
+                .get("absence_days")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
+        );
+        out.insert(
+            "last_activity_at".to_string(),
+            absence_json
+                .get("last_activity_at")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
+        );
+        out.insert("absence".to_string(), absence_json);
         out.insert("awaiting".to_string(), awaiting.to_json());
         out.insert(
             "session".to_string(),
@@ -60594,6 +60616,11 @@ fn handle_awaiting_command(
         };
         let report = collect_awaiting_report(&project_root, backend, &ctx, true);
         if let Some(line) = report.compact_line() {
+            println!("{line}");
+        }
+        let store_path = detect_distributed_store_from(&project_root)
+            .unwrap_or_else(|| project_root.join(".aida-store"));
+        if let Some(line) = status_cmd::absence_notice_line(&project_root, &store_path) {
             println!("{line}");
         }
         return Ok(());

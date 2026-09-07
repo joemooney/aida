@@ -7,6 +7,27 @@
 
 use crate::*;
 
+const DEFAULT_ABSENCE_DAYS: i64 = 14;
+
+// trace:STORY-976 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AbsenceReport {
+    last_activity_at: chrono::DateTime<chrono::Utc>,
+    absence_days: i64,
+    created_count: usize,
+    completed_count: usize,
+    rejected_count: usize,
+    top_titles: Vec<AbsenceChangeTitle>,
+    live_leases: usize,
+    stale_leases: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AbsenceChangeTitle {
+    spec_id: String,
+    title: String,
+}
+
 /// `aida status <spec>` — per-spec liveness inspection. Resolves the spec ID
 /// in the store, finds its spec-scoped session lease, and classifies liveness
 /// (live / stale / flag-only / no-session), demoting alive-but-idle sessions
@@ -280,6 +301,9 @@ pub(crate) fn handle_status_command_distributed(
         || stale;
     if !any_flag {
         let project_root = std::env::current_dir()?;
+        if let Some(report) = collect_absence_report(&project_root, store_path) {
+            print_absence_report(&report);
+        }
         // TASK-965: stranded-primary alarm — loud banner ABOVE the snapshot when the
         // primary checkout is parked on a feature branch with in-flight leases. All
         // local reads (git symbolic-ref + lease dir scan), so the fast path's
@@ -316,6 +340,7 @@ pub(crate) fn handle_status_command_distributed(
     // trace:TASK-1065 | ai:claude
     let store = build_status_store_from_cache(backend)?;
     let project_root = std::env::current_dir()?;
+    let absence_report = collect_absence_report(&project_root, store_path);
 
     // BUG-609: `--all` reveals stale agents AND lists every worktree; `--stale`
     // is the narrow form that only reveals the dead-PID agent corpses. Both feed
@@ -429,6 +454,7 @@ pub(crate) fn handle_status_command_distributed(
             queue_only,
             ci_only,
             &awaiting_report,
+            absence_report.as_ref().map(absence_report_json),
         );
     }
 
@@ -452,6 +478,9 @@ pub(crate) fn handle_status_command_distributed(
     // they've cleared their gates. Hidden on quiet days so the section
     // appearing is itself the signal. trace:STORY-465 | ai:claude
     let awaiting_report = collect_awaiting_report(&project_root, backend, &user_ctx, no_ci);
+    if let Some(report) = absence_report.as_ref() {
+        print_absence_report(report);
+    }
     let stdout = std::io::stdout();
     let _ = awaiting_report.render(verbose, stdout.lock());
 
@@ -800,6 +829,273 @@ fn should_print_rich_live_drain_status_line(flags: RichStatusLiveDrainFlags) -> 
         && !flags.ci_only
 }
 
+fn absence_threshold_days(project_root: &std::path::Path) -> i64 {
+    if let Ok(raw) = std::env::var("AIDA_ABSENCE_DAYS") {
+        if let Ok(days) = raw.trim().parse::<i64>() {
+            return days.max(0);
+        }
+    }
+    let path = config_path_for_project(project_root);
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return DEFAULT_ABSENCE_DAYS;
+    };
+    let Ok(value) = toml::from_str::<toml::Value>(&body) else {
+        return DEFAULT_ABSENCE_DAYS;
+    };
+    value
+        .get("status")
+        .and_then(|s| s.get("absence_days"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(0))
+        .unwrap_or(DEFAULT_ABSENCE_DAYS)
+}
+
+fn collect_absence_report(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+) -> Option<AbsenceReport> {
+    let last_activity_at = newest_activity_at(project_root, store_path)?;
+    let now = chrono::Utc::now();
+    let absence_days = now
+        .signed_duration_since(last_activity_at)
+        .num_days()
+        .max(0);
+    if absence_days < absence_threshold_days(project_root) {
+        return None;
+    }
+
+    let digest = collect_absence_change_digest(store_path, last_activity_at);
+    let (live_leases, stale_leases) = count_live_and_stale_leases(project_root);
+    Some(AbsenceReport {
+        last_activity_at,
+        absence_days,
+        created_count: digest.created_count,
+        completed_count: digest.completed_count,
+        rejected_count: digest.rejected_count,
+        top_titles: digest.top_titles,
+        live_leases,
+        stale_leases,
+    })
+}
+
+fn newest_activity_at(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    let mut newest = newest_store_commit_at(store_path);
+    newest = newest.max(newest_event_stream_at(project_root));
+    newest = newest.max(newest_usage_at(project_root));
+    newest
+}
+
+fn newest_store_commit_at(store_path: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["log", "-1", "--pretty=format:%aI"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    parse_rfc3339_utc(String::from_utf8_lossy(&out.stdout).trim())
+}
+
+fn newest_event_stream_at(project_root: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let body = std::fs::read_to_string(events::events_path(project_root)).ok()?;
+    body.lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<events::Event>(line).ok())
+        .map(|event| event.ts)
+        .next()
+}
+
+fn newest_usage_at(project_root: &std::path::Path) -> Option<chrono::DateTime<chrono::Utc>> {
+    let scopes = known_project_scopes(project_root);
+    usage::read_events()
+        .into_iter()
+        .filter(|event| {
+            event
+                .scope
+                .as_deref()
+                .map(|scope| scopes.iter().any(|known| known.eq_ignore_ascii_case(scope)))
+                .unwrap_or(true)
+        })
+        .filter_map(|event| parse_rfc3339_utc(&event.ts))
+        .max()
+}
+
+fn known_project_scopes(project_root: &std::path::Path) -> std::collections::HashSet<String> {
+    let mut scopes = std::collections::HashSet::new();
+    if let Some(name) = project_root.file_name().and_then(|n| n.to_str()) {
+        scopes.insert(name.to_string());
+    }
+    if let Ok(branch) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["branch", "--show-current"])
+        .output()
+    {
+        if branch.status.success() {
+            let name = String::from_utf8_lossy(&branch.stdout).trim().to_string();
+            if !name.is_empty() {
+                scopes.insert(name);
+            }
+        }
+    }
+    scopes
+}
+
+fn parse_rfc3339_utc(raw: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(raw)
+        .ok()
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+}
+
+#[derive(Default)]
+struct AbsenceChangeDigest {
+    created_count: usize,
+    completed_count: usize,
+    rejected_count: usize,
+    top_titles: Vec<AbsenceChangeTitle>,
+}
+
+fn collect_absence_change_digest(
+    store_path: &std::path::Path,
+    since: chrono::DateTime<chrono::Utc>,
+) -> AbsenceChangeDigest {
+    let opts = history::HistoryOpts {
+        limit: 250,
+        max_commits: 2_000,
+        events_mode: true,
+        id_filter: None,
+        type_filter: None,
+        author_filter: None,
+        since: Some(since.to_rfc3339()),
+        until: None,
+        status_changes_only: false,
+        shipped_only: false,
+        comments_only: false,
+        oneline: false,
+        archived_specs: std::collections::HashSet::new(),
+        archived_only_specs: None,
+        deferred_specs: std::collections::HashSet::new(),
+        deferred_only_specs: None,
+        exclude_meta: true,
+    };
+    let Ok(events) = history::collect_event_records(store_path, &opts) else {
+        return AbsenceChangeDigest::default();
+    };
+    summarize_absence_events(&events)
+}
+
+fn summarize_absence_events(events: &[history::HistoryEventRecord]) -> AbsenceChangeDigest {
+    let mut digest = AbsenceChangeDigest::default();
+    let mut seen_titles = std::collections::HashSet::new();
+    for event in events {
+        match event.kind.as_str() {
+            "added" => digest.created_count += 1,
+            "status_change" => {
+                let to = event
+                    .detail
+                    .get("to")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                if to.eq_ignore_ascii_case("Completed") {
+                    digest.completed_count += 1;
+                } else if to.eq_ignore_ascii_case("Rejected") {
+                    digest.rejected_count += 1;
+                }
+            }
+            _ => {}
+        }
+        if digest.top_titles.len() < 5 && seen_titles.insert(event.spec_id.clone()) {
+            let title = event
+                .detail
+                .get("title")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+                .unwrap_or_else(|| event.summary.clone());
+            digest.top_titles.push(AbsenceChangeTitle {
+                spec_id: event.spec_id.clone(),
+                title,
+            });
+        }
+    }
+    digest
+}
+
+fn count_live_and_stale_leases(project_root: &std::path::Path) -> (usize, usize) {
+    let leases = list_leases(project_root);
+    let live = process_probe::probe_live_claude_sessions();
+    let now = chrono::Utc::now();
+    let mut live_count = 0;
+    let mut stale_count = 0;
+    for lease in &leases {
+        match lease_state_for(lease, &live, now) {
+            LeaseState::Live | LeaseState::Dormant => live_count += 1,
+            LeaseState::Stale => stale_count += 1,
+        }
+    }
+    (live_count, stale_count)
+}
+
+fn print_absence_report(report: &AbsenceReport) {
+    let local = report.last_activity_at.with_timezone(&chrono::Local);
+    println!("{}", "─── Welcome back ───".bold());
+    println!(
+        "  Last activity: {}, {} day{} ago",
+        local.format("%A %Y-%m-%d %H:%M %Z"),
+        report.absence_days,
+        if report.absence_days == 1 { "" } else { "s" }
+    );
+    println!(
+        "  Changed since: {} created · {} completed · {} rejected",
+        report.created_count.to_string().cyan(),
+        report.completed_count.to_string().green(),
+        report.rejected_count.to_string().red()
+    );
+    for item in &report.top_titles {
+        println!("    {} {}", item.spec_id.bold(), item.title);
+    }
+    println!(
+        "  Leases: {} live · {} stale",
+        report.live_leases.to_string().green(),
+        report.stale_leases.to_string().yellow()
+    );
+    println!();
+}
+
+fn absence_report_json(report: &AbsenceReport) -> serde_json::Value {
+    serde_json::json!({
+        "absence_days": report.absence_days,
+        "last_activity_at": report.last_activity_at.to_rfc3339(),
+        "created_count": report.created_count,
+        "completed_count": report.completed_count,
+        "rejected_count": report.rejected_count,
+        "top_titles": report.top_titles.iter().map(|item| {
+            serde_json::json!({
+                "spec_id": item.spec_id,
+                "title": item.title,
+            })
+        }).collect::<Vec<_>>(),
+        "live_leases": report.live_leases,
+        "stale_leases": report.stale_leases,
+    })
+}
+
+pub(crate) fn absence_notice_line(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+) -> Option<String> {
+    let report = collect_absence_report(project_root, store_path)?;
+    Some(format!(
+        "Welcome back: back after {} day{}, run aida status.",
+        report.absence_days,
+        if report.absence_days == 1 { "" } else { "s" }
+    ))
+}
+
 #[cfg(test)]
 mod task_1194_live_drain_status_tests {
     use super::{should_print_rich_live_drain_status_line, RichStatusLiveDrainFlags};
@@ -850,6 +1146,100 @@ mod task_1194_live_drain_status_tests {
         let mut short = flags();
         short.short = true;
         assert!(!should_print_rich_live_drain_status_line(short));
+    }
+}
+
+#[cfg(test)]
+mod story_976_absence_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {:?} failed", args);
+    }
+
+    fn commit_backdated_store(
+        store: &std::path::Path,
+        spec: &str,
+        title: &str,
+        when: chrono::DateTime<chrono::Utc>,
+    ) {
+        std::fs::create_dir_all(store.join("objects").join("STORY")).unwrap();
+        std::fs::write(
+            store.join("objects").join("STORY").join(format!("{spec}.yaml")),
+            format!(
+                "id: 019e71f4-0000-7000-8000-000000000000\nspec_id: {spec}\ntitle: {title}\ndescription: fixture\nstatus: Draft\npriority: Low\nreq_type: Story\ncreated_at: {when}\nmodified_at: {when}\n"
+            ),
+        )
+        .unwrap();
+        git(store, &["init", "-q"]);
+        git(store, &["config", "user.email", "test@example.com"]);
+        git(store, &["config", "user.name", "Test User"]);
+        git(store, &["add", "."]);
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(store)
+            .args(["commit", "-q", "-m", &format!("add {spec} — {title}")])
+            .env("GIT_AUTHOR_DATE", when.to_rfc3339())
+            .env("GIT_COMMITTER_DATE", when.to_rfc3339())
+            .status()
+            .unwrap();
+        assert!(status.success(), "backdated git commit failed");
+    }
+
+    #[test]
+    fn synthetic_store_thirty_days_old_triggers_absence_report() {
+        let project = tempdir().unwrap();
+        let home = tempdir().unwrap();
+        let aida_dir = project.path().join(".aida");
+        std::fs::create_dir_all(&aida_dir).unwrap();
+        std::fs::write(
+            aida_dir.join("config.toml"),
+            "[status]\nabsence_days = 14\n",
+        )
+        .unwrap();
+        let store = project.path().join(".aida-store");
+        let old = chrono::Utc::now() - chrono::Duration::days(30);
+        commit_backdated_store(&store, "STORY-976", "welcome back digest", old);
+
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("HOME", home.path().to_str().unwrap()),
+            ("AIDA_ABSENCE_DAYS", "14"),
+        ]);
+        let report =
+            collect_absence_report(project.path(), &store).expect("absence over threshold");
+
+        assert!(report.absence_days >= 29, "{report:?}");
+        assert_eq!(report.created_count, 1);
+        assert_eq!(report.completed_count, 0);
+        assert_eq!(report.rejected_count, 0);
+        assert_eq!(report.top_titles[0].spec_id, "STORY-976");
+        assert_eq!(report.top_titles[0].title, "welcome back digest");
+    }
+
+    #[test]
+    fn below_threshold_stays_silent() {
+        let project = tempdir().unwrap();
+        let home = tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".aida")).unwrap();
+        let store = project.path().join(".aida-store");
+        let recent = chrono::Utc::now() - chrono::Duration::days(2);
+        commit_backdated_store(&store, "STORY-977", "recent activity", recent);
+
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("HOME", home.path().to_str().unwrap()),
+            ("AIDA_ABSENCE_DAYS", "14"),
+        ]);
+        assert!(
+            collect_absence_report(project.path(), &store).is_none(),
+            "below-threshold status must preserve existing bytes"
+        );
     }
 }
 
