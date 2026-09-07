@@ -87,6 +87,39 @@ pub fn headless_argv(adapter: &VendorAdapter, brief: &str) -> Option<Vec<String>
     }
 }
 
+/// The one-shot Ask-AI reviewer must judge only from caller-provided context.
+/// Unlike compete arms and rubric judges, it should not be able to mutate the
+/// worktree if the prompt's "Do not run tools" instruction is ignored.
+// trace:TASK-1195 | ai:codex
+pub fn ask_ai_argv(adapter: &VendorAdapter, prompt: &str) -> Option<Vec<String>> {
+    match adapter {
+        VendorAdapter::Headless {
+            command: "claude", ..
+        } => Some(vec![
+            "-p".to_string(),
+            "--permission-mode".to_string(),
+            "plan".to_string(),
+            "--permission-prompts".to_string(),
+            "none".to_string(),
+            prompt.to_string(),
+        ]),
+        VendorAdapter::Headless {
+            command: "codex", ..
+        } => Some(vec![
+            "exec".to_string(),
+            "--sandbox".to_string(),
+            "read-only".to_string(),
+            prompt.to_string(),
+        ]),
+        VendorAdapter::Headless { args_template, .. } => {
+            let mut argv = args_template.clone();
+            argv.push(prompt.to_string());
+            Some(argv)
+        }
+        VendorAdapter::HumanBriefed => None,
+    }
+}
+
 /// Per-vendor branch name: `compete/<spec-lower>-<vendor>`. Stable + collision-
 /// free across vendors for the same spec, and namespaced under `compete/` so a
 /// `git branch --list 'compete/*'` finds every arm.
@@ -842,6 +875,46 @@ mod tests {
         assert_eq!(argv[0], "exec");
         assert_eq!(argv[1], "--dangerously-bypass-approvals-and-sandbox");
         assert_eq!(argv.last().unwrap(), "BRIEF");
+    }
+
+    #[test]
+    fn ask_ai_argv_claude_uses_plan_mode_with_no_prompts() {
+        let adapter = vendor_adapter("claude").unwrap();
+        let argv = ask_ai_argv(&adapter, "REVIEW PROMPT").unwrap();
+        assert_eq!(
+            argv,
+            vec![
+                "-p".to_string(),
+                "--permission-mode".to_string(),
+                "plan".to_string(),
+                "--permission-prompts".to_string(),
+                "none".to_string(),
+                "REVIEW PROMPT".to_string(),
+            ]
+        );
+        assert!(
+            !argv.contains(&"bypassPermissions".to_string()),
+            "Ask-AI must not inherit compete's bypass posture: {argv:?}"
+        );
+    }
+
+    #[test]
+    fn ask_ai_argv_codex_uses_read_only_sandbox() {
+        let adapter = vendor_adapter("codex").unwrap();
+        let argv = ask_ai_argv(&adapter, "REVIEW PROMPT").unwrap();
+        assert_eq!(
+            argv,
+            vec![
+                "exec".to_string(),
+                "--sandbox".to_string(),
+                "read-only".to_string(),
+                "REVIEW PROMPT".to_string(),
+            ]
+        );
+        assert!(
+            !argv.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()),
+            "Ask-AI must not inherit compete's bypass posture: {argv:?}"
+        );
     }
 
     #[test]

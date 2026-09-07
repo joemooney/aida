@@ -66777,10 +66777,7 @@ fn ask_ai_review_once<W: std::io::Write + ?Sized>(
 ) -> Result<()> {
     let vendor = session::resolve_headless_vendor(project_root);
     let adapter = match compete::vendor_adapter(vendor.as_str()) {
-        Some(compete::VendorAdapter::Headless {
-            command,
-            args_template,
-        }) => (command, args_template),
+        Some(adapter @ compete::VendorAdapter::Headless { .. }) => adapter,
         Some(compete::VendorAdapter::HumanBriefed) | None => {
             writeln!(
                 output,
@@ -66791,19 +66788,22 @@ fn ask_ai_review_once<W: std::io::Write + ?Sized>(
         }
     };
     let prompt = ask_ai_review_prompt(req, spec_id, card, diffstat);
-    let mut args = adapter.1;
-    args.push(prompt);
+    let args = compete::ask_ai_argv(&adapter, &prompt).unwrap_or_default();
+    let command = match &adapter {
+        compete::VendorAdapter::Headless { command, .. } => *command,
+        compete::VendorAdapter::HumanBriefed => unreachable!("human-briefed returned above"),
+    };
     writeln!(
         output,
         "\nAsk-AI via {}…",
         format!(
             "{} {}",
-            adapter.0,
+            command,
             args.first().map(String::as_str).unwrap_or("")
         )
         .trim()
     )?;
-    let result = std::process::Command::new(adapter.0)
+    let result = std::process::Command::new(command)
         .current_dir(project_root)
         .args(&args)
         .output();
@@ -66825,7 +66825,7 @@ fn ask_ai_review_once<W: std::io::Write + ?Sized>(
             writeln!(
                 output,
                 "Ask-AI unavailable: could not spawn `{}` ({e}).",
-                adapter.0
+                command
             )?;
         }
     }
