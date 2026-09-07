@@ -4632,3 +4632,11 @@ Picked up `STORY-975` from the implementer queue. The story required a bounded d
 Implemented `[drain] retry_transient` parsing with default `1` and max `3`, plus `AIDA_RETRY_TRANSIENT` override in `DrainTuning`. Added the central `maybe_retry_transient_failure` gate in `auto_complete`, wrapping implementer, CI, reviewer, merge, pull, and build phase calls so only the failed phase re-enters. Added `SpecRetried` events, phase retry records in drain state with cause/attempt/max, `aida drain status` display as `attempt 2/2`, and explicit repo config `retry_transient = 1`.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib auto_complete -- --nocapture`; `cargo test -p aida-cli-lib drain_reliability_wiring -- --nocapture`; `cargo test -p aida-cli-lib drain_state::tests::render_human_shows_current_phase_retry_attempt -- --nocapture`. Dogfood evidence for a real three-spec no-manual-relaunch drain still needs to be captured in the PR because this session did not run a long live drain.
+
+## Session 2026-09-07 — PR-1688 review fix-forward
+
+Picked up `STORY-975` after PR-1688 review requested changes. The review found that the reviewer pre-launch `NoPr` guard bypassed the new transient retry gate, so `retry_transient = 1` could still park immediately before launching phase 3.
+
+Moved the reviewer PR-resolution preflight inside the phase-3 retry loop. A missing or zero PR now records a `no-pr` transient retry and rechecks the reviewer phase until the retry budget is exhausted; only then does it route through the normal failure/shelve path with the attempt count in the failure detail. Added a regression test proving the pre-launch missing-PR path spends the retry budget without calling `run_reviewer` against PR-0.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib reviewer_phase_missing_pr_spends_transient_retry_budget_before_parking -- --nocapture`; `cargo test -p aida-cli-lib transient_retry -- --nocapture`. Dogfood evidence remains blocked in this worktree by an already-active single-spec `STORY-975` drain lock and an insufficient safe queue for a new three-spec repo drain.

@@ -3311,11 +3311,40 @@ pub(crate) fn orchestrate_with_resume(
         if !json {
             eprintln!("  {} skipping reviewer phase per lifecycle tag", "↷".cyan());
         }
-    } else if driver.review_pr_number().is_some() {
+    } else {
         emit_start(Phase::Reviewer, spec, json, start.elapsed().as_millis());
         let phase_start = Instant::now();
         let mut retries_used = 0usize;
         loop {
+            // trace:STORY-975 | ai:codex
+            if driver.review_pr_number().is_none() {
+                let f = PhaseFailure::of(
+                    FailureKind::NoPr,
+                    "no open PR resolved before the reviewer phase — refusing to launch reviewer for PR-0",
+                );
+                if maybe_retry_transient_failure(
+                    driver,
+                    Phase::Reviewer,
+                    spec,
+                    &f,
+                    &mut retries_used,
+                    json,
+                    &start,
+                ) {
+                    continue;
+                }
+                let f = failure_with_retry_attempt(driver, &f, retries_used);
+                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Reviewer,
+                    spec,
+                    json,
+                    &start,
+                    &f,
+                    durations,
+                );
+            }
             match driver.run_reviewer() {
                 Err(f) => {
                     if maybe_retry_transient_failure(
@@ -3388,12 +3417,6 @@ pub(crate) fn orchestrate_with_resume(
         }
         durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
         emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
-    } else {
-        let f = PhaseFailure::of(
-            FailureKind::NoPr,
-            "no open PR resolved before the reviewer phase — refusing to launch reviewer for PR-0",
-        );
-        return resolve_phase_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
     }
     // Latent-defect guard (review finding): mirror the <=2/<=4/<=5 caps so a
     // future variant with last_phase()==3 (e.g. a "through-reviewer" mode)
@@ -7064,6 +7087,32 @@ mod tests {
             Some(FailureKind::NoPr)
         );
         assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+    }
+
+    #[test]
+    fn reviewer_phase_missing_pr_spends_transient_retry_budget_before_parking() {
+        let mut driver = MockPhaseDriver::all_ok().with_pr_number(None);
+        driver.transient_retry_budget = 1;
+        driver.shelve_succeeds = true;
+
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.exit_code, 3);
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        let failure = result.failure.as_ref().expect("failure recorded");
+        assert_eq!(failure.kind, FailureKind::NoPr);
+        assert!(failure.reason.contains("attempt 2/2"), "{}", failure.reason);
+        assert_eq!(driver.calls, vec![Phase::Implementer, Phase::Ci]);
+        assert_eq!(
+            driver.transient_retry_events,
+            vec![(Phase::Reviewer, "no-pr".to_string(), 2, 2)]
+        );
     }
 
     #[test]
