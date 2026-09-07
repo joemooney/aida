@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-09-07T02:14:33.922660586Z
+modified_at: 2026-09-07T02:14:34.588710728Z
 req_type: Epic
 tags:
 - canonical-hub
@@ -31,6 +31,12 @@ comments:
   content: 'Advisor note 2026-08-31: stays draft — needs operator''s gitlab host live (TASK-1164 blocked on the same) and a decomposition pass before any child is workable.'
   created_at: 2026-09-01T03:47:22.345605688Z
   modified_at: 2026-09-01T03:47:22.345605688Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a079a5-595c-7f90-bfe9-c08e855dca80
+  author: joe
+  content: 'Operator decision (2026-09-06): parked on the advisor''s recommendation. Both hubs are now fully synced with automatic two-leg fan-out (store mirror_remotes + TASK-1097 pre-push code hook, both verified live), which captures the practical benefit without migrating CI, PR machinery, or the public repo. Revisit when EPIC-35 MR parity ships.'
+  created_at: 2026-09-07T02:14:34.588710728Z
+  modified_at: 2026-09-07T02:14:34.588710728Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 deferred: true
 deferred_at: 2026-09-07T02:14:33.922660586Z
