@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:44.799090636Z
-modified_at: 2026-09-07T06:31:44.799090636Z
+modified_at: 2026-09-07T06:32:34.424527058Z
 req_type: Story
 tags:
 - drain
@@ -30,3 +30,8 @@ tags:
 - recommend:approve
 - resilience
 - risk:medium
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a07a90-b8de-71c3-8a91-b030e25c8a93
+  created_at: 2026-09-07T06:32:34.424520008Z
+  created_by: joe
