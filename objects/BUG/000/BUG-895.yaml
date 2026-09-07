@@ -3,20 +3,36 @@ spec_id: BUG-895
 agreed_id: BUG-895
 title: phase-3 no-pr preflight must invoke the BUG-893 auto-open using the pushed branch after the worktree is gone
 description: 'BUG-893 follow-up, found by TASK-1198 attempt 2 (2026-09-07 14:21): the auto-open helper is wired only into the implementer-worktree paths in lib.rs, but the actual failure occurs at the phase-3 reviewer preflight in auto_complete.rs around line 3320 (driver.review_pr_number() is None -> NoPr failure -> STORY-975 retry re-checks without creating anything -> park). By then phase 2 has torn down the worktree — and ALREADY AUTO-PUSHED the branch (origin/task-7-2 existed). Fix: (1) add a branch-based variant of open_orchestrator_pr_for_implementer_worktree that skips the worktree push/ahead check and instead verifies origin/<branch> is ahead of origin/main from project_root, then opens the PR from the head commit subject; (2) add a driver hook (default None) like recover_missing_review_pr called by the phase-3 preflight BEFORE constructing the NoPr failure, implemented by the real driver using the spec branch phase 2 pushed; (3) on success, set the PR number and proceed into the reviewer instead of retrying/parking. Acceptance: pipeline where phase 1 commits and phase 2 auto-pushes but no PR exists proceeds through review on an orchestrator-opened PR; the TASK-1198 3-spec codex validation ships 3/3 with zero relaunch; regression test at the preflight covering worktree-gone + branch-pushed.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T21:24:33.200084383Z
-modified_at: 2026-09-07T21:41:08.556149366Z
+modified_at: 2026-09-07T21:46:20.307024735Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07dd1-438b-71d1-bf39-568817ce1f42
   created_at: 2026-09-07T21:41:08.556137194Z
   created_by: joe
+history:
+- id: 01a07dd6-210c-7d01-8363-becb54bbd5d8
+  author: aida-auto-bump
+  timestamp: 2026-09-07T21:46:20.300566215Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07dd6-2113-7602-b601-1d3890c57df8
+  timestamp: 2026-09-07T21:46:20.307024204Z
+  agent: aida
+  commit_sha: f73faa314493a551c0548252c52393487758b38d
+  summary: Completed via merge f73faa31
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T21:32:16.631817360Z
   implemented_by: joe
+  completed_at: 2026-09-07T21:46:20.300445882Z
+  completion_sha: f73faa314493a551c0548252c52393487758b38d
