@@ -1,0 +1,11 @@
+scope = "BUG-895"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 2129096
+agent = "implementer"
+started_at = "2026-09-07T21:24:52.633904426+00:00"
+heartbeat_at = "2026-09-07T21:24:52.633904426+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
