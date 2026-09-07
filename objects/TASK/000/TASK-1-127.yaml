@@ -3,12 +3,12 @@ spec_id: TASK-1-127
 agreed_id: TASK-151
 title: aida add exited 1 five times on 2026-09-06 in under 50ms; cause unverified
 description: 'Global usage log: five aida add invocations (12 args each) exited 1 in 12-42ms on 2026-09-06, from a product-role session. That latency means a pre-write gate, not a store write. The TASK-647 gate holds an approved request as Draft and does not bail, so the refusal is elsewhere (possibly --queue from the product seat, or arg validation). Unverified: reproduce with the exact argv before promoting. Product direction says a draft dump must never be refused; if the refused writes were drafts, promote to BUG.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-07T06:32:40.645121398Z
-modified_at: 2026-09-07T18:29:40.868973832Z
+modified_at: 2026-09-07T18:30:24.563532996Z
 req_type: Task
 tags:
 - add
@@ -25,3 +25,7 @@ comments:
   modified_at: 2026-09-07T18:29:40.868973832Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-07T18:30:24.563532996Z
+  implemented_by: joe
