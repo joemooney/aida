@@ -11,12 +11,12 @@ description: |-
   - Run aida queue work --batch or aida burndown run with retry_transient at default once that ships; otherwise run as-is and record every manual relaunch.
   - Result recorded as a comment on this task: number of runs launched by a human, specs merged, median first-touch to merge, and every shelve cause. Attach the burndown log path.
   - Pass condition: three merges, zero human relaunches. If it fails, file one BUG per distinct cause and link them here; this task stays open until the pass condition is met on a rerun.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:49.397599124Z
-modified_at: 2026-09-07T18:41:32.596890042Z
+modified_at: 2026-09-07T18:52:08.888643812Z
 req_type: Task
 tags:
 - dogfood
@@ -32,3 +32,11 @@ relationships:
   created_at: 2026-09-07T06:32:35.179687108Z
   created_by: joe
 execution_mode: drain
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: no-progress-watchdog
+  detail: the implementer phase watchdog stopped the session — no commit, file-change, or session output for 10m — likely a degenerate session
+  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework TASK-1198 --work`.'
+  shelved_by: advisor
+  shelved_at: 2026-09-07T18:52:08.888643812Z
