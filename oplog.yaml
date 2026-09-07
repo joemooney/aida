@@ -49242,5 +49242,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4217
+- id: 01a07df2-8b3c-7671-bf6e-fba636876988
+  target_id: 01a07df2-7dfb-7193-9855-32174d17462b
+  author: aida
+  node_id: '1'
+  lamport: 4218
+  timestamp: 2026-09-07T22:17:22.492331193Z
+  kind: !Create
+    title: 'Review PR-1695: [AI:codex] fix(forge): resolve auto-open from target origin (BUG-896)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07ddf`) for branch `bug-896`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1695>
+      - Branch: `bug-896` → `main`
+
+      ## Covers
+
+      - BUG-896
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1695` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4218
 node_id: '1'
