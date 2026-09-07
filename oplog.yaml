@@ -48104,5 +48104,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4152
+- id: 01a07a19-ce3e-7be0-bde7-0e86338f32be
+  target_id: 01a07a19-c885-7960-8fdd-a13ddfa8923b
+  author: aida
+  node_id: '1'
+  lamport: 4153
+  timestamp: 2026-09-07T04:21:46.686169317Z
+  kind: !Create
+    title: 'Review PR-1684: [AI:codex] fix(tail): follow live drain and render prose logs (BUG-880)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07a12`) for branch `bug-880`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1684>
+      - Branch: `bug-880` → `main`
+
+      ## Covers
+
+      - BUG-880
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1684` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4153
 node_id: '1'
