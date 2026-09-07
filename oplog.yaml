@@ -47880,5 +47880,17 @@ operations:
   timestamp: 2026-09-07T02:27:31.900056281Z
   kind: !SetStatus
     status: Completed
-clock: 4135
+- id: 01a079b1-79d8-7f92-9287-9768be7eb872
+  target_id: 01a079b1-72cd-7240-a06a-a978137b59df
+  author: aida
+  node_id: '1'
+  lamport: 4136
+  timestamp: 2026-09-07T02:27:49.336957007Z
+  kind: !Create
+    title: work-machine environment smoke for codex
+    description: 'The residual 10-minute half of TASK-1182 after the 2026-09-06 home-testbed validation proved everything else: on the actual work machine, update aida, run aida init in the work repo (AGENTS.md block now injects per BUG-838), confirm the [agents] vendor pin is honored, run one aida-managed codex task end-to-end, and note anything environment-specific: proxy, work gitlab, employer codex build, Claude genuinely absent. Evidence goes on this task; findings become specs.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 4136
 node_id: '1'
