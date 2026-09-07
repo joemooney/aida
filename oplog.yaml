@@ -47848,5 +47848,17 @@ operations:
   timestamp: 2026-09-07T02:17:11.395992514Z
   kind: !SetTitle
     title: 'Codex end-to-end validation: home codex-pinned testbed (phase 1) + work-machine environment smoke (phase 2)'
-clock: 4132
+- id: 01a079ad-5dea-7302-ac44-3dec7804f890
+  target_id: 01a079ad-5a4f-7111-9a49-17551272cc70
+  author: aida
+  node_id: '1'
+  lamport: 4133
+  timestamp: 2026-09-07T02:23:20.042140213Z
+  kind: !Create
+    title: phase 3 fabricates PR-0 when the implementer never opened a PR — reviewer launches against a nonexistent PR
+    description: 'Found by the codex testbed validation (2026-09-06, TASK-1182 phase 1): a codex phase-1 implementer committed locally but never pushed its branch or opened a PR. Phase 2 passed anyway, and phase 3 launched a reviewer against PR NUMBER ZERO, erroring ''PR-0 has no backing specs''. Sibling of BUG-878 (teardown must push unpushed commits): even with that fixed, a missing PR must be detected — phase 2 (or the phase-3 preflight) should verify an open PR exists for the spec''s branch and, when absent, either OPEN it (branch pushed + aida pr machinery, the orchestrator owns the branch) or park the spec with a clear ''no PR for branch <b>'' failure and hint. PR number 0 must never reach a reviewer launch. Also capture the vendor-parity note: the codex implementer skill pack completed code+commit but skipped the push/PR step the claude flow performs — the phase contract must not depend on vendor skill compliance. Acceptance: pipeline with an implementer that commits without pushing ends with either an auto-opened PR reviewed normally or a parked spec naming the missing-PR cause; a reviewer session can never spawn with pr_number == 0; regression test on the phase-2/3 PR-resolution guard.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4133
 node_id: '1'
