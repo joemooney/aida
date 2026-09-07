@@ -4608,3 +4608,11 @@ Picked up `BUG-888` from the implementer queue. The bug was that node-qualified 
 Changed queue-work implementation identity to prefer the stored origin `spec_id` over `agreed_id` for session scope and manifest entries, while leaving display-oriented matching intact. Centralized work-branch parsing so `task-1-127` and `task-1-127-fix` resolve to `TASK-1-127` instead of `TASK-1`, and reused that path in doctor cleanup. Broadened object-store spec parsing, commit trailer detection, PR branch metadata extraction, and trace scanning to preserve node-qualified IDs as atomic values. Added `// trace:BUG-888 | ai:codex` comments on the queue and branch-resolution changes.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-core object_store --lib`; `cargo test -p aida-cli-lib is_work_spec_branch_name_tests --lib`; `cargo test -p aida-cli-lib queue_work_tests --lib`; `cargo test -p aida-cli-lib pr_ship::tests --lib`; `cargo test -p aida-cli-lib statusline_tests --lib`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-07 — BUG-890 stale human-review lease prompt
+
+Picked up `BUG-890` from the implementer queue. The bug was that `aida human review <SPEC>` / `aida review <SPEC>` could refuse on a stale lease that `aida why` already classified as dead-owner stale, forcing the operator to manually end the old session and rerun the review.
+
+Changed review-lease acquisition to use an explicit conflict policy. Human interactive review now prompts before releasing a reclaimable stale lease and then proceeds through the existing session cleanup machinery; declining leaves the old lease unchanged. Non-interactive/headless review refuses with a concrete `aida session end <lease> --yes` hint instead of silently releasing. Live conflicts keep the existing hard-refusal branch. Added `// trace:BUG-890 | ai:codex` comments on the release-and-proceed prompt path.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib bug_511_review_lease_tests -- --nocapture`; `cargo test -p aida-cli-lib bug_777_stale_lease_recovery_tests -- --nocapture`. Existing unrelated Rust warnings remain in the test output.

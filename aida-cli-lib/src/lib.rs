@@ -67103,7 +67103,7 @@ fn requirement_is_deferred(req: &aida_core::Requirement) -> bool {
 /// file on drop covers every exit path of [`handle_review_spec`] (verdict
 /// presented, surface bailed early, reviewer launch failed, `?` errors).
 /// A SIGKILL'd review leaks the file; the dead-PID reaping in
-/// [`acquire_review_lease`] / [`auto_release_decision_for_lease`] cleans
+/// [`acquire_review_lease_with_mode`] / [`auto_release_decision_for_lease`] cleans
 /// that up on the next coordination touch. trace:BUG-511 | ai:claude
 #[derive(Debug)]
 struct ReviewLeaseGuard {
@@ -67116,6 +67116,48 @@ impl Drop for ReviewLeaseGuard {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReviewLeaseConflictMode {
+    AutoReleaseStale,
+    PromptBeforeRelease,
+    RefuseStaleNonInteractive,
+}
+
+fn review_stale_lease_refusal(spec_id: &str, conflict: &SessionLease) -> String {
+    format!(
+        "`{spec_id}` is already in flight behind stale lease {} (owner {}, since {}). \
+         Headless review cannot ask whether to release it. Re-run from a TTY to release-and-proceed, \
+         or end it explicitly with `aida session end {} --yes` and then re-run `aida review {spec_id}`.",
+        &conflict.id[..conflict.id.len().min(8)],
+        conflict.owner,
+        conflict.started_at.format("%Y-%m-%d %H:%M UTC"),
+        &conflict.id[..conflict.id.len().min(8)],
+    )
+}
+
+fn confirm_release_stale_review_lease(spec_id: &str, conflict: &SessionLease) -> Result<bool> {
+    use std::io::Write;
+    eprintln!(
+        "  {} stale lease {} is blocking review of `{}` (owner {}, since {}).",
+        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+        (&conflict.id[..conflict.id.len().min(8)]).yellow(),
+        spec_id,
+        conflict.owner,
+        conflict.started_at.format("%Y-%m-%d %H:%M UTC"),
+    );
+    eprintln!(
+        "  {} release it via session cleanup and continue? [y/N] ",
+        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed()
+    );
+    std::io::stderr().flush()?;
+    let mut ans = String::new();
+    std::io::stdin().read_line(&mut ans)?;
+    Ok(matches!(
+        ans.trim().to_ascii_lowercase().as_str(),
+        "y" | "yes"
+    ))
+}
+
 /// BUG-511: take a session lease scoped to the spec for the duration of an
 /// `aida review <spec>` run — the same coordination substrate `aida queue
 /// work` uses (`.aida/sessions/`, [`find_scope_lease_conflict`], the
@@ -67124,16 +67166,75 @@ impl Drop for ReviewLeaseGuard {
 /// on it refuses instead of double-starting. The lease is an advisory lock
 /// (empty `worktree_path`, the TASK-474 convention); its liveness signal
 /// is this process's PID. trace:BUG-511 | ai:claude
-fn acquire_review_lease(
+fn acquire_review_lease_with_mode(
     project_root: &std::path::Path,
     spec_id: &str,
     branch: &str,
+    conflict_mode: ReviewLeaseConflictMode,
 ) -> Result<ReviewLeaseGuard> {
     let cfg = orchestrator::OrchestratorConfig::load(project_root);
     let mut remaining = 16usize; // defense-in-depth bound, mirrors queue work's sweep
     while let Some(conflict) = find_scope_lease_conflict(&list_leases(project_root), spec_id) {
+        let recovery = stale_lease_recovery_for_lease(&conflict);
+        if matches!(
+            recovery.verdict,
+            StaleLeaseRecovery::ReclaimableClean { .. }
+        ) && conflict_mode != ReviewLeaseConflictMode::AutoReleaseStale
+        {
+            match conflict_mode {
+                ReviewLeaseConflictMode::PromptBeforeRelease => {
+                    // BUG-890: human review is interactive, so a stale
+                    // clean/advisory lease should be an explicit
+                    // release-and-proceed choice rather than a hard stop.
+                    // trace:BUG-890 | ai:codex
+                    if !confirm_release_stale_review_lease(spec_id, &conflict)? {
+                        anyhow::bail!(
+                            "review aborted — stale lease {} on `{spec_id}` is still held.",
+                            &conflict.id[..conflict.id.len().min(8)]
+                        );
+                    }
+                }
+                ReviewLeaseConflictMode::RefuseStaleNonInteractive => {
+                    anyhow::bail!(review_stale_lease_refusal(spec_id, &conflict));
+                }
+                ReviewLeaseConflictMode::AutoReleaseStale => unreachable!(),
+            }
+            eprintln!(
+                "  {} released stale lease {} on {} (process dead)",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                (&conflict.id[..conflict.id.len().min(8)]).yellow(),
+                spec_id,
+            );
+            let _ = force_cleanup_lease(project_root, &conflict);
+            remaining -= 1;
+            if remaining == 0 {
+                anyhow::bail!(
+                    "stale-lease release gave up after 16 iterations on `{spec_id}` — \
+                     the lease store may be corrupt; inspect `.aida/sessions/`"
+                );
+            }
+            continue;
+        }
         match auto_release_decision_for_lease(project_root, &conflict, &cfg) {
             orchestrator::AutoReleaseDecision::SafelyDormant { process_dead, .. } => {
+                match conflict_mode {
+                    ReviewLeaseConflictMode::AutoReleaseStale => {}
+                    ReviewLeaseConflictMode::PromptBeforeRelease => {
+                        // BUG-890: human review is interactive, so a stale
+                        // clean/advisory lease should be an explicit
+                        // release-and-proceed choice rather than a hard stop.
+                        // trace:BUG-890 | ai:codex
+                        if !confirm_release_stale_review_lease(spec_id, &conflict)? {
+                            anyhow::bail!(
+                                "review aborted — stale lease {} on `{spec_id}` is still held.",
+                                &conflict.id[..conflict.id.len().min(8)]
+                            );
+                        }
+                    }
+                    ReviewLeaseConflictMode::RefuseStaleNonInteractive => {
+                        anyhow::bail!(review_stale_lease_refusal(spec_id, &conflict));
+                    }
+                }
                 eprintln!(
                     "  {} released stale lease {} on {} ({})",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -67473,7 +67574,13 @@ fn handle_review_spec(
     // why` / burndown-explain see the spec in flight and a concurrent
     // review or pickup refuses instead of double-starting. Released on
     // every exit path via the guard's Drop. trace:BUG-511 | ai:claude
-    let _review_lease = acquire_review_lease(project_root, &spec_id, &surface_branch)?;
+    let review_lease_mode = if interactive {
+        ReviewLeaseConflictMode::PromptBeforeRelease
+    } else {
+        ReviewLeaseConflictMode::RefuseStaleNonInteractive
+    };
+    let _review_lease =
+        acquire_review_lease_with_mode(project_root, &spec_id, &surface_branch, review_lease_mode)?;
 
     // BUG-510: stale-base pre-flight — same predicate as the reviewer-role
     // path (`aida queue work <PR-N> --for reviewer` / orchestrator phase 3:
