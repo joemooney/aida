@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:08:12.883065035Z
-modified_at: 2026-08-29T19:45:07.838088634Z
+modified_at: 2026-09-07T02:27:23.279921332Z
 req_type: Story
 tags:
 - codex orchestrator drain
@@ -37,3 +37,6 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T19:08:14.953019118Z
+deferred: true
+deferred_at: 2026-09-07T02:27:23.279921332Z
+deferred_until: work-environment sandbox facts from the deferred codex smoke establish whether parallel agent launches are permitted (the spec's own sequencing condition)
