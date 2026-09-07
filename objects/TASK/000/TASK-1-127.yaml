@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-07T06:32:40.645121398Z
-modified_at: 2026-09-07T18:54:47.174322975Z
+modified_at: 2026-09-07T20:51:48.193836557Z
 req_type: Task
 tags:
 - add
@@ -23,6 +23,12 @@ comments:
   content: 'Codex investigation: current main does not reproduce the product-role draft-dump refusal for the likely argv shape. Added a real-binary regression covering AIDA_SESSION_ROLE=product aida add --status draft --tags from-product:pm,recommend:approve,risk:low --queue --for advisor; it exits 0, files Draft, and appears in the advisor queue.'
   created_at: 2026-09-07T18:29:40.868973832Z
   modified_at: 2026-09-07T18:29:40.868973832Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a07da4-3361-7541-8d93-7c2071cfcb19
+  author: joe
+  content: 'Root cause candidate CONFIRMED live (2026-09-07 13:52): aida add exits 1 fast with ''failed to parse .aida/config.toml'' when the config is invalid — an aida pull autostash had left literal conflict markers in config.toml, and appends can duplicate sections. The five 2026-09-06 exit-1s match this signature (pre-write gate = config parse). Follow-ups worth their own specs: (a) aida pull must refuse or quarantine an autostash pop that leaves conflict markers, (b) aida add should print the parse error loudly (it may have been swallowed in some shells), (c) config writes should go through a section-aware editor, never raw append.'
+  created_at: 2026-09-07T20:51:48.193836557Z
+  modified_at: 2026-09-07T20:51:48.193836557Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a07d39-10d2-7911-9999-5df4f4a11400
