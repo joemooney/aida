@@ -48428,5 +48428,26 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 4169
+- id: 01a07a91-0416-7373-b95a-12fd864a899d
+  target_id: 01a07a90-ffef-7502-b4fa-bcf845a1b0b1
+  author: aida
+  node_id: '1'
+  lamport: 4170
+  timestamp: 2026-09-07T06:31:59.254171155Z
+  kind: !Create
+    title: Extract aida why into a standalone aida-why crate and binary
+    description: |-
+      ## Why
+      Operator decision 2026-09-06: factor aida why out as its own crate and stand-alone product. It already works with zero setup on a folder of markdown plus trace comments, and it is the one capability no neighbour tool (Beads, Spec Kit, Kiro, Cosmos) has. Standing alone it can ride their distribution as the "why layer" on top of whatever record the user already keeps; inside the aida binary it stays the index from code into the memory.
+
+      ## Acceptance
+      - New workspace crate aida-why (library + optional bin target "aida-why") containing: trace-comment scanner, the (SPEC-ID) trailer git-blame fallback, the markdown-folder spec resolver, and the human/JSON renderers. No dependency on aida-core storage, cache, roles, or the orphan store.
+      - aida-core / aida-cli-lib depend on aida-why; aida why <file:line> output is byte-identical before and after (golden test).
+      - aida-why --version, --json, and a --specs-dir flag; resolves a spec by scanning specs/**/*.md and objects/**/*.yaml by default.
+      - Crate README with the 60-second example from the aida README; publishable to crates.io independently (aida-crate metadata pattern).
+      - Follow-up filed, not in scope: importers for .beads/beads.jsonl and Spec Kit specs/ so their ids resolve in aida-why.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4170
 node_id: '1'
