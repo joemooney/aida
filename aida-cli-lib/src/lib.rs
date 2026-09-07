@@ -31468,6 +31468,7 @@ pub(crate) struct OpenPrInfo {
     pub(crate) number: u64,
     pub(crate) title: String,
     pub(crate) url: String,
+    pub(crate) head_branch: Option<String>,
 }
 
 /// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
@@ -31742,7 +31743,7 @@ fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::
     }
 }
 
-/// Run `gh pr list <filter> --limit 1 --json number,title,url` and parse the
+/// Run `gh pr list <filter> --limit 1 --json number,title,url,headRefName` and parse the
 /// single result line into a [`PrLookup`]. The shared core behind the
 /// branch-keyed and spec-keyed PR lookups — each caller supplies only its
 /// distinguishing `<filter>` args (`--head <branch>` / `--search <query>`
@@ -31766,9 +31767,9 @@ fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup
         "--limit",
         "1",
         "--json",
-        "number,title,url",
+        "number,title,url,headRefName",
         "-q",
-        r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+        r#".[] | "\(.number)\t\(.title)\t\(.url)\t\(.headRefName)""#,
     ]);
     let spawned = std::process::Command::new(&gh_bin)
         .current_dir(project_root)
@@ -32348,6 +32349,7 @@ fn pr_lookup_from_change_lookup(c: crate::forge::ChangeLookup) -> PrLookup {
             number: r.id,
             title: r.title.unwrap_or_default(),
             url: r.url,
+            head_branch: (!r.branch.is_empty()).then_some(r.branch),
         }),
         crate::forge::ChangeLookup::NoChange => PrLookup::NoOpenPr,
         crate::forge::ChangeLookup::CliMissing => PrLookup::GhMissing,
@@ -32395,6 +32397,16 @@ pub(crate) fn change_lookup_for_branch(
 ) -> crate::forge::ChangeLookup {
     crate::forge::forge_for(project_root)
         .change_for_branch(branch)
+        .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")))
+}
+
+// trace:BUG-876 | ai:codex
+fn change_lookup_for_spec(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> crate::forge::ChangeLookup {
+    crate::forge::forge_for(project_root)
+        .change_for_spec(spec)
         .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")))
 }
 
@@ -32462,15 +32474,136 @@ fn probe_branch_on_origin(project_root: &std::path::Path, branch: &str) -> Branc
     }
 }
 
-/// Fallback PR lookup for BUG-223: find an open PR that references `spec` in
-/// its title or body, used when the branch-keyed lookup comes up empty
-/// because `/aida-pr` swapped the branch. `gh pr list --search` does a
-/// full-text search across PR title + body; an AIDA PR body always names
-/// every covered spec in its `## Per-spec` section, so the spec id is a
-/// reliable key even after the branch the PR was opened from changed.
+fn spec_branch_slug(spec: &str) -> String {
+    spec.trim().to_ascii_lowercase().replace([' ', '_'], "-")
+}
+
+fn branch_name_references_spec(branch: &str, spec: &str) -> bool {
+    let slug = spec_branch_slug(spec);
+    let branch = branch
+        .trim()
+        .trim_start_matches("origin/")
+        .to_ascii_lowercase();
+    !slug.is_empty() && (branch == slug || branch.contains(&slug))
+}
+
+fn open_pr_commit_headlines_reference_spec(
+    project_root: &std::path::Path,
+    pr: u64,
+    spec: &str,
+) -> bool {
+    let Some(gh_bin) = resolve_gh_binary() else {
+        return false;
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "commits",
+            "-q",
+            ".commits[].messageHeadline",
+        ])
+        .output();
+    let Ok(out) = out else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    let wanted = spec.to_ascii_uppercase();
+    String::from_utf8_lossy(&out.stdout).lines().any(|line| {
+        extract_spec_ids_from_commit(line)
+            .into_iter()
+            .any(|id| id.eq_ignore_ascii_case(&wanted))
+    })
+}
+
+fn detect_open_pr_for_spec_by_head_or_commit(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> PrLookup {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return PrLookup::GhMissing,
+    };
+    let spawned = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "open",
+            "--limit",
+            "100",
+            "--json",
+            "number,title,url,headRefName",
+            "-q",
+            r#".[] | "\(.number)\t\(.title)\t\(.url)\t\(.headRefName)""#,
+        ])
+        .output();
+    let out = match spawned {
+        Ok(o) => o,
+        Err(e) => return PrLookup::GhFailed(gh_spawn_error(&gh_bin, project_root, &e)),
+    };
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        if gh_stderr_is_network_error(&stderr) {
+            return PrLookup::GhUnreachable(if stderr.is_empty() {
+                format!("gh exited {}", out.status)
+            } else {
+                stderr
+            });
+        }
+        return PrLookup::GhFailed(if stderr.is_empty() {
+            format!("gh exited {}", out.status)
+        } else {
+            stderr
+        });
+    }
+
+    let mut candidates: Vec<OpenPrInfo> = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        if let PrLookup::Found(pr) = parse_gh_pr_line(line) {
+            candidates.push(pr);
+        }
+    }
+
+    for pr in &candidates {
+        if pr
+            .head_branch
+            .as_deref()
+            .is_some_and(|b| branch_name_references_spec(b, spec))
+        {
+            return PrLookup::Found(OpenPrInfo {
+                number: pr.number,
+                title: pr.title.clone(),
+                url: pr.url.clone(),
+                head_branch: pr.head_branch.clone(),
+            });
+        }
+    }
+    for pr in candidates {
+        if open_pr_commit_headlines_reference_spec(project_root, pr.number, spec) {
+            return PrLookup::Found(pr);
+        }
+    }
+    PrLookup::NoOpenPr
+}
+
+/// Fallback PR lookup for BUG-223/BUG-876: find an open PR that references
+/// `spec`, used when branch/lease linkage is unavailable or stale. Search title
+/// / body first, then open PR head branches (`story-818`) and commit headlines
+/// carrying `(SPEC-ID)` trailers so releasing a lease cannot hide a pushed PR.
 /// trace:BUG-223 | ai:claude
+// trace:BUG-876 | ai:codex
 pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
-    gh_pr_list_first(project_root, &["--search", spec, "--state", "open"])
+    match gh_pr_list_first(project_root, &["--search", spec, "--state", "open"]) {
+        PrLookup::NoOpenPr => detect_open_pr_for_spec_by_head_or_commit(project_root, spec),
+        other => other,
+    }
 }
 
 /// TASK-843: list ALL open PRs that reference `spec` (number + head branch),
@@ -32757,6 +32890,10 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
         number,
         title: parts[1].to_string(),
         url: parts[2].to_string(),
+        head_branch: parts
+            .get(3)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
     })
 }
 
@@ -34341,6 +34478,7 @@ fn try_auto_queue_pr_review(
             number: c.id,
             title: c.title.unwrap_or_default(),
             url: c.url,
+            head_branch: (!c.branch.is_empty()).then_some(c.branch),
         },
         crate::forge::ChangeLookup::NoChange => {
             return AutoQueueOutcome::skipped_by_design(format!(
@@ -40328,6 +40466,7 @@ fn render_in_flight_grouped(
                     number: c.id,
                     title: c.title.unwrap_or_default(),
                     url: c.url,
+                    head_branch: (!c.branch.is_empty()).then_some(c.branch),
                 };
                 println!(
                     "  {} {} — {} spec{}:",
@@ -66704,12 +66843,41 @@ fn classify_review_surface(
     linkage: &GitLinkage,
     change: Option<crate::forge::ChangeLookup>,
 ) -> ReviewSurface {
+    classify_review_surface_forge_first(linkage, None, change)
+}
+
+/// BUG-876: resolve review surfaces forge-first. A lease/local branch is only
+/// an accelerator; an open PR whose head branch or commit trailers reference
+/// the spec remains the review surface after the lease is released.
+// trace:BUG-876 | ai:codex
+fn classify_review_surface_forge_first(
+    linkage: &GitLinkage,
+    spec_change: Option<crate::forge::ChangeLookup>,
+    branch_change: Option<crate::forge::ChangeLookup>,
+) -> ReviewSurface {
     if linkage.shipped {
         return ReviewSurface::Shipped {
             number: linkage.shipped_pr,
         };
     }
-    match (linkage.branch.clone(), change) {
+
+    if let Some(crate::forge::ChangeLookup::Found(c)) = spec_change {
+        let branch = if c.branch.is_empty() {
+            linkage
+                .branch
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string())
+        } else {
+            c.branch
+        };
+        return ReviewSurface::OpenChange {
+            branch,
+            number: c.id,
+            url: c.url,
+        };
+    }
+
+    match (linkage.branch.clone(), branch_change) {
         (Some(branch), Some(crate::forge::ChangeLookup::Found(c))) => ReviewSurface::OpenChange {
             branch,
             number: c.id,
@@ -67089,13 +67257,16 @@ fn handle_review_spec(
         return Ok(());
     }
 
-    // Resolve the change lookup only when there's an in-flight branch — the
-    // shipped / local cases never touch the forge.
-    let change = linkage
+    // BUG-876: look for an open PR by spec before relying on lease/local branch
+    // linkage. Releasing the implementer's lease must not change a pushed PR
+    // into "built locally, never pushed".
+    // trace:BUG-876 | ai:codex
+    let spec_change = change_lookup_for_spec(project_root, &spec_id);
+    let branch_change = linkage
         .branch
         .as_deref()
         .map(|b| change_lookup_for_branch(project_root, b));
-    let surface = classify_review_surface(&linkage, change);
+    let surface = classify_review_surface_forge_first(&linkage, Some(spec_change), branch_change);
 
     let change_noun = forge.change_noun();
 
@@ -75994,6 +76165,7 @@ impl RealPhaseDriver {
                 number: c.id,
                 title: c.title.unwrap_or_default(),
                 url: c.url,
+                head_branch: (!c.branch.is_empty()).then_some(c.branch),
             }),
             crate::forge::ChangeLookup::NoChange => {
                 match detect_open_pr_for_spec_via_forge(&self.project_root, &self.spec) {
@@ -77951,6 +78123,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             number: c.id,
                             title: c.title.unwrap_or_default(),
                             url: c.url,
+                            head_branch: (!c.branch.is_empty()).then_some(c.branch),
                         }),
                         _ => None,
                     }

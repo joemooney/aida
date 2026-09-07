@@ -375,7 +375,7 @@ fn change_lookup_from_pr_lookup(pl: crate::PrLookup, branch: &str) -> ChangeLook
         crate::PrLookup::Found(info) => ChangeLookup::Found(ChangeRef {
             id: info.number,
             url: info.url,
-            branch: branch.to_string(),
+            branch: info.head_branch.unwrap_or_else(|| branch.to_string()),
             base: String::new(),
             title: Some(info.title),
         }),
@@ -2655,6 +2655,7 @@ mod tests {
                 number: 42,
                 title: "Fix it".to_string(),
                 url: "https://example/pr/42".to_string(),
+                head_branch: None,
             }),
             "feature",
         );

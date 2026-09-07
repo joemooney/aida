@@ -10,6 +10,22 @@ fn parses_single_well_formed_line() {
             assert_eq!(p.number, 42);
             assert_eq!(p.title, "Fix the thing");
             assert_eq!(p.url, "https://github.com/o/r/pull/42");
+            assert_eq!(p.head_branch, None);
+        }
+        other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
+    }
+}
+
+/// BUG-876: spec-search review lookup needs the PR head branch after the
+/// implementer lease is gone.
+// trace:BUG-876 | ai:codex
+#[test]
+fn parses_optional_head_branch() {
+    let stdout = "1679\tFix\turl\tstory-818\n";
+    match parse_gh_pr_line(stdout) {
+        PrLookup::Found(p) => {
+            assert_eq!(p.number, 1679);
+            assert_eq!(p.head_branch.as_deref(), Some("story-818"));
         }
         other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
     }
