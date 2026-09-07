@@ -76099,6 +76099,19 @@ fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> advisor::Calibrat
 }
 
 impl RealPhaseDriver {
+    fn ensure_implementer_branch_pushed(
+        &self,
+        branch: &str,
+    ) -> Result<(), auto_complete::PhaseFailure> {
+        let worktree = self.implementer_worktree.as_deref().ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
+                "internal: implementer worktree not recorded before the CI phase",
+            )
+        })?;
+        ensure_implementer_branch_pushed(worktree, branch, self.json)
+    }
+
     /// End the implementer session: `aida session end <lease> --yes --skip-ci`.
     /// Releases the lease, returns the warm-pool worktree to idle, and (only
     /// when an OPEN PR still exists on the branch) auto-queues the `Review
@@ -76293,6 +76306,126 @@ fn orchestrator_phase_child_env(
         (orchestrator::VARIANT_ENV, variant.slug().to_string()),
         (orchestrator::PHASE_ENV, phase.index().to_string()),
     ]
+}
+
+fn git_output_checked(worktree: &std::path::Path, args: &[&str]) -> Result<String, String> {
+    let out = std::process::Command::new("git")
+        .current_dir(worktree)
+        .args(args)
+        .output()
+        .map_err(|e| format!("could not invoke `git {}`: {e}", args.join(" ")))?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        Err(if stderr.is_empty() {
+            format!("`git {}` exited {}", args.join(" "), out.status)
+        } else {
+            format!("`git {}` failed: {stderr}", args.join(" "))
+        })
+    }
+}
+
+fn parse_git_count(s: &str, context: &str) -> Result<u32, auto_complete::PhaseFailure> {
+    s.trim().parse::<u32>().map_err(|_| {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::Internal,
+            format!(
+                "could not parse `{context}` count from git output `{}`",
+                s.trim()
+            ),
+        )
+    })
+}
+
+fn push_branch_from_implementer_worktree(
+    worktree: &std::path::Path,
+    branch: &str,
+) -> Result<(), auto_complete::PhaseFailure> {
+    // trace:BUG-878 | ai:codex
+    let refspec = format!("HEAD:refs/heads/{branch}");
+    let out = std::process::Command::new("git")
+        .current_dir(worktree)
+        .args(["push", "-u", "origin", &refspec])
+        .output()
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not invoke `git push -u origin {refspec}`: {e}"),
+            )
+        })?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    Err(auto_complete::PhaseFailure::new(format!(
+        "could not push implementer branch `{branch}` from `{}` before phase-2 CI/teardown{}",
+        worktree.display(),
+        if stderr.is_empty() {
+            String::new()
+        } else {
+            format!(": {stderr}")
+        }
+    )))
+}
+
+fn ensure_implementer_branch_pushed(
+    worktree: &std::path::Path,
+    branch: &str,
+    json: bool,
+) -> Result<(), auto_complete::PhaseFailure> {
+    // trace:BUG-878 | ai:codex
+    let current = git_output_checked(worktree, &["branch", "--show-current"]).map_err(|e| {
+        auto_complete::PhaseFailure::new(format!(
+            "could not verify implementer branch before phase-2 CI/teardown: {e}"
+        ))
+    })?;
+    if current != branch {
+        return Err(auto_complete::PhaseFailure::new(format!(
+            "implementer worktree `{}` is on `{}` but phase 2 is driving `{}` — refusing to push or tear down",
+            worktree.display(),
+            if current.is_empty() { "DETACHED" } else { &current },
+            branch
+        )));
+    }
+
+    match git_output_checked(
+        worktree,
+        &["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+    ) {
+        Ok(upstream) => {
+            let ahead = git_output_checked(worktree, &["rev-list", "--count", &format!("{upstream}..HEAD")])
+                .map_err(|e| {
+                    auto_complete::PhaseFailure::new(format!(
+                        "could not compare implementer branch `{branch}` to `{upstream}` before phase-2 CI/teardown: {e}"
+                    ))
+                })
+                .and_then(|s| parse_git_count(&s, "ahead-of-upstream"))?;
+            if ahead == 0 {
+                return Ok(());
+            }
+            if !json {
+                eprintln!(
+                    "  {} implementer branch `{}` is {} commit(s) ahead of `{}` — pushing before CI/teardown",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    branch,
+                    ahead,
+                    upstream,
+                );
+            }
+            push_branch_from_implementer_worktree(worktree, branch)
+        }
+        Err(_) => {
+            if !json {
+                eprintln!(
+                    "  {} implementer branch `{}` has no upstream — pushing before CI/teardown",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    branch,
+                );
+            }
+            push_branch_from_implementer_worktree(worktree, branch)
+        }
+    }
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
@@ -76835,6 +76968,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: branch not resolved before the CI phase",
             )
         })?;
+        self.ensure_implementer_branch_pushed(&branch)?;
 
         // Probe, then block until CI is terminal unless the spec opted into
         // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
