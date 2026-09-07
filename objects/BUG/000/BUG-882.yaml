@@ -3,27 +3,39 @@ spec_id: BUG-882
 agreed_id: BUG-882
 title: reviewer-scoped queue work on a Done spec is refused by the implementer preflight
 description: 'Found completing the codex testbed validation (2026-09-06): aida queue work PR-3 --role reviewer --no-human refused with spec TASK-4 is Done — work already shipped, refusing to start a new session. A Done spec with an open PR is THE normal review state — the refusal is implementer-shaped preflight applied to a reviewer-scoped launch. Same disease the PR-1679 review found in the guided path (fixed there via specless launch); the generic PR/reviewer launch path needs the equivalent: role reviewer (or PR scope) skips the shipped-work preflight and takes a review-shaped lease that never flips spec status. Acceptance: queue work PR-N --role reviewer on a Done-backed open PR launches the reviewer; the spec status and implementer leases are untouched; regression test beside the guided-launch tests.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T04:18:21.718226219Z
-modified_at: 2026-09-07T05:41:39.358438499Z
+modified_at: 2026-09-07T05:46:25.003487368Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07a50-5e65-7b63-b23c-1d58dbb461e7
   created_at: 2026-09-07T05:21:28.315855738Z
   created_by: joe
+history:
+- id: 01a07a67-4b64-7622-8311-56ffdfc1e20c
+  author: aida-auto-bump
+  timestamp: 2026-09-07T05:46:24.996703736Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07a67-4b6b-7ac3-97b7-e07ebe461be2
+  timestamp: 2026-09-07T05:46:25.003486657Z
+  agent: aida
+  commit_sha: 3cedf3917631ae704efc33616c3f9a27c3a9dc96
+  summary: Completed via merge 3cedf391
+  punted:
+  - 'punted: the reviewer phase watchdog stopped the session — no session output for 10m — likely a degenerate session'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-07T05:12:02.013605926Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: failed
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-882 --work`'
-  shelved_at: 2026-09-07T05:37:23.146790475Z
+  completed_at: 2026-09-07T05:46:24.996581974Z
+  completion_sha: 3cedf3917631ae704efc33616c3f9a27c3a9dc96
