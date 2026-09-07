@@ -48361,5 +48361,30 @@ operations:
     req_type: Story
     status: Draft
     priority: High
-clock: 4166
+- id: 01a07a90-cf30-7e23-90d1-16bf4349b5b9
+  target_id: 01a07a90-cb9f-72d1-b250-c2a25fde1039
+  author: aida
+  node_id: '1'
+  lamport: 4167
+  timestamp: 2026-09-07T06:31:45.712641175Z
+  kind: !Create
+    title: Drain self-retries once on transient shelve causes before parking NeedsAttention
+    description: |-
+      ## Why
+      September 2026, six days: 104 drain runs, 41 merged one spec, 54 shelved and stopped, 9 did nothing. Every one of the 26 shelved specs is now Completed, because the operator noticed and relaunched the drain by hand roughly every 80 minutes. The per-run hit rate is 40%; the per-spec eventual rate is 100%. The difference is human relaunches. A single automatic retry on transient causes moves the recovery from the operator to the drain.
+
+      ## Acceptance
+      - Policy under [drain] in .aida/config.toml: retry_transient = 1 (default), max 3. Retry causes (closed set, from the typed-cause story): watchdog, no-verdict, no-pr, tool-exit, cache-locked. Never retried: verdict:request-changes, verdict:reject, ci-red, environmental, internal.
+      - A retried spec re-enters the failed phase only (reviewer retry does not re-run the implementer; implementer retry starts a fresh phase 1 on the same branch state).
+      - Each retry appends a DrainRetry to drain state and a SpecRetried event to events.jsonl with cause + attempt number; aida drain status shows "attempt 2/2".
+      - After the retry budget the spec parks NeedsAttention exactly as today, with the cause and attempt count in the finding.
+      - Unit test: a mock reviewer that fails with watchdog then succeeds yields one merge and one SpecRetried; a mock RequestChanges yields zero retries.
+      - Dogfood evidence: one drain on this repo with retry_transient = 1 shipping at least 3 specs with no manual relaunch, recorded in the PR.
+
+      ## Related
+      Blocked by the typed-cause story (retry policy keys off the cause). Do not ship before it.
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 4167
 node_id: '1'
