@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-07T06:32:40.645121398Z
-modified_at: 2026-09-07T18:22:28.597223728Z
+modified_at: 2026-09-07T18:29:40.868973832Z
 req_type: Task
 tags:
 - add
@@ -17,4 +17,11 @@ tags:
 - gate
 - kind:observation
 - severity:observation
+comments:
+- id: 01a07d22-1584-7833-a59f-6ef1e2116194
+  author: joe
+  content: 'Codex investigation: current main does not reproduce the product-role draft-dump refusal for the likely argv shape. Added a real-binary regression covering AIDA_SESSION_ROLE=product aida add --status draft --tags from-product:pm,recommend:approve,risk:low --queue --for advisor; it exits 0, files Draft, and appears in the advisor queue.'
+  created_at: 2026-09-07T18:29:40.868973832Z
+  modified_at: 2026-09-07T18:29:40.868973832Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
