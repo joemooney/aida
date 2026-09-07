@@ -1,9 +1,48 @@
 use super::{
     build_auto_punt_args, build_integrate_rebase_args, build_phase3_auto_rebase_args,
-    find_orchestrated_lease, headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
-    RealPhaseDriver,
+    ensure_implementer_branch_pushed, find_orchestrated_lease, headless_log_is_zero_bytes,
+    list_leases, orchestrator_phase_child_env, RealPhaseDriver,
 };
 use crate::auto_complete::PhaseDriver;
+use std::process::Command;
+
+fn git(root: &std::path::Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .current_dir(root)
+        .args(args)
+        .output()
+        .unwrap_or_else(|e| panic!("git {} failed to spawn: {e}", args.join(" ")));
+    assert!(
+        out.status.success(),
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+fn write_commit(root: &std::path::Path, file: &str, body: &str, msg: &str) {
+    std::fs::write(root.join(file), body).unwrap();
+    git(root, &["add", file]);
+    git(root, &["commit", "-q", "-m", msg]);
+}
+
+fn git_repo_with_origin() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let worktree = tmp.path().join("work");
+    std::fs::create_dir_all(&worktree).unwrap();
+    git(tmp.path(), &["init", "--bare", "origin.git"]);
+    git(&worktree, &["init", "-q"]);
+    git(&worktree, &["config", "user.email", "aida@example.invalid"]);
+    git(&worktree, &["config", "user.name", "AIDA Test"]);
+    git(&worktree, &["checkout", "-q", "-b", "bug-878"]);
+    git(
+        &worktree,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    (tmp, worktree, remote)
+}
 
 /// Mint a session lease + its manifest under `<root>/.aida/sessions/`,
 /// exactly as `aida queue work --session-id` would, so lease discovery has
@@ -128,6 +167,65 @@ fn phase_child_env_carries_auto_complete_variant() {
     assert!(env
         .iter()
         .any(|(k, v)| *k == crate::orchestrator::PHASE_ENV && v == "1"));
+}
+
+#[test]
+fn phase2_push_guard_pushes_branch_ahead_of_upstream() {
+    let (_tmp, worktree, remote) = git_repo_with_origin();
+    write_commit(&worktree, "file.txt", "base\n", "base");
+    git(&worktree, &["push", "-q", "-u", "origin", "bug-878"]);
+    write_commit(&worktree, "file.txt", "base\nlocal\n", "local work");
+
+    // The implementer committed locally but did not push. Phase 2 must publish
+    // that HEAD before it probes CI or tears down the lease/worktree.
+    // trace:BUG-878 | ai:codex
+    ensure_implementer_branch_pushed(&worktree, "bug-878", true).unwrap();
+
+    let local_head = git(&worktree, &["rev-parse", "HEAD"]);
+    let remote_head = git(&remote, &["rev-parse", "bug-878"]);
+    assert_eq!(remote_head, local_head);
+    assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "0");
+}
+
+#[test]
+fn phase2_push_guard_pushes_branch_with_no_upstream() {
+    let (_tmp, worktree, remote) = git_repo_with_origin();
+    write_commit(&worktree, "file.txt", "only local\n", "local root");
+
+    // No upstream is also unpushed work: publish and establish tracking rather
+    // than allowing session teardown to discard the only worktree copy.
+    // trace:BUG-878 | ai:codex
+    ensure_implementer_branch_pushed(&worktree, "bug-878", true).unwrap();
+
+    let local_head = git(&worktree, &["rev-parse", "HEAD"]);
+    let remote_head = git(&remote, &["rev-parse", "bug-878"]);
+    assert_eq!(remote_head, local_head);
+    assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "0");
+}
+
+#[test]
+fn phase2_push_guard_failure_leaves_worktree_intact_and_ahead() {
+    let (_tmp, worktree, _remote) = git_repo_with_origin();
+    write_commit(&worktree, "file.txt", "base\n", "base");
+    git(&worktree, &["push", "-q", "-u", "origin", "bug-878"]);
+    write_commit(&worktree, "file.txt", "base\nlocal\n", "local work");
+    git(
+        &worktree,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            "/definitely/missing/origin.git",
+        ],
+    );
+
+    // A failed push is a hard phase-2 failure. Because this guard runs before
+    // `aida session end`, the worktree and its local commit are still present.
+    // trace:BUG-878 | ai:codex
+    let err = ensure_implementer_branch_pushed(&worktree, "bug-878", true).unwrap_err();
+    assert!(err.reason.contains("could not push implementer branch"));
+    assert!(worktree.exists());
+    assert_eq!(git(&worktree, &["rev-list", "--count", "@{u}..HEAD"]), "1");
 }
 
 #[test]
