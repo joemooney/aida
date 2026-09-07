@@ -135,9 +135,20 @@ fn acquire_review_lease_refuses_second_then_releases_on_drop() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
 
-    let guard = acquire_review_lease(root, "BUG-511", "feature-x").unwrap();
-    let err = acquire_review_lease(root, "BUG-511", "feature-x")
-        .expect_err("second acquire must refuse while the first guard is held");
+    let guard = acquire_review_lease_with_mode(
+        root,
+        "BUG-511",
+        "feature-x",
+        ReviewLeaseConflictMode::AutoReleaseStale,
+    )
+    .unwrap();
+    let err = acquire_review_lease_with_mode(
+        root,
+        "BUG-511",
+        "feature-x",
+        ReviewLeaseConflictMode::AutoReleaseStale,
+    )
+    .expect_err("second acquire must refuse while the first guard is held");
     assert!(
         err.to_string().contains("already in flight"),
         "unexpected refusal text: {err}"
@@ -149,5 +160,55 @@ fn acquire_review_lease_refuses_second_then_releases_on_drop() {
         "dropping the guard must release the lease"
     );
     // Scope is free again.
-    let _ = acquire_review_lease(root, "BUG-511", "feature-x").unwrap();
+    let _ = acquire_review_lease_with_mode(
+        root,
+        "BUG-511",
+        "feature-x",
+        ReviewLeaseConflictMode::AutoReleaseStale,
+    )
+    .unwrap();
+}
+
+#[test]
+fn acquire_review_lease_headless_refuses_stale_conflict_and_keeps_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let stale = review_lease("rev008", "BUG-890", None);
+    write_lease(root, &stale);
+
+    let err = acquire_review_lease_with_mode(
+        root,
+        "BUG-890",
+        "feature-x",
+        ReviewLeaseConflictMode::RefuseStaleNonInteractive,
+    )
+    .expect_err("headless human review must not release a stale lease without consent");
+
+    let msg = err.to_string();
+    assert!(msg.contains("Headless review cannot ask"), "got: {msg}");
+    assert!(msg.contains("aida session end rev008 --yes"), "got: {msg}");
+    let leases = list_leases(root);
+    assert_eq!(leases.len(), 1);
+    assert_eq!(leases[0].id, "rev008");
+}
+
+#[test]
+fn acquire_review_lease_auto_release_mode_keeps_legacy_reap_behavior() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let stale = review_lease("rev009", "BUG-511", None);
+    write_lease(root, &stale);
+
+    let _guard = acquire_review_lease_with_mode(
+        root,
+        "BUG-511",
+        "feature-x",
+        ReviewLeaseConflictMode::AutoReleaseStale,
+    )
+    .expect("legacy auto-release mode should reap dead advisory review leases");
+
+    let leases = list_leases(root);
+    assert_eq!(leases.len(), 1);
+    assert_ne!(leases[0].id, "rev009");
+    assert_eq!(leases[0].scope, "BUG-511");
 }
