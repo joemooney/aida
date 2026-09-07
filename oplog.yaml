@@ -47942,5 +47942,31 @@ operations:
   timestamp: 2026-09-07T02:52:30.200222197Z
   kind: !SetStatus
     status: Completed
-clock: 4140
+- id: 01a079d9-a0c4-7170-8099-3d85d310f29d
+  target_id: 01a079d9-9d04-7bb1-91e3-46113d020541
+  author: aida
+  node_id: '1'
+  lamport: 4141
+  timestamp: 2026-09-07T03:11:40.740453485Z
+  kind: !Create
+    title: 'Review PR-1681: [AI:codex] fix(review): restrict one-shot Ask-AI argv (TASK-1195)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a079cb`) for branch `task-1195`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1681>
+      - Branch: `task-1195` → `main`
+
+      ## Covers
+
+      - TASK-1195
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1681` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4141
 node_id: '1'
