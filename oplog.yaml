@@ -48790,5 +48790,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4189
+- id: 01a07d41-92f9-71b1-a29b-c5e1c02f4545
+  target_id: 01a07d41-8d05-7923-8584-b6e585dd9e2f
+  author: aida
+  node_id: '1'
+  lamport: 4190
+  timestamp: 2026-09-07T19:04:04.601710260Z
+  kind: !Create
+    title: interactive human review refuses on a stale lease instead of offering release-and-proceed
+    description: 'Observed 2026-09-06 (STORY-818 review): aida human review SPEC refused because a lease from an exited session still held the spec — but aida why already classified that lease STALE (no live process). An interactive review should detect the stale case and offer release-and-proceed at the prompt (y releases via the session-end machinery and continues; n aborts unchanged), instead of making the operator run aida session end by hand and re-run. A LIVE lease keeps today''s hard refusal. Acceptance: stale-lease review at a TTY offers the release; declining changes nothing; live-lease behavior byte-identical; headless keeps refusing with the hint.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 4190
 node_id: '1'
