@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:58.191330588Z
-modified_at: 2026-09-07T06:31:58.191330588Z
+modified_at: 2026-09-07T17:00:42.813714246Z
 req_type: Story
 tags:
 - aida-why
@@ -26,3 +26,10 @@ tags:
 - from-product
 - recommend:approve
 - risk:medium
+comments:
+- id: 01a07cd0-a1bd-7761-8c0b-5a0dca83cc61
+  author: joe
+  content: 'Provenance correction (advisor, 2026-09-07): the operator did NOT decide this on 2026-09-06 — held for an explicit decision. Re-read this as a positioning PROPOSAL derived from the code-to-decision northstar, not a decided direction. If approved later it is keyboard/guided-class work (workspace restructuring).'
+  created_at: 2026-09-07T17:00:42.813714246Z
+  modified_at: 2026-09-07T17:00:42.813714246Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
