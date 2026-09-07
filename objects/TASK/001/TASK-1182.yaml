@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:07:28.227419728Z
-modified_at: 2026-08-29T19:44:53.994774845Z
+modified_at: 2026-09-07T02:17:10.475708853Z
 req_type: Task
 tags:
 - codex validation operator-action
@@ -44,3 +44,10 @@ relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-08-29T19:07:30.494233780Z
+comments:
+- id: 01a079a7-ba4b-7f03-a682-fb63433faaa1
+  author: joe
+  content: 'Rescoped (operator + advisor, 2026-09-06): the work machine is NOT needed as the primary testbed — [agents] vendor = codex (project-level, STORY-761 precedence chain) pins every headless spawn to codex in an isolated home project, and AIDA_AGENT_CMD can prove no claude exec occurs. Phase 1 (home, autonomous): throwaway project + vendor=codex + full --no-human=both drain lifecycle — running now. Phase 2 (work machine, residual): 10-minute smoke of environment specifics only — proxy, work GitLab remote, employer codex config, Claude-absent reality.'
+  created_at: 2026-09-07T02:17:10.475708853Z
+  modified_at: 2026-09-07T02:17:10.475708853Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
