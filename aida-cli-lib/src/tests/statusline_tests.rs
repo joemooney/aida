@@ -2259,6 +2259,16 @@ fn extract_spec_ids_from_commit_subject() {
         extract_spec_ids_from_commit(msg),
         vec!["BUG-1-099".to_string()]
     );
+    let msg = "[AI:codex] fix(queue): preserve node id (TASK-1-127)\n";
+    assert_eq!(
+        extract_spec_ids_from_commit(msg),
+        vec!["TASK-1-127".to_string()]
+    );
+    let msg = "[AI:codex] fix(queue): preserve alpha node id (TASK-NODE-A-127)\n";
+    assert_eq!(
+        extract_spec_ids_from_commit(msg),
+        vec!["TASK-NODE-A-127".to_string()]
+    );
     // Conventional-commit heads must NOT false-match as a colon-prefix id.
     for msg in [
         "fix: something broke\n",
@@ -3841,7 +3851,7 @@ fn plan_helpers_scan_trace_graph() {
     std::fs::create_dir_all(&src).unwrap();
     std::fs::write(
         src.join("a.rs"),
-        "// trace:STORY-86 | ai:claude\nfn auto_bump() {}\n\n// trace:FR-1-042\nstruct Thing;\n",
+        "// trace:STORY-86 | ai:claude\nfn auto_bump() {}\n\n// trace:FR-1-042\nstruct Thing;\n\n// trace:TASK-NODE-A-127\nfn node_id() {}\n",
     )
     .unwrap();
     std::fs::write(src.join("b.rs"), "pub fn inline() {} // trace:TASK-50\n").unwrap();
@@ -3850,7 +3860,7 @@ fn plan_helpers_scan_trace_graph() {
     std::fs::create_dir_all(&skip).unwrap();
     std::fs::write(skip.join("c.rs"), "// trace:STORY-86\nfn ignored() {}\n").unwrap();
 
-    let wanted: HashSet<String> = ["STORY-86", "FR-1-042", "TASK-50"]
+    let wanted: HashSet<String> = ["STORY-86", "FR-1-042", "TASK-50", "TASK-NODE-A-127"]
         .iter()
         .map(|s| s.to_string())
         .collect();
@@ -3874,6 +3884,12 @@ fn plan_helpers_scan_trace_graph() {
             .symbol
             .as_deref(),
         Some("inline")
+    );
+    assert_eq!(
+        hits.get("TASK-NODE-A-127").expect("TASK-NODE-A-127 hit")[0]
+            .symbol
+            .as_deref(),
+        Some("node_id")
     );
 }
 

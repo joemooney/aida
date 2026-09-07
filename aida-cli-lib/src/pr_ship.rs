@@ -1080,6 +1080,10 @@ mod tests {
             derive_squash_subject_spec_ids("feat(store): add cadence", "task-310", ""),
             vec!["TASK-310".to_string()]
         );
+        assert_eq!(
+            derive_squash_subject_spec_ids("fix(queue): preserve id", "task-1-127", ""),
+            vec!["TASK-1-127".to_string()]
+        );
     }
 
     #[test]

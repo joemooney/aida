@@ -4600,3 +4600,11 @@ Picked up `TASK-151` from the implementer queue. The task reported five fast `ai
 Investigated the `aida add --queue` path and found current `main` already has the request-route carve-out from `BUG-631`: draft work routed with `--for advisor` is triage intake, so it bypasses execution-dispatch advisor authority. Added an end-to-end regression in `aida-cli/tests/queue_work_dry_run.rs` that drives the real binary from `AIDA_SESSION_ROLE=product` with draft status, product provenance tags, `--queue`, and `--for advisor`. The command exits 0, files the requirement as Draft, and leaves it visible at `aida queue next --for advisor`.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli --test queue_work_dry_run product_role_add_queue_for_advisor_files_draft_request -- --nocapture`; `cargo test -p aida-cli-lib queue_at_filing -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-07 — BUG-888 node-qualified ID preservation
+
+Picked up `BUG-888` from the implementer queue. The bug was that node-qualified pre-merge IDs such as `TASK-1-127` could be converted into a different agreed/display ID such as `TASK-151` by queue-work identity, branch inference, and trailer/recovery surfaces.
+
+Changed queue-work implementation identity to prefer the stored origin `spec_id` over `agreed_id` for session scope and manifest entries, while leaving display-oriented matching intact. Centralized work-branch parsing so `task-1-127` and `task-1-127-fix` resolve to `TASK-1-127` instead of `TASK-1`, and reused that path in doctor cleanup. Broadened object-store spec parsing, commit trailer detection, PR branch metadata extraction, and trace scanning to preserve node-qualified IDs as atomic values. Added `// trace:BUG-888 | ai:codex` comments on the queue and branch-resolution changes.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-core object_store --lib`; `cargo test -p aida-cli-lib is_work_spec_branch_name_tests --lib`; `cargo test -p aida-cli-lib queue_work_tests --lib`; `cargo test -p aida-cli-lib pr_ship::tests --lib`; `cargo test -p aida-cli-lib statusline_tests --lib`. Existing unrelated Rust warnings remain in the test output.

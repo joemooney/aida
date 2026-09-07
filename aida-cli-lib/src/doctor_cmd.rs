@@ -602,24 +602,9 @@ fn classify_stale_remote_branch(facts: &RemoteBranchFacts) -> RemoteBranchVerdic
 /// Derive the candidate spec id from a work-branch name (`task-281-foo` →
 /// `TASK-281`). Returns None when the branch doesn't follow the work-branch
 // convention. trace:TASK-717
+// trace:BUG-888 | ai:codex
 fn spec_id_from_work_branch(branch: &str) -> Option<String> {
-    if !is_work_spec_branch_name(branch) {
-        return None;
-    }
-    // `<type>-<digits>[-suffix...]` → keep `<type>-<digits>`.
-    let mut parts = branch.splitn(3, '-');
-    let kind = parts.next()?;
-    let num = parts.next()?;
-    if kind.is_empty() || num.is_empty() || !num.chars().next()?.is_ascii_digit() {
-        return None;
-    }
-    // The number segment can carry a trailing `.suffix` (e.g. `epic-20.batch7`);
-    // trim at the first non-digit so we land on the bare spec id.
-    let digits: String = num.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return None;
-    }
-    Some(format!("{}-{}", kind.to_ascii_uppercase(), digits))
+    crate::work_spec_id_from_branch(branch)
 }
 
 /// Do the shared branches (code trunk + orphan store) hold the same tip on
@@ -3023,6 +3008,14 @@ mod story_462_doctor_tests {
         assert_eq!(
             spec_id_from_work_branch("task-281-foo"),
             Some("TASK-281".to_string())
+        );
+        assert_eq!(
+            spec_id_from_work_branch("task-1-127"),
+            Some("TASK-1-127".to_string())
+        );
+        assert_eq!(
+            spec_id_from_work_branch("task-1-127-fix"),
+            Some("TASK-1-127".to_string())
         );
         assert_eq!(
             spec_id_from_work_branch("bug-100"),

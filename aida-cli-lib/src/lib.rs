@@ -39769,7 +39769,8 @@ pub(crate) fn scan_trace_graph(
     // Capture the full spec id — including the optional third segment of a
     // node-aware id (`FR-1-042`), or `trace:FR-1-042` would bucket under a
     // bogus `FR-1`.
-    let trace_re = Regex::new(r"\btrace:([A-Z]+-[0-9]+(?:-[0-9]+)?)").unwrap();
+    let trace_re =
+        Regex::new(r"\btrace:([A-Z]+-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+|[A-Z]+-[0-9]+)").unwrap();
     let sym_re = Regex::new(
         r"\b(?:fn|struct|enum|trait|type|mod|const|static|function|class|interface)\s+([A-Za-z_][A-Za-z0-9_]*)",
     )
@@ -59849,24 +59850,59 @@ fn parse_pr_scope(scope: &str) -> Option<u64> {
 /// stale-reviewer-on-merged detector.
 /// trace:STORY-385 | ai:claude
 fn is_work_spec_branch_name(branch: &str) -> bool {
+    work_spec_id_from_branch(branch).is_some()
+}
+
+// trace:BUG-888 | ai:codex
+pub(crate) fn work_spec_id_from_branch(branch: &str) -> Option<String> {
     const PREFIXES: &[&str] = &[
         "task-", "story-", "bug-", "epic-", "spike-", "spec-", "fr-", "nfr-", "user-", "sr-",
     ];
     let lower = branch.to_ascii_lowercase();
     for p in PREFIXES {
         if let Some(rest) = lower.strip_prefix(p) {
-            let mut chars = rest.chars();
-            let first = match chars.next() {
-                Some(c) => c,
-                None => continue,
-            };
-            if !first.is_ascii_digit() {
+            let segments: Vec<&str> = rest.split(['-', '.']).filter(|s| !s.is_empty()).collect();
+            if segments.is_empty() {
                 continue;
             }
-            return chars.all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.');
+            if !segments
+                .iter()
+                .all(|s| s.chars().all(|c| c.is_ascii_alphanumeric()))
+            {
+                continue;
+            }
+            let spec_segment_count = if segments[0].chars().all(|c| c.is_ascii_digit()) {
+                if segments
+                    .get(1)
+                    .is_some_and(|s| s.chars().all(|c| c.is_ascii_digit()))
+                {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                segments
+                    .iter()
+                    .position(|s| s.chars().all(|c| c.is_ascii_digit()))
+                    .map(|idx| idx + 1)
+                    .unwrap_or(0)
+            };
+            if spec_segment_count == 0 {
+                continue;
+            }
+            let kind = p.trim_end_matches('-').to_ascii_uppercase();
+            return Some(format!(
+                "{}-{}",
+                kind,
+                segments[..spec_segment_count]
+                    .iter()
+                    .map(|s| s.to_ascii_uppercase())
+                    .collect::<Vec<_>>()
+                    .join("-")
+            ));
         }
     }
-    false
+    None
 }
 
 #[cfg(test)]
@@ -66298,27 +66334,25 @@ fn looks_like_spec_id(s: &str) -> bool {
     if s.len() < 3 || s.len() > 40 {
         return false;
     }
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
-        i += 1;
-    }
-    if i < 2 || i >= bytes.len() || bytes[i] != b'-' {
+    let mut parts = s.split('-');
+    let Some(prefix) = parts.next() else {
+        return false;
+    };
+    if prefix.len() < 2 || !prefix.chars().all(|c| c.is_ascii_alphabetic()) {
         return false;
     }
-    i += 1;
-    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+    let tail: Vec<&str> = parts.collect();
+    if tail.is_empty() {
         return false;
     }
-    while i < bytes.len() {
-        let b = bytes[i];
-        if b.is_ascii_digit() || b == b'-' {
-            i += 1;
-        } else {
-            return false;
-        }
+    if !tail
+        .iter()
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric()))
+    {
+        return false;
     }
-    true
+    tail.last()
+        .is_some_and(|part| part.chars().all(|c| c.is_ascii_digit()))
 }
 
 pub fn parse_pr_arg(arg: &str) -> Option<u32> {
