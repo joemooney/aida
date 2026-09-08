@@ -85,6 +85,36 @@ pub(crate) fn session_role_env() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Shared role queue identity for coordination-seat writes.
+///
+/// Advisor/human sessions often route work to a doer role they do not wear.
+/// If no explicit `--user` was supplied, keying that write to the coordinator's
+/// shell identity makes the success message technically true but operationally
+/// misleading: the doer has to know whose queue file to inspect. Route those
+/// writes to a stable role queue instead; readers already surface foreign
+/// entries whose `for_role` matches the active role.
+// trace:BUG-900 | ai:codex
+pub(crate) fn coordination_role_queue_user(
+    explicit_user: bool,
+    route: Option<&str>,
+    session_role: Option<&str>,
+) -> Option<String> {
+    if explicit_user {
+        return None;
+    }
+    let route = route.map(str::trim).filter(|r| !r.is_empty())?;
+    let session_role = session_role.map(str::trim).filter(|r| !r.is_empty())?;
+    let session_role = crate::canonical_role_name(session_role);
+    if !matches!(session_role.as_str(), "advisor" | "human") {
+        return None;
+    }
+    let route = crate::canonical_role_name(route);
+    if matches!(route.as_str(), "advisor" | "human" | "reviewer") {
+        return None;
+    }
+    Some(format!("role:{route}"))
+}
+
 /// `Some(routing_user)` when this entry lives in ANOTHER user's queue file —
 /// the attribution a reader shows so a surfaced entry is obviously not the
 /// caller's own. Folds identity through `canonical_user_id`.
@@ -181,6 +211,19 @@ fn collect_foreign_entries<S: QueueFiles + ?Sized>(
         }
     }
     out
+}
+
+/// Count entries that exist under other queue identities. This powers the
+/// empty-list hint: if your own/currently-filtered queue is empty but the store
+/// has work elsewhere, point at the fleet view instead of leaving a false
+/// impression that the project has no queued work.
+// trace:BUG-900 | ai:codex
+pub(crate) fn other_user_queue_entry_count<S: QueueFiles + ?Sized>(
+    src: &S,
+    user_id: &str,
+    include_completed: bool,
+) -> usize {
+    collect_foreign_entries(src, user_id, include_completed).len()
 }
 
 /// Who else, if anyone, has this spec queued. Powers the diagnostic that

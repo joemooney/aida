@@ -341,3 +341,114 @@ fn fallback_role_resolution() {
         Some("advisor".to_string())
     );
 }
+
+/// BUG-900: a coordination seat routing doer work without `--user` must not
+/// key the entry to the advisor's personal queue. Use a stable role queue so
+/// the destination identity is visible and role readers can find it.
+// trace:BUG-900 | ai:codex
+#[test]
+fn advisor_dispatch_write_targets_shared_role_queue_when_user_is_implicit() {
+    assert_eq!(
+        queue_role_fallback::coordination_role_queue_user(
+            false,
+            Some("implementer"),
+            Some("advisor")
+        )
+        .as_deref(),
+        Some("role:implementer")
+    );
+    assert_eq!(
+        queue_role_fallback::coordination_role_queue_user(false, Some("reviewer"), Some("advisor")),
+        None,
+        "review routing stays a request to a non-dispatch lane"
+    );
+    assert_eq!(
+        queue_role_fallback::coordination_role_queue_user(
+            true,
+            Some("implementer"),
+            Some("advisor")
+        ),
+        None,
+        "an explicit --user remains authoritative"
+    );
+    assert_eq!(
+        queue_role_fallback::coordination_role_queue_user(
+            false,
+            Some("implementer"),
+            Some("implementer")
+        ),
+        None,
+        "doer seats keep their own queue identity"
+    );
+}
+
+/// BUG-900 acceptance: an advisor-session `queue add --for implementer` writes
+/// to `role:implementer`, and an implementer identity's normal role fallback
+/// sees it without knowing the advisor's shell id.
+// trace:BUG-900 | ai:codex
+#[test]
+fn role_queue_entry_is_visible_to_implementer_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let spec = seed_spec(&root, "TASK-9000");
+    let storage = Storage::new(&root);
+
+    storage
+        .queue_add(entry_for(
+            "role:implementer",
+            spec,
+            Some("implementer"),
+            1000,
+        ))
+        .unwrap();
+
+    let own = storage.queue_list("joe", false).unwrap();
+    assert!(own.is_empty(), "joe has no personal queue entry");
+
+    let seen = queue_role_fallback::queue_list_with_role_fallback(
+        &storage,
+        "joe",
+        Some("implementer"),
+        false,
+    )
+    .unwrap();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].requirement_id, spec);
+    assert_eq!(
+        queue_role_fallback::routed_by_other_user(&seen[0], "joe"),
+        Some("role:implementer")
+    );
+}
+
+/// BUG-900: an empty current identity can now be honest that work exists
+/// elsewhere and point the operator at `--all-users`.
+// trace:BUG-900 | ai:codex
+#[test]
+fn counts_entries_under_other_queue_identities_for_empty_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let first = seed_spec(&root, "TASK-9001");
+    let second = seed_spec(&root, "TASK-9002");
+    let mine = seed_spec(&root, "TASK-9003");
+    let storage = Storage::new(&root);
+
+    storage
+        .queue_add(entry_for("alice", first, Some("implementer"), 1000))
+        .unwrap();
+    storage
+        .queue_add(entry_for(
+            "role:implementer",
+            second,
+            Some("implementer"),
+            2000,
+        ))
+        .unwrap();
+    storage
+        .queue_add(entry_for("joe", mine, Some("implementer"), 3000))
+        .unwrap();
+
+    assert_eq!(
+        queue_role_fallback::other_user_queue_entry_count(&storage, "joe", false),
+        2
+    );
+}
