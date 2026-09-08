@@ -1531,6 +1531,20 @@ pub(crate) fn handle_queue_command(
                         }
                     );
                 }
+                let other_queue_count = queue_role_fallback::other_user_queue_entry_count(
+                    storage,
+                    &user_id,
+                    *include_completed,
+                );
+                if other_queue_count > 0 && !*global && !*local {
+                    println!(
+                        "  ({})",
+                        format!(
+                            "{other_queue_count} item(s) exist under other queue identities; pass --all-users to inspect them"
+                        )
+                        .dimmed()
+                    );
+                }
                 // STORY-333: keep going if the Blocked section has
                 // anything to surface — even when the pickable list is
                 // empty. The user's queue isn't really empty if
@@ -2391,16 +2405,6 @@ pub(crate) fn handle_queue_command(
             // BUG-498: queuing work is advisor-style — nudge the operator to
             // seat the advisor role if they're acting via an env prefix.
             maybe_hint_advisor_seat();
-            let user_id = get_user(user);
-
-            // TASK-1150: distinct-user identity guard. Adding to a queue keyed
-            // by a genuinely-different user id than this shell's identity (e.g.
-            // `--user user-b` from a `user-a` shell — not just a case variant)
-            // silently crosses identities. Surface it (warn by default, refuse
-            // when the operator opts in). No-op on the common same-identity add.
-            // trace:TASK-1150 | ai:claude
-            identity_guard::enforce(&current_user_id(None), &user_id, "queue add")?;
-
             // BUG-634: avoid a full-store scan (`storage.load()` parses every
             // YAML) on the queue write path. For the distributed (directory)
             // store, open a cache-backed backend for targeted single-spec
@@ -2420,6 +2424,9 @@ pub(crate) fn handle_queue_command(
             // — surprising "queue is empty" right after queueing something.
             // Pass `--for any` to keep the unrouted behavior explicitly.
             // trace:BUG-18 | ai:claude
+            let session_role_for_routing = std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.is_empty());
             let r#for: Option<String> = match r#for.as_deref() {
                 Some("any") => None,
                 // TASK-586 / TASK-747: canonicalize the route target on add so
@@ -2435,15 +2442,35 @@ pub(crate) fn handle_queue_command(
                 // `--for advisor` still routes to advisor and is skipped —
                 // that's the intended meaning of explicit routing).
                 // trace:BUG-862 | ai:claude
-                None => std::env::var("AIDA_SESSION_ROLE")
-                    .ok()
-                    .filter(|s| !s.is_empty())
-                    .map(|s| canonical_role_name(&s))
+                None => session_role_for_routing
+                    .as_deref()
+                    .map(canonical_role_name)
                     .map(|role| match role.as_str() {
                         "advisor" | "human" => "implementer".to_string(),
                         _ => role,
                     }),
             };
+            let user_id = queue_role_fallback::coordination_role_queue_user(
+                user.is_some(),
+                r#for.as_deref(),
+                session_role_for_routing.as_deref(),
+            )
+            .unwrap_or_else(|| get_user(user));
+
+            // TASK-1150: distinct-user identity guard. Adding to a queue keyed
+            // by a genuinely-different user id than this shell's identity (e.g.
+            // `--user user-b` from a `user-a` shell — not just a case variant)
+            // silently crosses identities. Surface it (warn by default, refuse
+            // when the operator opts in). No-op on the common same-identity add.
+            //
+            // BUG-900: advisor/human dispatch writes with no explicit `--user`
+            // are intentionally keyed to `role:<target>`; skip the personal
+            // identity guard for that derived shared role queue.
+            // trace:TASK-1150 | ai:claude
+            // trace:BUG-900 | ai:codex
+            if !user_id.starts_with("role:") {
+                identity_guard::enforce(&current_user_id(None), &user_id, "queue add")?;
+            }
 
             // STORY-57: default scope routing. When adding inside a session
             // worktree without --scope or --no-scope, fill `for_scope` with
@@ -2690,9 +2717,11 @@ pub(crate) fn handle_queue_command(
                 routing_parts.push(format!("session:{}", &s[..s.len().min(8)]));
             }
             let routing = if routing_parts.is_empty() {
-                String::new()
+                format!(" [queue:{}]", user_id).cyan().to_string()
             } else {
-                format!(" [{}]", routing_parts.join(" ").cyan())
+                format!(" [queue:{} {}]", user_id, routing_parts.join(" "))
+                    .cyan()
+                    .to_string()
             };
             println!(
                 "{} Added {} ({}) to queue{}",
@@ -3290,16 +3319,23 @@ pub(crate) fn handle_queue_command(
             local,
         } => {
             let user_id = get_user(user);
+            let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
+            let queue_fallback_role =
+                queue_role_fallback::fallback_role(role.as_deref(), session_role.as_deref());
             let raw_entries = if *global {
                 Vec::new()
             } else {
-                storage.queue_list(&user_id, /* include_completed */ false)?
+                queue_role_fallback::queue_list_with_role_fallback(
+                    storage,
+                    &user_id,
+                    queue_fallback_role.as_deref(),
+                    /* include_completed */ false,
+                )?
             };
             let store = storage.load()?;
 
             // Same role-filter logic as queue list (BUG-87).
             // `--for X` takes precedence over `--all`. trace:BUG-87 | ai:claude
-            let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
             let (role_filter, only_unrouted) =
                 resolve_queue_role_filter(role.as_deref(), *all, session_role.as_deref());
 
@@ -6085,13 +6121,15 @@ pub(crate) fn resolve_queue_work_plan(
 ) -> Result<QueueWorkPlan> {
     // A `--for <role>` routing lands in the ROUTING user's queue file, so a
     // pickup that read only our own file could not work a spec a peer routed
-    // to our role. Widen the read to the active role's cross-user routings;
-    // with no active role this is the historical own-file-only read.
+    // to our role. Widen the read to the active/default work role's cross-user
+    // routings so coordinator writes to `role:implementer` are drivable by a
+    // bare default drain.
     // trace:BUG-774 | ai:claude
-    let work_fallback_role = queue_role_fallback::fallback_role(
-        None,
-        queue_role_fallback::session_role_env().as_deref(),
-    );
+    // trace:BUG-900 | ai:codex
+    let session_role_for_work =
+        queue_role_fallback::session_role_env().unwrap_or_else(|| "implementer".to_string());
+    let work_fallback_role =
+        queue_role_fallback::fallback_role(None, Some(session_role_for_work.as_str()));
     let mut entries = queue_role_fallback::queue_list_with_role_fallback(
         storage,
         user_id,
@@ -9003,8 +9041,14 @@ pub(crate) fn pick_auto_complete_head_for_role(
 pub(crate) fn auto_complete_head_candidates_with_roles(
     storage: &Storage,
     user_id: &str,
+    fallback_role: Option<&str>,
 ) -> Result<Vec<AutoCompleteHeadCandidate>> {
-    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    let entries = queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        fallback_role,
+        /* include_completed */ false,
+    )?;
     let store = storage.load()?;
     let mut ordered: Vec<&aida_core::QueueEntry> = entries.iter().collect();
     ordered.sort_by_key(|e| e.position);
@@ -9036,17 +9080,19 @@ pub(crate) fn auto_complete_head_candidates(
     role_override: Option<&str>,
 ) -> Result<Vec<(String, RequirementStatus)>> {
     let effective_role = effective_auto_complete_role(role_override);
-    Ok(auto_complete_head_candidates_with_roles(storage, user_id)?
-        .into_iter()
-        .filter(|candidate| {
-            candidate
-                .for_role
-                .as_deref()
-                .map(|r| canonical_role_name(r) == effective_role)
-                .unwrap_or(true)
-        })
-        .map(|candidate| (candidate.id, candidate.status))
-        .collect())
+    Ok(
+        auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
+            .into_iter()
+            .filter(|candidate| {
+                candidate
+                    .for_role
+                    .as_deref()
+                    .map(|r| canonical_role_name(r) == effective_role)
+                    .unwrap_or(true)
+            })
+            .map(|candidate| (candidate.id, candidate.status))
+            .collect(),
+    )
 }
 
 /// Resolve the queue head for `aida queue work --auto-complete` invoked with no
@@ -9062,7 +9108,7 @@ pub(crate) fn resolve_auto_complete_head(
     role_override: Option<&str>,
 ) -> Result<String> {
     let role_label = effective_auto_complete_role(role_override);
-    let candidates = auto_complete_head_candidates_with_roles(storage, user_id)?;
+    let candidates = auto_complete_head_candidates_with_roles(storage, user_id, Some(&role_label))?;
 
     match pick_auto_complete_head_for_role(&candidates, &role_label) {
         Some(pick) => {

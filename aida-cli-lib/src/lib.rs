@@ -72227,7 +72227,7 @@ fn resolve_next_n_head(
     role_override: Option<&str>,
 ) -> (Option<AutoCompleteHeadPick>, Vec<(String, String)>) {
     let effective_role = effective_auto_complete_role(role_override);
-    match auto_complete_head_candidates_with_roles(storage, user_id) {
+    match auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role)) {
         Ok(candidates) => {
             let pick = pick_auto_complete_head_for_role(&candidates, &effective_role);
             let role_skipped = match &pick {
@@ -72262,17 +72262,19 @@ fn drivable_queued_count(
     role_override: Option<&str>,
 ) -> Result<usize> {
     let effective_role = effective_auto_complete_role(role_override);
-    Ok(auto_complete_head_candidates_with_roles(storage, user_id)?
-        .iter()
-        .filter(|candidate| {
-            candidate
-                .for_role
-                .as_deref()
-                .map(|r| canonical_role_name(r) == effective_role)
-                .unwrap_or(true)
-                && auto_complete_head_drivable(&candidate.status)
-        })
-        .count())
+    Ok(
+        auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
+            .iter()
+            .filter(|candidate| {
+                candidate
+                    .for_role
+                    .as_deref()
+                    .map(|r| canonical_role_name(r) == effective_role)
+                    .unwrap_or(true)
+                    && auto_complete_head_drivable(&candidate.status)
+            })
+            .count(),
+    )
 }
 
 /// TASK-966: process-exit code a drain uses when a hard budget cap
