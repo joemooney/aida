@@ -4664,3 +4664,11 @@ Picked up `BUG-896` from the implementer queue. The bug was that the BUG-895 rec
 Added an auto-open-specific forge resolver that prefers a recognized target repo `origin` host for real change creation, even when stale config says pure-git. Routed PR creation, queue recovery auto-open, single-branch cluster PR creation, and phase-3 orchestrator PR recovery through that resolver. Changed `PureGitForge::open_change` to return an explicit unsupported error for forge-less mode instead of synthetic success, and made recovery print the underlying auto-open failure. Added `// trace:BUG-896 | ai:codex` comments on the resolver and regression tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib open_change_resolution_prefers_recognized_origin_over_stale_pure_git_config`; `cargo test -p aida-cli-lib pure_git_ci_is_none_and_open_change_is_unsupported`; `cargo test -p aida-cli-lib recover_open_change_uses_github_origin_even_with_stale_pure_git_config`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-07 — BUG-897 PR-scoped phase-3 relaunch
+
+Picked up `BUG-897` from the implementer queue. The bug was that an orchestrator-opened PR could reach phase 3 after a Codex implementer had already run `aida queue done`, leaving the backing spec Done and dequeued; the integration child drive then relaunched with a spec-scoped `queue work <SPEC> --auto-complete --from-pr`, which could refuse before reviewer launch.
+
+Changed the integration child argv to launch `aida queue work PR-N --auto-complete --from-pr` using the already-resolved PR number. Preserved explicit PR scopes through queue-work dispatch when `--from-pr` is set, and taught the PR-only re-entry path to resolve `PR-N` back to the backing spec for status/auto-bump while seeding the PR number and PR facts for phase 3. Added `// trace:BUG-897 | ai:codex` comments on the routing guardrails and tightened the routing regression tests to require the PR-scoped child drive.
+
+Verification so far: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib orchestration_routing::tests::integrate_argv_actually_routes_through_the_engine`; `cargo test -p aida-cli-lib integrate::tests::drive_args_routes_through_the_auto_complete_engine`; `cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the test output.

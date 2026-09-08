@@ -69804,7 +69804,7 @@ fn no_human_kickoff_gate(mode: auto_complete::NoHumanMode) -> Result<()> {
 fn handle_from_pr(
     storage: &Storage,
     user_id: &str,
-    spec: &str,
+    scope: &str,
     variant: auto_complete::AutoCompleteVariant,
     dry_run: bool,
     json: bool,
@@ -69826,12 +69826,48 @@ fn handle_from_pr(
             std::process::exit(1);
         }
     };
+    let (spec, seeded_pr) = match parse_review_scope(scope) {
+        Some((forge, n)) => match storage
+            .load()
+            .map_err(|e| anyhow::anyhow!(e))
+            .and_then(|store| resolve_pr_to_spec(&project_root, n as u32, &store))
+        {
+            Ok(spec) => (spec, Some(n as u32)),
+            Err(e) => {
+                eprintln!(
+                    "{} could not resolve {} to a backing spec: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    format_review_label(forge, n),
+                    e
+                );
+                std::process::exit(1);
+            }
+        },
+        None => (scope.to_string(), None),
+    };
 
     // Probe the world for this spec's PR + per-phase postconditions. Passing
     // `member: None` is exactly the standalone-PR case `probe_resume_facts`
     // already handles (it falls back to a forge lookup by spec when drain-state
     // recorded no PR). trace:TASK-405 | ai:claude
-    let (facts, branch, pr) = probe_resume_facts(&project_root, storage, spec, None);
+    let (mut facts, branch, pr) = probe_resume_facts(&project_root, storage, &spec, None);
+    let pr = seeded_pr.or(pr);
+    let branch = if seeded_pr.is_some() && branch.is_none() {
+        pr.and_then(|n| pr_head_branch(&project_root, n as u64))
+    } else {
+        branch
+    };
+    if let Some(n) = seeded_pr {
+        let mut sink = network_retry::StderrSink;
+        facts.pr_merged = pr_is_merged_with_sink(&project_root, n, &mut sink).unwrap_or(false);
+        facts.branch_exists = true;
+        if !facts.ci_green {
+            facts.ci_green = branch
+                .as_deref()
+                .map(|b| matches!(ci_probe_via_forge(b), CiProbe::Green { .. }))
+                .unwrap_or(false);
+        }
+    }
     let pr_exists = pr.is_some();
 
     match drain_resume::from_pr_plan(pr_exists, &facts) {
@@ -69896,7 +69932,7 @@ fn handle_from_pr(
             // lease on this scope; release a dead/clean one so the reviewer
             // phase (which resolves PR→spec) doesn't collide. Same guard the
             // resume path applies (BUG-438). trace:TASK-405 | ai:claude
-            release_dead_leases_for_resume(&project_root, spec);
+            release_dead_leases_for_resume(&project_root, &spec);
             let resume_entry = Some(ResumeEntry {
                 start_phase,
                 branch,
@@ -69906,7 +69942,7 @@ fn handle_from_pr(
             let result = run_auto_complete(
                 storage,
                 user_id,
-                spec,
+                &spec,
                 variant,
                 json,
                 permission_mode,

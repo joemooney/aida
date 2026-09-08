@@ -4482,7 +4482,14 @@ pub(crate) fn handle_queue_command(
             };
             // trace:TASK-518 | ai:antigravity
             let resolved_spec_id = if let Some(s) = effective_id {
-                if let Some(pr) = parse_pr_arg(s) {
+                if *from_pr {
+                    // BUG-897: `--from-pr` is the queue-independent PR
+                    // re-entry path. Keep an explicit PR-N scope intact so a
+                    // child drain does not resolve it back to a Done/dequeued
+                    // spec before phase 3.
+                    // trace:BUG-897 | ai:codex
+                    None
+                } else if let Some(pr) = parse_pr_arg(s) {
                     // STORY-501/BUG-440: when a "Review PR-N" story is queued,
                     // DON'T resolve PR→backing-spec here. The TASK-518 resolution
                     // (resolve to the implemented spec) is right for a human who
@@ -10506,7 +10513,16 @@ pub(crate) fn handle_queue_integrate(
             // we (a) skip re-driving a PR already driven this pass for a sibling
             // spec, and (b) emit one legible line naming every spec the merge
             // completes. trace:TASK-842 | ai:claude
-            if let Some(pr_num) = pr_numbers.get(id).and_then(|p| *p) {
+            let Some(pr_num) = pr_numbers.get(id).and_then(|p| *p) else {
+                println!(
+                    "  {} `{}` — no PR number resolved; skipping",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    id
+                );
+                any_parked_or_waited = true;
+                continue;
+            };
+            {
                 if !integrated_pr_numbers.insert(pr_num) {
                     // Already driven this pass for a sibling spec — the
                     // merge-trailer → auto-bump completes this spec too; don't
@@ -10531,10 +10547,10 @@ pub(crate) fn handle_queue_integrate(
             if dry_run {
                 let rebase_note = if rebase { " (would rebase first)" } else { "" };
                 println!(
-                    "  {} [dry-run] would drive `{}` via `aida queue work {} --auto-complete --from-pr`{}",
+                    "  {} [dry-run] would drive `{}` via `aida queue work PR-{} --auto-complete --from-pr`{}",
                     "→".dimmed(),
                     id,
-                    id,
+                    pr_num,
                     rebase_note
                 );
                 continue;
@@ -10634,7 +10650,7 @@ pub(crate) fn handle_queue_integrate(
                 // the child does not overwrite and release `.aida/drain.lock`
                 // before the parent loop finishes. trace:BUG-748 | ai:codex
                 .env("AIDA_DRAIN_BORROW", "1")
-                .args(integrate::drive_args(id))
+                .args(integrate::drive_args(pr_num))
                 .status();
             match status {
                 Ok(s) if s.success() => {
