@@ -160,7 +160,7 @@ impl Pool {
 }
 
 /// Options controlling `acquire`.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AcquireOptions {
     /// When set, stamp a durable reservation (`leased`) under this holder name
     /// instead of (or in addition to) the PID-liveness owner stamp. Use for a
@@ -175,6 +175,23 @@ pub struct AcquireOptions {
     /// Shell commands run after a fresh `git worktree add` (machine-global
     /// config only — see `worktree_hooks`).
     pub post_create_hooks: Vec<String>,
+    /// Initialize recursive git submodules before handing the worktree to a
+    /// caller. Defaults on so AIDA-created worktrees are build-ready when a repo
+    /// vendors dependencies through `.gitmodules`.
+    // trace:BUG-899 | ai:codex
+    pub init_submodules: bool,
+}
+
+impl Default for AcquireOptions {
+    fn default() -> Self {
+        Self {
+            lease_holder: None,
+            max_trees: None,
+            lease_ttl_secs: None,
+            post_create_hooks: Vec::new(),
+            init_submodules: true,
+        }
+    }
 }
 
 /// The classified live state of a pool entry, for `aida worktree pool status`.
@@ -428,6 +445,9 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
             let path = pool.entries[idx].path.clone();
             git_ops::reset_worktree_to(&path, &base_ref)
                 .with_context(|| format!("reset pooled worktree {}", path.display()))?;
+            git_ops::init_submodules_or_warn(&path, opts.init_submodules).with_context(|| {
+                format!("prepare submodules in pooled worktree {}", path.display())
+            })?;
             stamp_acquired(&mut pool.entries[idx], opts);
             // Warm-cache HIT: an already-built worktree was reused. Counts only,
             // no paths/content — the hit-rate telemetry (TASK-1012).
@@ -450,6 +470,8 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         let path = pool_path_for(project_root, &name);
         git_ops::add_detached_worktree(project_root, &path, &base_ref)
             .with_context(|| format!("create pool worktree {}", path.display()))?;
+        git_ops::init_submodules_or_warn(&path, opts.init_submodules)
+            .with_context(|| format!("prepare submodules in pool worktree {}", path.display()))?;
 
         // Best-effort post_create hooks (warm the cache, etc.); never fatal.
         crate::worktree_hooks::run_hooks(&opts.post_create_hooks, &path, "post_create");
@@ -912,6 +934,28 @@ mod git_integration_tests {
         dir
     }
 
+    // trace:BUG-899 | ai:codex
+    fn init_repo_with_submodule() -> (tempfile::TempDir, tempfile::TempDir) {
+        let sub = init_repo();
+        let repo = init_repo();
+        let root = repo.path();
+        let sub_path = sub.path().to_str().unwrap();
+        git(
+            root,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                sub_path,
+                "external/dep",
+            ],
+        );
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-qm", "add submodule"]);
+        (repo, sub)
+    }
+
     fn opts() -> AcquireOptions {
         AcquireOptions {
             max_trees: Some(4),
@@ -961,6 +1005,46 @@ mod git_integration_tests {
         assert_eq!(pool.create_count, 1, "first acquire minted a fresh tree");
         assert_eq!(pool.reuse_count, 1, "second acquire reused the warm tree");
         assert_eq!(pool.hit_rate(), Some(0.5));
+    }
+
+    // trace:BUG-899 | ai:codex
+    #[test]
+    fn acquire_populates_submodules_by_default() {
+        let (repo, _sub) = init_repo_with_submodule();
+        let root = repo.path();
+        let old = std::env::var_os("GIT_ALLOW_PROTOCOL");
+        std::env::set_var("GIT_ALLOW_PROTOCOL", "file");
+
+        let path = acquire(root, &opts()).unwrap();
+
+        match old {
+            Some(v) => std::env::set_var("GIT_ALLOW_PROTOCOL", v),
+            None => std::env::remove_var("GIT_ALLOW_PROTOCOL"),
+        }
+        assert!(
+            path.join("external/dep/README.md").is_file(),
+            "pooled worktree should initialize submodules before handoff"
+        );
+    }
+
+    // trace:BUG-899 | ai:codex
+    #[test]
+    fn acquire_opt_out_leaves_submodules_uninitialized() {
+        let (repo, _sub) = init_repo_with_submodule();
+        let root = repo.path();
+        let path = acquire(
+            root,
+            &AcquireOptions {
+                init_submodules: false,
+                ..opts()
+            },
+        )
+        .unwrap();
+
+        assert!(
+            !path.join("external/dep/README.md").exists(),
+            "opt-out should leave the submodule gitlink unpopulated"
+        );
     }
 
     #[test]

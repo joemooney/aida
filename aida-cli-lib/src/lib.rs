@@ -12623,6 +12623,20 @@ fn init_store_mirror_config_section() -> &'static str {
      # mirror_remotes = [\"gitlab\"]\n"
 }
 
+/// The `[worktree]` scaffold section. AIDA-created worktrees are expected to be
+/// ready for builds, so recursive submodule initialization is default-on with a
+/// visible opt-out.
+// trace:BUG-899 | ai:codex
+fn init_worktree_config_section() -> &'static str {
+    "\n# Worktree creation. AIDA initializes recursive git submodules by default\n\
+     # after creating or claiming a worktree, so repos that vendor dependencies\n\
+     # through `.gitmodules` are build-ready before pickup succeeds. Set this\n\
+     # false to skip the potentially-expensive init; AIDA will print the exact\n\
+     # recovery command when `.gitmodules` is present.\n\
+     [worktree]\n\
+     init_submodules = true\n"
+}
+
 /// The `[worktree_pool]` scaffold section. Pooling is ON by default (TASK-985):
 /// `aida session start` (and the agent-new / queue-work / orchestrator paths)
 /// reuse a recycled warm worktree instead of `git worktree add`, keeping the
@@ -26413,6 +26427,7 @@ fn acquire_session_pool_worktree(
         max_trees: worktree_pool_config_max_trees(project_root),
         lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(project_root)),
         post_create_hooks: worktree_pool_global_hooks("post_create"),
+        init_submodules: worktree_config_init_submodules(project_root),
     };
     let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
 
@@ -26938,6 +26953,11 @@ fn session_start(
         if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
         }
+        aida_core::git_ops::init_submodules_or_warn(
+            &worktree_path,
+            worktree_config_init_submodules(&project_root),
+        )
+        .with_context(|| format!("prepare submodules in worktree {}", worktree_path.display()))?;
 
         // STORY-71: enrich the lease with PR metadata via gh/glab. The
         // worktree is already on the PR's code (the fetch above did the
@@ -27011,6 +27031,11 @@ fn session_start(
                 branch_name
             );
         }
+        aida_core::git_ops::init_submodules_or_warn(
+            &worktree_path,
+            worktree_config_init_submodules(&project_root),
+        )
+        .with_context(|| format!("prepare submodules in worktree {}", worktree_path.display()))?;
     } else {
         // Default flow: create worktree on a NEW branch (the original
         // EPIC-20 behavior — work-in-progress sessions, not reviews).
@@ -27111,6 +27136,13 @@ fn session_start(
             if !res.status.success() {
                 anyhow::bail!("`git worktree add` failed");
             }
+            aida_core::git_ops::init_submodules_or_warn(
+                &worktree_path,
+                worktree_config_init_submodules(&project_root),
+            )
+            .with_context(|| {
+                format!("prepare submodules in worktree {}", worktree_path.display())
+            })?;
         }
     }
 
@@ -49309,6 +49341,8 @@ fn ensure_epic_worktree_core(
             String::from_utf8_lossy(&res.stderr).trim()
         );
     }
+    aida_core::git_ops::init_submodules_or_warn(&path, worktree_config_init_submodules(main_root))
+        .with_context(|| format!("prepare submodules in worktree {}", path.display()))?;
 
     // Auto-scope the new tree to the epic (STORY-706 focus). Uses the low-level
     // marker writer, not the validating `aida focus` path — the fresh worktree
@@ -49641,6 +49675,18 @@ fn worktree_pool_config_lease_ttl_secs(project_root: &std::path::Path) -> i64 {
         .unwrap_or(aida_core::worktree_pool::DEFAULT_LEASE_TTL_SECS)
 }
 
+/// Read `[worktree] init_submodules` from `.aida/config.toml`. Missing or
+/// invalid values default to true so AIDA-created worktrees are build-ready for
+/// repos with vendored git submodules.
+// trace:BUG-899 | ai:codex
+fn worktree_config_init_submodules(project_root: &std::path::Path) -> bool {
+    std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+        .ok()
+        .and_then(|body| toml::from_str::<toml::Value>(&body).ok())
+        .and_then(|value| value.get("worktree")?.get("init_submodules")?.as_bool())
+        .unwrap_or(true)
+}
+
 /// Hook commands for `key` (`post_create` / `pre_destroy`), sourced ONLY from
 /// the machine-global `~/.aida/config.toml`. Repo-level config is deliberately
 /// ignored — cloning a repo must never run arbitrary shell on your machine
@@ -49709,6 +49755,7 @@ fn handle_worktree_pool_command(cmd: &WorktreePoolCommand) -> Result<()> {
                 max_trees: worktree_pool_config_max_trees(&project_root),
                 lease_ttl_secs: Some(worktree_pool_config_lease_ttl_secs(&project_root)),
                 post_create_hooks: worktree_pool_global_hooks("post_create"),
+                init_submodules: worktree_config_init_submodules(&project_root),
             };
             let path = aida_core::worktree_pool::acquire(&project_root, &opts)?;
             if *json {

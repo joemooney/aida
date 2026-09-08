@@ -283,6 +283,11 @@ pub(crate) fn pr_rebase_handler(
             pr_local_branch
         );
     }
+    aida_core::git_ops::init_submodules_or_warn(
+        &wt_path,
+        crate::worktree_config_init_submodules(&project_root),
+    )
+    .with_context(|| format!("prepare submodules in PR worktree {}", wt_path.display()))?;
 
     let cleanup_worktree = || {
         let _ = std::process::Command::new("git")
