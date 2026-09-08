@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:27:12.323674694Z
-modified_at: 2026-09-07T02:28:10.038037102Z
+modified_at: 2026-09-08T02:49:09.312751242Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a04eea-cb6b-72a0-929a-8e7bc0999da2
   created_at: 2026-09-07T02:27:17.348852728Z
+comments:
+- id: 01a07eeb-5dc0-7db2-a17b-3e74368ad2f4
+  author: joe
+  content: 'Field evidence arrived unprompted (2026-09-07): the operator ran AIDA in the actual codex-mandated environment and filed three findings — vendor launcher ignores the enabled-agents profile (BUG-898, also BUG-018 in that project''s store), worktrees leave recursive submodules uninitialized (BUG-899), and queue routing fractures across identities (BUG-900). The environment smoke is partially executed in practice; complete the remaining checklist (proxy, work gitlab remote, AGENTS.md injection) next visit.'
+  created_at: 2026-09-08T02:49:09.312751242Z
+  modified_at: 2026-09-08T02:49:09.312751242Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 deferred: true
 deferred_at: 2026-09-07T02:28:10.038037102Z
 deferred_until: next time the operator is at the work machine
