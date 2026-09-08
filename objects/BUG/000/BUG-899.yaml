@@ -3,20 +3,36 @@ spec_id: BUG-899
 agreed_id: BUG-899
 title: AIDA-created worktrees leave recursive submodules uninitialized — builds fail on empty gitlinks
 description: 'Field report (2026-09-07, codex-only project): aida queue work SPEC --no-launch created a valid worktree, but a vendored submodule (external/usearch) remained an empty uninitialized gitlink, so the containerized build failed on the dependency''s missing pyproject.toml. git worktree add does not initialize submodules. Expected: worktree creation detects .gitmodules and runs git submodule update --init --recursive in the new worktree before reporting pickup success — or, if that is expensive/opt-out-worthy, prints a blocking warning naming the exact command before success. Applies to every worktree-creating surface (queue work, worktree enter/add, orchestrator phase-1, worktree pool warmup — pooled trees must init on creation or claim). Config knob [worktree] init_submodules with default true. Acceptance: fixture repo with a submodule — new worktree has the submodule populated; opt-out leaves it with the printed warning; pool-claimed trees covered.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-08T02:48:29.438017280Z
-modified_at: 2026-09-08T04:03:23.592468177Z
+modified_at: 2026-09-08T04:19:20.790776588Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07f2f-2cbe-77a3-905a-e43c2bff04ec
   created_at: 2026-09-08T04:03:17.706051223Z
   created_by: joe
+history:
+- id: 01a07f3d-f050-79b0-8896-1822f6c20a22
+  author: aida-auto-bump
+  timestamp: 2026-09-08T04:19:20.784201388Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07f3d-f056-7bf0-9a8d-229a33dcf4b3
+  timestamp: 2026-09-08T04:19:20.790774984Z
+  agent: aida
+  commit_sha: f44e1cd0e258d3eac61872b7899a809ed9da7633
+  summary: Completed via merge f44e1cd0
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-08T04:03:23.592468177Z
   implemented_by: joe
+  completed_at: 2026-09-08T04:19:20.784063583Z
+  completion_sha: f44e1cd0e258d3eac61872b7899a809ed9da7633
