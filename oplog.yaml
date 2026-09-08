@@ -49500,5 +49500,17 @@ operations:
   timestamp: 2026-09-08T04:49:53.815969410Z
   kind: !SetStatus
     status: Completed
-clock: 4236
+- id: 01a07f61-9c66-7033-90d9-1a32edd5dd3e
+  target_id: 01a07f61-9885-7d33-b986-c034d1d49805
+  author: aida
+  node_id: '1'
+  lamport: 4237
+  timestamp: 2026-09-08T04:58:18.598079343Z
+  kind: !Create
+    title: role-routed queue entries must be pickable by the orchestrator regardless of the adder's user identity — BUG-900 over-rotation
+    description: 'Regression found by TASK-1198 attempt 5 (2026-09-07 21:57), introduced by BUG-900''s identity strictness: queue entries added from the operator''s shell identity with --for implementer are now REFUSED by the drain''s phase-1 implementer session — error: TASK-7 is not in your queue, but it IS queued (the new visibility hint working while pickup regressed). All three specs shelved in 20 seconds; phase-1 startup failed cleanly with status restored to Approved. Calibration: for ORCHESTRATED pickup, role routing must trump user-queue ownership — a drain working role implementer picks any entry routed for implementer (any adder identity), while the BUG-900 protections stay for ad-hoc cross-identity writes and the visibility hint stays everywhere. Acceptance: entries queued from shell identity A --for implementer are drained by an orchestrator under identity B; the TASK-1198 3-spec codex validation ships 3/3; BUG-900''s named-destination output and other-queues hint unchanged.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4237
 node_id: '1'
