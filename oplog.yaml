@@ -49320,5 +49320,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4223
+- id: 01a07eea-ff2f-7fd3-8099-dbc52af30eca
+  target_id: 01a07eea-d445-75b0-ae8e-a61d9d5b7d42
+  author: aida
+  node_id: '1'
+  lamport: 4224
+  timestamp: 2026-09-08T02:48:45.103931980Z
+  kind: !Create
+    title: queue routing fractures across user identities — advisor requeue succeeds into a queue the implementer never sees
+    description: 'Field report (2026-09-07, multi-agent project): an advisor session requeued a task and got a success message, but the implementer could not see or pick it up — the entry landed in the ADVISOR''s user queue. Three identities (codex-advisor-1, joe, joe.mooney) produced conflicting queue views; the task only surfaced after explicitly routing to the implementer''s actual identity. Root: the BUG-89 contract keys the queue on the SHELL user (AIDA_USER/USER), so agent sessions with distinct identities write to invisible queues, and TASK-951''s case-fold does not bridge genuinely different aliases (that person-alias map is TASK-845, open). Expected: (1) queue add/rework SUCCESS OUTPUT always names the target queue identity (routed to queue joe for role implementer) so a mis-route is visible immediately; (2) a cross-identity write from a coordination role (advisor routing --for implementer) targets the project''s shared/role queue or requires an explicit --user, never silently the writer''s own; (3) aida queue list gains a --others/--all-users hint when the current identity''s queue is empty but other queues in the store are not. Acceptance: advisor-session requeue with --for implementer is visible to the implementer identity''s bare queue list; success output names the destination identity; empty-queue view mentions N entries under other identities when present.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4224
 node_id: '1'
