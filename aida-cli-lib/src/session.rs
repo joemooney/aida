@@ -1160,6 +1160,96 @@ pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
         .unwrap_or(HeadlessVendor::Claude)
 }
 
+fn agent_selection_allows_vendor(
+    selection: crate::init_cmd::AgentSelection,
+    vendor: HeadlessVendor,
+) -> bool {
+    match vendor {
+        HeadlessVendor::Claude => selection.claude,
+        HeadlessVendor::Codex => selection.codex,
+        HeadlessVendor::Agy => selection.antigravity,
+    }
+}
+
+fn enabled_headless_vendors(selection: crate::init_cmd::AgentSelection) -> Vec<HeadlessVendor> {
+    let mut vendors = Vec::new();
+    if selection.claude {
+        vendors.push(HeadlessVendor::Claude);
+    }
+    if selection.codex {
+        vendors.push(HeadlessVendor::Codex);
+    }
+    if selection.antigravity {
+        vendors.push(HeadlessVendor::Agy);
+    }
+    vendors
+}
+
+fn explicit_headless_vendor_selected(worktree_root: &Path) -> bool {
+    if headless_vendor_override().is_some() {
+        return true;
+    }
+    if std::env::var("AIDA_HEADLESS_VENDOR")
+        .ok()
+        .and_then(|raw| HeadlessVendor::parse(&raw))
+        .is_some()
+    {
+        return true;
+    }
+    let cfg = crate::read_project_config_value(worktree_root);
+    if crate::config_lookup(cfg.as_ref(), "orchestrator", "headless_vendor")
+        .and_then(|v| v.as_str())
+        .and_then(HeadlessVendor::parse)
+        .is_some()
+    {
+        return true;
+    }
+    aida_core::agents_config::resolve_default_vendor(worktree_root)
+        .as_deref()
+        .and_then(HeadlessVendor::parse)
+        .is_some()
+}
+
+/// BUG-898: queue-work launch preflight. The launch vendor must be resolved
+/// and checked against the persisted `[agents] enabled` profile before
+/// `session_start` creates a worktree or writes a lease.
+// trace:BUG-898 | ai:codex
+pub(crate) fn resolve_enabled_headless_vendor(worktree_root: &Path) -> Result<HeadlessVendor> {
+    let resolved = resolve_headless_vendor(worktree_root);
+    let Some(selection) = crate::init_cmd::read_enabled_agent_selection(worktree_root) else {
+        return Ok(resolved);
+    };
+    if agent_selection_allows_vendor(selection, resolved) {
+        return Ok(resolved);
+    }
+
+    let enabled = enabled_headless_vendors(selection);
+    if enabled.is_empty() {
+        anyhow::bail!(
+            "no agent launch profiles are enabled by `[agents] enabled`; refusing before creating \
+             a worktree or lease. Recovery: enable a profile such as `codex`, or re-run with \
+             `--no-launch` to prepare state without launching an agent."
+        );
+    }
+
+    if enabled.len() == 1 && !explicit_headless_vendor_selected(worktree_root) {
+        return Ok(enabled[0]);
+    }
+
+    let enabled_names = enabled
+        .iter()
+        .map(|v| v.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    anyhow::bail!(
+        "resolved launch vendor `{}` is disabled by `[agents] enabled` (enabled: {}). \
+         Refusing before creating a worktree or lease. Recovery: re-run with an enabled explicit \
+         vendor, for example `--vendor codex`, or use `--no-launch`.",
+        resolved.as_str(),
+        enabled_names
+    );
+}
+
 /// TASK-1162: resolve the session vendor for a launch rooted at the current
 /// project — the same precedence stack as a headless drain spawn (flag
 /// override → `AIDA_HEADLESS_VENDOR` → `[orchestrator] headless_vendor` →
@@ -1968,7 +2058,13 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
 /// because the parent must stay alive to host the tee — including for the
 /// `--no-tee-headless` path, where the tee still runs so failure events
 /// (`is_error`, `permission_denials`) can never hide. trace:TASK-307 | ai:claude
-pub fn exec_claude_headless(
+/// BUG-898: run the already-preflighted queue-work headless vendor. Callers
+/// that need to validate `[agents] enabled` before mutating state resolve the
+/// vendor first and pass it here, avoiding a second late resolver that could
+/// silently fall back to a disabled default.
+// trace:BUG-898 | ai:codex
+pub fn exec_vendor_headless(
+    vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
     log_path: &Path,
@@ -1989,7 +2085,6 @@ pub fn exec_claude_headless(
     // implementer always tried claude (fatal on a claude-less machine). It now
     // shares the spawn path's per-vendor composition; the claude arm is
     // byte-identical to the spawn path's claude arm.
-    let vendor = resolve_headless_vendor(&headless_worktree_root());
     if vendor != HeadlessVendor::Claude {
         eprintln!(
             "{} headless implementer phase on vendor `{}`",
@@ -4562,13 +4657,107 @@ mod tests {
         );
     }
 
+    // BUG-898: a codex-only enabled profile must not let queue-work's launch
+    // resolver fall through to the built-in Claude default. This preflight is
+    // pure and runs before the queue-work worktree/lease mutation path.
+    // trace:BUG-898 | ai:codex
+    #[test]
+    fn resolve_enabled_headless_vendor_autopicks_single_enabled_profile() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[agents]\nenabled = [\"codex\"]\n",
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HEADLESS_VENDOR", None),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("HOME", Some(home.to_str().unwrap())),
+        ]);
+        set_headless_vendor_override(None);
+
+        assert_eq!(
+            resolve_enabled_headless_vendor(&project).unwrap(),
+            HeadlessVendor::Codex
+        );
+    }
+
+    // BUG-898: an all-disabled profile is a launch configuration error and
+    // must be reported before queue-work creates a worktree or lease.
+    // trace:BUG-898 | ai:codex
+    #[test]
+    fn resolve_enabled_headless_vendor_refuses_all_disabled_profile() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[agents]\nenabled = []\n",
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HEADLESS_VENDOR", None),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("HOME", Some(home.to_str().unwrap())),
+        ]);
+        set_headless_vendor_override(None);
+
+        let err = resolve_enabled_headless_vendor(&project)
+            .expect_err("all-disabled profile must refuse launch");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("no agent launch profiles are enabled"),
+            "{msg}"
+        );
+        assert!(msg.contains("--no-launch"), "{msg}");
+    }
+
+    // BUG-898: the allow-list gates explicit launch choices too. If the
+    // operator explicitly asks for disabled Claude in a codex-only project, we
+    // refuse instead of silently launching Claude or mutating queue-work state.
+    // trace:BUG-898 | ai:codex
+    #[test]
+    fn resolve_enabled_headless_vendor_refuses_explicit_disabled_vendor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path().join("home");
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "[agents]\nenabled = [\"codex\"]\n",
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("HOME", Some(home.to_str().unwrap())),
+        ]);
+        set_headless_vendor_override(None);
+
+        let err = resolve_enabled_headless_vendor(&project)
+            .expect_err("explicit disabled vendor must refuse launch");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("resolved launch vendor `claude` is disabled"),
+            "{msg}"
+        );
+        assert!(msg.contains("--vendor codex"), "{msg}");
+        assert!(msg.contains("--no-launch"), "{msg}");
+    }
+
     /// BUG-705: the shared composition routes per vendor — with Codex the
     /// program is `codex` and the argv is the exec form; with Claude it is the
     /// unchanged `claude -p` form. This is the helper BOTH the spawn path and
     /// the `--no-human` phase-1 exec path build from, so the exec site can
     /// never silently miss the vendor again.
     // trace:BUG-705 | ai:claude
-    #[test]
     // ── BUG-799: codex slash-command inline rendering ──
     #[test]
     fn codex_review_slash_command_expands_to_the_handshake_bearing_body() {

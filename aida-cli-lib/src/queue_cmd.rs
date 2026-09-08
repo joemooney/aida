@@ -7299,6 +7299,49 @@ pub(crate) fn handle_queue_work(
         }
     }
 
+    // TASK-112: decide cold-launch-vs-resume up front, *before*
+    // session_start mints a worktree — so a bad `--resume <id>` (or a
+    // bare `--resume` with no prior session) fails clean with nothing to
+    // unwind. `None` when `--no-launch` (setup-only, no conversation).
+    let launch: Option<QueueWorkLaunch> = if no_launch {
+        None
+    } else {
+        Some(resolve_queue_work_launch(
+            &plan.anchor_display,
+            resume,
+            fresh,
+            session_id,
+        )?)
+    };
+
+    let project_root_for_config = find_main_worktree_root().ok();
+    // BUG-898: resolve + validate the headless launch vendor before any write
+    // below (calibration tags, leases, worktrees). A codex-only profile should
+    // auto-pick codex; a disabled/ambiguous vendor refuses with zero state
+    // created and a recovery hint.
+    // trace:BUG-898 | ai:codex
+    let headless_vendor = if !no_launch && no_human && !list_sessions {
+        let root = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let resolved = session::resolve_enabled_headless_vendor(&root)?;
+        if matches!(launch, Some(QueueWorkLaunch::Resume(_)))
+            && resolved != session::HeadlessVendor::Claude
+        {
+            anyhow::bail!(
+                "headless resume currently supports only the Claude session model, but the \
+                 enabled launch vendor resolved to `{}`. Recovery: re-run with an enabled \
+                 Claude profile, start a fresh `{}` run, or use `--no-launch`.",
+                resolved.as_str(),
+                resolved.as_str()
+            );
+        }
+        Some(resolved)
+    } else {
+        None
+    };
+
     // STORY-439: capture pickup-time complexity + assistance estimate
     // ASAP after plan resolution — we know the anchor spec, the project
     // root is reachable via `find_project_root`, and the capture is a
@@ -7356,21 +7399,6 @@ pub(crate) fn handle_queue_work(
         return print_scope_sessions(&plan.anchor_display);
     }
 
-    // TASK-112: decide cold-launch-vs-resume up front, *before*
-    // session_start mints a worktree — so a bad `--resume <id>` (or a
-    // bare `--resume` with no prior session) fails clean with nothing to
-    // unwind. `None` when `--no-launch` (setup-only, no conversation).
-    let launch: Option<QueueWorkLaunch> = if no_launch {
-        None
-    } else {
-        Some(resolve_queue_work_launch(
-            &plan.anchor_display,
-            resume,
-            fresh,
-            session_id,
-        )?)
-    };
-
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
 
     // Permission mode resolution (TASK-83 → TASK-84). Order:
@@ -7387,7 +7415,6 @@ pub(crate) fn handle_queue_work(
     let env_mode = std::env::var("AIDA_PERMISSION_MODE")
         .ok()
         .filter(|s| !s.is_empty());
-    let project_root_for_config = find_main_worktree_root().ok();
     let config_mode = project_root_for_config
         .as_deref()
         .and_then(read_behavior_permission_mode);
@@ -8581,9 +8608,8 @@ pub(crate) fn handle_queue_work(
                 // BUG-705: the banner names the RESOLVED headless vendor —
                 // before, it always said claude even when the drain was
                 // routed to codex, hiding the unrouted-exec bug.
-                let headless_vendor = crate::session::resolve_headless_vendor(
-                    &find_project_root().unwrap_or_else(|_| std::path::PathBuf::from(".")),
-                );
+                let headless_vendor = headless_vendor
+                    .unwrap_or_else(|| crate::session::resolve_headless_vendor(&project_root));
                 let launch_detail = match headless_vendor {
                     crate::session::HeadlessVendor::Claude => format!(
                         "claude -p, {}",
@@ -8619,7 +8645,8 @@ pub(crate) fn handle_queue_work(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label(&lease.branch);
-                return session::exec_claude_headless(
+                return session::exec_vendor_headless(
+                    headless_vendor,
                     &prompt,
                     &id,
                     &log_path,
