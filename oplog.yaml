@@ -49374,5 +49374,31 @@ operations:
   timestamp: 2026-09-08T03:20:29.362417707Z
   kind: !SetStatus
     status: Completed
-clock: 4227
+- id: 01a07f16-65e2-7f60-bee5-143f762d0be5
+  target_id: 01a07f16-38e9-7393-9dab-102cbbcafb1b
+  author: aida
+  node_id: '1'
+  lamport: 4228
+  timestamp: 2026-09-08T03:36:09.442355358Z
+  kind: !Create
+    title: 'Review PR-1697: [AI:codex] fix(queue): preflight enabled launch vendor (BUG-898)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07f0b`) for branch `bug-898`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1697>
+      - Branch: `bug-898` → `main`
+
+      ## Covers
+
+      - BUG-898
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1697` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4228
 node_id: '1'
