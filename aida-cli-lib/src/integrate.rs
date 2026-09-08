@@ -823,7 +823,7 @@ pub(crate) fn describe_pr_completion(c: &PrCompletion) -> String {
     }
 }
 
-/// Assemble the `aida queue work <id> --auto-complete --from-pr` argv the
+/// Assemble the `aida queue work PR-N --auto-complete --from-pr` argv the
 /// integrator self-invokes per ready PR. Pure, so the routing guarantee is
 /// pinned by a unit test (and the `orchestration_routing` guardrail).
 ///
@@ -837,11 +837,12 @@ pub(crate) fn describe_pr_completion(c: &PrCompletion) -> String {
 /// runs it in the integrator's own checkout — those are delivery concerns, not
 /// part of the routing argv asserted here.
 // trace:ADR-7 trace:ADR-9 | ai:claude
-pub(crate) fn drive_args(id: &str) -> Vec<String> {
+// trace:BUG-897 | ai:codex
+pub(crate) fn drive_args(pr_number: u32) -> Vec<String> {
     vec![
         "queue".to_string(),
         "work".to_string(),
-        id.to_string(),
+        format!("PR-{pr_number}"),
         "--auto-complete".to_string(),
         "--from-pr".to_string(),
     ]
@@ -1610,16 +1611,16 @@ enabled = true
 
     #[test]
     fn drive_args_routes_through_the_auto_complete_engine() {
-        let args = drive_args("STORY-520");
+        let args = drive_args(12);
         // The routing invariant the orchestration_routing guardrail relies on:
-        // integrate hands the spec to `queue work --auto-complete`, never an
+        // integrate hands the PR to `queue work --auto-complete`, never an
         // inlined merge lifecycle.
         assert_eq!(
             args,
             vec![
                 "queue".to_string(),
                 "work".to_string(),
-                "STORY-520".to_string(),
+                "PR-12".to_string(),
                 "--auto-complete".to_string(),
                 "--from-pr".to_string(),
             ]

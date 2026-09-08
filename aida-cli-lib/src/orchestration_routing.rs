@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn integrate_argv_actually_routes_through_the_engine() {
-        let args = crate::integrate::drive_args("SPEC-1");
+        let args = crate::integrate::drive_args(46);
         assert!(
             args.contains(&"--auto-complete".to_string()),
             "aida integrate must hand the spec to the --auto-complete engine, not an inlined merge"
@@ -204,6 +204,10 @@ mod tests {
         assert!(
             args.contains(&"--from-pr".to_string()),
             "aida integrate re-enters the engine at the reviewer phase via --from-pr"
+        );
+        assert!(
+            args.contains(&"PR-46".to_string()),
+            "aida integrate must launch the reviewer phase with a PR scope, not a Done/dequeued spec id"
         );
     }
 }
