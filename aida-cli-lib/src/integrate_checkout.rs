@@ -61,6 +61,16 @@ pub(crate) fn ensure_integrator_checkout(project_root: &Path) -> Result<PathBuf>
             let base_ref = aida_core::git_ops::furthest_ahead_default_ref(project_root)?;
             aida_core::git_ops::reset_worktree_to(&entry.path, &base_ref)
                 .with_context(|| format!("reset integrator worktree {}", entry.path.display()))?;
+            aida_core::git_ops::init_submodules_or_warn(
+                &entry.path,
+                crate::worktree_config_init_submodules(project_root),
+            )
+            .with_context(|| {
+                format!(
+                    "prepare submodules in integrator worktree {}",
+                    entry.path.display()
+                )
+            })?;
             return Ok(entry.path.clone());
         }
     }
@@ -73,6 +83,7 @@ pub(crate) fn ensure_integrator_checkout(project_root: &Path) -> Result<PathBuf>
         max_trees: crate::worktree_pool_config_max_trees(project_root),
         lease_ttl_secs: Some(crate::worktree_pool_config_lease_ttl_secs(project_root)),
         post_create_hooks: crate::worktree_pool_global_hooks("post_create"),
+        init_submodules: crate::worktree_config_init_submodules(project_root),
     };
     aida_core::worktree_pool::acquire(project_root, &opts)
         .context("acquire a dedicated integrator worktree (BUG-650)")

@@ -853,6 +853,16 @@ fn run_compete_arm(
             String::from_utf8_lossy(&add.stderr).trim()
         );
     }
+    aida_core::git_ops::init_submodules_or_warn(
+        &worktree_dir,
+        crate::worktree_config_init_submodules(project_root),
+    )
+    .with_context(|| {
+        format!(
+            "prepare submodules in compete worktree {}",
+            worktree_dir.display()
+        )
+    })?;
 
     // BUG-575 defense-in-depth: even though the logs now live outside the
     // worktree, belt-and-suspenders exclude the legacy log glob in the worktree's

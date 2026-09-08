@@ -1148,6 +1148,45 @@ pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Resul
     Ok(())
 }
 
+/// Initialize recursive submodules in a newly-created or newly-claimed AIDA
+/// worktree when the repo carries `.gitmodules`. When disabled, print the exact
+/// recovery command before the caller reports success so the checkout is not
+/// mistaken for build-ready.
+// trace:BUG-899 | ai:codex
+pub fn init_submodules_or_warn(worktree_path: &Path, enabled: bool) -> Result<()> {
+    if !worktree_path.join(".gitmodules").is_file() {
+        return Ok(());
+    }
+
+    let command = submodule_init_command(worktree_path);
+    if !enabled {
+        eprintln!("warning: .gitmodules detected; submodules were not initialized. Run: {command}");
+        return Ok(());
+    }
+
+    let result = git(
+        worktree_path,
+        &["submodule", "update", "--init", "--recursive"],
+    )?;
+    if !result.success {
+        anyhow::bail!(
+            "failed to initialize submodules in {}: {}\nRun: {}",
+            worktree_path.display(),
+            result.stderr,
+            command
+        );
+    }
+    Ok(())
+}
+
+// trace:BUG-899 | ai:codex
+pub fn submodule_init_command(worktree_path: &Path) -> String {
+    format!(
+        "git -C {} submodule update --init --recursive",
+        worktree_path.display()
+    )
+}
+
 /// Reset a worktree to a clean **detached-HEAD** checkout of `ref_`: force a
 /// detached checkout, hard-reset, and clean untracked files. This is the
 /// shared "acquire / return" cleanup — running it on every acquire makes the
@@ -4297,6 +4336,16 @@ mod tests {
         assert_eq!(
             detach.stdout, "true",
             "auto-gc must be detached so it never blocks a write"
+        );
+    }
+
+    // trace:BUG-899 | ai:codex
+    #[test]
+    fn submodule_init_command_names_recursive_recovery_command() {
+        let path = Path::new("/tmp/aida-task-1");
+        assert_eq!(
+            submodule_init_command(path),
+            "git -C /tmp/aida-task-1 submodule update --init --recursive"
         );
     }
 
