@@ -49458,5 +49458,31 @@ operations:
   timestamp: 2026-09-08T04:19:21.522175646Z
   kind: !SetStatus
     status: Completed
-clock: 4233
+- id: 01a07f55-c96b-74e2-9bb0-a91dd62af4ff
+  target_id: 01a07f55-bf3b-76b3-ad3d-f00aed03903f
+  author: aida
+  node_id: '1'
+  lamport: 4234
+  timestamp: 2026-09-08T04:45:23.691539380Z
+  kind: !Create
+    title: 'Review PR-1699: [AI:codex] fix(queue): route coordinator dispatch to role queue (BUG-900)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a07f40`) for branch `bug-900`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1699>
+      - Branch: `bug-900` → `main`
+
+      ## Covers
+
+      - BUG-900
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1699` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4234
 node_id: '1'
