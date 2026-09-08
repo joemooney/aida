@@ -49332,5 +49332,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4224
+- id: 01a07ef7-31c5-7040-8e96-3c14eebb5643
+  target_id: 01a07ef7-2e2b-7b00-aa2d-9180eb035671
+  author: aida
+  node_id: '1'
+  lamport: 4225
+  timestamp: 2026-09-08T03:02:04.485763523Z
+  kind: !Create
+    title: 'Review PR-1696: [AI:codex] fix(queue): launch from-pr review drives by PR scope (BUG-897)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a07eeb`) for branch `bug-897`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1696>
+      - Branch: `bug-897` → `main`
+
+      ## Covers
+
+      - BUG-897
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1696` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4225
 node_id: '1'
