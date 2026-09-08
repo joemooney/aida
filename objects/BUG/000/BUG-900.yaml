@@ -3,20 +3,36 @@ spec_id: BUG-900
 agreed_id: BUG-900
 title: queue routing fractures across user identities — advisor requeue succeeds into a queue the implementer never sees
 description: 'Field report (2026-09-07, multi-agent project): an advisor session requeued a task and got a success message, but the implementer could not see or pick it up — the entry landed in the ADVISOR''s user queue. Three identities (codex-advisor-1, joe, joe.mooney) produced conflicting queue views; the task only surfaced after explicitly routing to the implementer''s actual identity. Root: the BUG-89 contract keys the queue on the SHELL user (AIDA_USER/USER), so agent sessions with distinct identities write to invisible queues, and TASK-951''s case-fold does not bridge genuinely different aliases (that person-alias map is TASK-845, open). Expected: (1) queue add/rework SUCCESS OUTPUT always names the target queue identity (routed to queue joe for role implementer) so a mis-route is visible immediately; (2) a cross-identity write from a coordination role (advisor routing --for implementer) targets the project''s shared/role queue or requires an explicit --user, never silently the writer''s own; (3) aida queue list gains a --others/--all-users hint when the current identity''s queue is empty but other queues in the store are not. Acceptance: advisor-session requeue with --for implementer is visible to the implementer identity''s bare queue list; success output names the destination identity; empty-queue view mentions N entries under other identities when present.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-08T02:48:34.117133828Z
-modified_at: 2026-09-08T04:45:27.418431905Z
+modified_at: 2026-09-08T04:49:53.160403612Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a07f55-bf3b-76b3-ad3d-f00aed03903f
   created_at: 2026-09-08T04:45:27.418418984Z
   created_by: joe
+history:
+- id: 01a07f59-e601-73d2-9111-f2d63aa8db2f
+  author: aida-auto-bump
+  timestamp: 2026-09-08T04:49:53.153951726Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a07f59-e608-74f2-850b-67d497a6446a
+  timestamp: 2026-09-08T04:49:53.160402268Z
+  agent: aida
+  commit_sha: 18e7ee5d46ec7c523e750e392856b175a1649825
+  summary: Completed via merge 18e7ee5d
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-08T04:34:56.675860027Z
   implemented_by: joe
+  completed_at: 2026-09-08T04:49:53.153833087Z
+  completion_sha: 18e7ee5d46ec7c523e750e392856b175a1649825
