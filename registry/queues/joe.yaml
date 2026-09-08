@@ -434,45 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 01a07d15-410b-71c3-ae40-158bccfc8bea
-  position: 346000
-  added_by: joe
-  note: auto-queued by `session end` (01a07cf9); covers 1 spec
-  added_at: 2026-09-07T18:15:45.500646649Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07a90-cb9f-72d1-b250-c2a25fde1039
-  position: 347000
-  added_by: joe
-  added_at: 2026-09-07T20:30:33.870335474Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07db5-7b5b-7613-b6f7-fc8b53474b02
-  position: 348000
-  added_by: joe
-  note: auto-queued by `session end` (01a07da4); covers 1 spec
-  added_at: 2026-09-07T21:10:48.672600657Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07dd1-438b-71d1-bf39-568817ce1f42
-  position: 349000
-  added_by: joe
-  note: auto-queued by `session end` (01a07dc2); covers 1 spec
-  added_at: 2026-09-07T21:41:09.418369994Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a07df2-7dfb-7193-9855-32174d17462b
-  position: 350000
-  added_by: joe
-  note: auto-queued by `session end` (01a07ddf); covers 1 spec
-  added_at: 2026-09-07T22:17:26.767611981Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a07dfe-3f4c-7ac2-b201-de9a6b251ddd
   position: 351000
   added_by: joe
