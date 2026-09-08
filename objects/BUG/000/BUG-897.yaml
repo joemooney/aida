@@ -3,11 +3,11 @@ spec_id: BUG-897
 agreed_id: BUG-897
 title: phase-3 reviewer spawn must be PR-scoped — spec-scoped relaunch refuses when the implementer already dequeued the spec
 description: 'TASK-1198 attempt 4 (2026-09-07 15:28): the full auto-open chain finally worked (commit, auto-push, orchestrator-opened PR-4) and the failure moved to the reviewer spawn itself: the orchestrator relaunches phase 3 via a spec-scoped queue work invocation, which exits 1 with TASK-7 is not queued, status is Done — because codex implementers run aida queue done during phase 1 (claude implementers leave the entry, masking this). The reviewer phase must be spawned PR-scoped (queue work PR-N shape) or otherwise queue-independent: by phase 3 the spec being Done and dequeued is the NORMAL state. Sibling of BUG-882 (shipped-work preflight) — same disease, different check. Acceptance: phase 3 spawns the reviewer for an orchestrator-opened PR regardless of queue membership or Done status; the 3-spec codex validation ships 3/3; regression test on the reviewer-spawn scope.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T22:30:09.484223104Z
-modified_at: 2026-09-07T22:30:19.410489281Z
+modified_at: 2026-09-08T02:49:15.189091614Z
 req_type: Bug
 execution_mode: drain
