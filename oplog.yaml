@@ -49296,5 +49296,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4221
+- id: 01a07eea-afd1-7521-b476-3e31da2e9bc5
+  target_id: 01a07eea-a10e-78b2-bd35-b8c351be80e1
+  author: aida
+  node_id: '1'
+  lamport: 4222
+  timestamp: 2026-09-08T02:48:24.785007124Z
+  kind: !Create
+    title: queue work launches the disabled claude vendor instead of the enabled codex — after already creating the worktree
+    description: 'Field report from a codex-only project (2026-09-07; filed as BUG-018 in that project''s own store): with Claude DISABLED and Codex ENABLED in the persisted agent profile, bare aida queue work SPEC created the worktree and lease, then attempted to launch claude — failing after state was already mutated. Expected: vendor selection resolves BEFORE any state mutation — pick the single enabled vendor automatically when unambiguous; if the default vendor is disabled and none can be resolved, refuse up front (no worktree, no lease) with a recovery line naming --no-launch and the explicit --vendor codex form. The enabled-agents allow-list (STORY-807 persisted profile) must gate every launch surface, not just init scaffolding. Acceptance: codex-only profile + bare queue work launches codex; all-disabled refuses with zero state created; unit test on the launcher vendor resolution against the profile.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4222
 node_id: '1'
