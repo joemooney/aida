@@ -4672,3 +4672,11 @@ Picked up `BUG-897` from the implementer queue. The bug was that an orchestrator
 Changed the integration child argv to launch `aida queue work PR-N --auto-complete --from-pr` using the already-resolved PR number. Preserved explicit PR scopes through queue-work dispatch when `--from-pr` is set, and taught the PR-only re-entry path to resolve `PR-N` back to the backing spec for status/auto-bump while seeding the PR number and PR facts for phase 3. Added `// trace:BUG-897 | ai:codex` comments on the routing guardrails and tightened the routing regression tests to require the PR-scoped child drive.
 
 Verification so far: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib orchestration_routing::tests::integrate_argv_actually_routes_through_the_engine`; `cargo test -p aida-cli-lib integrate::tests::drive_args_routes_through_the_auto_complete_engine`; `cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-07 — BUG-898 queue-work enabled-vendor preflight
+
+Picked up `BUG-898` from the implementer queue. The bug was that `aida queue work <SPEC>` could create a worktree and lease, then try to launch Claude even when the persisted project profile disabled Claude and enabled Codex.
+
+Added a headless launch resolver that checks the resolved vendor against `[agents] enabled` before queue work performs any write. A codex-only profile now auto-selects Codex when the built-in default would have been Claude; all-disabled or explicitly disabled vendor selections refuse up front with `--no-launch` / `--vendor codex` recovery guidance. Wired fresh no-human queue work to pass that preflighted vendor into the existing generic headless executor, so Codex launches through `codex exec` instead of the Claude path. Added `// trace:BUG-898 | ai:codex` comments on the resolver, queue-work preflight, and executor.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib resolve_enabled_headless_vendor -- --nocapture`; `cargo test -p aida-cli-lib compose_headless_command_routes_per_vendor -- --nocapture`; `cargo test -p aida-cli-lib codex_phase_argv_carries_the_expanded_body_and_claude_is_unchanged -- --nocapture`; `cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the test output.
