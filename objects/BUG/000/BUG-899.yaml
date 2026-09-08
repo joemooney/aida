@@ -3,11 +3,11 @@ spec_id: BUG-899
 agreed_id: BUG-899
 title: AIDA-created worktrees leave recursive submodules uninitialized — builds fail on empty gitlinks
 description: 'Field report (2026-09-07, codex-only project): aida queue work SPEC --no-launch created a valid worktree, but a vendored submodule (external/usearch) remained an empty uninitialized gitlink, so the containerized build failed on the dependency''s missing pyproject.toml. git worktree add does not initialize submodules. Expected: worktree creation detects .gitmodules and runs git submodule update --init --recursive in the new worktree before reporting pickup success — or, if that is expensive/opt-out-worthy, prints a blocking warning naming the exact command before success. Applies to every worktree-creating surface (queue work, worktree enter/add, orchestrator phase-1, worktree pool warmup — pooled trees must init on creation or claim). Config knob [worktree] init_submodules with default true. Acceptance: fixture repo with a submodule — new worktree has the submodule populated; opt-out leaves it with the printed warning; pool-claimed trees covered.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-08T02:48:29.438017280Z
-modified_at: 2026-09-08T02:48:55.770183952Z
+modified_at: 2026-09-08T03:52:34.392563022Z
 req_type: Bug
 execution_mode: drain
