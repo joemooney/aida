@@ -1,0 +1,35 @@
+id: 01a0849b-cac5-7883-ace9-fc4251d72c38
+spec_id: STORY-995
+agreed_id: STORY-995
+title: aida session focus <id> and aida session send <id> <text> via a terminal-multiplexer adapter
+description: |-
+  ## Why
+  Operator (2026-09-08): capture the terminal id "and be able to somehow use that to focus or send keystrokes into". Verified on the operator's machine: Terminator (in use) exposes no focus or send-text over DBus; tmux and wezterm (both installed, not in use) support both; xdotool can activate a window but not a tab; raw tty injection is impossible (dev.tty.legacy_tiocsti = 0). So the verbs must go through a multiplexer adapter and degrade to a locate-hint where the emulator cannot act.
+
+  ## Acceptance
+  1. aida session focus <session|agent-name|SPEC>: resolves the registry entry (via the [terminal] block from the capture story) and activates it: tmux select-window/select-pane on TMUX_PANE; wezterm cli activate-pane on WEZTERM_PANE; otherwise prints a locate hint ("on pts/0, terminator tab titled 'aida · advisor · 3653ac9c'") and exits 0 with a warning, never an error.
+  2. aida session send <session|agent-name|SPEC> "<text>" [--enter]: tmux send-keys / wezterm cli send-text where supported. On any other emulator it refuses with the hint and suggests the mailbox: aida mailbox send. Never writes to the tty device.
+  3. --mail: instead of keystrokes, deliver via the mailbox AND, where supported, send a single Enter so an idle interactive session takes its next turn and reads the notice. This is the recommended cross-vendor form; keystroke text is the escape hatch.
+  4. Both verbs honour --format json (resolved emulator, action taken, hint).
+  5. Adapter is one trait with tmux, wezterm, and null implementations; Terminator gets locate-hint only until its DBus grows a focus method. No xdotool dependency.
+  6. Docs: docs/tui/README.md gains a "finding and reaching a live session" section covering focus/send, the tmux recommendation, and the Terminator limitation. TASK-1120's --panes tmux fan-out is the existing pattern to extend.
+  7. Tests: adapter selection from a [terminal] block; null adapter yields hint + exit 0 for focus and refusal for send; tmux adapter command lines golden-tested (no live tmux in CI).
+
+  ## Related
+  Blocked by the capture story (needs the [terminal] block). References STORY-993, STORY-991, TASK-1120.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T05:19:57.637633008Z
+modified_at: 2026-09-09T05:19:57.637633008Z
+req_type: Story
+tags:
+- from-product
+- multiplexer
+- recommend:approve
+- risk:medium
+- session
+- terminal
+- tmux
+- wezterm
