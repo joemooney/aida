@@ -1,0 +1,44 @@
+id: 01a084f5-7d66-78e0-8f54-a8ee22412e40
+spec_id: STORY-998
+agreed_id: STORY-998
+title: 'Information-based idle detection (idlewatch) over agent event streams: a Spinning watchdog trip for drains and a spinning liveness state for sessions'
+description: |-
+  ## Why
+  Operator-generated prototype (_ignore/terminator: idlewatch, zero-dep Rust, 11 passing tests) classifies an output stream as working / quiet / spinning / runaway by canonicalizing lines to templates and asking whether the NON-CLOCK numbers inside the dominant template still move. That is the right idea and it is better than the drain's current no-progress watchdog, which trips on "no commit or file-change for N minutes" (BUG-420) and had to be patched for reviewers (BUG-875) and CI waits (BUG-749). A filler-spin (sleep + status loop, the BUG-420 case) is a period-2 low-entropy stream and would be caught in about a minute; a long legitimate review produces novel Read/Grep events and would never be killed.
+
+  Reviewed 2026-09-08 by building it in a scratch crate and probing beyond its own fixtures. Confirmed defects to fix before adoption:
+  1. UUID / hex-id tokens are classified as clocks (the date regex "2+ dashes and 6+ digits" matches 01a079fe-4ad8-...), so a stream of distinct job ids canonicalizes to one template with zero numeric activity and is reported Spinning. False idle on exactly the ids AIDA logs.
+  2. A hung agent's spinner ("Thinking… (12s · 1.2k tokens)") reads Working forever because its elapsed-seconds counter advances. Counters that advance in lockstep with wall time are clocks and must be excluded like timestamps.
+  3. lines_per_sec is computed over the pruned window, so it saturates at max_window_lines / window_secs (68/s); a runaway_rate above that never fires. Count all lines in the span, not surviving window rows.
+  4. Escape-only / blank lines reset the quiet timer, so a cursor-only redraw loop is Working forever and never Quiet. Track last-information time separately from last-byte time.
+  5. main.rs uses lines() on stdin; one invalid UTF-8 byte ends the reader thread and silently drops the rest of the passthrough. Read bytes with read_until and from_utf8_lossy.
+  6. Dead store warning (m.state = raw in tick).
+
+  ## Decision
+  Do NOT pursue the PTY front-end or VTE scraping. AIDA already has structured streams: headless drain logs (.aida/headless-logs, .aida/burndown/*.jsonl, stream-json from claude -p / codex exec) and Claude Code transcripts (~/.claude/projects/<slug>/<session>.jsonl). Feed the detector canonicalized EVENT lines (event type + tool name + canonicalized tool input) instead of terminal text: no ANSI, no PTY buffering, no Terminator plugin needed for inference. The Terminator/tmux side only displays state (STORY-994/995).
+
+  ## Acceptance
+  1. aida-core gains an idle module (port of the reviewed classifier with fixes 1-6 and their regression tests: distinct-uuid stream is Working; lockstep counter is Spinning; 500/s loop trips runaway_rate=100; escape-only stream goes Quiet; non-UTF8 passthrough keeps later lines).
+  2. Drain watchdog: a Spinning verdict (low entropy + frozen payload + no novel event for [drain] spinning_after, default 90s) is a new WatchdogTrip::Spinning and shelves with typed cause "watchdog:spinning" (STORY-974 cause set) carrying the dominant template so the finding says WHAT was repeating. CI-wait exemption (BUG-749) still applies. No-progress and ceiling trips unchanged.
+  3. Sessions: aida ps / session conversations / STORY-993 liveness gain state spinning (process alive, transcript low-information for spinning_after) rendered as a distinct glyph, so a live-but-looping interactive session is visible.
+  4. aida tail annotates transitions ("[23:14:07] ⟳ spinning: '§T poll: no work § jobs' x41") when --annotate is passed; off by default.
+  5. Config under [drain]: spinning_after, runaway_rate, low_entropy_bits, progress_activity; all with the prototype defaults.
+  6. Dogfood evidence: one recorded BUG-420-style filler spin caught by Spinning before the 10-minute no-progress trip, cited in the PR.
+
+  ## Related
+  STORY-974 (typed causes), STORY-993 (liveness), STORY-994/995 (display only), BUG-420, BUG-749, BUG-875. Prototype source: _ignore/terminator (untracked).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T06:57:56.070370960Z
+modified_at: 2026-09-09T06:57:56.070370960Z
+req_type: Story
+tags:
+- drain
+- from-product
+- idlewatch
+- liveness
+- recommend:approve
+- risk:medium
+- watchdog
