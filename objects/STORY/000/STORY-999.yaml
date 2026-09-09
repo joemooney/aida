@@ -1,0 +1,26 @@
+id: 01a084f9-a2f3-7741-ad9e-311aec282da5
+spec_id: STORY-999
+agreed_id: STORY-999
+title: 'Review PR-1704: [AI:codex] feat(session): capture terminal identity and title launches (STORY-994)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a084e6`) for branch `story-994`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1704>
+  - Branch: `story-994` → `main`
+
+  ## Covers
+
+  - STORY-994
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1704` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T07:02:27.827153688Z
+modified_at: 2026-09-09T07:02:27.827153688Z
+req_type: Story
