@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:57.637633008Z
-modified_at: 2026-09-09T05:30:06.376192232Z
+modified_at: 2026-09-09T05:30:07.335420052Z
 req_type: Story
 tags:
 - from-product
@@ -51,3 +51,4 @@ comments:
   created_at: 2026-09-09T05:24:28.893174314Z
   modified_at: 2026-09-09T05:24:28.893174314Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+execution_mode: drain
