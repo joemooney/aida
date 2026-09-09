@@ -6993,6 +6993,22 @@ pub enum AgentNewCommand {
         #[clap(long)]
         no_prompt: bool,
 
+        /// Skip the ended-session resume offer.
+        #[clap(long)]
+        no_resume: bool,
+
+        /// Resume the latest ended matching session, or a named ended session, without prompting.
+        #[clap(long, value_name = "latest|NAME")]
+        resume: Option<String>,
+
+        /// Skip the live-duplicate confirmation prompt while still checking for duplicates.
+        #[clap(long)]
+        allow_duplicate: bool,
+
+        /// Skip the live same-vendor/same-role duplicate check entirely.
+        #[clap(long)]
+        no_duplicate_check: bool,
+
         /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
         #[clap(long)]
         no_default_flags: bool,
@@ -7066,6 +7082,22 @@ pub enum AgentNewCommand {
         #[clap(long)]
         no_prompt: bool,
 
+        /// Skip the ended-session resume offer.
+        #[clap(long)]
+        no_resume: bool,
+
+        /// Resume the latest ended matching session, or a named ended session, without prompting.
+        #[clap(long, value_name = "latest|NAME")]
+        resume: Option<String>,
+
+        /// Skip the live-duplicate confirmation prompt while still checking for duplicates.
+        #[clap(long)]
+        allow_duplicate: bool,
+
+        /// Skip the live same-vendor/same-role duplicate check entirely.
+        #[clap(long)]
+        no_duplicate_check: bool,
+
         /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
         #[clap(long)]
         no_default_flags: bool,
@@ -7128,6 +7160,22 @@ pub enum AgentNewCommand {
         /// Do not auto-generate an initial message when --spec is supplied.
         #[clap(long)]
         no_prompt: bool,
+
+        /// Skip the ended-session resume offer.
+        #[clap(long)]
+        no_resume: bool,
+
+        /// Resume the latest ended matching session, or a named ended session, without prompting.
+        #[clap(long, value_name = "latest|NAME")]
+        resume: Option<String>,
+
+        /// Skip the live-duplicate confirmation prompt while still checking for duplicates.
+        #[clap(long)]
+        allow_duplicate: bool,
+
+        /// Skip the live same-vendor/same-role duplicate check entirely.
+        #[clap(long)]
+        no_duplicate_check: bool,
 
         /// Do not read per-agent default flags from ~/.aida/agents.toml or .aida/agents.toml.
         #[clap(long)]
