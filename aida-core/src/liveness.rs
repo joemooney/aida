@@ -80,16 +80,106 @@ pub const RECENT_JSONL_WINDOW: Duration = Duration::from_secs(60);
 pub fn probe_live_claude_sessions() -> Vec<LiveSession> {
     use std::sync::OnceLock;
     static CACHE: OnceLock<Vec<LiveSession>> = OnceLock::new();
+    // STORY-993: project the (memoized) claude+codex walk rather than walking
+    // again, so a run that needs both views still touches `/proc` once.
     CACHE
-        .get_or_init(probe_live_claude_sessions_uncached)
+        .get_or_init(|| claude_sessions_from_agent_processes(&probe_live_agent_processes()))
         .clone()
 }
 
 /// BUG-613: the uncached single-walk probe. Prefer [`probe_live_claude_sessions`]
 /// (process-lifetime memoized) on the read-mostly status/listing paths; reach
 /// for this only when fresh liveness is required mid-process.
-// trace:BUG-613
+///
+/// STORY-993: derived from the ONE agent-process walk
+/// ([`walk_live_agent_processes`]) so the claude-only view and the
+/// claude+codex view share a single `/proc` scan per CLI run.
+// trace:BUG-613 trace:STORY-993
 pub fn probe_live_claude_sessions_uncached() -> Vec<LiveSession> {
+    claude_sessions_from_agent_processes(&walk_live_agent_processes())
+}
+
+/// STORY-993: project the claude rows of an agent-process walk into the
+/// historical [`LiveSession`] shape (with the recent-jsonl lookup).
+// trace:STORY-993 | ai:claude
+fn claude_sessions_from_agent_processes(procs: &[LiveAgentProcess]) -> Vec<LiveSession> {
+    procs
+        .iter()
+        .filter(|p| p.agent == AgentKind::Claude)
+        .map(|p| {
+            let jsonl = if p.stale_cwd {
+                None
+            } else {
+                recent_jsonl_in_project(&p.cwd)
+            };
+            LiveSession {
+                pid: p.pid,
+                cwd: p.cwd.clone(),
+                jsonl,
+                stale_cwd: p.stale_cwd,
+            }
+        })
+        .collect()
+}
+
+/// Which coding-agent binary a live process is. Only the agents whose
+/// transcripts `aida session conversations` lists are recognised; anything
+/// else is skipped by the walk.
+// trace:STORY-993 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AgentKind {
+    Claude,
+    Codex,
+}
+
+impl AgentKind {
+    /// The `SessionMeta.agent` / registry `agent_type` spelling.
+    pub fn label(self) -> &'static str {
+        match self {
+            AgentKind::Claude => "claude",
+            AgentKind::Codex => "codex",
+        }
+    }
+}
+
+/// One live coding-agent process (claude or codex) with the facts the
+/// conversation table needs to attach a PID to a transcript: cwd (for the
+/// session-cwd match), start time (for the "started at or before the last
+/// resume" bound and the process-elapsed cell), and controlling tty (so a
+/// human can find the terminal). Every field is read from the same `/proc`
+/// walk — no per-process spawn. `start_time` / `tty` are `None` when the
+/// platform can't report them; they are never guessed.
+// trace:STORY-993 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LiveAgentProcess {
+    pub pid: u32,
+    pub agent: AgentKind,
+    /// Cwd with any ` (deleted)` suffix stripped (see [`LiveSession::cwd`]).
+    pub cwd: PathBuf,
+    pub stale_cwd: bool,
+    /// Process start time (UTC), from the kernel's per-process start tick.
+    pub start_time: Option<chrono::DateTime<chrono::Utc>>,
+    /// Controlling terminal as `/dev/…` (e.g. `/dev/pts/3`), from the
+    /// process's stdin link. `None` for headless / redirected processes.
+    pub tty: Option<String>,
+}
+
+/// STORY-993: enumerate every live claude **and** codex process on this host,
+/// memoized for the process lifetime exactly like
+/// [`probe_live_claude_sessions`] (the two share one walk — the claude probe
+/// is a projection of this one).
+// trace:STORY-993 | ai:claude
+pub fn probe_live_agent_processes() -> Vec<LiveAgentProcess> {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<Vec<LiveAgentProcess>> = OnceLock::new();
+    CACHE.get_or_init(walk_live_agent_processes).clone()
+}
+
+/// The single uncached `/proc` walk behind both probes. One sysinfo refresh
+/// (processes + cwd + cmd); start time comes from the same refresh; the tty
+/// is one `readlink` per *matched* agent process (a handful), never per row.
+// trace:BUG-613 trace:STORY-993 | ai:claude
+fn walk_live_agent_processes() -> Vec<LiveAgentProcess> {
     // One refresh, not two: `new_with_specifics` already performs the initial
     // process walk for the given `RefreshKind`, so the previous extra
     // `refresh_processes_specifics` call doubled the `/proc` scan for no gain.
@@ -111,27 +201,84 @@ pub fn probe_live_claude_sessions_uncached() -> Vec<LiveSession> {
         if proc.thread_kind().is_some() {
             continue;
         }
-        if !is_claude_process(proc.name(), proc.cmd()) {
+        let agent = if is_claude_process(proc.name(), proc.cmd()) {
+            AgentKind::Claude
+        } else if is_codex_process(proc.name(), proc.cmd()) {
+            AgentKind::Codex
+        } else {
             continue;
-        }
+        };
         let raw_cwd = match proc.cwd() {
             Some(p) => p.to_path_buf(),
             None => continue,
         };
         let (cwd, stale_cwd) = strip_deleted_suffix(&raw_cwd);
-        let jsonl = if stale_cwd {
-            None
-        } else {
-            recent_jsonl_in_project(&cwd)
+        let pid = proc.pid().as_u32();
+        let start_time = match proc.start_time() {
+            0 => None,
+            secs => chrono::DateTime::<chrono::Utc>::from_timestamp(secs as i64, 0),
         };
-        out.push(LiveSession {
-            pid: proc.pid().as_u32(),
+        out.push(LiveAgentProcess {
+            pid,
+            agent,
             cwd,
-            jsonl,
             stale_cwd,
+            start_time,
+            tty: process_tty(pid),
         });
     }
     out
+}
+
+/// Controlling terminal of `pid` as a `/dev/…` path, read from the stdin
+/// link under `/proc` (unix only; `None` elsewhere or when stdin is not a
+/// terminal).
+// trace:STORY-993 | ai:claude
+#[cfg(unix)]
+pub fn process_tty(pid: u32) -> Option<String> {
+    std::fs::read_link(format!("/proc/{pid}/fd/0"))
+        .ok()
+        .map(|p| p.display().to_string())
+        .filter(|s| s.starts_with("/dev/"))
+}
+
+#[cfg(not(unix))]
+pub fn process_tty(_pid: u32) -> Option<String> {
+    None
+}
+
+/// Start time of ONE process (UTC) via a single-pid sysinfo refresh — for a
+/// lease-recorded pid that the agent walk did not classify as claude/codex
+/// (e.g. a wrapper the lease stamped). Not a table walk.
+// trace:STORY-993 | ai:claude
+pub fn process_start_time(pid: u32) -> Option<chrono::DateTime<chrono::Utc>> {
+    use sysinfo::Pid;
+    let target = Pid::from_u32(pid);
+    let mut sys = System::new();
+    sys.refresh_pids_specifics(&[target], ProcessRefreshKind::new());
+    match sys.process(target)?.start_time() {
+        0 => None,
+        secs => chrono::DateTime::<chrono::Utc>::from_timestamp(secs as i64, 0),
+    }
+}
+
+/// Heuristic: does this look like a Codex CLI process? The binary is named
+/// `codex` (`codex`, `codex exec …`); match the name or the command's first
+/// token's basename exactly so `codex-something` never false-positives.
+// trace:STORY-993 | ai:claude
+fn is_codex_process(name: &str, cmd: &[String]) -> bool {
+    if name == "codex" {
+        return true;
+    }
+    cmd.first()
+        .map(|arg| {
+            Path::new(arg)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(arg)
+                == "codex"
+        })
+        .unwrap_or(false)
 }
 
 /// Heuristic: does this look like a Claude Code process? `claude` matches by
