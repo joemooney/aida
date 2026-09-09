@@ -50660,5 +50660,30 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4309
+- id: 01a0855b-5c8c-75f1-8dc7-b7526cd4a4d9
+  target_id: 01a0855b-58b5-7fb2-a850-75397c3cc52e
+  author: aida
+  node_id: '1'
+  lamport: 4310
+  timestamp: 2026-09-09T08:49:12.332979377Z
+  kind: !Create
+    title: session conversations attributes the orchestrator pid to a headless drain transcript because is_claude_process matches any cmdline token
+    description: |
+      Found while reviewing PR #1706 (STORY-993) against the live machine.
+
+      **Symptom.** In `aida session conversations`, the row for a transcript driven by a headless `--auto-complete` drain resolved to the ORCHESTRATOR pid, not the agent process. The reviewer session's row rendered `● 01a08552 41m 2780911 -` where 2780911 is `aida queue work STORY-993 --vendor claude --auto-complete --no-human=both`, while `aida ps` correctly reported the same lease as pid 2805460 (`claude -p …`, elapsed 7m). So the two surfaces disagree on the pid for one lease, and the AGE cell shows the orchestrator's elapsed.
+
+      **Root cause (two parts).**
+
+      1. Pre-existing: `is_claude_process` in `aida-core/src/liveness.rs` scans EVERY cmdline token for a bare `claude` basename, so any process whose arguments contain the word — the orchestrator's `--vendor claude` — is classified as a Claude Code process. This already contaminates the memoized claude walk that `aida ps`, spec liveness, and the STORY-993 proc-scan candidate set consume. Contrast `is_codex_process` (same file, added by STORY-993) which deliberately matches only the name or the first token's basename.
+
+      2. STORY-993's lease join accepts `creator_pid` "only when it IS a live agent process" (`ProcessResolver::fill` in `aida-cli-lib/src/session.rs`). The guard leans on (1), so the orchestrator pid passes and wins over the proc-scan, which would otherwise have found the real `claude -p` in the worktree cwd.
+
+      **Fix sketch.** Tighten `is_claude_process` to the executable token (cmd[0] basename) plus the interpreter-script shape (cmd[1] when cmd[0] is node/bun/deno) — never a token that follows a `-`-prefixed flag. Keep the existing `is_claude_process_falls_back_to_cmd` test green and add a negative case for `aida queue work X --vendor claude …`. With (1) fixed, the creator_pid guard behaves as documented; optionally also skip creator_pid when its comm is `aida`.
+
+      **Repro.** Start any `aida queue work <SPEC> --auto-complete --no-human=both` drain, then run `aida session conversations --format json` and compare `pid` for that lease's transcript with `aida ps --format json`.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 4310
 node_id: '1'
