@@ -3,12 +3,12 @@ spec_id: BUG-902
 agreed_id: BUG-902
 title: BUG-898 vendor preflight is headless-gated — interactive queue work still resolves disabled claude and mutates state first
 description: 'Work-machine retest on 0.14.0 (2026-09-08, SHA 18e7ee5d4; tracked as BUG-018 in the originating project): with Claude disabled and Codex enabled, interactive bare queue work still resolves claude and creates the worktree/lease before the launch fails (failed to exec claude). Verified against HEAD: (a) the BUG-898 preflight (resolve_enabled_headless_vendor — validates [agents] enabled, refuses with zero state + recovery hint) is gated no_human-only at queue_cmd.rs:7361, so interactive runs never hit it; (b) the default vendor fallback at queue_cmd.rs:4301 reads resolve_default_vendor which consults [agents] vendor but never enabled; (c) explicit --vendor codex is exec-correct (the :8554 branch returns codex) — the DRY-RUN label is a hardcoded claude-session string at ~:7795 that never reads vendor, and for codex the minted claude session uuid is inapplicable, not just mislabeled. Minimal fix: (1) lift the BUG-898 preflight out of the no_human gate — run it whenever a launch will happen (!no_launch && !list_sessions), mapping the resolved vendor onto the interactive path too, which yields the disabled-vendor refusal and zero-state guarantee for free; (2) dry-run output prints the RESOLVED vendor and executable, and drops the session-id line for codex (no caller-minted resume id per TASK-895). Regression tests beside session.rs autopicks_single_enabled_profile / refuses_all_disabled_profile: claude-disabled+codex-enabled interactive bare pickup resolves codex; all-disabled refuses before worktree/lease; dry-run JSON carries vendor+executable.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T04:32:45.861800107Z
-modified_at: 2026-09-09T05:12:16.379080152Z
+modified_at: 2026-09-09T05:12:23.535357294Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -16,3 +16,7 @@ relationships:
   created_at: 2026-09-09T05:12:16.379075816Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-09T05:12:23.535357294Z
+  implemented_by: joe
