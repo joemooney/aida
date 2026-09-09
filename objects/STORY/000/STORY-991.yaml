@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:08:23.155545862Z
-modified_at: 2026-09-09T05:08:23.155545862Z
+modified_at: 2026-09-09T05:08:28.433896757Z
 req_type: Story
 tags:
 - agent-launcher
@@ -37,3 +37,8 @@ tags:
 - risk:low
 - session-resume
 - ux
+relationships:
+- rel_type: References
+  target_id: 01a07321-bb4d-7dd0-8b28-5ef6301ed3ab
+  created_at: 2026-09-09T05:08:28.433891879Z
+  created_by: joe
