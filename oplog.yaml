@@ -49941,5 +49941,29 @@ operations:
   timestamp: 2026-09-09T05:15:11.161614190Z
   kind: !SetStatus
     status: Completed
-clock: 4260
+- id: 01a0849b-ba7e-7e10-936a-6c5704a881b9
+  target_id: 01a0849b-b631-7b62-8d99-8c1a009ad628
+  author: aida
+  node_id: '1'
+  lamport: 4261
+  timestamp: 2026-09-09T05:19:53.470388641Z
+  kind: !Create
+    title: Capture terminal identity at agent launch and title the tab so a human can find the session
+    description: |-
+      ## Why
+      Operator (2026-09-08): "when we open a conversation perhaps we can capture the terminal id". The registry already records tty (e.g. /dev/pts/3) but not the multiplexer/emulator identity that a tool could act on, and a session's tab shows nothing that ties it to an AIDA role or id. Tonight two advisor sessions were live and the operator could not tell which terminal held the second one.
+
+      ## Acceptance
+      1. At launch (aida agent new, aida session new, aida role enter, and the SessionStart hook for hand-opened sessions), the registry entry gains a [terminal] block with whichever of these are present in the environment: tty, TERMINATOR_UUID, TMUX_PANE (+ TMUX socket), WEZTERM_PANE, WINDOWID, KITTY_WINDOW_ID, and a derived emulator = terminator|tmux|wezterm|kitty|gnome-terminal|unknown. Absent values are omitted, never guessed.
+      2. On launch the tab title is set to "aida · <role> · <short session id>" (spec appended when known, e.g. "aida · implementer · STORY-993 · 01a079fe"). Mechanism by emulator: tmux rename-window; wezterm cli set-tab-title; terminator DBus set_tab_title (remotinator) using the captured UUID; otherwise the OSC 0/2 title escape that aida statusbar already emits. Opt out with [terminal] title = false or --no-title. Restored on session end when the emulator supports it (mirrors statusbar --restore-title).
+      3. aida session conversations and aida agent ls show the emulator and pane/uuid in --format json and a short "pts/0 · terminator" cell in the human table (extends STORY-993's TTY column).
+      4. Cross-vendor: the same capture runs for codex and antigravity launches.
+      5. Tests: env fixture per emulator produces the expected [terminal] block; missing env produces only tty; title string golden test.
+
+      ## Related
+      STORY-993 (PID/TTY column) shows this data; the focus/send story consumes it.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4261
 node_id: '1'
