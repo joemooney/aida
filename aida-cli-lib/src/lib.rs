@@ -20374,6 +20374,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             sandbox,
             role,
+            no_title,
         } => {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
@@ -20388,6 +20389,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 role.clone(),
                 None,
                 mode.contained,
+                !*no_title,
             )
         }
         SessionCommand::Start {
@@ -20400,6 +20402,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             branch_style,
             launch,
             title,
+            no_title,
             name,
             permission_mode,
             sandbox,
@@ -20433,6 +20436,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 branch_style,
                 *launch,
                 title.clone(),
+                !*no_title,
                 name.clone(),
                 mode.mode.as_deref(),
                 mode.contained,
@@ -21029,6 +21033,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             model: None,
             sandbox: false,
             no_context: false,
+            no_title: false,
             show_context: false,
             prompt: None,
             no_prompt: false,
@@ -21050,6 +21055,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             bypass_sandbox: false,
             model: None,
             no_context: false,
+            no_title: false,
             show_context: false,
             prompt: None,
             no_prompt: false,
@@ -21069,6 +21075,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             cwd: None,
             bypass_sandbox: false,
             no_context: false,
+            no_title: false,
             show_context: false,
             prompt: None,
             no_prompt: false,
@@ -21154,6 +21161,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             model,
             sandbox,
             no_context,
+            no_title,
             show_context,
             prompt,
             no_prompt,
@@ -21174,6 +21182,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             permission_mode.as_deref(),
             *sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            !*no_title,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -21194,6 +21203,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             bypass_sandbox,
             model,
             no_context,
+            no_title,
             show_context,
             prompt,
             no_prompt,
@@ -21212,6 +21222,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            !*no_title,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -21230,6 +21241,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             cwd,
             bypass_sandbox,
             no_context,
+            no_title,
             show_context,
             prompt,
             no_prompt,
@@ -21248,6 +21260,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             cwd.as_deref(),
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
+            !*no_title,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -21401,6 +21414,7 @@ fn agent_resume_ended(
         Some(&launch_context),
         &[],
         entry.description.clone(),
+        true,
     )
 }
 
@@ -21974,6 +21988,7 @@ fn agent_new_claude(
     permission_mode: Option<&str>,
     sandbox: bool,
     context: AgentContextOptions,
+    title: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22044,6 +22059,7 @@ fn agent_new_claude(
             force,
             cwd,
             context,
+            title,
             prompt,
             resume,
             flag_options,
@@ -22059,6 +22075,7 @@ fn agent_new_claude(
             force,
             cwd,
             context,
+            title,
             prompt,
             resume,
             flag_options,
@@ -22079,6 +22096,7 @@ fn agent_new_codex(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    title: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22115,6 +22133,7 @@ fn agent_new_codex(
         force,
         cwd,
         context,
+        title,
         prompt,
         resume,
         flag_options,
@@ -22134,6 +22153,7 @@ fn agent_new_antigravity(
     cwd: Option<&std::path::Path>,
     bypass_sandbox: bool,
     context: AgentContextOptions,
+    title: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22170,6 +22190,7 @@ fn agent_new_antigravity(
         force,
         cwd,
         context,
+        title,
         prompt,
         resume,
         flag_options,
@@ -22188,6 +22209,7 @@ fn agent_new_with_config(
     force: bool,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
+    title: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22323,6 +22345,7 @@ fn agent_new_with_config(
         launch_context.as_ref(),
         &prompt_args,
         description,
+        title,
     )
 }
 
@@ -22348,6 +22371,7 @@ fn agent_new_bg_dispatch(
     force: bool,
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
+    _title: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -23457,6 +23481,7 @@ fn prepare_agent_launch(
                 /* branch_style */ "auto",
                 /* launch_claude */ false,
                 /* launch_title */ None,
+                /* launch_set_title */ false,
                 /* launch_name */ None,
                 // STORY-495: inert here (launch_claude=false). The agent-new
                 // launch path injects its own posture via `config.default_args`.
@@ -24201,6 +24226,7 @@ fn run_tracked_agent(
     launch_context: Option<&AgentLaunchContext>,
     prompt_args: &[String],
     description: Option<String>,
+    title: bool,
 ) -> Result<()> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
@@ -24253,6 +24279,21 @@ fn run_tracked_agent(
         .spawn()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     let child_pid = child.id();
+    let terminal = agent_registry::current_terminal_identity();
+    let title_enabled = title && agent_registry::terminal_title_enabled(&plan.project_root);
+    if title_enabled {
+        let session_id = plan
+            .native_session_id
+            .as_deref()
+            .map(str::to_string)
+            .unwrap_or_else(|| child_pid.to_string());
+        let title = agent_registry::launch_title(
+            plan.role.as_deref().unwrap_or(config.agent_type),
+            plan.current_spec.as_deref(),
+            &session_id,
+        );
+        agent_registry::apply_terminal_title(&title, terminal.as_ref());
+    }
     let binary = agent_registry::AgentBinaryIdentity::new(
         env!("CARGO_PKG_VERSION").to_string(),
         env!("AIDA_BUILD_GIT_SHA").to_string(),
@@ -24275,6 +24316,9 @@ fn run_tracked_agent(
         .wait()
         .with_context(|| format!("failed to wait for {}", config.agent_type))?;
     signal_forwarder.stop();
+    if title_enabled {
+        agent_registry::restore_terminal_title(terminal.as_ref());
+    }
     if let Err(err) =
         agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid)
     {
@@ -24331,6 +24375,11 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
         });
     }
 
+    if output_format_is_json() {
+        println!("{}", serde_json::to_string_pretty(&agents)?);
+        return Ok(());
+    }
+
     if agents.is_empty() {
         if ended_only {
             println!("No ended resumable agents found.");
@@ -24343,8 +24392,8 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
     }
 
     println!(
-        "{:<30} {:<10} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} WORKTREE",
-        "NAME/ID", "PID", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "DESC"
+        "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} WORKTREE",
+        "NAME/ID", "PID", "TTY", "KIND", "ROLE", "SPEC", "SCOPE", "STATUS", "AGE", "DESC"
     );
     let now = chrono::Utc::now();
     for agent in agents {
@@ -24372,6 +24421,7 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
             &agent.worktree_path,
         );
         let desc = agent.description.as_deref().unwrap_or("(none)");
+        let terminal = agent_registry::terminal_cell(agent.terminal.as_ref(), agent.tty.as_deref());
         // STORY-528: surface paused-availability inline after the worktree.
         let paused_note = match agent_registry::paused_glyph(&agent) {
             Some(g) => format!("  {g}"),
@@ -24385,9 +24435,10 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
                 })
                 .unwrap_or_else(|| "?".to_string());
             println!(
-                "{:<30} {:<10} {:<11} {:<12} {:<6} {:<8} {}  resume:{}{}",
+                "{:<30} {:<10} {:<20} {:<11} {:<12} {:<6} {:<8} {}  resume:{}{}",
                 identity,
                 pid_str,
+                terminal,
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
                 "ended",
@@ -24402,9 +24453,10 @@ fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Result<()> {
             );
         } else {
             println!(
-                "{:<30} {:<10} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} {}{}",
+                "{:<30} {:<10} {:<20} {:<8} {:<11} {:<12} {:<18} {:<6} {:<8} {:<24} {}{}",
                 identity,
                 pid_str,
+                terminal,
                 agent_registry::view_kind(&agent),
                 agent.role.as_deref().unwrap_or("(none)"),
                 agent.current_spec.as_deref().unwrap_or("(none)"),
@@ -27828,6 +27880,7 @@ fn session_start(
     branch_style: &str,
     launch_claude: bool,
     launch_title: Option<String>,
+    launch_set_title: bool,
     launch_name: Option<String>,
     // STORY-495: `None` → faithful native launch (no `--permission-mode`).
     launch_permission_mode: Option<&str>,
@@ -28958,6 +29011,7 @@ fn session_start(
             launch_role,
             derived_name,
             launch_contained,
+            launch_set_title,
         );
     }
 
@@ -51087,6 +51141,7 @@ fn ensure_spec_worktree(
                 /* branch_style */ "auto",
                 /* launch */ false,
                 /* launch_title */ None,
+                /* launch_set_title */ false,
                 /* launch_name */ None,
                 /* permission_mode */ None,
                 /* launch_contained */ false,
@@ -59739,6 +59794,7 @@ fn lease_agent_view(
         name: None,
         description: None,
         tty: None,
+        terminal: None,
         started_at: lease.started_at,
         last_active_at: lease_activity_timestamp(project_root, lease).unwrap_or(lease.started_at),
         role: lease.role.clone(),
@@ -69816,6 +69872,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             None,
             false,
             AgentContextOptions::new(true, false),
+            true,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),
@@ -69830,6 +69887,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             None,
             false,
             AgentContextOptions::new(true, false),
+            true,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),

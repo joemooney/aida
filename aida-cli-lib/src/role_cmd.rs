@@ -486,6 +486,14 @@ fn emit_role_enter_eval(
         println!("unset AIDA_SESSION_PURPOSE");
     }
     println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    if crate::agent_registry::terminal_title_enabled(project_root) {
+        let title = crate::agent_registry::launch_title(
+            &state.name,
+            None,
+            &uuid::Uuid::now_v7().to_string(),
+        );
+        println!("printf '\\033]2;%s\\007' '{}'", sh_single_quote(&title));
+    }
     println!("if [ -n \"${{PS1+x}}\" ]; then");
     println!("    export PS1=\"(role:{}) $PS1\"", state.name);
     println!("fi");

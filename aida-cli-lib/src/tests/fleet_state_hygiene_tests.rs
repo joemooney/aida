@@ -9,6 +9,7 @@ fn agent_view(id: &str, status: agent_registry::AgentStatus) -> agent_registry::
         name: None,
         description: None,
         tty: None,
+        terminal: None,
         started_at: now,
         last_active_at: now,
         role: Some("implementer".to_string()),

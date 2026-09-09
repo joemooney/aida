@@ -25,7 +25,7 @@ fn glyph(g: crate::glyphs::Glyph) -> &'static str {
     crate::glyphs::get(g, crate::find_project_root().ok().as_deref())
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SessionMeta {
     pub agent: String,
     pub id: String,
@@ -43,6 +43,8 @@ pub struct SessionMeta {
     /// our parse window so worktree switches mid-session show up.
     /// trace:STORY-59 | ai:claude
     pub last_cwd: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<crate::agent_registry::TerminalIdentity>,
     /// Branch the worktree at `last_cwd` was on when we ran. Computed on
     /// demand at table-print time (one cheap `git branch --show-current`
     /// per unique cwd) — None if we can't resolve a branch (cwd missing,
@@ -114,6 +116,14 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     }
     let hidden = (total_here - here.len()) + (total_parent - parent.len());
 
+    if crate::output_format_is_json() && here.is_empty() && parent.is_empty() {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&Vec::<SessionMeta>::new())?
+        );
+        return Ok(());
+    }
+
     if here.is_empty() && parent.is_empty() {
         if hidden > 0 {
             eprintln!(
@@ -148,6 +158,13 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     // lease_role, the same rows the table renders.
     if crate::output_format_is_json() {
         return print_json(&here, &parent, parent_root.as_deref());
+    }
+
+    if crate::output_format_is_json() {
+        let mut rows = here;
+        rows.extend(parent);
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+        return Ok(());
     }
 
     // STORY-58: when there's nothing to merge, render the classic single
@@ -498,6 +515,7 @@ mod normalize_specs_tests {
             title: None,
             started_at: None,
             last_cwd: None,
+            terminal: None,
             branch: None,
             recent_focus: None,
             path: None,
@@ -628,6 +646,7 @@ pub fn new_session(
     role_override: Option<String>,
     display_name: Option<String>,
     contained: bool,
+    set_terminal_title: bool,
 ) -> Result<()> {
     let role = role_override
         .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
@@ -644,6 +663,18 @@ pub fn new_session(
 
     // STORY-495: record `native` in the launch-log when no mode is injected.
     append_launch_log(&role, permission_mode.unwrap_or("native"), &title)?;
+    if set_terminal_title {
+        let project_root = crate::find_main_worktree_root()
+            .or_else(|_| crate::find_project_root())
+            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+        if crate::agent_registry::terminal_title_enabled(&project_root) {
+            let terminal = crate::agent_registry::current_terminal_identity();
+            let session_id = uuid::Uuid::now_v7().to_string();
+            let scope = std::env::var("AIDA_SESSION_SCOPE").ok();
+            let title = crate::agent_registry::launch_title(&role, scope.as_deref(), &session_id);
+            crate::agent_registry::apply_terminal_title(&title, terminal.as_ref());
+        }
+    }
 
     let name_for_log = display_name.as_deref().unwrap_or("(auto)");
     let mode_display = if contained {
@@ -2912,6 +2943,9 @@ fn enrich_from_agent_registry(sessions: &mut [SessionMeta]) {
         if session.spec.is_none() {
             session.spec = view.current_spec.clone();
         }
+        if session.terminal.is_none() {
+            session.terminal = view.terminal.clone();
+        }
     }
 }
 
@@ -3185,6 +3219,7 @@ fn parse_session_meta_for_agent(
         title,
         started_at,
         last_cwd,
+        terminal: None,
         branch: None,
         recent_focus: None,
         path: Some(path.to_path_buf()),
@@ -3305,6 +3340,7 @@ struct TableWidths {
     agent_w: usize,
     role_w: usize,
     spec_w: usize,
+    terminal_w: usize,
     worktree_w: usize,
 }
 
@@ -3319,12 +3355,15 @@ impl TableWidths {
         let mut agent_w = 5usize;
         let mut pid_w = 3usize;
         let mut tty_w = 3usize;
+        let mut terminal_w = 3usize;
         for s in sessions {
             agent_w = agent_w.max(s.agent.len());
             role_w = role_w.max(s.role.as_deref().unwrap_or("-").len());
             spec_w = spec_w.max(s.spec.as_deref().unwrap_or("-").len());
             pid_w = pid_w.max(s.process.pid_cell().len());
             tty_w = tty_w.max(s.process.tty_cell().len());
+            terminal_w = terminal_w
+                .max(crate::agent_registry::terminal_cell(s.terminal.as_ref(), None).len());
         }
         Self {
             id_w: 8,
@@ -3334,6 +3373,7 @@ impl TableWidths {
             agent_w,
             role_w,
             spec_w,
+            terminal_w: terminal_w.min(20),
             worktree_w: Self::WORKTREE_W,
         }
     }
@@ -3375,7 +3415,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
     println!(
         "{}",
         format!(
-            " {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            " {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<term_w$}  {:<wt_w$}  {}",
             "ID",
             "AGE",
             "PID",
@@ -3383,6 +3423,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             "AGENT",
             "ROLE",
             "SPEC",
+            "TERMINAL",
             "WORKTREE",
             "RECENT FOCUS",
             id_w = w.id_w,
@@ -3392,6 +3433,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             agent_w = w.agent_w,
             role_w = w.role_w,
             spec_w = w.spec_w,
+            term_w = w.terminal_w,
             wt_w = w.worktree_w,
         )
         .dimmed()
@@ -3404,6 +3446,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
         let tty = s.process.tty_cell();
         let role = s.role.as_deref().unwrap_or("-");
         let spec = s.spec.as_deref().unwrap_or("-");
+        let terminal = crate::agent_registry::terminal_cell(s.terminal.as_ref(), None);
         let focus = s.recent_focus.as_deref().unwrap_or("-");
         let worktree =
             format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), w.worktree_w);
@@ -3416,7 +3459,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             crate::session_liveness::Liveness::None => live.dimmed().to_string(),
         };
         println!(
-            "{} {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            "{} {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<term_w$}  {:<wt_w$}  {}",
             live_colored,
             id_short.bold(),
             age,
@@ -3425,6 +3468,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             s.agent.as_str().blue(),
             role.yellow(),
             spec.cyan(),
+            terminal.cyan(),
             worktree.cyan(),
             focus.cyan(),
             id_w = w.id_w,
@@ -3434,8 +3478,9 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             agent_w = w.agent_w,
             role_w = w.role_w,
             spec_w = w.spec_w,
+            term_w = w.terminal_w,
             wt_w = w.worktree_w,
-        );
+        )
     }
 }
 
@@ -3464,13 +3509,14 @@ fn format_worktree_label(cwd: Option<&str>, branch: Option<&str>, max: usize) ->
 
 pub fn format_role_resume_session_line(m: &SessionMeta) -> String {
     format!(
-        "{} {:<8}  {:<6}  {:<11}  {:<11}  {:<12}  {:<24}  {}",
+        "{} {:<8}  {:<6}  {:<11}  {:<11}  {:<12}  {:<20}  {:<24}  {}",
         liveness_indicator(m.age_seconds),
         &m.id[..m.id.len().min(8)],
         humanize_age(m.age_seconds),
         m.agent,
         m.role.as_deref().unwrap_or("-"),
         m.spec.as_deref().unwrap_or("-"),
+        crate::agent_registry::terminal_cell(m.terminal.as_ref(), None),
         format_worktree_label(m.last_cwd.as_deref(), m.branch.as_deref(), 24),
         m.title.as_deref().unwrap_or("(untitled)"),
     )
@@ -4185,6 +4231,7 @@ mod tests {
             title: Some("agent-aware sessions".to_string()),
             started_at: None,
             last_cwd: None,
+            terminal: None,
             branch: None,
             recent_focus: None,
             path: None,
@@ -4228,6 +4275,7 @@ mod tests {
             title: Some("resume prompt work".to_string()),
             started_at: None,
             last_cwd: Some("/home/joe/ai/aida-story-821".to_string()),
+            terminal: None,
             branch: Some("story-821".to_string()),
             recent_focus: None,
             path: None,

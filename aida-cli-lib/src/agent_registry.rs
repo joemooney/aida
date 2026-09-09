@@ -85,6 +85,8 @@ pub(crate) struct AgentRegistryEntry {
     pub(crate) description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) tty: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) terminal: Option<TerminalIdentity>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -151,6 +153,7 @@ pub(crate) struct AgentRegistryView {
     pub(crate) name: Option<String>,
     pub(crate) description: Option<String>,
     pub(crate) tty: Option<String>,
+    pub(crate) terminal: Option<TerminalIdentity>,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) last_active_at: DateTime<Utc>,
     pub(crate) role: Option<String>,
@@ -169,6 +172,41 @@ pub(crate) struct AgentRegistryView {
     pub(crate) native_session_id: Option<String>,
     pub(crate) ended_at: Option<DateTime<Utc>>,
     pub(crate) resumed_from: Option<String>,
+}
+
+// trace:STORY-994 | ai:codex
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct TerminalIdentity {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tty: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) terminator_uuid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tmux_pane: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) tmux_socket: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) wezterm_pane: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) windowid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) kitty_window_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) emulator: Option<String>,
+}
+
+impl TerminalIdentity {
+    pub(crate) fn short_cell(&self) -> String {
+        let tty = self
+            .tty
+            .as_deref()
+            .map(short_tty)
+            .unwrap_or_else(|| "-".to_string());
+        match self.emulator.as_deref() {
+            Some(emulator) if !emulator.is_empty() => format!("{tty} · {emulator}"),
+            _ => tty,
+        }
+    }
 }
 
 // trace:TASK-1184 | ai:codex
@@ -432,6 +470,7 @@ pub(crate) fn touch_mcp_agent(
             name: None,
             description: None,
             tty: current_tty(),
+            terminal: current_terminal_identity(),
             started_at: now,
             last_active_at: now,
             role: None,
@@ -470,6 +509,9 @@ pub(crate) fn touch_mcp_agent(
     if entry.tty.is_none() {
         entry.tty = current_tty();
     }
+    if entry.terminal.is_none() {
+        entry.terminal = current_terminal_identity();
+    }
 
     write_entry(project_root, &entry)?;
     Ok(entry)
@@ -505,6 +547,7 @@ pub(crate) fn register_spawned_agent(
         name,
         description,
         tty: current_tty(),
+        terminal: current_terminal_identity(),
         started_at: now,
         last_active_at: now,
         role,
@@ -725,13 +768,16 @@ pub(crate) fn register_existing_agent(
 ) -> Result<AgentRegistryEntry> {
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
+    let tty = process_tty(pid).or_else(current_tty);
+    let terminal = terminal_identity_for_tty(tty.clone());
     let entry = AgentRegistryEntry {
         id: agent_id(&agent_type, pid),
         agent_type,
         pid,
         name,
         description,
-        tty: process_tty(pid).or_else(current_tty),
+        tty,
+        terminal,
         started_at: now,
         last_active_at: now,
         role: Some(role),
@@ -1231,6 +1277,7 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
                 &agent.worktree_path,
             );
             let desc = agent.description.as_deref().unwrap_or("(none)");
+            let terminal = terminal_cell(agent.terminal.as_ref(), agent.tty.as_deref());
             // STORY-528: a paused agent gets its `⏸ paused (...)` state
             // appended so the operator sees budget/rate-limit holds inline.
             let paused_note = match paused_glyph(agent) {
@@ -1238,7 +1285,7 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
                 None => String::new(),
             };
             format!(
-                "  {:<15} {:<8} {:<11} {:<12} {:<18} {:<5} {:<8} {:<24} {}{}{}",
+                "  {:<15} {:<8} {:<11} {:<12} {:<18} {:<5} {:<8} {:<20} {:<24} {}{}{}",
                 identity,
                 view_kind(agent),
                 agent.role.as_deref().unwrap_or("(none)"),
@@ -1246,6 +1293,7 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
                 scope,
                 agent.status.as_str(),
                 format!("({elapsed})"),
+                terminal,
                 desc,
                 agent.worktree_path.display(),
                 source_note,
@@ -1303,6 +1351,7 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         name: entry.name,
         description: entry.description,
         tty: entry.tty,
+        terminal: entry.terminal,
         started_at: entry.started_at,
         last_active_at: entry.last_active_at,
         role: entry.role,
@@ -1435,6 +1484,167 @@ fn looks_like_spec_id(s: &str) -> bool {
         && number.chars().all(|c| c.is_ascii_digit())
 }
 
+// trace:STORY-994 | ai:codex
+pub(crate) fn current_terminal_identity() -> Option<TerminalIdentity> {
+    terminal_identity_for_tty(current_tty())
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn terminal_identity_for_tty(tty: Option<String>) -> Option<TerminalIdentity> {
+    terminal_identity_from_env(tty, std::env::vars())
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn terminal_identity_from_env<I, K, V>(
+    tty: Option<String>,
+    vars: I,
+) -> Option<TerminalIdentity>
+where
+    I: IntoIterator<Item = (K, V)>,
+    K: AsRef<str>,
+    V: AsRef<str>,
+{
+    let env: std::collections::BTreeMap<String, String> = vars
+        .into_iter()
+        .filter_map(|(k, v)| {
+            let value = v.as_ref().trim();
+            if value.is_empty() {
+                None
+            } else {
+                Some((k.as_ref().to_string(), value.to_string()))
+            }
+        })
+        .collect();
+    let tmux_socket = env
+        .get("TMUX")
+        .and_then(|s| s.split(',').next())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let emulator = if env.contains_key("TERMINATOR_UUID") {
+        Some("terminator".to_string())
+    } else if env.contains_key("TMUX_PANE") || tmux_socket.is_some() {
+        Some("tmux".to_string())
+    } else if env.contains_key("WEZTERM_PANE") {
+        Some("wezterm".to_string())
+    } else if env.contains_key("KITTY_WINDOW_ID") {
+        Some("kitty".to_string())
+    } else if env.contains_key("WINDOWID") {
+        Some("gnome-terminal".to_string())
+    } else {
+        None
+    };
+    let ident = TerminalIdentity {
+        tty,
+        terminator_uuid: env.get("TERMINATOR_UUID").cloned(),
+        tmux_pane: env.get("TMUX_PANE").cloned(),
+        tmux_socket,
+        wezterm_pane: env.get("WEZTERM_PANE").cloned(),
+        windowid: env.get("WINDOWID").cloned(),
+        kitty_window_id: env.get("KITTY_WINDOW_ID").cloned(),
+        emulator,
+    };
+    if ident.tty.is_none()
+        && ident.terminator_uuid.is_none()
+        && ident.tmux_pane.is_none()
+        && ident.tmux_socket.is_none()
+        && ident.wezterm_pane.is_none()
+        && ident.windowid.is_none()
+        && ident.kitty_window_id.is_none()
+        && ident.emulator.is_none()
+    {
+        None
+    } else {
+        Some(ident)
+    }
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn short_tty(tty: &str) -> String {
+    tty.strip_prefix("/dev/").unwrap_or(tty).to_string()
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn terminal_cell(terminal: Option<&TerminalIdentity>, tty: Option<&str>) -> String {
+    terminal
+        .map(TerminalIdentity::short_cell)
+        .or_else(|| tty.map(short_tty))
+        .unwrap_or_else(|| "-".to_string())
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn launch_title(role: &str, spec: Option<&str>, session_id: &str) -> String {
+    let short_id: String = session_id.chars().take(8).collect();
+    match spec.filter(|s| !s.trim().is_empty()) {
+        Some(spec) => format!("aida · {role} · {spec} · {short_id}"),
+        None => format!("aida · {role} · {short_id}"),
+    }
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn terminal_title_enabled(project_root: &Path) -> bool {
+    let path = project_root.join(".aida").join("config.toml");
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return true;
+    };
+    let Ok(value) = body.parse::<toml::Value>() else {
+        return true;
+    };
+    value
+        .get("terminal")
+        .and_then(|v| v.get("title"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn apply_terminal_title(title: &str, terminal: Option<&TerminalIdentity>) {
+    use std::io::Write;
+    let Some(terminal) = terminal else {
+        print!("{}", crate::statusline_cmd::osc_terminal_title(title));
+        let _ = std::io::stdout().flush();
+        return;
+    };
+    match terminal.emulator.as_deref() {
+        Some("tmux") => {
+            let _ = std::process::Command::new("tmux")
+                .args(["rename-window", title])
+                .status();
+        }
+        Some("wezterm") => {
+            let mut cmd = std::process::Command::new("wezterm");
+            cmd.args(["cli", "set-tab-title", title]);
+            if let Some(pane) = terminal.wezterm_pane.as_deref() {
+                cmd.args(["--pane-id", pane]);
+            }
+            let _ = cmd.status();
+        }
+        Some("terminator") => {
+            if let Some(uuid) = terminal.terminator_uuid.as_deref() {
+                let _ = std::process::Command::new("remotinator")
+                    .args(["set_tab_title", uuid, title])
+                    .status();
+            }
+        }
+        _ => {
+            print!("{}", crate::statusline_cmd::osc_terminal_title(title));
+            let _ = std::io::stdout().flush();
+        }
+    }
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn restore_terminal_title(terminal: Option<&TerminalIdentity>) {
+    if terminal
+        .and_then(|t| t.emulator.as_deref())
+        .is_some_and(|e| matches!(e, "tmux" | "wezterm" | "terminator"))
+    {
+        return;
+    }
+    use std::io::Write;
+    print!("{}", crate::statusbar_cmd::RESTORE_TITLE);
+    let _ = std::io::stdout().flush();
+}
+
 #[cfg(unix)]
 fn current_tty() -> Option<String> {
     std::fs::read_link("/proc/self/fd/0")
@@ -1517,6 +1727,7 @@ mod tests {
             name: None,
             description: None,
             tty: Some("/dev/pts/1".to_string()),
+            terminal: None,
             started_at: last_active_at,
             last_active_at,
             role: Some("implementer".to_string()),
@@ -1535,6 +1746,68 @@ mod tests {
             spec_status_at_end: None,
             resumed_from: None,
         }
+    }
+
+    #[test]
+    fn terminal_identity_captures_known_emulator_env() {
+        let terminator = terminal_identity_from_env(
+            Some("/dev/pts/4".to_string()),
+            vec![("TERMINATOR_UUID", "term-1")],
+        )
+        .unwrap();
+        assert_eq!(terminator.emulator.as_deref(), Some("terminator"));
+        assert_eq!(terminator.terminator_uuid.as_deref(), Some("term-1"));
+
+        let tmux = terminal_identity_from_env(
+            Some("/dev/pts/4".to_string()),
+            vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
+        )
+        .unwrap();
+        assert_eq!(tmux.emulator.as_deref(), Some("tmux"));
+        assert_eq!(tmux.tmux_pane.as_deref(), Some("%3"));
+        assert_eq!(tmux.tmux_socket.as_deref(), Some("/tmp/tmux.sock"));
+
+        for (vars, emulator) in [
+            (vec![("WEZTERM_PANE", "12")], "wezterm"),
+            (vec![("KITTY_WINDOW_ID", "9")], "kitty"),
+            (vec![("WINDOWID", "123")], "gnome-terminal"),
+        ] {
+            let ident = terminal_identity_from_env(Some("/dev/pts/4".to_string()), vars).unwrap();
+            assert_eq!(ident.tty.as_deref(), Some("/dev/pts/4"));
+            assert_eq!(ident.emulator.as_deref(), Some(emulator));
+            match emulator {
+                "wezterm" => assert_eq!(ident.wezterm_pane.as_deref(), Some("12")),
+                "kitty" => assert_eq!(ident.kitty_window_id.as_deref(), Some("9")),
+                "gnome-terminal" => assert_eq!(ident.windowid.as_deref(), Some("123")),
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_identity_with_missing_env_is_only_tty() {
+        let ident =
+            terminal_identity_from_env(Some("/dev/pts/9".to_string()), Vec::<(&str, &str)>::new())
+                .unwrap();
+        assert_eq!(ident.tty.as_deref(), Some("/dev/pts/9"));
+        assert_eq!(ident.emulator, None);
+        assert_eq!(ident.terminator_uuid, None);
+        assert_eq!(ident.tmux_pane, None);
+        assert_eq!(ident.wezterm_pane, None);
+        assert_eq!(ident.windowid, None);
+        assert_eq!(ident.kitty_window_id, None);
+    }
+
+    #[test]
+    fn launch_title_includes_role_optional_spec_and_short_id() {
+        assert_eq!(
+            launch_title("implementer", Some("STORY-993"), "01a079fe-dead-beef"),
+            "aida · implementer · STORY-993 · 01a079fe"
+        );
+        assert_eq!(
+            launch_title("advisor", None, "abcdef012345"),
+            "aida · advisor · abcdef01"
+        );
     }
 
     fn ctx(now: DateTime<Utc>, threshold_secs: u64, leases: Vec<PathBuf>) -> AgentClassifyContext {
@@ -1931,6 +2204,7 @@ mod tests {
             name: None,
             description: None,
             tty: None,
+            terminal: None,
             started_at: now,
             // Freshness column is computed relative to `Utc::now()` inside
             // `format_agent_status_lines`. Anchor it at "now - 0s" so the
@@ -2185,6 +2459,7 @@ source = "mcp"
             name: None,
             description: None,
             tty: None,
+            terminal: None,
             started_at: now,
             last_active_at: now,
             role: Some("implementer".to_string()),
