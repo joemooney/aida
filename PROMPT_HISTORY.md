@@ -4704,3 +4704,11 @@ Picked up `BUG-901` from the implementer queue. The bug was a BUG-900 follow-up:
 Updated the orchestrator phase-child environment to set `AIDA_SESSION_ROLE=implementer` for phase 1 and `AIDA_SESSION_ROLE=reviewer` for reviewer phases, preventing role lookup from inheriting the parent shell role. Added a regression proving an advisor-launched auto-complete drain under a different identity picks work queued by an operator shell for `implementer`, plus wiring coverage that phase-child env carries the concrete phase role. Added `// trace:BUG-901 | ai:codex` comments on the implementation and tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture`; `cargo test -p aida-cli-lib phase_child_env -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-08 — BUG-902 interactive enabled-vendor preflight
+
+Picked up `BUG-902` from the implementer queue. The bug was that the BUG-898 enabled-vendor preflight only ran for headless queue work, so an interactive pickup in a codex-only profile could still resolve the Claude fallback, create launch state, and then fail at exec.
+
+Moved queue-work launch vendor validation out of the headless-only gate so any real launch (`!no_launch && !list_sessions`) resolves against `[agents] enabled` before calibration tags, leases, or worktrees are written. The resolved vendor now feeds the interactive Codex launch branch, and unsupported interactive AGY selections refuse explicitly instead of falling through to Claude. Single-spec dry-run output now prints the resolved vendor and executable, and only renders the Claude session-id line for Claude launches. Added `// trace:BUG-902 | ai:codex` on the queue-work preflight.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib session::tests::resolve_enabled_headless_vendor -- --nocapture`; `cargo test -p aida-cli --test queue_work_dry_run -- --nocapture`. Existing unrelated Rust warnings remain in the test output.

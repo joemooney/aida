@@ -7353,12 +7353,12 @@ pub(crate) fn handle_queue_work(
     };
 
     let project_root_for_config = find_main_worktree_root().ok();
-    // BUG-898: resolve + validate the headless launch vendor before any write
-    // below (calibration tags, leases, worktrees). A codex-only profile should
-    // auto-pick codex; a disabled/ambiguous vendor refuses with zero state
-    // created and a recovery hint.
-    // trace:BUG-898 | ai:codex
-    let headless_vendor = if !no_launch && no_human && !list_sessions {
+    // BUG-898/BUG-902: resolve + validate the launch vendor before any write
+    // below (calibration tags, leases, worktrees), for both headless and
+    // interactive launches. A codex-only profile should auto-pick codex; a
+    // disabled/ambiguous vendor refuses with zero state created and a recovery
+    // hint. trace:BUG-898 BUG-902 | ai:codex
+    let resolved_launch_vendor = if !no_launch && !list_sessions {
         let root = project_root_for_config
             .clone()
             .or_else(|| std::env::current_dir().ok())
@@ -7379,6 +7379,10 @@ pub(crate) fn handle_queue_work(
     } else {
         None
     };
+    let launch_vendor = resolved_launch_vendor.unwrap_or_else(|| {
+        session::HeadlessVendor::parse(vendor).unwrap_or(session::HeadlessVendor::Claude)
+    });
+    let headless_vendor = no_human.then_some(launch_vendor);
 
     // STORY-439: capture pickup-time complexity + assistance estimate
     // ASAP after plan resolution — we know the anchor spec, the project
@@ -7788,20 +7792,25 @@ pub(crate) fn handle_queue_work(
                 .map(|parent| parent.join(format!("{}-{}", repo_name, slug)))
                 .unwrap_or_else(|| std::path::PathBuf::from(format!("{}-{}", repo_name, slug))),
         };
-        let session_render = match &launch {
-            Some(l) => format!(
-                "{} {}",
-                l.session_id().cyan(),
-                "(claude session id it would launch / resume)".dimmed()
-            ),
-            None => "(deferred — --no-launch)".dimmed().to_string(),
-        };
+        let executable = session::resolve_agent_program(launch_vendor.program());
         dry_line("branch", branch.cyan().to_string());
         dry_line(
             "worktree",
             worktree_path.display().to_string().cyan().to_string(),
         );
-        dry_line("session", session_render);
+        dry_line("vendor", launch_vendor.as_str().cyan().to_string());
+        dry_line("exec", executable.cyan().to_string());
+        if launch_vendor == session::HeadlessVendor::Claude {
+            let session_render = match &launch {
+                Some(l) => format!(
+                    "{} {}",
+                    l.session_id().cyan(),
+                    "(claude session id it would launch / resume)".dimmed()
+                ),
+                None => "(deferred — --no-launch)".dimmed().to_string(),
+            };
+            dry_line("session", session_render);
+        }
         dry_line(
             "lease",
             format!(
@@ -8551,7 +8560,7 @@ pub(crate) fn handle_queue_work(
     // vendor via STORY-683), so this branch handles only the interactive Codex
     // launch and leaves the entire Claude `match launch` below byte-identical.
     // trace:TASK-895 | ai:claude
-    if vendor.eq_ignore_ascii_case("codex") && !no_human {
+    if launch_vendor == session::HeadlessVendor::Codex && !no_human {
         // BUG-743: queue/do's interactive Codex path used to ignore the
         // STORY-495 `[agents] bypass` resolver and launch bare `codex
         // /aida-pickup`, leaving operators in prompt-per-command posture even
@@ -8573,6 +8582,13 @@ pub(crate) fn handle_queue_work(
             .cyan()
         );
         return session::exec_codex_session(&prompt, codex_bypass);
+    }
+    if launch_vendor == session::HeadlessVendor::Agy && !no_human {
+        anyhow::bail!(
+            "interactive queue work does not support vendor `agy` yet. Recovery: re-run with \
+             `--no-human` for a headless AGY launch, choose `--vendor claude` or `--vendor codex`, \
+             or use `--no-launch`."
+        );
     }
     match launch {
         QueueWorkLaunch::Resume(id) => {

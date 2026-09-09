@@ -31,6 +31,8 @@ fn aida(repo: &Path, home: &Path) -> Command {
     cmd.env_remove("AIDA_SESSION_ROLE");
     cmd.env_remove("AIDA_PERMISSION_MODE");
     cmd.env_remove("AIDA_AGENT_OUTPUT");
+    cmd.env_remove("AIDA_HEADLESS_VENDOR");
+    cmd.env_remove("AIDA_AGENT_CMD");
     cmd
 }
 
@@ -477,6 +479,203 @@ fn drain_dry_run_skips_reviewer_routed_head() {
         siblings_before,
         sibling_worktrees(&base_dir),
         "dry-run created a worktree sibling"
+    );
+}
+
+#[test]
+fn interactive_dry_run_autopicks_codex_only_enabled_profile() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+    std::fs::write(
+        repo.join(".aida").join("config.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "bug",
+            "--status",
+            "approved",
+            "--title",
+            "codex only dry run",
+        ])
+        .output()
+        .expect("run aida add");
+    assert!(
+        add.status.success(),
+        "aida add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let add_out = String::from_utf8_lossy(&add.stdout);
+    let spec = add_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse spec id from add output:\n{add_out}"))
+        .to_string();
+
+    let dry = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--dry-run", "--no-pull"])
+        .output()
+        .expect("run aida queue work --dry-run");
+    assert!(
+        dry.status.success(),
+        "dry-run exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        dry.status.code(),
+        String::from_utf8_lossy(&dry.stderr),
+        String::from_utf8_lossy(&dry.stdout)
+    );
+    let plan = String::from_utf8_lossy(&dry.stderr);
+    for needle in ["vendor:", "codex", "exec:", "dry run"] {
+        assert!(
+            plan.contains(needle),
+            "codex dry-run plan is missing `{needle}`:\n{plan}"
+        );
+    }
+    assert!(
+        !plan.contains("claude session id"),
+        "codex dry-run plan must not render a caller-minted Claude session id:\n{plan}"
+    );
+    assert_eq!(
+        Vec::<String>::new(),
+        list_session_files(&repo),
+        "codex dry-run wrote a session lease"
+    );
+    assert_eq!(
+        Vec::<String>::new(),
+        sibling_worktrees(&base_dir),
+        "codex dry-run created a worktree sibling"
+    );
+}
+
+#[test]
+fn interactive_work_refuses_all_disabled_profile_before_state() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+    std::fs::write(
+        repo.join(".aida").join("config.toml"),
+        "[agents]\nenabled = []\n",
+    )
+    .unwrap();
+
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "bug",
+            "--status",
+            "approved",
+            "--title",
+            "all disabled dry run",
+        ])
+        .output()
+        .expect("run aida add");
+    assert!(
+        add.status.success(),
+        "aida add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let add_out = String::from_utf8_lossy(&add.stdout);
+    let spec = add_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse spec id from add output:\n{add_out}"))
+        .to_string();
+    let queue_add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args(["queue", "add", &spec, "--for", "implementer"])
+        .output()
+        .expect("run aida queue add");
+    assert!(
+        queue_add.status.success(),
+        "aida queue add failed: {}",
+        String::from_utf8_lossy(&queue_add.stderr)
+    );
+
+    let sessions_before = list_session_files(&repo);
+    let siblings_before = sibling_worktrees(&base_dir);
+    let run = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--no-pull"])
+        .output()
+        .expect("run aida queue work");
+    assert!(
+        !run.status.success(),
+        "all-disabled launch should fail before state:\nstderr={}\nstdout={}",
+        String::from_utf8_lossy(&run.stderr),
+        String::from_utf8_lossy(&run.stdout)
+    );
+    let err = format!(
+        "{}{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        err.contains("no agent launch profiles are enabled") && err.contains("--no-launch"),
+        "all-disabled error should include recovery hint:\n{err}"
+    );
+    assert_eq!(
+        sessions_before,
+        list_session_files(&repo),
+        "all-disabled launch wrote a session lease"
+    );
+    assert_eq!(
+        siblings_before,
+        sibling_worktrees(&base_dir),
+        "all-disabled launch created a worktree sibling"
     );
 }
 
