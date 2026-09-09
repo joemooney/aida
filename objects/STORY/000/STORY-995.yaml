@@ -1,28 +1,30 @@
 id: 01a0849b-cac5-7883-ace9-fc4251d72c38
 spec_id: STORY-995
 agreed_id: STORY-995
-title: aida session focus <id> and aida session send <id> <text> via a terminal-multiplexer adapter
+title: aida session focus <id> and aida session send <id> <text> via a terminal-multiplexer adapter (tmux, wezterm, Terminator plugin)
 description: |-
   ## Why
-  Operator (2026-09-08): capture the terminal id "and be able to somehow use that to focus or send keystrokes into". Verified on the operator's machine: Terminator (in use) exposes no focus or send-text over DBus; tmux and wezterm (both installed, not in use) support both; xdotool can activate a window but not a tab; raw tty injection is impossible (dev.tty.legacy_tiocsti = 0). So the verbs must go through a multiplexer adapter and degrade to a locate-hint where the emulator cannot act.
+  Operator (2026-09-08): capture the terminal id "and be able to somehow use that to focus or send keystrokes into". Verified on the operator's machine: tmux and wezterm (installed, not in use) support both natively; xdotool can activate a window but not a tab; raw tty injection is impossible (dev.tty.legacy_tiocsti = 0). Terminator (in use) exposes no focus or send over its built-in DBus, BUT its plugin API does: the shipped Custom Commands plugin injects with terminal.vte.feed_child(text.encode()), Terminator().find_terminal_by_uuid(uuid) resolves the TERMINATOR_UUID the capture story records, and Terminal.ensure_visible_and_focussed() switches tab and raises the window (all verified in terminatorlib 2.1.3). So a ~40-line AIDA plugin that registers its own session-bus name gives Terminator the same two verbs.
 
   ## Acceptance
-  1. aida session focus <session|agent-name|SPEC>: resolves the registry entry (via the [terminal] block from the capture story) and activates it: tmux select-window/select-pane on TMUX_PANE; wezterm cli activate-pane on WEZTERM_PANE; otherwise prints a locate hint ("on pts/0, terminator tab titled 'aida · advisor · 3653ac9c'") and exits 0 with a warning, never an error.
-  2. aida session send <session|agent-name|SPEC> "<text>" [--enter]: tmux send-keys / wezterm cli send-text where supported. On any other emulator it refuses with the hint and suggests the mailbox: aida mailbox send. Never writes to the tty device.
-  3. --mail: instead of keystrokes, deliver via the mailbox AND, where supported, send a single Enter so an idle interactive session takes its next turn and reads the notice. This is the recommended cross-vendor form; keystroke text is the escape hatch.
-  4. Both verbs honour --format json (resolved emulator, action taken, hint).
-  5. Adapter is one trait with tmux, wezterm, and null implementations; Terminator gets locate-hint only until its DBus grows a focus method. No xdotool dependency.
-  6. Docs: docs/tui/README.md gains a "finding and reaching a live session" section covering focus/send, the tmux recommendation, and the Terminator limitation. TASK-1120's --panes tmux fan-out is the existing pattern to extend.
-  7. Tests: adapter selection from a [terminal] block; null adapter yields hint + exit 0 for focus and refusal for send; tmux adapter command lines golden-tested (no live tmux in CI).
+  1. aida session focus <session|agent-name|SPEC>: resolves the registry entry (the [terminal] block from the capture story) and activates it via the adapter: tmux select-window/select-pane on TMUX_PANE; wezterm cli activate-pane on WEZTERM_PANE; Terminator: DBus call Focus(uuid) on the AIDA plugin (below). When no adapter can act, print a locate hint ("on pts/0, tab titled 'aida · advisor · 3653ac9c'") and exit 0 with a warning, never an error.
+  2. aida session send <session|agent-name|SPEC> "<text>" [--enter]: tmux send-keys; wezterm cli send-text; Terminator: DBus call Send(uuid, text). Elsewhere it refuses with the hint and suggests aida mailbox send. Never writes to the tty device.
+  3. --mail: deliver via the mailbox AND, where an adapter exists, send a single Enter so an idle interactive session takes its next turn and reads the notice. Recommended cross-vendor form; raw keystroke text is the escape hatch.
+  4. Terminator plugin: aida-core/templates/terminal/terminator/aida_terminator.py, a plugin.Plugin subclass that on load registers dbus.service.Object at bus name net.aida.Terminator, path /net/aida/Terminator, methods Focus(uuid) -> bool, Send(uuid, text) -> bool, Ping() -> version. Unknown uuid returns false, no exception. aida terminal install terminator copies it to ~/.config/terminator/plugins/, prints the Preferences > Plugins enable step and the restart note, and is idempotent (checksum marker like the skills packs). The Rust adapter calls it via dbus (zbus or busctl subprocess; pick one, note why) and treats a missing bus name as "plugin not installed" with the install hint.
+  5. Trust boundary documented in the plugin header and docs: Send is keystroke injection into a shell at Custom Commands' trust level; it listens on the user session bus only; optional [terminal] send_token in config must match a token the plugin reads from ~/.config/terminator/aida-token when present.
+  6. Both verbs honour --format json (resolved emulator, adapter, action taken, hint).
+  7. Adapter is one trait with tmux, wezterm, terminator, and null implementations. No xdotool dependency.
+  8. Docs: docs/tui/README.md gains "finding and reaching a live session" covering focus/send, the Terminator plugin install, tmux/wezterm native paths, and the trust note. TASK-1120's --panes tmux fan-out is the existing pattern to extend.
+  9. Tests: adapter selection from a [terminal] block; null adapter yields hint + exit 0 for focus and refusal for send; tmux/wezterm command lines golden-tested; the plugin has a python unit test with a fake Terminator singleton asserting Focus calls ensure_visible_and_focussed and Send calls feed_child with the encoded text.
 
   ## Related
-  Blocked by the capture story (needs the [terminal] block). References STORY-993, STORY-991, TASK-1120.
+  Blocked by STORY-994 (needs the [terminal] block). References STORY-993, STORY-991, TASK-1120.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:57.637633008Z
-modified_at: 2026-09-09T05:20:02.892057067Z
+modified_at: 2026-09-09T05:24:27.850574642Z
 req_type: Story
 tags:
 - from-product
