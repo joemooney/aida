@@ -87,6 +87,57 @@ fn clean_repo() -> tempfile::TempDir {
     dir
 }
 
+fn committed_repo() -> tempfile::TempDir {
+    let dir = clean_repo();
+    std::fs::write(dir.path().join("README.md"), "seed\n").unwrap();
+    for args in [
+        vec!["add", "README.md"],
+        vec![
+            "-c",
+            "user.name=AIDA Test",
+            "-c",
+            "user.email=aida@example.test",
+            "commit",
+            "-qm",
+            "seed",
+        ],
+    ] {
+        let ok = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir.path())
+            .args(args)
+            .status();
+        assert!(ok.map(|s| s.success()).unwrap_or(false), "git failed");
+    }
+    dir
+}
+
+fn add_worktree(project_root: &std::path::Path, branch: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("worktree tempdir");
+    let path = dir.path().to_path_buf();
+    std::fs::remove_dir(&path).unwrap();
+    let ok = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "add", "-q", "-b", branch])
+        .arg(&path)
+        .status();
+    assert!(
+        ok.map(|s| s.success()).unwrap_or(false),
+        "git worktree add failed"
+    );
+    dir
+}
+
+fn write_lease(project_root: &std::path::Path, lease: &SessionLease) {
+    std::fs::create_dir_all(leases_dir(project_root)).unwrap();
+    std::fs::write(
+        lease_path(project_root, &lease.id),
+        toml::to_string_pretty(lease).unwrap(),
+    )
+    .unwrap();
+}
+
 /// (a) The canonical BUG-777 state: the owning session exited and left a lease
 /// behind over a clean worktree. That must classify as reclaimable, which is
 /// exactly what lets `--force-claim` release it and take the scope.
@@ -242,4 +293,63 @@ fn dirty_sample_is_bounded_and_reports_the_overflow() {
     assert!(sample.contains("f0.rs"));
     assert!(sample.contains("+4 more"), "got: {sample}");
     assert!(!sample.contains("f8.rs"), "got: {sample}");
+}
+
+#[test]
+fn phase_retry_releases_dead_clean_predecessor_lease() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "pr-1700");
+    let mut lease = lease_at(worktree.path(), 5, Some(reaped_pid()), None);
+    lease.id = "019f906clean".to_string();
+    lease.scope = "PR-1700".to_string();
+    lease.slug = "pr-1700".to_string();
+    lease.branch = "pr-1700".to_string();
+    lease.role = Some("reviewer".to_string());
+    write_lease(project.path(), &lease);
+
+    release_dead_phase_predecessor_leases(
+        project.path(),
+        "PR-1700",
+        auto_complete::Phase::Reviewer,
+    )
+    .expect("clean dead predecessor lease should be released");
+
+    assert!(
+        !lease_path(project.path(), &lease.id).exists(),
+        "lease file should be removed"
+    );
+}
+
+#[test]
+fn phase_retry_dirty_dead_predecessor_parks_with_typed_cause() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "pr-1700-dirty");
+    std::fs::write(worktree.path().join("wip.rs"), "// unfinished\n").unwrap();
+    let mut lease = lease_at(worktree.path(), 5, Some(reaped_pid()), None);
+    lease.id = "019f906dirty".to_string();
+    lease.scope = "PR-1700".to_string();
+    lease.slug = "pr-1700".to_string();
+    lease.branch = "pr-1700-dirty".to_string();
+    lease.role = Some("reviewer".to_string());
+    write_lease(project.path(), &lease);
+
+    let err = release_dead_phase_predecessor_leases(
+        project.path(),
+        "PR-1700",
+        auto_complete::Phase::Reviewer,
+    )
+    .expect_err("dirty dead predecessor lease should park the retry");
+
+    assert_eq!(err.kind, auto_complete::FailureKind::CacheLocked);
+    assert!(
+        err.reason
+            .contains(worktree.path().to_string_lossy().as_ref()),
+        "reason should name the dirty worktree: {}",
+        err.reason
+    );
+    assert!(
+        err.reason.contains("wip.rs"),
+        "reason should name dirty entries: {}",
+        err.reason
+    );
 }

@@ -77908,6 +77908,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let session_uuid = uuid::Uuid::now_v7().to_string();
         self.mark_drain_phase_session(auto_complete::Phase::Reviewer, &session_uuid);
         let scope = format!("PR-{pr}");
+        // BUG-906: a transient retry can relaunch this phase immediately after
+        // a predecessor reviewer process died. Reap that dead PR-scoped lease
+        // before spawning the next `queue work PR-N`; dirty leftovers park with
+        // a typed cause instead of self-colliding again.
+        release_dead_phase_predecessor_leases(
+            &self.project_root,
+            &scope,
+            auto_complete::Phase::Reviewer,
+        )?;
         let from_pr_head_sha = if self.from_pr {
             // BUG-868: prompt text must anchor the from-PR review to the PR head
             // that the orchestrator is about to gate. This is advisory context,
@@ -79660,6 +79669,74 @@ fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLeaseRecoveryRep
         dirty,
         worktree_exists,
     }
+}
+
+/// BUG-906: before a transient phase retry relaunches a child session, reap any
+/// predecessor lease on the same scope whose owner process is verifiably gone.
+/// Clean/missing worktrees are safe to release; dirty worktrees become a typed,
+/// shelvable `cache-locked` failure so the drain parks with the exact worktree
+/// that needs human salvage instead of burning the retry on its own leftover
+/// lease.
+// trace:BUG-906 | ai:codex
+fn release_dead_phase_predecessor_leases(
+    project_root: &std::path::Path,
+    scope: &str,
+    phase: auto_complete::Phase,
+) -> Result<(), auto_complete::PhaseFailure> {
+    let mut remaining = 16usize;
+    while remaining > 0 {
+        let leases = list_leases(project_root);
+        let Some(conflict) = find_scope_lease_conflict(&leases, scope) else {
+            return Ok(());
+        };
+        let report = stale_lease_recovery_for_lease(&conflict);
+        match report.verdict {
+            StaleLeaseRecovery::ReclaimableClean { .. } => {
+                if !force_cleanup_lease(project_root, &conflict) {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::CacheLocked,
+                        format!(
+                            "phase {} retry found dead predecessor lease {} on `{scope}`, \
+                             but auto-release did not finish; worktree: {}",
+                            phase.index(),
+                            &conflict.id[..conflict.id.len().min(8)],
+                            conflict.worktree_path.display(),
+                        ),
+                    ));
+                }
+                eprintln!(
+                    "  {} released dead predecessor lease {} on `{scope}` before retrying phase {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    (&conflict.id[..conflict.id.len().min(8)]).yellow(),
+                    phase.index()
+                );
+                remaining -= 1;
+            }
+            StaleLeaseRecovery::StaleDirty { dirty_entries } => {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CacheLocked,
+                    format!(
+                        "phase {} retry found dead predecessor lease {} on `{scope}`, \
+                         but its worktree is dirty ({dirty_entries} uncommitted change(s)); \
+                         worktree: {}; changes: {}",
+                        phase.index(),
+                        &conflict.id[..conflict.id.len().min(8)],
+                        conflict.worktree_path.display(),
+                        report.dirty_sample(),
+                    ),
+                ));
+            }
+            StaleLeaseRecovery::Live | StaleLeaseRecovery::UnknownLiveness => return Ok(()),
+        }
+    }
+    Err(auto_complete::PhaseFailure::of(
+        auto_complete::FailureKind::CacheLocked,
+        format!(
+            "phase {} retry found too many predecessor leases on `{scope}`; \
+             release stale leases manually with `aida session leases` / `aida session end`",
+            phase.index()
+        ),
+    ))
 }
 
 /// BUG-438: on `--resume-drain`, proactively release the crashed orchestrator's

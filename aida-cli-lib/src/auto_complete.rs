@@ -4997,6 +4997,11 @@ mod tests {
         /// STORY-975: mock reviewer failures that classify as watchdog before
         /// succeeding.
         reviewer_watchdog_failures: usize,
+        /// BUG-906: mock reviewer launch failures caused by a dirty dead
+        /// predecessor lease. They classify as cache-locked so the retry gate
+        /// parks with a typed cause after the budget is spent.
+        // trace:BUG-906 | ai:codex
+        reviewer_cache_locked_failures: usize,
         /// STORY-975: whole-phase transient retry budget returned by the mock.
         transient_retry_budget: usize,
         /// STORY-975: retry records captured by `record_transient_retry`.
@@ -5037,6 +5042,7 @@ mod tests {
                 merge_hold: None,
                 pr_number: Some(46),
                 reviewer_watchdog_failures: 0,
+                reviewer_cache_locked_failures: 0,
                 transient_retry_budget: 0,
                 transient_retry_events: Vec::new(),
                 recover_review_pr: None,
@@ -5171,6 +5177,15 @@ mod tests {
             }
         }
 
+        // trace:BUG-906 | ai:codex
+        fn reviewer_cache_locked_then_succeeds(failures: usize) -> Self {
+            Self {
+                reviewer_cache_locked_failures: failures,
+                transient_retry_budget: 1,
+                ..Self::base()
+            }
+        }
+
         /// STORY-306: make `run_reviewer` escalate the merge decision —
         /// phase 3 returns [`ReviewerOutcome::EscalatedToHuman`] with `reason`.
         fn reviewer_escalates_merge(reason: &str) -> Self {
@@ -5292,6 +5307,13 @@ mod tests {
                 return Err(PhaseFailure::of(
                     FailureKind::Watchdog,
                     "the reviewer phase watchdog stopped the session",
+                ));
+            }
+            if self.reviewer_cache_locked_failures > 0 {
+                self.reviewer_cache_locked_failures -= 1;
+                return Err(PhaseFailure::of(
+                    FailureKind::CacheLocked,
+                    "phase 3 retry found dead predecessor lease with a dirty worktree",
                 ));
             }
             match &self.reviewer_escalates {
@@ -5700,6 +5722,30 @@ mod tests {
         assert!(failure.reason.contains("attempt 2/2"), "{}", failure.reason);
         let shelved = result.shelved_reason.as_ref().expect("shelved");
         assert!(shelved.detail.contains("attempt 2/2"), "{}", shelved.detail);
+    }
+
+    #[test]
+    fn exhausted_cache_locked_reviewer_retry_parks_with_typed_cause() {
+        let mut driver = MockPhaseDriver::reviewer_cache_locked_then_succeeds(2);
+        driver.shelve_succeeds = true;
+        let result = orchestrate(
+            &mut driver,
+            "TASK-247",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        let failure = result.failure.as_ref().expect("failure recorded");
+        assert_eq!(failure.kind, FailureKind::CacheLocked);
+        assert!(failure.reason.contains("attempt 2/2"), "{}", failure.reason);
+        assert_eq!(
+            driver.transient_retry_events,
+            vec![(Phase::Reviewer, "cache-locked".to_string(), 2, 2)]
+        );
+        let shelved = result.shelved_reason.as_ref().expect("shelved");
+        assert_eq!(shelved.kind, "cache-locked");
     }
 
     // --- TASK-975: CI auto-fix loop + in-drain merge-conflict rebase -------

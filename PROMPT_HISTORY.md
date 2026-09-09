@@ -4712,3 +4712,11 @@ Picked up `BUG-902` from the implementer queue. The bug was that the BUG-898 ena
 Moved queue-work launch vendor validation out of the headless-only gate so any real launch (`!no_launch && !list_sessions`) resolves against `[agents] enabled` before calibration tags, leases, or worktrees are written. The resolved vendor now feeds the interactive Codex launch branch, and unsupported interactive AGY selections refuse explicitly instead of falling through to Claude. Single-spec dry-run output now prints the resolved vendor and executable, and only renders the Claude session-id line for Claude launches. Added `// trace:BUG-902 | ai:codex` on the queue-work preflight.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib session::tests::resolve_enabled_headless_vendor -- --nocapture`; `cargo test -p aida-cli --test queue_work_dry_run -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-08 — BUG-906 phase retry dead predecessor lease
+
+Picked up `BUG-906` from the implementer queue. The bug was that a transient phase-3 reviewer retry could immediately collide with the PR-scoped lease left by its own dead predecessor process, burning the retry budget without ever relaunching the reviewer.
+
+Added a phase-predecessor lease cleanup helper that reuses the existing BUG-777 dead-lease classifier before the reviewer subprocess launches. A same-scope dead predecessor with a clean or missing worktree is force-cleaned so the retry can proceed; a dead predecessor with uncommitted work returns a typed `cache-locked` phase failure naming the dirty worktree and sample entries, so the normal transient retry/shelve path parks the spec with an actionable cause. Added `// trace:BUG-906 | ai:codex` comments on the reviewer launch cleanup and retry regression.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib transient_retry -- --nocapture`; `cargo test -p aida-cli-lib bug_777_stale_lease_recovery_tests -- --nocapture`; `cargo test -p aida-cli-lib exhausted_cache_locked_reviewer_retry_parks_with_typed_cause -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
