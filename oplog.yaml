@@ -50490,5 +50490,141 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4292
+- id: 01a08530-732b-7e62-b62d-1ce288c3eac0
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4293
+  timestamp: 2026-09-09T08:02:20.075754929Z
+  kind: !SetTitle
+    title: STORY-975 retry cannot reclaim the lease attempt 1 left behind — attempt 2 dies in seconds with 'scope is owned by lease … worktree DIRTY'
+- id: 01a08530-7398-7c21-b2ed-3441e0343da4
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4294
+  timestamp: 2026-09-09T08:02:20.184118802Z
+  kind: !SetPriority
+    priority: High
+- id: 01a08530-7401-7c72-a36b-1140f0f161a0
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4295
+  timestamp: 2026-09-09T08:02:20.289501453Z
+  kind: !SetDescription
+    description: |-
+      ## Observed (twice on 2026-09-09, STORY-993)
+      - 06:41 UTC, Codex vendor: attempt 1 killed by watchdog (BUG-909), SpecRetried cause=watchdog attempt 2/2, attempt 2 SpecShelved tool-exit 1.5 s later.
+      - 08:00 UTC, Claude vendor: attempt 1 ended after 826 s with no PR (the implementer ended its turn while its release build was still running), SpecRetried cause=no-pr attempt 2/2, attempt 2 exited 3 s later. Its output: "scope STORY-993 is owned by lease 01a08522 (implementer, worktree: /home/joe/ai/aida-story-993 — worktree DIRTY (6 uncommitted change(s))) — to take over: --steal ends that session and removes its worktree". So the retry is refused by the lease its own attempt 1 created, every time. The STORY-975 retry has therefore never succeeded on an implementer phase; the "attempt 2/2" line is a no-op that burns the retry budget and parks the spec.
+
+      ## Expected
+      The retry re-enters the SAME lease and worktree (that is the point of a retry: continue where attempt 1 stopped, with its uncommitted work intact). Attempt 1's lease is released or re-owned by the orchestrator before attempt 2 is spawned; the dirty worktree is preserved, never removed.
+
+      ## Acceptance
+      1. On SpecRetried for the implementer phase the orchestrator (a) marks attempt 1's lease ended (process exited) and (b) launches attempt 2 with the equivalent of --force-claim on the same scope, reusing the worktree; the retry never runs --steal.
+      2. Uncommitted changes from attempt 1 survive into attempt 2 (assert in a test with a dirty fake worktree).
+      3. If reclaim still fails, the shelve cause is lease-conflict (typed, STORY-974) naming the lease id and worktree, not tool-exit.
+      4. The auto-drafted BUG-908 stops being filed for this shape (suppressed when the cause is lease-conflict, like BUG-657 suppresses environmental).
+      5. Dogfood: one drain where an implementer retry actually re-enters the worktree and ships, cited in the PR.
+
+      ## Related
+      STORY-975 (retry), BUG-909 (Codex silence; the first trigger), STORY-974 (typed causes), STORY-993 (victim; work salvaged by hand as commits 69223684b and e28c214ee on story-993).
+- id: 01a08530-746b-75b0-8c79-4819acd96fec
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4296
+  timestamp: 2026-09-09T08:02:20.395470947Z
+  kind: !AddTag
+    tag: orchestrator
+- id: 01a08530-74d4-7fc0-9f58-2b8df8d9b69e
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4297
+  timestamp: 2026-09-09T08:02:20.500160336Z
+  kind: !AddTag
+    tag: risk:medium
+- id: 01a08530-753d-7ce3-8a65-0a177df9e88f
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4298
+  timestamp: 2026-09-09T08:02:20.605349343Z
+  kind: !AddTag
+    tag: drain
+- id: 01a08530-75a6-70e1-80c3-7170bef52cdc
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4299
+  timestamp: 2026-09-09T08:02:20.710343411Z
+  kind: !AddTag
+    tag: lease
+- id: 01a08530-7610-7c02-b6b9-81df9a065e45
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4300
+  timestamp: 2026-09-09T08:02:20.816583778Z
+  kind: !AddTag
+    tag: retry
+- id: 01a08530-7679-7ef2-8340-e94d2cefbec0
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4301
+  timestamp: 2026-09-09T08:02:20.921352390Z
+  kind: !AddTag
+    tag: from-product
+- id: 01a08530-76e1-7600-8874-92a5447d5dc1
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4302
+  timestamp: 2026-09-09T08:02:21.025966737Z
+  kind: !AddTag
+    tag: recommend:approve
+- id: 01a08530-774a-7571-b445-f803ce732a49
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4303
+  timestamp: 2026-09-09T08:02:21.130826862Z
+  kind: !RemoveTag
+    tag: implementer
+- id: 01a08530-77b3-7501-8d33-abaf5a4d655b
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4304
+  timestamp: 2026-09-09T08:02:21.235640091Z
+  kind: !RemoveTag
+    tag: auto-drafted
+- id: 01a08530-781c-78f0-8e46-bb7549eb2028
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4305
+  timestamp: 2026-09-09T08:02:21.340450646Z
+  kind: !RemoveTag
+    tag: auto-complete
+- id: 01a08530-7885-7ec0-82ec-9fdc92ee5073
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4306
+  timestamp: 2026-09-09T08:02:21.445357957Z
+  kind: !RemoveTag
+    tag: failure-1
+- id: 01a08530-78ee-7181-9ba2-511260b955f4
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4307
+  timestamp: 2026-09-09T08:02:21.550262986Z
+  kind: !RemoveTag
+    tag: failure-kind:tool-exit
+clock: 4307
 node_id: '1'

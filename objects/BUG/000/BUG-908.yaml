@@ -1,50 +1,36 @@
 id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
 spec_id: BUG-908
 agreed_id: BUG-908
-title: 'auto-complete failure: phase 1 (implementer) on STORY-993'
+title: STORY-975 retry cannot reclaim the lease attempt 1 left behind — attempt 2 dies in seconds with 'scope is owned by lease … worktree DIRTY'
 description: |-
-  Auto-drafted by `aida queue work STORY-993 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+  ## Observed (twice on 2026-09-09, STORY-993)
+  - 06:41 UTC, Codex vendor: attempt 1 killed by watchdog (BUG-909), SpecRetried cause=watchdog attempt 2/2, attempt 2 SpecShelved tool-exit 1.5 s later.
+  - 08:00 UTC, Claude vendor: attempt 1 ended after 826 s with no PR (the implementer ended its turn while its release build was still running), SpecRetried cause=no-pr attempt 2/2, attempt 2 exited 3 s later. Its output: "scope STORY-993 is owned by lease 01a08522 (implementer, worktree: /home/joe/ai/aida-story-993 — worktree DIRTY (6 uncommitted change(s))) — to take over: --steal ends that session and removes its worktree". So the retry is refused by the lease its own attempt 1 created, every time. The STORY-975 retry has therefore never succeeded on an implementer phase; the "attempt 2/2" line is a no-op that burns the retry budget and parks the spec.
 
-  ## Failure
+  ## Expected
+  The retry re-enters the SAME lease and worktree (that is the point of a retry: continue where attempt 1 stopped, with its uncommitted work intact). Attempt 1's lease is released or re-owned by the orchestrator before attempt 2 is spawned; the dirty worktree is preserved, never removed.
 
-  the implementer session exited 1 — it was aborted or errored (attempt 2/2)
+  ## Acceptance
+  1. On SpecRetried for the implementer phase the orchestrator (a) marks attempt 1's lease ended (process exited) and (b) launches attempt 2 with the equivalent of --force-claim on the same scope, reusing the worktree; the retry never runs --steal.
+  2. Uncommitted changes from attempt 1 survive into attempt 2 (assert in a test with a dirty fake worktree).
+  3. If reclaim still fails, the shelve cause is lease-conflict (typed, STORY-974) naming the lease id and worktree, not tool-exit.
+  4. The auto-drafted BUG-908 stops being filed for this shape (suppressed when the cause is lease-conflict, like BUG-657 suppresses environmental).
+  5. Dogfood: one drain where an implementer retry actually re-enters the worktree and ships, cited in the PR.
 
-  Failure kind: `tool-exit`
-
-  ## Recovery hint shown to the user
-
-  Continue the implementer session: `aida queue work STORY-993 --resume`
-
-  ## Recurrence
-
-  Attempts: 2
-  Latest recurrence: 2026-09-09T08:00:37.634799246+00:00
-
-  ## Phase durations
-
-    - phase 1 (implementer): 782457 ms
-
-  ## Telemetry entry
-
-  The line appended to `~/.aida/auto-complete.jsonl` for this run:
-
-  ```json
-  {"spec_id":"STORY-993","started_at":"2026-09-09T06:28:04.345707664+00:00","completed_at":"2026-09-09T06:41:07.693387680+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"tool-exit","failure_message":"the implementer session exited 1 — it was aborted or errored (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":782457}],"total_ms":782457,"binary_sha":"26d41c8d0"}
-  ```
-
-  ## Recurse-fix
-
-  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+  ## Related
+  STORY-975 (retry), BUG-909 (Codex silence; the first trigger), STORY-974 (typed causes), STORY-993 (victim; work salvaged by hand as commits 69223684b and e28c214ee on story-993).
 status: Draft
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:41:07.999388001Z
-modified_at: 2026-09-09T08:00:37.967478653Z
+modified_at: 2026-09-09T08:02:20.008813226Z
 req_type: Bug
 tags:
-- auto-complete
-- auto-drafted
-- failure-1
-- failure-kind:tool-exit
-- implementer
+- drain
+- from-product
+- lease
+- orchestrator
+- recommend:approve
+- retry
+- risk:medium
