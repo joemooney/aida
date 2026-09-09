@@ -1,0 +1,26 @@
+id: 01a084a9-7a7d-7fa2-b7a2-8a9ab3ab7159
+spec_id: STORY-996
+agreed_id: STORY-996
+title: 'Review PR-1702: [AI:codex] fix(auto-complete): reap dead phase retry leases (BUG-906)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a084a3`) for branch `bug-906`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1702>
+  - Branch: `bug-906` → `main`
+
+  ## Covers
+
+  - BUG-906
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1702` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T05:34:54.589318827Z
+modified_at: 2026-09-09T05:34:54.589318827Z
+req_type: Story
