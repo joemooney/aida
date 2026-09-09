@@ -76603,12 +76603,22 @@ fn orchestrator_phase_child_env(
     phase: auto_complete::Phase,
     variant: auto_complete::AutoCompleteVariant,
 ) -> Vec<(&'static str, String)> {
-    vec![
+    let phase_role = match phase {
+        auto_complete::Phase::Implementer => Some("implementer"),
+        auto_complete::Phase::Reviewer => Some("reviewer"),
+        _ => None,
+    };
+    // trace:BUG-901 | ai:codex
+    let mut env = vec![
         (orchestrator::AUTO_COMPLETE_ENV, "1".to_string()),
         (orchestrator::TOKEN_ENV, run_token.to_string()),
         (orchestrator::VARIANT_ENV, variant.slug().to_string()),
         (orchestrator::PHASE_ENV, phase.index().to_string()),
-    ]
+    ];
+    if let Some(role) = phase_role {
+        env.push(("AIDA_SESSION_ROLE", role.to_string()));
+    }
+    env
 }
 
 fn git_output_checked(worktree: &std::path::Path, args: &[&str]) -> Result<String, String> {

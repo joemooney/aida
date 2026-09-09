@@ -4696,3 +4696,11 @@ Picked up `BUG-900` from the implementer queue. The bug was that advisor/coordin
 Added a shared `role:<target>` queue identity for advisor/human dispatch writes when `--user` is not explicit, kept explicit `--user` authoritative, and made queue-add success output name the destination queue identity. Extended `queue next`, `queue work`, and auto-complete drain candidate resolution to include cross-user role fallback entries for the active/default work role, so `role:implementer` entries are visible to implementer drains. Added an empty queue hint that reports when entries exist under other queue identities and points at `aida queue list --all-users`. Added `// trace:BUG-900 | ai:codex` comments on the implementation and tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture`; `cargo test -p aida-cli --test queue_work_dry_run -- --nocapture`; `git diff --check`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-08 — BUG-901 orchestrated role pickup identity
+
+Picked up `BUG-901` from the implementer queue. The bug was a BUG-900 follow-up: a drain launched from a coordination/advisor shell could select implementer-routed work, but its phase-1 `aida queue work <SPEC>` subprocess inherited the launcher role instead of explicitly running as the implementer role, so strict item pickup could miss a queue row stored under another user identity.
+
+Updated the orchestrator phase-child environment to set `AIDA_SESSION_ROLE=implementer` for phase 1 and `AIDA_SESSION_ROLE=reviewer` for reviewer phases, preventing role lookup from inheriting the parent shell role. Added a regression proving an advisor-launched auto-complete drain under a different identity picks work queued by an operator shell for `implementer`, plus wiring coverage that phase-child env carries the concrete phase role. Added `// trace:BUG-901 | ai:codex` comments on the implementation and tests.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture`; `cargo test -p aida-cli-lib phase_child_env -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
