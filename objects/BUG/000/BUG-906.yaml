@@ -3,20 +3,36 @@ spec_id: BUG-906
 agreed_id: BUG-906
 title: phase retry collides with its own dead predecessor's lease — retry must reap a lease whose process exited
 description: 'Observed on BUG-901''s pipeline (2026-09-08 22:02): the phase-3 reviewer attempt 1 took the PR-scoped lease and died; the STORY-975 retry relaunched and REFUSED on that same lease (scope PR-1700 is owned by lease 01a08482, worktree CLEAN) — attempt 2/2 burned on the predecessor''s leftovers and the spec shelved despite green CI and a finished implementation. A retrying phase must treat a lease whose backing process has exited as reapable: release it (worktree clean = safe; dirty = park with a typed cause naming the dirty worktree) before relaunching. Acceptance: simulated dead-lease + clean worktree lets the retry proceed; dirty worktree parks with the typed cause; regression test beside the retry gate tests.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:04:30.107956991Z
-modified_at: 2026-09-09T05:35:05.408908629Z
+modified_at: 2026-09-09T05:48:38.437460692Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a084a9-7a7d-7fa2-b7a2-8a9ab3ab7159
   created_at: 2026-09-09T05:35:00.117203738Z
   created_by: joe
+history:
+- id: 01a084b6-0c9e-76f1-b6a6-3d15ea73348a
+  author: aida-auto-bump
+  timestamp: 2026-09-09T05:48:38.430901883Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a084b6-0ca5-70e1-b831-fc95dbaed888
+  timestamp: 2026-09-09T05:48:38.437460070Z
+  agent: aida
+  commit_sha: 3c2ccad641661f37edbdd73bba8cf085fc42e874
+  summary: Completed via merge 3c2ccad6
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-09T05:35:05.408908629Z
   implemented_by: joe
+  completed_at: 2026-09-09T05:48:38.430793272Z
+  completion_sha: 3c2ccad641661f37edbdd73bba8cf085fc42e874
