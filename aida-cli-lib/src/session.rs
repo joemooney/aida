@@ -139,8 +139,9 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     normalize_specs(&mut parent);
     fill_recent_focus(&mut here);
     fill_recent_focus(&mut parent);
-    fill_process_facts(&mut here);
-    fill_process_facts(&mut parent);
+    let resolver = ProcessResolver::new();
+    resolver.fill(&mut here);
+    resolver.fill(&mut parent);
 
     // STORY-993: `--format json` (or AIDA_OUTPUT_FORMAT=json) — the machine
     // projection carrying pid / pids / tty / liveness / resolution /
@@ -211,69 +212,91 @@ fn process_legend() -> String {
     )
 }
 
-/// STORY-993: resolve pid / tty / liveness for each row — one shared
-/// `/proc` walk (memoized with every other liveness consumer), one lease +
-/// manifest read, no per-row spawn. A lease covers a transcript when a
-/// session manifest joins the lease id to the transcript's
-/// `claude_session_id`; the lease's `active_pid` (or its `creator_pid` when
-/// that pid IS a live agent process — the launcher exec'd into the agent)
-/// then wins over the proc-scan. Falls back to the cwd + start-window scan
-/// against live claude/codex processes. `aida ps` parity (TASK-152): when the
-/// transcript names no role but the lease does, the lease role fills the ROLE
-/// cell and is always carried as `lease_role` in JSON.
+/// STORY-993: the once-per-run inputs the process resolver needs — one
+/// shared `/proc` walk (memoized with every other liveness consumer), one
+/// lease read, one manifest read. Built once and applied to every table
+/// group so the second group costs only its own rows, never a second
+/// directory sweep.
 // trace:STORY-993 | ai:claude
-fn fill_process_facts(sessions: &mut [SessionMeta]) {
-    use crate::session_liveness::{self as sl, AgentKind, LeaseFacts, TranscriptFacts};
-    if sessions.is_empty() {
-        return;
-    }
-    let procs = aida_core::liveness::probe_live_agent_processes();
-    let root = crate::find_main_worktree_root().ok();
-    let leases = root.as_deref().map(crate::list_leases).unwrap_or_default();
-    let manifests = root
-        .as_deref()
-        .map(crate::session_manifest::list_all)
-        .unwrap_or_default();
-    let now = chrono::Utc::now();
-    let is_agent_proc = |pid: u32| procs.iter().any(|p| p.pid == pid);
-    for s in sessions.iter_mut() {
-        let lease = manifests
-            .iter()
-            .find(|m| m.claude_session_id.as_deref() == Some(s.id.as_str()))
-            .and_then(|m| leases.iter().find(|l| l.id == m.session_id))
-            .map(|l| LeaseFacts {
-                pid: l.active_pid.or(l.creator_pid.filter(|p| is_agent_proc(*p))),
-                role: l.role.clone(),
-            });
-        let cwd = s.last_cwd.as_deref().map(Path::new);
-        let t = TranscriptFacts {
-            agent: s.agent.as_str(),
-            cwd,
-            started_at: s.started_at,
-            age_seconds: s.age_seconds,
-        };
-        let path = s.path.clone();
-        let last_start = move || path.as_deref().and_then(sl::last_process_start_event);
-        s.process = sl::resolve(
-            &t,
-            lease.as_ref(),
-            &procs,
-            &crate::process_probe::pid_is_alive,
-            &|pid| {
-                (
-                    aida_core::liveness::process_start_time(pid),
-                    aida_core::liveness::process_tty(pid),
-                )
-            },
-            &last_start,
-            now,
-        );
-        if s.role.is_none() {
-            s.role = s.process.lease_role.clone();
+struct ProcessResolver {
+    procs: Vec<crate::session_liveness::LiveAgentProcess>,
+    leases: Vec<crate::SessionLease>,
+    manifests: Vec<crate::session_manifest::SessionManifest>,
+    now: chrono::DateTime<chrono::Utc>,
+}
+
+impl ProcessResolver {
+    fn new() -> Self {
+        let procs = aida_core::liveness::probe_live_agent_processes();
+        let root = crate::find_main_worktree_root().ok();
+        let leases = root.as_deref().map(crate::list_leases).unwrap_or_default();
+        let manifests = root
+            .as_deref()
+            .map(crate::session_manifest::list_all)
+            .unwrap_or_default();
+        Self {
+            procs,
+            leases,
+            manifests,
+            now: chrono::Utc::now(),
         }
-        // Keep the walk's `AgentKind` spelling and the row's agent label in
-        // one place so a future agent kind can't silently never match.
-        debug_assert!(AgentKind::Claude.label() == "claude" && AgentKind::Codex.label() == "codex");
+    }
+
+    /// Resolve pid / tty / liveness for each row — no per-row spawn, no
+    /// per-row directory read. A lease covers a transcript when a session
+    /// manifest joins the lease id to the transcript's `claude_session_id`;
+    /// the lease's `active_pid` (or its `creator_pid` when that pid IS a live
+    /// agent process — the launcher exec'd into the agent) then wins over the
+    /// proc-scan. Falls back to the cwd + start-window scan against live
+    /// claude/codex processes. `aida ps` parity (TASK-152): when the
+    /// transcript names no role but the lease does, the lease role fills the
+    /// ROLE cell and is always carried as `lease_role` in JSON.
+    // trace:STORY-993 | ai:claude
+    fn fill(&self, sessions: &mut [SessionMeta]) {
+        use crate::session_liveness::{self as sl, AgentKind, LeaseFacts, TranscriptFacts};
+        let is_agent_proc = |pid: u32| self.procs.iter().any(|p| p.pid == pid);
+        for s in sessions.iter_mut() {
+            let lease = self
+                .manifests
+                .iter()
+                .find(|m| m.claude_session_id.as_deref() == Some(s.id.as_str()))
+                .and_then(|m| self.leases.iter().find(|l| l.id == m.session_id))
+                .map(|l| LeaseFacts {
+                    pid: l.active_pid.or(l.creator_pid.filter(|p| is_agent_proc(*p))),
+                    role: l.role.clone(),
+                });
+            let cwd = s.last_cwd.as_deref().map(Path::new);
+            let t = TranscriptFacts {
+                agent: s.agent.as_str(),
+                cwd,
+                started_at: s.started_at,
+                age_seconds: s.age_seconds,
+            };
+            let path = s.path.clone();
+            let last_start = move || path.as_deref().and_then(sl::last_process_start_event);
+            s.process = sl::resolve(
+                &t,
+                lease.as_ref(),
+                &self.procs,
+                &crate::process_probe::pid_is_alive,
+                &|pid| {
+                    (
+                        aida_core::liveness::process_start_time(pid),
+                        aida_core::liveness::process_tty(pid),
+                    )
+                },
+                &last_start,
+                self.now,
+            );
+            if s.role.is_none() {
+                s.role = s.process.lease_role.clone();
+            }
+            // Keep the walk's `AgentKind` spelling and the row's agent label in
+            // one place so a future agent kind can't silently never match.
+            debug_assert!(
+                AgentKind::Claude.label() == "claude" && AgentKind::Codex.label() == "codex"
+            );
+        }
     }
 }
 

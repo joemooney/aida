@@ -238,8 +238,19 @@ fn walk_live_agent_processes() -> Vec<LiveAgentProcess> {
 pub fn process_tty(pid: u32) -> Option<String> {
     std::fs::read_link(format!("/proc/{pid}/fd/0"))
         .ok()
-        .map(|p| p.display().to_string())
-        .filter(|s| s.starts_with("/dev/"))
+        .and_then(|p| tty_from_stdin_link(&p.display().to_string()))
+}
+
+/// The terminal a process's stdin link names — `/dev/pts/N` or `/dev/ttyN`
+/// — or `None` for anything that is not a terminal (`/dev/null` for a
+/// headless agent, `pipe:[…]`, `socket:[…]`, a regular file). A `/dev/`
+/// prefix alone is not enough: a headless implementer's stdin IS `/dev/null`
+/// and must render `-`, not `null`.
+// trace:STORY-993 | ai:claude
+pub fn tty_from_stdin_link(link: &str) -> Option<String> {
+    let is_tty = link.starts_with("/dev/pts/")
+        || (link.starts_with("/dev/tty") && link.len() > "/dev/tty".len());
+    is_tty.then(|| link.to_string())
 }
 
 #[cfg(not(unix))]
@@ -961,6 +972,23 @@ pub fn spec_liveness_map(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// STORY-993: a headless agent's stdin is `/dev/null` — not a terminal.
+    #[test]
+    fn tty_from_stdin_link_rejects_non_terminals() {
+        assert_eq!(
+            tty_from_stdin_link("/dev/pts/3").as_deref(),
+            Some("/dev/pts/3")
+        );
+        assert_eq!(
+            tty_from_stdin_link("/dev/tty2").as_deref(),
+            Some("/dev/tty2")
+        );
+        assert_eq!(tty_from_stdin_link("/dev/null"), None);
+        assert_eq!(tty_from_stdin_link("/dev/tty"), None);
+        assert_eq!(tty_from_stdin_link("pipe:[12345]"), None);
+        assert_eq!(tty_from_stdin_link("/home/joe/log.txt"), None);
+    }
 
     // ---- probe helpers (moved from aida-cli/src/process_probe.rs) ----------
 
