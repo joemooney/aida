@@ -1,0 +1,26 @@
+id: 01a08494-a55b-7ab2-b3f0-a09160446d51
+spec_id: STORY-992
+agreed_id: STORY-992
+title: 'Review PR-1701: [AI:codex] fix(queue): preflight interactive launch vendor (BUG-902)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0848c`) for branch `bug-902`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1701>
+  - Branch: `bug-902` → `main`
+
+  ## Covers
+
+  - BUG-902
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1701` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T05:12:09.307734921Z
+modified_at: 2026-09-09T05:12:09.307734921Z
+req_type: Story
