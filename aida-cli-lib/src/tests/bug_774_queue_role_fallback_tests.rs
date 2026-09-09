@@ -420,6 +420,32 @@ fn role_queue_entry_is_visible_to_implementer_identity() {
     );
 }
 
+/// BUG-901: a drain launched from a coordination/advisor shell still works the
+/// implementer lane. The queued row may live under the operator's shell
+/// identity, not the orchestrator child's identity; role routing is the
+/// authority for orchestrated pickup.
+// trace:BUG-901 | ai:codex
+#[test]
+fn advisor_launched_auto_complete_picks_operator_queued_implementer_work() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let spec = seed_spec(&root, "TASK-9010");
+    let storage = Storage::new(&root);
+
+    storage
+        .queue_add(entry_for("operator-shell", spec, Some("implementer"), 1000))
+        .unwrap();
+
+    let picked = crate::queue_cmd::resolve_auto_complete_head(
+        &storage,
+        "codex-implementer-1",
+        /* role_override */ None,
+    )
+    .expect("advisor-launched drain should pick implementer-routed foreign work");
+    assert_eq!(picked, "TASK-9010");
+}
+
 /// BUG-900: an empty current identity can now be honest that work exists
 /// elsewhere and point the operator at `--all-users`.
 // trace:BUG-900 | ai:codex

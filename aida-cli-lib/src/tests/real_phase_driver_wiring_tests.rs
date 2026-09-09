@@ -168,6 +168,23 @@ fn phase_child_env_carries_auto_complete_variant() {
     assert!(env
         .iter()
         .any(|(k, v)| *k == crate::orchestrator::PHASE_ENV && v == "1"));
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == "AIDA_SESSION_ROLE" && v == "implementer"));
+}
+
+#[test]
+fn reviewer_phase_child_env_sets_reviewer_role() {
+    let env = orchestrator_phase_child_env(
+        "run-token",
+        crate::auto_complete::Phase::Reviewer,
+        crate::auto_complete::AutoCompleteVariant::Full,
+    );
+    // BUG-901: phase children must not inherit the launcher/advisor shell role;
+    // queue-work's strict role-routed lookup reads AIDA_SESSION_ROLE.
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == "AIDA_SESSION_ROLE" && v == "reviewer"));
 }
 
 #[test]
