@@ -1,0 +1,32 @@
+id: 01a084e5-d57e-7783-90dd-28773c6d7170
+spec_id: TASK-1199
+agreed_id: TASK-1199
+title: 'aida statusline setup --client antigravity: emit/install the Antigravity CLI statusLine block (same shape as Claude) and document the title script'
+description: |-
+  ## Why
+  Operator (2026-09-08): "is there a statusline for agy, I would like it to at least show the role but realistically be compatible with claude if possible". Verified against agy 1.1.27 and https://antigravity.google/docs/cli/statusline: Antigravity's ~/.gemini/antigravity-cli/settings.json takes "statusLine": {"type": "command", "command": "..."} with optional padding, enabled, and stack_with_default (render below the built-in line instead of replacing it). Its stdin payload is a superset of Claude's (cwd, session_id, model.display_name, workspace.current_dir/project_dir, context_window, version, plus vcs, quota, cost, conversation_title, agent_state). aida statusline reads no stdin, so the Claude command line works verbatim; installed by hand on the operator's machine tonight with stack_with_default = true. A "title": {"type": "command", "command": "..."} block takes the same payload for the terminal title.
+
+  aida statusline setup only knows --client claude|codex|all today.
+
+  ## Acceptance
+  1. aida statusline setup --client antigravity prints the settings.json fragment: the same command string as the Claude entry, plus "stack_with_default": true by default (flag --replace-default emits false). --install merges it into ~/.gemini/antigravity-cli/settings.json (path overridable via AIDA_ANTIGRAVITY_SETTINGS or --settings-path), preserving every other key, writing a timestamped backup first, refusing (not overwriting) if the existing file does not parse (agy 1.1.19+ has the same rule for its own saves).
+  2. --client all includes the antigravity section.
+  3. The fragment also prints the optional "title" block wired to aida statusline --title as the terminal-title parity path (Antigravity, unlike Codex, runs a command for the title; note this in the parity doc).
+  4. docs/agents/claude-surfaces-codex-parity.md (or a sibling antigravity parity table) gains a statusLine row: full parity, command-backed, superset payload. docs/agents/aida-mcp-install-matrix.md Antigravity row links to it.
+  5. The scaffolded .antigravity/ pack or AGENTS.md mentions the one-liner so a new project gets the hint.
+  6. Tests: fragment golden test for --client antigravity; merge test that preserves unrelated keys and refuses on invalid JSON; --client all contains all three.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T06:40:50.046442969Z
+modified_at: 2026-09-09T06:40:50.046442969Z
+req_type: Task
+tags:
+- antigravity
+- from-product
+- lifecycle:no-review
+- parity
+- recommend:approve
+- risk:low
+- statusline
