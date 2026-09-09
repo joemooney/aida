@@ -3,38 +3,39 @@ spec_id: BUG-902
 agreed_id: BUG-902
 title: BUG-898 vendor preflight is headless-gated — interactive queue work still resolves disabled claude and mutates state first
 description: 'Work-machine retest on 0.14.0 (2026-09-08, SHA 18e7ee5d4; tracked as BUG-018 in the originating project): with Claude disabled and Codex enabled, interactive bare queue work still resolves claude and creates the worktree/lease before the launch fails (failed to exec claude). Verified against HEAD: (a) the BUG-898 preflight (resolve_enabled_headless_vendor — validates [agents] enabled, refuses with zero state + recovery hint) is gated no_human-only at queue_cmd.rs:7361, so interactive runs never hit it; (b) the default vendor fallback at queue_cmd.rs:4301 reads resolve_default_vendor which consults [agents] vendor but never enabled; (c) explicit --vendor codex is exec-correct (the :8554 branch returns codex) — the DRY-RUN label is a hardcoded claude-session string at ~:7795 that never reads vendor, and for codex the minted claude session uuid is inapplicable, not just mislabeled. Minimal fix: (1) lift the BUG-898 preflight out of the no_human gate — run it whenever a launch will happen (!no_launch && !list_sessions), mapping the resolved vendor onto the interactive path too, which yields the disabled-vendor refusal and zero-state guarantee for free; (2) dry-run output prints the RESOLVED vendor and executable, and drops the session-id line for codex (no caller-minted resume id per TASK-895). Regression tests beside session.rs autopicks_single_enabled_profile / refuses_all_disabled_profile: claude-disabled+codex-enabled interactive bare pickup resolves codex; all-disabled refuses before worktree/lease; dry-run JSON carries vendor+executable.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T04:32:45.861800107Z
-modified_at: 2026-09-09T05:13:16.536534355Z
+modified_at: 2026-09-09T05:25:14.153511445Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08494-a55b-7ab2-b3f0-a09160446d51
   created_at: 2026-09-09T05:12:16.379075816Z
   created_by: joe
+history:
+- id: 01a084a0-9f23-7520-a8c8-0d2b233ee6ce
+  author: aida-auto-bump
+  timestamp: 2026-09-09T05:25:14.147034476Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a084a0-9f29-7641-b5c5-6c51c39adca8
+  timestamp: 2026-09-09T05:25:14.153510828Z
+  agent: aida
+  commit_sha: 65bfdeedb598dbebba32d57273e785353c48bf1a
+  summary: Completed via merge 65bfdeed
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
+  - 'punted: PR-1701 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md Recover with: aida pr rebase 1701 # clean rebase + force-push-with-lease aida pr rebase 1701 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-09T05:12:23.535357294Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: |-
-    PR-1701 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.
-
-    Overlapping files:
-      PROMPT_HISTORY.md
-
-    Recover with:
-      aida pr rebase 1701              # clean rebase + force-push-with-lease
-      aida pr rebase 1701 --interactive  # if conflicts need manual resolve
-
-    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-902 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-09T05:13:16.536534355Z
+  completed_at: 2026-09-09T05:25:14.146899575Z
+  completion_sha: 65bfdeedb598dbebba32d57273e785353c48bf1a
