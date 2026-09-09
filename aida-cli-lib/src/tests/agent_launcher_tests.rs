@@ -878,6 +878,171 @@ fn parses_agent_new_context_flags() {
     assert!(show_context);
 }
 
+// trace:STORY-991 | ai:codex
+#[test]
+fn parses_agent_new_resume_and_duplicate_flags() {
+    let cli = Cli::try_parse_from([
+        "aida",
+        "agent",
+        "new",
+        "codex",
+        "--role",
+        "advisor",
+        "--resume",
+        "latest",
+        "--no-resume",
+        "--allow-duplicate",
+        "--no-duplicate-check",
+    ])
+    .unwrap();
+    let Command::Agent(AgentCommand::New {
+        command:
+            Some(AgentNewCommand::Codex {
+                no_resume,
+                resume,
+                allow_duplicate,
+                no_duplicate_check,
+                ..
+            }),
+    }) = cli.command
+    else {
+        panic!("expected agent new codex command");
+    };
+    assert!(no_resume);
+    assert_eq!(resume.as_deref(), Some("latest"));
+    assert!(allow_duplicate);
+    assert!(no_duplicate_check);
+}
+
+fn launcher_view(
+    id: &str,
+    agent_type: &str,
+    role: Option<&str>,
+    spec: Option<&str>,
+    status: agent_registry::AgentStatus,
+    ended: bool,
+) -> agent_registry::AgentRegistryView {
+    let now = chrono::Utc::now();
+    agent_registry::AgentRegistryView {
+        id: id.to_string(),
+        agent_type: agent_type.to_string(),
+        pid: 42,
+        name: Some(id.to_string()),
+        description: Some(format!("title {id}")),
+        tty: Some("/dev/pts/7".to_string()),
+        started_at: now,
+        last_active_at: now,
+        role: role.map(str::to_string),
+        current_spec: spec.map(str::to_string),
+        worktree_path: std::path::PathBuf::from(format!("/tmp/{id}")),
+        source: "registry".to_string(),
+        binary_version: None,
+        build_sha: None,
+        status,
+        availability: agent_registry::Availability::Available,
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
+        native_session_id: ended.then(|| format!("session-{id}")),
+        ended_at: ended.then_some(now),
+        resumed_from: None,
+    }
+}
+
+// trace:STORY-991 | ai:codex
+#[test]
+fn agent_launch_duplicate_classifier_separates_live_and_ended_role_matches() {
+    let live_same = launcher_view(
+        "live-same",
+        "codex",
+        Some("implementer"),
+        Some("STORY-991"),
+        agent_registry::AgentStatus::Busy,
+        false,
+    );
+    let live_other_role = launcher_view(
+        "live-other",
+        "codex",
+        Some("advisor"),
+        Some("STORY-991"),
+        agent_registry::AgentStatus::Busy,
+        false,
+    );
+    let ended_same = launcher_view(
+        "ended-same",
+        "codex",
+        Some("implementer"),
+        Some("STORY-991"),
+        agent_registry::AgentStatus::Stale,
+        true,
+    );
+    let views = vec![live_other_role, ended_same.clone(), live_same.clone()];
+
+    let duplicate = matching_live_duplicate(&views, "codex", Some("implementer"), None)
+        .expect("live same-role agent should be a duplicate");
+    assert_eq!(duplicate.id, live_same.id);
+    assert!(
+        matching_live_duplicate(&views, "codex", Some("reviewer"), None).is_none(),
+        "live other-role agents must not trip the duplicate alert"
+    );
+
+    let ended = matching_ended_resume_views_from(views, "codex", Some("implementer"), None, 5);
+    assert_eq!(ended.len(), 1);
+    assert_eq!(ended[0].id, ended_same.id);
+}
+
+// trace:STORY-991 | ai:codex
+#[test]
+fn agent_launch_spec_sorts_same_spec_before_same_role_rest() {
+    let other_spec = launcher_view(
+        "other-spec",
+        "claude",
+        Some("implementer"),
+        Some("TASK-1"),
+        agent_registry::AgentStatus::Busy,
+        false,
+    );
+    let same_spec = launcher_view(
+        "same-spec",
+        "claude",
+        Some("implementer"),
+        Some("STORY-991"),
+        agent_registry::AgentStatus::Busy,
+        false,
+    );
+    let duplicate = matching_live_duplicate(
+        &[other_spec, same_spec.clone()],
+        "claude",
+        Some("implementer"),
+        Some("STORY-991"),
+    )
+    .expect("same-role duplicate expected");
+    assert_eq!(duplicate.id, same_spec.id);
+}
+
+// trace:STORY-991 | ai:codex
+#[test]
+fn agent_launch_prompt_gate_is_disabled_for_headless_or_non_tty() {
+    assert!(agent_launch_should_prompt(false, true, true));
+    assert!(!agent_launch_should_prompt(true, true, true));
+    assert!(!agent_launch_should_prompt(false, false, true));
+    assert!(!agent_launch_should_prompt(false, true, false));
+}
+
+// trace:STORY-991 | ai:codex
+#[test]
+fn agent_resume_prompt_config_defaults_to_enabled() {
+    let tmp = TempDir::new().unwrap();
+    assert!(agent_resume_prompt_enabled(tmp.path()));
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    std::fs::write(
+        tmp.path().join(".aida").join("config.toml"),
+        "[agent]\nresume_prompt = false\n",
+    )
+    .unwrap();
+    assert!(!agent_resume_prompt_enabled(tmp.path()));
+}
+
 // trace:TASK-587 | ai:antigravity
 #[test]
 fn parses_agent_list_roles_flags() {

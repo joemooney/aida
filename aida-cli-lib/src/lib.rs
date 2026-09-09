@@ -20156,6 +20156,10 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_context: false,
             prompt: None,
             no_prompt: false,
+            no_resume: false,
+            resume: None,
+            allow_duplicate: false,
+            no_duplicate_check: false,
             no_default_flags: false,
             extra_flags: Vec::new(),
             name: None,
@@ -20172,6 +20176,10 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_context: false,
             prompt: None,
             no_prompt: false,
+            no_resume: false,
+            resume: None,
+            allow_duplicate: false,
+            no_duplicate_check: false,
             no_default_flags: false,
             extra_flags: Vec::new(),
             name: None,
@@ -20187,6 +20195,10 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             show_context: false,
             prompt: None,
             no_prompt: false,
+            no_resume: false,
+            resume: None,
+            allow_duplicate: false,
+            no_duplicate_check: false,
             no_default_flags: false,
             extra_flags: Vec::new(),
             name: None,
@@ -20253,6 +20265,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_context,
             prompt,
             no_prompt,
+            no_resume,
+            resume,
+            allow_duplicate,
+            no_duplicate_check,
             no_default_flags,
             extra_flags,
             name,
@@ -20267,6 +20283,12 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentResumeOptions::new(
+                !*no_resume,
+                resume.clone(),
+                *allow_duplicate,
+                !*no_duplicate_check,
+            ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
             description.clone(),
@@ -20282,6 +20304,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_context,
             prompt,
             no_prompt,
+            no_resume,
+            resume,
+            allow_duplicate,
+            no_duplicate_check,
             no_default_flags,
             extra_flags,
             name,
@@ -20294,6 +20320,12 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentResumeOptions::new(
+                !*no_resume,
+                resume.clone(),
+                *allow_duplicate,
+                !*no_duplicate_check,
+            ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
             description.clone(),
@@ -20308,6 +20340,10 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             show_context,
             prompt,
             no_prompt,
+            no_resume,
+            resume,
+            allow_duplicate,
+            no_duplicate_check,
             no_default_flags,
             extra_flags,
             name,
@@ -20320,6 +20356,12 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
+            AgentResumeOptions::new(
+                !*no_resume,
+                resume.clone(),
+                *allow_duplicate,
+                !*no_duplicate_check,
+            ),
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
             name.clone(),
             description.clone(),
@@ -20643,6 +20685,30 @@ fn tool_contained_flags(agent_type: &str) -> Vec<String> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentResumeOptions {
+    prompt_enabled: bool,
+    direct_target: Option<String>,
+    allow_duplicate: bool,
+    duplicate_check: bool,
+}
+
+impl AgentResumeOptions {
+    fn new(
+        prompt_enabled: bool,
+        direct_target: Option<String>,
+        allow_duplicate: bool,
+        duplicate_check: bool,
+    ) -> Self {
+        Self {
+            prompt_enabled,
+            direct_target,
+            allow_duplicate,
+            duplicate_check,
+        }
+    }
+}
+
 /// TASK-646: resolve the role for a SPAWNED CHILD agent. ADR-2 ordering:
 ///   1. `--role X` → use X (no prompt).
 ///   2. no `--role`, stdin is a TTY → prompt via the shared role picker,
@@ -20688,6 +20754,300 @@ fn child_role_project_root(cwd: Option<&std::path::Path>) -> Result<std::path::P
     Ok(main_worktree_root_from(&discovered_root))
 }
 
+// trace:STORY-991 | ai:codex
+fn agent_resume_prompt_enabled(project_root: &std::path::Path) -> bool {
+    let cfg = read_project_config_value(project_root);
+    config_lookup(cfg.as_ref(), "agent", "resume_prompt")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
+
+fn same_agent_role_view(
+    agent: &agent_registry::AgentRegistryView,
+    agent_type: &str,
+    role: Option<&str>,
+) -> bool {
+    agent.agent_type.eq_ignore_ascii_case(agent_type)
+        && agent
+            .role
+            .as_deref()
+            .zip(role)
+            .map(|(a, b)| canonical_role_name(a) == canonical_role_name(b))
+            .unwrap_or(false)
+}
+
+fn spec_rank(agent: &agent_registry::AgentRegistryView, spec: Option<&str>) -> u8 {
+    match spec {
+        Some(spec)
+            if agent
+                .current_spec
+                .as_deref()
+                .is_some_and(|s| s.eq_ignore_ascii_case(spec)) =>
+        {
+            0
+        }
+        _ => 1,
+    }
+}
+
+fn agent_launch_views(project_root: &std::path::Path) -> Vec<agent_registry::AgentRegistryView> {
+    let leases = list_leases(project_root);
+    let ctx = build_agent_classify_context(project_root, &leases);
+    let registry_agents = agent_registry::list_agent_views(project_root, &ctx);
+    merge_agent_views_with_lease_fallback(project_root, &leases, registry_agents, &ctx)
+}
+
+fn matching_live_duplicate(
+    agents: &[agent_registry::AgentRegistryView],
+    agent_type: &str,
+    role: Option<&str>,
+    spec: Option<&str>,
+) -> Option<agent_registry::AgentRegistryView> {
+    let mut matches: Vec<_> = agents
+        .iter()
+        .filter(|agent| {
+            same_agent_role_view(agent, agent_type, role)
+                && agent.ended_at.is_none()
+                && agent.status != agent_registry::AgentStatus::Stale
+        })
+        .cloned()
+        .collect();
+    matches.sort_by(|a, b| {
+        spec_rank(a, spec)
+            .cmp(&spec_rank(b, spec))
+            .then_with(|| b.started_at.cmp(&a.started_at))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    matches.into_iter().next()
+}
+
+fn matching_ended_resume_candidates(
+    project_root: &std::path::Path,
+    agent_type: &str,
+    role: Option<&str>,
+    spec: Option<&str>,
+    limit: usize,
+) -> Vec<agent_registry::AgentRegistryView> {
+    let leases = list_leases(project_root);
+    let ctx = build_agent_classify_context(project_root, &leases);
+    matching_ended_resume_views_from(
+        agent_registry::ended_resumable_agent_views(project_root, &ctx),
+        agent_type,
+        role,
+        spec,
+        limit,
+    )
+}
+
+fn matching_ended_resume_views_from(
+    agents: Vec<agent_registry::AgentRegistryView>,
+    agent_type: &str,
+    role: Option<&str>,
+    spec: Option<&str>,
+    limit: usize,
+) -> Vec<agent_registry::AgentRegistryView> {
+    let mut matches: Vec<_> = agents
+        .into_iter()
+        .filter(|agent| {
+            same_agent_role_view(agent, agent_type, role)
+                && agent.ended_at.is_some()
+                && agent.native_session_id.is_some()
+        })
+        .collect();
+    matches.sort_by(|a, b| {
+        spec_rank(a, spec)
+            .cmp(&spec_rank(b, spec))
+            .then_with(|| b.ended_at.cmp(&a.ended_at))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    matches.truncate(limit);
+    matches
+}
+
+fn agent_launch_should_prompt(headless: bool, stdin_tty: bool, stderr_tty: bool) -> bool {
+    stdin_tty && stderr_tty && !headless
+}
+
+fn agent_identity_for_view(agent: &agent_registry::AgentRegistryView) -> String {
+    agent
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("{}#{}", agent.agent_type, agent.pid))
+}
+
+fn local_time_label(at: chrono::DateTime<chrono::Utc>) -> String {
+    at.with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M:%S %Z")
+        .to_string()
+}
+
+fn render_live_duplicate_block(agent: &agent_registry::AgentRegistryView) -> String {
+    let now = chrono::Utc::now();
+    let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
+        now,
+        agent.started_at,
+    ));
+    let identity = agent_identity_for_view(agent);
+    format!(
+        "A live {vendor}/{role} agent already exists:\n  name: {name}\n  spec: {spec}\n  pid: {pid}\n  tty: {tty}\n  started: {started}\n  elapsed: {elapsed}\n  resume: aida agent resume {name}",
+        vendor = agent.agent_type,
+        role = agent.role.as_deref().unwrap_or("(none)"),
+        name = identity,
+        spec = agent.current_spec.as_deref().unwrap_or("(none)"),
+        pid = if agent.source == "lease" {
+            "-".to_string()
+        } else {
+            agent.pid.to_string()
+        },
+        tty = agent.tty.as_deref().unwrap_or("(unknown)"),
+        started = local_time_label(agent.started_at),
+        elapsed = elapsed,
+    )
+}
+
+fn resume_unavailable_reason(agent: &agent_registry::AgentRegistryView) -> Option<String> {
+    if !agent.worktree_path.exists() {
+        return Some(format!(
+            "worktree missing: {}",
+            agent.worktree_path.display()
+        ));
+    }
+    let native = agent.native_session_id.as_deref()?;
+    verify_agent_native_session_available(&agent.agent_type, &agent.worktree_path, native)
+        .err()
+        .map(|err| err.to_string())
+}
+
+fn format_agent_resume_candidate(agent: &agent_registry::AgentRegistryView) -> String {
+    let now = chrono::Utc::now();
+    let age = agent
+        .ended_at
+        .map(|at| agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(now, at)))
+        .unwrap_or_else(|| "?".to_string());
+    let id = agent_identity_for_view(agent);
+    let title = agent.description.as_deref().unwrap_or("(none)");
+    let base = format!(
+        "{id}  age:{age}  role:{role}  spec:{spec}  worktree:{worktree}  title:{title}",
+        role = agent.role.as_deref().unwrap_or("(none)"),
+        spec = agent.current_spec.as_deref().unwrap_or("(none)"),
+        worktree = agent.worktree_path.display(),
+    );
+    match resume_unavailable_reason(agent) {
+        Some(reason) => format!("{}  unavailable: {}", base.dimmed(), reason.dimmed()),
+        None => base,
+    }
+}
+
+fn choose_latest_resume_candidate(
+    project_root: &std::path::Path,
+    agent_type: &str,
+    role: Option<&str>,
+    spec: Option<&str>,
+) -> Result<Option<agent_registry::AgentRegistryEntry>> {
+    let Some(candidate) = matching_ended_resume_candidates(project_root, agent_type, role, spec, 1)
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
+    agent_registry::resolve_resumable_ended_agent(project_root, &candidate.id).map(Some)
+}
+
+fn maybe_handle_agent_resume_or_duplicate(
+    project_root: &std::path::Path,
+    agent_type: &str,
+    role: Option<&str>,
+    spec: Option<&str>,
+    resume: &AgentResumeOptions,
+) -> Result<bool> {
+    if let Some(target) = resume.direct_target.as_deref() {
+        let entry = if target.eq_ignore_ascii_case("latest") {
+            choose_latest_resume_candidate(project_root, agent_type, role, spec)?.ok_or_else(
+                || anyhow::anyhow!("no ended resumable {agent_type} agent found for this role"),
+            )?
+        } else {
+            agent_registry::resolve_resumable_ended_agent(project_root, target)?
+        };
+        agent_resume_ended(project_root, entry)?;
+        return Ok(true);
+    }
+
+    let headless = std::env::var("AIDA_HEADLESS").as_deref() == Ok("1");
+    let interactive = agent_launch_should_prompt(
+        headless,
+        std::io::stdin().is_terminal(),
+        std::io::stderr().is_terminal(),
+    );
+
+    if resume.duplicate_check {
+        if let Some(live) =
+            matching_live_duplicate(&agent_launch_views(project_root), agent_type, role, spec)
+        {
+            let block = render_live_duplicate_block(&live);
+            if interactive {
+                eprintln!("{block}");
+                if !resume.allow_duplicate {
+                    // ?-exempt: the duplicate block above is the local context card.
+                    let launch = inquire::Confirm::new("Launch another anyway?")
+                        .with_default(false)
+                        .prompt()
+                        .unwrap_or(false);
+                    if !launch {
+                        eprintln!("Launch cancelled.");
+                        return Ok(true);
+                    }
+                }
+            } else {
+                eprintln!("warning: {block}");
+            }
+        }
+    }
+
+    if !(resume.prompt_enabled && agent_resume_prompt_enabled(project_root) && interactive) {
+        return Ok(false);
+    }
+
+    let candidates = matching_ended_resume_candidates(project_root, agent_type, role, spec, 5);
+    if candidates.is_empty() {
+        return Ok(false);
+    }
+    let fresh_label = "Start a new session".to_string();
+    let labels: Vec<String> = std::iter::once(fresh_label.clone())
+        .chain(candidates.iter().map(format_agent_resume_candidate))
+        .collect();
+    let prompt = format!(
+        "Resume a recent {agent_type}/{role} session?",
+        role = role.unwrap_or("implementer")
+    );
+    let pick = match inquire::Select::new(&prompt, labels.clone())
+        .with_help_message("arrows to move, type to filter, Enter to choose, Esc to start new")
+        .prompt()
+    {
+        Ok(pick) => pick,
+        Err(inquire::InquireError::OperationCanceled)
+        | Err(inquire::InquireError::OperationInterrupted) => return Ok(false),
+        Err(e) => return Err(anyhow::anyhow!("agent resume picker failed: {e}")),
+    };
+    if pick == fresh_label {
+        return Ok(false);
+    }
+    let idx = labels
+        .iter()
+        .position(|l| l == &pick)
+        .map(|p| p.saturating_sub(1))
+        .unwrap_or(0);
+    if let Some(reason) = resume_unavailable_reason(&candidates[idx]) {
+        eprintln!(
+            "cannot resume {}: {reason}",
+            agent_identity_for_view(&candidates[idx])
+        );
+        return Ok(true);
+    }
+    let entry = agent_registry::resolve_resumable_ended_agent(project_root, &candidates[idx].id)?;
+    agent_resume_ended(project_root, entry)?;
+    Ok(true)
+}
+
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
 fn agent_new_claude(
@@ -20699,6 +21059,7 @@ fn agent_new_claude(
     sandbox: bool,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -20768,6 +21129,7 @@ fn agent_new_claude(
             cwd,
             context,
             prompt,
+            resume,
             flag_options,
             name,
             description,
@@ -20782,6 +21144,7 @@ fn agent_new_claude(
             cwd,
             context,
             prompt,
+            resume,
             flag_options,
             name,
             description,
@@ -20801,6 +21164,7 @@ fn agent_new_codex(
     bypass_sandbox: bool,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -20836,6 +21200,7 @@ fn agent_new_codex(
         cwd,
         context,
         prompt,
+        resume,
         flag_options,
         name,
         description,
@@ -20854,6 +21219,7 @@ fn agent_new_antigravity(
     bypass_sandbox: bool,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -20889,6 +21255,7 @@ fn agent_new_antigravity(
         cwd,
         context,
         prompt,
+        resume,
         flag_options,
         name,
         description,
@@ -20906,6 +21273,7 @@ fn agent_new_with_config(
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -20963,6 +21331,16 @@ fn agent_new_with_config(
         // epic-appropriate message before the readiness gate dead-ends.
         epic_agent_new_guard(&project_root, spec_id)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
+    }
+
+    if maybe_handle_agent_resume_or_duplicate(
+        &project_root,
+        config.agent_type,
+        role.as_deref(),
+        spec.as_deref(),
+        &resume,
+    )? {
+        return Ok(());
     }
 
     enforce_agent_singleton_preflight(
@@ -21054,6 +21432,7 @@ fn agent_new_bg_dispatch(
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
     prompt: AgentPromptOptions,
+    resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -21103,6 +21482,16 @@ fn agent_new_bg_dispatch(
         // BUG-653: epic-aware dead-end guard, same as the foreground path.
         epic_agent_new_guard(&project_root, spec_id)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
+    }
+
+    if maybe_handle_agent_resume_or_duplicate(
+        &project_root,
+        config.agent_type,
+        role.as_deref(),
+        spec.as_deref(),
+        &resume,
+    )? {
+        return Ok(());
     }
 
     enforce_agent_singleton_preflight(
@@ -68040,6 +68429,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             AgentPromptOptions::new(Some(launch.prompt), false),
+            AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new()),
             launch.name,
             launch.description,
@@ -68053,6 +68443,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             AgentPromptOptions::new(Some(launch.prompt), false),
+            AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new()),
             launch.name,
             launch.description,
