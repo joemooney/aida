@@ -19,12 +19,12 @@ description: |-
 
   ## Related
   STORY-991 (launcher live-duplicate alert) consumes the same resolver; build it once here.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:14:58.955676870Z
-modified_at: 2026-09-09T08:39:41.650379521Z
+modified_at: 2026-09-09T08:51:19.915487023Z
 req_type: Story
 tags:
 - from-product
@@ -45,11 +45,31 @@ comments:
   created_at: 2026-09-09T07:02:53.052391751Z
   modified_at: 2026-09-09T07:02:53.052391751Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0855d-4ee4-7e61-8a8a-93b515f227ca
+  author: aida-auto-bump
+  timestamp: 2026-09-09T08:51:19.908944965Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0855d-4eeb-7a10-a551-87e3786c62fa
+  timestamp: 2026-09-09T08:51:19.915481195Z
+  agent: aida
+  commit_sha: d6cdad05cfc6b9f74d2d4bde2c75160681f34593
+  summary: 'All 7 acceptance items verified against the diff, tests (128+40 green), clippy, fmt, CI SUCCESS, and a live run: interactive rows resolve real pid+tty (23126 pts/0); headless-drain rows can show the orchestrator pid via a pre-existing is_claude_process false positive, filed as BUG-911 (follow-up, not blocking)'
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-09T08:29:50.928496159Z
   implemented_by: joe
+  completed_at: 2026-09-09T08:51:19.908804163Z
+  completion_sha: d6cdad05cfc6b9f74d2d4bde2c75160681f34593
 interface_changes:
   cli:
   - aida session conversations — PID and TTY columns per row; three-state liveness glyph (● alive / ◐ file-touched / blank); AGE = process elapsed for ● rows
