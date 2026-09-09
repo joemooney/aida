@@ -51190,6 +51190,14 @@ fn short_lease_id(l: &SessionLease, all: &[SessionLease]) -> String {
 struct PsRow {
     lease: SessionLease,
     state: LeaseState,
+    /// Display role for `aida ps`: the live transcript role wins when present
+    /// because it names the session's current behavior; the raw lease role is
+    /// retained separately for JSON provenance.
+    // trace:TASK-152 | ai:codex
+    role: Option<String>,
+    /// Raw role recorded on the lease before any live-transcript override.
+    // trace:TASK-152 | ai:codex
+    lease_role: Option<String>,
     /// PID of the live claude inside the worktree (or the review-verb creator
     /// pid). `None` when no live process backs the lease.
     pid: Option<u32>,
@@ -51729,7 +51737,8 @@ fn handle_integrate(json: bool) -> Result<()> {
             .map(|row| {
                 serde_json::json!({
                     "spec": row.spec,
-                    "role": row.lease.role,
+                    "role": row.role,
+                    "lease_role": row.lease_role,
                     "pid": row.pid,
                     "elapsed_secs": row.elapsed_secs,
                     "live": matches!(row.state, LeaseState::Live),
@@ -51809,7 +51818,7 @@ fn handle_integrate(json: bool) -> Result<()> {
             .map(|row| {
                 vec![
                     row.spec.clone().unwrap_or_else(|| "-".to_string()),
-                    row.lease.role.clone().unwrap_or_else(|| "-".to_string()),
+                    row.role.clone().unwrap_or_else(|| "-".to_string()),
                     humanize_duration_secs(row.elapsed_secs),
                     row.state.label().to_string(),
                 ]
@@ -51921,7 +51930,7 @@ fn handle_integrate(json: bool) -> Result<()> {
                 .spec
                 .clone()
                 .unwrap_or_else(|| truncate(&row.lease.scope, 14));
-            let role_col = row.lease.role.as_deref().unwrap_or("-");
+            let role_col = row.role.as_deref().unwrap_or("-");
             let live_label = format!("{} {}", row.state.glyph(), row.state.label());
             let live_col = match row.state {
                 LeaseState::Live => live_label.green(),
@@ -52111,6 +52120,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         dispatch_health_ps::probe_worktree,
         |wt| worktree_lock::read_authorized_by(project_root, wt),
         pid_start_time,
+        |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
     )
 }
 
@@ -52147,6 +52157,7 @@ fn build_running_work(
     dispatch_probe: impl Fn(&std::path::Path) -> dispatch_health_ps::WorktreeGitProbe,
     lock_probe: impl Fn(&std::path::Path) -> Option<String>,
     pid_start_probe: impl Fn(u32) -> Option<chrono::DateTime<chrono::Utc>>,
+    role_probe: impl Fn(&std::path::Path) -> Option<String>,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -52164,6 +52175,13 @@ fn build_running_work(
                 } else {
                     None
                 });
+            let live_by_pid = pid.and_then(|p| live.iter().find(|s| s.pid == p));
+            let jsonl_role = live_by_pid
+                .or(live_in_worktree)
+                .and_then(|s| s.jsonl.as_deref())
+                .and_then(&role_probe);
+            let lease_role = l.role.clone();
+            let role = jsonl_role.or_else(|| lease_role.clone());
             // BUG-763: resolve the backing pid's own start time so an adopted
             // persistent lease (pid younger than the lease record) can name
             // both ages instead of mixing provenance silently.
@@ -52238,6 +52256,8 @@ fn build_running_work(
             PsRow {
                 lease: l.clone(),
                 state,
+                role,
+                lease_role,
                 pid,
                 pid_started_at,
                 elapsed_secs,
@@ -52326,7 +52346,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "session_id": row.lease.id,
                     "scope": row.lease.scope,
                     "spec": row.spec,
-                    "role": row.lease.role,
+                    "role": row.role,
+                    "lease_role": row.lease_role,
                     "worktree": row.lease.worktree_path.display().to_string(),
                     "branch": row.lease.branch,
                     "pid": row.pid,
@@ -52427,7 +52448,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 vec![
                     r.lease.id.clone(),
                     r.spec.clone().unwrap_or_else(|| "-".to_string()),
-                    r.lease.role.clone().unwrap_or_else(|| "-".to_string()),
+                    r.role.clone().unwrap_or_else(|| "-".to_string()),
                     r.pid
                         .map(|p| p.to_string())
                         .unwrap_or_else(|| "-".to_string()),
@@ -52555,7 +52576,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             .collect();
         let role_cells: Vec<String> = shown
             .iter()
-            .map(|r| r.lease.role.clone().unwrap_or_else(|| "-".to_string()))
+            .map(|r| r.role.clone().unwrap_or_else(|| "-".to_string()))
             .collect();
         let spec_w = ps_column_width(&spec_cells, PS_SPEC_MIN_WIDTH, PS_SPEC_MAX_WIDTH);
         let role_w = ps_column_width(&role_cells, PS_ROLE_MIN_WIDTH, PS_ROLE_MAX_WIDTH);
@@ -52603,7 +52624,7 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             // TASK-1168: an over-wide cell WRAPS onto an indented continuation
             // line (nothing is lost) instead of being ellipsized mid-word.
             let (spec_head, spec_rest) = ps_wrap_cell(&spec_col, spec_w);
-            let (role_head, role_rest) = ps_wrap_cell(l.role.as_deref().unwrap_or("-"), role_w);
+            let (role_head, role_rest) = ps_wrap_cell(row.role.as_deref().unwrap_or("-"), role_w);
             println!(
                 "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
                 (&l.id[..prefix_len]).yellow(),

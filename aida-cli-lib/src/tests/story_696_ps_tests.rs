@@ -87,6 +87,7 @@ fn ps_process_backed_lease_uses_active_pid() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -123,6 +124,7 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
         },
         |_| None,
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -139,6 +141,48 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
         "alive + dirty is Moving — no salvage hint for a working agent"
     );
     assert!(d.hint.is_none());
+}
+
+/// TASK-152: when the same live pid has both a harness-worktree lease role and
+/// a transcript role, `aida ps` displays the transcript role because it names
+/// what the session is actually doing. The original lease role remains present
+/// for structured provenance.
+// trace:TASK-152 | ai:codex
+#[test]
+fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join("repo");
+    let wt = tmp.path().join(".claude/worktrees/agent-abc123");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&wt).unwrap();
+    let jsonl = tmp.path().join("session.jsonl");
+
+    let mut l = ps_lease("l-role", worktree_lease::HARNESS_WORKTREE_SCOPE, wt.clone());
+    l.role = Some("general-purpose".into());
+    l.active_pid = Some(std::process::id());
+
+    let live = vec![process_probe::LiveSession {
+        pid: std::process::id(),
+        cwd: repo,
+        jsonl: Some(jsonl.clone()),
+        stale_cwd: false,
+    }];
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &live,
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |path| (path == jsonl).then(|| "advisor".to_string()),
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].pid, Some(std::process::id()));
+    assert_eq!(rows[0].role.as_deref(), Some("advisor"));
+    assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
 }
 
 /// BUG-752: a harness lease with NO pid signal at all (legacy lease from a
@@ -166,6 +210,7 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
             ahead_of_main: 0,
             last_commit_subject: Some("wip: half-done".into()),
         },
+        |_| None,
         |_| None,
         |_| None,
     );
@@ -209,6 +254,7 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
             ahead_of_main: 0,
             last_commit_subject: None,
         },
+        |_| None,
         |_| None,
         |_| None,
     );
@@ -505,6 +551,7 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| None,
+        |_| None,
     );
 
     // Row: TASK-1's scope resolved to its display id; live pid attached.
@@ -606,6 +653,7 @@ fn build_running_work_surfaces_the_worktree_lock_owner() {
             }
         },
         |_| None,
+        |_| None,
     );
 
     let locked_row = rows
@@ -638,6 +686,9 @@ fn ps_json_shape() {
         "scope": l.scope,
         "spec": Some("STORY-3"),
         "role": l.role,
+        // TASK-152: raw lease-role provenance survives even when display role
+        // is overridden by the live transcript role.
+        "lease_role": Some("implementer"),
         "worktree": l.worktree_path.display().to_string(),
         "branch": l.branch,
         "pid": Some(4242u32),
@@ -655,6 +706,7 @@ fn ps_json_shape() {
         "scope",
         "spec",
         "role",
+        "lease_role",
         "worktree",
         "branch",
         "pid",
@@ -849,6 +901,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| Some(pid_started),
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -872,6 +925,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| Some(pid_started),
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].pid, None);
@@ -944,6 +998,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| Some(now - chrono::Duration::minutes(3)),
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -960,6 +1015,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| Some(lease_born),
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1150,6 +1206,7 @@ fn ps_freshly_hand_entered_spec_reads_awaiting_agent_not_orphaned() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1225,6 +1282,7 @@ fn ps_dead_agent_lease_still_flags_stalled_after_the_grace_window() {
         &[],
         now,
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
         |_| None,
         |_| None,
     );
