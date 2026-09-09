@@ -4728,3 +4728,11 @@ Picked up `STORY-991` from the implementer queue. The story asked `aida agent ne
 Added `--no-resume`, `--resume latest|NAME`, `--allow-duplicate`, and `--no-duplicate-check` to the Claude, Codex, and Antigravity `agent new` subcommands. Wired foreground and Claude background launch paths through a shared preflight that checks merged registry/lease views, prints a live duplicate block with name/spec/pid/tty/start/elapsed/resume hint, prompts only at an interactive TTY, warns without prompting for non-TTY launches, and lists up to five ended resumable same-vendor/same-role sessions with age, role, spec, worktree, and title. Direct resume routes through the existing `agent_resume_ended` path so worktree and native-session checks remain centralized. Added `[agent] resume_prompt = false` support and `// trace:STORY-991 | ai:codex` comments on the implementation and tests.
 
 Verification: `cargo fmt --all -- --check`; `git diff --check`; `cargo test -p aida-cli-lib agent_launcher --no-default-features`; `env -u AIDA_AUTO_COMPLETE cargo test -p aida-cli-lib --no-default-features`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-09 — TASK-152 ps role reconciliation
+
+Picked up `TASK-152` from the implementer queue. The task was a STORY-993 follow-up: `aida ps` could show the lease role (`general-purpose`) while `aida session conversations` showed the JSONL hook role (`advisor`) for the same live PID.
+
+Added a `session::role_from_jsonl` helper and wired `aida ps` running-work rows to prefer the live transcript role when a row can correlate to a recent JSONL by PID or worktree. The raw lease role is retained separately as `lease_role` in JSON output, while human, TOON, and integrate views use the resolved display role. Added a regression for the harness-worktree shape where the live PID's transcript says `advisor` but the lease says `general-purpose`, with `// trace:TASK-152 | ai:codex` comments on the implementation and test.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib story_696_ps_tests`; `cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the test output.

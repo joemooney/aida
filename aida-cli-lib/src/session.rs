@@ -2728,6 +2728,18 @@ pub fn format_session_line(m: &SessionMeta) -> String {
     )
 }
 
+/// Resolve only the AIDA role from a session JSONL. The `aida ps` live table
+/// uses this when a lease and a currently-active transcript point at the same
+/// pid: the transcript role names what the session is actually doing now,
+/// while the lease role remains provenance.
+// trace:TASK-152 | ai:codex
+pub fn role_from_jsonl(path: &Path, agent: &'static str) -> Result<Option<String>> {
+    let mtime = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .unwrap_or_else(|_| SystemTime::now());
+    Ok(parse_session_meta_for_agent(path, mtime, SystemTime::now(), agent)?.role)
+}
+
 #[cfg(test)]
 fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result<SessionMeta> {
     parse_session_meta_for_agent(path, mtime, now, "claude")
