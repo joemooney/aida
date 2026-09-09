@@ -50376,5 +50376,31 @@ operations:
   timestamp: 2026-09-09T07:19:50.955479989Z
   kind: !SetStatus
     status: In Progress
-clock: 4284
+- id: 01a08519-9877-77f3-8960-f7e45443cb5b
+  target_id: 01a08519-9466-7a33-b4c6-d2c1caa805d7
+  author: aida
+  node_id: '1'
+  lamport: 4285
+  timestamp: 2026-09-09T07:37:22.295462041Z
+  kind: !Create
+    title: 'Review PR-1705: [AI:codex] fix(session): reconcile ps role with live transcript (TASK-152)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08509`) for branch `story-995`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1705>
+      - Branch: `story-995` → `main`
+
+      ## Covers
+
+      - TASK-152
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1705` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4285
 node_id: '1'
