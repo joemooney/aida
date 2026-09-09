@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:14:58.955676870Z
-modified_at: 2026-09-09T05:29:58.136273836Z
+modified_at: 2026-09-09T05:29:59.164309139Z
 req_type: Story
 tags:
 - from-product
@@ -33,3 +33,4 @@ tags:
 - risk:low
 - session
 - ux
+execution_mode: drain
