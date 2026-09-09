@@ -8,11 +8,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-08T04:58:17.605256586Z
-modified_at: 2026-09-09T04:44:06.295672342Z
+modified_at: 2026-09-09T04:44:07.413817485Z
 req_type: Bug
 execution_mode: drain
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo fmt --all -- --check
+    cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture
+    cargo test -p aida-cli-lib phase_child_env -- --nocapture
+    cargo check -p aida-cli-lib
+    git diff --check
   implemented_at: 2026-09-09T04:44:04.618966894Z
   implemented_by: joe
 interface_changes:
