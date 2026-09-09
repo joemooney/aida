@@ -434,14 +434,6 @@
   added_at: 2026-06-04T07:03:42.061867225Z
   for_role: reviewer
 - user_id: joe
-  requirement_id: 01a08482-06ad-78c0-b038-f15810531e3f
-  position: 343000
-  added_by: joe
-  note: auto-queued by `session end` (01a08473); covers 1 spec
-  added_at: 2026-09-09T04:51:54.905008992Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0848d-a39b-7563-9428-cbb53258311c
   position: 344000
   added_by: joe
@@ -449,25 +441,10 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a08494-a55b-7ab2-b3f0-a09160446d51
-  position: 345000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a0848c); covers 1 spec
-  added_at: 2026-09-09T05:12:17.035023043Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a08491-31f3-7ed2-95ad-cff26d716dea
   position: 346000
   added_by: joe
   added_at: 2026-09-09T05:14:53.815808801Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a08470-9525-7a01-93a1-ab3ad67214a6
-  position: 347000
-  added_by: joe
-  added_at: 2026-09-09T05:15:37.922846515Z
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
