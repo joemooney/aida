@@ -49728,5 +49728,37 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4247
+- id: 01a08491-364d-7563-a649-c1e5a4f4aaba
+  target_id: 01a08491-31f3-7ed2-95ad-cff26d716dea
+  author: aida
+  node_id: '1'
+  lamport: 4248
+  timestamp: 2026-09-09T05:08:24.269100719Z
+  kind: !Create
+    title: aida agent new offers to resume a recent session and alerts on a live same-role agent before launching
+    description: |-
+      ## Why
+      Operator request (2026-09-08): after picking the vendor and the role in aida agent new, I should be offered the most recent (or a previous) session for that vendor+role to resume, and if one is already live I should be told before a second one is launched.
+
+      Today the bare launcher path (vendor picker -> role picker -> spawn) never consults the agent registry. The two mechanisms it needs already exist: aida agent resume <name> relaunches an ended registry entry via its recorded native session id (agent_resume_ended), aida agent ls --ended lists resumable ended entries (ended_resumable_agent_views), and aida role enter already shows the same recent-session prompt for a role (STORY-821, pick_recent_session_for_role). This story wires those into the launcher so the operator does not have to remember agent names or run three commands.
+
+      ## Acceptance
+      Applies to bare aida agent new (picker path) AND aida agent new <vendor> --role <role> at a TTY. Non-TTY launches never prompt.
+
+      1. Live-duplicate alert. After vendor+role are known and before spawning, if the registry (merged with session leases, same classifier as aida agent ls) holds a LIVE entry with the same vendor and role, print one block: name, spec, pid, tty, started (local time), elapsed, and the resume hint. Offer: Launch another anyway (default No) / Cancel. Non-TTY: print the same block as a warning on stderr and proceed. --allow-duplicate skips the prompt; --no-duplicate-check skips the check entirely.
+      2. Resume offer. If no live duplicate (or the operator chose to continue), list ended resumable entries for the same vendor+role, newest first, at most 5, using the enriched columns aida session resume shows (id, age, role, spec, worktree, title). First option is Start a new session (default). Choosing a row takes exactly the aida agent resume <name> path (worktree-present and native-session-available checks included); a row that fails those checks is shown greyed with the reason, not hidden.
+      3. Flags mirror STORY-821: --no-resume skips the offer; --resume [latest|<name>] goes straight to that session with no prompt. Config: [agent] resume_prompt = true|false (default true), read the same way [role] resume_prompt is.
+      4. Explicit --spec <SPEC> narrows both lists to entries on that spec first, then the rest of the role.
+      5. The registry entry created by a resumed launch records resumed_from = <ended entry id> (field already exists).
+      6. Tests: unit test for the duplicate classifier (live same-role -> alert; live other-role -> no alert; ended same-role -> resume list); unit test that non-TTY never prompts; golden test that the TOON/JSON output of aida agent new --format json is unchanged when nothing is live or resumable.
+
+      ## Out of scope
+      The TUI launcher (aida tui) keeps its own flow; a follow-up mirrors the two prompts there once this lands in the CLI.
+
+      ## Related
+      STORY-821 (role enter resume prompt, the pattern to copy). agent_resume_ended / ended_resumable_agent_views in agent_registry.rs are the reusable helpers; do not reimplement the relaunch.
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 4248
 node_id: '1'
