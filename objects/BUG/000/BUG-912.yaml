@@ -1,0 +1,34 @@
+id: 01a0855c-ad4a-7b50-b220-c3e479747e6a
+spec_id: BUG-912
+agreed_id: BUG-912
+title: review record --pr writes the phase-3 handshake under AIDA_DRIVE_ROOT (the worktree) and ignores AIDA_REVIEW_VERDICT_FILE, so a headless verdict lands where phase 4 never looks
+description: |
+  Found during the headless review of PR #1706 (reviewer session 01a08552df63, phase 3 of `aida queue work STORY-993 --auto-complete --no-human=both`).
+
+  **Symptom.** `aida review record STORY-993 --pr 1706 --verdict approved …` reported:
+
+      handshake: /home/joe/ai/aida-pr-1706/.aida/review-verdicts/PR-1706.json
+
+  i.e. under the review WORKTREE, while the orchestrator waits on the drive-root anchor. The review command's own prompt warned that a verdict written anywhere else is invisible to the orchestrator and shelves the spec. The reviewer noticed and copied the file by hand; an unattended reviewer would not have.
+
+  **Environment the orchestrator exported to the reviewer (verbatim, relevant subset):**
+
+      AIDA_DRIVE_ROOT=/home/joe/ai/aida-pr-1706
+      AIDA_PROJECT_ROOT=/home/joe/ai/aida
+      AIDA_REVIEW_VERDICT_FILE=/home/joe/ai/aida/.aida/review-verdicts/PR-1706.json
+      AIDA_AUTO_COMPLETE_PHASE=3
+
+  `review record --pr` derives the handshake path from `AIDA_DRIVE_ROOT` (which the orchestrator points at the worktree) and ignores `AIDA_REVIEW_VERDICT_FILE`, which names the exact file phase 4 reads. Running the verb from `/home/joe/ai/aida` does not help because the env var wins over cwd. (`.aida/review-verdicts/` in the worktree is a real directory, not a symlink to the drive root, so the two paths are distinct files.)
+
+  **Fix.** When `AIDA_REVIEW_VERDICT_FILE` is set, `review record --pr N` must write the handshake to exactly that path (and say so). Fallback order after that: `AIDA_PROJECT_ROOT`, then the session lease's `parent_project_root`, then `AIDA_DRIVE_ROOT`. Add a test that sets the env the orchestrator exports and asserts the file lands at the anchor. Substrate-as-bouncer: the review skill should not have to carry a "cd there first" instruction.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T08:50:38.538752064Z
+modified_at: 2026-09-09T08:50:38.538752064Z
+req_type: Bug
+tags:
+- aida:review:record
+- headless
+- orchestrator
