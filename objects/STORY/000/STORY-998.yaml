@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-09T06:58:02.141156033Z
+modified_at: 2026-09-09T06:58:02.896075964Z
 req_type: Story
 tags:
 - drain
@@ -46,4 +46,8 @@ relationships:
 - rel_type: References
   target_id: 01a07a90-b8de-71c3-8a91-b030e25c8a93
   created_at: 2026-09-09T06:58:02.141151398Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a08497-3c0b-7a10-84d4-24e573f46ec4
+  created_at: 2026-09-09T06:58:02.896067774Z
   created_by: joe
