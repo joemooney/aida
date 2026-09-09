@@ -1,0 +1,26 @@
+id: 01a08482-06ad-78c0-b038-f15810531e3f
+spec_id: STORY-990
+agreed_id: STORY-990
+title: 'Review PR-1700: [AI:codex] fix(queue): pin orchestrator phase child roles (BUG-901)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a08473`) for branch `bug-901`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1700>
+  - Branch: `bug-901` → `main`
+
+  ## Covers
+
+  - BUG-901
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1700` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T04:51:49.037791969Z
+modified_at: 2026-09-09T04:51:49.037791969Z
+req_type: Story

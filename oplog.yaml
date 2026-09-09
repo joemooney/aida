@@ -49644,5 +49644,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4244
+- id: 01a08482-0a8a-7082-b91f-92e45b438092
+  target_id: 01a08482-06ad-78c0-b038-f15810531e3f
+  author: aida
+  node_id: '1'
+  lamport: 4245
+  timestamp: 2026-09-09T04:51:50.026582314Z
+  kind: !Create
+    title: 'Review PR-1700: [AI:codex] fix(queue): pin orchestrator phase child roles (BUG-901)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08473`) for branch `bug-901`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1700>
+      - Branch: `bug-901` → `main`
+
+      ## Covers
+
+      - BUG-901
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1700` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4245
 node_id: '1'
