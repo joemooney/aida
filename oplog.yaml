@@ -49889,5 +49889,33 @@ operations:
   timestamp: 2026-09-09T05:14:59.951873421Z
   kind: !SetStatus
     status: Rejected
-clock: 4256
+- id: 01a08497-4408-72b0-894d-f26766b98b02
+  target_id: 01a08497-3c0b-7a10-84d4-24e573f46ec4
+  author: aida
+  node_id: '1'
+  lamport: 4257
+  timestamp: 2026-09-09T05:15:01.000832606Z
+  kind: !Create
+    title: session conversations shows PID and TTY per live session so a human can find the terminal, and the live glyph means a process is alive
+    description: |-
+      ## Why
+      Operator (2026-09-08): aida session conversations showed two live (●) sessions, product 01a079fe and advisor 3653ac9c, and asked "should we show the pid, because I don't think I have two advisors open". Investigation: both were real. 3653ac9c was claude pid 23126 on pts/0, resumed 2026-09-05 12:44, actively writing assistant messages at 22:14 that evening on the prompt "please review open items and approve and drain". The operator had forgotten a terminal tab with an advisor that was still draining. The table gave no way to find it: no pid, no tty, and ● only means "the jsonl was modified in the last 5 minutes" (liveness_indicator in session.rs), which by design avoids pids because Claude Code forks.
+
+      The same pid was shown by aida ps as session abf9f7f0 with role general-purpose (from the harness-worktree lease), while conversations called it advisor (from hook role markers in the jsonl). Two views, one process, two roles.
+
+      ## Acceptance
+      1. aida session conversations (and its deprecated alias list) gain PID and TTY columns, resolved best-effort and never invented: (a) the lease's active_pid when a lease covers that session id; else (b) a claude/codex process whose cwd equals the session's recorded cwd and whose start time is at or before the session's most recent resume event; else "-". Ambiguity (two candidate processes for one session) renders "?" with both pids in --format json.
+      2. Three-state liveness: ● = process resolved and alive; ◐ = jsonl written in the last 5 minutes but no process resolved (file-touched, unverified); blank = neither. The legend line explains all three.
+      3. The elapsed column for a ● row is process elapsed (ps etime), not file age.
+      4. aida ps and aida session conversations agree on role for the same pid: when both a lease role and a jsonl hook role exist, show the jsonl hook role (what the session is actually doing) and note the lease role in --format json as lease_role.
+      5. --format json carries pid, tty, liveness (alive|file-touched|none), resolution (lease|proc-scan|none).
+      6. Cold cost stays under 200ms on this machine with 20 claude processes (single /proc scan, no per-row spawn).
+      7. Unit tests: resolver picks lease active_pid over proc-scan; ambiguous proc-scan yields "?"; a session with a fresh mtime and no process is ◐ not ●.
+
+      ## Related
+      STORY-991 (launcher live-duplicate alert) consumes the same resolver; build it once here.
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 4257
 node_id: '1'
