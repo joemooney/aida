@@ -23,12 +23,12 @@ description: |-
 
   ## Related
   STORY-821 (role enter resume prompt, the pattern to copy). agent_resume_ended / ended_resumable_agent_views in agent_registry.rs are the reusable helpers; do not reimplement the relaunch.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:08:23.155545862Z
-modified_at: 2026-09-09T06:16:55.612074387Z
+modified_at: 2026-09-09T06:24:02.903097764Z
 req_type: Story
 tags:
 - agent-launcher
