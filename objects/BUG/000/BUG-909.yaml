@@ -1,0 +1,37 @@
+id: 01a084f9-de06-76c1-9236-d2aff53a1a74
+spec_id: BUG-909
+agreed_id: BUG-909
+title: 'Watchdog is blind to a working Codex implementer: codex exec prints nothing to stdout until it finishes, so ''no session output for 10m'' kills every Codex phase that thinks for 10 minutes'
+description: |-
+  ## Observed
+  2026-09-08 23:28, drain 01a084da (vendor = codex, --no-human=both). STORY-993 implementer: headless log .aida/headless-logs/story-993-01a084da-*.jsonl stayed at 0 bytes for 13 minutes, the watchdog tripped ("no commit, file-change, or session output for 10m"), STORY-975's retry fired (SpecRetried cause=watchdog attempt 2/2), attempt 2 exited 1 after 1.5 s (tool-exit), spec parked NeedsAttention and escalated to the human.
+
+  The implementer was working the whole time. Codex's own rollout ~/.codex/sessions/2026/09/08/rollout-2026-09-08T23-28-12-*.jsonl has 500 lines (78 function calls) written continuously until 23:41:00, and the worktree /home/joe/ai/aida-story-993 holds 588 inserted lines in aida-cli-lib/src/session.rs, uncommitted. Same shape for STORY-994 at 23:41: codex exec pid 2700757 has fd 1 pointed at the headless log, log still 0 bytes after 19 minutes, rollout file at 754 lines and growing.
+
+  ## Cause
+  codex exec without --json writes only the final message to stdout, at the end. Every earlier successful codex phase log has 15-23 lines, all written at completion. The BUG-875 fix keyed the watchdog on "session output" which for Codex is silence-until-done. Claude's stream-json is live, so the same watchdog is fine for Claude. The second attempt's 1.5 s exit is a separate symptom (likely re-entry on the existing branch/worktree) and should get its own cause once this is fixed.
+
+  ## Acceptance
+  1. For codex phases the activity signal is live: either launch codex exec with --json so events stream into the headless log (and adapt any final-message parsing to the JSONL event shape), or additionally treat the newest ~/.codex/sessions/**/rollout-*.jsonl whose session id matches the launch as the activity source (mtime advancing = output). Prefer --json; document the choice.
+  2. The watchdog's "no session output" clause counts activity from that source, so a Codex implementer that reads and thinks for 15 minutes without a file change is NOT tripped.
+  3. A watchdog retry (STORY-975) never destroys uncommitted worktree changes: attempt 2 resumes in the same worktree, and if it cannot, the shelve finding says so and names the worktree with the diff size.
+  4. Regression test: a fake codex phase that writes nothing to stdout for longer than no_progress_limit while its rollout file advances is classified as progressing.
+  5. Dogfood evidence: one codex-vendor drain on this repo shipping a spec whose implementer phase exceeded 10 minutes, cited in the PR.
+
+  ## Related
+  BUG-875 (keyed the watchdog on output), BUG-420 (original no-progress watchdog), STORY-975 (retry), STORY-998 (event-stream idle detection would read the same source). Affected tonight: STORY-993 (parked, work salvageable in aida-story-993), STORY-994 (at risk).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-09T07:02:42.950154022Z
+modified_at: 2026-09-09T07:02:42.950154022Z
+req_type: Bug
+tags:
+- codex
+- drain
+- from-product
+- orchestrator
+- recommend:approve
+- risk:medium
+- watchdog
