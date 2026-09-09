@@ -57,6 +57,15 @@ pub struct SessionMeta {
     /// they show the session's spec evolution.
     /// trace:BUG-112 | ai:claude
     pub recent_focus: Option<String>,
+    /// The transcript file this row was parsed from (`None` for rows built
+    /// without a file, e.g. in tests). Read lazily by the STORY-993 process
+    /// resolver for the last launch/resume hook event.
+    // trace:STORY-993 | ai:claude
+    pub path: Option<PathBuf>,
+    /// STORY-993: the process (pid / tty / liveness) resolved for this row —
+    /// lease pid, cwd+start-window proc-scan, or none. Never invented.
+    // trace:STORY-993 | ai:claude
+    pub process: crate::session_liveness::ProcessFacts,
 }
 
 /// STORY-59: liveness inferred from activity recency. Visual indicator
@@ -130,6 +139,16 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     normalize_specs(&mut parent);
     fill_recent_focus(&mut here);
     fill_recent_focus(&mut parent);
+    let resolver = ProcessResolver::new();
+    resolver.fill(&mut here);
+    resolver.fill(&mut parent);
+
+    // STORY-993: `--format json` (or AIDA_OUTPUT_FORMAT=json) — the machine
+    // projection carrying pid / pids / tty / liveness / resolution /
+    // lease_role, the same rows the table renders.
+    if crate::output_format_is_json() {
+        return print_json(&here, &parent, parent_root.as_deref());
+    }
 
     // STORY-58: when there's nothing to merge, render the classic single
     // table — keep the existing one-group output untouched. Only switch
@@ -175,7 +194,149 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
          `-` = no spec tracked)"
             .dimmed()
     );
+    // STORY-993: the three-state liveness legend + what PID `?` means.
+    eprintln!("{}", process_legend().dimmed());
     print_leases_hint();
+    Ok(())
+}
+
+/// STORY-993: the legend for the liveness glyph, PID/TTY cells and the AGE
+/// column's dual meaning.
+// trace:STORY-993 | ai:claude
+fn process_legend() -> String {
+    format!(
+        "(● = a process is alive for this session · {} = transcript written in the last 5m but \
+         no process resolved · blank = neither; PID `?` = two candidate processes — \
+         `--format json` lists them; AGE = process elapsed for ● rows, time since last write otherwise)",
+        glyph(crate::glyphs::Glyph::InFlight)
+    )
+}
+
+/// STORY-993: the once-per-run inputs the process resolver needs — one
+/// shared `/proc` walk (memoized with every other liveness consumer), one
+/// lease read, one manifest read. Built once and applied to every table
+/// group so the second group costs only its own rows, never a second
+/// directory sweep.
+// trace:STORY-993 | ai:claude
+struct ProcessResolver {
+    procs: Vec<crate::session_liveness::LiveAgentProcess>,
+    leases: Vec<crate::SessionLease>,
+    manifests: Vec<crate::session_manifest::SessionManifest>,
+    now: chrono::DateTime<chrono::Utc>,
+}
+
+impl ProcessResolver {
+    fn new() -> Self {
+        let procs = aida_core::liveness::probe_live_agent_processes();
+        let root = crate::find_main_worktree_root().ok();
+        let leases = root.as_deref().map(crate::list_leases).unwrap_or_default();
+        let manifests = root
+            .as_deref()
+            .map(crate::session_manifest::list_all)
+            .unwrap_or_default();
+        Self {
+            procs,
+            leases,
+            manifests,
+            now: chrono::Utc::now(),
+        }
+    }
+
+    /// Resolve pid / tty / liveness for each row — no per-row spawn, no
+    /// per-row directory read. A lease covers a transcript when a session
+    /// manifest joins the lease id to the transcript's `claude_session_id`;
+    /// the lease's `active_pid` (or its `creator_pid` when that pid IS a live
+    /// agent process — the launcher exec'd into the agent) then wins over the
+    /// proc-scan. Falls back to the cwd + start-window scan against live
+    /// claude/codex processes. `aida ps` parity (TASK-152): when the
+    /// transcript names no role but the lease does, the lease role fills the
+    /// ROLE cell and is always carried as `lease_role` in JSON.
+    // trace:STORY-993 | ai:claude
+    fn fill(&self, sessions: &mut [SessionMeta]) {
+        use crate::session_liveness::{self as sl, AgentKind, LeaseFacts, TranscriptFacts};
+        let is_agent_proc = |pid: u32| self.procs.iter().any(|p| p.pid == pid);
+        for s in sessions.iter_mut() {
+            let lease = self
+                .manifests
+                .iter()
+                .find(|m| m.claude_session_id.as_deref() == Some(s.id.as_str()))
+                .and_then(|m| self.leases.iter().find(|l| l.id == m.session_id))
+                .map(|l| LeaseFacts {
+                    pid: l.active_pid.or(l.creator_pid.filter(|p| is_agent_proc(*p))),
+                    role: l.role.clone(),
+                });
+            let cwd = s.last_cwd.as_deref().map(Path::new);
+            let t = TranscriptFacts {
+                agent: s.agent.as_str(),
+                cwd,
+                started_at: s.started_at,
+                age_seconds: s.age_seconds,
+            };
+            let path = s.path.clone();
+            let last_start = move || path.as_deref().and_then(sl::last_process_start_event);
+            s.process = sl::resolve(
+                &t,
+                lease.as_ref(),
+                &self.procs,
+                &crate::process_probe::pid_is_alive,
+                &|pid| {
+                    (
+                        aida_core::liveness::process_start_time(pid),
+                        aida_core::liveness::process_tty(pid),
+                    )
+                },
+                &last_start,
+                self.now,
+            );
+            if s.role.is_none() {
+                s.role = s.process.lease_role.clone();
+            }
+            // Keep the walk's `AgentKind` spelling and the row's agent label in
+            // one place so a future agent kind can't silently never match.
+            debug_assert!(
+                AgentKind::Claude.label() == "claude" && AgentKind::Codex.label() == "codex"
+            );
+        }
+    }
+}
+
+/// STORY-993: the JSON projection of the conversations table.
+// trace:STORY-993 | ai:claude
+fn print_json(
+    here: &[SessionMeta],
+    parent: &[SessionMeta],
+    parent_root: Option<&Path>,
+) -> Result<()> {
+    let row = |group: &str, s: &SessionMeta| {
+        let p = &s.process;
+        serde_json::json!({
+            "group": group,
+            "id": s.id,
+            "agent": s.agent,
+            "age_seconds": s.age_seconds,
+            "elapsed_secs": p.elapsed_secs,
+            "role": s.role,
+            "lease_role": p.lease_role,
+            "spec": s.spec,
+            "title": s.title,
+            "started_at": s.started_at.map(|t| t.to_rfc3339()),
+            "cwd": s.last_cwd,
+            "branch": s.branch,
+            "recent_focus": s.recent_focus,
+            "pid": p.pid,
+            "pids": p.candidates,
+            "tty": p.tty,
+            "liveness": p.liveness.label(),
+            "resolution": p.resolution.label(),
+        })
+    };
+    let mut sessions: Vec<serde_json::Value> = here.iter().map(|s| row("here", s)).collect();
+    sessions.extend(parent.iter().map(|s| row("parent", s)));
+    let out = serde_json::json!({
+        "parent_root": parent_root.map(|p| p.display().to_string()),
+        "sessions": sessions,
+    });
+    println!("{}", serde_json::to_string_pretty(&out)?);
     Ok(())
 }
 
@@ -339,6 +500,8 @@ mod normalize_specs_tests {
             last_cwd: None,
             branch: None,
             recent_focus: None,
+            path: None,
+            process: Default::default(),
         }
     }
 
@@ -2907,6 +3070,8 @@ fn parse_session_meta_for_agent(
         last_cwd,
         branch: None,
         recent_focus: None,
+        path: Some(path.to_path_buf()),
+        process: Default::default(),
     })
 }
 
@@ -3018,6 +3183,8 @@ fn first_spec_id(line: &str) -> Option<String> {
 struct TableWidths {
     id_w: usize,
     age_w: usize,
+    pid_w: usize,
+    tty_w: usize,
     agent_w: usize,
     role_w: usize,
     spec_w: usize,
@@ -3033,14 +3200,20 @@ impl TableWidths {
         let mut role_w = 4usize;
         let mut spec_w = 4usize;
         let mut agent_w = 5usize;
+        let mut pid_w = 3usize;
+        let mut tty_w = 3usize;
         for s in sessions {
             agent_w = agent_w.max(s.agent.len());
             role_w = role_w.max(s.role.as_deref().unwrap_or("-").len());
             spec_w = spec_w.max(s.spec.as_deref().unwrap_or("-").len());
+            pid_w = pid_w.max(s.process.pid_cell().len());
+            tty_w = tty_w.max(s.process.tty_cell().len());
         }
         Self {
             id_w: 8,
             age_w: 6,
+            pid_w,
+            tty_w,
             agent_w,
             role_w,
             spec_w,
@@ -3054,6 +3227,30 @@ fn print_table(sessions: &[SessionMeta]) {
     print_table_with_widths(sessions, &widths);
 }
 
+/// STORY-993: the AGE cell — process elapsed for a `●` row (the process
+/// resolved and its start time is known), time since the transcript's last
+/// write otherwise.
+// trace:STORY-993 | ai:claude
+fn age_cell(s: &SessionMeta) -> String {
+    match (s.process.liveness, s.process.elapsed_secs) {
+        (crate::session_liveness::Liveness::Alive, Some(e)) => humanize_age(e),
+        _ => humanize_age(s.age_seconds),
+    }
+}
+
+/// STORY-993: the liveness glyph for a row — `●` only when a process was
+/// resolved and is alive; the registry's partial glyph when the transcript
+/// was merely written recently; a blank otherwise.
+// trace:STORY-993 | ai:claude
+fn process_liveness_glyph(s: &SessionMeta) -> &'static str {
+    use crate::session_liveness::Liveness;
+    match s.process.liveness {
+        Liveness::Alive => "●",
+        Liveness::FileTouched => glyph(crate::glyphs::Glyph::InFlight),
+        Liveness::None => " ",
+    }
+}
+
 /// STORY-58: render the session-list table using caller-supplied widths
 /// (so two grouped sections can share one column layout).
 /// trace:STORY-58 | ai:claude
@@ -3061,9 +3258,11 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
     println!(
         "{}",
         format!(
-            " {:<id_w$}  {:<age_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            " {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
             "ID",
             "AGE",
+            "PID",
+            "TTY",
             "AGENT",
             "ROLE",
             "SPEC",
@@ -3071,6 +3270,8 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             "RECENT FOCUS",
             id_w = w.id_w,
             age_w = w.age_w,
+            pid_w = w.pid_w,
+            tty_w = w.tty_w,
             agent_w = w.agent_w,
             role_w = w.role_w,
             spec_w = w.spec_w,
@@ -3081,30 +3282,29 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
 
     for s in sessions {
         let id_short = &s.id[..s.id.len().min(w.id_w)];
-        let age = humanize_age(s.age_seconds);
+        let age = age_cell(s);
+        let pid = s.process.pid_cell();
+        let tty = s.process.tty_cell();
         let role = s.role.as_deref().unwrap_or("-");
         let spec = s.spec.as_deref().unwrap_or("-");
         let focus = s.recent_focus.as_deref().unwrap_or("-");
         let worktree =
             format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), w.worktree_w);
-        let live = liveness_indicator(s.age_seconds);
-        // Color the indicator: bright green when truly live, yellow for
-        // recent, dim for idle. Width of the indicator slot is one cell.
-        // The "recent" marker routes through the registry, so compare against
-        // its rendered form rather than a hard-coded literal. trace:TASK-840
-        let recent = glyph(crate::glyphs::Glyph::InFlight);
-        let live_colored = if live == "●" {
-            live.green().bold().to_string()
-        } else if live == recent {
-            live.yellow().to_string()
-        } else {
-            live.dimmed().to_string()
+        // STORY-993: three-state glyph — bright green only for a resolved,
+        // alive process; yellow for file-touched; dim blank otherwise.
+        let live = process_liveness_glyph(s);
+        let live_colored = match s.process.liveness {
+            crate::session_liveness::Liveness::Alive => live.green().bold().to_string(),
+            crate::session_liveness::Liveness::FileTouched => live.yellow().to_string(),
+            crate::session_liveness::Liveness::None => live.dimmed().to_string(),
         };
         println!(
-            "{} {:<id_w$}  {:<age_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            "{} {:<id_w$}  {:<age_w$}  {:<pid_w$}  {:<tty_w$}  {:<agent_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
             live_colored,
             id_short.bold(),
             age,
+            pid,
+            tty,
             s.agent.as_str().blue(),
             role.yellow(),
             spec.cyan(),
@@ -3112,6 +3312,8 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
             focus.cyan(),
             id_w = w.id_w,
             age_w = w.age_w,
+            pid_w = w.pid_w,
+            tty_w = w.tty_w,
             agent_w = w.agent_w,
             role_w = w.role_w,
             spec_w = w.spec_w,
@@ -3868,6 +4070,8 @@ mod tests {
             last_cwd: None,
             branch: None,
             recent_focus: None,
+            path: None,
+            process: Default::default(),
         };
 
         let line = format_session_line(&m);
@@ -3909,6 +4113,8 @@ mod tests {
             last_cwd: Some("/home/joe/ai/aida-story-821".to_string()),
             branch: Some("story-821".to_string()),
             recent_focus: None,
+            path: None,
+            process: Default::default(),
         };
 
         let line = format_role_resume_session_line(&m);

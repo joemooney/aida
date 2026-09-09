@@ -216,6 +216,8 @@ mod schema;
 mod seats;
 mod server_cmd;
 mod session;
+// trace:STORY-993 | ai:claude
+mod session_liveness;
 mod session_manifest;
 mod session_misc_cmd;
 // trace:TASK-1177 | ai:claude — the substrate-state reap pass for sessions
