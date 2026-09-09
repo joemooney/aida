@@ -485,16 +485,16 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a08497-77d1-7900-a12e-01a6df8188d8
-  position: 350000
-  added_by: joe
-  added_at: 2026-09-09T05:30:05.766284375Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0849b-cac5-7883-ace9-fc4251d72c38
   position: 351000
   added_by: joe
   added_at: 2026-09-09T05:30:08.922202488Z
   for_role: implementer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a08497-77d1-7900-a12e-01a6df8188d8
+  position: 352000
+  added_by: joe
+  note: Promoted from finding TASK-1-128 via `aida findings promote`
+  added_at: 2026-09-09T05:30:09.468523150Z
+  for_role: implementer
