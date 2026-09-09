@@ -49716,5 +49716,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4246
+- id: 01a0848d-a92f-70f2-abe8-3a2a918eae10
+  target_id: 01a0848d-a39b-7563-9428-cbb53258311c
+  author: aida
+  node_id: '1'
+  lamport: 4247
+  timestamp: 2026-09-09T05:04:31.535247236Z
+  kind: !Create
+    title: phase retry collides with its own dead predecessor's lease — retry must reap a lease whose process exited
+    description: 'Observed on BUG-901''s pipeline (2026-09-08 22:02): the phase-3 reviewer attempt 1 took the PR-scoped lease and died; the STORY-975 retry relaunched and REFUSED on that same lease (scope PR-1700 is owned by lease 01a08482, worktree CLEAN) — attempt 2/2 burned on the predecessor''s leftovers and the spec shelved despite green CI and a finished implementation. A retrying phase must treat a lease whose backing process has exited as reapable: release it (worktree clean = safe; dirty = park with a typed cause naming the dirty worktree) before relaunching. Acceptance: simulated dead-lease + clean worktree lets the retry proceed; dirty worktree parks with the typed cause; regression test beside the retry gate tests.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 4247
 node_id: '1'
