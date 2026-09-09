@@ -3,12 +3,12 @@ spec_id: TASK-1-128
 agreed_id: TASK-152
 title: aida ps and session conversations report different roles for the same pid (lease role vs jsonl hook role)
 description: '2026-09-08: pid 23126 (pts/0, cwd /home/joe/ai/aida) appears in aida ps as session abf9f7f0 role general-purpose (harness-worktree lease) and in aida session conversations as 3653ac9c role advisor SPIKE-50 (jsonl hook markers). One process, two roles, two ids. Reconcile in the PID/TTY story or decide which is authoritative.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-09T05:15:14.257221011Z
-modified_at: 2026-09-09T07:37:25.865203041Z
+modified_at: 2026-09-09T07:42:23.211009683Z
 req_type: Task
 tags:
 - from-advisor:STORY-993
@@ -23,8 +23,24 @@ relationships:
   target_id: 01a08519-9466-7a33-b4c6-d2c1caa805d7
   created_at: 2026-09-09T07:37:25.865198131Z
   created_by: joe
+history:
+- id: 01a0851e-2fe4-7541-93ac-7760673ac32d
+  author: aida-auto-bump
+  timestamp: 2026-09-09T07:42:23.204273189Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0851e-2feb-72b3-a4dc-27c2755c54ff
+  timestamp: 2026-09-09T07:42:23.211008944Z
+  agent: aida
+  commit_sha: 5f02a8c0b1e565191e4a8100be74a3b44d20a331
+  summary: Completed via merge 5f02a8c0
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-09T07:27:33.830867043Z
   implemented_by: joe
+  completed_at: 2026-09-09T07:42:23.170403796Z
+  completion_sha: 5f02a8c0b1e565191e4a8100be74a3b44d20a331
