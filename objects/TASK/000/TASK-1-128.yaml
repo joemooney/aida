@@ -1,5 +1,6 @@
 id: 01a08497-77d1-7900-a12e-01a6df8188d8
 spec_id: TASK-1-128
+agreed_id: TASK-152
 title: aida ps and session conversations report different roles for the same pid (lease role vs jsonl hook role)
 description: '2026-09-08: pid 23126 (pts/0, cwd /home/joe/ai/aida) appears in aida ps as session abf9f7f0 role general-purpose (harness-worktree lease) and in aida session conversations as 3653ac9c role advisor SPIKE-50 (jsonl hook markers). One process, two roles, two ids. Reconcile in the PID/TTY story or decide which is authoritative.'
 status: Draft
