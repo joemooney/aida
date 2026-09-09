@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:52.369729897Z
-modified_at: 2026-09-09T07:20:41.831238051Z
+modified_at: 2026-09-09T07:20:43.054841540Z
 req_type: Story
 tags:
 - from-product
@@ -39,6 +39,18 @@ relationships:
   target_id: 01a084f9-a2f3-7741-ad9e-311aec282da5
   created_at: 2026-09-09T07:02:32.409336048Z
   created_by: joe
+comments:
+- id: 01a0850a-5862-7e61-94e2-1f49b4141ea7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1704):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. STORY-994 acceptance 1 requires the SessionStart hook for hand-opened sessions to add a registry [terminal] block; the changed hook path only stamps presence/notice state, while terminal capture is limited to launcher/MCP/manual registration paths.
+    2. STORY-994 acceptance 2 requires restoring titles on session end when supported. apply_terminal_title changes tmux/wezterm/terminator via native commands, but restore_terminal_title immediately returns for those emulator values, so prior native titles are not restored.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-09T07:20:42.850209422Z
+  modified_at: 2026-09-09T07:20:42.850209422Z
 execution_mode: drain
 implementation_info:
   implemented: true
