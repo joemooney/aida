@@ -8,10 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-08T04:58:17.605256586Z
-modified_at: 2026-09-09T04:44:04.618966894Z
+modified_at: 2026-09-09T04:44:06.295672342Z
 req_type: Bug
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-09T04:44:04.618966894Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - queue work --auto-complete phase children now set AIDA_SESSION_ROLE for their phase
