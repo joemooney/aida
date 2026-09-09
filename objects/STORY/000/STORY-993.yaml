@@ -19,12 +19,12 @@ description: |-
 
   ## Related
   STORY-991 (launcher live-duplicate alert) consumes the same resolver; build it once here.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:14:58.955676870Z
-modified_at: 2026-09-09T08:00:36.152619364Z
+modified_at: 2026-09-09T08:06:59.297122080Z
 req_type: Story
 tags:
 - from-product
@@ -41,11 +41,3 @@ comments:
   modified_at: 2026-09-09T07:02:53.052391751Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: tool-exit
-  detail: the implementer session exited 1 — it was aborted or errored (attempt 2/2)
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-993 --resume 01a085220ebe`'
-  shelved_by: advisor
-  shelved_at: 2026-09-09T08:00:36.152619364Z
