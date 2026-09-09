@@ -50634,5 +50634,31 @@ operations:
   timestamp: 2026-09-09T08:06:59.360028539Z
   kind: !SetStatus
     status: In Progress
-clock: 4308
+- id: 01a08552-85f1-7bc0-9596-e80b41dcc443
+  target_id: 01a08552-7ec6-7e50-b213-a48d7f33f464
+  author: aida
+  node_id: '1'
+  lamport: 4309
+  timestamp: 2026-09-09T08:39:33.105228821Z
+  kind: !Create
+    title: 'Review PR-1706: [AI:claude] feat(session): PID/TTY per live session, three-state liveness glyph (STORY-993)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08534`) for branch `story-993-4`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1706>
+      - Branch: `story-993-4` → `main`
+
+      ## Covers
+
+      - STORY-993
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1706` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4309
 node_id: '1'
