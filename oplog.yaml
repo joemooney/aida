@@ -50113,5 +50113,31 @@ operations:
   timestamp: 2026-09-09T05:48:39.178808698Z
   kind: !SetStatus
     status: Completed
-clock: 4273
+- id: 01a084cf-e0cd-7bb0-88dc-f104d533a16c
+  target_id: 01a084cf-dd21-7cc0-939c-2a28832b14cd
+  author: aida
+  node_id: '1'
+  lamport: 4274
+  timestamp: 2026-09-09T06:16:51.149994876Z
+  kind: !Create
+    title: 'Review PR-1703: [AI:codex] feat(agent): prompt before duplicate launcher sessions (STORY-991)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a084b8`) for branch `story-991`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1703>
+      - Branch: `story-991` → `main`
+
+      ## Covers
+
+      - STORY-991
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1703` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4274
 node_id: '1'
