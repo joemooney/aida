@@ -8,6 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T05:00:54.802815765Z
-modified_at: 2026-09-10T11:33:11.943920405Z
+modified_at: 2026-09-10T11:37:31.459026124Z
 req_type: Task
+comments:
+- id: 01a08b1b-d243-75f1-95b5-19b29a035fee
+  author: joe
+  content: 'Investigation result: the observed 2026-09-09T07:46 relaunch was not caused by queue-add itself. Evidence: ~/.aida/usage.jsonl shows the prior next-N drain ended at 07:46:01, advisor re-added/changed queue state at 07:46:28, and .aida/events.jsonl records STORY-993 phase 1 at 07:46:29 with ~/.aida/auto-complete.jsonl recording the single-spec run. The documented launch path is an active drain runner/wrapper picking up the requeued head: scripts/drain-loop.sh:57-82 runs nextN passes, and aida-cli-lib/src/lib.rs:72944-72983 (RealNextNDriver) resolves the head and re-enters run_auto_complete for the selected spec. I documented that queue add is metadata-only and relaunch requires an active runner in .aida/discipline/machinery-glossary.md and docs/autonomous-drain.md. Residual: the exact OS parent process for pid 2759412 was not reconstructable from retained logs; journalctl had no aida-drain-loop entries for that window, so the docs phrase this as runner/wrapper behavior rather than claiming systemd specifically.'
+  created_at: 2026-09-10T11:37:31.459026124Z
+  modified_at: 2026-09-10T11:37:31.459026124Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
