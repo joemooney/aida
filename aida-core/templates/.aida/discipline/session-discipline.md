@@ -111,10 +111,10 @@ When refactoring across the codebase, dated historical artifacts stay
 frozen at the date in their filename. Glyph swaps, vocabulary updates,
 renames, and palette unifications should update *living* guidance and
 code to current truth — and **leave dated records alone**. SPIKE outputs
-(`docs/spikes/YYYY-MM-DD-*.md`), session logs (`PROMPT_HISTORY.md`
-entries), dated competitive-analysis snapshots, spec comments, and git
-commit messages are records of *what we knew at time T*. Rewriting them
-erases the path taken and makes the past look like the present.
+(`docs/spikes/YYYY-MM-DD-*.md`), dated competitive-analysis snapshots,
+spec comments, and git commit messages are records of *what we knew at
+time T*. Rewriting them erases the path taken and makes the past look
+like the present.
 
 The discriminator when classifying a file mid-refactor:
 
@@ -124,7 +124,6 @@ The discriminator when classifying a file mid-refactor:
 | Code (source, configs, templates that compile/scaffold) | **YES** |
 | Plan files in `docs/plans/` | YES if active/load-bearing; NO once historical |
 | Dated SPIKE outputs (`docs/spikes/YYYY-MM-DD-*.md`) | **NO** |
-| Dated session logs (`PROMPT_HISTORY.md` entries) | **NO** |
 | Dated competitive-analysis snapshots | **NO** |
 | Spec descriptions / acceptance bullets | YES if work hasn't started; else file a follow-up |
 | Spec comments | **NO** |
@@ -138,6 +137,14 @@ phrasing is the rule.
 
 A lint check is unnecessary; the filename-date convention plus this
 discipline is sufficient.
+
+## Session history lives in the substrate
+
+AIDA projects do not keep a per-session append-only log file. The durable
+record is the AIDA substrate: use `aida history --events` for the time
+series, `aida digest` for narrative summaries, and specs, comments, PRs,
+and commits for the why. Do not create or maintain an equivalent session-log
+file in an AIDA-scaffolded project.
 
 ## Trust the reviewer over intuition
 

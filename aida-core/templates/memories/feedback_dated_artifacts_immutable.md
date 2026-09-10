@@ -1,6 +1,6 @@
 ---
 name: dated-artifacts-immutable
-description: When refactoring across the codebase, dated historical artifacts (SPIKE outputs, PROMPT_HISTORY, dated plans, dated competitive-analysis snapshots, commit messages, spec comments) stay frozen at the date in their filename — they record what we knew at time T.
+description: When refactoring across the codebase, dated historical artifacts (SPIKE outputs, dated plans, dated competitive-analysis snapshots, commit messages, spec comments) stay frozen at the date in their filename — they record what we knew at time T.
 propagation: scaffolding-pack
 metadata:
   type: feedback
@@ -8,7 +8,7 @@ metadata:
 
 When a convention evolves — a glyph swap, a vocabulary update, a palette unification, a renamed term — a cross-cutting refactor should update *living* guidance and code to current truth, and **leave dated historical artifacts alone**. Those files are records of "what we knew at time T"; rewriting them erodes the trail of how the team's understanding evolved.
 
-**Why:** The value of a dated SPIKE output, a session log, or a competitive-analysis snapshot is precisely that it captures a moment. Retroactively editing it makes the past look like the present — which destroys evidence of the path taken and makes it impossible to reason later about why a decision was made when only the "current" version exists. Commit messages and spec comments share the same property: they are chronological record, not living guidance.
+**Why:** The value of a dated SPIKE output, an archived incident record, or a competitive-analysis snapshot is precisely that it captures a moment. Retroactively editing it makes the past look like the present — which destroys evidence of the path taken and makes it impossible to reason later about why a decision was made when only the "current" version exists. Commit messages and spec comments share the same property: they are chronological record, not living guidance.
 
 **How to apply:** When doing a cross-cutting refactor (glyph swap, vocabulary normalization, rename, palette unification), classify each affected file:
 
@@ -18,13 +18,12 @@ When a convention evolves — a glyph swap, a vocabulary update, a palette unifi
 | Code (Rust source, configs, templates that compile/scaffold) | **YES** — update to current truth |
 | Plan files in `docs/plans/` (active or recent) | YES if still load-bearing; NO once the work shipped and the plan is historical |
 | Dated SPIKE outputs (`docs/spikes/YYYY-MM-DD-*.md`) | **NO** — dated record of empirical findings |
-| Dated session logs (`PROMPT_HISTORY.md` entries) | **NO** — chronological record |
 | Dated competitive-analysis snapshots (`docs/competitive-analysis/YYYY-MM-DD-*.md`) | **NO** — snapshot at time T |
 | Spec descriptions / acceptance bullets | YES if work hasn't started; OR file follow-up + comment per [[refinements-must-be-acceptance-criteria]] |
 | Spec comments | **NO** — chronological record |
 | Git commit messages | **NO** — immutable record |
 
-The discriminator: *is the filename dated, or does the artifact's value depend on being a point-in-time record?* If yes, freeze it. If it is living guidance someone reads to learn current truth, update it.
+The discriminator: *is the filename dated, or does the artifact's value depend on being a point-in-time record?* If yes, freeze it. If it is living guidance someone reads to learn current truth, update it. In AIDA projects, session history belongs in the substrate (`aida history --events`, `aida digest`, specs, comments, PRs, and commits), not in a mutable session-log file.
 
 **Concrete instance (2026-05-17 BUG-116):** BUG-116 propagated the `▶ ⏵ 🚪` → `▶ ⇒ ⏸` glyph swap across skill templates. The implementer correctly left `docs/spikes/2026-05-16-claude-headless.md:87` untouched, noting: *"dated historical observation record, not living guidance."* That phrase is the convention worth codifying — and is the origin of this memory.
 
