@@ -50964,5 +50964,21 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4331
+- id: 01a08989-6b92-7110-b804-7a8cc60406c6
+  target_id: 01a08988-d8cc-7890-bb34-8d75e03077dc
+  author: aida
+  node_id: '1'
+  lamport: 4332
+  timestamp: 2026-09-10T04:17:59.698922874Z
+  kind: !SetTitle
+    title: 'aida report: compose a paste-ready bug report to stdout (email transport deferred)'
+- id: 01a08989-6bfb-7ec2-b7c9-72b4dcfa75d2
+  target_id: 01a08988-d8cc-7890-bb34-8d75e03077dc
+  author: aida
+  node_id: '1'
+  lamport: 4333
+  timestamp: 2026-09-10T04:17:59.803415437Z
+  kind: !SetDescription
+    description: 'Operator re-scope (2026-09-09, moments after filing): slice 1 is just the COMPOSER — aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY) prints a complete paste-ready report to stdout and nothing else. Format: first line Subject: aida: <title> (matching the home-side retrieval convention), then the structured body — title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled per config show), OS. The operator pastes it into their work mail client by hand. No transport, no [report] config, no secrets, no outbox in this slice. Optionally --copy to also put it on the clipboard where available (same mechanism aida ultraplan uses). SLICE 2 (deferred until demand — revisit if manual pasting becomes friction): configurable email transport (command/sendmail and SMTP with AIDA_SMTP_PASSWORD) + offline outbox + --flush, as originally specified in this spec''s history. Acceptance (slice 1): the command prints subject line + structured body with all context fields populated; stdin and --description both work; TTY $EDITOR path works; output is plain text with no ANSI when piped; unit test on the composed format.'
+clock: 4333
 node_id: '1'

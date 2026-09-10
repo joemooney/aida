@@ -1,13 +1,13 @@
 id: 01a08988-d8cc-7890-bb34-8d75e03077dc
 spec_id: STORY-1004
 agreed_id: STORY-1004
-title: 'aida report: file a bug report by email from the CLI, with configurable transport and an offline outbox'
-description: 'Operator request (2026-09-09), the sending half of the established mail-intake loop (work machine emails reports home; the home advisor retrieves them by subject and files specs). Command: aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY). It composes a structured plain-text report — title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled), OS — and emails it with subject aida: <title> (matching the retrieval convention). Transport config, machine-global ~/.aida/config.toml [report] section (work mail setup is per-machine): to = address (required); transport = command | smtp; command transport pipes RFC822 text to a configurable command (default sendmail -t; also works with corporate mail CLIs) — the simplest corporate path; smtp transport takes host/port/starttls/username with the password ONLY from AIDA_SMTP_PASSWORD env (never config; add the row to docs/environment-variables.md). Reliability: on any send failure the report is written to ~/.aida/outbox/<timestamp>.eml and the command says so; aida report --flush retries the outbox. Privacy: the report contains only what the composer shows the user before sending (TTY confirms with the full text; --yes skips). No config = clear error naming the [report] section. Acceptance: command transport invokes the configured program with well-formed RFC822 on stdin (test with a capture script); failure lands the .eml in the outbox and --flush resends; subject matches aida: <title>; TTY preview + confirm; docs row for AIDA_SMTP_PASSWORD.'
+title: 'aida report: compose a paste-ready bug report to stdout (email transport deferred)'
+description: 'Operator re-scope (2026-09-09, moments after filing): slice 1 is just the COMPOSER — aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY) prints a complete paste-ready report to stdout and nothing else. Format: first line Subject: aida: <title> (matching the home-side retrieval convention), then the structured body — title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled per config show), OS. The operator pastes it into their work mail client by hand. No transport, no [report] config, no secrets, no outbox in this slice. Optionally --copy to also put it on the clipboard where available (same mechanism aida ultraplan uses). SLICE 2 (deferred until demand — revisit if manual pasting becomes friction): configurable email transport (command/sendmail and SMTP with AIDA_SMTP_PASSWORD) + offline outbox + --flush, as originally specified in this spec''s history. Acceptance (slice 1): the command prints subject line + structured body with all context fields populated; stdin and --description both work; TTY $EDITOR path works; output is plain text with no ANSI when piped; unit test on the composed format.'
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:17:22.124798775Z
-modified_at: 2026-09-10T04:17:26.562928064Z
+modified_at: 2026-09-10T04:17:59.635053185Z
 req_type: Story
 execution_mode: drain
