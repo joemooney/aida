@@ -51268,5 +51268,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4349
+- id: 01a089d1-0aed-71e1-9212-a9c331fd8605
+  target_id: 01a089d1-020d-7952-807a-7f4a661dc431
+  author: aida
+  node_id: '1'
+  lamport: 4350
+  timestamp: 2026-09-10T05:36:13.549193267Z
+  kind: !Create
+    title: 'Review PR-1710: [AI:codex] fix(worktree): sync and populate submodules on handoff (BUG-916)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a089c0`) for branch `bug-916`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1710>
+      - Branch: `bug-916` → `main`
+
+      ## Covers
+
+      - BUG-916
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1710` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4350
 node_id: '1'
