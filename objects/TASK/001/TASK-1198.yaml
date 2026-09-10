@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:49.397599124Z
-modified_at: 2026-09-10T05:01:01.130970925Z
+modified_at: 2026-09-10T05:01:01.983946852Z
 req_type: Task
 tags:
 - dogfood
@@ -37,5 +37,11 @@ comments:
   content: 'Reassigned (advisor, 2026-09-07): this is a validation RUN, not implementable code — a headless implementer cannot execute a nested drain on another repo, hence the park. The advisor executes it as the STORY-975 dogfood-evidence run: testbed drain, 3 specs, retry_transient=1, zero manual relaunch, evidence recorded here and on STORY-975.'
   created_at: 2026-09-07T18:55:16.468236160Z
   modified_at: 2026-09-07T18:55:16.468236160Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a089b0-d29f-7c83-b4b3-1b6e75cadcd1
+  author: joe
+  content: 'Capture sweep (2026-09-09 22:00): this was the dropped thread — attempt 6 was never run after BUG-901 shipped (Wednesday''s field-report batch took priority). It stays ADVISOR-executed (a main-repo implementer cannot run a nested drain on another repo — the 2026-09-07 park proved it). Trigger: after tonight''s chain-2 drain exits, the advisor resets the three testbed specs and runs attempt 6 on the current binary, which now carries 897/901/BUG-1023-era fixes.'
+  created_at: 2026-09-10T05:01:01.983946852Z
+  modified_at: 2026-09-10T05:01:01.983946852Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
