@@ -1,4 +1,10 @@
 - user_id: joe
+  requirement_id: 01a08988-d8cc-7890-bb34-8d75e03077dc
+  position: -5000
+  added_by: joe
+  added_at: 2026-09-10T12:37:08.106026990Z
+  for_role: implementer
+- user_id: joe
   requirement_id: 01a0849b-b631-7b62-8d99-8c1a009ad628
   position: -4000
   added_by: joe
@@ -9,12 +15,6 @@
   position: -3000
   added_by: joe
   added_at: 2026-09-10T11:34:17.895991532Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a08988-d8cc-7890-bb34-8d75e03077dc
-  position: -2000
-  added_by: joe
-  added_at: 2026-09-10T10:06:19.400934362Z
   for_role: implementer
 - user_id: joe
   requirement_id: 01a0849b-cac5-7883-ace9-fc4251d72c38
