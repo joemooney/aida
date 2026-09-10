@@ -20870,6 +20870,18 @@ fn agent_launch_should_prompt(headless: bool, stdin_tty: bool, stderr_tty: bool)
     stdin_tty && stderr_tty && !headless
 }
 
+// trace:BUG-1019 | ai:codex
+fn live_duplicate_allows_anyway_prompt(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &std::path::Path,
+) -> bool {
+    let cfg = agent_registry::Config::load(project_root);
+    agent_registry::same_scope_conflict(project_root, &cfg, role, current_spec, worktree_path)
+        .is_none()
+}
+
 fn agent_identity_for_view(agent: &agent_registry::AgentRegistryView) -> String {
     agent
         .name
@@ -20986,6 +20998,11 @@ fn maybe_handle_agent_resume_or_duplicate(
             matching_live_duplicate(&agent_launch_views(project_root), agent_type, role, spec)
         {
             let block = render_live_duplicate_block(&live);
+            if !live_duplicate_allows_anyway_prompt(project_root, role, spec, project_root) {
+                eprintln!("{block}");
+                enforce_agent_singleton_preflight(project_root, role, spec, project_root)?;
+                return Ok(true);
+            }
             if interactive {
                 eprintln!("{block}");
                 if !resume.allow_duplicate {

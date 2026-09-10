@@ -4806,3 +4806,17 @@ branches.
 Verification: `cargo test -p aida-cli-lib status_display --lib`; `cargo test -p aida-tui redesign::list_row --lib`;
 `cargo fmt --all -- --check`; stale `◯ Draft` scan. Existing unrelated Rust warnings remain in the
 CLI test output.
+
+## Session 2026-09-10 — BUG-1019 duplicate-agent prompt consistency
+
+Picked up `BUG-1019` from the implementer queue. The bug was that `aida agent new` could warn about
+a live same-vendor/same-role agent, ask `Launch another anyway?`, then fail immediately on the
+singleton same-scope guard after the operator answered yes.
+
+Changed the duplicate-agent preflight to consult the same singleton scope policy used by launch
+enforcement before offering the interactive "anyway" prompt. When the existing policy would refuse
+the launch, AIDA now prints the duplicate block and returns the hard singleton refusal immediately;
+the "anyway" path remains available for duplicate warnings that do not conflict with the requested
+launch scope. Added `// trace:BUG-1019 | ai:codex` comments on the helper and regression tests.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib agent_launcher_tests::live_duplicate_anyway_prompt_is_absent -- --nocapture`; `cargo test -p aida-cli-lib agent_launcher_tests::agent_launch_ -- --nocapture`. Existing unrelated Rust warnings remain in the test output.

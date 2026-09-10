@@ -1029,6 +1029,72 @@ fn agent_launch_prompt_gate_is_disabled_for_headless_or_non_tty() {
     assert!(!agent_launch_should_prompt(false, true, false));
 }
 
+// trace:BUG-1019 | ai:codex
+#[test]
+fn live_duplicate_anyway_prompt_is_absent_when_singleton_policy_would_refuse() {
+    let tmp = TempDir::new().unwrap();
+    let binary = agent_registry::AgentBinaryIdentity::new("1.0.0".into(), "abc123".into());
+    agent_registry::register_spawned_agent(
+        tmp.path(),
+        "codex",
+        std::process::id(),
+        Some("advisor".to_string()),
+        None,
+        tmp.path().to_path_buf(),
+        Some(&binary),
+        Some("codex-advisor-1".to_string()),
+        None,
+        None,
+        Some("repo advisor".to_string()),
+    )
+    .unwrap();
+
+    assert!(
+        !live_duplicate_allows_anyway_prompt(tmp.path(), Some("advisor"), None, tmp.path()),
+        "repo-scoped singleton roles must hard-refuse instead of offering an impossible yes path"
+    );
+}
+
+// trace:BUG-1019 | ai:codex
+#[test]
+fn live_duplicate_anyway_prompt_is_absent_for_same_spec_singleton_conflicts() {
+    let tmp = TempDir::new().unwrap();
+    let binary = agent_registry::AgentBinaryIdentity::new("1.0.0".into(), "abc123".into());
+    agent_registry::register_spawned_agent(
+        tmp.path(),
+        "codex",
+        std::process::id(),
+        Some("implementer".to_string()),
+        Some("BUG-1019".to_string()),
+        tmp.path().join("bug-1019-a"),
+        Some(&binary),
+        Some("codex-implementer-1".to_string()),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+
+    assert!(
+        !live_duplicate_allows_anyway_prompt(
+            tmp.path(),
+            Some("implementer"),
+            Some("BUG-1019"),
+            tmp.path()
+        ),
+        "spec-scoped singleton conflicts must not offer a prompt whose yes answer fails"
+    );
+    assert!(
+        live_duplicate_allows_anyway_prompt(
+            tmp.path(),
+            Some("implementer"),
+            Some("BUG-1020"),
+            tmp.path()
+        ),
+        "a same-role agent on a different spec may still use the duplicate-warning anyway path"
+    );
+}
+
 // trace:STORY-991 | ai:codex
 #[test]
 fn agent_resume_prompt_config_defaults_to_enabled() {
