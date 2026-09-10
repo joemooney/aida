@@ -3076,6 +3076,57 @@ mod tests {
         );
     }
 
+    #[test]
+    fn aida_scaffold_does_not_recreate_prompt_history_discipline() {
+        // trace:TASK-1202 | ai:codex
+        // AIDA's session record is the substrate (`aida history --events`,
+        // `aida digest`, specs, PRs, and commits), not a per-session log file.
+        use crate::templates::EMBEDDED_TEMPLATES;
+
+        for (key, raw) in EMBEDDED_TEMPLATES.iter() {
+            assert!(
+                !raw.contains("PROMPT_HISTORY"),
+                "{} must not scaffold PROMPT_HISTORY.md guidance",
+                key
+            );
+            assert!(
+                !raw.to_lowercase().contains("prompt_history"),
+                "{} must not scaffold prompt-history variants",
+                key
+            );
+        }
+
+        let discipline = EMBEDDED_TEMPLATES
+            .get(".aida/discipline/session-discipline.md")
+            .expect("session discipline template is embedded");
+        assert!(
+            discipline.contains("Session history lives in the substrate"),
+            "session discipline should name the substrate as the session record"
+        );
+        assert!(
+            discipline.contains("aida history --events") && discipline.contains("aida digest"),
+            "session discipline should point agents at substrate history and digest"
+        );
+
+        let temp_dir = TempDir::new().unwrap();
+        let mut scaffolder =
+            Scaffolder::new(temp_dir.path().to_path_buf(), ScaffoldConfig::default());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        assert!(
+            !preview
+                .artifacts
+                .iter()
+                .any(|a| a.path == Path::new("PROMPT_HISTORY.md")),
+            "preview must not include PROMPT_HISTORY.md"
+        );
+        scaffolder.apply(&preview).expect("scaffolding apply");
+        assert!(
+            !temp_dir.path().join("PROMPT_HISTORY.md").exists(),
+            "scaffold apply must not create PROMPT_HISTORY.md"
+        );
+    }
+
     fn create_test_store() -> RequirementsStore {
         RequirementsStore {
             name: "test-project".to_string(),
