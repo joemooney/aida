@@ -20159,6 +20159,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             force: false,
             cwd: None,
             permission_mode: None,
+            model: None,
             sandbox: false,
             no_context: false,
             show_context: false,
@@ -20180,6 +20181,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             force: false,
             cwd: None,
             bypass_sandbox: false,
+            model: None,
             no_context: false,
             show_context: false,
             prompt: None,
@@ -20268,6 +20270,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             force,
             cwd,
             permission_mode,
+            model,
             sandbox,
             no_context,
             show_context,
@@ -20297,7 +20300,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 *allow_duplicate,
                 !*no_duplicate_check,
             ),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone()),
             name.clone(),
             description.clone(),
             *bg,
@@ -20308,6 +20311,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             force,
             cwd,
             bypass_sandbox,
+            model,
             no_context,
             show_context,
             prompt,
@@ -20334,7 +20338,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 *allow_duplicate,
                 !*no_duplicate_check,
             ),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone()),
             name.clone(),
             description.clone(),
         ),
@@ -20370,7 +20374,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 *allow_duplicate,
                 !*no_duplicate_check,
             ),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone()),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), None),
             name.clone(),
             description.clone(),
         ),
@@ -20654,13 +20658,19 @@ impl AgentPromptOptions {
 struct AgentDefaultFlagOptions {
     use_config_defaults: bool,
     extra_flags: Vec<String>,
+    model_override: Option<String>,
 }
 
 impl AgentDefaultFlagOptions {
-    fn new(use_config_defaults: bool, extra_flags: Vec<String>) -> Self {
+    fn new(
+        use_config_defaults: bool,
+        extra_flags: Vec<String>,
+        model_override: Option<String>,
+    ) -> Self {
         Self {
             use_config_defaults,
             extra_flags,
+            model_override,
         }
     }
 }
@@ -21753,6 +21763,23 @@ fn apply_agent_default_flags(
             }
         }
         config.default_args.extend(per_tool);
+    }
+    let resolved_model = flag_options
+        .model_override
+        .as_deref()
+        .filter(|m| !m.trim().is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            flag_options
+                .use_config_defaults
+                .then(|| {
+                    aida_core::agents_config::resolve_vendor_model(project_root, config.agent_type)
+                })
+                .flatten()
+        });
+    // trace:STORY-1003 | ai:codex
+    if let Some(model) = resolved_model {
+        config.default_args.extend(["--model".to_string(), model]);
     }
     config.default_args.extend(flag_options.extra_flags);
     Ok(())
@@ -68492,7 +68519,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             AgentContextOptions::new(true, false),
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
-            AgentDefaultFlagOptions::new(true, Vec::new()),
+            AgentDefaultFlagOptions::new(true, Vec::new(), None),
             launch.name,
             launch.description,
             false,
@@ -68506,7 +68533,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             AgentContextOptions::new(true, false),
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
-            AgentDefaultFlagOptions::new(true, Vec::new()),
+            AgentDefaultFlagOptions::new(true, Vec::new(), None),
             launch.name,
             launch.description,
         ),
@@ -79443,7 +79470,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
-        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false);
+        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false, None);
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let status = std::process::Command::new(&program)

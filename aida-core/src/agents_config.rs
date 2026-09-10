@@ -42,6 +42,18 @@ fn vendor_from_file(path: &Path) -> Option<String> {
     KNOWN_VENDORS.contains(&token.as_str()).then_some(token)
 }
 
+fn model_from_file(path: &Path, vendor: &str) -> Option<Option<String>> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let raw = value
+        .get("agents")?
+        .get(vendor.trim().to_ascii_lowercase())?
+        .get("model")?
+        .as_str()?;
+    let model = raw.trim();
+    Some((!model.is_empty()).then_some(model.to_string()))
+}
+
 /// Resolve the default vendor from explicit file paths — the testable core.
 /// Precedence, highest first:
 ///   1. project `.aida/agents.toml` — the per-clone personal knob (gitignored,
@@ -65,6 +77,35 @@ pub fn resolve_default_vendor_from(
         .or_else(|| global_agents_toml.and_then(vendor_from_file))
 }
 
+/// Resolve `[agents.<vendor>] model` as an opaque passthrough string.
+///
+/// Precedence mirrors the default-vendor chain:
+/// project `.aida/agents.toml` > project `.aida/config.toml` > global
+/// `~/.aida/agents.toml`. Empty strings are treated as unset so the native
+/// vendor default remains unchanged. AIDA never validates model names.
+// trace:STORY-1003 | ai:codex
+pub fn resolve_vendor_model_from(
+    global_agents_toml: Option<&Path>,
+    project_config_toml: Option<&Path>,
+    project_agents_toml: Option<&Path>,
+    vendor: &str,
+) -> Option<String> {
+    let vendor = vendor.trim().to_ascii_lowercase();
+    if vendor.is_empty() {
+        return None;
+    }
+    if let Some(model) = project_agents_toml.and_then(|p| model_from_file(p, &vendor)) {
+        return model;
+    }
+    if let Some(model) = project_config_toml.and_then(|p| model_from_file(p, &vendor)) {
+        return model;
+    }
+    if let Some(model) = global_agents_toml.and_then(|p| model_from_file(p, &vendor)) {
+        return model;
+    }
+    None
+}
+
 /// Resolve the default vendor for a project: project `.aida/agents.toml`
 /// overrides the user-global `~/.aida/agents.toml`; `None` when neither sets
 /// a recognized `[agents] vendor`.
@@ -77,6 +118,21 @@ pub fn resolve_default_vendor(project_root: &Path) -> Option<String> {
         global.as_deref(),
         Some(&project_config),
         Some(&project_agents),
+    )
+}
+
+/// Resolve the model configured for a vendor in this project.
+// trace:STORY-1003 | ai:codex
+#[cfg(feature = "native")]
+pub fn resolve_vendor_model(project_root: &Path, vendor: &str) -> Option<String> {
+    let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let project_config = project_root.join(".aida").join("config.toml");
+    let project_agents = project_root.join(".aida").join("agents.toml");
+    resolve_vendor_model_from(
+        global.as_deref(),
+        Some(&project_config),
+        Some(&project_agents),
+        vendor,
     )
 }
 
@@ -190,6 +246,49 @@ mod tests {
         assert_eq!(
             resolve_default_vendor_from(Some(&g), Some(&cfg), Some(&ag)).as_deref(),
             Some("claude")
+        );
+    }
+
+    #[test]
+    fn model_resolves_per_vendor_as_opaque_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let g = write(
+            tmp.path(),
+            "g.toml",
+            "[agents.codex]\nmodel = \"global-codex\"\n",
+        );
+        let cfg = write(
+            tmp.path(),
+            "config.toml",
+            "[agents.codex]\nmodel = \"team/codex-prod\"\n",
+        );
+        let ag = write(
+            tmp.path(),
+            "agents.toml",
+            "[agents.codex]\nmodel = \"local alias\"\n[agents.claude]\nmodel = \"opus\"\n",
+        );
+        assert_eq!(
+            resolve_vendor_model_from(Some(&g), Some(&cfg), Some(&ag), "codex").as_deref(),
+            Some("local alias")
+        );
+        assert_eq!(
+            resolve_vendor_model_from(Some(&g), Some(&cfg), Some(&ag), "claude").as_deref(),
+            Some("opus")
+        );
+    }
+
+    #[test]
+    fn model_empty_string_selects_vendor_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let g = write(
+            tmp.path(),
+            "g.toml",
+            "[agents.codex]\nmodel = \"global-codex\"\n",
+        );
+        let p = write(tmp.path(), "p.toml", "[agents.codex]\nmodel = \"\"\n");
+        assert_eq!(
+            resolve_vendor_model_from(Some(&g), None, Some(&p), "codex"),
+            None
         );
     }
 }
