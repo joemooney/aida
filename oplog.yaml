@@ -50803,5 +50803,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4319
+- id: 01a08980-6d6d-7323-8d6b-f30393160e35
+  target_id: 01a08980-66f6-7ee2-903f-f948f584d855
+  author: aida
+  node_id: '1'
+  lamport: 4320
+  timestamp: 2026-09-10T04:08:10.349419275Z
+  kind: !Create
+    title: Draft status glyph is the oversized circle — use the small circle to match the status column
+    description: 'Operator request (2026-09-09): the Draft glyph renders as the large circle U+25EF (◯ Draft) while InProgress uses the half-circle U+25D0 (◐), making Draft visually oversized in aida list. Swap Draft to the matching small circle U+25CB (○) everywhere the status glyph renders (list, show, TUI, statusline). One-glyph change; check the glyph table in one place. Acceptance: Draft renders ○ across list/show/TUI; glyph test updated.'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 4320
 node_id: '1'
