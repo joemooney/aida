@@ -3,11 +3,11 @@ spec_id: BUG-1025
 agreed_id: BUG-1025
 title: aida pull autostash can leave conflict markers inside .aida/config.toml — silently corrupting config for every later command
 description: 'Capture from live incident (2026-09-07, diagnosed during TASK-1-127): aida pull''s autostash pop conflicted and left literal <<<<<<< markers inside .aida/config.toml, which then made every config-reading command fail (aida add exited 1 in <50ms with a parse error that some invocation shapes swallowed). The advisor found it only days later. Fix: (1) after an autostash pop, aida pull checks its known config files for conflict markers / parse validity and, on failure, REFUSES to finish silently — prints the conflicted file, quarantines the broken version to .aida/config.toml.conflicted, restores the pre-pull version, and names the manual merge step; (2) config parse errors are always LOUD: any command failing on config parse prints the file, line, and a fix hint to stderr regardless of output format. Related hardening (same change or split if large): AIDA-owned config edits go through a section-aware TOML editor, never raw append (raw appends created duplicate [agents]/[drain] sections twice this week). Acceptance: simulated conflicted autostash → pull fails loudly with quarantine + restore; parse-failure path prints file+line on every command shape; config-writing code paths audited for raw appends.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T05:00:49.102852777Z
-modified_at: 2026-09-10T05:00:53.692814328Z
+modified_at: 2026-09-10T11:14:06.346043978Z
 req_type: Bug
 execution_mode: drain
