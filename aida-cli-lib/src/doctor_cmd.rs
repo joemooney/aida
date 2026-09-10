@@ -3296,7 +3296,67 @@ mod story_462_doctor_tests {
             normalize_doctor_category("agent-wiring").unwrap(),
             "agents-wiring"
         );
+        assert_eq!(
+            normalize_doctor_category("container-gitdir").unwrap(),
+            "worktree-container-gitdir"
+        );
         assert!(normalize_doctor_category("not-a-category").is_err());
+    }
+
+    #[test]
+    fn doctor_reports_worktree_container_gitdir() {
+        // BUG-915
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        std::fs::write(root.join("Dockerfile"), "FROM scratch\n").unwrap();
+
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        std::fs::create_dir_all(&root).unwrap();
+        std::process::Command::new("git")
+            .arg("init")
+            .arg(&root)
+            .output()
+            .unwrap();
+        run(&["config", "user.name", "Test"]);
+        run(&["config", "user.email", "test@example.com"]);
+        run(&["add", "Dockerfile"]);
+        run(&["commit", "-m", "init"]);
+
+        let worktree = tmp.path().join("repo-bug915");
+        run(&[
+            "worktree",
+            "add",
+            worktree.to_str().unwrap(),
+            "-b",
+            "bug915",
+        ]);
+
+        let findings = collect_doctor_findings(
+            &root,
+            &aida_core::RequirementsStore::default(),
+            Some("worktree-container-gitdir"),
+        )
+        .unwrap();
+        assert_eq!(findings.len(), 1);
+        let f = &findings[0];
+        assert_eq!(f.category, "worktree-container-gitdir");
+        assert!(f.summary.contains("Dockerfile"), "{:?}", f.summary);
+        assert!(f.summary.contains(".git/worktrees"), "{:?}", f.summary);
+        assert!(f.action.contains("mount"), "{:?}", f.action);
     }
 
     #[test]
