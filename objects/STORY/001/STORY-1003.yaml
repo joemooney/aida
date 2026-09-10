@@ -3,12 +3,12 @@ spec_id: STORY-1003
 agreed_id: STORY-1003
 title: 'per-vendor model selection: [agents.<vendor>] model config + --model flag passed through the launch adapter'
 description: 'Operator request (2026-09-09): a vendor deployment can expose multiple named models (site-defined aliases — public clouds and workplace deployments name them differently), and AIDA has no convenient way to pick one. Design: (1) config — [agents.codex] model = "<name>" and [agents.claude] model = "<name>" in the standard resolution chain (project agents.toml > project config.toml > machine-global), empty = vendor default; (2) flag — --model <name> on aida agent new and aida queue work (and honored by drain phase spawns via config) as a one-shot override; (3) adapter passthrough — the vendor adapter maps it to the native CLI form (codex --model / claude --model) at the EXECUTION layer only, no model names hardcoded in AIDA; (4) display — the resolved vendor line (vendor: codex / exec: codex from BUG-902) gains model: <name> when set, including dry-run. Values are opaque strings passed through verbatim — AIDA never validates model names against a list. Acceptance: config-set model appears in the spawned argv and the resolved display; --model overrides config; unset behaves exactly as today; tests on the resolution chain and adapter argv per vendor.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:10:51.901655369Z
-modified_at: 2026-09-10T08:55:02.525588880Z
+modified_at: 2026-09-10T09:03:03.526976428Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -22,8 +22,24 @@ comments:
   created_at: 2026-09-10T04:31:33.587582949Z
   modified_at: 2026-09-10T04:31:33.587582949Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a08a8e-6760-7093-96f8-c8e5bad77f85
+  author: aida-auto-bump
+  timestamp: 2026-09-10T09:03:03.520233845Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a08a8e-6766-75c3-8f13-7b19cdc553ae
+  timestamp: 2026-09-10T09:03:03.526974968Z
+  agent: aida
+  commit_sha: 3b6ebbc46413fbfbbc5b701d6bdfd1c0c6388503
+  summary: Completed via merge 3b6ebbc4
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-10T08:44:22.151164583Z
   implemented_by: joe
+  completed_at: 2026-09-10T09:03:03.520089764Z
+  completion_sha: 3b6ebbc46413fbfbbc5b701d6bdfd1c0c6388503
