@@ -1726,35 +1726,12 @@ pub(crate) fn restore_terminal_title(restore: TerminalTitleRestore) {
         let _ = std::io::stdout().flush();
         return;
     };
+    if let Some((program, args)) = native_restore_title_command(terminal, &restore.previous_title) {
+        let _ = std::process::Command::new(program).args(args).status();
+        return;
+    }
     match terminal.emulator.as_deref() {
-        Some("tmux") => {
-            if let Some(previous) = restore.previous_title.as_deref() {
-                let _ = std::process::Command::new("tmux")
-                    .args(["rename-window", previous])
-                    .status();
-            }
-            return;
-        }
-        Some("wezterm") => {
-            if let Some(previous) = restore.previous_title.as_deref() {
-                let mut cmd = std::process::Command::new("wezterm");
-                cmd.args(["cli", "set-tab-title", previous]);
-                if let Some(pane) = terminal.wezterm_pane.as_deref() {
-                    cmd.args(["--pane-id", pane]);
-                }
-                let _ = cmd.status();
-            }
-            return;
-        }
-        Some("terminator") => {
-            if let (Some(uuid), Some(previous)) = (
-                terminal.terminator_uuid.as_deref(),
-                restore.previous_title.as_deref(),
-            ) {
-                let _ = std::process::Command::new("remotinator")
-                    .args(["set_tab_title", uuid, previous])
-                    .status();
-            }
+        Some("tmux") | Some("wezterm") | Some("terminator") => {
             return;
         }
         _ => {}
@@ -1762,6 +1739,42 @@ pub(crate) fn restore_terminal_title(restore: TerminalTitleRestore) {
     use std::io::Write;
     print!("{}", crate::statusbar_cmd::RESTORE_TITLE);
     let _ = std::io::stdout().flush();
+}
+
+// trace:STORY-994 | ai:codex
+fn native_restore_title_command(
+    terminal: &TerminalIdentity,
+    previous_title: &Option<String>,
+) -> Option<(String, Vec<String>)> {
+    let previous = previous_title.as_deref()?;
+    match terminal.emulator.as_deref() {
+        Some("tmux") => Some((
+            "tmux".to_string(),
+            vec!["rename-window".to_string(), previous.to_string()],
+        )),
+        Some("wezterm") => {
+            let mut args = vec![
+                "cli".to_string(),
+                "set-tab-title".to_string(),
+                previous.to_string(),
+            ];
+            if let Some(pane) = terminal.wezterm_pane.as_deref() {
+                args.extend(["--pane-id".to_string(), pane.to_string()]);
+            }
+            Some(("wezterm".to_string(), args))
+        }
+        Some("terminator") => terminal.terminator_uuid.as_deref().map(|uuid| {
+            (
+                "remotinator".to_string(),
+                vec![
+                    "set_tab_title".to_string(),
+                    uuid.to_string(),
+                    previous.to_string(),
+                ],
+            )
+        }),
+        _ => None,
+    }
 }
 
 // trace:STORY-994 | ai:codex
@@ -2022,6 +2035,62 @@ mod tests {
             launch_title("advisor", None, "abcdef012345"),
             "aida · advisor · abcdef01"
         );
+    }
+
+    #[test]
+    fn native_restore_title_command_restores_supported_emulators() {
+        let previous = Some("previous title".to_string());
+
+        let tmux = terminal_identity_from_env(
+            Some("/dev/pts/4".to_string()),
+            vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
+        )
+        .unwrap();
+        assert_eq!(
+            native_restore_title_command(&tmux, &previous),
+            Some((
+                "tmux".to_string(),
+                vec!["rename-window".to_string(), "previous title".to_string()]
+            ))
+        );
+
+        let wezterm = terminal_identity_from_env(
+            Some("/dev/pts/4".to_string()),
+            vec![("WEZTERM_PANE", "12")],
+        )
+        .unwrap();
+        assert_eq!(
+            native_restore_title_command(&wezterm, &previous),
+            Some((
+                "wezterm".to_string(),
+                vec![
+                    "cli".to_string(),
+                    "set-tab-title".to_string(),
+                    "previous title".to_string(),
+                    "--pane-id".to_string(),
+                    "12".to_string()
+                ]
+            ))
+        );
+
+        let terminator = terminal_identity_from_env(
+            Some("/dev/pts/4".to_string()),
+            vec![("TERMINATOR_UUID", "term-994")],
+        )
+        .unwrap();
+        assert_eq!(
+            native_restore_title_command(&terminator, &previous),
+            Some((
+                "remotinator".to_string(),
+                vec![
+                    "set_tab_title".to_string(),
+                    "term-994".to_string(),
+                    "previous title".to_string()
+                ]
+            ))
+        );
+
+        assert_eq!(native_restore_title_command(&tmux, &None), None);
     }
 
     #[test]
