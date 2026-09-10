@@ -3,12 +3,12 @@ spec_id: BUG-1017
 agreed_id: BUG-1017
 title: unified queue pickability policy — Done entries selectable by next/dry-run, NeedsAttention accepted without triage or force
 description: 'Field report (2026-09-09; tracked as BUG-032 in the originating project): queue surfaces disagree on what is pickable — ordinary queue data contains Done entries; queue next SELECTS a Done requirement; queue work --dry-run proposes a fresh branch for Done work; dry-run accepts NeedsAttention work without resolved triage or --force. Fix: ONE pickability policy (terminal statuses excluded; Done excluded from fresh pickup — it is awaiting-merge, route to from-pr/integrate instead with that hint; NeedsAttention requires resolved triage or explicit force) shared by queue next, queue list default lens, dry-run, and live pickup — the dry-run must never propose what live pickup would refuse. Acceptance: table-driven test over statuses x surfaces asserting identical pickability; queue next on a Done-headed queue skips with the awaiting-merge hint; dry-run on NeedsAttention refuses without force naming the triage path.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:33.137984320Z
-modified_at: 2026-09-10T05:44:02.897491649Z
+modified_at: 2026-09-10T05:55:31.925921496Z
 req_type: Bug
 comments:
 - id: 01a08980-6136-79f3-99e6-0e0e18a21774
@@ -18,3 +18,7 @@ comments:
   modified_at: 2026-09-10T04:08:07.222436376Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-10T05:55:31.925921496Z
+  implemented_by: joe
