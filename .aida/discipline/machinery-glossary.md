@@ -77,10 +77,12 @@ implements one iteration of it.
 Re-adding a shelved spec to a queue is **not** itself a relaunch. The relaunch
 path is an active drain runner that notices the queued head and invokes the
 same per-spec orchestrator again. In the built-in resilient loop, that runner is
-`scripts/drain-loop.sh` (`while true` plus `aida queue work "next${CHUNK}"
---auto-complete …`), and the `nextN` driver resolves the current head in
-`RealNextNDriver::next_head` before calling `RealNextNDriver::run_spec` to
-re-enter `run_auto_complete` for that spec. trace:TASK-1201 | ai:codex
+`scripts/drain-loop.sh:57` (`while true`) and `scripts/drain-loop.sh:82`
+(`aida queue work "next${CHUNK}" --auto-complete …`), and the `nextN` driver
+resolves the current head in `aida-cli-lib/src/lib.rs:72945`
+(`RealNextNDriver::next_head`) before calling `aida-cli-lib/src/lib.rs:72958`
+(`RealNextNDriver::run_spec`) to re-enter `run_auto_complete` for that spec.
+trace:TASK-1201 | ai:codex
 
 Operationally: `aida queue add STORY-993 --for implementer` only blesses
 STORY-993 back into the queue. If a drain loop or another wrapper is already

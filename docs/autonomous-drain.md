@@ -72,12 +72,14 @@ trace:STORY-975
 to the queue again. A relaunch happens when an already-running drain runner
 polls the queue and starts a new pass.
 
-The built-in resilient runner is `scripts/drain-loop.sh`: its main loop checks
-whether the active role has queued work, then runs
-`aida queue work "next${CHUNK}" --auto-complete …`. Inside AIDA, that enters
-the `nextN` path (`handle_auto_complete_next_n`), whose
-`RealNextNDriver::next_head` re-resolves the queue head on each iteration and
-whose `RealNextNDriver::run_spec` calls `run_auto_complete` for the selected
+The built-in resilient runner is `scripts/drain-loop.sh`: its main loop
+(`scripts/drain-loop.sh:57`) checks whether the active role has queued work,
+then runs `aida queue work "next${CHUNK}" --auto-complete …`
+(`scripts/drain-loop.sh:82`). Inside AIDA, that enters the `nextN` path
+(`aida-cli-lib/src/lib.rs:73001`, `handle_auto_complete_next_n`), whose
+`RealNextNDriver::next_head` (`aida-cli-lib/src/lib.rs:72945`) re-resolves the
+queue head on each iteration and whose `RealNextNDriver::run_spec`
+(`aida-cli-lib/src/lib.rs:72958`) calls `run_auto_complete` for the selected
 spec. That is why a re-added shelved item can appear seconds later as a fresh
 single-spec `aida queue work SPEC --auto-complete` run in process listings,
 events, and `~/.aida/auto-complete.jsonl`.
