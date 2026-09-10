@@ -52182,5 +52182,31 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4399
+- id: 01a08b13-5c20-7a90-b337-343bd5436bfc
+  target_id: 01a08b13-578c-7080-84bb-d2a3dbcf0373
+  author: aida
+  node_id: '1'
+  lamport: 4400
+  timestamp: 2026-09-10T11:28:16.928746668Z
+  kind: !Create
+    title: 'Review PR-1721: [AI:codex] fix(pull): quarantine conflicted config after autostash (BUG-1025)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08b06`) for branch `bug-1025`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1721>
+      - Branch: `bug-1025` → `main`
+
+      ## Covers
+
+      - BUG-1025
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1721` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4400
 node_id: '1'
