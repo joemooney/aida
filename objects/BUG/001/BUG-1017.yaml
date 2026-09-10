@@ -8,6 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:33.137984320Z
-modified_at: 2026-09-10T04:07:37.612705143Z
+modified_at: 2026-09-10T04:08:07.222436376Z
 req_type: Bug
+comments:
+- id: 01a08980-6136-79f3-99e6-0e0e18a21774
+  author: joe
+  content: 'Concrete field repro (operator, 2026-09-09): ordinary queue JSON contains Done entries; queue next selects TASK-025 (Done); bare queue work --dry-run proposes a new task-025-2 worktree for it; explicit dry-run accepts TASK-030 (NeedsAttention) without triage or force. Workaround in use until fixed: explicit IDs + aida show first. Tracked as BUG-032 in the originating project.'
+  created_at: 2026-09-10T04:08:07.222436376Z
+  modified_at: 2026-09-10T04:08:07.222436376Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
