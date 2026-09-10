@@ -3,11 +3,15 @@ spec_id: BUG-914
 agreed_id: BUG-914
 title: worktrees expose .aida/ and .aida-store as untracked files — stage-into-MR hazard; use worktree-local git excludes
 description: 'Field report (2026-09-09): in a repository that does NOT commit AIDA scaffolding, git status in an AIDA-created worktree shows ?? .aida/ and ?? .aida-store — coordination artifacts presenting as stageable product changes, one careless git add -A away from landing in a feature MR. Fix: worktree creation writes the AIDA runtime paths (.aida/, .aida-store, and any other coordination artifacts it materializes) into the WORKTREE-LOCAL exclude file (.git/info/exclude resolves per-worktree via worktrees/<name>/info/exclude) — never touching the product''s tracked .gitignore. Idempotent; applies to queue work, worktree enter/add, orchestrator phase-1, and pool creation/claim. Acceptance: fresh worktree in a no-scaffold repo shows clean git status; the product .gitignore is untouched; regression test asserting the exclude file content and clean status.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:14.278839429Z
-modified_at: 2026-09-10T04:44:50.525256277Z
+modified_at: 2026-09-10T04:53:16.939312167Z
 req_type: Bug
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-10T04:53:16.939312167Z
+  implemented_by: joe
