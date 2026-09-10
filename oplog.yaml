@@ -51126,5 +51126,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4342
+- id: 01a089b0-a6e7-7901-8014-a7a10add85a6
+  target_id: 01a089b0-a04e-7522-8b9e-a29bd1d38b00
+  author: aida
+  node_id: '1'
+  lamport: 4343
+  timestamp: 2026-09-10T05:00:50.791092867Z
+  kind: !Create
+    title: aida pull autostash can leave conflict markers inside .aida/config.toml — silently corrupting config for every later command
+    description: 'Capture from live incident (2026-09-07, diagnosed during TASK-1-127): aida pull''s autostash pop conflicted and left literal <<<<<<< markers inside .aida/config.toml, which then made every config-reading command fail (aida add exited 1 in <50ms with a parse error that some invocation shapes swallowed). The advisor found it only days later. Fix: (1) after an autostash pop, aida pull checks its known config files for conflict markers / parse validity and, on failure, REFUSES to finish silently — prints the conflicted file, quarantines the broken version to .aida/config.toml.conflicted, restores the pre-pull version, and names the manual merge step; (2) config parse errors are always LOUD: any command failing on config parse prints the file, line, and a fix hint to stderr regardless of output format. Related hardening (same change or split if large): AIDA-owned config edits go through a section-aware TOML editor, never raw append (raw appends created duplicate [agents]/[drain] sections twice this week). Acceptance: simulated conflicted autostash → pull fails loudly with quarantine + restore; parse-failure path prints file+line on every command shape; config-writing code paths audited for raw appends.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4343
 node_id: '1'
