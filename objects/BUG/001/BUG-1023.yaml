@@ -3,20 +3,36 @@ spec_id: BUG-1023
 agreed_id: BUG-1023
 title: rework sessions work on a <spec>-pr<N> branch while phase 2 drives <spec> — systematic branch-mismatch refusals
 description: 'Recurring pattern (STORY-975 rework 2026-09-07, STORY-994 rework 2026-09-09): a findings-led rework implementer checks out or creates a branch named <spec>-pr<N> (e.g. story-994-pr1704) while the orchestrator phase 2 drives the plain <spec> branch, so the BUG-878-era safety guard refuses to push or tear down (implementer worktree is on story-994-pr1704 but phase 2 is driving story-994 — attempt 2/2) and the spec shelves even when the work was already pushed. The guard is CORRECT; the branch-naming handoff is the bug: the rework launch and the phase-2 expectation must agree on ONE branch — either the rework session is told to stay on the PR''s existing head branch (preferred: fixups belong on the open PR), or phase 2 accepts the session''s registered branch when it differs from the derived default. Acceptance: a findings-led rework runs implementer + phase 2 + review on the SAME branch with no mismatch refusal; regression test simulating the rework relaunch asserting branch agreement; the guard still refuses a genuinely foreign branch.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:19:47.196589859Z
-modified_at: 2026-09-10T10:13:11.742014969Z
+modified_at: 2026-09-10T10:27:39.820600353Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08ace-8811-7a30-a177-ce6206c9a733
   created_at: 2026-09-10T10:13:11.742005422Z
   created_by: joe
+history:
+- id: 01a08adb-dca5-76d2-8e6a-dc4934c3ef2f
+  author: aida-auto-bump
+  timestamp: 2026-09-10T10:27:39.813708229Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a08adb-dcac-71e2-b085-8d71a94a1dbb
+  timestamp: 2026-09-10T10:27:39.820599555Z
+  agent: aida
+  commit_sha: de94851a74cebca198c800013449d4dbf854e30d
+  summary: Completed via merge de94851a
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-10T10:12:50.663891679Z
   implemented_by: joe
+  completed_at: 2026-09-10T10:27:39.813600277Z
+  completion_sha: de94851a74cebca198c800013449d4dbf854e30d
