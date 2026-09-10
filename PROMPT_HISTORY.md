@@ -1,5 +1,9 @@
 # Requirements Manager - Prompt History
 
+> **FROZEN as of 2026-09-09** (operator decision): no new entries. Session history lives in the
+> AIDA substrate — `aida history --events` for the time series, `aida digest` for narrative,
+> specs + PR trail for the why. This file remains as a dated artifact of sessions before the freeze.
+
 A chronological record of development sessions and changes made to the Requirements Manager project.
 
 ---
@@ -4752,3 +4756,21 @@ Picked up `BUG-913` from the implementer queue. The bug was that non-launching `
 Changed queue-work vendor resolution to run for display paths as well as launch paths, so dry-run/no-launch output uses the enabled vendor selected by `[agents] enabled`. Added vendor-aware deferred launch hint helpers: Claude keeps the existing exact round-trip command, while Codex no-launch handoff prints `codex ...` / `codex exec ...` instead of Claude instructions. Added `// trace:BUG-913 | ai:codex` comments on the resolver and hint helpers.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli --test queue_work_dry_run -- no_launch --nocapture`; `cargo test -p aida-cli --test queue_work_dry_run -- --nocapture`; `cargo test -p aida-cli-lib headless_hint -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
+
+## Sessions 2026-09-05 → 2026-09-09 — advisor arc: dogfood burndown, codex parity, mail intake
+
+Multi-day advisor session (Claude, this repo). ~60 specs shipped across ~12 autonomous drains plus
+advisor-merged PRs. Major arcs: session/role UX (picker roles, role-enter resume + 30s lag,
+agent-new duplicate guard); AGENTS.md injection + scaffold refresh for codex environments; forge
+profiles + gitlab two-leg mirroring verified live; init footprint (minimal mode, discipline pack →
+.aida/, lazy plans, user-level agent awareness, post-init hooks, README+registry); drain
+observability (typed shelve causes, transient auto-retry, pacing/quiet warnings, statusline/status/
+TUI/tail busy surfaces); the codex-parity chain (auto-push, PR auto-open, forge resolution,
+PR-scoped reviewer spawns, vendor gating on every launch/display surface, queue identity
+calibration) driven by five testbed validation attempts plus three work-machine field reports —
+each failure one level deeper, every level now machine-owned. Established the work→home mail-intake
+loop (subject "aida", Gmail retrieval, high-water file) with aida report as the sending half.
+Process notes: advisor-merge protocol (verdict file + CI-on-exact-head) used where reviewer
+machinery structurally failed; capture sweep re-armed TASK-1198 (codex validation attempt 6) after
+it dropped behind the field-report batch. Full detail: the specs (BUG-837…BUG-1025,
+STORY-821…STORY-1006) and their PR trail.
