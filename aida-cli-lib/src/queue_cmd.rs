@@ -4288,6 +4288,7 @@ pub(crate) fn handle_queue_command(
             list_sessions,
             session_id,
             vendor,
+            model,
             auto_complete,
             drain,
             json,
@@ -4340,6 +4341,13 @@ pub(crate) fn handle_queue_command(
             // the interactive host path's existing handling below. trace:TASK-1116
             if let Some(raw) = vendor.as_deref() {
                 let _ = session::install_headless_vendor_override(raw);
+            }
+            // STORY-1003: `--model` is a one-shot opaque override. Export it
+            // before the auto-complete router so spawned phase children inherit
+            // the same model choice; config-only models are read by each child
+            // from the normal project config chain.
+            if let Some(model) = model.as_deref().filter(|m| !m.trim().is_empty()) {
+                std::env::set_var("AIDA_AGENT_MODEL", model);
             }
             // STORY-761: resolve the interactive host vendor — explicit
             // `--vendor` flag > the uniform `[agents] vendor` knob
@@ -5259,6 +5267,7 @@ pub(crate) fn handle_queue_command(
                 // (session id, worktree, branch, role, skill, lease) and
                 // return before any side effect. trace:TASK-1053 | ai:claude
                 *dry_run,
+                model.as_deref(),
             )?;
         }
         // TASK-232: progress view across the buckets a draining session
@@ -6048,6 +6057,7 @@ pub(crate) fn handle_queue_rework(
             /* plan_only */ false,
             /* guided */ false,
             /* dry_run */ false,
+            /* model_override */ None,
         )?;
     } else {
         println!(
@@ -7227,15 +7237,16 @@ pub(crate) fn deferred_headless_launch_hint(
     prompt: &str,
     session_id: &str,
     contained: bool,
+    model: Option<&str>,
 ) -> String {
     match vendor {
         session::HeadlessVendor::Claude => headless_launch_hint(prompt, session_id, contained),
         session::HeadlessVendor::Codex => {
-            let argv = session::codex_headless_args(prompt);
+            let argv = session::codex_headless_args_with_model(prompt, model);
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            let argv = session::headless_vendor_args(vendor, prompt, session_id, contained);
+            let argv = session::headless_vendor_args(vendor, prompt, session_id, contained, model);
             format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv))
         }
     }
@@ -7250,11 +7261,18 @@ pub(crate) fn deferred_interactive_launch_hint(
     prompt: &str,
     permission_mode: Option<&str>,
     contained: bool,
+    model: Option<&str>,
 ) -> String {
     match vendor {
         session::HeadlessVendor::Claude => {
-            let mut args =
-                session::claude_session_args(permission_mode, None, Some(prompt), None, contained);
+            let mut args = session::claude_session_args(
+                permission_mode,
+                None,
+                Some(prompt),
+                None,
+                contained,
+                model,
+            );
             if contained && !args.iter().any(|arg| arg == "--permission-mode") {
                 args.splice(
                     0..0,
@@ -7267,7 +7285,7 @@ pub(crate) fn deferred_interactive_launch_hint(
             let bypass = permission_mode == Some("bypassPermissions");
             format!(
                 "codex {}",
-                shell_join_display(&session::codex_session_args(prompt, bypass))
+                shell_join_display(&session::codex_session_args(prompt, bypass, model))
             )
         }
         session::HeadlessVendor::Agy => {
@@ -7373,6 +7391,8 @@ pub(crate) fn handle_queue_work(
     // session. The `--batch` form is handled at the dispatch site (it
     // returns there before reaching this function). trace:TASK-1053 | ai:claude
     dry_run: bool,
+    // STORY-1003: opaque vendor model override for this pickup/drain.
+    model_override: Option<&str>,
 ) -> Result<()> {
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
@@ -7507,6 +7527,20 @@ pub(crate) fn handle_queue_work(
     let launch_vendor = resolved_launch_vendor.unwrap_or_else(|| {
         session::HeadlessVendor::parse(vendor).unwrap_or(session::HeadlessVendor::Claude)
     });
+    let model_root = project_root_for_config
+        .clone()
+        .or_else(|| std::path::Path::new(".").canonicalize().ok());
+    let resolved_model = model_override
+        .filter(|m| !m.trim().is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            model_root
+                .as_deref()
+                .and_then(|r| session::resolve_vendor_model(r, launch_vendor))
+        });
+    if let Some(model) = &resolved_model {
+        std::env::set_var("AIDA_AGENT_MODEL", model);
+    }
     let headless_vendor = no_human.then_some(launch_vendor);
 
     // STORY-439: capture pickup-time complexity + assistance estimate
@@ -7925,6 +7959,9 @@ pub(crate) fn handle_queue_work(
         );
         dry_line("vendor", launch_vendor.as_str().cyan().to_string());
         dry_line("exec", executable.cyan().to_string());
+        if let Some(model) = &resolved_model {
+            dry_line("model", model.cyan().to_string());
+        }
         if launch_vendor == session::HeadlessVendor::Claude {
             let session_render = match &launch {
                 Some(l) => format!(
@@ -8558,7 +8595,14 @@ pub(crate) fn handle_queue_work(
             let sid = claude_session_id.as_deref().unwrap_or_default();
             eprintln!(
                 "  {}",
-                deferred_headless_launch_hint(launch_vendor, &prompt, sid, contained).cyan()
+                deferred_headless_launch_hint(
+                    launch_vendor,
+                    &prompt,
+                    sid,
+                    contained,
+                    resolved_model.as_deref(),
+                )
+                .cyan()
             );
         } else {
             eprintln!(
@@ -8567,7 +8611,8 @@ pub(crate) fn handle_queue_work(
                     launch_vendor,
                     &prompt,
                     permission_mode.as_deref(),
-                    contained
+                    contained,
+                    resolved_model.as_deref(),
                 )
                 .cyan()
             );
@@ -8702,7 +8747,7 @@ pub(crate) fn handle_queue_work(
             )
             .cyan()
         );
-        return session::exec_codex_session(&prompt, codex_bypass);
+        return session::exec_codex_session(&prompt, codex_bypass, resolved_model.as_deref());
     }
     if launch_vendor == session::HeadlessVendor::Agy && !no_human {
         anyhow::bail!(
@@ -8849,6 +8894,7 @@ pub(crate) fn handle_queue_work(
                 &prompt,
                 &id,
                 contained,
+                resolved_model.as_deref(),
             )
         }
     }

@@ -5230,6 +5230,12 @@ pub enum QueueCommand {
         // trace:TASK-895 STORY-761 TASK-1116 | ai:claude
         #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
         vendor: Option<String>,
+        /// Opaque model name passed through to the selected vendor CLI for this
+        /// run. Overrides `[agents.<vendor>] model`; empty config means vendor
+        /// default. AIDA does not validate model names.
+        // trace:STORY-1003 | ai:codex
+        #[clap(long, value_name = "MODEL")]
+        model: Option<String>,
         /// Drive the full implementer → CI → reviewer → merge → pull →
         /// build lifecycle for one SPEC in a single command, instead of
         /// running the 5+ steps by hand. The orchestrator spawns each
@@ -6971,6 +6977,12 @@ pub enum AgentNewCommand {
         #[clap(long)]
         permission_mode: Option<String>,
 
+        /// Opaque Claude model name passed through as `claude --model`.
+        /// Overrides `[agents.claude] model`; AIDA does not validate it.
+        // trace:STORY-1003 | ai:codex
+        #[clap(long, value_name = "MODEL")]
+        model: Option<String>,
+
         /// Launch Claude in contained mode: strict Bash sandboxing, no
         /// unsandboxed fallback, destructive-command deny rules, and
         /// project-relative edit auto-allow only.
@@ -7065,6 +7077,12 @@ pub enum AgentNewCommand {
         /// the empirical autonomous-drain posture used in prior dogfood runs.
         #[clap(long)]
         bypass_sandbox: bool,
+
+        /// Opaque Codex model name passed through as `codex --model`.
+        /// Overrides `[agents.codex] model`; AIDA does not validate it.
+        // trace:STORY-1003 | ai:codex
+        #[clap(long, value_name = "MODEL")]
+        model: Option<String>,
 
         /// Do not write/inject the AIDA launch-context snapshot.
         #[clap(long)]

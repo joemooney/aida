@@ -32,6 +32,7 @@ fn aida(repo: &Path, home: &Path) -> Command {
     cmd.env_remove("AIDA_PERMISSION_MODE");
     cmd.env_remove("AIDA_AGENT_OUTPUT");
     cmd.env_remove("AIDA_HEADLESS_VENDOR");
+    cmd.env_remove("AIDA_AGENT_MODEL");
     cmd.env_remove("AIDA_AGENT_CMD");
     cmd
 }
@@ -827,6 +828,68 @@ fn interactive_dry_run_autopicks_codex_only_enabled_profile() {
         Vec::<String>::new(),
         sibling_worktrees(&base_dir),
         "codex dry-run created a worktree sibling"
+    );
+}
+
+#[test]
+fn queue_work_dry_run_displays_config_model_and_flag_override() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+    std::fs::write(
+        repo.join(".aida").join("config.toml"),
+        "[agents]\nenabled = [\"codex\"]\n\n[agents.codex]\nmodel = \"team-codex\"\n",
+    )
+    .unwrap();
+
+    let dry = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--dry-run", "--no-pull"])
+        .output()
+        .expect("run aida queue work --dry-run");
+    assert!(
+        dry.status.success(),
+        "dry-run exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        dry.status.code(),
+        String::from_utf8_lossy(&dry.stderr),
+        String::from_utf8_lossy(&dry.stdout)
+    );
+    let plan = String::from_utf8_lossy(&dry.stderr);
+    assert!(
+        plan.contains("model:"),
+        "dry run should show model:\n{plan}"
+    );
+    assert!(
+        plan.contains("team-codex"),
+        "dry run should show configured model:\n{plan}"
+    );
+
+    let override_dry = aida(&repo, &home)
+        .args([
+            "queue",
+            "work",
+            &spec,
+            "--dry-run",
+            "--no-pull",
+            "--model",
+            "flag-codex",
+        ])
+        .output()
+        .expect("run aida queue work --dry-run --model");
+    assert!(
+        override_dry.status.success(),
+        "dry-run override exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        override_dry.status.code(),
+        String::from_utf8_lossy(&override_dry.stderr),
+        String::from_utf8_lossy(&override_dry.stdout)
+    );
+    let override_plan = String::from_utf8_lossy(&override_dry.stderr);
+    assert!(
+        override_plan.contains("flag-codex"),
+        "--model should override config in dry-run display:\n{override_plan}"
+    );
+    assert!(
+        !override_plan.contains("team-codex"),
+        "--model display should not retain configured model:\n{override_plan}"
     );
 }
 

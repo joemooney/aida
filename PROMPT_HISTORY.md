@@ -4828,3 +4828,11 @@ Picked up `TASK-1200` from the implementer queue. The task was to add the produc
 Added `product` to `STARTER_ROLES` with purpose text that distinguishes requirement intake and capture from advisor judgment/disposition. Updated first-init and CLI help copy that enumerates starter roles, and added fallback product role guidance for launches where no stored role file exists. Added `// trace:TASK-1200 | ai:codex` comments on the starter role and fallback guidance.
 
 Verification: `cargo test -p aida-cli-lib role_identity_tests -- --nocapture`; `cargo fmt --all -- --check`. Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — STORY-1003 per-vendor model selection
+
+Picked up `STORY-1003` from the implementer queue. The story requested opaque per-vendor model selection via `[agents.<vendor>] model`, a `--model` one-shot override on `aida agent new` and `aida queue work`, native CLI passthrough for Claude/Codex, and resolved display in queue dry-runs.
+
+Added model resolution to the shared agents config chain (`.aida/agents.toml` > `.aida/config.toml` > `~/.aida/agents.toml`), with empty strings selecting the vendor default. Wired `--model` through `agent new claude`, `agent new codex`, and `queue work`; exported `AIDA_AGENT_MODEL` so auto-complete phase children inherit one-shot overrides. Updated Claude/Codex interactive and headless argv builders to append native `--model <name>` without validating model names, and added the resolved `model:` line to queue dry-run output. Added `// trace:STORY-1003 | ai:codex` comments on the resolver, CLI fields, env propagation, and argv injection.
+
+Verification: `cargo check -q`; `cargo test -q -p aida-core agents_config`; `cargo test -q -p aida-cli-lib agent_launcher_tests`; `cargo test -q -p aida-cli-lib interactive_session_args_pass_model_before_prompt`; `cargo test -q -p aida-cli-lib headless_vendor_args_pass_model_for_claude_and_codex_only`; `cargo test -q -p aida-cli --test queue_work_dry_run queue_work_dry_run_displays_config_model_and_flag_override`. Existing unrelated Rust warnings remain in the focused test output.

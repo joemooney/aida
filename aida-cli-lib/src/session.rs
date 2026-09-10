@@ -667,6 +667,7 @@ pub fn new_session(
         None,
         None,
         contained,
+        None,
     )
 }
 
@@ -818,6 +819,7 @@ pub fn exec_claude_with_session(
     initial_prompt: &str,
     session_id: &str,
     contained: bool,
+    model: Option<&str>,
 ) -> Result<()> {
     exec_claude(
         permission_mode,
@@ -825,6 +827,7 @@ pub fn exec_claude_with_session(
         Some(initial_prompt),
         Some(session_id),
         contained,
+        model,
     )
 }
 
@@ -846,6 +849,7 @@ pub fn claude_session_args(
     initial_prompt: Option<&str>,
     session_id: Option<&str>,
     contained: bool,
+    model: Option<&str>,
 ) -> Vec<String> {
     let mut args = Vec::new();
     if let Some(m) = permission_mode {
@@ -865,6 +869,9 @@ pub fn claude_session_args(
         args.push("--session-id".to_string());
         args.push(sid.to_string());
     }
+    if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
+        args.extend(["--model".to_string(), model.to_string()]);
+    }
     if let Some(p) = initial_prompt {
         // Positional first-message — claude treats trailing positionals
         // as the initial prompt for the session.
@@ -879,6 +886,7 @@ fn exec_claude(
     initial_prompt: Option<&str>,
     session_id: Option<&str>,
     contained: bool,
+    model: Option<&str>,
 ) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
@@ -888,6 +896,7 @@ fn exec_claude(
         initial_prompt,
         session_id,
         contained,
+        model,
     ));
     #[cfg(unix)]
     {
@@ -921,6 +930,7 @@ pub fn spawn_claude_session(
             Some(initial_prompt),
             Some(session_id),
             contained,
+            None,
         ))
         .status()
         .context("failed to spawn claude")
@@ -1017,6 +1027,7 @@ pub(crate) fn compose_headless_command(
     prompt: &str,
     session_id: &str,
     contained: bool,
+    model: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
     let worktree = headless_worktree_root();
     // BUG-799: Codex gets slash-commands inline-rendered; Claude expands its
@@ -1032,7 +1043,7 @@ pub(crate) fn compose_headless_command(
     os_wrapped_program_and_args(
         &worktree,
         &resolve_agent_program(vendor.program()),
-        headless_vendor_args(vendor, &effective_prompt, session_id, contained),
+        headless_vendor_args(vendor, &effective_prompt, session_id, contained, model),
     )
 }
 
@@ -1069,7 +1080,9 @@ pub fn spawn_vendor_headless(
             vendor.as_str()
         );
     }
-    let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
+    let model = resolve_vendor_model(&headless_worktree_root(), vendor);
+    let (program, args) =
+        compose_headless_command(vendor, prompt, session_id, contained, model.as_deref())?;
     // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
     // ourselves rather than inheriting whatever the ambient shell carried, so
     // every headless phase behaves identically whoever launched it.
@@ -1135,10 +1148,13 @@ pub fn spawn_claude_resume(
 /// Pure — the flag set is unit-tested without spawning codex.
 // trace:TASK-895 | ai:claude
 // trace:BUG-743 | ai:codex
-pub fn codex_session_args(initial_prompt: &str, bypass: bool) -> Vec<String> {
+pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str>) -> Vec<String> {
     let mut args = Vec::new();
     if bypass {
         args.push("--dangerously-bypass-approvals-and-sandbox".to_string());
+    }
+    if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
+        args.extend(["--model".to_string(), model.to_string()]);
     }
     args.push(initial_prompt.to_string());
     args
@@ -1150,10 +1166,10 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool) -> Vec<String> {
 /// all lease / worktree / manifest setup has already run by the time this is
 /// reached.
 // trace:TASK-895 | ai:claude
-pub fn exec_codex_session(initial_prompt: &str, bypass: bool) -> Result<()> {
+pub fn exec_codex_session(initial_prompt: &str, bypass: bool, model: Option<&str>) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("codex");
-    cmd.args(codex_session_args(initial_prompt, bypass));
+    cmd.args(codex_session_args(initial_prompt, bypass, model));
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1321,6 +1337,19 @@ pub(crate) fn resolve_headless_vendor(worktree_root: &Path) -> HeadlessVendor {
                 .and_then(HeadlessVendor::parse)
         })
         .unwrap_or(HeadlessVendor::Claude)
+}
+
+/// STORY-1003: resolve the opaque model string for a vendor-backed launch.
+///
+/// The one-shot env tier is how `aida queue work --model` propagates into
+/// orchestrator phase children without teaching the orchestrator model names.
+/// Empty values are unset; AIDA never validates the model token.
+// trace:STORY-1003 | ai:codex
+pub(crate) fn resolve_vendor_model(worktree_root: &Path, vendor: HeadlessVendor) -> Option<String> {
+    std::env::var("AIDA_AGENT_MODEL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| aida_core::agents_config::resolve_vendor_model(worktree_root, vendor.as_str()))
 }
 
 fn agent_selection_allows_vendor(
@@ -1494,10 +1523,13 @@ pub fn headless_vendor_args(
     prompt: &str,
     session_id: &str,
     contained: bool,
+    model: Option<&str>,
 ) -> Vec<String> {
     match vendor {
-        HeadlessVendor::Claude => claude_headless_args_with_posture(prompt, session_id, contained),
-        HeadlessVendor::Codex => codex_headless_args(prompt),
+        HeadlessVendor::Claude => {
+            claude_headless_args_with_posture_and_model(prompt, session_id, contained, model)
+        }
+        HeadlessVendor::Codex => codex_headless_args_with_model(prompt, model),
         HeadlessVendor::Agy => agy_headless_args(prompt),
     }
 }
@@ -1529,12 +1561,84 @@ pub fn agy_headless_args(prompt: &str) -> Vec<String> {
 /// `--output-format stream-json` (codex has no matching resumable session model),
 /// so the codex arm does not thread `session_id`. trace:STORY-683 | ai:claude
 pub fn codex_headless_args(prompt: &str) -> Vec<String> {
+    codex_headless_args_with_model(prompt, None)
+}
+
+// trace:STORY-1003 | ai:codex
+pub fn codex_headless_args_with_model(prompt: &str, model: Option<&str>) -> Vec<String> {
+    let mut args = vec![
+        "exec".to_string(),
+        "--dangerously-bypass-approvals-and-sandbox".to_string(),
+    ];
+    if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
+        args.extend(["--model".to_string(), model.to_string()]);
+    }
+    args.push(prompt.to_string());
+    args
+}
+
+pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
+    claude_headless_args_with_posture(prompt, session_id, false)
+}
+
+pub fn claude_headless_args_with_posture(
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> Vec<String> {
+    claude_headless_args_with_posture_and_model(prompt, session_id, contained, None)
+}
+
+// trace:STORY-1003 | ai:codex
+pub fn claude_headless_args_with_posture_and_model(
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+) -> Vec<String> {
+    let permission_mode = if contained {
+        "dontAsk"
+    } else {
+        "bypassPermissions"
+    };
+    vec![
+        "-p".to_string(),
+        "--permission-mode".to_string(),
+        permission_mode.to_string(),
+    ]
+    .into_iter()
+    .chain(if contained {
+        claude_contained_flags()
+    } else {
+        Vec::new()
+    })
+    .chain([
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--disallowed-tools".to_string(),
+        "AskUserQuestion".to_string(),
+        "--session-id".to_string(),
+        session_id.to_string(),
+    ])
+    .chain(
+        model
+            .filter(|m| !m.trim().is_empty())
+            .map(|m| vec!["--model".to_string(), m.to_string()])
+            .unwrap_or_default(),
+    )
+    .chain([prompt.to_string()])
+    .collect()
+}
+
+/* old impl retained below */
+/* pub fn codex_headless_args(prompt: &str) -> Vec<String> {
     vec![
         "exec".to_string(),
         "--dangerously-bypass-approvals-and-sandbox".to_string(),
         prompt.to_string(),
     ]
-}
+} */
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
 /// `claude -p` launch. The flag set is SPIKE-7's mandatory list — see
@@ -1560,40 +1664,6 @@ pub fn codex_headless_args(prompt: &str) -> Vec<String> {
 /// Never `--bare`: it strips OAuth/keychain auth and breaks login (spike Q1).
 /// Pure — the flag set is unit-tested without spawning claude.
 /// trace:STORY-263 | ai:claude
-pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
-    claude_headless_args_with_posture(prompt, session_id, false)
-}
-
-pub fn claude_headless_args_with_posture(
-    prompt: &str,
-    session_id: &str,
-    contained: bool,
-) -> Vec<String> {
-    let permission_mode = if contained {
-        "dontAsk"
-    } else {
-        "bypassPermissions"
-    };
-    let mut args = vec![
-        "-p".to_string(),
-        "--permission-mode".to_string(),
-        permission_mode.to_string(),
-    ];
-    if contained {
-        args.extend(claude_contained_flags());
-    }
-    args.extend([
-        "--output-format".to_string(),
-        "stream-json".to_string(),
-        "--verbose".to_string(),
-        "--disallowed-tools".to_string(),
-        "AskUserQuestion".to_string(),
-        "--session-id".to_string(),
-        session_id.to_string(),
-        prompt.to_string(),
-    ]);
-    args
-}
 
 pub fn claude_contained_flags() -> Vec<String> {
     vec![
@@ -2255,7 +2325,9 @@ pub fn exec_vendor_headless(
             vendor.as_str()
         );
     }
-    let (program, args) = compose_headless_command(vendor, prompt, session_id, contained)?;
+    let model = resolve_vendor_model(&headless_worktree_root(), vendor);
+    let (program, args) =
+        compose_headless_command(vendor, prompt, session_id, contained, model.as_deref())?;
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
@@ -4479,7 +4551,7 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_native_omits_permission_mode() {
-        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false);
+        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false, None);
         assert!(
             !args.iter().any(|a| a == "--permission-mode"),
             "native launch must not inject --permission-mode: {args:?}"
@@ -4493,7 +4565,7 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_some_injects_permission_mode() {
-        let args = claude_session_args(Some("bypassPermissions"), None, None, None, false);
+        let args = claude_session_args(Some("bypassPermissions"), None, None, None, false, None);
         let pos = args
             .iter()
             .position(|a| a == "--permission-mode")
@@ -4511,7 +4583,7 @@ mod tests {
     // trace:TASK-895 | ai:claude
     #[test]
     fn codex_session_args_native_is_just_the_prompt_positional() {
-        let args = codex_session_args("/aida-pickup", false);
+        let args = codex_session_args("/aida-pickup", false, None);
         assert_eq!(args, vec!["/aida-pickup".to_string()]);
         assert!(!args.iter().any(|a| a == "--session-id"), "{args:?}");
         assert!(!args.iter().any(|a| a == "--resume"), "{args:?}");
@@ -4529,7 +4601,7 @@ mod tests {
     // trace:BUG-743 | ai:codex
     #[test]
     fn codex_session_args_bypass_maps_to_codex_bypass_flag() {
-        let args = codex_session_args("/aida-pickup BUG-743", true);
+        let args = codex_session_args("/aida-pickup BUG-743", true, None);
         assert_eq!(
             args,
             vec![
@@ -4541,6 +4613,39 @@ mod tests {
         assert!(!args.iter().any(|a| a == "--resume"), "{args:?}");
     }
 
+    #[test]
+    fn interactive_session_args_pass_model_before_prompt() {
+        let claude = claude_session_args(
+            None,
+            None,
+            Some("/aida-pickup STORY-1003"),
+            Some("sid"),
+            false,
+            Some("opus-alias"),
+        );
+        assert_eq!(
+            claude
+                .windows(2)
+                .find(|w| w[0] == "--model")
+                .map(|w| w[1].as_str()),
+            Some("opus-alias")
+        );
+        assert_eq!(
+            claude.last().map(String::as_str),
+            Some("/aida-pickup STORY-1003")
+        );
+
+        let codex = codex_session_args("/aida-pickup STORY-1003", false, Some("gpt-alias"));
+        assert_eq!(
+            codex,
+            vec![
+                "--model".to_string(),
+                "gpt-alias".to_string(),
+                "/aida-pickup STORY-1003".to_string()
+            ]
+        );
+    }
+
     /// STORY-495 safety invariant: the headless argv ALWAYS forces
     /// `bypassPermissions` regardless of the interactive faithful default —
     /// a prompting (`default`) headless child has no TTY to answer and would
@@ -4550,7 +4655,8 @@ mod tests {
     #[test]
     fn headless_args_force_bypass_regardless_of_interactive_default() {
         // The interactive builder is now native-by-default…
-        let interactive = claude_session_args(None, None, Some("/aida-review"), Some("sid"), false);
+        let interactive =
+            claude_session_args(None, None, Some("/aida-review"), Some("sid"), false, None);
         assert!(!interactive.iter().any(|a| a == "--permission-mode"));
         // …yet the headless builder still hard-forces bypass.
         let headless = claude_headless_args("/aida-review", "sid");
@@ -4580,6 +4686,41 @@ mod tests {
             args.last().map(String::as_str),
             Some("/aida-pickup BUG-743")
         );
+    }
+
+    #[test]
+    fn headless_vendor_args_pass_model_for_claude_and_codex_only() {
+        let prompt = "/aida-pickup STORY-1003";
+        let sid = "sid";
+        let claude = headless_vendor_args(
+            HeadlessVendor::Claude,
+            prompt,
+            sid,
+            false,
+            Some("opus-alias"),
+        );
+        assert_eq!(
+            claude
+                .windows(2)
+                .find(|w| w[0] == "--model")
+                .map(|w| w[1].as_str()),
+            Some("opus-alias")
+        );
+        assert_eq!(claude.last().map(String::as_str), Some(prompt));
+
+        let codex =
+            headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, Some("gpt-alias"));
+        assert_eq!(
+            codex
+                .windows(2)
+                .find(|w| w[0] == "--model")
+                .map(|w| w[1].as_str()),
+            Some("gpt-alias")
+        );
+        assert_eq!(codex.last().map(String::as_str), Some(prompt));
+
+        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, Some("ignored"));
+        assert!(!agy.iter().any(|arg| arg == "--model"), "{agy:?}");
     }
 
     #[test]
@@ -4655,7 +4796,7 @@ mod tests {
         let sid = "019e0000-0000-7000-8000-000000000000";
 
         // Claude arm: -p print mode + the prompt survives, NOT a codex command.
-        let claude = headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false);
+        let claude = headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None);
         assert!(claude.contains(&"-p".to_string()), "claude -p: {claude:?}");
         assert!(
             claude.contains(&"bypassPermissions".to_string()),
@@ -4674,7 +4815,7 @@ mod tests {
 
         // Codex arm: `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`,
         // with the prompt as the final positional and NO claude `-p`.
-        let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false);
+        let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None);
         assert_eq!(codex.first().map(String::as_str), Some("exec"), "{codex:?}");
         assert!(
             codex.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()),
@@ -4688,7 +4829,7 @@ mod tests {
 
         // TASK-1048: Agy arm: `agy -p --dangerously-skip-permissions <prompt>`,
         // with the prompt as the final positional and NO codex `exec`.
-        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false);
+        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None);
         assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
         assert_eq!(agy.first().map(String::as_str), Some("-p"), "{agy:?}");
         assert!(
@@ -5014,9 +5155,14 @@ mod tests {
     #[test]
     fn codex_phase_argv_carries_the_expanded_body_and_claude_is_unchanged() {
         let _env = AgentCmdEnvGuard::acquire();
-        let (_, args) =
-            compose_headless_command(HeadlessVendor::Codex, "/aida-review --pr 7", "sid", false)
-                .unwrap();
+        let (_, args) = compose_headless_command(
+            HeadlessVendor::Codex,
+            "/aida-review --pr 7",
+            "sid",
+            false,
+            None,
+        )
+        .unwrap();
         let joined = args.join(" ");
         assert!(
             joined.contains("review-verdicts"),
@@ -5027,9 +5173,14 @@ mod tests {
             "the literal slash string must be gone"
         );
 
-        let (_, cargs) =
-            compose_headless_command(HeadlessVendor::Claude, "/aida-review --pr 7", "sid", false)
-                .unwrap();
+        let (_, cargs) = compose_headless_command(
+            HeadlessVendor::Claude,
+            "/aida-review --pr 7",
+            "sid",
+            false,
+            None,
+        )
+        .unwrap();
         assert!(
             cargs.contains(&"/aida-review --pr 7".to_string()),
             "claude expands its own skills — its path must be byte-identical"
@@ -5040,13 +5191,15 @@ mod tests {
     fn compose_headless_command_routes_per_vendor() {
         let _env = AgentCmdEnvGuard::acquire();
         let (prog, args) =
-            compose_headless_command(HeadlessVendor::Codex, "do a thing", "sid", false).unwrap();
+            compose_headless_command(HeadlessVendor::Codex, "do a thing", "sid", false, None)
+                .unwrap();
         assert!(prog.ends_with("codex"), "{prog}");
         assert_eq!(args.first().map(String::as_str), Some("exec"), "{args:?}");
         assert!(!args.contains(&"-p".to_string()), "{args:?}");
 
         let (prog, args) =
-            compose_headless_command(HeadlessVendor::Claude, "do a thing", "sid", false).unwrap();
+            compose_headless_command(HeadlessVendor::Claude, "do a thing", "sid", false, None)
+                .unwrap();
         assert!(prog.ends_with("claude"), "{prog}");
         assert!(args.contains(&"-p".to_string()), "{args:?}");
         assert_eq!(

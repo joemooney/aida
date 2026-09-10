@@ -50,6 +50,8 @@ fn parses_agent_new_claude_flags() {
         "/tmp/project",
         "--permission-mode",
         "acceptEdits",
+        "--model",
+        "opus-local",
         "--prompt",
         "review STORY-432",
         "--no-default-flags",
@@ -64,6 +66,7 @@ fn parses_agent_new_claude_flags() {
                 spec,
                 cwd,
                 permission_mode,
+                model,
                 no_context,
                 show_context,
                 prompt,
@@ -80,6 +83,7 @@ fn parses_agent_new_claude_flags() {
     assert_eq!(spec.as_deref(), Some("STORY-432"));
     assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
     assert_eq!(permission_mode.as_deref(), Some("acceptEdits"));
+    assert_eq!(model.as_deref(), Some("opus-local"));
     assert!(!no_context);
     assert!(!show_context);
     assert_eq!(prompt.as_deref(), Some("review STORY-432"));
@@ -188,6 +192,8 @@ fn parses_agent_new_codex_flags() {
         "--cwd",
         "/tmp/project",
         "--bypass-sandbox",
+        "--model",
+        "gpt-prod",
         "--no-prompt",
         "--extra-flag",
         "--ask-for-approval=never",
@@ -200,6 +206,7 @@ fn parses_agent_new_codex_flags() {
                 spec,
                 cwd,
                 bypass_sandbox,
+                model,
                 no_context,
                 show_context,
                 no_prompt,
@@ -214,6 +221,7 @@ fn parses_agent_new_codex_flags() {
     assert_eq!(spec.as_deref(), Some("STORY-433"));
     assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
     assert!(bypass_sandbox);
+    assert_eq!(model.as_deref(), Some("gpt-prod"));
     assert!(!no_context);
     assert!(!show_context);
     assert!(no_prompt);
@@ -294,7 +302,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     apply_agent_default_flags(
         &mut codex,
         &project,
-        AgentDefaultFlagOptions::new(true, vec!["--extra".to_string()]),
+        AgentDefaultFlagOptions::new(true, vec!["--extra".to_string()], None),
         false,
     )
     .unwrap();
@@ -312,7 +320,7 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     apply_agent_default_flags(
         &mut antigravity,
         &project,
-        AgentDefaultFlagOptions::new(true, Vec::new()),
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
         false,
     )
     .unwrap();
@@ -327,13 +335,70 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     apply_agent_default_flags(
         &mut claude,
         &project,
-        AgentDefaultFlagOptions::new(false, vec!["--one-shot".to_string()]),
+        AgentDefaultFlagOptions::new(false, vec!["--one-shot".to_string()], None),
         true,
     )
     .unwrap();
     assert_eq!(
         claude.default_args,
         vec!["--permission-mode", "acceptEdits", "--one-shot"]
+    );
+}
+
+#[test]
+fn agent_model_config_and_flag_append_vendor_model_args() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        home.join(".aida/agents.toml"),
+        "[agents.codex]\nmodel = \"global-codex\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "[agents.codex]\nmodel = \"team-codex\"\n",
+    )
+    .unwrap();
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+    let mut codex = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    apply_agent_default_flags(
+        &mut codex,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(codex.default_args, vec!["--model", "team-codex"]);
+
+    let mut explicit = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    apply_agent_default_flags(
+        &mut explicit,
+        &project,
+        AgentDefaultFlagOptions::new(
+            true,
+            vec!["--tail".to_string()],
+            Some("flag-codex".to_string()),
+        ),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        explicit.default_args,
+        vec!["--model", "flag-codex", "--tail"]
     );
 }
 
@@ -564,7 +629,7 @@ fn apply_agent_default_flags_knob_injects_when_native() {
     apply_agent_default_flags(
         &mut claude,
         &project,
-        AgentDefaultFlagOptions::new(true, Vec::new()),
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
         /* explicit_permission */ false,
     )
     .unwrap();
@@ -597,7 +662,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
     apply_agent_default_flags(
         &mut claude,
         &project,
-        AgentDefaultFlagOptions::new(true, Vec::new()),
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
         false,
     )
     .unwrap();
@@ -629,7 +694,7 @@ fn apply_agent_default_flags_rejects_bypass_and_contained() {
     let err = apply_agent_default_flags(
         &mut claude,
         &project,
-        AgentDefaultFlagOptions::new(true, Vec::new()),
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
         false,
     )
     .unwrap_err();
@@ -661,7 +726,7 @@ fn apply_agent_default_flags_explicit_skips_knob() {
     apply_agent_default_flags(
         &mut claude,
         &project,
-        AgentDefaultFlagOptions::new(true, Vec::new()),
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
         /* explicit_permission */ true,
     )
     .unwrap();
@@ -695,7 +760,7 @@ fn apply_agent_default_flags_per_tool_flags_override_knob() {
     apply_agent_default_flags(
         &mut codex,
         &project,
-        AgentDefaultFlagOptions::new(true, Vec::new()),
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
         /* explicit_permission */ false,
     )
     .unwrap();
@@ -729,7 +794,7 @@ fn apply_agent_default_flags_no_default_flags_is_native() {
     apply_agent_default_flags(
         &mut claude,
         &project,
-        AgentDefaultFlagOptions::new(/* use_config_defaults */ false, Vec::new()),
+        AgentDefaultFlagOptions::new(/* use_config_defaults */ false, Vec::new(), None),
         /* explicit_permission */ false,
     )
     .unwrap();
