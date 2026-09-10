@@ -51352,5 +51352,31 @@ operations:
   timestamp: 2026-09-10T06:11:26.491131087Z
   kind: !SetStatus
     status: Completed
-clock: 4355
+- id: 01a08a0b-f6cd-7ab3-afbc-689873f8e023
+  target_id: 01a08a0b-e788-7073-a7ff-2479942fda16
+  author: aida
+  node_id: '1'
+  lamport: 4356
+  timestamp: 2026-09-10T06:40:35.021770858Z
+  kind: !Create
+    title: 'Review PR-1712: [AI:codex] feat(queue): print full mutation destinations (STORY-1002)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a089f3`) for branch `story-1002`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1712>
+      - Branch: `story-1002` → `main`
+
+      ## Covers
+
+      - STORY-1002
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1712` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4356
 node_id: '1'
