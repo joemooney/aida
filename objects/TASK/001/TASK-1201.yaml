@@ -3,12 +3,12 @@ spec_id: TASK-1201
 agreed_id: TASK-1201
 title: identify the auto-relaunch path that re-drove STORY-993 unprompted
 description: 'Observation (2026-09-09 00:46): seconds after the advisor un-shelved STORY-993, a single-spec pipeline (queue work STORY-993 --vendor claude --auto-complete --no-human=both --force-claim, pid 2759412) launched that the advisor did NOT start. It did the right thing (re-drove the spec), but no machinery is known to auto-relaunch shelved specs — identify what launched it (auto-rework path? another session? a leftover chain stage?) and either document it as a feature in the machinery glossary/drain docs or flag it as unintended. Evidence: .aida/drive-late4.log tail, events.jsonl around 2026-09-09T07:46:28Z, the drain-state file from that window. Acceptance: the launch path is named with file:line, documented or filed as its own bug.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T05:00:54.802815765Z
-modified_at: 2026-09-10T11:37:31.459026124Z
+modified_at: 2026-09-10T11:38:41.960575700Z
 req_type: Task
 comments:
 - id: 01a08b1b-d243-75f1-95b5-19b29a035fee
@@ -18,3 +18,7 @@ comments:
   modified_at: 2026-09-10T11:37:31.459026124Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-10T11:38:41.960575700Z
+  implemented_by: joe
