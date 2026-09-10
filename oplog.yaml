@@ -51424,5 +51424,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4357
+- id: 01a08a24-c7f4-77d1-b2f9-9fc55f3f5d30
+  target_id: 01a08a24-c401-7250-a8eb-e0104bb941b3
+  author: aida
+  node_id: '1'
+  lamport: 4358
+  timestamp: 2026-09-10T07:07:41.428668679Z
+  kind: !Create
+    title: 'Review PR-1713: [AI:codex] fix(status): shrink Draft glyph (BUG-1018)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08a16`) for branch `bug-1018`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1713>
+      - Branch: `bug-1018` → `main`
+
+      ## Covers
+
+      - BUG-1018
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1713` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4358
 node_id: '1'
