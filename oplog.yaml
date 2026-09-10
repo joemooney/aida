@@ -51211,5 +51211,17 @@ operations:
   timestamp: 2026-09-10T05:01:01.194803543Z
   kind: !SetStatus
     status: Approved
-clock: 4347
+- id: 01a089bb-dd05-7631-bf06-4dc21da924cf
+  target_id: 01a089bb-d6ae-7b53-909b-a817bbe427d6
+  author: aida
+  node_id: '1'
+  lamport: 4348
+  timestamp: 2026-09-10T05:13:05.541419196Z
+  kind: !Create
+    title: retire PROMPT_HISTORY from AIDA-scaffolded discipline — substrate and digest are the session record
+    description: 'Operator decision (2026-09-09): PROMPT_HISTORY.md is retired in AIDA projects — in four days of heavy multi-agent work it was read zero times while causing three rebase conflicts (append-only file under parallel sessions), and its jobs are done better by the substrate (aida history --events for the time series, aida digest for narrative, specs + PR trail for the why). Already done outside this task: this repo''s file frozen with a banner (commit 382bd4097); the operator''s global agent instructions scoped it to non-AIDA projects. THIS task cleans the scaffolded discipline so downstream AIDA projects never adopt it: (1) update the template mentions — aida-core/templates/.aida/discipline/session-discipline.md gains the rule (session history = substrate + digest; no session-log file), aida-core/templates/memories/feedback_dated_artifacts_immutable.md and memories/MEMORY.md drop or rescope their PROMPT_HISTORY references; (2) audit generate_claude_md / AGENTS.md generators and every skill/command template for any instruction to write session logs to a file (grep found none today — add a regression test asserting the embedded templates contain no PROMPT_HISTORY append instruction so one cannot sneak back in); (3) confirm init creates no such file (it does not today — cover in the same test). Acceptance: template grep test green; session-discipline.md carries the substrate-is-the-record rule; refresh delivers the updated templates via the TASK-1170 mechanism.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 4348
 node_id: '1'
