@@ -1,0 +1,26 @@
+id: 01a08b26-b0f7-7de3-abab-5b95343844de
+spec_id: STORY-1019
+agreed_id: STORY-1019
+title: 'Review PR-1722: [AI:codex] docs(drain): document shelved requeue relaunch path (TASK-1201)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a08b17`) for branch `task-1201`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1722>
+  - Branch: `task-1201` → `main`
+
+  ## Covers
+
+  - TASK-1201
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1722` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T11:49:23.831561744Z
+modified_at: 2026-09-10T11:49:23.831561744Z
+req_type: Story

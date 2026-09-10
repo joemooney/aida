@@ -52254,5 +52254,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4401
+- id: 01a08b26-b4f7-7942-8eb5-aa806c77e58a
+  target_id: 01a08b26-b0f7-7de3-abab-5b95343844de
+  author: aida
+  node_id: '1'
+  lamport: 4402
+  timestamp: 2026-09-10T11:49:24.855655951Z
+  kind: !Create
+    title: 'Review PR-1722: [AI:codex] docs(drain): document shelved requeue relaunch path (TASK-1201)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08b17`) for branch `task-1201`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1722>
+      - Branch: `task-1201` → `main`
+
+      ## Covers
+
+      - TASK-1201
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1722` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4402
 node_id: '1'
