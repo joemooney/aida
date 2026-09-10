@@ -50899,5 +50899,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4328
+- id: 01a08988-de86-7dd3-994a-d71771fff62f
+  target_id: 01a08988-d8cc-7890-bb34-8d75e03077dc
+  author: aida
+  node_id: '1'
+  lamport: 4329
+  timestamp: 2026-09-10T04:17:23.590788001Z
+  kind: !Create
+    title: 'aida report: file a bug report by email from the CLI, with configurable transport and an offline outbox'
+    description: 'Operator request (2026-09-09), the sending half of the established mail-intake loop (work machine emails reports home; the home advisor retrieves them by subject and files specs). Command: aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY). It composes a structured plain-text report — title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled), OS — and emails it with subject aida: <title> (matching the retrieval convention). Transport config, machine-global ~/.aida/config.toml [report] section (work mail setup is per-machine): to = address (required); transport = command | smtp; command transport pipes RFC822 text to a configurable command (default sendmail -t; also works with corporate mail CLIs) — the simplest corporate path; smtp transport takes host/port/starttls/username with the password ONLY from AIDA_SMTP_PASSWORD env (never config; add the row to docs/environment-variables.md). Reliability: on any send failure the report is written to ~/.aida/outbox/<timestamp>.eml and the command says so; aida report --flush retries the outbox. Privacy: the report contains only what the composer shows the user before sending (TTY confirms with the full text; --yes skips). No config = clear error naming the [report] section. Acceptance: command transport invokes the configured program with well-formed RFC822 on stdin (test with a capture script); failure lands the .eml in the outbox and --flush resends; subject matches aida: <title>; TTY preview + confirm; docs row for AIDA_SMTP_PASSWORD.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4329
 node_id: '1'
