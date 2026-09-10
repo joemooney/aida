@@ -1,0 +1,12 @@
+id: 01a08981-4826-7eb0-9a9c-a15a913e3e1a
+spec_id: TASK-1200
+agreed_id: TASK-1200
+title: add product to the starter role set — intake/PO seat missing from the default roles
+description: 'Operator request (2026-09-09), noticing the agent-launch role picker offers only advisor/implementer/integrator/reviewer: the product seat (intake / product-owner hat — groom drafts, capture requirements, route work; the operator uses role:product daily) should ship in the first-machine starter role pack (TASK-638 machinery, ~/.aida/roles/) so a new project offers it out of the box. Add the product role template beside the existing four (purpose text distinguishing it from advisor: product = intake and requirement capture; advisor = strategic counsel and disposition), idempotent on existing installs (never overwrite a user''s product role), scaffold refresh delivers it to machines that already ran first-init. Acceptance: fresh first-machine init writes product role; the agent-new picker lists it; existing ~/.aida/roles untouched when a product role exists; refresh adds it where absent.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T04:09:06.342872945Z
+modified_at: 2026-09-10T04:09:06.342872945Z
+req_type: Task
