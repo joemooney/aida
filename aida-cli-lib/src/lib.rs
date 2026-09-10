@@ -12213,6 +12213,122 @@ fn config_path_for_project(project_root: &std::path::Path) -> std::path::PathBuf
     project_root.join(".aida").join("config.toml")
 }
 
+fn config_parse_error_message(path: &std::path::Path, body: &str, err: &toml::de::Error) -> String {
+    let loc = err
+        .span()
+        .map(|span| byte_offset_line_col(body, span.start))
+        .map(|(line, col)| format!(":{line}:{col}"))
+        .unwrap_or_default();
+    format!(
+        "{}{}: failed to parse AIDA config: {err}\n  Fix the TOML syntax, then re-run the command. If this came from `aida pull`, inspect any sibling `{}.conflicted` file and merge it manually.",
+        path.display(),
+        loc,
+        path.display()
+    )
+}
+
+fn byte_offset_line_col(body: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1usize;
+    let mut col = 1usize;
+    for (idx, ch) in body.char_indices() {
+        if idx >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+fn config_conflict_marker_line(body: &str) -> Option<usize> {
+    body.lines().enumerate().find_map(|(idx, line)| {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("<<<<<<< ")
+            || trimmed == "<<<<<<<"
+            || trimmed.starts_with("=======")
+            || trimmed.starts_with(">>>>>>> ")
+            || trimmed == ">>>>>>>"
+        {
+            Some(idx + 1)
+        } else {
+            None
+        }
+    })
+}
+
+#[derive(Debug)]
+struct ConfigSnapshot {
+    path: std::path::PathBuf,
+    before: Option<String>,
+}
+
+fn known_project_config_paths(project_root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let aida = project_root.join(".aida");
+    vec![aida.join("config.toml"), aida.join("agents.toml")]
+}
+
+fn snapshot_known_project_configs(project_root: &std::path::Path) -> Vec<ConfigSnapshot> {
+    known_project_config_paths(project_root)
+        .into_iter()
+        .map(|path| ConfigSnapshot {
+            before: std::fs::read_to_string(&path).ok(),
+            path,
+        })
+        .collect()
+}
+
+fn validate_and_restore_project_configs_after_pull(snapshots: &[ConfigSnapshot]) -> Result<()> {
+    for snapshot in snapshots {
+        let Ok(after) = std::fs::read_to_string(&snapshot.path) else {
+            continue;
+        };
+        let failure = if let Some(line) = config_conflict_marker_line(&after) {
+            Some(format!(
+                "{}:{line}: conflict marker found in AIDA config after pull",
+                snapshot.path.display()
+            ))
+        } else {
+            match toml::from_str::<toml::Value>(&after) {
+                Ok(_) => None,
+                Err(err) => Some(config_parse_error_message(&snapshot.path, &after, &err)),
+            }
+        };
+        let Some(message) = failure else {
+            continue;
+        };
+
+        let conflicted = snapshot.path.with_extension("toml.conflicted");
+        aida_core::write_atomic(&conflicted, after)
+            .with_context(|| format!("failed to quarantine {}", conflicted.display()))?;
+        match &snapshot.before {
+            Some(before) => {
+                // trace:BUG-1025 | ai:codex
+                aida_core::write_atomic(&snapshot.path, before.clone())
+                    .with_context(|| format!("failed to restore {}", snapshot.path.display()))?;
+            }
+            None => match std::fs::remove_file(&snapshot.path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(e)
+                        .with_context(|| format!("failed to remove {}", snapshot.path.display()));
+                }
+            },
+        }
+        anyhow::bail!(
+            "{message}\n  Quarantined the conflicted version at {}.\n  Restored the pre-pull version at {}.\n  Manual merge step: compare both files, edit {}, then re-run `aida pull`.",
+            conflicted.display(),
+            snapshot.path.display(),
+            snapshot.path.display()
+        );
+    }
+    Ok(())
+}
+
 /// TASK-304: `[ultraplan] mode` governs whether AIDA proactively suggests
 /// `aida ultraplan <SPEC>` for chunky specs. /ultraplan is inherently
 /// interactive (claude.ai web approval), so the realistic surface is
@@ -12704,8 +12820,8 @@ fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncCon
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Ok(StoreSyncConfig::default());
     };
-    let value: toml::Value =
-        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let value: toml::Value = toml::from_str(&body)
+        .map_err(|err| anyhow::anyhow!(config_parse_error_message(&path, &body, &err)))?;
     let Some(sync) = value.get("store").and_then(|s| s.get("sync")) else {
         return Ok(StoreSyncConfig {
             source: path.display().to_string(),
@@ -12759,8 +12875,8 @@ fn read_store_allocation_config(project_root: &std::path::Path) -> Result<StoreA
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Ok(StoreAllocationConfig::default());
     };
-    let value: toml::Value =
-        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let value: toml::Value = toml::from_str(&body)
+        .map_err(|err| anyhow::anyhow!(config_parse_error_message(&path, &body, &err)))?;
     let Some(allocation) = value
         .get("store")
         .and_then(|s| s.get("allocation"))
@@ -55202,6 +55318,7 @@ fn handle_pull_command(
             // ff-update, we detect + restore it below by the top having moved.
             // trace:BUG-691 | ai:claude
             let pre_stash_top = git_ops::stash_top_sha(&project_root);
+            let config_snapshots = snapshot_known_project_configs(&project_root);
             // BUG-691: refuse the pull UP FRONT if another git process holds the
             // index lock. Otherwise git's autostash can stash the dirty tree,
             // then die on the reset when the lock reappears — stranding the
@@ -55243,6 +55360,12 @@ fn handle_pull_command(
                     .status();
                 match res {
                     Ok(s) if s.success() => {
+                        if let Err(e) =
+                            validate_and_restore_project_configs_after_pull(&config_snapshots)
+                        {
+                            eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+                            anyhow::bail!("aida pull: code leg failed (post-pull AIDA config validation failed: {e})");
+                        }
                         println!("  {}", "code pull complete".green());
                         // STORY-86: scan the just-pulled commits for
                         // refs to specs currently in Done and bump them.
@@ -55423,6 +55546,13 @@ fn handle_pull_command(
                         // uncommitted work is not silently stranded in the stash.
                         // trace:BUG-691 | ai:claude
                         report_autostash_restore(&project_root, pre_stash_top.as_deref());
+                        if let Err(e) =
+                            validate_and_restore_project_configs_after_pull(&config_snapshots)
+                        {
+                            eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+                            code_failed =
+                                Some(format!("post-pull AIDA config validation failed: {e}"));
+                        }
                     }
                     Err(e) => {
                         // BUG-691: same recovery on the process-spawn failure path

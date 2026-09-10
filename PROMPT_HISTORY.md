@@ -4852,3 +4852,20 @@ the existing branch-mismatch refusal intact. Added `// trace:BUG-1023 | ai:codex
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib queue_work_tests`;
 `cargo test -p aida-cli-lib real_phase_driver_wiring_tests`. Existing unrelated Rust warnings
 remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1025 pull config autostash hardening
+
+Picked up `BUG-1025` from the implementer queue. The bug was that `aida pull` could leave
+conflict markers in `.aida/config.toml` after an autostash pop conflict, causing later config reads
+to fail obscurely or be swallowed by invocation-specific output handling.
+
+Added post-code-pull validation for known project config files (`.aida/config.toml` and
+`.aida/agents.toml`). If validation finds conflict markers or invalid TOML, AIDA quarantines the
+broken file as `<name>.toml.conflicted`, restores the pre-pull version, prints the conflicted file
+and line/fix hint, and fails the pull instead of continuing silently. Also routed load-bearing
+store config parse errors through a shared formatter that includes file, line/column, and recovery
+guidance. Audited scoped config writers; existing mutable config paths use full-file creation or
+the section-preserving `config_edit::set_kv`, not raw `[agents]`/`[drain]` appends.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib handle_pull_command_tests -- --nocapture`.
+Existing unrelated Rust warnings remain in the focused test output.

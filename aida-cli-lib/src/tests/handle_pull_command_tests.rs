@@ -353,3 +353,67 @@ fn pull_store_only_does_not_run_auto_bump() {
         req.status
     );
 }
+
+#[test]
+fn post_pull_config_validation_quarantines_conflict_and_restores_pre_pull_config() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let project_root = tmp.path();
+    let aida = project_root.join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    let config = aida.join("config.toml");
+    let before = "[deployment]\nmode = \"distributed\"\n";
+    std::fs::write(&config, before).unwrap();
+
+    let snapshots = snapshot_known_project_configs(project_root);
+    let conflicted = format!(
+        "[deployment]\n{} Updated upstream\nmode = \"distributed\"\n{}\nmode = \"centralized\"\n{} Stashed changes\n",
+        "<<<<<<<", "=======", ">>>>>>>"
+    );
+    std::fs::write(&config, &conflicted).unwrap();
+
+    // trace:BUG-1025 | ai:codex
+    let err = validate_and_restore_project_configs_after_pull(&snapshots)
+        .expect_err("conflicted config must make pull fail loudly");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains(".aida/config.toml:2: conflict marker"),
+        "error should name conflicted file and line: {msg}"
+    );
+    assert!(
+        msg.contains("Quarantined the conflicted version"),
+        "error should name quarantine step: {msg}"
+    );
+    assert!(
+        msg.contains("Manual merge step"),
+        "error should include manual merge instruction: {msg}"
+    );
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), before);
+    assert_eq!(
+        std::fs::read_to_string(aida.join("config.toml.conflicted")).unwrap(),
+        conflicted
+    );
+}
+
+#[test]
+fn store_sync_config_parse_error_names_file_line_and_fix_hint() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let aida = tmp.path().join(".aida");
+    std::fs::create_dir_all(&aida).unwrap();
+    std::fs::write(
+        aida.join("config.toml"),
+        "[store]\n[store.sync]\nauto_push = \"manual\"\n[broken\n",
+    )
+    .unwrap();
+
+    let err = read_store_sync_config(tmp.path())
+        .expect_err("invalid config TOML must be returned as a loud error");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains(".aida/config.toml:4"),
+        "error should include config path and line: {msg}"
+    );
+    assert!(
+        msg.contains("Fix the TOML syntax"),
+        "error should include a fix hint: {msg}"
+    );
+}
