@@ -51903,5 +51903,13 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4380
+- id: 01a08afc-78c2-73d1-8fbd-7d7369ce780b
+  target_id: 01a089c0-4f1e-7913-a3f1-5c602eb50f67
+  author: aida
+  node_id: '1'
+  lamport: 4381
+  timestamp: 2026-09-10T11:03:16.930077788Z
+  kind: !SetStatus
+    status: Rejected
+clock: 4381
 node_id: '1'
