@@ -51831,5 +51831,31 @@ operations:
   timestamp: 2026-09-10T10:28:03.407647308Z
   kind: !SetStatus
     status: Completed
-clock: 4378
+- id: 01a08af1-6719-74a3-8720-f076d2a8da01
+  target_id: 01a08af1-631a-7940-8b27-9d1d7c096d0a
+  author: aida
+  node_id: '1'
+  lamport: 4379
+  timestamp: 2026-09-10T10:51:11.513894426Z
+  kind: !Create
+    title: 'Review PR-1720: [AI:codex] feat(session): add handoff fresh-vs-compact probe (STORY-1006)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08adf`) for branch `story-1006`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1720>
+      - Branch: `story-1006` → `main`
+
+      ## Covers
+
+      - STORY-1006
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1720` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4379
 node_id: '1'
