@@ -56,6 +56,78 @@ pub fn is_git_repo(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+/// Append AIDA's per-worktree runtime paths to the worktree-local git exclude.
+///
+/// Linked worktrees expose `.git` as a pointer file, so callers must not assume
+/// `<worktree>/.git/info/exclude`. `git rev-parse --git-path info/exclude`
+/// resolves the private exclude file for both main and linked worktrees.
+// trace:BUG-914 | ai:codex
+pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
+    let output = Command::new("git")
+        .current_dir(worktree)
+        .args(["rev-parse", "--git-path", "info/exclude"])
+        .output()
+        .with_context(|| {
+            format!(
+                "resolve worktree-local git exclude for {}",
+                worktree.display()
+            )
+        })?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git rev-parse --git-path info/exclude failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if raw.is_empty() {
+        anyhow::bail!("git returned an empty path for info/exclude");
+    }
+    let exclude_path = if Path::new(&raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        worktree.join(raw)
+    };
+
+    append_exclude_entries(
+        &exclude_path,
+        &[
+            ".aida/",
+            ".aida-store",
+            ".aida-store/",
+            ".aida-compete-*.log",
+        ],
+    )
+}
+
+// trace:BUG-914 | ai:codex
+fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool> {
+    let existing = std::fs::read_to_string(exclude_path).unwrap_or_default();
+    let mut contents = existing.clone();
+    let mut changed = false;
+    for entry in entries {
+        if existing.lines().any(|line| line.trim() == *entry) {
+            continue;
+        }
+        if !contents.is_empty() && !contents.ends_with('\n') {
+            contents.push('\n');
+        }
+        contents.push_str(entry);
+        contents.push('\n');
+        changed = true;
+    }
+    if !changed {
+        return Ok(false);
+    }
+    if let Some(parent) = exclude_path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    std::fs::write(exclude_path, contents)
+        .with_context(|| format!("write {}", exclude_path.display()))?;
+    Ok(true)
+}
+
 /// Initialize a new git repository.
 pub fn init(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path)?;
@@ -3085,6 +3157,79 @@ pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::process::Command;
+
+    fn run_git(cwd: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("failed to run git {args:?} in {}: {e}", cwd.display()));
+        assert!(
+            output.status.success(),
+            "git {args:?} failed in {}\nstdout:\n{}\nstderr:\n{}",
+            cwd.display(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    #[test]
+    fn aida_runtime_excludes_hide_materialized_worktree_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+        run_git(&repo, &["config", "user.email", "aida@example.invalid"]);
+        run_git(&repo, &["config", "user.name", "AIDA Test"]);
+        std::fs::write(repo.join("README.md"), "seed\n").unwrap();
+        run_git(&repo, &["add", "-A"]);
+        run_git(&repo, &["commit", "-qm", "seed"]);
+
+        let worktree = tmp.path().join("repo-bug914");
+        run_git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "bug-914",
+                worktree.to_str().unwrap(),
+                "HEAD",
+            ],
+        );
+
+        let changed = ensure_aida_runtime_excluded(&worktree).unwrap();
+        assert!(changed, "first exclude write should append entries");
+        let second = ensure_aida_runtime_excluded(&worktree).unwrap();
+        assert!(!second, "second exclude write should be idempotent");
+
+        std::fs::create_dir_all(worktree.join(".aida/sessions")).unwrap();
+        std::fs::create_dir_all(worktree.join(".aida-store/objects")).unwrap();
+
+        assert!(
+            !worktree.join(".gitignore").exists(),
+            "runtime excludes must not touch product .gitignore"
+        );
+        let status = run_git(&worktree, &["status", "--short"]);
+        assert_eq!(
+            status, "",
+            "AIDA runtime paths must not show as stageable worktree changes"
+        );
+
+        let exclude_path = run_git(&worktree, &["rev-parse", "--git-path", "info/exclude"]);
+        let exclude_path = if Path::new(&exclude_path).is_absolute() {
+            PathBuf::from(exclude_path)
+        } else {
+            worktree.join(exclude_path)
+        };
+        let exclude = std::fs::read_to_string(exclude_path).unwrap();
+        assert!(exclude.lines().any(|line| line.trim() == ".aida/"));
+        assert!(exclude.lines().any(|line| line.trim() == ".aida-store"));
+        assert!(exclude.lines().any(|line| line.trim() == ".aida-store/"));
+    }
 
     #[test]
     fn identity_redaction_substitutes_only_when_configured() {
