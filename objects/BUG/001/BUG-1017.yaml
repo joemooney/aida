@@ -3,12 +3,12 @@ spec_id: BUG-1017
 agreed_id: BUG-1017
 title: unified queue pickability policy — Done entries selectable by next/dry-run, NeedsAttention accepted without triage or force
 description: 'Field report (2026-09-09; tracked as BUG-032 in the originating project): queue surfaces disagree on what is pickable — ordinary queue data contains Done entries; queue next SELECTS a Done requirement; queue work --dry-run proposes a fresh branch for Done work; dry-run accepts NeedsAttention work without resolved triage or --force. Fix: ONE pickability policy (terminal statuses excluded; Done excluded from fresh pickup — it is awaiting-merge, route to from-pr/integrate instead with that hint; NeedsAttention requires resolved triage or explicit force) shared by queue next, queue list default lens, dry-run, and live pickup — the dry-run must never propose what live pickup would refuse. Acceptance: table-driven test over statuses x surfaces asserting identical pickability; queue next on a Done-headed queue skips with the awaiting-merge hint; dry-run on NeedsAttention refuses without force naming the triage path.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:33.137984320Z
-modified_at: 2026-09-10T06:05:03.152186464Z
+modified_at: 2026-09-10T06:11:25.691551515Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -22,8 +22,25 @@ comments:
   created_at: 2026-09-10T04:08:07.222436376Z
   modified_at: 2026-09-10T04:08:07.222436376Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a089f1-4551-7321-8d96-6d136028ab52
+  author: aida-auto-bump
+  timestamp: 2026-09-10T06:11:25.649972361Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a089f1-457b-7fd3-865a-c4a9d134a613
+  timestamp: 2026-09-10T06:11:25.691549815Z
+  agent: aida
+  commit_sha: dcb82b852a62273abac7f406433bbbd492b1657e
+  summary: 'BUG-1017 passes: shared fresh-pickup policy excludes Done from fresh work, gates NeedsAttention without force, and tests/CI are green.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-10T05:55:31.925921496Z
   implemented_by: joe
+  completed_at: 2026-09-10T06:11:25.649850070Z
+  completion_sha: dcb82b852a62273abac7f406433bbbd492b1657e
