@@ -52122,5 +52122,13 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4397
+- id: 01a08b06-5772-77a1-b741-b1699d781988
+  target_id: 01a0849b-b631-7b62-8d99-8c1a009ad628
+  author: aida
+  node_id: '1'
+  lamport: 4398
+  timestamp: 2026-09-10T11:14:03.762226949Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 4398
 node_id: '1'
