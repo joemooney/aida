@@ -74,6 +74,21 @@ orchestrator per queued implementer spec until the queue is empty.
 A drain is a *workflow pattern*; the orchestrator is the *machine* that
 implements one iteration of it.
 
+Re-adding a shelved spec to a queue is **not** itself a relaunch. The relaunch
+path is an active drain runner that notices the queued head and invokes the
+same per-spec orchestrator again. In the built-in resilient loop, that runner is
+`scripts/drain-loop.sh` (`while true` plus `aida queue work "next${CHUNK}"
+--auto-complete …`), and the `nextN` driver resolves the current head in
+`RealNextNDriver::next_head` before calling `RealNextNDriver::run_spec` to
+re-enter `run_auto_complete` for that spec. trace:TASK-1201 | ai:codex
+
+Operationally: `aida queue add STORY-993 --for implementer` only blesses
+STORY-993 back into the queue. If a drain loop or another wrapper is already
+running, it may pick that item up seconds later and the visible process/logs
+will look like a fresh single-spec `aida queue work STORY-993 --auto-complete`
+run. If no runner is active, nothing launches until someone runs a drain or
+`queue work` command.
+
 ### batch
 
 A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --tags

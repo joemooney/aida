@@ -4985,3 +4985,22 @@ contract tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib queue_destination_contract -- --nocapture`;
 `cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-10 — TASK-1201 STORY-993 relaunch path
+
+Picked up `TASK-1201` from the implementer queue. The task was to identify what launched the
+2026-09-09 07:46 UTC re-drive of shelved `STORY-993` and either document it as machinery or file it
+as unintended.
+
+Reviewed the requested evidence: `/home/joe/ai/aida/.aida/drive-late4.log`, events around
+`2026-09-09T07:46:28Z`, `/home/joe/.aida/usage.jsonl`, `/home/joe/.aida/auto-complete.jsonl`, and
+the current drain-state shape. The evidence showed `queue add`/status activity immediately before a
+fresh `STORY-993` auto-complete run, but `queue add` itself is metadata-only. The documented launch
+path is an already-active drain runner/wrapper picking up the requeued head: `scripts/drain-loop.sh`
+runs `queue work nextN --auto-complete`, and `RealNextNDriver` resolves the live queue head then
+calls `run_auto_complete` for that spec. Added a `trace:TASK-1201` docs note to the machinery
+glossary and to `docs/autonomous-drain.md`, plus an AIDA comment with the evidence and residual
+limit: retained logs did not prove the exact OS parent for pid 2759412, so the docs name the
+runner/wrapper path rather than claiming systemd specifically.
+
+Verification: documentation diff review.
