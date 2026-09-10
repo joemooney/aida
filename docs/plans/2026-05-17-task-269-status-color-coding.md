@@ -42,7 +42,7 @@ criterion is satisfied for free; glyphs are plain Unicode and always print.
   `paint_status` (apply palette colour to arbitrary text — lets table cells
   be padded *then* coloured), `status_badge` (`"<glyph> <coloured status>"`).
 - **Spec's proposed palette is authoritative** — the user authored it in the
-  spec on 2026-05-16: Draft=dim ◯, Approved=cyan ▸, Planned=blue ▷,
+  spec on 2026-05-16: Draft=dim ○, Approved=cyan ▸, Planned=blue ▷,
   InProgress=yellow ◐, Done=bright-green-bold ◉, Completed=green ✓,
   Rejected=red ✗. Done stays bold-bright-green to keep the STORY-86
   "done on a branch" vs plain-green "merged" distinction.

@@ -298,7 +298,7 @@ Each tool was called over the stdio MCP bridge, then verified using the AIDA CLI
   UUID: 019e50e6-199d-75a2-b5a6-003a9fc776fd
   Title: Antigravity Phase 2 test fixture - safe to delete
   Type: Task
-  Status: ◯ Draft
+  Status: ○ Draft
   Priority: Low
 
   Created by Antigravity Phase 2 bounded writes test run.
@@ -339,7 +339,7 @@ Each tool was called over the stdio MCP bridge, then verified using the AIDA CLI
   UUID: 019e50e6-1f14-77a2-880a-0df6042d7d23
   Title: schema discovery worked but tool descriptions could benefit from more detail
   Type: Task
-  Status: ◯ Draft
+  Status: ○ Draft
   Priority: Medium
   Tags: kind:followup-suggestion, severity:cosmetic, from-implementer:STORY-407
 

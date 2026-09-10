@@ -4791,3 +4791,18 @@ drain hints. Added `// trace:BUG-1017 | ai:codex` comments on the policy and reg
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib queue_work_tests --no-default-features`;
 `cargo test -p aida-cli --test queue_work_dry_run --no-default-features`. Existing unrelated Rust
 warnings remain in the test output.
+
+## Session 2026-09-10 — BUG-1018 Draft status glyph
+
+Picked up `BUG-1018` from the implementer queue. The bug was that Draft rendered with the oversized
+U+25EF large circle (`◯`) while the rest of the status column used smaller-width visual marks.
+
+Changed Draft status rendering to U+25CB (`○`) in the CLI status display literal map, the
+profile-aware `Glyph::Pending` registry path, and the TUI redesign list-row mirror. Updated the
+focused glyph assertions and stale rendered examples in Antigravity MCP setup docs/templates plus
+the TASK-269 palette note. Added `// trace:BUG-1018 | ai:codex` comments on the status glyph
+branches.
+
+Verification: `cargo test -p aida-cli-lib status_display --lib`; `cargo test -p aida-tui redesign::list_row --lib`;
+`cargo fmt --all -- --check`; stale `◯ Draft` scan. Existing unrelated Rust warnings remain in the
+CLI test output.

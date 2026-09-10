@@ -11,7 +11,7 @@
 //!
 //! | Status      | Colour              | Glyph |
 //! |-------------|---------------------|-------|
-//! | Draft       | dim grey            | ◯     |
+//! | Draft       | dim grey            | ○     |
 //! | Approved    | cyan                | ▸     |
 //! | Planned     | blue                | ▷     |
 //! | InProgress  | yellow              | ◐     |
@@ -108,7 +108,8 @@ pub(crate) fn status_glyph(status: &str) -> &'static str {
 /// that assert the default rendering. trace:STORY-628 | ai:claude
 fn status_glyph_literal(status: &str) -> &'static str {
     match normalize(status).as_str() {
-        "draft" => "◯",
+        // trace:BUG-1018 | ai:codex
+        "draft" => "○",
         "approved" => "▸",
         "planned" => "▷",
         "inprogress" => "◐",
@@ -271,6 +272,10 @@ mod tests {
             status_glyph_for_profile("Approved", GlyphProfile::Unicode),
             "▸"
         );
+        assert_eq!(
+            status_glyph_for_profile("Draft", GlyphProfile::Unicode),
+            "○"
+        );
         // ASCII profile downgrades.
         assert_eq!(
             status_glyph_for_profile("Completed", GlyphProfile::Ascii),
@@ -279,6 +284,10 @@ mod tests {
         assert_eq!(
             status_glyph_for_profile("Approved", GlyphProfile::Ascii),
             "->"
+        );
+        assert_eq!(
+            status_glyph_for_profile("Draft", GlyphProfile::Ascii),
+            "( )"
         );
         // Done now routes through the registry (TASK-835): Unicode reproduces
         // the historical ◉ byte-for-byte; ASCII downgrades.
@@ -297,7 +306,7 @@ mod tests {
 
     #[test]
     fn glyph_for_each_canonical_status() {
-        assert_eq!(status_glyph_literal("Draft"), "◯");
+        assert_eq!(status_glyph_literal("Draft"), "○");
         assert_eq!(status_glyph_literal("Approved"), "▸");
         assert_eq!(status_glyph_literal("Planned"), "▷");
         assert_eq!(status_glyph_literal("In Progress"), "◐");

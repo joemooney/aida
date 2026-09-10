@@ -51,7 +51,7 @@ pub(crate) enum Glyph {
     Check,
     /// Failure / rejected (✗).
     Cross,
-    /// Draft / not-started (◯).
+    /// Draft / not-started (○).
     Pending,
     /// In-progress / partial (◐).
     InFlight,
@@ -132,7 +132,8 @@ impl Glyph {
         match self {
             Glyph::Check => "✓",
             Glyph::Cross => "✗",
-            Glyph::Pending => "◯",
+            // trace:BUG-1018 | ai:codex
+            Glyph::Pending => "○",
             Glyph::InFlight => "◐",
             Glyph::Blocked => "⚠",
             Glyph::Queued => "▷",
