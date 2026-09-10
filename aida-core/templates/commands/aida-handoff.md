@@ -14,4 +14,3 @@ Follow the workflow in `.claude/skills/aida-handoff.md`:
 2. Run `aida session handoff --check` and inspect drains, leases, briefs, and open PR/review state.
 3. Write a durable handoff note or brief for the next session. If `$ARGUMENTS` names a spec, use that as the focus.
 4. End with one decision line: `Recommendation: START FRESH` or `Recommendation: COMPACT`, listing every pin when compaction is required.
-

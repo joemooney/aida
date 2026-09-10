@@ -85,4 +85,3 @@ Print exactly one decision line:
 
 Do not recommend compaction merely because context is large. In AIDA work,
 fresh is preferred once the substrate boundary is clean.
-
