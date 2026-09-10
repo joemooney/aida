@@ -1,0 +1,51 @@
+id: 01a08988-f67b-7971-80ff-b83d92cccea8
+spec_id: BUG-1022
+agreed_id: BUG-1022
+title: 'auto-complete failure: phase 2 (ci) on STORY-994'
+description: |
+  Auto-drafted by `aida queue work STORY-994 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  implementer worktree `/home/joe/ai/aida-story-994` is on `story-994-pr1704` but phase 2 is driving `story-994` — refusing to push or tear down (attempt 2/2)
+
+  Failure kind: `tool-exit`
+
+  ## Recovery hint shown to the user
+
+  The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0898142d3 --skip-ci`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-10T04:17:27.673505249+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 513528 ms
+    - phase 2 (ci): 21 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"STORY-994","started_at":"2026-09-10T04:08:51.919419646+00:00","completed_at":"2026-09-10T04:17:27.673505249+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"tool-exit","failure_message":"implementer worktree `/home/joe/ai/aida-story-994` is on `story-994-pr1704` but phase 2 is driving `story-994` — refusing to push or tear down (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":513528},{"phase":2,"slug":"ci","elapsed_ms":21}],"total_ms":514869,"binary_sha":"d6cdad05c"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T04:17:29.723404518Z
+modified_at: 2026-09-10T04:17:29.723404518Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- ci
+- failure-2
+- failure-kind:tool-exit
