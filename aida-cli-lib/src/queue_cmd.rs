@@ -6120,6 +6120,40 @@ pub(crate) struct QueueWorkEntry {
     pub(crate) status_at_plan: String,
 }
 
+pub(crate) fn rework_pr_head_branch_from_lookup(lookup: PrLookup) -> Option<String> {
+    match lookup {
+        PrLookup::Found(pr) => pr.head_branch.filter(|branch| !branch.trim().is_empty()),
+        _ => None,
+    }
+}
+
+pub(crate) fn queue_work_plan_wants_pr_head_branch(plan: &QueueWorkPlan) -> bool {
+    plan.review_target.is_none()
+        && plan.entries.len() == 1
+        && plan.entries.iter().any(|entry| {
+            matches!(
+                entry.status_at_plan.as_str(),
+                "In Progress" | "InProgress" | "Done"
+            )
+        })
+}
+
+fn rework_pr_head_branch_override(
+    project_root: &std::path::Path,
+    plan: &QueueWorkPlan,
+    explicit_branch: Option<&str>,
+) -> Option<String> {
+    if explicit_branch.is_some() || !queue_work_plan_wants_pr_head_branch(plan) {
+        return None;
+    }
+    let spec = plan.entries.first()?.spec_id.as_str();
+    // BUG-1023: a findings-led rework belongs on the already-open PR branch.
+    // Seed session_start with that head so the implementer lease and phase 2
+    // drive the same branch instead of deriving the plain spec branch.
+    // trace:BUG-1023 | ai:codex
+    rework_pr_head_branch_from_lookup(crate::detect_open_pr_for_spec_via_forge(project_root, spec))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QueueWorkMode {
     Head,
@@ -7915,6 +7949,11 @@ pub(crate) fn handle_queue_work(
         }
     }
 
+    let project_root = find_main_worktree_root()?;
+    let rework_branch_override =
+        rework_pr_head_branch_override(&project_root, &plan, branch_override);
+    let session_branch_override = branch_override.or(rework_branch_override.as_deref());
+
     // TASK-1053: single-spec dry-run preview. The plan is now fully resolved —
     // the pre-flight summary above already printed anchor/scope/role/mode/skill;
     // here we add the branch, worktree path, session id, and the lease the
@@ -7929,9 +7968,8 @@ pub(crate) fn handle_queue_work(
         let dry_line = |label: &str, value: String| {
             eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
         };
-        let project_root = find_main_worktree_root()?;
         let slug = slugify(&plan.scope);
-        let branch = if let Some(b) = branch_override {
+        let branch = if let Some(b) = session_branch_override {
             b.to_string()
         } else if let Some((forge, n)) = plan.review_target {
             forge.local_branch_for(n)
@@ -8378,7 +8416,7 @@ pub(crate) fn handle_queue_work(
     // real base to record. Both `--stack` and `--base` flow through the
     // same `session_start(base: Option<&str>)` parameter.
     // trace:STORY-248 | ai:claude
-    let project_root_for_base = find_main_worktree_root()?;
+    let project_root_for_base = project_root.clone();
     let cwd_for_base = std::env::current_dir().unwrap_or_else(|_| project_root_for_base.clone());
     let resolved_base = resolve_stack_base(
         &project_root_for_base,
@@ -8406,7 +8444,7 @@ pub(crate) fn handle_queue_work(
     // a queue-work-specific launch summary before exec.
     session_start(
         &plan.scope,
-        branch_override,
+        session_branch_override,
         resolved_base.as_deref(),
         /* reuse_branch */ false,
         path_override,
@@ -8431,7 +8469,6 @@ pub(crate) fn handle_queue_work(
     )?;
 
     // Look up the lease we just minted: by scope, by owner=us, freshest.
-    let project_root = find_main_worktree_root()?;
     let lease = list_leases(&project_root)
         .into_iter()
         .filter(|l| l.scope.eq_ignore_ascii_case(&plan.scope))

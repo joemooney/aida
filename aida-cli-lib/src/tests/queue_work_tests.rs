@@ -39,6 +39,14 @@ fn resolved(spec: &str, qe: QueueEntry) -> QueueWorkEntry {
     }
 }
 
+fn resolved_with_status(spec: &str, qe: QueueEntry, status: &str) -> QueueWorkEntry {
+    QueueWorkEntry {
+        queue: qe,
+        spec_id: spec.into(),
+        status_at_plan: status.into(),
+    }
+}
+
 fn plan_with(mode: QueueWorkMode, scope: &str, entries: Vec<QueueWorkEntry>) -> QueueWorkPlan {
     let review_target = parse_review_scope(scope);
     QueueWorkPlan {
@@ -49,6 +57,63 @@ fn plan_with(mode: QueueWorkMode, scope: &str, entries: Vec<QueueWorkEntry>) -> 
         anchor_display: scope.into(),
         anchor_title: "anchor".into(),
     }
+}
+
+#[test]
+fn rework_pr_head_lookup_selects_open_pr_head_branch() {
+    let lookup = PrLookup::Found(OpenPrInfo {
+        number: 1704,
+        title: "Rework STORY-994".into(),
+        url: "https://example.test/pr/1704".into(),
+        head_branch: Some("story-994-pr1704".into()),
+    });
+
+    assert_eq!(
+        rework_pr_head_branch_from_lookup(lookup),
+        Some("story-994-pr1704".into())
+    );
+}
+
+#[test]
+fn rework_pr_head_lookup_ignores_missing_or_empty_branch() {
+    let lookup = PrLookup::Found(OpenPrInfo {
+        number: 1704,
+        title: "Rework STORY-994".into(),
+        url: "https://example.test/pr/1704".into(),
+        head_branch: Some("   ".into()),
+    });
+
+    assert_eq!(rework_pr_head_branch_from_lookup(lookup), None);
+    assert_eq!(rework_pr_head_branch_from_lookup(PrLookup::NoOpenPr), None);
+}
+
+#[test]
+fn in_progress_single_spec_pickup_wants_pr_head_branch() {
+    let r = req("STORY-994", None, RequirementType::Story);
+    let e = resolved_with_status(
+        "STORY-994",
+        entry(r.id, Some("implementer"), None),
+        "In Progress",
+    );
+    let plan = plan_with(QueueWorkMode::Item, "STORY-994", vec![e]);
+
+    assert!(queue_work_plan_wants_pr_head_branch(&plan));
+}
+
+#[test]
+fn approved_or_review_pickup_does_not_use_pr_head_branch() {
+    let r = req("STORY-994", None, RequirementType::Story);
+    let approved = resolved("STORY-994", entry(r.id, Some("implementer"), None));
+    let approved_plan = plan_with(QueueWorkMode::Item, "STORY-994", vec![approved]);
+    assert!(!queue_work_plan_wants_pr_head_branch(&approved_plan));
+
+    let review = resolved_with_status(
+        "PR-1704",
+        entry(Uuid::now_v7(), Some("reviewer"), None),
+        "In Progress",
+    );
+    let review_plan = plan_with(QueueWorkMode::Item, "PR-1704", vec![review]);
+    assert!(!queue_work_plan_wants_pr_head_branch(&review_plan));
 }
 
 /// Single-role cluster → that role, "cluster-derived", no warnings.
