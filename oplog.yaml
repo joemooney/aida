@@ -50996,5 +50996,17 @@ operations:
   timestamp: 2026-09-10T04:19:15.029539800Z
   kind: !SetDescription
     description: 'Operator re-scope (2026-09-09): slice 1 is the COMPOSER + LOCAL FILING, no email transport. aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY) does two things: (1) PRINTS a paste-ready report to stdout — first line Subject: aida: <title> (matching the home-side retrieval convention), then the structured body: title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled), OS; the operator pastes it into their mail client by hand; --copy also puts it on the clipboard (ultraplan mechanism). (2) FILES the same report as a spec in the CURRENT project''s own store: aida add --type bug --title "AIDA: <title>" with the body as description, tagged upstream:aida and observed-version:<aida version> — formalizing the operator''s existing local practice (their BUG-018/BUG-032). RESOLUTION RECHECK: aida report --recheck lists open AIDA:-prefixed / upstream:aida specs with observed version vs the currently installed aida version, flagging those observed on an OLDER version as re-test candidates after an upgrade; additionally the first store-reading command after an aida version change prints a one-line notice when such specs exist (N upstream aida reports predate this binary — aida report --recheck). --no-file skips the local spec for one-off sends. No transport, no config, no secrets in this slice; email transport + outbox stay SLICE 2, deferred until manual pasting becomes friction. Acceptance: command prints subject+body with all context fields; a spec titled AIDA: <title> with upstream:aida + observed-version tags exists in the local store afterward; --recheck lists it with observed vs current version and drops it when the spec closes; the post-upgrade one-line notice fires exactly once per version change; --no-file skips filing; plain text, no ANSI when piped; unit tests on composer format, tags, and recheck filtering.'
-clock: 4335
+- id: 01a0898b-151f-7820-b3e2-ddc7e0b9b8fe
+  target_id: 01a0898b-0f7c-7fc1-836a-ceec955e4ca1
+  author: aida
+  node_id: '1'
+  lamport: 4336
+  timestamp: 2026-09-10T04:19:48.639663208Z
+  kind: !Create
+    title: rework sessions work on a <spec>-pr<N> branch while phase 2 drives <spec> — systematic branch-mismatch refusals
+    description: 'Recurring pattern (STORY-975 rework 2026-09-07, STORY-994 rework 2026-09-09): a findings-led rework implementer checks out or creates a branch named <spec>-pr<N> (e.g. story-994-pr1704) while the orchestrator phase 2 drives the plain <spec> branch, so the BUG-878-era safety guard refuses to push or tear down (implementer worktree is on story-994-pr1704 but phase 2 is driving story-994 — attempt 2/2) and the spec shelves even when the work was already pushed. The guard is CORRECT; the branch-naming handoff is the bug: the rework launch and the phase-2 expectation must agree on ONE branch — either the rework session is told to stay on the PR''s existing head branch (preferred: fixups belong on the open PR), or phase 2 accepts the session''s registered branch when it differs from the derived default. Acceptance: a findings-led rework runs implementer + phase 2 + review on the SAME branch with no mismatch refusal; regression test simulating the rework relaunch asserting branch agreement; the guard still refuses a genuinely foreign branch.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4336
 node_id: '1'

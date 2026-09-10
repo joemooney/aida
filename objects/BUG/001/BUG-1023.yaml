@@ -1,0 +1,12 @@
+id: 01a0898b-0f7c-7fc1-836a-ceec955e4ca1
+spec_id: BUG-1023
+agreed_id: BUG-1023
+title: rework sessions work on a <spec>-pr<N> branch while phase 2 drives <spec> — systematic branch-mismatch refusals
+description: 'Recurring pattern (STORY-975 rework 2026-09-07, STORY-994 rework 2026-09-09): a findings-led rework implementer checks out or creates a branch named <spec>-pr<N> (e.g. story-994-pr1704) while the orchestrator phase 2 drives the plain <spec> branch, so the BUG-878-era safety guard refuses to push or tear down (implementer worktree is on story-994-pr1704 but phase 2 is driving story-994 — attempt 2/2) and the spec shelves even when the work was already pushed. The guard is CORRECT; the branch-naming handoff is the bug: the rework launch and the phase-2 expectation must agree on ONE branch — either the rework session is told to stay on the PR''s existing head branch (preferred: fixups belong on the open PR), or phase 2 accepts the session''s registered branch when it differs from the derived default. Acceptance: a findings-led rework runs implementer + phase 2 + review on the SAME branch with no mismatch refusal; regression test simulating the rework relaunch asserting branch agreement; the guard still refuses a genuinely foreign branch.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T04:19:47.196589859Z
+modified_at: 2026-09-10T04:19:47.196589859Z
+req_type: Bug
