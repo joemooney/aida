@@ -23,7 +23,7 @@
 //!
 //! | Status         | Colour (ratatui)     | Glyph (unicode / ascii) |
 //! |----------------|----------------------|-------------------------|
-//! | Draft          | dim                  | ◯ / ( )                 |
+//! | Draft          | dim                  | ○ / ( )                 |
 //! | Approved       | cyan (accent)        | ▸ / ->                  |
 //! | Planned        | blue (info)          | ▷ / [>]                 |
 //! | InProgress     | yellow (warn)        | ◐ / [~]                 |
@@ -52,7 +52,7 @@ use ratatui::style::{Color, Modifier, Style};
 /// trace:TASK-914 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GlyphMode {
-    /// Unicode glyphs (the CLI default; ◯ ▸ ◐ ✓ …).
+    /// Unicode glyphs (the CLI default; ○ ▸ ◐ ✓ …).
     #[default]
     Unicode,
     /// Curated ASCII fallback (( ) -> [~] [x] …).
@@ -99,7 +99,8 @@ fn normalize(status: &str) -> String {
 /// so column layout stays stable. trace:TASK-914 | ai:claude
 pub fn status_glyph(status: &str, mode: GlyphMode) -> &'static str {
     match (normalize(status).as_str(), mode) {
-        ("draft", GlyphMode::Unicode) => "◯",
+        // trace:BUG-1018 | ai:codex
+        ("draft", GlyphMode::Unicode) => "○",
         ("draft", GlyphMode::Ascii) => "( )",
         ("approved", GlyphMode::Unicode) => "▸",
         ("approved", GlyphMode::Ascii) => "->",
@@ -358,7 +359,7 @@ mod tests {
     #[test]
     fn glyph_for_each_canonical_status_unicode() {
         // Mirrors status_display::glyph_for_each_canonical_status.
-        assert_eq!(status_glyph("Draft", GlyphMode::Unicode), "◯");
+        assert_eq!(status_glyph("Draft", GlyphMode::Unicode), "○");
         assert_eq!(status_glyph("Approved", GlyphMode::Unicode), "▸");
         assert_eq!(status_glyph("Planned", GlyphMode::Unicode), "▷");
         assert_eq!(status_glyph("In Progress", GlyphMode::Unicode), "◐");
@@ -504,7 +505,7 @@ mod tests {
             assert_eq!(row.priority.chars().count(), 10, "priority columns aligned");
         }
         // The status glyph rode along, mode-resolved.
-        assert_eq!(laid[0].status_glyph, "◯"); // Draft
+        assert_eq!(laid[0].status_glyph, "○"); // Draft
         assert_eq!(laid[1].status_glyph, "◐"); // In Progress
         assert_eq!(laid[2].status_glyph, "✓"); // Completed
                                                // Padded id keeps the original prefix.
