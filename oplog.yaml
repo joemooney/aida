@@ -52422,5 +52422,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4408
+- id: 01a08b55-1808-7e20-936f-38f04c30c462
+  target_id: 01a08b55-1261-7992-9334-a612f9693fde
+  author: aida
+  node_id: '1'
+  lamport: 4409
+  timestamp: 2026-09-10T12:40:04.872642368Z
+  kind: !Create
+    title: reviewer phase-child hits the queue-membership identity refusal — phase children need the pipeline's queue user, not just the phase role
+    description: 'TASK-1198 attempt 6 (2026-09-10): the phase-3 reviewer child failed with TASK-7 isn''t in your queue, but it IS queued (help: aida role enter implementer) and exited 1 — the BUG-901 fix pinned AIDA_SESSION_ROLE per phase but the child still resolves a queue USER whose personal queue lacks the entry, so the queue-membership check refuses. For orchestrated phase children the queue identity must come from the pipeline (the entry''s owning queue captured at drain pickup, passed via env/flag to every phase child), and a reviewer-phase child arguably should not run a queue-membership check at all (it reviews a PR, not a queue entry — sibling of BUG-897''s PR-scoping). Acceptance: pipeline whose entry lives in user X''s queue runs all phase children successfully when launched by user Y; the reviewer child performs no queue-membership refusal; regression beside the BUG-901 tests.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4409
 node_id: '1'
