@@ -1737,8 +1737,8 @@ pub enum RoleCommand {
         yes: bool,
     },
 
-    /// Install a starter set of global roles (implementer, advisor,
-    /// reviewer) at ~/.aida/roles/ — the agent-wired role taxonomy.
+    /// Install a starter set of global roles (implementer, product, advisor,
+    /// reviewer, integrator) at ~/.aida/roles/.
     /// Idempotent — skips any that already exist; safe to re-run.
     /// (`architect` / `triage` are opt-in via `aida role add`.)
     Scaffold,
@@ -10138,10 +10138,10 @@ pub enum Command {
         #[clap(long)]
         no_post_hooks: bool,
 
-        /// Skip bootstrapping the default global role set (implementer, advisor,
-        /// reviewer) into ~/.aida/roles/. By default `aida init` scaffolds them
-        /// so a fresh machine is ready out of the box.
-        // trace:TASK-638 | ai:claude
+        /// Skip bootstrapping the default global role set (implementer, product,
+        /// advisor, reviewer, integrator) into ~/.aida/roles/. By default
+        /// `aida init` scaffolds them so a fresh machine is ready out of the box.
+        // trace:TASK-638 TASK-1200 | ai:claude,codex
         #[clap(long)]
         no_roles: bool,
 
