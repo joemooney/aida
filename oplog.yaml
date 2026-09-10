@@ -50731,5 +50731,17 @@ operations:
   timestamp: 2026-09-09T08:51:20.558406367Z
   kind: !SetStatus
     status: Completed
-clock: 4313
+- id: 01a0897f-7fa7-77a1-bd09-ad8dd4c641c1
+  target_id: 01a0897f-7b38-7e50-8f6f-95eaac42c7f0
+  author: aida
+  node_id: '1'
+  lamport: 4314
+  timestamp: 2026-09-10T04:07:09.479730880Z
+  kind: !Create
+    title: no-launch and dry-run paths bypass vendor resolution — disabled claude displayed and completion instructions hardcode claude
+    description: 'Field report on 0.14.0, codex-only project (2026-09-09; the BUG-898/902 live-launch fix is CONFIRMED working there — live-capable dry runs resolve vendor codex / exec codex). Two residual gaps on the non-launching paths: (1) queue work --vendor codex --no-launch resolves and prints vendor codex / exec codex correctly, but the POST-SETUP completion instructions still print claude and claude /aida-pickup SPEC — in a project where claude is prohibited. (2) --no-launch --dry-run WITHOUT an explicit vendor still displays vendor claude / exec claude — the BUG-902 preflight is skipped when no launch will happen, so the disabled default leaks into display. Fix: the resolved-vendor preflight runs on every path that DISPLAYS a vendor (no-launch and dry-run included) — a disabled vendor never appears as the resolved default (show the enabled resolution, or vendor none / launch deferred); completion instructions are vendor-aware (codex form for codex, neutral enter-the-worktree text when no vendor resolved). Acceptance: codex-only project — no-launch completion text names codex or is vendor-neutral; no-launch dry-run without --vendor shows codex or none, never the disabled claude; regression tests beside the BUG-902 set.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4314
 node_id: '1'
