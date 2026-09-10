@@ -50887,5 +50887,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4327
+- id: 01a08986-e302-78d2-a4de-026efe1734a0
+  target_id: 01a08986-deb1-7581-a3d1-a8e70d537e4f
+  author: aida
+  node_id: '1'
+  lamport: 4328
+  timestamp: 2026-09-10T04:15:13.666453175Z
+  kind: !Create
+    title: cross-platform nightly red on macOS two consecutive nights (main d6cdad0 and 18e7ee5)
+    description: 'Surfaced via mail intake (2026-09-09): GitHub nightly cross-platform runs failed on macos-latest for main at 18e7ee5 (Sep 8) and d6cdad0 (Sep 9) — two consecutive reds, unread in the inbox. Releases require cross-platform green within 24h of tagging (pre-release gate), so the next release is blocked until this is fixed. Investigate via gh run logs for the failing macos jobs, fix the platform-specific breakage, and verify with a manual workflow_dispatch of cross-platform.yml. Acceptance: a dispatched cross-platform run is green on all three platforms; the cause is noted on this spec.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4328
 node_id: '1'
