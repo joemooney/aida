@@ -2103,7 +2103,7 @@ fn run() -> Result<()> {
             match scaffold_starter_roles(&statusline_project_root()) {
                 Ok((created, skipped)) => {
                     println!(
-                        "  {} global roles installed: implementer, advisor, reviewer",
+                        "  {} global roles installed: implementer, product, advisor, reviewer, integrator",
                         crate::glyph(crate::glyphs::Glyph::Check).green()
                     );
                     if created.is_empty() {
@@ -17518,7 +17518,8 @@ fn human_route_is_open(archived: bool, status: &aida_core::RequirementStatus) ->
 ///
 /// The default set is the **agent-wired** role taxonomy — the roles the
 /// orchestrator actually drives and routes work to (`implementer`,
-/// `advisor`, `reviewer`, `integrator`).
+/// `advisor`, `reviewer`, `integrator`) plus the product intake seat that
+/// captures requirements and routes work before implementation.
 /// `architect` and `triage` are deliberately NOT scaffolded by default:
 /// they have no orchestrator phase and sit empirically dormant, so shipping
 /// them as starters invites the "what's this role for?" first-impression
@@ -17527,10 +17528,15 @@ fn human_route_is_open(archived: bool, status: &aida_core::RequirementStatus) ->
 /// `validate_registered_agent_role`.
 // trace:TASK-608 | ai:claude
 // trace:STORY-460 | ai:claude — integrator joins the agent-wired starter set
+// trace:TASK-1200 | ai:codex — product joins the first-machine starter set
 const STARTER_ROLES: &[(&str, &str)] = &[
     (
         "implementer",
         "Heads-down coding on a specific feature or fix. Drive a requirement to completed.",
+    ),
+    (
+        "product",
+        "Intake and product-owner seat. Groom drafts, capture requirements, sharpen acceptance criteria, and route work to the right queue. Distinct from advisor: product owns requirement capture; advisor owns strategic counsel, disposition, and design-fork judgment.",
     ),
     (
         "advisor",
@@ -23231,9 +23237,10 @@ fn role_guidance_for(project_root: &std::path::Path, role: &str) -> String {
 
 /// The built-in per-role guidance used when no stored role file (`~/.aida/roles/
 /// <role>.toml` or a project role) provides a Purpose / system prompt. Every
-/// agent-wired seat (`implementer`, `advisor`, `reviewer`, `integrator`) gets a
-/// first-class arm so a fresh machine with no scaffolded role file still ships
-/// seat-specific context; unknown roles fall through to the generic pointer.
+/// agent-wired seat (`implementer`, `advisor`, `reviewer`, `integrator`) plus
+/// the product intake seat gets a first-class arm so a fresh machine with no
+/// scaffolded role file still ships seat-specific context; unknown roles fall
+/// through to the generic pointer.
 /// Split out from [`role_guidance_for`] so the arms are unit-testable without a
 /// machine's role files shadowing them.
 // trace:STORY-718 | ai:claude
@@ -23241,11 +23248,13 @@ fn default_role_guidance(role: &str) -> String {
     match role {
         "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
         "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
+        // trace:TASK-1200 | ai:codex
+        "product" => "You are wearing the product seat. Groom drafts, capture requirements, sharpen acceptance criteria, and route work to the right queue. Focus on intake and requirement capture; leave strategic counsel and disposition calls to the advisor.".to_string(),
         "reviewer" => "You are reviewing. Inspect the PR and linked spec, prioritize correctness/regression risks, run targeted tests when useful, and produce a clear verdict/finding rather than taking over implementation.".to_string(),
         // The integrator seat's role-context prompt, mirroring the arms above.
         // Mechanical merge cascade only; escalate anything that turns on judgment.
         "integrator" => "You are integrating. Land finished work (Done specs with an open PR) on the default branch one PR at a time in dependency order: rebase stale branches, resolve MECHANICAL conflicts only, watch CI, squash-merge the green-and-reviewed PRs, delete merged branches, and run `aida pull` to auto-bump. Never make a design call — escalate design-judgment conflicts to the advisor and route missing-verdict PRs to the reviewer.".to_string(),
-        "unspecified" => "No role was provided. Determine whether you are acting as advisor, implementer, reviewer, or integrator before making changes.".to_string(),
+        "unspecified" => "No role was provided. Determine whether you are acting as product, advisor, implementer, reviewer, or integrator before making changes.".to_string(),
         other => format!("No stored role file was found for `{other}`. Follow the project discipline in AGENTS.md and the active spec/brief context."),
     }
 }

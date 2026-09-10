@@ -4820,3 +4820,11 @@ the "anyway" path remains available for duplicate warnings that do not conflict 
 launch scope. Added `// trace:BUG-1019 | ai:codex` comments on the helper and regression tests.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib agent_launcher_tests::live_duplicate_anyway_prompt_is_absent -- --nocapture`; `cargo test -p aida-cli-lib agent_launcher_tests::agent_launch_ -- --nocapture`. Existing unrelated Rust warnings remain in the test output.
+
+## Session 2026-09-10 — TASK-1200 product starter role
+
+Picked up `TASK-1200` from the implementer queue. The task was to add the product / intake / PO seat to the first-machine starter role pack so fresh installs and refreshed role scaffolds offer `product` beside the existing starter roles, while preserving any user-owned `~/.aida/roles/product.toml`.
+
+Added `product` to `STARTER_ROLES` with purpose text that distinguishes requirement intake and capture from advisor judgment/disposition. Updated first-init and CLI help copy that enumerates starter roles, and added fallback product role guidance for launches where no stored role file exists. Added `// trace:TASK-1200 | ai:codex` comments on the starter role and fallback guidance.
+
+Verification: `cargo test -p aida-cli-lib role_identity_tests -- --nocapture`; `cargo fmt --all -- --check`. Existing unrelated Rust warnings remain in the focused test output.
