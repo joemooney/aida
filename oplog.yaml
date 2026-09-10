@@ -51466,5 +51466,31 @@ operations:
   timestamp: 2026-09-10T07:11:56.168589073Z
   kind: !SetStatus
     status: Completed
-clock: 4360
+- id: 01a08a36-7b15-77c3-8620-ea835a79c3b5
+  target_id: 01a08a36-643f-7961-a4d4-d29f9a9e5d37
+  author: aida
+  node_id: '1'
+  lamport: 4361
+  timestamp: 2026-09-10T07:27:01.397083140Z
+  kind: !Create
+    title: 'Review PR-1714: [AI:codex] fix(agent): align duplicate prompt with singleton guard (BUG-1019)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08a2b`) for branch `bug-1019`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1714>
+      - Branch: `bug-1019` → `main`
+
+      ## Covers
+
+      - BUG-1019
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1714` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4361
 node_id: '1'
