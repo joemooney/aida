@@ -8,6 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:08:08.694600268Z
-modified_at: 2026-09-10T04:08:13.978721509Z
+modified_at: 2026-09-10T04:08:14.906417887Z
 req_type: Bug
+tags:
+- severity:cosmetic lifecycle:trivial
 execution_mode: drain
