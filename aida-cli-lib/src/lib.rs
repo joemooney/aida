@@ -20095,6 +20095,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         ),
         SessionCommand::Leases { verbose, all, json } => session_leases(*verbose, *all, *json),
         SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
+        SessionCommand::Handoff { check } => session_handoff_check(*check),
         SessionCommand::Prune {
             days,
             dry_run,
@@ -37409,6 +37410,156 @@ fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SessionHandoffRecommendation {
+    StartFresh,
+    Compact,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SessionHandoffFacts {
+    live_drain: Option<String>,
+    stale_drain: Option<String>,
+    live_session_leases: Vec<String>,
+}
+
+fn decide_session_handoff(facts: &SessionHandoffFacts) -> SessionHandoffRecommendation {
+    if facts.live_drain.is_some() || !facts.live_session_leases.is_empty() {
+        SessionHandoffRecommendation::Compact
+    } else {
+        SessionHandoffRecommendation::StartFresh
+    }
+}
+
+fn active_handoff_leases(leases: &[SessionLease], cwd: Option<&std::path::Path>) -> Vec<String> {
+    let mut out = Vec::new();
+    for lease in leases {
+        let covers_cwd = cwd.is_some_and(|cwd| lease_covers_cwd(lease, cwd));
+        if covers_cwd {
+            out.push(format!(
+                "{} {} ({})",
+                &lease.id[..8.min(lease.id.len())],
+                lease.scope,
+                lease.branch
+            ));
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+fn collect_session_handoff_facts(project_root: &std::path::Path) -> SessionHandoffFacts {
+    let (live_drain, stale_drain) = match drain_lock::probe_lock(project_root) {
+        drain_lock::LockStatus::Running(lock) => (
+            Some(format!(
+                "pid {} on {}: {}",
+                lock.pid, lock.host, lock.command
+            )),
+            None,
+        ),
+        drain_lock::LockStatus::Stale(lock) => (
+            None,
+            Some(format!(
+                "pid {} on {} is not alive: {}",
+                lock.pid, lock.host, lock.command
+            )),
+        ),
+        drain_lock::LockStatus::None => (None, None),
+    };
+    let cwd = std::env::current_dir()
+        .ok()
+        .map(|cwd| cwd.canonicalize().unwrap_or(cwd));
+    let live_session_leases = active_handoff_leases(&list_leases(project_root), cwd.as_deref());
+    SessionHandoffFacts {
+        live_drain,
+        stale_drain,
+        live_session_leases,
+    }
+}
+
+fn session_handoff_check(_check: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let facts = collect_session_handoff_facts(&project_root);
+    let recommendation = decide_session_handoff(&facts);
+    // trace:STORY-1006 | ai:codex
+    match recommendation {
+        SessionHandoffRecommendation::StartFresh => {
+            println!("Recommendation: START FRESH");
+            println!("Reason: no live drain or current-session lease pins this conversation.");
+        }
+        SessionHandoffRecommendation::Compact => {
+            println!("Recommendation: COMPACT");
+            println!("Reason: live session-bound state is still attached here:");
+            if let Some(drain) = &facts.live_drain {
+                println!("  - live drain: {drain}");
+            }
+            for lease in &facts.live_session_leases {
+                println!("  - live lease: {lease}");
+            }
+        }
+    }
+    if let Some(stale) = &facts.stale_drain {
+        println!("Note: stale drain lock present but not a compact pin: {stale}");
+    }
+    println!(
+        "CLI limit: conversation-only residue is unknowable here; run /aida-handoff or /aida-capture before ending the session."
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod session_handoff_tests {
+    use super::*;
+
+    fn facts() -> SessionHandoffFacts {
+        SessionHandoffFacts {
+            live_drain: None,
+            stale_drain: None,
+            live_session_leases: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn handoff_recommends_start_fresh_when_substrate_has_no_live_pins() {
+        assert_eq!(
+            decide_session_handoff(&facts()),
+            SessionHandoffRecommendation::StartFresh
+        );
+    }
+
+    #[test]
+    fn handoff_recommends_compact_for_live_drain() {
+        let mut f = facts();
+        f.live_drain = Some("pid 123: aida queue work --auto-complete".to_string());
+        assert_eq!(
+            decide_session_handoff(&f),
+            SessionHandoffRecommendation::Compact
+        );
+    }
+
+    #[test]
+    fn handoff_recommends_compact_for_live_session_lease() {
+        let mut f = facts();
+        f.live_session_leases
+            .push("abcd1234 STORY-1006 (story-1006)".to_string());
+        assert_eq!(
+            decide_session_handoff(&f),
+            SessionHandoffRecommendation::Compact
+        );
+    }
+
+    #[test]
+    fn handoff_stale_drain_does_not_pin_compaction() {
+        let mut f = facts();
+        f.stale_drain = Some("pid 123 is not alive".to_string());
+        assert_eq!(
+            decide_session_handoff(&f),
+            SessionHandoffRecommendation::StartFresh
+        );
+    }
 }
 
 /// Render the planned-cluster manifest for `session_id` as a status table.
