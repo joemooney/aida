@@ -200,11 +200,14 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
 /// `aida config show` so the operator can tell a deliberate override from an
 /// inherited default at a glance.
 // trace:BUG-533 | ai:claude
+#[derive(Clone, Copy)]
 enum PolicySource {
     /// No file or env set this — the built-in default is in force.
     Default,
     /// Set in the project's `.aida/config.toml`.
     ProjectConfig,
+    /// Set in the project's `.aida/agents.toml`.
+    ProjectAgents,
     /// Set in the global `~/.aida/agents.toml` (agent permission posture).
     GlobalAgents,
     /// Set in the global `~/.aida/config.toml` (user-wide default). STORY-620.
@@ -218,6 +221,7 @@ impl PolicySource {
         match self {
             PolicySource::Default => "default".dimmed().to_string(),
             PolicySource::ProjectConfig => ".aida/config.toml".dimmed().to_string(),
+            PolicySource::ProjectAgents => ".aida/agents.toml".dimmed().to_string(),
             PolicySource::GlobalAgents => "~/.aida/agents.toml".dimmed().to_string(),
             PolicySource::GlobalConfig => "~/.aida/config.toml".dimmed().to_string(),
             PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
@@ -231,6 +235,7 @@ impl PolicySource {
         match self {
             PolicySource::Default => "default".to_string(),
             PolicySource::ProjectConfig => ".aida/config.toml".to_string(),
+            PolicySource::ProjectAgents => ".aida/agents.toml".to_string(),
             PolicySource::GlobalAgents => "~/.aida/agents.toml".to_string(),
             PolicySource::GlobalConfig => "~/.aida/config.toml".to_string(),
             PolicySource::Env(name) => format!("{name} (env)"),
@@ -754,7 +759,7 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             .and_then(|p| read_agents_bypass_from_file(p).ok().flatten());
         let project_bypass = read_agents_bypass_from_file(&project_agents).ok().flatten();
         let (effective, source) = match (project_bypass, global_bypass) {
-            (Some(v), _) => (v, PolicySource::ProjectConfig),
+            (Some(v), _) => (v, PolicySource::ProjectAgents),
             (None, Some(v)) => (v, PolicySource::GlobalAgents),
             (None, None) => (false, PolicySource::Default),
         };
@@ -768,13 +773,28 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             value: rendered,
             source,
         });
-        let selection = crate::init_cmd::read_enabled_agent_selection(project_root).unwrap_or(
-            crate::init_cmd::AgentSelection {
+        let selection_with_source =
+            crate::init_cmd::read_enabled_agent_selection_with_source(project_root);
+        let selection = selection_with_source
+            .as_ref()
+            .map(|s| s.selection)
+            .unwrap_or(crate::init_cmd::AgentSelection {
                 claude: true,
                 codex: true,
                 antigravity: true,
-            },
-        );
+            });
+        let enabled_source = selection_with_source
+            .as_ref()
+            .map(|s| {
+                if s.path == project_root.join(".aida/agents.toml") {
+                    PolicySource::ProjectAgents
+                } else if s.path == project_root.join(".aida/config.toml") {
+                    PolicySource::ProjectConfig
+                } else {
+                    PolicySource::GlobalAgents
+                }
+            })
+            .unwrap_or(PolicySource::Default);
         for (key, enabled) in [
             ("claude", selection.claude),
             ("codex", selection.codex),
@@ -787,15 +807,7 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 } else {
                     "disabled".to_string()
                 },
-                source: if read_project_config_value(project_root)
-                    .as_ref()
-                    .and_then(|cfg| config_lookup(Some(cfg), "agents", "enabled"))
-                    .is_some()
-                {
-                    PolicySource::ProjectConfig
-                } else {
-                    PolicySource::Default
-                },
+                source: enabled_source,
             });
         }
         PolicySection {
