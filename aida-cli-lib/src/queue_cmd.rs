@@ -6341,8 +6341,8 @@ pub(crate) fn handle_queue_rework(
         println!(
             "  ({})",
             format!(
-                "run `aida queue work {}` to start a session for this spec",
-                display_id
+                "run `{}` to start a session for this spec",
+                details.pickup_command
             )
             .dimmed()
         );
