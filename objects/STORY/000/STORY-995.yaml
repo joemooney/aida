@@ -19,12 +19,12 @@ description: |-
 
   ## Related
   Blocked by STORY-994 (needs the [terminal] block). References STORY-993, STORY-991, TASK-1120.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:57.637633008Z
-modified_at: 2026-09-10T04:44:20.317613466Z
+modified_at: 2026-09-10T05:00:52.046278412Z
 req_type: Story
 tags:
 - from-product
@@ -52,3 +52,11 @@ comments:
   modified_at: 2026-09-09T05:24:28.893174314Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1708: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34438907080 — view it: `gh run view 34438907080`. Push fixups to the same branch: `aida queue work STORY-995 --branch bug-914 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-10T05:00:52.046278412Z
