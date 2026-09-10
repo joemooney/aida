@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:52.369729897Z
-modified_at: 2026-09-10T12:37:02.909082904Z
+modified_at: 2026-09-10T12:37:04.304272697Z
 req_type: Story
 tags:
 - from-product
@@ -51,6 +51,16 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-09T07:20:42.850209422Z
   modified_at: 2026-09-09T07:20:42.850209422Z
+- id: 01a08b52-55d5-70b2-b8c5-29df99a47341
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1704):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. STORY-994 acceptance item 2 says launch title setting can be disabled with [terminal] title=false or --no-title. The PR adds --no-title for aida session new/start and agent new, but RoleCommand::Enter only exposes name, cd, and no_resume while emit_role_enter_eval still emits the OSC title command whenever [terminal] title is enabled, so aida role enter cannot opt out per invocation.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-10T12:37:04.085433504Z
+  modified_at: 2026-09-10T12:37:04.085433504Z
 execution_mode: drain
 implementation_info:
   implemented: true
