@@ -1,0 +1,26 @@
+id: 01a089eb-5df4-7310-a545-916d11bcaffc
+spec_id: STORY-1008
+agreed_id: STORY-1008
+title: 'Review PR-1711: [AI:codex] fix(queue): unify fresh pickup policy (BUG-1017)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a089d7`) for branch `bug-1017`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1711>
+  - Branch: `bug-1017` → `main`
+
+  ## Covers
+
+  - BUG-1017
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1711` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T06:04:58.740218630Z
+modified_at: 2026-09-10T06:04:58.740218630Z
+req_type: Story

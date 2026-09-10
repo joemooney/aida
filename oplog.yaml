@@ -51310,5 +51310,31 @@ operations:
   timestamp: 2026-09-10T05:40:27.001127953Z
   kind: !SetStatus
     status: Completed
-clock: 4352
+- id: 01a089eb-61f1-7700-b751-5eca258c3473
+  target_id: 01a089eb-5df4-7310-a545-916d11bcaffc
+  author: aida
+  node_id: '1'
+  lamport: 4353
+  timestamp: 2026-09-10T06:04:59.761011581Z
+  kind: !Create
+    title: 'Review PR-1711: [AI:codex] fix(queue): unify fresh pickup policy (BUG-1017)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a089d7`) for branch `bug-1017`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1711>
+      - Branch: `bug-1017` → `main`
+
+      ## Covers
+
+      - BUG-1017
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1711` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4353
 node_id: '1'
