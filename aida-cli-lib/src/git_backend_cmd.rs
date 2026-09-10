@@ -68,6 +68,10 @@ pub(crate) fn handle_git_backend_command(
     if let Some(project_root) = store_path.parent() {
         warn_if_periodic_auto_push(project_root);
     }
+    if !matches!(command, Command::Report { recheck: true, .. }) {
+        let storage = Storage::new(store_path);
+        report_cmd::maybe_print_upstream_recheck_notice(&storage);
+    }
 
     // STORY-640: team identity hygiene. In a TEAM context (a roster with >1
     // node, or a node other than this clone), a shared `"default"` identity
@@ -109,6 +113,16 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::Agent(agent_cmd) => {
             return handle_agent_command(agent_cmd);
+        }
+        Command::Report { recheck, command } => {
+            let storage = Storage::new(store_path.to_path_buf());
+            let db_path_str = store_path.display().to_string();
+            return report_cmd::handle_report_command(
+                *recheck,
+                command.as_ref(),
+                &storage,
+                &db_path_str,
+            );
         }
         Command::Advisor { short, command } => {
             // STORY-262 / STORY-559: two advisor subcommands reach storage init

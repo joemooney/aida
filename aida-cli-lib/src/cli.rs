@@ -319,6 +319,46 @@ pub enum TraceCommand {
 /// Commands for generating reports
 #[derive(Subcommand, Debug)]
 pub enum ReportCommand {
+    /// Compose and optionally file an upstream AIDA bug report.
+    Bug {
+        /// Short report title. The pasted subject becomes `aida: <title>`.
+        #[clap(long)]
+        title: String,
+
+        /// Report description. If omitted, reads stdin when piped or opens
+        /// $EDITOR at a TTY.
+        #[clap(long)]
+        description: Option<String>,
+
+        /// Copy the rendered report to the system clipboard as well as stdout.
+        #[clap(long)]
+        copy: bool,
+
+        /// Do not file a local upstream:aida spec after printing.
+        #[clap(long)]
+        no_file: bool,
+    },
+
+    /// Compose and optionally file an upstream AIDA idea report.
+    Idea {
+        /// Short report title. The pasted subject becomes `aida: <title>`.
+        #[clap(long)]
+        title: String,
+
+        /// Report description. If omitted, reads stdin when piped or opens
+        /// $EDITOR at a TTY.
+        #[clap(long)]
+        description: Option<String>,
+
+        /// Copy the rendered report to the system clipboard as well as stdout.
+        #[clap(long)]
+        copy: bool,
+
+        /// Do not file a local upstream:aida spec after printing.
+        #[clap(long)]
+        no_file: bool,
+    },
+
     /// Generate AI integration report
     AiIntegration {
         /// Output format: markdown or html
@@ -10118,8 +10158,15 @@ pub enum Command {
     },
 
     /// Report generation commands
-    #[clap(subcommand, hide = true)]
-    Report(ReportCommand),
+    #[clap(hide = true)]
+    Report {
+        /// Recheck locally filed upstream AIDA reports against this binary.
+        #[clap(long)]
+        recheck: bool,
+
+        #[clap(subcommand)]
+        command: Option<ReportCommand>,
+    },
 
     /// Initialize AIDA in the current project
     #[clap(group(

@@ -4026,9 +4026,17 @@ fn run() -> Result<()> {
                 }
             }
         }
-        Command::Report(report_cmd) => {
+        Command::Report {
+            recheck,
+            command: report_cmd,
+        } => {
             let db_path_str = requirements_path.display().to_string();
-            report_cmd::handle_report_command(report_cmd, &storage, &db_path_str)?;
+            report_cmd::handle_report_command(
+                *recheck,
+                report_cmd.as_ref(),
+                &storage,
+                &db_path_str,
+            )?;
         }
         Command::Scaffold(scaffold_cmd) => {
             scaffold_cmd::handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
