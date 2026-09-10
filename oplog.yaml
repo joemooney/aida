@@ -51622,5 +51622,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4368
+- id: 01a08a87-0203-74f0-92cc-ceae8bad2b5f
+  target_id: 01a08a86-fe17-7300-bbcc-47accf1616fe
+  author: aida
+  node_id: '1'
+  lamport: 4369
+  timestamp: 2026-09-10T08:54:58.819240128Z
+  kind: !Create
+    title: 'Review PR-1717: [AI:codex] feat(agents): pass through vendor model selection (STORY-1003)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08a6d`) for branch `story-1003`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1717>
+      - Branch: `story-1003` → `main`
+
+      ## Covers
+
+      - STORY-1003
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1717` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4369
 node_id: '1'
