@@ -50875,5 +50875,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4326
+- id: 01a08982-f274-7c53-bb3d-cf230e3b540b
+  target_id: 01a08982-e47d-7830-9152-a3b975b2e1f1
+  author: aida
+  node_id: '1'
+  lamport: 4327
+  timestamp: 2026-09-10T04:10:55.476997679Z
+  kind: !Create
+    title: 'per-vendor model selection: [agents.<vendor>] model config + --model flag passed through the launch adapter'
+    description: 'Operator request (2026-09-09): a vendor deployment can expose multiple named models (site-defined aliases — public clouds and workplace deployments name them differently), and AIDA has no convenient way to pick one. Design: (1) config — [agents.codex] model = "<name>" and [agents.claude] model = "<name>" in the standard resolution chain (project agents.toml > project config.toml > machine-global), empty = vendor default; (2) flag — --model <name> on aida agent new and aida queue work (and honored by drain phase spawns via config) as a one-shot override; (3) adapter passthrough — the vendor adapter maps it to the native CLI form (codex --model / claude --model) at the EXECUTION layer only, no model names hardcoded in AIDA; (4) display — the resolved vendor line (vendor: codex / exec: codex from BUG-902) gains model: <name> when set, including dry-run. Values are opaque strings passed through verbatim — AIDA never validates model names against a list. Acceptance: config-set model appears in the spawned argv and the resolved display; --model overrides config; unset behaves exactly as today; tests on the resolution chain and adapter argv per vendor.'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4327
 node_id: '1'
