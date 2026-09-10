@@ -182,7 +182,7 @@ fn handle_upstream_report(
     }
     if !no_file {
         let filed = file_upstream_report(storage, kind, title, &body, &context.version)?;
-        println!(
+        eprintln!(
             "Filed local upstream AIDA report {} — {}",
             filed.spec_id.as_deref().unwrap_or("?"),
             filed.title

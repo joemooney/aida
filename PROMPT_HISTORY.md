@@ -4917,3 +4917,11 @@ Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib mcp_auth
 `cargo test -p aida-cli-lib status_unified -- --nocapture`;
 `tests/test_mcp_stdio.sh --skip-agent-contract`. Existing unrelated Rust warnings remain in the
 focused test output.
+
+## Session 2026-09-10 — STORY-1004 PR-1718 report stdout review fix
+
+Addressed the PR #1718 review finding for `STORY-1004`: `aida report bug|idea` must keep stdout limited to the paste-ready Subject/body report. The local upstream AIDA filing confirmation now prints to stderr instead of being appended to stdout after the report.
+
+Added a Linux black-box CLI regression test that initializes a throwaway project, runs `aida report bug`, asserts stdout starts with the composed `Subject:` report and excludes the filing confirmation, and asserts stderr names the locally filed `AIDA:` report.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli --test report_channels`; `cargo test -p aida-cli-lib report_cmd`. Existing unrelated Rust warnings remain in the focused test output.
