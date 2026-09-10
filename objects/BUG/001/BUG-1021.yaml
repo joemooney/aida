@@ -8,6 +8,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-10T09:06:21.533823563Z
+modified_at: 2026-09-10T09:20:43.737712667Z
 req_type: Bug
+comments:
+- id: 01a08a9e-94d9-7990-a4b4-463410690b61
+  author: joe
+  content: 'Cause found from Sep 8/Sep 9 cross-platform logs: macOS failures were Linux-only /proc ancestry lookup plus /private/var vs /var temp-path assertions; Windows failures were POSIX shell subprocess tests and path-list/path-separator assumptions, plus role queue identity ''role:implementer'' being used as a raw filename. Scheduled notifier also failed because gh issue commands ran without repo checkout/context. Fix adds macOS ps fallback, path canonicalization/TOML escaping, Windows-portable PATH/path assertions, Unix-gated POSIX shell tests, portable queue filename encoding with decoded logical users, and checkout for notifier jobs.'
+  created_at: 2026-09-10T09:20:43.737712667Z
+  modified_at: 2026-09-10T09:20:43.737712667Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
