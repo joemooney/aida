@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:57.637633008Z
-modified_at: 2026-09-10T05:00:52.046278412Z
+modified_at: 2026-09-10T05:22:28.195807889Z
 req_type: Story
 tags:
 - from-product
@@ -51,6 +51,12 @@ comments:
   created_at: 2026-09-09T05:24:28.893174314Z
   modified_at: 2026-09-09T05:24:28.893174314Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a089c4-72e3-7661-b118-667bd86f47f8
+  author: joe
+  content: 'CI-red cause (advisor triage, 2026-09-09 22:20): the fs_atomic guard test known_concurrent_paths_use_read_atomic failed — this PR''s diff adds a bare fs::read_to_string on a known-concurrent path. Use aida_core::read_atomic instead (Windows transient-open race, TASK-346). Local main is green; the failure is in this branch''s added code.'
+  created_at: 2026-09-10T05:22:28.195807889Z
+  modified_at: 2026-09-10T05:22:28.195807889Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 failure_reason:
   phase: ci
