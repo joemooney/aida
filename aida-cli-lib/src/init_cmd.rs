@@ -877,10 +877,11 @@ fn agent_selection_from_file(path: &std::path::Path) -> Option<AgentSelection> {
 pub(crate) fn read_enabled_agent_selection_with_source(
     project_root: &std::path::Path,
 ) -> Option<AgentSelectionWithSource> {
+    // trace:BUG-1020 | ai:codex
     for path in [
         Some(project_root.join(".aida/agents.toml")),
         Some(project_root.join(".aida/config.toml")),
-        dirs::home_dir().map(|h| h.join(".aida/agents.toml")),
+        crate::aida_home_dir().map(|h| h.join(".aida/agents.toml")),
     ]
     .into_iter()
     .flatten()
@@ -2425,6 +2426,44 @@ mod task_631_init_self_commit_tests {
             }
         );
         assert_eq!(resolved.path, dir.path().join(".aida/agents.toml"));
+    }
+
+    // trace:BUG-1020 | ai:codex
+    #[test]
+    fn enabled_agent_selection_honors_aida_home_for_global_agents_toml() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = dir.path().join("project");
+        let real_home = dir.path().join("home");
+        let aida_home = dir.path().join("aida-home");
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::create_dir_all(real_home.join(".aida")).unwrap();
+        std::fs::create_dir_all(aida_home.join(".aida")).unwrap();
+        std::fs::write(
+            real_home.join(".aida/agents.toml"),
+            "[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            aida_home.join(".aida/agents.toml"),
+            "[agents]\nenabled = [\"codex\"]\n",
+        )
+        .unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("HOME", real_home.to_str().unwrap()),
+            ("AIDA_HOME", aida_home.to_str().unwrap()),
+        ]);
+
+        let resolved = read_enabled_agent_selection_with_source(&project).unwrap();
+
+        assert_eq!(
+            resolved.selection,
+            AgentSelection {
+                claude: false,
+                codex: true,
+                antigravity: false,
+            }
+        );
+        assert_eq!(resolved.path, aida_home.join(".aida/agents.toml"));
     }
 
     // trace:STORY-830 | ai:codex

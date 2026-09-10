@@ -4872,3 +4872,13 @@ Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib agent_la
 codex-only project confirmed `aida agent new claude` refuses with the enabled-profile config
 hint before any missing-binary error. Existing unrelated Rust warnings remain in the focused
 test output.
+
+## Session 2026-09-10 — BUG-1020 PR #1716 review fix
+
+Addressed PR #1716 review feedback that global `[agents] enabled` resolution still read the
+machine `HOME` via `dirs::home_dir()` instead of the AIDA_HOME-aware resolver. Switched
+`read_enabled_agent_selection_with_source` to `crate::aida_home_dir()` and added a regression
+where `HOME/.aida/agents.toml` enables Claude while `AIDA_HOME/.aida/agents.toml` enables Codex;
+the resolved source and selection now come from `AIDA_HOME`.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib enabled_agent_selection_honors_aida_home_for_global_agents_toml`; `cargo test -p aida-cli-lib enabled_agent_selection_`; `cargo test -p aida-cli-lib resolve_enabled_headless_vendor`. Existing unrelated Rust warnings remain in the focused test output.
