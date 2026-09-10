@@ -8,6 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:10:51.901655369Z
-modified_at: 2026-09-10T04:11:00.301534933Z
+modified_at: 2026-09-10T04:31:33.587582949Z
 req_type: Story
+comments:
+- id: 01a08995-d6d3-75c1-b241-196e8c92a9fb
+  author: joe
+  content: 'Design addendum (2026-09-09) — model PICKER for role/agent configuration, after verifying neither codex nor claude CLIs expose model enumeration (codex: -m free string, no models subcommand; claude: --model aliases, no list): the selection list is assembled best-effort from three sources, deduped in order: (1) SITE LIST — [agents.<vendor>] models = ["a", "b"] in config (machine-global or project): the reliable corporate answer, populated once per site; (2) MODELS COMMAND — optional [agents.<vendor>] models_command = "..." whose stdout lines become entries, the escape hatch for site gateways that DO have an enumeration CLI, and the forward-hook for when vendors grow one; (3) RECENTLY USED — models previously passed via --model, remembered locally (~/.aida, no values leave the machine). The picker always includes a free-text entry row; with no sources configured, the prompt is plain free-text exactly as slice 1. Surfaces: aida agent new (after vendor/role selection when sources exist), and role configuration. Acceptance additions: picker presents union of the three sources in order with dedup; models_command failure degrades silently to the other sources; free-text always available; recently-used persists across sessions.'
+  created_at: 2026-09-10T04:31:33.587582949Z
+  modified_at: 2026-09-10T04:31:33.587582949Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
