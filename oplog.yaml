@@ -52410,5 +52410,17 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4407
+- id: 01a08b54-ff98-76a3-b7ae-a48f126ceffd
+  target_id: 01a08b54-f987-7283-ba81-c853e9906a2d
+  author: aida
+  node_id: '1'
+  lamport: 4408
+  timestamp: 2026-09-10T12:39:58.616308350Z
+  kind: !Create
+    title: reviewer preflight checks resolve the forge as pure-git on a github-origin project — one forge resolution for the whole pipeline
+    description: 'TASK-1198 attempt 6 (2026-09-10 05:39, testbed with github origin): the phase-3 stale-base and intermediate-only preflight checks both warned could not resolve change metadata — this project has no forge (pure-git) and proceeded degraded, while the same pipeline''s auto-open resolved GitHub fine post-BUG-896. Forge resolution is still computed independently per call site with different context (cwd/root), so the same project is GitHub in one phase and forge-less in the next. Fix: resolve the forge ONCE per pipeline run from the target project root and thread it through every phase consumer (preflights, auto-open, merge, linkage); a resolution mismatch between call sites becomes impossible by construction. Acceptance: a github-origin project resolves GitHub in every phase message; regression test asserting the preflight and auto-open use the shared resolution; the pure-git warning appears only for genuinely forge-less projects.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4408
 node_id: '1'
