@@ -88,7 +88,7 @@ impl Resolution {
 
 /// The resolved process facts for one conversation row.
 // trace:STORY-993 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize)]
 pub struct ProcessFacts {
     /// The single resolved pid. `None` when unresolved OR ambiguous — check
     /// [`ProcessFacts::is_ambiguous`] / `candidates` to tell the two apart.
