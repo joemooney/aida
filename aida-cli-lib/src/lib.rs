@@ -24281,6 +24281,7 @@ fn run_tracked_agent(
     let child_pid = child.id();
     let terminal = agent_registry::current_terminal_identity();
     let title_enabled = title && agent_registry::terminal_title_enabled(&plan.project_root);
+    let mut title_restore = None;
     if title_enabled {
         let session_id = plan
             .native_session_id
@@ -24292,7 +24293,10 @@ fn run_tracked_agent(
             plan.current_spec.as_deref(),
             &session_id,
         );
-        agent_registry::apply_terminal_title(&title, terminal.as_ref());
+        title_restore = Some(agent_registry::apply_terminal_title(
+            &title,
+            terminal.as_ref(),
+        ));
     }
     let binary = agent_registry::AgentBinaryIdentity::new(
         env!("CARGO_PKG_VERSION").to_string(),
@@ -24316,8 +24320,8 @@ fn run_tracked_agent(
         .wait()
         .with_context(|| format!("failed to wait for {}", config.agent_type))?;
     signal_forwarder.stop();
-    if title_enabled {
-        agent_registry::restore_terminal_title(terminal.as_ref());
+    if let Some(restore) = title_restore {
+        agent_registry::restore_terminal_title(restore);
     }
     if let Err(err) =
         agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid)
@@ -62417,6 +62421,23 @@ fn emit_notice_time_line() {
         let payload = std::io::read_to_string(std::io::stdin()).unwrap_or_default();
         presence::parse_hook_payload(&payload)
     };
+    if is_session_start {
+        let project_root = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| find_aida_project_root_from(&cwd).ok())
+            .map(|root| main_worktree_root_from(&root));
+        if let Some(project_root) = project_root {
+            let binary = agent_registry::AgentBinaryIdentity::new(
+                env!("CARGO_PKG_VERSION").to_string(),
+                env!("AIDA_BUILD_GIT_SHA").to_string(),
+            );
+            let _ = agent_registry::touch_session_start_agent(
+                &project_root,
+                session_id.as_deref(),
+                &binary,
+            );
+        }
+    }
     let now = chrono::Local::now();
     let label = presence::stamp_turn_clock(
         session_id.as_deref(),

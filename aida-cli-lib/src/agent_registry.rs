@@ -209,6 +209,13 @@ impl TerminalIdentity {
     }
 }
 
+// trace:STORY-994 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TerminalTitleRestore {
+    pub(crate) terminal: Option<TerminalIdentity>,
+    pub(crate) previous_title: Option<String>,
+}
+
 // trace:TASK-1184 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct AgentGcRow {
@@ -511,6 +518,74 @@ pub(crate) fn touch_mcp_agent(
     }
     if entry.terminal.is_none() {
         entry.terminal = current_terminal_identity();
+    }
+
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
+// trace:STORY-994 | ai:codex
+pub(crate) fn touch_session_start_agent(
+    project_root: &Path,
+    session_id: Option<&str>,
+    binary: &AgentBinaryIdentity,
+) -> Result<AgentRegistryEntry> {
+    let now = Utc::now();
+    let hook_pid = std::process::id();
+    let agent_type = detect_agent_type();
+    let pid = session_start_agent_pid(hook_pid, &agent_type).unwrap_or(hook_pid);
+    let id = agent_id(&agent_type, pid);
+    let path = registry_path(project_root, &id);
+    let mut entry = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        .unwrap_or_else(|| AgentRegistryEntry {
+            id: id.clone(),
+            agent_type: agent_type.clone(),
+            pid,
+            name: env_nonempty("AIDA_AGENT_NAME"),
+            description: None,
+            tty: process_tty(pid).or_else(current_tty),
+            terminal: None,
+            started_at: now,
+            last_active_at: now,
+            role: None,
+            current_spec: None,
+            worktree_path: project_root.to_path_buf(),
+            source: "session-start-hook".to_string(),
+            binary_version: None,
+            build_sha: None,
+            availability: Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+            native_session_id: None,
+            claude_session_id: None,
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
+        });
+
+    entry.id = id;
+    entry.agent_type = agent_type;
+    entry.pid = pid;
+    entry.last_active_at = now;
+    entry.role = env_nonempty("AIDA_SESSION_ROLE").or(entry.role);
+    entry.current_spec = env_nonempty("AIDA_SESSION_SCOPE")
+        .filter(|s| looks_like_spec_id(s))
+        .or(entry.current_spec);
+    entry.worktree_path = project_root.to_path_buf();
+    if entry.source != "agent-launcher" {
+        entry.source = "session-start-hook".to_string();
+    }
+    entry.binary_version = Some(binary.version.clone());
+    entry.build_sha = Some(binary.sha.clone());
+    if entry.tty.is_none() {
+        entry.tty = process_tty(pid).or_else(current_tty);
+    }
+    entry.terminal = terminal_identity_for_tty(entry.tty.clone()).or(entry.terminal);
+    if let Some(session_id) = session_id.filter(|s| !s.trim().is_empty()) {
+        entry.claude_session_id = Some(session_id.to_string());
     }
 
     write_entry(project_root, &entry)?;
@@ -1597,13 +1672,20 @@ pub(crate) fn terminal_title_enabled(project_root: &Path) -> bool {
 }
 
 // trace:STORY-994 | ai:codex
-pub(crate) fn apply_terminal_title(title: &str, terminal: Option<&TerminalIdentity>) {
+pub(crate) fn apply_terminal_title(
+    title: &str,
+    terminal: Option<&TerminalIdentity>,
+) -> TerminalTitleRestore {
     use std::io::Write;
     let Some(terminal) = terminal else {
         print!("{}", crate::statusline_cmd::osc_terminal_title(title));
         let _ = std::io::stdout().flush();
-        return;
+        return TerminalTitleRestore {
+            terminal: None,
+            previous_title: None,
+        };
     };
+    let previous_title = current_native_title(terminal);
     match terminal.emulator.as_deref() {
         Some("tmux") => {
             let _ = std::process::Command::new("tmux")
@@ -1630,19 +1712,91 @@ pub(crate) fn apply_terminal_title(title: &str, terminal: Option<&TerminalIdenti
             let _ = std::io::stdout().flush();
         }
     }
+    TerminalTitleRestore {
+        terminal: Some(terminal.clone()),
+        previous_title,
+    }
 }
 
 // trace:STORY-994 | ai:codex
-pub(crate) fn restore_terminal_title(terminal: Option<&TerminalIdentity>) {
-    if terminal
-        .and_then(|t| t.emulator.as_deref())
-        .is_some_and(|e| matches!(e, "tmux" | "wezterm" | "terminator"))
-    {
+pub(crate) fn restore_terminal_title(restore: TerminalTitleRestore) {
+    let Some(terminal) = restore.terminal.as_ref() else {
+        use std::io::Write;
+        print!("{}", crate::statusbar_cmd::RESTORE_TITLE);
+        let _ = std::io::stdout().flush();
         return;
+    };
+    match terminal.emulator.as_deref() {
+        Some("tmux") => {
+            if let Some(previous) = restore.previous_title.as_deref() {
+                let _ = std::process::Command::new("tmux")
+                    .args(["rename-window", previous])
+                    .status();
+            }
+            return;
+        }
+        Some("wezterm") => {
+            if let Some(previous) = restore.previous_title.as_deref() {
+                let mut cmd = std::process::Command::new("wezterm");
+                cmd.args(["cli", "set-tab-title", previous]);
+                if let Some(pane) = terminal.wezterm_pane.as_deref() {
+                    cmd.args(["--pane-id", pane]);
+                }
+                let _ = cmd.status();
+            }
+            return;
+        }
+        Some("terminator") => {
+            if let (Some(uuid), Some(previous)) = (
+                terminal.terminator_uuid.as_deref(),
+                restore.previous_title.as_deref(),
+            ) {
+                let _ = std::process::Command::new("remotinator")
+                    .args(["set_tab_title", uuid, previous])
+                    .status();
+            }
+            return;
+        }
+        _ => {}
     }
     use std::io::Write;
     print!("{}", crate::statusbar_cmd::RESTORE_TITLE);
     let _ = std::io::stdout().flush();
+}
+
+// trace:STORY-994 | ai:codex
+fn current_native_title(terminal: &TerminalIdentity) -> Option<String> {
+    match terminal.emulator.as_deref() {
+        Some("tmux") => command_output_trim("tmux", &["display-message", "-p", "#W"]),
+        Some("wezterm") => {
+            let mut args = vec!["cli", "get-tab-title"];
+            if let Some(pane) = terminal.wezterm_pane.as_deref() {
+                args.extend(["--pane-id", pane]);
+            }
+            command_output_trim("wezterm", &args)
+        }
+        Some("terminator") => terminal
+            .terminator_uuid
+            .as_deref()
+            .and_then(|uuid| command_output_trim("remotinator", &["get_tab_title", uuid])),
+        _ => None,
+    }
+}
+
+fn command_output_trim(program: &str, args: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 #[cfg(unix)]
@@ -1696,6 +1850,66 @@ fn parent_pid(pid: u32) -> Option<u32> {
         }
         String::from_utf8_lossy(&out.stdout).trim().parse().ok()
     }
+}
+
+#[cfg(unix)]
+fn process_cmdline(pid: u32) -> Option<String> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let text = raw
+        .split(|b| *b == 0)
+        .filter(|part| !part.is_empty())
+        .map(|part| String::from_utf8_lossy(part))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.trim().is_empty() {
+        None
+    } else {
+        Some(text)
+    }
+}
+
+#[cfg(unix)]
+fn session_start_agent_pid(mut child_pid: u32, agent_type: &str) -> Option<u32> {
+    while let Some(parent) = parent_pid(child_pid) {
+        if parent == 0 || parent == child_pid {
+            return None;
+        }
+        if process_cmdline(parent).is_some_and(|cmd| cmdline_matches_agent(&cmd, agent_type)) {
+            return Some(parent);
+        }
+        child_pid = parent;
+    }
+    None
+}
+
+#[cfg(unix)]
+fn cmdline_matches_agent(cmdline: &str, agent_type: &str) -> bool {
+    let lower = cmdline.to_ascii_lowercase();
+    match agent_type {
+        "claude" => {
+            lower.contains("claude-code")
+                || lower.contains("@anthropic-ai/claude")
+                || lower.split_whitespace().any(|arg| {
+                    std::path::Path::new(arg)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|name| name == "claude")
+                })
+        }
+        "codex" => lower.split_whitespace().any(|arg| {
+            std::path::Path::new(arg)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .is_some_and(|name| name == "codex")
+        }),
+        "antigravity" => lower.contains("antigravity") || lower.contains("gemini"),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn session_start_agent_pid(_child_pid: u32, _agent_type: &str) -> Option<u32> {
+    None
 }
 
 #[cfg(not(unix))]
@@ -1808,6 +2022,68 @@ mod tests {
             launch_title("advisor", None, "abcdef012345"),
             "aida · advisor · abcdef01"
         );
+    }
+
+    #[test]
+    fn session_start_cmdline_match_detects_agent_binary() {
+        assert!(cmdline_matches_agent(
+            "/home/joe/.local/bin/codex --cd /repo",
+            "codex"
+        ));
+        assert!(cmdline_matches_agent(
+            "/usr/bin/node /usr/local/bin/claude",
+            "claude"
+        ));
+        assert!(cmdline_matches_agent(
+            "node /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js",
+            "claude"
+        ));
+        assert!(cmdline_matches_agent("gemini --model pro", "antigravity"));
+        assert!(!cmdline_matches_agent(
+            "bash .claude/hooks/aida-mail-notice.sh",
+            "claude"
+        ));
+    }
+
+    #[test]
+    fn session_start_hook_touch_writes_terminal_block() {
+        let tmp = TempDir::new().unwrap();
+        let prev_agent_type = std::env::var_os("AIDA_AGENT_TYPE");
+        let prev_role = std::env::var_os("AIDA_SESSION_ROLE");
+        let prev_scope = std::env::var_os("AIDA_SESSION_SCOPE");
+        let prev_term = std::env::var_os("TERMINATOR_UUID");
+        std::env::set_var("AIDA_AGENT_TYPE", "codex");
+        std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+        std::env::set_var("AIDA_SESSION_SCOPE", "STORY-994");
+        std::env::set_var("TERMINATOR_UUID", "term-994");
+
+        let binary = AgentBinaryIdentity::new("0.14.0".into(), "abc123".into());
+        let entry = touch_session_start_agent(tmp.path(), Some("claude-sid"), &binary).unwrap();
+
+        assert_eq!(entry.agent_type, "codex");
+        assert_eq!(entry.role.as_deref(), Some("advisor"));
+        assert_eq!(entry.current_spec.as_deref(), Some("STORY-994"));
+        assert_eq!(entry.claude_session_id.as_deref(), Some("claude-sid"));
+        let terminal = entry.terminal.as_ref().expect("terminal block");
+        assert_eq!(terminal.emulator.as_deref(), Some("terminator"));
+        assert_eq!(terminal.terminator_uuid.as_deref(), Some("term-994"));
+
+        match prev_agent_type {
+            Some(v) => std::env::set_var("AIDA_AGENT_TYPE", v),
+            None => std::env::remove_var("AIDA_AGENT_TYPE"),
+        }
+        match prev_role {
+            Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
+            None => std::env::remove_var("AIDA_SESSION_ROLE"),
+        }
+        match prev_scope {
+            Some(v) => std::env::set_var("AIDA_SESSION_SCOPE", v),
+            None => std::env::remove_var("AIDA_SESSION_SCOPE"),
+        }
+        match prev_term {
+            Some(v) => std::env::set_var("TERMINATOR_UUID", v),
+            None => std::env::remove_var("TERMINATOR_UUID"),
+        }
     }
 
     fn ctx(now: DateTime<Utc>, threshold_secs: u64, leases: Vec<PathBuf>) -> AgentClassifyContext {
