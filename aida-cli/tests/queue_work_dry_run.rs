@@ -45,6 +45,65 @@ fn git(repo: &Path, args: &[&str]) {
     assert!(status.success(), "git {args:?} failed");
 }
 
+fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::PathBuf, String) {
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+    std::fs::write(
+        repo.join(".aida").join("config.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "bug",
+            "--status",
+            "approved",
+            "--title",
+            "codex only queue work",
+        ])
+        .output()
+        .expect("run aida add");
+    assert!(
+        add.status.success(),
+        "aida add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let add_out = String::from_utf8_lossy(&add.stdout);
+    let spec = add_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse spec id from add output:\n{add_out}"))
+        .to_string();
+    (repo, home, spec)
+}
+
 #[test]
 fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     let base = tempfile::tempdir().expect("tempdir");
@@ -186,6 +245,69 @@ fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     assert!(
         status_line.contains("approved"),
         "spec status should still be Approved after a dry run, got: `{status_line}`"
+    );
+}
+
+#[test]
+fn no_launch_dry_run_autopicks_codex_only_enabled_profile() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+
+    let dry = aida(&repo, &home)
+        .args([
+            "queue",
+            "work",
+            &spec,
+            "--no-launch",
+            "--dry-run",
+            "--no-pull",
+        ])
+        .output()
+        .expect("run aida queue work --no-launch --dry-run");
+    assert!(
+        dry.status.success(),
+        "dry-run exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        dry.status.code(),
+        String::from_utf8_lossy(&dry.stderr),
+        String::from_utf8_lossy(&dry.stdout)
+    );
+    let plan = String::from_utf8_lossy(&dry.stderr);
+    assert!(
+        plan.contains("vendor:") && plan.contains("codex"),
+        "no-launch dry-run should display resolved codex vendor:\n{plan}"
+    );
+    assert!(
+        !plan.contains("vendor: claude") && !plan.contains("exec:    claude"),
+        "no-launch dry-run must not display disabled claude default:\n{plan}"
+    );
+}
+
+#[test]
+fn no_launch_completion_text_is_codex_aware() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+
+    let run = aida(&repo, &home)
+        .args(["queue", "work", &spec, "--no-launch", "--no-pull"])
+        .output()
+        .expect("run aida queue work --no-launch");
+    assert!(
+        run.status.success(),
+        "no-launch exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        run.status.code(),
+        String::from_utf8_lossy(&run.stderr),
+        String::from_utf8_lossy(&run.stdout)
+    );
+    let out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    assert!(
+        out.contains("codex") && !out.contains("claude /aida-pickup"),
+        "no-launch completion text should name codex or stay neutral, not hardcode claude:\n{out}"
     );
 }
 

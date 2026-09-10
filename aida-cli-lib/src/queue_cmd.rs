@@ -7161,6 +7161,64 @@ pub(crate) fn headless_launch_hint(prompt: &str, session_id: &str, contained: bo
     format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
 }
 
+// BUG-913: deferred queue-work launch instructions must reflect the resolved
+// vendor. The Claude arm deliberately reuses the exact historical helper so its
+// round-trip invariant stays unchanged; non-Claude arms name the command the
+// equivalent launch path would use. trace:BUG-913 | ai:codex
+pub(crate) fn deferred_headless_launch_hint(
+    vendor: session::HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+) -> String {
+    match vendor {
+        session::HeadlessVendor::Claude => headless_launch_hint(prompt, session_id, contained),
+        session::HeadlessVendor::Codex => {
+            let argv = session::codex_headless_args(prompt);
+            format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
+        }
+        session::HeadlessVendor::Agy => {
+            let argv = session::headless_vendor_args(vendor, prompt, session_id, contained);
+            format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv))
+        }
+    }
+}
+
+// BUG-913: same vendor-aware rendering for `--no-launch` interactive handoff
+// text. Without this, a codex-only project correctly prepared a codex session
+// but still told the operator to run `claude /aida-pickup ...`.
+// trace:BUG-913 | ai:codex
+pub(crate) fn deferred_interactive_launch_hint(
+    vendor: session::HeadlessVendor,
+    prompt: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> String {
+    match vendor {
+        session::HeadlessVendor::Claude => {
+            let mut args =
+                session::claude_session_args(permission_mode, None, Some(prompt), None, contained);
+            if contained && !args.iter().any(|arg| arg == "--permission-mode") {
+                args.splice(
+                    0..0,
+                    ["--permission-mode".to_string(), "dontAsk".to_string()],
+                );
+            }
+            format!("claude {}", shell_join_display(&args))
+        }
+        session::HeadlessVendor::Codex => {
+            let bypass = permission_mode == Some("bypassPermissions");
+            format!(
+                "codex {}",
+                shell_join_display(&session::codex_session_args(prompt, bypass))
+            )
+        }
+        session::HeadlessVendor::Agy => {
+            format!("agy {}", shell_join_display(&[prompt.to_string()]))
+        }
+    }
+}
+
 pub(crate) fn claude_posture_display(permission_mode: Option<&str>, contained: bool) -> String {
     if contained {
         "contained sandbox".to_string()
@@ -7353,18 +7411,19 @@ pub(crate) fn handle_queue_work(
     };
 
     let project_root_for_config = find_main_worktree_root().ok();
-    // BUG-898/BUG-902: resolve + validate the launch vendor before any write
-    // below (calibration tags, leases, worktrees), for both headless and
-    // interactive launches. A codex-only profile should auto-pick codex; a
-    // disabled/ambiguous vendor refuses with zero state created and a recovery
-    // hint. trace:BUG-898 BUG-902 | ai:codex
-    let resolved_launch_vendor = if !no_launch && !list_sessions {
+    // BUG-898/BUG-902/BUG-913: resolve + validate the launch/display vendor
+    // before any write below (calibration tags, leases, worktrees), for both
+    // launching and non-launching previews. A codex-only profile should
+    // auto-pick codex; disabled defaults must not leak into dry-run or
+    // no-launch output. trace:BUG-898 BUG-902 BUG-913 | ai:codex
+    let resolved_launch_vendor = if !list_sessions {
         let root = project_root_for_config
             .clone()
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| std::path::PathBuf::from("."));
         let resolved = session::resolve_enabled_headless_vendor(&root)?;
-        if matches!(launch, Some(QueueWorkLaunch::Resume(_)))
+        if !no_launch
+            && matches!(launch, Some(QueueWorkLaunch::Resume(_)))
             && resolved != session::HeadlessVendor::Claude
         {
             anyhow::bail!(
@@ -8431,24 +8490,20 @@ pub(crate) fn handle_queue_work(
             // the env `exec_claude_headless` sets, so the copy-pasted hint
             // launches an equivalent process.
             let sid = claude_session_id.as_deref().unwrap_or_default();
-            eprintln!("  {}", headless_launch_hint(&prompt, sid, contained).cyan());
-        } else {
-            let mut args = session::claude_session_args(
-                permission_mode.as_deref(),
-                None,
-                Some(&prompt),
-                None,
-                contained,
-            );
-            if contained && !args.iter().any(|arg| arg == "--permission-mode") {
-                args.splice(
-                    0..0,
-                    ["--permission-mode".to_string(), "dontAsk".to_string()],
-                );
-            }
             eprintln!(
                 "  {}",
-                format!("claude {}", shell_join_display(&args)).cyan()
+                deferred_headless_launch_hint(launch_vendor, &prompt, sid, contained).cyan()
+            );
+        } else {
+            eprintln!(
+                "  {}",
+                deferred_interactive_launch_hint(
+                    launch_vendor,
+                    &prompt,
+                    permission_mode.as_deref(),
+                    contained
+                )
+                .cyan()
             );
         }
         // BUG-673: next-step breadcrumb after a `queue work` pickup. The lease
