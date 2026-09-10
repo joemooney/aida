@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:10:09.235245752Z
-modified_at: 2026-09-10T12:41:58.213444717Z
+modified_at: 2026-09-10T12:45:57.531143716Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -30,6 +30,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-10T08:27:27.624417799Z
   modified_at: 2026-09-10T08:27:27.624417799Z
+- id: 01a08b5a-799b-74e3-88c1-80e6f7c5dec8
+  author: joe
+  content: 'Codex addressed PR #1716 review finding: read_enabled_agent_selection_with_source now uses crate::aida_home_dir() for global .aida/agents.toml, with a regression separating HOME from AIDA_HOME so Codex-only global enabled selection resolves from AIDA_HOME. Commit: 9797c3f73.'
+  created_at: 2026-09-10T12:45:57.531143716Z
+  modified_at: 2026-09-10T12:45:57.531143716Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
