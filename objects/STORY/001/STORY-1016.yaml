@@ -1,0 +1,26 @@
+id: 01a08ace-8811-7a30-a177-ce6206c9a733
+spec_id: STORY-1016
+agreed_id: STORY-1016
+title: 'Review PR-1719: [AI:codex] fix(queue): reuse PR head for rework pickups (BUG-1023)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08ac7`) for branch `bug-1023`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1719>
+  - Branch: `bug-1023` → `main`
+
+  ## Covers
+
+  - BUG-1023
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1719` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T10:13:06.193401116Z
+modified_at: 2026-09-10T10:13:06.193401116Z
+req_type: Story
