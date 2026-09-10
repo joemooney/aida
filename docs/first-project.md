@@ -226,9 +226,21 @@ gets *routed* by putting it on a role's queue. Queue STORY-1 and STORY-2 for the
 ```
 $ AIDA_SESSION_ROLE=advisor aida queue add STORY-1 --for implementer
 ✓ Added STORY-1 (Add and list tasks) to queue [for:implementer]
+  Destination:
+    identity: role:implementer
+    queue: local
+    routed role: implementer
+    observe: aida queue list --user role:implementer --for implementer
+    pickup: aida queue work STORY-1 --user role:implementer --role implementer
 
 $ AIDA_SESSION_ROLE=advisor aida queue add STORY-2 --for implementer
 ✓ Added STORY-2 (Mark a task done) to queue [for:implementer]
+  Destination:
+    identity: role:implementer
+    queue: local
+    routed role: implementer
+    observe: aida queue list --user role:implementer --for implementer
+    pickup: aida queue work STORY-2 --user role:implementer --role implementer
 ```
 
 Check the queue:
