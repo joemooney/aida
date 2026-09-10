@@ -827,6 +827,53 @@ pub(crate) fn opportunistic_queue_gc(
         .unwrap_or(0)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum QueueFreshPickup {
+    Pickable,
+    AwaitingMerge,
+    Terminal(RequirementStatus),
+    Blocked(aida_core::pickability::BlockedReason),
+}
+
+/// BUG-1017: one policy for fresh queue pickup surfaces. `Done` stays visible
+/// as in-flight / awaiting-merge work, but it is not a valid fresh pickup.
+/// `NeedsAttention` is blocked by normal pickability unless an explicit force
+/// path is being resolved.
+// trace:BUG-1017 | ai:codex
+pub(crate) fn queue_fresh_pickup_policy(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+    force_needs_attention: bool,
+) -> QueueFreshPickup {
+    if matches!(req.status, RequirementStatus::Done) {
+        return QueueFreshPickup::AwaitingMerge;
+    }
+    if is_terminal_status(&req.status) {
+        return QueueFreshPickup::Terminal(req.status.clone());
+    }
+    if force_needs_attention && matches!(req.status, RequirementStatus::NeedsAttention) {
+        return QueueFreshPickup::Pickable;
+    }
+    match aida_core::pickability::pickability(req, store) {
+        aida_core::pickability::Pickability::Pickable => QueueFreshPickup::Pickable,
+        aida_core::pickability::Pickability::Blocked(reason) => QueueFreshPickup::Blocked(reason),
+    }
+}
+
+pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Option<String> {
+    match policy {
+        QueueFreshPickup::Pickable => None,
+        QueueFreshPickup::AwaitingMerge => Some(
+            "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
+                .to_string(),
+        ),
+        QueueFreshPickup::Terminal(status) => Some(format!("{status} — already terminal")),
+        QueueFreshPickup::Blocked(reason) => {
+            Some(aida_core::pickability::pickability_reason_label(reason))
+        }
+    }
+}
+
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
 /// than the legacy full YAML load.
@@ -1347,9 +1394,10 @@ pub(crate) fn handle_queue_command(
                     else {
                         return true;
                     };
-                    match aida_core::pickability::pickability(req, &store) {
-                        aida_core::pickability::Pickability::Pickable => true,
-                        aida_core::pickability::Pickability::Blocked(reason) => {
+                    match queue_fresh_pickup_policy(req, &store, false) {
+                        QueueFreshPickup::Pickable => true,
+                        QueueFreshPickup::AwaitingMerge | QueueFreshPickup::Terminal(_) => false,
+                        QueueFreshPickup::Blocked(reason) => {
                             blocked_entries.push(BlockedEntry { req, reason });
                             false
                         }
@@ -3435,18 +3483,17 @@ pub(crate) fn handle_queue_command(
                     else {
                         return true;
                     };
-                    match aida_core::pickability::pickability(req, &store) {
-                        aida_core::pickability::Pickability::Pickable => true,
-                        aida_core::pickability::Pickability::Blocked(reason) => {
+                    match queue_fresh_pickup_policy(req, &store, false) {
+                        QueueFreshPickup::Pickable => true,
+                        other => {
                             let display = req
                                 .agreed_id
                                 .clone()
                                 .or_else(|| req.spec_id.clone())
                                 .unwrap_or_else(|| "?".to_string());
-                            skipped_unpickable.push((
-                                display,
-                                aida_core::pickability::pickability_reason_label(&reason),
-                            ));
+                            let reason = queue_fresh_pickup_reason_label(&other)
+                                .unwrap_or_else(|| "not pickable".to_string());
+                            skipped_unpickable.push((display, reason));
                             false
                         }
                     }
@@ -5167,6 +5214,7 @@ pub(crate) fn handle_queue_command(
                 base.as_deref(),
                 *force_base,
                 *steal,
+                *force,
                 *force_claim,
                 resume.as_deref(),
                 *fresh,
@@ -5970,6 +6018,7 @@ pub(crate) fn handle_queue_rework(
             /* base */ None,
             /* force_base */ false,
             steal,
+            /* force */ false,
             /* force_claim */ false,
             // Bare `--resume` → resume the scope's most recent recorded
             // claude session (`resolve_queue_work_launch` fails clean when
@@ -6118,6 +6167,7 @@ pub(crate) fn resolve_queue_work_plan(
     // entry in-memory so the plan resolves identically to a real pickup while
     // mutating nothing. trace:TASK-1053 | ai:claude
     dry_run: bool,
+    force_needs_attention: bool,
 ) -> Result<QueueWorkPlan> {
     // A `--for <role>` routing lands in the ROUTING user's queue file, so a
     // pickup that read only our own file could not work a spec a peer routed
@@ -6205,29 +6255,25 @@ pub(crate) fn resolve_queue_work_plan(
                 None => true,
             })
             .filter(|e| {
-                let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
-                    return true;
-                };
-                !is_terminal_status(&req.status)
-            })
-            .filter(|e| {
                 // STORY-333: pre-pickup gate. Skip un-pickable specs so the
                 // orchestrator never spawns a doomed phase-1 implementer on
                 // them. Reasons are recorded for the banner.
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
                     return true;
                 };
-                match aida_core::pickability::pickability(req, &store) {
-                    aida_core::pickability::Pickability::Pickable => true,
-                    aida_core::pickability::Pickability::Blocked(reason) => {
+                match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+                    QueueFreshPickup::Pickable => true,
+                    other => {
                         let display = req
                             .agreed_id
                             .clone()
                             .or_else(|| req.spec_id.clone())
                             .unwrap_or_else(|| "?".to_string());
+                        let reason = queue_fresh_pickup_reason_label(&other)
+                            .unwrap_or_else(|| "not pickable".to_string());
                         skipped_unpickable.push((
                             display,
-                            aida_core::pickability::pickability_reason_label(&reason),
+                            reason,
                         ));
                         false
                     }
@@ -6360,6 +6406,17 @@ pub(crate) fn resolve_queue_work_plan(
             .iter()
             .find(|r| r.id == entry.requirement_id)
             .unwrap();
+        if let Some(reason) = queue_fresh_pickup_reason_label(&queue_fresh_pickup_policy(
+            req,
+            &store,
+            force_needs_attention,
+        )) {
+            anyhow::bail!(
+                "`{}` is not pickable for fresh work: {}",
+                req.display_id(),
+                reason
+            );
+        }
         let (scope, review_target) = derive_scope_from_entry(&entry, req);
         let anchor_display = req
             .agreed_id
@@ -6391,7 +6448,10 @@ pub(crate) fn resolve_queue_work_plan(
                 let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
                     return false;
                 };
-                if is_terminal_status(&req.status) {
+                if !matches!(
+                    queue_fresh_pickup_policy(req, &store, force_needs_attention),
+                    QueueFreshPickup::Pickable
+                ) {
                     return false;
                 }
                 review_title_matches(&req.title, forge, n)
@@ -6490,24 +6550,21 @@ pub(crate) fn resolve_queue_work_plan(
             let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
                 return false;
             };
-            // Skip terminal-status reqs (they shouldn't ever be in the
-            // queue but defensive).
-            if is_terminal_status(&req.status) {
-                return false;
-            }
             // STORY-333: cluster drains must skip un-pickable members so
             // the orchestrator never spawns phase 1 on a blocked-by /
             // human-only spec. Same gate as head pickup + batch drain.
             // trace:STORY-333 | ai:claude
-            match aida_core::pickability::pickability(req, &store) {
-                aida_core::pickability::Pickability::Pickable => {}
-                aida_core::pickability::Pickability::Blocked(reason) => {
+            match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+                QueueFreshPickup::Pickable => {}
+                other => {
+                    let reason = queue_fresh_pickup_reason_label(&other)
+                        .unwrap_or_else(|| "not pickable".to_string());
                     eprintln!(
                         "  {} cluster {} — skipping un-pickable {} ({})",
                         crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                         anchor_id_upper,
                         req.display_id(),
-                        aida_core::pickability::pickability_reason_label(&reason),
+                        reason,
                     );
                     return false;
                 }
@@ -7256,6 +7313,7 @@ pub(crate) fn handle_queue_work(
     base: Option<&str>,
     force_base: bool,
     steal: bool,
+    force: bool,
     force_claim: bool,
     resume: Option<&str>,
     fresh: bool,
@@ -7332,7 +7390,15 @@ pub(crate) fn handle_queue_work(
     // unchanged. We try the normal resolution first; only on its failure do we
     // consult the marker, so a still-queued or non-held spec keeps its existing
     // behaviour exactly. trace:TASK-630 | ai:claude
-    let plan = match resolve_queue_work_plan(storage, user_id, arg, type_filter, strict, dry_run) {
+    let plan = match resolve_queue_work_plan(
+        storage,
+        user_id,
+        arg,
+        type_filter,
+        strict,
+        dry_run,
+        force || force_claim,
+    ) {
         Ok(plan) => plan,
         Err(e) => match arg.filter(|_| resume.is_some()) {
             Some(arg_str) => {
@@ -9324,6 +9390,7 @@ fn preview_queue_work_drain(
             /* type_filter */ None,
             /* strict */ false,
             /* dry_run */ true,
+            /* force_needs_attention */ false,
         )?;
         println!("  target: {}", plan.anchor_display);
         let status = plan
@@ -9430,7 +9497,10 @@ fn auto_complete_sibling_role_hint(
         else {
             continue;
         };
-        if is_terminal_status(&req.status) {
+        if !matches!(
+            queue_fresh_pickup_policy(req, &store, false),
+            QueueFreshPickup::Pickable
+        ) {
             continue;
         }
         *counts.entry(role).or_default() += 1;

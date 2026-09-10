@@ -4774,3 +4774,20 @@ Process notes: advisor-merge protocol (verdict file + CI-on-exact-head) used whe
 machinery structurally failed; capture sweep re-armed TASK-1198 (codex validation attempt 6) after
 it dropped behind the field-report batch. Full detail: the specs (BUG-837…BUG-1025,
 STORY-821…STORY-1006) and their PR trail.
+
+## Session 2026-09-10 — BUG-1017 unified queue pickability
+
+Picked up `BUG-1017` from the implementer queue. The bug was that queue pickup surfaces disagreed:
+`Done` rows could still be selected as fresh work, and dry-run resolution could preview work that
+live pickup should refuse.
+
+Added a shared fresh-pickup policy for queue surfaces. `Done` is now treated as awaiting-merge
+work, visible through in-flight reporting but not selectable for fresh pickup; terminal statuses
+are excluded; `NeedsAttention` is blocked as `needs-triage` unless the live resolver receives an
+explicit force path. Wired the helper through `queue list`, `queue next`, explicit/head/cluster
+`queue work`, batch member resolution, PR review-story dispatch detection, and sibling-role
+drain hints. Added `// trace:BUG-1017 | ai:codex` comments on the policy and regression tests.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib queue_work_tests --no-default-features`;
+`cargo test -p aida-cli --test queue_work_dry_run --no-default-features`. Existing unrelated Rust
+warnings remain in the test output.
