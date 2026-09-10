@@ -3,12 +3,12 @@ spec_id: STORY-1003
 agreed_id: STORY-1003
 title: 'per-vendor model selection: [agents.<vendor>] model config + --model flag passed through the launch adapter'
 description: 'Operator request (2026-09-09): a vendor deployment can expose multiple named models (site-defined aliases — public clouds and workplace deployments name them differently), and AIDA has no convenient way to pick one. Design: (1) config — [agents.codex] model = "<name>" and [agents.claude] model = "<name>" in the standard resolution chain (project agents.toml > project config.toml > machine-global), empty = vendor default; (2) flag — --model <name> on aida agent new and aida queue work (and honored by drain phase spawns via config) as a one-shot override; (3) adapter passthrough — the vendor adapter maps it to the native CLI form (codex --model / claude --model) at the EXECUTION layer only, no model names hardcoded in AIDA; (4) display — the resolved vendor line (vendor: codex / exec: codex from BUG-902) gains model: <name> when set, including dry-run. Values are opaque strings passed through verbatim — AIDA never validates model names against a list. Acceptance: config-set model appears in the spawned argv and the resolved display; --model overrides config; unset behaves exactly as today; tests on the resolution chain and adapter argv per vendor.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:10:51.901655369Z
-modified_at: 2026-09-10T08:27:34.910658889Z
+modified_at: 2026-09-10T08:44:22.151164583Z
 req_type: Story
 comments:
 - id: 01a08995-d6d3-75c1-b241-196e8c92a9fb
@@ -18,3 +18,7 @@ comments:
   modified_at: 2026-09-10T04:31:33.587582949Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-10T08:44:22.151164583Z
+  implemented_by: joe
