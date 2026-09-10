@@ -50823,5 +50823,17 @@ operations:
   timestamp: 2026-09-10T04:08:14.973336039Z
   kind: !AddTag
     tag: severity:cosmetic lifecycle:trivial
-clock: 4321
+- id: 01a08980-8cad-7573-b3a3-d69fbb29879e
+  target_id: 01a08980-86df-7762-a2c1-cb108c198489
+  author: aida
+  node_id: '1'
+  lamport: 4322
+  timestamp: 2026-09-10T04:08:18.349479689Z
+  kind: !Create
+    title: duplicate-agent guard offers Launch another anyway, then refuses anyway — the yes path must work or the offer must not exist
+    description: 'Field report (2026-09-09) on the fresh STORY-991 guard: aida agent new detected a live codex/advisor (codex-advisor-1), correctly offered the resume command and asked Launch another anyway? — the operator answered Yes and it then ERRORED: agent role advisor is already active on this scope. The interactive offer contradicts the scope enforcement: never ask a question whose yes answer is refused. Fix: the anyway path launches with a distinct auto-suffixed name/scope (codex-advisor-2) when policy permits, or the prompt is replaced by the hard refusal + resume hint when policy forbids a second same-role agent on the scope. Acceptance: yes on the anyway prompt yields a running second agent (distinct name) or the prompt is absent and the refusal is immediate; test on the prompt/enforcement consistency.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4322
 node_id: '1'
