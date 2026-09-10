@@ -51378,5 +51378,51 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4356
+- id: 01a08a15-f793-7591-8635-2fa696fd8a76
+  target_id: 01a08a15-f210-7430-8d2e-b5a6b3b2ec17
+  author: aida
+  node_id: '1'
+  lamport: 4357
+  timestamp: 2026-09-10T06:51:30.579408351Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on STORY-1002'
+    description: |
+      Auto-drafted by `aida queue work STORY-1002 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the reviewer session exited 1 (attempt 2/2)
+
+      Failure kind: `tool-exit`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-1002 --work`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-10T06:51:28.886348905+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 995256 ms
+        - phase 2 (ci): 622584 ms
+        - phase 3 (reviewer): 647777 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-1002","started_at":"2026-09-10T06:13:41.579829027+00:00","completed_at":"2026-09-10T06:51:28.886348905+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"tool-exit","failure_message":"the reviewer session exited 1 (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":995256},{"phase":2,"slug":"ci","elapsed_ms":622584},{"phase":3,"slug":"reviewer","elapsed_ms":647777}],"total_ms":2266693,"binary_sha":"f559386b1"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4357
 node_id: '1'
