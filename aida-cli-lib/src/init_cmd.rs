@@ -454,6 +454,12 @@ pub(crate) struct AgentSelection {
     pub antigravity: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AgentSelectionWithSource {
+    pub selection: AgentSelection,
+    pub path: std::path::PathBuf,
+}
+
 impl AgentSelection {
     fn all() -> Self {
         Self {
@@ -848,10 +854,9 @@ fn ensure_minimal_cache(root: &std::path::Path, db_path: &std::path::Path) {
     }
 }
 
-pub(crate) fn read_enabled_agent_selection(
-    project_root: &std::path::Path,
-) -> Option<AgentSelection> {
-    let cfg = read_project_config_value(project_root)?;
+fn agent_selection_from_file(path: &std::path::Path) -> Option<AgentSelection> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let cfg: toml::Value = toml::from_str(&body).ok()?;
     let enabled = config_lookup(Some(&cfg), "agents", "enabled")?.as_array()?;
     let mut selection = AgentSelection {
         claude: false,
@@ -867,6 +872,30 @@ pub(crate) fn read_enabled_agent_selection(
         }
     }
     Some(selection)
+}
+
+pub(crate) fn read_enabled_agent_selection_with_source(
+    project_root: &std::path::Path,
+) -> Option<AgentSelectionWithSource> {
+    for path in [
+        Some(project_root.join(".aida/agents.toml")),
+        Some(project_root.join(".aida/config.toml")),
+        dirs::home_dir().map(|h| h.join(".aida/agents.toml")),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(selection) = agent_selection_from_file(&path) {
+            return Some(AgentSelectionWithSource { selection, path });
+        }
+    }
+    None
+}
+
+pub(crate) fn read_enabled_agent_selection(
+    project_root: &std::path::Path,
+) -> Option<AgentSelection> {
+    read_enabled_agent_selection_with_source(project_root).map(|s| s.selection)
 }
 
 pub(crate) fn write_enabled_agent_selection(
@@ -2368,6 +2397,34 @@ mod task_631_init_self_commit_tests {
             "canonical enabled array written: {body}"
         );
         assert_eq!(read_enabled_agent_selection(dir.path()), Some(selection));
+    }
+
+    #[test]
+    fn enabled_agent_selection_prefers_project_agents_toml_over_config() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".aida/agents.toml"),
+            "[agents]\nenabled = [\"codex\"]\n",
+        )
+        .unwrap();
+
+        let resolved = read_enabled_agent_selection_with_source(dir.path()).unwrap();
+
+        assert_eq!(
+            resolved.selection,
+            AgentSelection {
+                claude: false,
+                codex: true,
+                antigravity: false,
+            }
+        );
+        assert_eq!(resolved.path, dir.path().join(".aida/agents.toml"));
     }
 
     // trace:STORY-830 | ai:codex

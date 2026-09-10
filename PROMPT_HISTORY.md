@@ -4852,3 +4852,23 @@ the existing branch-mismatch refusal intact. Added `// trace:BUG-1023 | ai:codex
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib queue_work_tests`;
 `cargo test -p aida-cli-lib real_phase_driver_wiring_tests`. Existing unrelated Rust warnings
 remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1020 agent picker enabled-profile gate
+
+Picked up `BUG-1020` from the implementer queue. The bug was that bare `aida agent new`
+could still offer disabled vendors in codex-only projects, and explicit `aida agent new
+claude` could reach launch setup instead of refusing from the resolved enabled-agent profile.
+
+Extended `[agents] enabled` resolution to use project `.aida/agents.toml`, project
+`.aida/config.toml`, then global `~/.aida/agents.toml`, returning the winning source for
+operator-facing hints. Wired the bare agent-type picker through the resolved enabled profile,
+including the single-enabled-agent skip path, and added an explicit launch guard before binary
+lookup for foreground and Claude background launches. Updated `config show` source labels so
+project `.aida/agents.toml` is distinguishable. Added `// trace:BUG-1020 | ai:codex` on the
+picker filtering helper.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib agent_launcher_tests -- --nocapture`;
+`cargo test -p aida-cli-lib enabled_agent_selection -- --nocapture`; CLI probe with a temporary
+codex-only project confirmed `aida agent new claude` refuses with the enabled-profile config
+hint before any missing-binary error. Existing unrelated Rust warnings remain in the focused
+test output.

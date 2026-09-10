@@ -1233,6 +1233,68 @@ fn agent_type_picker_choices_cover_all_launchers() {
     assert!(agent_new_command_for_type("nope").is_none());
 }
 
+#[test]
+fn agent_type_picker_choices_respect_enabled_profile() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(
+        dir.path().join(".aida/config.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+
+    let choices = enabled_agent_type_picker_choices_for_project(dir.path());
+    let labels: Vec<&str> = choices.iter().map(|(label, _)| *label).collect();
+    let tokens: Vec<&str> = choices.iter().map(|(_, token)| *token).collect();
+
+    assert_eq!(labels, vec!["Codex"]);
+    assert_eq!(tokens, vec!["codex"]);
+    assert!(matches!(
+        agent_new_command_for_type(tokens[0]),
+        Some(AgentNewCommand::Codex { .. })
+    ));
+}
+
+#[test]
+fn explicit_agent_new_refuses_disabled_profile_with_config_hint() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(
+        dir.path().join(".aida/config.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+
+    let err = enforce_agent_type_enabled(dir.path(), "claude").unwrap_err();
+    let msg = err.to_string();
+
+    assert!(msg.contains("`claude` is disabled by `[agents] enabled`"));
+    assert!(msg.contains(".aida/config.toml"));
+    assert!(msg.contains("enabled: codex"));
+}
+
+#[test]
+fn explicit_agent_new_disabled_hint_uses_winning_agents_toml() {
+    let dir = TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(
+        dir.path().join(".aida/config.toml"),
+        "[agents]\nenabled = [\"claude\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join(".aida/agents.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+
+    let err = enforce_agent_type_enabled(dir.path(), "claude").unwrap_err();
+    let msg = err.to_string();
+
+    assert!(msg.contains(".aida/agents.toml"));
+    assert!(msg.contains("enabled: codex"));
+}
+
 // trace:TASK-837 | ai:claude — a token picked interactively must produce the
 // same default-options command as the explicit `aida agent new <type>` lane,
 // so the two entry points share one launch path.
