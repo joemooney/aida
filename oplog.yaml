@@ -51716,5 +51716,32 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4373
+- id: 01a08ac1-447a-7d30-960e-4bab45d68241
+  target_id: 01a08ac1-3bb4-73d1-9067-7a7889ebc05c
+  author: aida
+  node_id: '1'
+  lamport: 4374
+  timestamp: 2026-09-10T09:58:36.922653661Z
+  kind: !Create
+    title: 'Review PR-1718: [AI:codex] fix(agent): gate launcher picker by enabled profile (BUG-1020)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08aa8`) for branch `story-1004`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1718>
+      - Branch: `story-1004` → `main`
+
+      ## Covers
+
+      - STORY-1004
+      - BUG-1020
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1718` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4374
 node_id: '1'
