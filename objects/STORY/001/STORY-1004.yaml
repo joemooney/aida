@@ -3,11 +3,11 @@ spec_id: STORY-1004
 agreed_id: STORY-1004
 title: 'aida report: compose a paste-ready bug report to stdout (email transport deferred)'
 description: 'Operator re-scope (2026-09-09): slice 1 is the COMPOSER + LOCAL FILING, no email transport. aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY) does two things: (1) PRINTS a paste-ready report to stdout — first line Subject: aida: <title> (matching the home-side retrieval convention), then the structured body: title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled), OS; the operator pastes it into their mail client by hand; --copy also puts it on the clipboard (ultraplan mechanism). (2) FILES the same report as a spec in the CURRENT project''s own store: aida add --type bug --title "AIDA: <title>" with the body as description, tagged upstream:aida and observed-version:<aida version> — formalizing the operator''s existing local practice (their BUG-018/BUG-032). RESOLUTION RECHECK: aida report --recheck lists open AIDA:-prefixed / upstream:aida specs with observed version vs the currently installed aida version, flagging those observed on an OLDER version as re-test candidates after an upgrade; additionally the first store-reading command after an aida version change prints a one-line notice when such specs exist (N upstream aida reports predate this binary — aida report --recheck). --no-file skips the local spec for one-off sends. No transport, no config, no secrets in this slice; email transport + outbox stay SLICE 2, deferred until manual pasting becomes friction. Acceptance: command prints subject+body with all context fields; a spec titled AIDA: <title> with upstream:aida + observed-version tags exists in the local store afterward; --recheck lists it with observed vs current version and drops it when the spec closes; the post-upgrade one-line notice fires exactly once per version change; --no-file skips filing; plain text, no ANSI when piped; unit tests on composer format, tags, and recheck filtering.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:17:22.124798775Z
-modified_at: 2026-09-10T04:19:14.962022417Z
+modified_at: 2026-09-10T09:31:32.979010836Z
 req_type: Story
 execution_mode: drain
