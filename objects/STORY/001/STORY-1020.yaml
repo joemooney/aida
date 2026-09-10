@@ -1,0 +1,26 @@
+id: 01a08b39-c102-7f82-9b10-5a5406f2c874
+spec_id: STORY-1020
+agreed_id: STORY-1020
+title: 'Review PR-1723: [AI:codex] fix(scaffold): retire prompt-history discipline (TASK-1202)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08b31`) for branch `task-1202`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1723>
+  - Branch: `task-1202` → `main`
+
+  ## Covers
+
+  - TASK-1202
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1723` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-10T12:10:13.122909030Z
+modified_at: 2026-09-10T12:10:13.122909030Z
+req_type: Story
