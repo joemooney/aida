@@ -51008,5 +51008,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4336
+- id: 01a08999-6c68-7b40-afae-033b22d3915f
+  target_id: 01a08999-686e-7bb1-bf2c-f01707423c2b
+  author: aida
+  node_id: '1'
+  lamport: 4337
+  timestamp: 2026-09-10T04:35:28.488608734Z
+  kind: !Create
+    title: 'Review PR-1707: [AI:codex] fix(queue): resolve vendor for no-launch paths (BUG-913)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08989`) for branch `bug-913-no-launch-vendor`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1707>
+      - Branch: `bug-913-no-launch-vendor` → `main`
+
+      ## Covers
+
+      - BUG-913
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1707` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4337
 node_id: '1'
