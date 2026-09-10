@@ -3,12 +3,12 @@ spec_id: TASK-1202
 agreed_id: TASK-1202
 title: retire PROMPT_HISTORY from AIDA-scaffolded discipline — substrate and digest are the session record
 description: 'Operator decision (2026-09-09): PROMPT_HISTORY.md is retired in AIDA projects — in four days of heavy multi-agent work it was read zero times while causing three rebase conflicts (append-only file under parallel sessions), and its jobs are done better by the substrate (aida history --events for the time series, aida digest for narrative, specs + PR trail for the why). Already done outside this task: this repo''s file frozen with a banner (commit 382bd4097); the operator''s global agent instructions scoped it to non-AIDA projects. THIS task cleans the scaffolded discipline so downstream AIDA projects never adopt it: (1) update the template mentions — aida-core/templates/.aida/discipline/session-discipline.md gains the rule (session history = substrate + digest; no session-log file), aida-core/templates/memories/feedback_dated_artifacts_immutable.md and memories/MEMORY.md drop or rescope their PROMPT_HISTORY references; (2) audit generate_claude_md / AGENTS.md generators and every skill/command template for any instruction to write session logs to a file (grep found none today — add a regression test asserting the embedded templates contain no PROMPT_HISTORY append instruction so one cannot sneak back in); (3) confirm init creates no such file (it does not today — cover in the same test). Acceptance: template grep test green; session-discipline.md carries the substrate-is-the-record rule; refresh delivers the updated templates via the TASK-1170 mechanism.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T05:13:03.918355494Z
-modified_at: 2026-09-10T12:10:17.684146413Z
+modified_at: 2026-09-10T12:10:25.034630421Z
 req_type: Task
 relationships:
 - rel_type: !Custom implemented-by
@@ -16,3 +16,7 @@ relationships:
   created_at: 2026-09-10T12:10:17.684139304Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-10T12:10:25.034630421Z
+  implemented_by: joe
