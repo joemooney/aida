@@ -4836,3 +4836,19 @@ Picked up `STORY-1003` from the implementer queue. The story requested opaque pe
 Added model resolution to the shared agents config chain (`.aida/agents.toml` > `.aida/config.toml` > `~/.aida/agents.toml`), with empty strings selecting the vendor default. Wired `--model` through `agent new claude`, `agent new codex`, and `queue work`; exported `AIDA_AGENT_MODEL` so auto-complete phase children inherit one-shot overrides. Updated Claude/Codex interactive and headless argv builders to append native `--model <name>` without validating model names, and added the resolved `model:` line to queue dry-run output. Added `// trace:STORY-1003 | ai:codex` comments on the resolver, CLI fields, env propagation, and argv injection.
 
 Verification: `cargo check -q`; `cargo test -q -p aida-core agents_config`; `cargo test -q -p aida-cli-lib agent_launcher_tests`; `cargo test -q -p aida-cli-lib interactive_session_args_pass_model_before_prompt`; `cargo test -q -p aida-cli-lib headless_vendor_args_pass_model_for_claude_and_codex_only`; `cargo test -q -p aida-cli --test queue_work_dry_run queue_work_dry_run_displays_config_model_and_flag_override`. Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1023 rework PR branch agreement
+
+Picked up `BUG-1023` from the implementer queue. The bug was that findings-led rework could launch
+the implementer on an existing `<spec>-pr<N>` head branch while later auto-complete phases still
+derived and drove the plain `<spec>` branch, tripping the correct phase-2 foreign-branch guard.
+
+Changed `queue work` session setup to detect a single-spec In Progress/Done pickup with an open PR
+for that spec and seed `session_start` with the PR head branch when no explicit branch override was
+provided. That makes rework leases, implementer worktrees, phase 2, and review converge on the same
+branch while leaving `PR-N` reviewer pickups, fresh Approved work, explicit branch overrides, and
+the existing branch-mismatch refusal intact. Added `// trace:BUG-1023 | ai:codex` on the resolver.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib queue_work_tests`;
+`cargo test -p aida-cli-lib real_phase_driver_wiring_tests`. Existing unrelated Rust warnings
+remain in the focused test output.
