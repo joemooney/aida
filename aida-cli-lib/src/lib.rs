@@ -27500,6 +27500,16 @@ fn session_start(
 
         if let Some(acquired) = pooled {
             worktree_path = acquired;
+            // BUG-916: pooled/session-start handoff is a worktree materialization
+            // path too; keep it as build-ready as the fresh `git worktree add`
+            // paths before reporting the session ready.
+            aida_core::git_ops::init_submodules_or_warn(
+                &worktree_path,
+                worktree_config_init_submodules(&project_root),
+            )
+            .with_context(|| {
+                format!("prepare submodules in worktree {}", worktree_path.display())
+            })?;
         } else {
             let mut args = vec![
                 "worktree",
