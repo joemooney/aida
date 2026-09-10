@@ -51508,5 +51508,31 @@ operations:
   timestamp: 2026-09-10T07:31:35.922539666Z
   kind: !SetStatus
     status: Completed
-clock: 4363
+- id: 01a08a42-a4d4-7b02-93e9-7fe4a8e4b651
+  target_id: 01a08a42-a0dd-77f0-bbc4-573456938783
+  author: aida
+  node_id: '1'
+  lamport: 4364
+  timestamp: 2026-09-10T07:40:18.516462349Z
+  kind: !Create
+    title: 'Review PR-1715: [AI:codex] feat(roles): add product starter role (TASK-1200)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08a3c`) for branch `task-1200`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1715>
+      - Branch: `task-1200` → `main`
+
+      ## Covers
+
+      - TASK-1200
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1715` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4364
 node_id: '1'
