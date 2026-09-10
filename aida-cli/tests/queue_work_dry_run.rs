@@ -312,6 +312,138 @@ fn no_launch_completion_text_is_codex_aware() {
 }
 
 #[test]
+fn no_launch_with_custom_base_populates_submodules() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let repo = base_dir.join("repo");
+    let home = base_dir.join("home");
+    let submodule_src = base_dir.join("submodule-src");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::create_dir_all(&submodule_src).unwrap();
+
+    git(&submodule_src, &["init", "-q", "-b", "main"]);
+    git(&submodule_src, &["config", "user.email", "t@t.t"]);
+    git(&submodule_src, &["config", "user.name", "t"]);
+    std::fs::write(submodule_src.join("payload.txt"), "submodule payload\n").unwrap();
+    git(&submodule_src, &["add", "payload.txt"]);
+    git(&submodule_src, &["commit", "-q", "-m", "submodule payload"]);
+
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@t.t"]);
+    git(&repo, &["config", "user.name", "t"]);
+    git(&repo, &["config", "protocol.file.allow", "always"]);
+    let submodule_path = submodule_src.to_string_lossy().to_string();
+    let add_submodule = Command::new("git")
+        .current_dir(&repo)
+        .args([
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            &submodule_path,
+            "vendor/lib",
+        ])
+        .output()
+        .expect("git submodule add");
+    assert!(
+        add_submodule.status.success(),
+        "git submodule add failed:\nstdout={}\nstderr={}",
+        String::from_utf8_lossy(&add_submodule.stdout),
+        String::from_utf8_lossy(&add_submodule.stderr)
+    );
+    git(&repo, &["commit", "-q", "-am", "add submodule"]);
+    git(&repo, &["branch", "custom-base"]);
+
+    let init = aida(&repo, &home)
+        .args([
+            "init",
+            "--no-skills",
+            "--no-hooks",
+            "--no-agent-config",
+            "--no-roles",
+        ])
+        .output()
+        .expect("run aida init");
+    assert!(
+        init.status.success(),
+        "aida init failed: {}",
+        String::from_utf8_lossy(&init.stderr)
+    );
+    std::fs::write(
+        repo.join(".aida").join("config.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "add",
+            "--type",
+            "bug",
+            "--status",
+            "approved",
+            "--title",
+            "submodule queue work",
+        ])
+        .output()
+        .expect("run aida add");
+    assert!(
+        add.status.success(),
+        "aida add failed: {}",
+        String::from_utf8_lossy(&add.stderr)
+    );
+    let add_out = String::from_utf8_lossy(&add.stdout);
+    let spec = add_out
+        .split(|c: char| c.is_whitespace() || c == ',')
+        .find(|t| is_spec_id(t))
+        .unwrap_or_else(|| panic!("could not parse spec id from add output:\n{add_out}"))
+        .to_string();
+    let before = sibling_worktrees(&base_dir);
+
+    // trace:BUG-916 | ai:codex
+    let run = aida(&repo, &home)
+        .env("GIT_ALLOW_PROTOCOL", "file")
+        .args([
+            "queue",
+            "work",
+            &spec,
+            "--no-launch",
+            "--base",
+            "custom-base",
+            "--no-pull",
+        ])
+        .output()
+        .expect("run aida queue work --no-launch --base");
+    assert!(
+        run.status.success(),
+        "queue work exited non-zero ({:?}):\nstderr={}\nstdout={}",
+        run.status.code(),
+        String::from_utf8_lossy(&run.stderr),
+        String::from_utf8_lossy(&run.stdout)
+    );
+
+    let after = sibling_worktrees(&base_dir);
+    let created: Vec<_> = after
+        .iter()
+        .filter(|name| !before.contains(name))
+        .cloned()
+        .collect();
+    assert_eq!(
+        created.len(),
+        1,
+        "expected exactly one new worktree, before={before:?} after={after:?}"
+    );
+    let worktree = base_dir.join(&created[0]);
+    assert!(
+        worktree.join("vendor/lib/payload.txt").is_file(),
+        "queue work --no-launch --base left an empty submodule gitlink at {}",
+        worktree.join("vendor/lib").display()
+    );
+}
+
+#[test]
 fn drain_dry_run_previews_plan_with_no_side_effects() {
     let base = tempfile::tempdir().expect("tempdir");
     let base_dir = base.path().canonicalize().expect("canonicalize tempdir");

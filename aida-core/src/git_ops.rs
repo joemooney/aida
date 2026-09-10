@@ -1149,10 +1149,11 @@ pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Resul
 }
 
 /// Initialize recursive submodules in a newly-created or newly-claimed AIDA
-/// worktree when the repo carries `.gitmodules`. When disabled, print the exact
-/// recovery command before the caller reports success so the checkout is not
-/// mistaken for build-ready.
-// trace:BUG-899 | ai:codex
+/// worktree when the repo carries `.gitmodules`. Sync first so URL changes in
+/// `.gitmodules` reach `.git/config` before update clones/fetches submodules.
+/// When disabled, print the exact recovery commands before the caller reports
+/// success so the checkout is not mistaken for build-ready.
+// trace:BUG-899 trace:BUG-916 | ai:codex
 pub fn init_submodules_or_warn(worktree_path: &Path, enabled: bool) -> Result<()> {
     if !worktree_path.join(".gitmodules").is_file() {
         return Ok(());
@@ -1164,25 +1165,35 @@ pub fn init_submodules_or_warn(worktree_path: &Path, enabled: bool) -> Result<()
         return Ok(());
     }
 
-    let result = git(
+    let sync = git(worktree_path, &["submodule", "sync", "--recursive"])?;
+    if !sync.success {
+        anyhow::bail!(
+            "failed to sync submodule URLs in {}: {}\nRun: {}",
+            worktree_path.display(),
+            sync.stderr,
+            command
+        );
+    }
+    let update = git(
         worktree_path,
         &["submodule", "update", "--init", "--recursive"],
     )?;
-    if !result.success {
+    if !update.success {
         anyhow::bail!(
             "failed to initialize submodules in {}: {}\nRun: {}",
             worktree_path.display(),
-            result.stderr,
+            update.stderr,
             command
         );
     }
     Ok(())
 }
 
-// trace:BUG-899 | ai:codex
+// trace:BUG-899 trace:BUG-916 | ai:codex
 pub fn submodule_init_command(worktree_path: &Path) -> String {
     format!(
-        "git -C {} submodule update --init --recursive",
+        "git -C {} submodule sync --recursive && git -C {} submodule update --init --recursive",
+        worktree_path.display(),
         worktree_path.display()
     )
 }
@@ -4345,7 +4356,7 @@ mod tests {
         let path = Path::new("/tmp/aida-task-1");
         assert_eq!(
             submodule_init_command(path),
-            "git -C /tmp/aida-task-1 submodule update --init --recursive"
+            "git -C /tmp/aida-task-1 submodule sync --recursive && git -C /tmp/aida-task-1 submodule update --init --recursive"
         );
     }
 
