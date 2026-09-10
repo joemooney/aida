@@ -180,6 +180,155 @@ fn effective_auto_complete_role_maps_dispatch_seats_to_implementer() {
     assert_eq!(effective_auto_complete_role(None), "implementer");
 }
 
+fn queued_status_fixture(statuses: &[(&str, RequirementStatus)]) -> (tempfile::TempDir, Storage) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let storage = Storage::new(&root);
+    let mut store = aida_core::RequirementsStore::default();
+
+    for (idx, (spec, status)) in statuses.iter().enumerate() {
+        let mut r = aida_core::Requirement::new(format!("title for {spec}"), String::new());
+        r.spec_id = Some((*spec).to_string());
+        r.agreed_id = Some((*spec).to_string());
+        r.status = status.clone();
+        let req_id = r.id;
+        store.requirements.push(r);
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: "u".into(),
+                requirement_id: req_id,
+                position: ((idx + 1) * 1000) as i64,
+                added_by: "u".into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some("implementer".into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
+    backend.save(&store).unwrap();
+    (dir, storage)
+}
+
+#[test]
+fn fresh_pickup_policy_status_table_is_shared_by_surfaces() {
+    use RequirementStatus::*;
+
+    let mut store = aida_core::RequirementsStore::default();
+    for status in [
+        Draft,
+        Approved,
+        Planned,
+        InProgress,
+        Done,
+        Completed,
+        Rejected,
+        Superseded,
+        NeedsAttention,
+    ] {
+        let mut r = aida_core::Requirement::new(format!("status {status}"), String::new());
+        r.spec_id = Some(format!("SPEC-{status:?}"));
+        r.status = status.clone();
+        store.requirements = vec![r.clone()];
+
+        let expected = match status {
+            Done => QueueFreshPickup::AwaitingMerge,
+            Completed | Rejected | Superseded => QueueFreshPickup::Terminal(status.clone()),
+            NeedsAttention => {
+                QueueFreshPickup::Blocked(aida_core::pickability::BlockedReason::NeedsTriage)
+            }
+            _ => QueueFreshPickup::Pickable,
+        };
+
+        // trace:BUG-1017 | ai:codex
+        for surface in [
+            "queue list",
+            "queue next",
+            "queue work --dry-run",
+            "queue work",
+        ] {
+            assert_eq!(
+                queue_fresh_pickup_policy(&r, &store, false),
+                expected,
+                "{surface} must share status pickability for {status}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fresh_pickup_policy_allows_needs_attention_only_with_force() {
+    let mut store = aida_core::RequirementsStore::default();
+    let mut r = aida_core::Requirement::new("punted".to_string(), String::new());
+    r.spec_id = Some("BUG-1017".to_string());
+    r.status = RequirementStatus::NeedsAttention;
+    store.requirements.push(r.clone());
+
+    assert!(matches!(
+        queue_fresh_pickup_policy(&r, &store, false),
+        QueueFreshPickup::Blocked(aida_core::pickability::BlockedReason::NeedsTriage)
+    ));
+    assert_eq!(
+        queue_fresh_pickup_policy(&r, &store, true),
+        QueueFreshPickup::Pickable
+    );
+}
+
+#[test]
+fn queue_work_head_skips_done_and_picks_next_fresh_item() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let (_dir, storage) = queued_status_fixture(&[
+        ("BUG-1017", RequirementStatus::Done),
+        ("BUG-1018", RequirementStatus::Approved),
+    ]);
+
+    let plan = resolve_queue_work_plan(&storage, "u", None, None, false, true, false)
+        .expect("head pickup should skip Done and pick the next fresh item");
+
+    assert_eq!(plan.anchor_display, "BUG-1018");
+}
+
+#[test]
+fn queue_work_explicit_done_refuses_with_awaiting_merge_hint() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let (_dir, storage) = queued_status_fixture(&[("BUG-1017", RequirementStatus::Done)]);
+
+    let err = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, true, false)
+        .expect_err("explicit Done pickup must refuse fresh work")
+        .to_string();
+
+    assert!(err.contains("Done"), "error should name Done: {err}");
+    assert!(
+        err.contains("awaiting merge"),
+        "error should hint merge path: {err}"
+    );
+    assert!(
+        err.contains("--from-pr") || err.contains("integrate"),
+        "error should route away from fresh pickup: {err}"
+    );
+}
+
+#[test]
+fn queue_work_explicit_needs_attention_requires_force() {
+    let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+    let (_dir, storage) = queued_status_fixture(&[("BUG-1017", RequirementStatus::NeedsAttention)]);
+
+    let err = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, true, false)
+        .expect_err("NeedsAttention pickup must refuse without force")
+        .to_string();
+    assert!(
+        err.contains("needs-triage"),
+        "error should name triage: {err}"
+    );
+
+    let plan = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, false, true)
+        .expect("force should allow a deliberate NeedsAttention claim");
+    assert_eq!(plan.anchor_display, "BUG-1017");
+}
+
 /// Reviewer role + PR scope → `/aida-review --pr N`.
 #[test]
 fn prompt_reviewer_pr_passes_number() {
@@ -1536,7 +1685,15 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     backend.save(&store).unwrap();
 
     // 1. With strict = true, it must refuse and error out with status-aware error message
-    let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, true, false);
+    let res = resolve_queue_work_plan(
+        &storage,
+        "test-user",
+        Some("BUG-376"),
+        None,
+        true,
+        false,
+        false,
+    );
     assert!(res.is_err());
     let err = res.unwrap_err().to_string();
     assert!(
@@ -1547,8 +1704,16 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     // TASK-1053: a DRY RUN on the same Approved-but-unqueued spec must
     // resolve the very same Item plan WITHOUT persisting the auto-queue —
     // the queue stays empty afterwards. trace:TASK-1053 | ai:claude
-    let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, false, true)
-        .expect("dry-run should resolve a plan without persisting");
+    let res = resolve_queue_work_plan(
+        &storage,
+        "test-user",
+        Some("BUG-376"),
+        None,
+        false,
+        true,
+        false,
+    )
+    .expect("dry-run should resolve a plan without persisting");
     assert_eq!(res.mode, QueueWorkMode::Item);
     assert_eq!(res.anchor_display, "BUG-376");
     let entries = storage.queue_list("test-user", false).unwrap();
@@ -1558,8 +1723,16 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
     );
 
     // 2. With strict = false (real run), it must automatically queue it and return a successful plan
-    let res = resolve_queue_work_plan(&storage, "test-user", Some("BUG-376"), None, false, false)
-        .expect("auto-queue should succeed and return plan");
+    let res = resolve_queue_work_plan(
+        &storage,
+        "test-user",
+        Some("BUG-376"),
+        None,
+        false,
+        false,
+        false,
+    )
+    .expect("auto-queue should succeed and return plan");
     assert_eq!(res.mode, QueueWorkMode::Item);
     assert_eq!(res.anchor_display, "BUG-376");
 
@@ -1631,7 +1804,7 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
     queue_review_story(&storage, &root);
-    let plan = resolve_queue_work_plan(&storage, "u", Some("PR-457"), None, false, false)
+    let plan = resolve_queue_work_plan(&storage, "u", Some("PR-457"), None, false, false, false)
         .expect("PR-N with a queued review story resolves to a plan");
     assert!(
         plan.review_target.is_some(),

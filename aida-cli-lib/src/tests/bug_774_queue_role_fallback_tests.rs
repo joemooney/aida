@@ -240,6 +240,7 @@ fn queue_work_resolves_a_peer_routed_entry() {
         None,
         /* strict */ true,
         /* dry_run */ false,
+        /* force_needs_attention */ false,
     )
     .expect("a peer-routed entry must be workable by the role holder");
     assert_eq!(plan.entries.len(), 1);
@@ -282,6 +283,7 @@ fn not_in_your_queue_diagnostic_names_the_holder_instead_of_a_lost_lease() {
         None,
         /* strict */ true,
         /* dry_run */ false,
+        /* force_needs_attention */ false,
     )
     .expect_err("a spec routed to another role must not resolve a plan")
     .to_string();

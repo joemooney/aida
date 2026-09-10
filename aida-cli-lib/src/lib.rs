@@ -67016,7 +67016,10 @@ fn queued_review_story_for_pr(
             .iter()
             .find(|r| r.id == e.requirement_id)
             .map(|req| {
-                !is_terminal_status(&req.status) && review_title_matches(&req.title, forge, n)
+                matches!(
+                    queue_cmd::queue_fresh_pickup_policy(req, &store, false),
+                    queue_cmd::QueueFreshPickup::Pickable
+                ) && review_title_matches(&req.title, forge, n)
             })
             .unwrap_or(false)
     })
@@ -71005,58 +71008,20 @@ fn resolve_batch_members(
         if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
             continue;
         }
-        // Skip terminal items (Completed/Rejected); they're already shipped
-        // and don't need draining.
-        if is_terminal_status(&req.status) {
-            continue;
-        }
-        // STORY-332 / EPIC-28: a NeedsAttention spec is paused awaiting
-        // triage — either a design-fork punt or an orchestrator-shelved
-        // phase failure. The orchestrator must never re-pick it; doing so
-        // would either loop on the same failure (the shelve case) or
-        // commit a guess (the punt case). Mirrors `queue next`'s
-        // STORY-332 filter so every batch surface gets the same skip.
-        // The dropped member is reported to stderr so the operator sees
-        // the batch shrank and why. trace:STORY-332 EPIC-28 | ai:claude
-        if matches!(req.status, RequirementStatus::NeedsAttention) {
-            let reason_label = match req
-                .failure_reason
-                .as_ref()
-                .map(|fr| format!("shelved (failure:{})", fr.phase))
-            {
-                Some(label) => label,
-                None => req
-                    .attention_reason
-                    .as_ref()
-                    .map(|ar| format!("punted ({})", ar.category))
-                    .unwrap_or_else(|| "needs attention".to_string()),
-            };
+        // BUG-1017: batch pickup shares the same fresh-pickup policy as
+        // queue next, list, and explicit dry-runs. Done remains visible as
+        // awaiting-merge work but is not re-drained from scratch.
+        if let Some(reason_label) = queue_cmd::queue_fresh_pickup_reason_label(
+            &queue_cmd::queue_fresh_pickup_policy(req, &store, false),
+        ) {
             eprintln!(
-                "  {} batch:{} — skipping {} ({})",
+                "  {} batch:{} — skipping un-pickable member {} ({})",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 batch_name,
                 req.display_id(),
                 reason_label,
             );
             continue;
-        }
-        // STORY-333: skip un-pickable members so the batch drain never
-        // spawns a doomed phase-1 implementer on a blocked-by /
-        // human-only spec. The dropped members are reported to stderr
-        // so the operator sees the batch shrank and why.
-        // trace:STORY-333 | ai:claude
-        match aida_core::pickability::pickability(req, &store) {
-            aida_core::pickability::Pickability::Pickable => {}
-            aida_core::pickability::Pickability::Blocked(reason) => {
-                eprintln!(
-                    "  {} batch:{} — skipping un-pickable member {} ({})",
-                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                    batch_name,
-                    req.display_id(),
-                    aida_core::pickability::pickability_reason_label(&reason),
-                );
-                continue;
-            }
         }
         members.push((
             entry,
