@@ -3,11 +3,11 @@ spec_id: BUG-916
 agreed_id: BUG-916
 title: submodule init on worktree creation ineffective in the field — empty gitlinks recur on 0.14.0 despite the BUG-899 fix
 description: 'Field regression report (2026-09-09, binary 0.14.0 SHA 18e7ee5d which CONTAINS the BUG-899 fix f44e1cd0e): a queue work --no-launch --base <branch> worktree again left a vendored submodule as an empty gitlink; the containerized build failed on the missing files; manual recovery was git submodule sync --recursive && git submodule update --init --recursive. So the BUG-899 fix does not cover this creation path (custom --base, or the no-launch route, or sync is needed before update in repos whose submodule URLs changed). Fix: audit every worktree-materialization path for the init hook; run submodule sync --recursive BEFORE update --init --recursive; when init is skipped or fails, print the exact recovery commands BEFORE reporting the worktree ready. Acceptance: fixture repo with a submodule — queue work --no-launch --base <branch> produces a populated submodule; failure path prints the recovery commands; regression tests parameterized over base/no-launch variants.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:27.385309079Z
-modified_at: 2026-09-10T04:07:31.675567733Z
+modified_at: 2026-09-10T05:18:01.990649565Z
 req_type: Bug
 execution_mode: drain
