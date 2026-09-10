@@ -1972,8 +1972,14 @@ mod task_510_init_scaffold_task_tests {
         let out = std::fs::read_to_string(root.join("order.txt")).unwrap();
         let mut lines = out.lines();
         let first_line = lines.next().unwrap();
+        let canonical_root = root.canonicalize().unwrap();
         assert!(
-            first_line.starts_with(&format!("1:{}:{}", root.display(), root.display())),
+            // trace:BUG-1021 | ai:codex
+            first_line.starts_with(&format!(
+                "1:{}:{}",
+                canonical_root.display(),
+                canonical_root.display()
+            )),
             "cwd and project root env must point at the project: {first_line}"
         );
         assert!(

@@ -89,6 +89,11 @@ jobs:
     permissions:
       issues: write
     steps:
+      # BUG-1021: gh issue commands infer the repository from git context unless
+      # GH_REPO is provided. Give the scheduled notifier a checkout so it can
+      # open/comment reliably after a matrix failure. trace:BUG-1021 | ai:codex
+      - uses: actions/checkout@v5
+
       - name: Open or update the cross-platform-red issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,6 +122,9 @@ jobs:
     permissions:
       issues: write
     steps:
+      # See notifier checkout note above. trace:BUG-1021 | ai:codex
+      - uses: actions/checkout@v5
+
       - name: Close any open cross-platform-red issue
         env:
           GH_TOKEN: ${{ github.token }}

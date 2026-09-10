@@ -11,7 +11,11 @@ fn project_registry_is_created_with_current_project() {
     assert!(body.starts_with("# AIDA project registry\n"));
     assert!(body.contains("[[project]]"));
     assert!(body.contains("name = \"demo\""));
-    assert!(body.contains(&format!("path = \"{}\"", root.display())));
+    let canonical_root = root.canonicalize().unwrap();
+    assert!(body.contains(&format!(
+        "path = \"{}\"",
+        canonical_root.display().to_string().replace('\\', "\\\\")
+    )));
 
     assert!(!crate::register_project_in_registry_at(&registry, &root).unwrap());
 }
@@ -34,6 +38,7 @@ fn project_registry_updates_path_match_and_preserves_other_blocks() {
         .status()
         .unwrap();
 
+    let canonical_root = root.canonicalize().unwrap();
     let original = format!(
         "\
 # header stays
@@ -48,7 +53,7 @@ repo = \"old\"
 from = \"one\"
 to = \"two\"
 ",
-        root.display()
+        canonical_root.display().to_string().replace('\\', "\\\\")
     );
     std::fs::write(&registry, &original).unwrap();
 

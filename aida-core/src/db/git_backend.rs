@@ -152,20 +152,83 @@ pub fn resolve_queue_user(store_root: &Path, requested: &str) -> String {
             continue;
         }
         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            let logical_stem = decode_queue_user_filename(stem);
             // An exact (case-sensitive) hit always wins — return immediately so
             // the common path never rewrites the casing it was handed.
-            if stem == requested {
+            if logical_stem == requested {
                 return requested.to_string();
             }
             // Resolve each existing queue file to its canonical person too, so an
             // alias's stored queue file is matched even when the lookup uses a
             // different alias of the same person.
-            if aliases.resolve(stem) == target {
-                return stem.to_string();
+            if aliases.resolve(&logical_stem) == target {
+                return logical_stem;
             }
         }
     }
     requested.to_string()
+}
+
+// Queue identities are logical user ids, not portable filenames. Role queues use
+// `role:<name>`, which fails on Windows unless the filename layer escapes it.
+// trace:BUG-1021 | ai:codex
+fn encode_queue_user_filename(user_id: &str) -> String {
+    let mut out = String::new();
+    for b in user_id.bytes() {
+        match b {
+            b'%' => out.push_str("%25"),
+            b':' => out.push_str("%3A"),
+            b'/' => out.push_str("%2F"),
+            b'\\' => out.push_str("%5C"),
+            _ => out.push(b as char),
+        }
+    }
+    out
+}
+
+fn decode_queue_user_filename(stem: &str) -> String {
+    let bytes = stem.as_bytes();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = &stem[i + 1..i + 3];
+            if let Ok(v) = u8::from_str_radix(hex, 16) {
+                out.push(v as char);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+fn queue_relative_path(user_id: &str) -> String {
+    format!(
+        "registry/queues/{}.yaml",
+        encode_queue_user_filename(user_id)
+    )
+}
+
+fn queue_file_path(store_root: &Path, user_id: &str) -> PathBuf {
+    let encoded = store_root.join(queue_relative_path(user_id));
+    let legacy = store_root
+        .join("registry/queues")
+        .join(format!("{}.yaml", user_id));
+    if !encoded.exists() && legacy.exists() {
+        legacy
+    } else {
+        encoded
+    }
+}
+
+fn queue_relative_path_for_file(store_root: &Path, path: &Path, user_id: &str) -> String {
+    path.strip_prefix(store_root)
+        .ok()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| queue_relative_path(user_id))
 }
 
 impl GitBackend {
@@ -877,10 +940,7 @@ impl DatabaseBackend for GitBackend {
         // trace:TASK-951 — fold case at the lookup boundary so `Joe` finds the
         // queue keyed under `joe`. Storage casing is left as-is.
         let user_id = self.resolve_queue_user(user_id);
-        let path = self
-            .root
-            .join("registry/queues")
-            .join(format!("{}.yaml", user_id));
+        let path = queue_file_path(&self.root, &user_id);
         // trace:TASK-712 — propagate parse errors instead of unwrap_or_default.
         Self::read_queue_file(&path)
     }
@@ -901,7 +961,7 @@ impl DatabaseBackend for GitBackend {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    users.push(stem.to_string());
+                    users.push(decode_queue_user_filename(stem));
                 }
             }
         }
@@ -917,7 +977,7 @@ impl DatabaseBackend for GitBackend {
         // appends to the existing `joe.yaml`) without rewriting the stored
         // `entry.user_id` (BUG-89: the persisted key stays the raw shell `$USER`).
         let user_id = self.resolve_queue_user(&entry.user_id);
-        let path = dir.join(format!("{}.yaml", user_id));
+        let path = queue_file_path(&self.root, &user_id);
         // trace:TASK-712 — a parse error here aborts BEFORE the write-back below,
         // so a momentarily-unparseable queue file is never silently truncated.
         let mut entries = Self::read_queue_file(&path)?;
@@ -948,7 +1008,7 @@ impl DatabaseBackend for GitBackend {
         std::fs::write(&path, yaml)?;
         self.auto_commit_paths(
             "update queue",
-            &[&format!("registry/queues/{}.yaml", user_id)],
+            &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
         );
         Ok(())
     }
@@ -970,10 +1030,7 @@ impl DatabaseBackend for GitBackend {
     ) -> Result<()> {
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
-        let path = self
-            .root
-            .join("registry/queues")
-            .join(format!("{}.yaml", user_id));
+        let path = queue_file_path(&self.root, &user_id);
         if !path.exists() {
             return Ok(());
         }
@@ -998,7 +1055,7 @@ impl DatabaseBackend for GitBackend {
         std::fs::write(&path, yaml)?;
         self.auto_commit_paths(
             "update queue",
-            &[&format!("registry/queues/{}.yaml", user_id)],
+            &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
         );
         Ok(())
     }
@@ -1006,10 +1063,7 @@ impl DatabaseBackend for GitBackend {
     fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
-        let path = self
-            .root
-            .join("registry/queues")
-            .join(format!("{}.yaml", user_id));
+        let path = queue_file_path(&self.root, &user_id);
         if !path.exists() {
             return Ok(());
         }
@@ -1025,7 +1079,7 @@ impl DatabaseBackend for GitBackend {
         std::fs::write(&path, yaml)?;
         self.auto_commit_paths(
             "reorder queue",
-            &[&format!("registry/queues/{}.yaml", user_id)],
+            &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
         );
         Ok(())
     }
@@ -1042,10 +1096,7 @@ impl DatabaseBackend for GitBackend {
     fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
-        let path = self
-            .root
-            .join("registry/queues")
-            .join(format!("{}.yaml", user_id));
+        let path = queue_file_path(&self.root, &user_id);
         if !path.exists() {
             return Ok(());
         }
@@ -1055,7 +1106,7 @@ impl DatabaseBackend for GitBackend {
             std::fs::remove_file(&path)?;
             self.auto_commit_paths(
                 "clear queue",
-                &[&format!("registry/queues/{}.yaml", user_id)],
+                &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
             );
             return Ok(());
         }
@@ -1092,7 +1143,7 @@ impl DatabaseBackend for GitBackend {
 
         self.auto_commit_paths(
             "clear completed queue entries",
-            &[&format!("registry/queues/{}.yaml", user_id)],
+            &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
         );
         Ok(())
     }
@@ -1108,10 +1159,7 @@ impl DatabaseBackend for GitBackend {
         }
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
-        let path = self
-            .root
-            .join("registry/queues")
-            .join(format!("{}.yaml", user_id));
+        let path = queue_file_path(&self.root, &user_id);
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -1138,7 +1186,7 @@ impl DatabaseBackend for GitBackend {
         }
         self.auto_commit_paths(
             "gc dead queue entries",
-            &[&format!("registry/queues/{}.yaml", user_id)],
+            &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
         );
         Ok(removed)
     }
@@ -1623,6 +1671,28 @@ mod tests {
             2,
             "both entries land in joe's one queue"
         );
+    }
+
+    // BUG-1021: role queue identities contain `:`, which is not a portable
+    // filename character. The logical queue user remains `role:implementer`,
+    // while the git-canonical filename is escaped.
+    // trace:BUG-1021 | ai:codex
+    #[test]
+    fn test_role_queue_user_uses_portable_filename() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        let entry = sample_queue_entry("role:implementer", 1000);
+        backend.queue_add(entry.clone()).unwrap();
+
+        assert!(root
+            .join("registry/queues/role%3Aimplementer.yaml")
+            .exists());
+        assert_eq!(backend.queue_users().unwrap(), vec!["role:implementer"]);
+        let listed = backend.queue_list("role:implementer", false).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].requirement_id, entry.requirement_id);
     }
 
     // BUG-529: `queue_remove_for_role` with a role filter drops ONLY the entry

@@ -344,6 +344,7 @@ branch refs/heads/epic-54-work
     /// and compose with a dev-activate style `(aida-release) ` prefix.
     // trace:TASK-1160 | ai:claude
     #[test]
+    #[cfg(unix)]
     fn ps1_splice_then_strip_round_trips_in_bash() {
         let script = format!(
             "PS1='(aida-release) \\u@\\h$ '\n\

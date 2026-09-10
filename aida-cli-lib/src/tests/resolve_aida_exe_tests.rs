@@ -48,11 +48,15 @@ fn pr_ship_post_merge_subcommands_do_not_require_path_lookup() {
 // trace:BUG-766 | ai:claude
 #[test]
 fn prepend_dir_to_path_puts_coordinating_dir_first() {
-    let dir = std::path::Path::new("/repo/target/debug");
-    let path = std::ffi::OsString::from("/usr/local/bin:/usr/bin");
-    let updated = prepend_dir_to_path(dir, &path);
+    let dir = std::path::Path::new("repo").join("target").join("debug");
+    let path = std::env::join_paths([
+        std::path::Path::new("usr-local-bin"),
+        std::path::Path::new("usr-bin"),
+    ])
+    .unwrap();
+    let updated = prepend_dir_to_path(&dir, &path);
     let parts: Vec<_> = std::env::split_paths(&updated).collect();
-    assert_eq!(parts[0], dir);
+    assert_eq!(parts[0], dir.as_path());
     assert_eq!(parts.len(), 3);
 }
 
@@ -62,13 +66,14 @@ fn prepend_dir_to_path_puts_coordinating_dir_first() {
 // trace:BUG-766 | ai:claude
 #[test]
 fn prepend_dir_to_path_dedupes_existing_entries() {
-    let dir = std::path::Path::new("/repo/target/debug");
-    let path = std::ffi::OsString::from("/repo/target/debug:/usr/bin:/repo/target/debug");
-    let updated = prepend_dir_to_path(dir, &path);
+    let dir = std::path::Path::new("repo").join("target").join("debug");
+    let usr_bin = std::path::Path::new("usr-bin");
+    let path = std::env::join_paths([dir.as_path(), usr_bin, dir.as_path()]).unwrap();
+    let updated = prepend_dir_to_path(&dir, &path);
     let parts: Vec<_> = std::env::split_paths(&updated).collect();
-    assert_eq!(parts[0], dir);
+    assert_eq!(parts[0], dir.as_path());
     assert_eq!(parts.len(), 2, "duplicates must be dropped: {parts:?}");
     // A stale install dir keeps its (now second-place) slot but can no
     // longer shadow the coordinating build.
-    assert_eq!(parts[1], std::path::Path::new("/usr/bin"));
+    assert_eq!(parts[1], usr_bin);
 }
