@@ -3,13 +3,17 @@ spec_id: BUG-1018
 agreed_id: BUG-1018
 title: Draft status glyph is the oversized circle — use the small circle to match the status column
 description: 'Operator request (2026-09-09): the Draft glyph renders as the large circle U+25EF (◯ Draft) while InProgress uses the half-circle U+25D0 (◐), making Draft visually oversized in aida list. Swap Draft to the matching small circle U+25CB (○) everywhere the status glyph renders (list, show, TUI, statusline). One-glyph change; check the glyph table in one place. Acceptance: Draft renders ○ across list/show/TUI; glyph test updated.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:08:08.694600268Z
-modified_at: 2026-09-10T06:51:34.027891529Z
+modified_at: 2026-09-10T06:56:52.987212641Z
 req_type: Bug
 tags:
 - severity:cosmetic lifecycle:trivial
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-10T06:56:52.987212641Z
+  implemented_by: joe
