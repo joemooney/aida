@@ -24,12 +24,12 @@ description: |-
 
   ## Related
   EPIC-28 (resilient drain), STORY-975 (retry), STORY-974 (typed causes), TASK-1116 (--vendor), the burndown fan-out. CI-side companion: the one-compile-profile task.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:36.779816829Z
-modified_at: 2026-09-11T12:34:01.290046226Z
+modified_at: 2026-09-11T13:41:23.379796255Z
 req_type: Story
 tags:
 - drain
