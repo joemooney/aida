@@ -57993,5 +57993,31 @@ operations:
     req_type: Story
     status: Draft
     priority: High
-clock: 4683
+- id: 01a09182-afaa-7442-9dff-b57d1266ab71
+  target_id: 01a09182-abe3-7811-a8a1-537c3da17e7c
+  author: aida
+  node_id: '1'
+  lamport: 4684
+  timestamp: 2026-09-11T17:27:36.106174653Z
+  kind: !Create
+    title: 'Review PR-1741: [AI:codex] fix(ps): use manifest transcript role fallback (TASK-153)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09172`) for branch `task-1-129`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1741>
+      - Branch: `task-1-129` → `main`
+
+      ## Covers
+
+      - TASK-153
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1741` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4684
 node_id: '1'

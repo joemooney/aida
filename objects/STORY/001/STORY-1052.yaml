@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:26:17.489929474Z
-modified_at: 2026-09-11T17:26:25.942274398Z
+modified_at: 2026-09-11T17:27:36.376832588Z
 req_type: Story
 tags:
 - from-product
@@ -52,3 +52,17 @@ relationships:
   target_id: 01a08ee4-6120-7e82-929b-34f62cf53340
   created_at: 2026-09-11T17:26:25.942269263Z
   created_by: joe
+comments:
+- id: 01a09182-b0b8-7f40-83e5-7ba67167dd02
+  author: joe
+  content: |-
+    RELIABILITY CAVEAT (verified 2026-09-11): a bare mailbox nudge is UNRELIABLE at delivery-to-attention. The advisor only sees mail via the SessionStart + per-turn UserPromptSubmit hooks (aida-mail-notice.sh), so a nudge lands ONLY when the advisor takes a turn. It does NOT reach: an idle advisor sitting at the prompt (no turn = no hook), a headless -p drain mid-run (no interactive turns), or a closed session. This is the same flaw as BUG-1063. So the nudge, alone, only works against an interactive advisor a human is already driving.
+
+    Acceptance revision: the nudge must NOT be a bare mailbox write. Tiered delivery, most-to-least reliable:
+    1. If aida session send (STORY-995) is available AND the advisor is in a wake-able terminal (tmux/wezterm/Terminator plugin): mailbox-write THEN `aida session send <advisor> --enter` to force a turn so the notice fires. This is the only reliable WAKE.
+    2. Else if the advisor is live but not wake-able: mailbox-write and ALSO operator-notify (STORY-1029) that a nudge is waiting the advisor may not see — so the human can poke it.
+    3. Else (no advisor live): operator-notify only ("N stuck, no advisor running, start one").
+    Add: a nudge whose target never acts within one min-interval ESCALATES to the operator (a nudge the advisor never read must not silently rot). And note plainly in docs: the session-independent supervisor (STORY-1051 / a cron) is the RELIABLE path — this nudge tier is a best-effort convenience that depends on a listening advisor.
+  created_at: 2026-09-11T17:27:36.376832588Z
+  modified_at: 2026-09-11T17:27:36.376832588Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
