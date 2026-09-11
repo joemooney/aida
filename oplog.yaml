@@ -59950,5 +59950,31 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 4804
+- id: 01a092ce-9ade-74a0-8867-d504e805e984
+  target_id: 01a092ce-923c-76b3-9d7c-a3a400da676c
+  author: aida
+  node_id: '1'
+  lamport: 4805
+  timestamp: 2026-09-11T23:30:08.734652406Z
+  kind: !Create
+    title: 'Review PR-1754: [AI:codex] feat(reliability): add vendor activity adapter (STORY-1054)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a092c2`) for branch `story-1051-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1754>
+      - Branch: `story-1051-2` → `main`
+
+      ## Covers
+
+      - STORY-1054
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1754` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4805
 node_id: '1'
