@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-11T08:33:20.791234752Z
+modified_at: 2026-09-11T12:35:51.896400246Z
 req_type: Story
 tags:
 - breaking
@@ -51,3 +51,9 @@ comments:
   created_at: 2026-09-11T08:33:20.791234752Z
   modified_at: 2026-09-11T08:33:20.791234752Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09077-97d8-7581-bd69-5604b55a8885
+  author: joe
+  content: 'Operator decision recorded (2026-09-10, product session): clean break, NO deprecation aliases — ''nobody else uses aida so now is a good time to clean up any technical debt.'' The hold is resolved; approve and queue. Sweep list and CI grep guard are in the acceptance.'
+  created_at: 2026-09-11T12:35:51.896400246Z
+  modified_at: 2026-09-11T12:35:51.896400246Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
