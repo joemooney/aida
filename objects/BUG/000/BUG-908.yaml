@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:41:07.999388001Z
-modified_at: 2026-09-11T16:32:44.244357288Z
+modified_at: 2026-09-11T16:32:45.453913614Z
 req_type: Bug
 tags:
 - drain
@@ -57,6 +57,15 @@ comments:
 execution_mode: drain
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo fmt --all -- --check
+    cargo test -p aida-cli-lib bug_777_stale_lease_recovery_tests -- --nocapture
+    cargo test -p aida-cli-lib queue_work_tests::implementer_phase_args -- --nocapture
+    cargo test -p aida-cli-lib queue_work_tests::implementer_retry_args_thread_branch_and_existing_path_without_steal -- --nocapture
+    cargo test -p aida-cli-lib auto_complete::tests::transient_retry_policy_is_closed_and_bounded -- --nocapture
+    cargo test -p aida-cli-lib auto_complete::tests::orchestrate_retries_watchdog_reviewer_once_then_ships -- --nocapture
+    git diff --check
+    cargo check -p aida-cli-lib
   implemented_at: 2026-09-11T16:32:42.619358775Z
   implemented_by: joe
 interface_changes: {}
