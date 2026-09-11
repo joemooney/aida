@@ -1972,10 +1972,22 @@ mod task_510_init_scaffold_task_tests {
         let out = std::fs::read_to_string(root.join("order.txt")).unwrap();
         let mut lines = out.lines();
         let first_line = lines.next().unwrap();
-        assert!(
-            first_line.starts_with(&format!("1:{}:{}", root.display(), root.display())),
-            "cwd and project root env must point at the project: {first_line}"
-        );
+        let canonical_root = root.canonicalize().unwrap();
+        // trace:BUG-1021 | ai:claude
+        // macOS: the hook's `$PWD` is the realpath (`/private/var/...`) while
+        // the env var carries the path as passed (`/var/...`). Both must
+        // resolve to the project, so compare canonicalized, not textually.
+        let mut fields = first_line.splitn(4, ':');
+        assert_eq!(fields.next(), Some("1"), "{first_line}");
+        for label in ["cwd", "AIDA_INIT_PROJECT_ROOT"] {
+            let raw = fields.next().unwrap_or_default();
+            let resolved = std::path::Path::new(raw).canonicalize().ok();
+            assert_eq!(
+                resolved.as_deref(),
+                Some(canonical_root.as_path()),
+                "{label} must point at the project: {first_line}"
+            );
+        }
         assert!(
             first_line.ends_with(":demo:rust:git@github.com:org/demo.git:github"),
             "hook context env should be complete: {first_line}"

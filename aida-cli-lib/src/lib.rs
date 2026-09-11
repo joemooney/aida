@@ -17127,6 +17127,14 @@ fn project_roles_dir(project_root: &std::path::Path) -> std::path::PathBuf {
 /// Global role storage: ~/.aida/roles/ — for personas you carry across
 /// projects (e.g., "triage", "code-review").
 fn global_roles_dir() -> Option<std::path::PathBuf> {
+    // trace:BUG-1021 | ai:claude
+    // Test hook: `dirs::home_dir()` ignores `$HOME` on Windows (it reads the
+    // profile folder), so tests that redirect the home dir set AIDA_TEST_HOME
+    // — the same override `glyphs.rs` / `user_alias.rs` honor.
+    #[cfg(test)]
+    if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
+        return Some(std::path::PathBuf::from(home).join(".aida/roles"));
+    }
     dirs::home_dir().map(|h| h.join(".aida/roles"))
 }
 

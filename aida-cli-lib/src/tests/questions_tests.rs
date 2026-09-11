@@ -621,7 +621,8 @@ fn remedy_log_path_is_under_headless_logs_with_safe_spec_slug() {
     let root = std::path::Path::new("/tmp/aida-project");
     let path = questions_remedy_log_path(root, "Task 10/75");
     let s = path.to_string_lossy();
-    assert!(s.contains("/tmp/aida-project/.aida/headless-logs/remedy-"));
+    // trace:BUG-1021 | ai:codex
+    assert!(path.starts_with(root.join(".aida").join("headless-logs")));
     assert!(s.contains("task-10-75"));
     assert!(s.ends_with(".jsonl"));
 }

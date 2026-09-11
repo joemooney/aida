@@ -74,6 +74,7 @@ fn run_wrapper(stub: &str, body: &str) -> (String, String, Option<i32>) {
 /// backticked lease id is never run as a command, and the status propagates.
 // trace:BUG-779 | ai:claude
 #[test]
+#[cfg(unix)]
 fn failing_eval_list_subcommand_is_not_evaled() {
     let stub = "#!/usr/bin/env bash\n\
                 printf 'error: \"No lease found for branch `019f8357`\"\\nhelp: aida session leases\\n'\n\
@@ -103,6 +104,7 @@ fn failing_eval_list_subcommand_is_not_evaled() {
 /// mutating it.
 // trace:BUG-779 | ai:claude
 #[test]
+#[cfg(unix)]
 fn successful_eval_list_subcommand_still_evals_its_payload() {
     let stub = "#!/usr/bin/env bash\n\
                 echo \"# aida role enter\"\n\
@@ -127,6 +129,7 @@ fn successful_eval_list_subcommand_still_evals_its_payload() {
 /// the (empty) payload and returns 0 rather than treating it as a failure.
 // trace:BUG-779 | ai:claude
 #[test]
+#[cfg(unix)]
 fn benign_noop_success_stays_exit_zero() {
     let stub = "#!/usr/bin/env bash\n\
                 echo 'Not inside a scoped worktree. Nothing to step out of.' >&2\n\
@@ -145,6 +148,7 @@ fn benign_noop_success_stays_exit_zero() {
 /// bug for that verb.
 // trace:BUG-779 | ai:claude
 #[test]
+#[cfg(unix)]
 fn every_eval_list_subcommand_is_guarded() {
     let stub = "#!/usr/bin/env bash\n\
                 echo \"error: \\\"boom\\\"\"\n\

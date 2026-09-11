@@ -617,28 +617,14 @@ pub fn foreign_writer_holds_lock(cache_path: &Path) -> bool {
     }
 }
 
-/// True when `pid` is a live process. Unix uses `kill(pid, 0)` (probes
-/// existence/permission, sends no signal); other platforms conservatively
-/// return true.
-// trace:BUG-664
+/// True when `pid` is a live process. Delegates to the one canonical probe
+/// (`liveness::pid_is_alive`: `kill(pid, 0)` on Unix, a single-pid sysinfo
+/// refresh elsewhere). The previous local copy returned `true` for every pid
+/// on non-Unix, so a crashed writer's stale lock file wedged Windows readers
+/// forever (and the dead-pid test asserted the opposite).
+// trace:BUG-664 trace:BUG-1021 | ai:claude
 fn pid_is_alive(pid: u32) -> bool {
-    if pid == 0 {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        // SAFETY: signal 0 only probes existence/permission; it sends nothing.
-        let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-        if rc == 0 {
-            return true;
-        }
-        std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        true
-    }
+    crate::liveness::pid_is_alive(pid)
 }
 
 fn open_connection_with_retry(path: &Path) -> Result<Connection> {

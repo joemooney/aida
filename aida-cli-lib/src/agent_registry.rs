@@ -1468,9 +1468,24 @@ fn pid_has_ancestor(mut child_pid: u32, ancestor_pid: u32) -> bool {
 
 #[cfg(unix)]
 fn parent_pid(pid: u32) -> Option<u32> {
-    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-    let after_comm = stat.rsplit_once(") ")?.1;
-    after_comm.split_whitespace().nth(1)?.parse().ok()
+    #[cfg(target_os = "linux")]
+    {
+        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+        let after_comm = stat.rsplit_once(") ")?.1;
+        after_comm.split_whitespace().nth(1)?.parse().ok()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        // trace:BUG-1021 | ai:codex
+        let out = std::process::Command::new("ps")
+            .args(["-o", "ppid=", "-p", &pid.to_string()])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+    }
 }
 
 #[cfg(not(unix))]

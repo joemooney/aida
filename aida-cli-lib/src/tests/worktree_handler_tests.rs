@@ -359,6 +359,7 @@ fn stale_marker_self_heal_is_its_own_wrapper_capability() {
 /// has to know by hand.
 // trace:BUG-780 | ai:claude
 #[test]
+#[cfg(unix)]
 fn wrapper_prompt_hook_clears_a_dangling_marker_in_bash() {
     let dir = tempfile::tempdir().unwrap();
     let lease = dir.path().join("019f7683.toml");

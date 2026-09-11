@@ -73,7 +73,9 @@ jobs:
         run: cargo build --workspace --release
 
       - name: Run tests
-        run: cargo test --workspace
+        # --no-fail-fast: one run reports every failing test binary across
+        # crates, instead of stopping at the first (BUG-1021).
+        run: cargo test --workspace --no-fail-fast
 
   # TASK-687: the nightly matrix was red 3 days unnoticed before a release gate
   # forced the issue. PR CI is Linux-only (TASK-257), so cross-platform debt
@@ -89,6 +91,11 @@ jobs:
     permissions:
       issues: write
     steps:
+      # BUG-1021: gh issue commands infer the repository from git context unless
+      # GH_REPO is provided. Give the scheduled notifier a checkout so it can
+      # open/comment reliably after a matrix failure. trace:BUG-1021 | ai:codex
+      - uses: actions/checkout@v5
+
       - name: Open or update the cross-platform-red issue
         env:
           GH_TOKEN: ${{ github.token }}
@@ -117,6 +124,9 @@ jobs:
     permissions:
       issues: write
     steps:
+      # See notifier checkout note above. trace:BUG-1021 | ai:codex
+      - uses: actions/checkout@v5
+
       - name: Close any open cross-platform-red issue
         env:
           GH_TOKEN: ${{ github.token }}

@@ -14,6 +14,7 @@
 //! installed into `~/.zshrc` too. zsh joins the matrix when the runner has it
 //! and is cleanly skipped when it does not; a block-slicing divergence between
 //! the shells fails the suite here instead of shipping as a broken shell.
+#![cfg(unix)]
 // trace:TASK-1171 | ai:claude
 // trace:TASK-1174 | ai:claude
 
