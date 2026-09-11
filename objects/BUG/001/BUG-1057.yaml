@@ -1,0 +1,52 @@
+id: 01a0902f-b7a6-71b3-9868-75b1e1c0323d
+spec_id: BUG-1057
+agreed_id: BUG-1057
+title: 'auto-complete failure: phase 3 (reviewer) on STORY-1029'
+description: |
+  Auto-drafted by `aida queue work STORY-1029 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `verdict:request-changes`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework STORY-1029 --work`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-11T11:17:20.672787076+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 515359 ms
+    - phase 2 (ci): 669186 ms
+    - phase 3 (reviewer): 222331 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"STORY-1029","started_at":"2026-09-11T10:53:47.820883729+00:00","completed_at":"2026-09-11T11:17:20.672787076+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":515359},{"phase":2,"slug":"ci","elapsed_ms":669186},{"phase":3,"slug":"reviewer","elapsed_ms":222331}],"total_ms":1408655,"binary_sha":"a46cf734d"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T11:17:21.446878316Z
+modified_at: 2026-09-11T11:17:21.446878316Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:verdict:request-changes
+- reviewer
