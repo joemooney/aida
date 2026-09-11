@@ -1,0 +1,26 @@
+id: 01a09164-67d9-7b70-a669-d0a0dd174909
+spec_id: STORY-1046
+agreed_id: STORY-1046
+title: 'Review PR-1740: [AI:codex] fix(orchestrator): stream codex headless output (BUG-909)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0915e`) for branch `bug-909`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1740>
+  - Branch: `bug-909` → `main`
+
+  ## Covers
+
+  - BUG-909
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1740` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T16:54:31.641233431Z
+modified_at: 2026-09-11T16:54:31.641233431Z
+req_type: Story
