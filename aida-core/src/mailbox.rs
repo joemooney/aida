@@ -176,6 +176,11 @@ pub struct Message {
     // trace:STORY-583 | ai:codex
     #[serde(default)]
     pub deleted: bool,
+    /// Operator archive marker: hides read/stale mail from the default inbox
+    /// while preserving it for `--all` / `--archived` views.
+    // trace:TASK-1211 | ai:codex
+    #[serde(default)]
+    pub archived: bool,
 }
 
 impl Message {
@@ -183,7 +188,7 @@ impl Message {
     /// broadcast — but not its own sent messages (an agent doesn't inbox what
     /// it sent, including its own broadcasts).
     fn addressed_to(&self, agent: &str) -> bool {
-        if self.deleted {
+        if self.deleted || self.archived {
             return false;
         }
         if self.from == agent {
@@ -256,6 +261,8 @@ pub fn merge_dedup(local: &[Message], canonical: &[Message]) -> Vec<Message> {
 // trace:STORY-583 | ai:codex
 pub fn message_state_rank(m: &Message) -> u8 {
     if m.deleted {
+        3
+    } else if m.archived {
         2
     } else if m.retracted {
         1
@@ -732,6 +739,7 @@ mod tests {
             intent: Intent::Fyi,
             retracted: false,
             deleted: false,
+            archived: false,
         }
     }
 
@@ -913,6 +921,7 @@ mod tests {
         assert!(!m.urgent, "absent urgent field defaults to false");
         assert!(!m.retracted, "absent retracted field defaults to false");
         assert!(!m.deleted, "absent deleted field defaults to false");
+        assert!(!m.archived, "absent archived field defaults to false");
         assert_eq!(m.intent, Intent::Fyi, "absent intent field defaults to fyi");
     }
 
@@ -1003,6 +1012,26 @@ mod tests {
         assert!(merged[0].deleted);
         assert!(inbox_for("claude", &merged).is_empty());
         assert!(thread("t", &merged).is_empty());
+    }
+
+    // trace:TASK-1211 | ai:codex
+    #[test]
+    fn archived_marker_wins_and_hides_from_inbox_but_preserves_thread() {
+        let original = msg("1", "t", "codex", Recipient::Agent("claude".into()), 10);
+        let archived = Message {
+            archived: true,
+            ..original.clone()
+        };
+
+        let merged = merge_dedup(
+            std::slice::from_ref(&archived),
+            std::slice::from_ref(&original),
+        );
+
+        assert!(merged[0].archived);
+        assert!(inbox_for("claude", &merged).is_empty());
+        assert!(unread_inbox("claude", &merged, None).is_empty());
+        assert_eq!(thread("t", &merged).len(), 1);
     }
 
     #[test]

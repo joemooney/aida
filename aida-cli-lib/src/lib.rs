@@ -8286,6 +8286,7 @@ pub(crate) fn send_notification(
         intent: Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(

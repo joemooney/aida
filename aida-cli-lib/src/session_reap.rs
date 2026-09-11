@@ -632,6 +632,7 @@ fn notify_finished_live_sessions(project_root: &std::path::Path, rows: &mut [Not
             intent: aida_core::mailbox::Intent::Fyi,
             retracted: false,
             deleted: false,
+            archived: false,
         };
         if let Err(e) = mailbox_store::write_message(project_root, &msg) {
             row.outcome = Some(format!("notify failed — {e}"));

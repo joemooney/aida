@@ -1181,6 +1181,7 @@ fn send_assignment_notification(
         intent: Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     if let Err(e) = aida_core::mailbox::write_local_message(project_dir, &msg) {
         tracing::warn!("could not send mailbox notice to {recipient}: {e}");

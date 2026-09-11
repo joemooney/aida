@@ -214,6 +214,7 @@ mod tests {
             intent: aida_core::mailbox::Intent::Fyi,
             retracted: false,
             deleted: false,
+            archived: false,
         }
     }
 
@@ -321,6 +322,33 @@ mod tests {
         let canon = read_canonical_messages(store.path()).unwrap();
         assert_eq!(canon.len(), 1);
         assert!(canon[0].deleted);
+    }
+
+    // trace:TASK-1211 | ai:codex
+    #[test]
+    fn digest_writes_archive_marker_for_already_synced_message() {
+        let proj = tempdir().unwrap();
+        let store = tempdir().unwrap();
+        let original = msg("a", "codex", Recipient::Broadcast, 10);
+        write_message(proj.path(), &original).unwrap();
+        assert_eq!(
+            digest_local_to_canonical(store.path(), proj.path()).unwrap(),
+            1
+        );
+
+        let marker = Message {
+            archived: true,
+            ..original
+        };
+        write_message_marker(proj.path(), &marker).unwrap();
+        assert_eq!(
+            digest_local_to_canonical(store.path(), proj.path()).unwrap(),
+            1
+        );
+
+        let canon = read_canonical_messages(store.path()).unwrap();
+        assert_eq!(canon.len(), 1);
+        assert!(canon[0].archived);
     }
 
     #[test]

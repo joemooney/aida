@@ -299,6 +299,7 @@ fn message_to_agent_type_reaches_inbox() {
         intent: Intent::Request,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     let watermarks = std::collections::HashMap::new();
     let summary = build_notice(
@@ -426,6 +427,7 @@ fn mailbox_mutation_allowed_for_sender_or_operator_only() {
         intent: aida_core::mailbox::Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     assert!(mailbox_mutation_allowed(&msg, "codex", "joe"));
     assert!(mailbox_mutation_allowed(&msg, "joe", "joe"));
@@ -1139,6 +1141,7 @@ fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Messag
         intent: aida_core::mailbox::Intent::Request,
         retracted: false,
         deleted: false,
+        archived: false,
     }
 }
 

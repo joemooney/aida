@@ -2486,6 +2486,7 @@ impl<'a> McpServer<'a> {
             intent,
             retracted: false,
             deleted: false,
+            archived: false,
         };
         crate::mailbox_store::write_message(&self.project_root, &msg).map_err(|e| e.to_string())?;
         Ok(format!("Message sent: {id} (thread {thread_id})"))

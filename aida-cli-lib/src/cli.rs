@@ -2604,9 +2604,9 @@ pub enum MailboxCommand {
         intent: String,
     },
 
-    /// Show an agent's inbox: messages addressed to it + broadcasts, oldest-first.
+    /// Show an agent's inbox: unread plus a small recent read tail, newest-first.
     /// Reading marks the inbox seen (clears unread); `--all` is the operator-wide
-    /// read-only view across every agent.
+    /// read-only full-history view across every agent.
     Inbox {
         /// Whose inbox (default: this shell's agent/user identity).
         agent: Option<String>,
@@ -2628,6 +2628,16 @@ pub enum MailboxCommand {
         // trace:STORY-585
         #[clap(long)]
         unread: bool,
+
+        /// Show archived messages only. Read-only — does not mark anything seen.
+        // trace:TASK-1211 | ai:codex
+        #[clap(long, conflicts_with_all = ["all", "unread"])]
+        archived: bool,
+
+        /// Number of already-read messages to keep in the default inbox tail.
+        // trace:TASK-1211 | ai:codex
+        #[clap(long, default_value_t = 5)]
+        read_tail: usize,
     },
 
     // trace:STORY-585
@@ -2669,6 +2679,33 @@ pub enum MailboxCommand {
     Delete {
         /// Message id to delete.
         message_id: String,
+    },
+
+    /// Archive read mailbox messages so stale handoffs leave the default inbox.
+    // trace:TASK-1211 | ai:codex
+    Archive {
+        /// Message id to archive. Omit with --older-than for a sweep.
+        message_id: Option<String>,
+
+        /// Archive messages older than this duration (e.g. 30d, 12h, 90m).
+        #[clap(long, value_name = "DURATION", conflicts_with = "message_id")]
+        older_than: Option<String>,
+
+        /// Only archive messages that are read for their recipient identity.
+        #[clap(long, requires = "older_than")]
+        read_only: bool,
+    },
+
+    /// Maintenance sweep for stale read mailbox messages.
+    // trace:TASK-1211 | ai:codex
+    Gc {
+        /// Archive messages older than this duration (default: 30d).
+        #[clap(long, value_name = "DURATION", default_value = "30d")]
+        older_than: String,
+
+        /// Only archive messages that are read for their recipient identity.
+        #[clap(long, default_value_t = true)]
+        read_only: bool,
     },
 
     /// Show a full conversation thread, oldest-first.

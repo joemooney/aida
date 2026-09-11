@@ -14,6 +14,7 @@
 //! `digest_mailbox_to_canonical`) stay in `main.rs`; this dispatcher reaches
 //! them via `crate::`.
 
+use aida_core::mailbox::{Message, Recipient};
 use anyhow::Result;
 use colored::Colorize;
 
@@ -28,7 +29,7 @@ pub(crate) fn handle_mailbox_command(
     cmd: &MailboxCommand,
     store_path: &std::path::Path,
 ) -> Result<()> {
-    use aida_core::mailbox::{inbox_for, merge_dedup, thread as thread_view, Message, Recipient};
+    use aida_core::mailbox::{inbox_for, merge_dedup, thread as thread_view};
     // store_path is the orphan-store worktree root (the canonical layer lives at
     // <store_root>/mailbox); its parent is the project root (the local layer at
     // <project_root>/.aida/mailbox).
@@ -118,6 +119,7 @@ pub(crate) fn handle_mailbox_command(
                 intent: parsed_intent,
                 retracted: false,
                 deleted: false,
+                archived: false,
             };
             mailbox_store::write_message(project_root, &msg)?;
             let mut flag = String::new();
@@ -146,6 +148,8 @@ pub(crate) fn handle_mailbox_command(
             all,
             peek,
             unread,
+            archived,
+            read_tail,
         } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -173,6 +177,28 @@ pub(crate) fn handle_mailbox_command(
                 return Ok(());
             }
 
+            if *archived {
+                let mut msgs: Vec<&Message> =
+                    merged.iter().filter(|m| m.archived && !m.deleted).collect();
+                msgs.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+                if msgs.is_empty() {
+                    println!(
+                        "{} no archived messages",
+                        crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed()
+                    );
+                    return Ok(());
+                }
+                println!(
+                    "{} {}",
+                    "Archived messages".bold(),
+                    format!("({})", msgs.len()).dimmed()
+                );
+                for m in msgs {
+                    print_mailbox_line(m);
+                }
+                return Ok(());
+            }
+
             // BUG-555: with no explicit --agent, read across the SAME identity
             // set the notice/hook spans (`inbox_identities()` = shell user +
             // session role), not just the shell user. Role-addressed mail (e.g.
@@ -191,11 +217,15 @@ pub(crate) fn handle_mailbox_command(
             for who in &who_list {
                 let wm = mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
                 for m in inbox_for(who, &merged) {
-                    // `--unread` filters to messages past THIS identity's
-                    // watermark; the seen-mark below still advances to each
-                    // identity's full-inbox newest (a filtered read must not
-                    // under-advance + resurrect older-but-unread items).
-                    if *unread && m.timestamp <= wm {
+                    let is_unread = m.timestamp > wm;
+                    // trace:TASK-1211 | ai:codex
+                    // Default inbox = unread + a small recent read tail so
+                    // live handoffs stay on top and months-old read mail does
+                    // not bury them. `--unread` remains strict.
+                    if *unread && !is_unread {
+                        continue;
+                    }
+                    if !*unread && !is_unread && *read_tail == 0 {
                         continue;
                     }
                     if seen_ids.insert(m.id.clone()) {
@@ -203,7 +233,23 @@ pub(crate) fn handle_mailbox_command(
                     }
                 }
             }
-            inbox.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+            inbox.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+            if !*unread {
+                let watermarks = mailbox_store::read_all_watermarks(project_root)?;
+                let mut unread_msgs = Vec::new();
+                let mut read_msgs = Vec::new();
+                for m in inbox {
+                    if message_unread_for_any(&who_list, m, &watermarks) {
+                        unread_msgs.push(m);
+                    } else {
+                        read_msgs.push(m);
+                    }
+                }
+                read_msgs.truncate(*read_tail);
+                inbox = unread_msgs;
+                inbox.extend(read_msgs);
+                inbox.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| b.id.cmp(&a.id)));
+            }
             let who_label = who_list.join(" + ");
             if inbox.is_empty() {
                 let label = if *unread {
@@ -423,6 +469,70 @@ pub(crate) fn handle_mailbox_command(
             );
             Ok(())
         }
+        MailboxCommand::Archive {
+            message_id,
+            older_than,
+            read_only,
+        } => {
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let watermarks = mailbox_store::read_all_watermarks(project_root)?;
+            if let Some(message_id) = message_id {
+                let msg = resolve_mailbox_message(&merged, message_id)?;
+                if msg.deleted {
+                    anyhow::bail!("message {} is deleted", message_id);
+                }
+                if msg.archived {
+                    println!(
+                        "{} already archived {}",
+                        crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
+                        msg.id.cyan()
+                    );
+                    return Ok(());
+                }
+                if !message_read_for_archive(msg, &watermarks, project_root) {
+                    anyhow::bail!(
+                        "refusing to archive unread message {}; read it first or let a read-only sweep skip it",
+                        msg.id
+                    );
+                }
+                archive_mailbox_message(project_root, msg)?;
+                println!(
+                    "{} archived {}",
+                    crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+                    msg.id.cyan()
+                );
+                return Ok(());
+            }
+            let Some(raw) = older_than.as_deref() else {
+                anyhow::bail!("specify a message id or --older-than <duration>");
+            };
+            let count = archive_mailbox_sweep(project_root, &merged, &watermarks, raw, *read_only)?;
+            println!(
+                "{} archived {} message(s)",
+                crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+                count.to_string().cyan()
+            );
+            Ok(())
+        }
+        MailboxCommand::Gc {
+            older_than,
+            read_only,
+        } => {
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let watermarks = mailbox_store::read_all_watermarks(project_root)?;
+            let count =
+                archive_mailbox_sweep(project_root, &merged, &watermarks, older_than, *read_only)?;
+            println!(
+                "{} archived {} stale read message(s)",
+                crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+                count.to_string().cyan()
+            );
+            Ok(())
+        }
         MailboxCommand::Thread { thread_id } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -470,5 +580,187 @@ pub(crate) fn handle_mailbox_command(
             );
             Ok(())
         }
+    }
+}
+
+// trace:TASK-1211 | ai:codex
+fn message_unread_for_any(
+    identities: &[String],
+    msg: &Message,
+    watermarks: &std::collections::HashMap<String, i64>,
+) -> bool {
+    identities.iter().any(|id| {
+        let visible = match &msg.to {
+            Recipient::Agent(agent) => agent == id,
+            Recipient::Broadcast => msg.from != *id,
+        };
+        visible && msg.timestamp > watermarks.get(id).copied().unwrap_or(i64::MIN)
+    })
+}
+
+// trace:TASK-1211 | ai:codex
+fn message_read_for_archive(
+    msg: &Message,
+    watermarks: &std::collections::HashMap<String, i64>,
+    project_root: &std::path::Path,
+) -> bool {
+    if msg.deleted || msg.archived {
+        return false;
+    }
+    match &msg.to {
+        Recipient::Agent(agent) => watermarks
+            .get(agent)
+            .copied()
+            .is_some_and(|wm| wm >= msg.timestamp),
+        Recipient::Broadcast => {
+            let mut readers: std::collections::BTreeSet<String> =
+                watermarks.keys().cloned().collect();
+            readers.extend(known_mailbox_identities(project_root));
+            let mut saw_relevant = false;
+            for reader in readers {
+                if reader == msg.from {
+                    continue;
+                }
+                saw_relevant = true;
+                if watermarks.get(&reader).copied().unwrap_or(i64::MIN) < msg.timestamp {
+                    return false;
+                }
+            }
+            saw_relevant
+        }
+    }
+}
+
+// trace:TASK-1211 | ai:codex
+fn archive_mailbox_message(project_root: &std::path::Path, msg: &Message) -> Result<()> {
+    let marker = Message {
+        archived: true,
+        ..msg.clone()
+    };
+    mailbox_store::write_message_marker(project_root, &marker)
+}
+
+// trace:TASK-1211 | ai:codex
+fn archive_mailbox_sweep(
+    project_root: &std::path::Path,
+    messages: &[Message],
+    watermarks: &std::collections::HashMap<String, i64>,
+    older_than: &str,
+    read_only: bool,
+) -> Result<usize> {
+    let duration = crate::parse_days_arg(older_than)?;
+    let cutoff = chrono::Utc::now()
+        .checked_sub_signed(duration)
+        .ok_or_else(|| anyhow::anyhow!("duration is too large: {older_than}"))?
+        .timestamp_millis();
+    let mut count = 0usize;
+    for msg in messages {
+        if msg.deleted || msg.archived || msg.timestamp >= cutoff {
+            continue;
+        }
+        if read_only && !message_read_for_archive(msg, watermarks, project_root) {
+            continue;
+        }
+        if !read_only && message_unread_globally(msg, watermarks, project_root) {
+            continue;
+        }
+        archive_mailbox_message(project_root, msg)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+// trace:TASK-1211 | ai:codex
+fn message_unread_globally(
+    msg: &Message,
+    watermarks: &std::collections::HashMap<String, i64>,
+    project_root: &std::path::Path,
+) -> bool {
+    match &msg.to {
+        Recipient::Agent(agent) => {
+            msg.timestamp > watermarks.get(agent).copied().unwrap_or(i64::MIN)
+        }
+        Recipient::Broadcast => {
+            let mut readers: std::collections::BTreeSet<String> =
+                watermarks.keys().cloned().collect();
+            readers.extend(known_mailbox_identities(project_root));
+            readers
+                .into_iter()
+                .filter(|reader| reader != &msg.from)
+                .any(|reader| msg.timestamp > watermarks.get(&reader).copied().unwrap_or(i64::MIN))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn msg(id: &str, to: Recipient, ts: i64) -> Message {
+        Message {
+            id: id.to_string(),
+            thread_id: "t".to_string(),
+            from: "sender".to_string(),
+            to,
+            timestamp: ts,
+            in_reply_to: None,
+            body: "body".to_string(),
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Fyi,
+            retracted: false,
+            deleted: false,
+            archived: false,
+        }
+    }
+
+    // trace:TASK-1211 | ai:codex
+    #[test]
+    fn archive_read_guard_allows_read_direct_mail_only() {
+        let project = tempfile::tempdir().unwrap();
+        let direct = msg("m1", Recipient::Agent("codex".into()), 100);
+        let mut watermarks = std::collections::HashMap::new();
+
+        assert!(!message_read_for_archive(
+            &direct,
+            &watermarks,
+            project.path()
+        ));
+
+        watermarks.insert("codex".to_string(), 99);
+        assert!(!message_read_for_archive(
+            &direct,
+            &watermarks,
+            project.path()
+        ));
+
+        watermarks.insert("codex".to_string(), 100);
+        assert!(message_read_for_archive(
+            &direct,
+            &watermarks,
+            project.path()
+        ));
+    }
+
+    // trace:TASK-1211 | ai:codex
+    #[test]
+    fn archive_read_guard_never_allows_potentially_unread_broadcast() {
+        let project = tempfile::tempdir().unwrap();
+        let broadcast = msg("m1", Recipient::Broadcast, 100);
+        let mut watermarks = std::collections::HashMap::new();
+        watermarks.insert("codex".to_string(), 100);
+        watermarks.insert("advisor".to_string(), 99);
+
+        assert!(!message_read_for_archive(
+            &broadcast,
+            &watermarks,
+            project.path()
+        ));
+
+        watermarks.insert("advisor".to_string(), 100);
+        assert!(!message_read_for_archive(
+            &broadcast,
+            &watermarks,
+            project.path()
+        ));
     }
 }
