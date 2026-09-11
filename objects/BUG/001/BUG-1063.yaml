@@ -1,0 +1,41 @@
+id: 01a090d8-2df3-7f02-b96f-bb27a1e00285
+spec_id: BUG-1063
+agreed_id: BUG-1063
+title: 'Headless phases die waiting: sessions either end their turn expecting a background notification that never arrives under claude -p, or block in one long gh run watch that emits nothing until it return'
+description: |-
+  ## Observed (four times on 2026-09-09 .. 2026-09-11, all on this repo)
+  1. STORY-993 implementer (09-09 08:00): started make build-fast in the background, ended its turn with "waiting on that notification" -> no-pr, session over.
+  2. BUG-1021 implementer round 2 (09-11 06:41): dispatched cross-platform.yml, "armed a monitor", ended the turn waiting -> watchdog.
+  3. BUG-1021 reviewer (09-11 06:11): gh run watch on CI + cross-platform inside one Bash call for >10 min -> no output reaches the headless log until the call returns -> watchdog.
+  4. BUG-1021 reviewer (09-11 07:19): "waiting on the watcher notification" for the Windows leg -> no-verdict, session over.
+  Each time the work itself was correct and the retry then died on the lease (BUG-908), so the spec parked.
+
+  ## Cause
+  Two harness facts the skills do not state. (a) Under claude -p there is no next turn: a background task's completion notification never wakes the session, so ending the turn to wait is ending the session. (b) A single long-running Bash tool call streams nothing to stream-json until it returns, so gh run watch or an until-loop that lasts longer than the no-progress window looks like silence to the watchdog.
+
+  ## Acceptance
+  1. The headless brief (aida-core/templates: /aida-pickup, /aida-review, /aida-advise, and the orchestrator's phase prompt text in auto_complete.rs) carries a HEADLESS WAITING RULE: never end the turn to wait for a notification; never block in one tool call longer than 60 s; poll in bounded steps (sleep <= 60 s per tool call, print the state each step) so each step is a stream event that feeds the watchdog; if the wait would exceed the phase's remaining budget, write the verdict/result with the wait's current state and exit instead.
+  2. Reviewer contract: a reviewer may gate on PR CI but must NOT gate on the nightly cross-platform workflow unless the spec's acceptance names it; when it does, poll per rule 1.
+  3. The orchestrator's watchdog counts stream-json tool events as output (a bounded-step poll is progress), which it already does for Claude; confirm with a test that a 5 x 60 s polling loop does not trip a 3-minute no-progress window.
+  4. The no-pr / no-verdict shelve detail names the rule when the last assistant text matches "waiting on|wait for the notification|armed a monitor" so the finding says why.
+  5. Regression: a fake headless phase whose transcript ends with "waiting on that notification" is classified with cause headless-wait, not tool-exit.
+
+  ## Related
+  BUG-908 (the retry that should have saved every one of these), BUG-909 (Codex silence, the other blind spot), STORY-974 (typed causes), STORY-998 (spinning detection reads the same stream).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T14:21:21.779925377Z
+modified_at: 2026-09-11T14:21:21.779925377Z
+req_type: Bug
+tags:
+- drain
+- from-product
+- headless
+- implementer
+- recommend:approve
+- reviewer
+- risk:low
+- skills
+- watchdog
