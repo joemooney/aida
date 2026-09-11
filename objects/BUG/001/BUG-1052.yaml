@@ -3,20 +3,36 @@ spec_id: BUG-1052
 agreed_id: BUG-1052
 title: 'integrate --run: propagate headless mode to member re-drives and optionally wait on in-flight CI'
 description: 'Maiden-night findings on the merge queue (2026-09-11): (1) HEADLESS PASSTHROUGH — integrate --run re-drives a member''s remaining phases via aida do, which errors ''needs a terminal for the interactive implementer'' in a headless invocation; the loop must run members with --no-human=both when integrate itself is headless (and inherit the interactive mode at a TTY). Four consecutive passes parked every member on this. (2) CI WAIT — a member whose CI is still running is skipped for the whole pass; add --wait-ci (default on for --run) that blocks on the member''s in-flight CI (bounded by the phase ceiling) instead of skipping, so a single --run converges without an external retry loop. Acceptance: headless integrate --run merges a green Done-with-PR member end-to-end with no TTY error; a member with in-flight CI is waited on and merged in the same pass; parked reasons unchanged for genuine failures.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T07:59:16.939417461Z
-modified_at: 2026-09-11T09:05:06.340266604Z
+modified_at: 2026-09-11T09:10:01.491478584Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08fb6-83f0-7cc2-acca-0ccd2da1749e
   created_at: 2026-09-11T09:05:06.340262028Z
   created_by: joe
+history:
+- id: 01a08fbb-2402-7211-a384-d8a75b5aad1e
+  author: aida-auto-bump
+  timestamp: 2026-09-11T09:10:01.474104041Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a08fbb-2413-79e0-ab6a-3528cde62659
+  timestamp: 2026-09-11T09:10:01.491477278Z
+  agent: aida
+  commit_sha: a46cf734dda8997cff4ff0c9642bd24f7ef31d9b
+  summary: Completed via merge a46cf734
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T08:54:23.275845584Z
   implemented_by: joe
+  completed_at: 2026-09-11T09:10:01.473995560Z
+  completion_sha: a46cf734dda8997cff4ff0c9642bd24f7ef31d9b
