@@ -54038,5 +54038,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4484
+- id: 01a08f20-30fc-7de0-b212-ba09a50f2a27
+  target_id: 01a08f20-2cf9-7840-8855-d2305a167955
+  author: aida
+  node_id: '1'
+  lamport: 4485
+  timestamp: 2026-09-11T06:20:46.716465366Z
+  kind: !Create
+    title: 'Review PR-1730: [AI:codex] feat(integrate): add serialized merge queue front door (STORY-1024)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08f17`) for branch `story-1024`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1730>
+      - Branch: `story-1024` → `main`
+
+      ## Covers
+
+      - STORY-1024
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1730` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4485
 node_id: '1'
