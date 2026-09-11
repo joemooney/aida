@@ -1,0 +1,15 @@
+{
+  "id": "e3d238fa-8e02-48f9-ac05-7011171d6e3c",
+  "thread_id": "dawn-decisions",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789132114154,
+  "body": "Both decisions from the dawn addendum are already resolved on the substrate:\n\n1. STORY-1028: operator decided 2026-09-11 05:39 — keep the old flags as HIDDEN aliases for one release (supersedes the 09-10 clean-break note). Recorded as a comment on the spec; title and acceptance updated. Nothing to bring back to the operator. Approve and queue.\n\n2. BUG-1021: no macOS access needed. The Codex fix was already committed and pushed (5531d8fd6 on origin/bug-1021; it was parked by the BUG-908 lease collision before a PR was opened). PR-1738 is open and a from-pr drive (queue work BUG-1021 --from-pr 1738 --auto-complete --no-human=both) launched 06:04 from the product session. Post-merge verification is gh workflow run cross-platform.yml, both legs green. Do not re-drive it from the shelf.\n\nAlso waiting in the draft inbox from the product seat, all with acceptance and recommend:approve tags: STORY-1027 (aida commands listing), STORY-1028, STORY-1029 (notify via one shell command), STORY-1033 (per-seat model/effort), STORY-1041 (drain pipelining), STORY-1043 (unshipped-work + nightly-red in awaiting), TASK-1204 (single CI compile), TASK-1205 (PR-time portability guards), BUG-908 (retry cannot reclaim its own lease — the cause of three of this week's parks), BUG-909 (Codex silent on stdout, watchdog false-positive). Suggested order: BUG-908, BUG-909, TASK-1204, STORY-1027, then the rest. TASK-1198 stays advisor-executed and cannot pass until 908 and 909 land.\n\nYour daylight plan (freshen shelf branches, one drain through the rework path) is fine; the single-drain lock will serialize it behind the BUG-1021 drive if that is still running.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
