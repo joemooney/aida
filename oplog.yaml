@@ -59424,5 +59424,13 @@ operations:
 
       ## Related
       BUG-1021, TASK-257, TASK-1204 (single compile profile; keep the two changes in separate PRs so their timings are attributable).
-clock: 4772
+- id: 01a0921f-623c-7462-bc1a-72a8630156fe
+  target_id: 01a09218-31fd-7dc0-98a0-bb30603314dd
+  author: aida
+  node_id: '1'
+  lamport: 4773
+  timestamp: 2026-09-11T20:18:45.436813748Z
+  kind: !SetStatus
+    status: Rejected
+clock: 4773
 node_id: '1'

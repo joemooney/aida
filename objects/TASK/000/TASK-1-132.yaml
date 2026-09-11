@@ -2,15 +2,22 @@ id: 01a09218-31fd-7dc0-98a0-bb30603314dd
 spec_id: TASK-1-132
 title: TASK-1205 cross-target check needs foreign SDK strategy
 description: 'TASK-1205 implementation found that the exact requested Linux-runner command, cargo check --workspace --tests --target x86_64-pc-windows-msvc and aarch64-apple-darwin, fails before reaching AIDA code because third-party C build scripts require foreign SDK/toolchain pieces. ring fails on MSVC without lib.exe/Windows headers and on Darwin without Apple-compatible compiler/SDK flags; libsqlite3-sys also requires MSVC archiver/tooling. I made the Linux-hosted target check report-only and added the path-filtered real Windows/macOS PR matrix plus the required portability ratchet. Follow-up choices: provision real foreign SDKs on Linux, change feature topology so a pure-Rust no-default cross-target test compiles, or amend TASK-1205 acceptance to rely on the actual OS matrix for full-workspace coverage.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-11T20:10:54.333522838Z
-modified_at: 2026-09-11T20:10:54.333522838Z
+modified_at: 2026-09-11T20:18:45.365047095Z
 req_type: Task
 tags:
 - from-advisor:TASK-1205
 - kind:observation
 - linked:TASK-1205
 - severity:major
+comments:
+- id: 01a0921f-61f5-7950-8312-b027ff67ea03
+  author: joe
+  content: 'Dismissed by joe 2026-09-11: Acceptance amended instead: item 1 is now report-only per the finding''s option 3 — full-workspace enforcement rides the real path-filtered OS matrix (item 3) + ratchet (item 2). Foreign-SDK provisioning on Linux rejected as yak-shaving.'
+  created_at: 2026-09-11T20:18:45.365047095Z
+  modified_at: 2026-09-11T20:18:45.365047095Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
