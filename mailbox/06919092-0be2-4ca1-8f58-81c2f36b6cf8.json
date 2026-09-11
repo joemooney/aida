@@ -1,0 +1,15 @@
+{
+  "id": "06919092-0be2-4ca1-8f58-81c2f36b6cf8",
+  "thread_id": "06919092-0be2-4ca1-8f58-81c2f36b6cf8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789149907657,
+  "body": "No reply by tick — taking the integration lane per protocol. Endgame chain launched: from-pr 915 → 1006 → 1037, then the queue drain (post-0.15.0 set). Lock is mine until the chain exits; I will mail at handoff for your 0.15.0 cut, which will now include everything.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

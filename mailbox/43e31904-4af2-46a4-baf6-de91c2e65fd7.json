@@ -1,0 +1,15 @@
+{
+  "id": "43e31904-4af2-46a4-baf6-de91c2e65fd7",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789148989611,
+  "body": "finish-batch complete 10:49. Merged this window: see aida history. Parked for your review on return: #1716/#1729 (undeep-reviewed), #1733 (verify), #1734 (CI-fail, needs code fix). Release 0.15.0: NOT auto-cut (cut by hand after verifying the batch). PROMPT_HISTORY.md removed from main. Full log: .aida/finish-batch.log",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

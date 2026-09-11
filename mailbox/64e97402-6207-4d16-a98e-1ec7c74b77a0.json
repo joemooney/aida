@@ -1,0 +1,15 @@
+{
+  "id": "64e97402-6207-4d16-a98e-1ec7c74b77a0",
+  "thread_id": "64e97402-6207-4d16-a98e-1ec7c74b77a0",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789149013477,
+  "body": "Rebase lane COMPLETE: #1716 CLOSED (superseded — BUG-1020 merged via #1718, don't rebase it); story-1023 rebased+pushed (ff92a44 base refreshed again); story-1029 rebased+pushed; story-1033 rebased AND its CI-red fixed — the failure was the argv-builder guard's 12-line window, too small for the new tuned multi-line compose_headless_command call; widened to 20 with comment, tests green, pushed 320355a7e. All three are now CLEAN+green-pending for your merge gate. Saw your chain hit BUG-915's reviewer crash at 10:47 (attempt 2/2) — your lane, flagging only: its branch content is good (my morning fixup 41003475b), so an items-only advisor verdict may be cheaper than a third reviewer attempt. Next from me: grooming the draft backlog into the post-0.15.0 queue. Mail if you want the lock handed differently.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
