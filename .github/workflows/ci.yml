@@ -138,15 +138,25 @@ jobs:
       # nonexistent or rejected spec — a dead/dangling provenance link. This is
       # the server-side, non-bypassable half: a `git commit --no-verify`'d local
       # commit that dodges the message-grammar hook is still caught here. The
-      # store lives on the orphan `aida-store` branch; fetch it so the binary's
-      # fresh-clone auto-attach can build the read cache. Mechanical/release
+      # store lives on the orphan `aida-store` branch; fetch it into a remote
+      # tracking ref and sync/attach `.aida-store` from there so the binary can
+      # build the read cache without colliding with an attached worktree.
+      # Mechanical/release
       # commits with no trailer are exempt by the existing audited rule.
       # trace:STORY-498 | ai:claude
       - name: Validate commit SPEC-ID references (trace gate)
         if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags origin aida-store:aida-store || \
-            echo "::warning::could not fetch aida-store branch — trace gate may not resolve ids"
+          git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store
+          # trace:TASK-1206 | ai:codex
+          if git -C .aida-store rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            git -C .aida-store merge --ff-only origin/aida-store
+          elif [ -e .aida-store ]; then
+            echo "::error::.aida-store exists but is not an attached git worktree"
+            exit 1
+          else
+            git worktree add .aida-store refs/remotes/origin/aida-store
+          fi
           BASE="origin/${{ github.base_ref }}"
           git fetch --no-tags origin "${{ github.base_ref }}" || true
           ./target/debug/aida trace gate --range "${BASE}..HEAD"
@@ -174,13 +184,21 @@ jobs:
       # must mark doc-impact — non-empty `interface_changes` (STORY-542) OR a
       # `docs:impacted` tag. This stops "blind surface edits" where the surface
       # moves but no spec captures the WHY the documenter needs. The store lives
-      # on the orphan `aida-store` branch (fetched by the trace gate above); the
-      # script reads it via `git show` with no attached worktree required, and
-      # SKIPs (non-failing) when the store can't resolve. trace:STORY-603
+      # on the orphan `aida-store` branch; sync/attach it from the remote-tracking
+      # ref before checking doc intent. trace:STORY-603
       - name: Doc-intent gate (surface changes mark doc-impact)
         if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags origin aida-store:aida-store 2>/dev/null || true
+          git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store
+          # trace:TASK-1206 | ai:codex
+          if git -C .aida-store rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            git -C .aida-store merge --ff-only origin/aida-store
+          elif [ -e .aida-store ]; then
+            echo "::error::.aida-store exists but is not an attached git worktree"
+            exit 1
+          else
+            git worktree add .aida-store refs/remotes/origin/aida-store
+          fi
           BASE="origin/${{ github.base_ref }}"
           git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
           python3 docs/cli/verify-interface-changes.py "${BASE}" HEAD

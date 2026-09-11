@@ -2494,6 +2494,21 @@ fn trace_gate_passes_when_all_references_live() {
 }
 
 #[test]
+fn trace_gate_refuses_when_requirement_store_is_unreachable() {
+    let tmp = tempfile::tempdir().unwrap();
+
+    // trace:TASK-1206 | ai:codex
+    let err = load_store_for_trace_gate(tmp.path()).expect_err("empty tempdir has no store");
+    let msg = format!("{err:#}");
+
+    assert!(
+        msg.contains("trace gate: no requirement store reachable"),
+        "got: {msg}"
+    );
+    assert!(msg.contains("cannot validate references"), "got: {msg}");
+}
+
+#[test]
 fn trace_gate_reports_every_id_in_a_multi_spec_trailer() {
     let commits = vec![(
         "abcabc1".to_string(),
