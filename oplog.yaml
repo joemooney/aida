@@ -59177,5 +59177,31 @@ operations:
   timestamp: 2026-09-11T18:51:55.355705968Z
   kind: !SetStatus
     status: Completed
-clock: 4761
+- id: 01a091de-4c1d-7c50-98c7-addae0731059
+  target_id: 01a091de-4877-7aa2-8506-da5ae4e9179d
+  author: aida
+  node_id: '1'
+  lamport: 4762
+  timestamp: 2026-09-11T19:07:39.933670049Z
+  kind: !Create
+    title: 'Review PR-1744: [AI:codex] feat(agents): record retry model escalation telemetry (STORY-1033)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a091d2`) for branch `story-1033-followup`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1744>
+      - Branch: `story-1033-followup` → `main`
+
+      ## Covers
+
+      - STORY-1033
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1744` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4762
 node_id: '1'
