@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:49.938635015Z
-modified_at: 2026-09-11T19:55:14.127925952Z
+modified_at: 2026-09-11T19:59:52.813206506Z
 req_type: Story
 tags:
 - awaiting
@@ -58,3 +58,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-11T19:55:14.127925952Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1745: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34641408384 — view it: `gh run view 34641408384`. Push fixups to the same branch: `aida queue work STORY-1043 --branch story-1043 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-11T19:59:52.813206506Z
