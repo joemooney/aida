@@ -8675,6 +8675,7 @@ pub(crate) fn send_notification(
         intent: Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     if let Err(e) = mailbox_store::write_message(project_root, &msg) {
         eprintln!(
@@ -17338,15 +17339,22 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     } else {
         String::new()
     };
+    // trace:TASK-1211 | ai:codex
+    let archived_tag = if m.archived {
+        format!("{} ", "[archived]".dimmed())
+    } else {
+        String::new()
+    };
     let body = if m.retracted {
         "[withdrawn]".dimmed().to_string()
     } else {
         m.body.clone()
     };
     println!(
-        "  {}{}{} {} → {}  {}  {}",
+        "  {}{}{}{} {} → {}  {}  {}",
         flag,
         intent_tag,
+        archived_tag,
         short.dimmed(),
         m.from.cyan(),
         to.yellow(),

@@ -580,6 +580,7 @@ mod tests {
             intent: aida_core::mailbox::Intent::default(),
             retracted: false,
             deleted: false,
+            archived: false,
         }
     }
 
