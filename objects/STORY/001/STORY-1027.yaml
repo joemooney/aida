@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:02.794991062Z
-modified_at: 2026-09-11T08:33:06.402462668Z
+modified_at: 2026-09-11T08:33:07.908099042Z
 req_type: Story
 tags:
 - cli
@@ -29,3 +29,4 @@ tags:
 - lifecycle:no-review
 - recommend:approve
 - risk:low
+execution_mode: drain
