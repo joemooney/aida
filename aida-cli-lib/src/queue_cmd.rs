@@ -7419,6 +7419,27 @@ pub(crate) fn append_reviewer_prompt_suffixes(prompt: &mut String) {
     }
 }
 
+// trace:BUG-1063 | ai:codex
+fn headless_waiting_rule_suffix(role: &str) -> String {
+    let artifact = if role.eq_ignore_ascii_case("reviewer") {
+        "verdict file"
+    } else if role.eq_ignore_ascii_case("advisor") {
+        "response JSON"
+    } else {
+        "result"
+    };
+    format!(
+        "\n\nHEADLESS WAITING RULE: AIDA_HEADLESS=1 means there is no next \
+         conversational turn. Never end your turn waiting for a notification, \
+         watcher, monitor, or CI callback. Never block in one tool call longer \
+         than 60 seconds. Poll long waits in bounded steps (`sleep <= 60s` per \
+         tool call) and print the current state each step so stream-json emits \
+         progress for the watchdog. If the wait would exceed the phase's \
+         remaining budget, write the {artifact} with the current wait state and \
+         exit instead."
+    )
+}
+
 pub(crate) fn derive_queue_work_prompt(
     plan: &QueueWorkPlan,
     role: &str,
@@ -7997,6 +8018,17 @@ pub(crate) fn handle_queue_work(
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
         append_reviewer_prompt_suffixes(&mut prompt);
+    }
+    if no_human {
+        prompt.push_str(&headless_waiting_rule_suffix(&role));
+        if role.eq_ignore_ascii_case("reviewer") {
+            prompt.push_str(
+                "\n\nReviewer CI contract: gate on PR CI, but do not gate on the \
+                 nightly cross-platform workflow unless the spec acceptance \
+                 explicitly names it; when it does, poll by the bounded-step \
+                 rule above.",
+            );
+        }
     }
 
     // STORY-281: reviewer pre-flight stale-base check. Fires only when

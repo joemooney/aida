@@ -76132,7 +76132,113 @@ fn enrich_no_verdict_with_headless_diagnostic(
             );
         }
     }
+    enrich_headless_wait_failure(failure, project_root, started_at)
+}
+
+// trace:BUG-1063 | ai:codex
+fn enrich_headless_wait_failure(
+    failure: auto_complete::PhaseFailure,
+    project_root: &std::path::Path,
+    started_at: std::time::SystemTime,
+) -> auto_complete::PhaseFailure {
+    if !matches!(
+        failure.kind,
+        auto_complete::FailureKind::NoPr | auto_complete::FailureKind::NoVerdict
+    ) {
+        return failure;
+    }
+    let logs_dir = project_root.join(".aida").join("headless-logs");
+    let Ok(entries) = std::fs::read_dir(&logs_dir) else {
+        return failure;
+    };
+    for entry in entries.flatten() {
+        let Ok(meta) = entry.metadata() else { continue };
+        let Ok(modified) = meta.modified() else {
+            continue;
+        };
+        if modified < started_at {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(body) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(last_text) = last_headless_assistant_text(&body) else {
+            continue;
+        };
+        if headless_wait_text(&last_text) {
+            return auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::HeadlessWait,
+                format!(
+                    "{} — the headless log ({}) ended with assistant text that \
+                     waits for a future notification/monitor. Under AIDA_HEADLESS=1 \
+                     there is no next turn; poll in <=60s bounded steps and write \
+                     the phase result with the current wait state instead (BUG-1063).",
+                    failure.reason,
+                    path.display(),
+                ),
+            );
+        }
+    }
     failure
+}
+
+// trace:BUG-1063 | ai:codex
+fn last_headless_assistant_text(content: &str) -> Option<String> {
+    content
+        .lines()
+        .rev()
+        .filter_map(headless_line_assistant_text)
+        .find(|s| !s.trim().is_empty())
+}
+
+// trace:BUG-1063 | ai:codex
+fn headless_line_assistant_text(line: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(line.trim()).ok()?;
+    if value.get("type").and_then(|v| v.as_str()) == Some("result") {
+        return value
+            .get("result")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+    }
+    if value.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if let Some(text) = value.get("text").and_then(|v| v.as_str()) {
+        parts.push(text.to_string());
+    }
+    let content = value
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .or_else(|| value.get("content"));
+    if let Some(blocks) = content.and_then(|v| v.as_array()) {
+        for block in blocks {
+            if block.get("type").and_then(|v| v.as_str()) == Some("text") {
+                if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
+                    parts.push(text.to_string());
+                }
+            }
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("\n"))
+    }
+}
+
+// trace:BUG-1063 | ai:codex
+fn headless_wait_text(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    const MARKERS: &[&str] = &[
+        "waiting on",
+        "wait for the notification",
+        "waiting for the notification",
+        "waiting on the watcher notification",
+        "armed a monitor",
+    ];
+    MARKERS.iter().any(|marker| lower.contains(marker))
 }
 
 #[cfg(test)]
@@ -78442,6 +78548,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
              the lock"
         );
         let session_uuid = uuid::Uuid::now_v7().to_string();
+        // trace:BUG-1063 | ai:codex
+        let implementer_started_at = std::time::SystemTime::now();
         self.mark_drain_phase_session(auto_complete::Phase::Implementer, &session_uuid);
         // STORY-306: remember the minted session id — if phase 1 punts and the
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
@@ -78942,11 +79050,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
                     return Ok(auto_complete::ImplementerOutcome::Punted { reason });
                 }
-                Err(auto_complete::PhaseFailure::of(
+                let failure = auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoPr,
                     "the implementer session exited cleanly but opened no PR — \
                      run `/aida-pr` inside the session before exiting",
-                ))
+                );
+                if headless_impl {
+                    Err(enrich_headless_wait_failure(
+                        failure,
+                        &self.project_root,
+                        implementer_started_at,
+                    ))
+                } else {
+                    Err(failure)
+                }
             }
         }
     }

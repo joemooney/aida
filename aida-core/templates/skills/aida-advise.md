@@ -49,6 +49,17 @@ echo "response: ${AIDA_PUNT_RESPONSE_FILE:?not an advisor launch}"
 If either is unset this is not an advisor launch — stop; there is nothing to
 advise on.
 
+## Headless waiting rule (`AIDA_HEADLESS=1`) — trace:BUG-1063 | ai:codex
+
+Under a headless drain there is no next conversational turn. Never end your
+turn waiting for a background notification, watcher, monitor, or callback.
+Never block inside one tool call for longer than 60 seconds. Poll any long
+wait in bounded steps (`sleep <= 60s` per tool call), printing the current
+state on each step so the stream-json log advances and feeds the watchdog. If
+the wait would exceed the phase's remaining budget, write the response JSON
+with the current wait state and exit instead of parking the session on a
+future notification.
+
 ## The load-bearing rule — when in doubt, ESCALATE
 
 A headless advisor applying judgment unattended is **exactly where drain

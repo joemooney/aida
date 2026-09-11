@@ -101,6 +101,22 @@ ordering explicit so the model cannot drift past it.
 The interactive workflow still walks steps 1–11 in order; this contract
 only takes effect when `AIDA_HEADLESS=1`.
 
+## Headless waiting rule (`AIDA_HEADLESS=1`) — trace:BUG-1063 | ai:codex
+
+Under a headless drain there is no next conversational turn. Never end your
+turn waiting for a background notification, watcher, monitor, or CI callback.
+Never block inside one tool call for longer than 60 seconds. Poll long waits in
+bounded steps (`sleep <= 60s` per tool call), printing the current state on
+each step so the stream-json log advances and feeds the watchdog. If the wait
+would exceed the phase's remaining budget, write the verdict file with the
+current wait state and exit instead of parking the session on a future
+notification.
+
+Reviewer CI contract: you may gate on the PR CI required for the review, but
+do not gate on the nightly cross-platform workflow unless the spec's
+acceptance criteria explicitly name that workflow. When the spec does require
+it, poll it by the bounded-step rule above.
+
 ## Fix-forward policy — trace:TASK-333 | ai:claude
 
 The reviewer may **fix-forward** — push a small corrective commit on the PR's

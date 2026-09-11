@@ -1,4 +1,7 @@
-use super::enrich_no_verdict_with_headless_diagnostic;
+use super::{
+    enrich_headless_wait_failure, enrich_no_verdict_with_headless_diagnostic, headless_wait_text,
+    last_headless_assistant_text,
+};
 use crate::auto_complete::{FailureKind, PhaseFailure};
 use std::fs;
 use std::time::{Duration, SystemTime};
@@ -114,4 +117,47 @@ fn non_noverdict_failure_unchanged() {
     );
     assert_eq!(out.kind, FailureKind::CiRed);
     assert_eq!(out.reason, failure.reason);
+}
+
+// trace:BUG-1063 | ai:codex
+#[test]
+fn fake_headless_waiting_transcript_classifies_as_headless_wait() {
+    let dir = tempfile::tempdir().unwrap();
+    let logs = dir.path().join(".aida").join("headless-logs");
+    fs::create_dir_all(&logs).unwrap();
+    let log_path = logs.join("bug-1063-abc.jsonl");
+    fs::write(
+        &log_path,
+        r#"{"type":"assistant","message":{"content":[{"type":"text","text":"CI is still running; I armed a monitor and am waiting on that notification."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Still waiting on that notification."}
+"#,
+    )
+    .unwrap();
+
+    let failure = PhaseFailure::of(FailureKind::NoPr, "the implementer opened no PR");
+    let out = enrich_headless_wait_failure(
+        failure,
+        dir.path(),
+        SystemTime::now() - Duration::from_secs(60),
+    );
+    assert_eq!(out.kind, FailureKind::HeadlessWait);
+    assert_eq!(out.kind.cause_slug(), "headless-wait");
+    assert!(out.reason.contains("BUG-1063"), "{}", out.reason);
+    assert!(
+        out.reason
+            .contains(log_path.file_name().unwrap().to_str().unwrap()),
+        "diagnostic names the offending log: {}",
+        out.reason
+    );
+}
+
+// trace:BUG-1063 | ai:codex
+#[test]
+fn headless_wait_classifier_uses_last_assistant_text() {
+    let log = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"Earlier I mentioned waiting on the old run."}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Final: verdict written."}]}}
+"#;
+    let last = last_headless_assistant_text(log).expect("last text");
+    assert_eq!(last, "Final: verdict written.");
+    assert!(!headless_wait_text(&last));
 }
