@@ -1,0 +1,44 @@
+id: 01a09185-1e1c-7471-8955-860094fcbd51
+spec_id: STORY-1054
+agreed_id: STORY-1054
+title: 'Vendor activity/liveness adapter: one seam giving the watchdog, idle detector, and supervisor a per-vendor ''is this session alive and producing output'' signal (Claude+Codex tier-1, Antigravity tier-2)'
+description: |-
+  ## Why
+  Operator mandate (EPIC-62): the reliability mechanism must work on Codex AND Claude, Antigravity second-tier. Today the activity signal is vendor-specific and scattered: the watchdog keys on Claude's live stream-json, which is why a Codex --json-less run reads as silent (BUG-909) and a headless session that ends its turn looks dead (BUG-1063). Per AIDA's vendor-at-exec-layer principle, vendor logic must live behind ONE adapter, not inline in the watchdog/supervisor.
+
+  ## Design
+  - trait VendorActivity (in aida-core or aida-cli-lib): given a launched session (vendor + session id + headless log path + worktree), answer: is_alive() (process/lease liveness, vendor-neutral via /proc + leases), and last_activity() (the timestamp of the most recent real output event — the signal the no-progress watchdog counts).
+  - Per-vendor impls:
+    - Claude: parse the stream-json headless log; each event advances last_activity (works today).
+    - Codex: with --json, parse the JSONL event log (BUG-909); as fallback, the newest ~/.codex/sessions/**/rollout-*.jsonl matching the session id, mtime = activity. Tier-1, required.
+    - Antigravity: agy --output-format stream-json NDJSON (confirmed available in agy 1.1.27). Tier-2: adapter present and unit-tested against a fixture stream, but not required-green in a live drain until validated.
+  - The watchdog (watchdog_verdict), STORY-998 idlewatch, STORY-993 liveness, and STORY-1051 supervisor all call the adapter — no vendor string-matching in those call sites.
+
+  ## Acceptance
+  1. One trait, three impls (claude, codex, antigravity), selected by the launch vendor (resolve_headless_vendor / [agents] vendor). A new vendor is added by implementing the trait, with zero changes to the watchdog/supervisor.
+  2. Codex tier-1: a Codex phase that reads/thinks for 15 min with --json (or an advancing rollout file) reports last_activity advancing and is NOT watchdog-tripped (the BUG-909 regression, via the adapter).
+  3. Claude tier-1: unchanged behaviour, byte-for-byte watchdog decisions (golden test).
+  4. Antigravity tier-2: adapter parses an agy stream-json fixture and reports activity; marked experimental, not wired into a required gate.
+  5. is_alive() is vendor-neutral (leases + /proc), shared across all three.
+  6. Call-site audit: grep shows no 'codex'/'claude'/'antigravity' literal in watchdog_verdict, idlewatch, or the supervisor after this lands — all vendor knowledge is in the adapter.
+
+  ## Related
+  Parent EPIC-62. BUG-909 (Codex --json — becomes the Codex adapter impl), BUG-1063 (headless-wait — the adapter makes 'is it working' answerable), STORY-998 (idlewatch consumes it), STORY-993 (liveness), STORY-1051 (supervisor consumes it), TASK-1116 (--vendor precedence), the vendor-at-exec-layer principle.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T17:30:15.452401410Z
+modified_at: 2026-09-11T17:30:15.452401410Z
+req_type: Story
+tags:
+- adapter
+- antigravity
+- claude
+- codex
+- cross-vendor
+- from-product
+- parent:EPIC-62
+- recommend:approve
+- reliability
+- risk:medium
