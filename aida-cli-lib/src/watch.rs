@@ -359,6 +359,15 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "unread-mail",
             "supervisor mailbox has unread mail".to_string(),
         ),
+        // trace:STORY-1043 | ai:codex
+        EventKind::UnshippedWorkDetected {
+            spec,
+            branch,
+            first_seen,
+        } => (
+            "unshipped-work-detected",
+            format!("{spec} on {branch} first seen {first_seen}"),
+        ),
         // trace:STORY-722 | ai:claude
         EventKind::CompeteOutcome {
             winner, spec_kind, ..

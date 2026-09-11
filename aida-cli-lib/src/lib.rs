@@ -19644,6 +19644,8 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // across configured remotes (github vs gitlab drift).
         // trace:TASK-1095 | ai:claude
         "remote-drift" | "remote-sync" | "drift" | "remotes" => "remote-drift",
+        // trace:STORY-1043 | ai:codex
+        "ci" | "cross-platform" | "cross-platform-ci" | "nightly-red" | "nightly" => "ci",
         // STORY-762: a vendor this project resolves to (interactive default,
         // headless, or configured TUI) whose CLI binary is missing from PATH.
         // trace:STORY-762 | ai:claude
@@ -19673,7 +19675,7 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
              orphan-branches, stale-remote-branches, merged-agent-worktrees, \
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime, remote-drift, vendor-binary, scaffold-drift, \
+             store-tracked-runtime, remote-drift, ci, vendor-binary, scaffold-drift, \
              store-scrub, agents-wiring, worktree-container-gitdir)",
             other
         ),
@@ -62013,6 +62015,447 @@ fn collect_remote_branch_name_set(
     set
 }
 
+// trace:STORY-1043 | ai:codex
+#[derive(Debug, Clone)]
+struct UnshippedBranchCandidate {
+    branch: String,
+    refname: String,
+    spec_id: String,
+    commits_ahead: u32,
+    age: String,
+    has_local: bool,
+}
+
+// trace:STORY-1043 | ai:codex
+fn collect_unshipped_work_items(
+    project_root: &std::path::Path,
+    summaries: &[aida_core::RequirementSummary],
+    no_forge: bool,
+    emit_detected_events: bool,
+) -> Vec<awaiting_you::UnshippedWorkItem> {
+    let Some(default_ref) = detect_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+
+    let mut status_by_spec = std::collections::HashMap::new();
+    for s in summaries {
+        let Some(id) = s.agreed_id.clone().or_else(|| s.spec_id.clone()) else {
+            continue;
+        };
+        status_by_spec.insert(id.to_ascii_uppercase(), s.status.to_ascii_lowercase());
+    }
+
+    let live = process_probe::probe_live_claude_sessions();
+    let now = chrono::Utc::now();
+    let live_leases: Vec<SessionLease> = list_leases(project_root)
+        .into_iter()
+        .filter(|l| matches!(lease_state_for(l, &live, now), LeaseState::Live))
+        .collect();
+    let live_scopes: std::collections::HashSet<String> = live_leases
+        .iter()
+        .map(|l| l.scope.to_ascii_uppercase())
+        .collect();
+    let live_branches: std::collections::HashSet<String> =
+        live_leases.iter().map(|l| l.branch.clone()).collect();
+
+    let mut seen = std::collections::HashSet::new();
+    let local: std::collections::HashSet<String> =
+        list_local_branches(project_root).into_iter().collect();
+    let remote = collect_remote_branch_name_set(project_root);
+    let mut branches: Vec<(String, String, bool)> = local
+        .iter()
+        .map(|b| (b.clone(), b.clone(), true))
+        .chain(
+            remote
+                .iter()
+                .filter(|b| !local.contains(*b))
+                .map(|b| (format!("origin/{b}"), format!("origin/{b}"), false)),
+        )
+        .collect();
+    branches.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let open_pr_branches: std::collections::HashSet<String> = if no_forge {
+        std::collections::HashSet::new()
+    } else {
+        collect_open_prs(project_root)
+            .by_branch
+            .keys()
+            .cloned()
+            .collect()
+    };
+
+    let mut candidates = Vec::new();
+    for (display_branch, refname, has_local) in branches {
+        let short_branch = display_branch
+            .strip_prefix("origin/")
+            .unwrap_or(display_branch.as_str())
+            .to_string();
+        if matches!(
+            short_branch.as_str(),
+            "main" | "master" | "aida-store" | "HEAD"
+        ) {
+            continue;
+        }
+        if !no_forge && open_pr_branches.contains(&short_branch) {
+            continue;
+        }
+        let commits_ahead = match branch_ahead_of(project_root, &refname, &default_ref) {
+            Some(n) if n > 0 => n,
+            _ => continue,
+        };
+        let Some(spec_id) = work_spec_id_from_branch(&short_branch)
+            .or_else(|| first_spec_id_in_branch_commits(project_root, &default_ref, &refname))
+        else {
+            continue;
+        };
+        let spec_key = spec_id.to_ascii_uppercase();
+        if live_scopes.contains(&spec_key) || live_branches.contains(&short_branch) {
+            continue;
+        }
+        if status_by_spec
+            .get(&spec_key)
+            .map(|status| matches!(status.as_str(), "completed" | "rejected" | "superseded"))
+            .unwrap_or(false)
+        {
+            continue;
+        }
+        if !seen.insert(display_branch.clone()) {
+            continue;
+        }
+        candidates.push(UnshippedBranchCandidate {
+            branch: display_branch,
+            refname,
+            spec_id,
+            commits_ahead,
+            age: branch_tip_age(project_root, &short_branch),
+            has_local,
+        });
+    }
+
+    candidates.sort_by(|a, b| b.commits_ahead.cmp(&a.commits_ahead));
+    candidates
+        .into_iter()
+        .map(|c| {
+            let first_seen = if emit_detected_events {
+                record_unshipped_work_detected(project_root, &c.spec_id, &c.branch)
+            } else {
+                String::new()
+            };
+            let pr_state = if no_forge {
+                "unknown".to_string()
+            } else {
+                "absent".to_string()
+            };
+            let recovery = if !no_forge {
+                format!("aida pr ship {}", c.branch)
+            } else if c.has_local {
+                format!("aida pr ship {}", c.branch)
+            } else {
+                format!(
+                    "git switch -c {} {} && aida pr ship {}",
+                    c.spec_id.to_ascii_lowercase(),
+                    c.refname,
+                    c.spec_id.to_ascii_lowercase()
+                )
+            };
+            let age = if first_seen.is_empty() {
+                c.age
+            } else {
+                format!("{} (first seen {})", c.age, first_seen)
+            };
+            awaiting_you::UnshippedWorkItem {
+                spec_id: c.spec_id,
+                branch: c.branch,
+                commits_ahead: c.commits_ahead,
+                age,
+                recovery,
+                pr_state,
+            }
+        })
+        .collect()
+}
+
+// trace:STORY-1043 | ai:codex
+fn first_spec_id_in_branch_commits(
+    project_root: &std::path::Path,
+    default_ref: &str,
+    refname: &str,
+) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "log",
+            "--format=%s",
+            "-n",
+            "25",
+            &format!("{default_ref}..{refname}"),
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|line| extract_spec_ids_from_commit(line).into_iter().next())
+}
+
+// trace:STORY-1043 | ai:codex
+fn branch_tip_age(project_root: &std::path::Path, refname: &str) -> String {
+    let ts = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "-1", "--format=%ct", refname])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .parse::<i64>()
+                .ok()
+        });
+    let Some(ts) = ts else {
+        return "unknown".to_string();
+    };
+    let age = chrono::Utc::now().timestamp().saturating_sub(ts);
+    if age < 3600 {
+        format!("{}m", (age / 60).max(1))
+    } else if age < 86400 {
+        format!("{}h", age / 3600)
+    } else {
+        format!("{}d", age / 86400)
+    }
+}
+
+// trace:STORY-1043 | ai:codex
+fn record_unshipped_work_detected(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    branch: &str,
+) -> String {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    branch.hash(&mut hasher);
+    let safe: String = branch
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe = format!("{safe}-{:016x}", hasher.finish());
+    let path = project_root
+        .join(".aida")
+        .join("unshipped-work-seen")
+        .join(safe);
+    if let Ok(prev) = std::fs::read_to_string(&path) {
+        return prev.trim().to_string();
+    }
+    let first_seen = chrono::Utc::now().to_rfc3339();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if std::fs::write(&path, &first_seen).is_ok() {
+        events::emit(
+            project_root,
+            &events::Event::new(
+                Some(spec_id.to_string()),
+                "",
+                events::EventKind::UnshippedWorkDetected {
+                    spec: spec_id.to_string(),
+                    branch: branch.to_string(),
+                    first_seen: first_seen.clone(),
+                },
+            ),
+        );
+    }
+    first_seen
+}
+
+// trace:STORY-1043 | ai:codex
+#[cfg(test)]
+mod story_1043_unshipped_work_tests {
+    use super::*;
+
+    fn git(root: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn commit_file(root: &std::path::Path, path: &str, body: &str, subject: &str) {
+        let full = root.join(path);
+        if let Some(parent) = full.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(&full, body).unwrap();
+        git(root, &["add", path]);
+        git(root, &["commit", "-m", subject]);
+    }
+
+    fn branch_with_commit(root: &std::path::Path, branch: &str, spec: &str) {
+        git(root, &["checkout", "-b", branch, "main"]);
+        commit_file(
+            root,
+            &format!("{branch}.txt"),
+            branch,
+            &format!("[AI:codex] feat: branch work ({spec})"),
+        );
+        git(root, &["checkout", "main"]);
+    }
+
+    fn summary(spec_id: &str, status: &str) -> aida_core::RequirementSummary {
+        aida_core::RequirementSummary {
+            id: uuid::Uuid::new_v4(),
+            spec_id: Some(spec_id.to_string()),
+            agreed_id: Some(spec_id.to_string()),
+            title: format!("{spec_id} title"),
+            description: String::new(),
+            status: status.to_string(),
+            priority: "high".to_string(),
+            owner: String::new(),
+            assignee: None,
+            feature: String::new(),
+            req_type: "Story".to_string(),
+            tags: Vec::new(),
+            created_at: String::new(),
+            modified_at: chrono::Utc::now().to_rfc3339(),
+            archived: false,
+            archived_at: None,
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
+            in_degree: 0,
+            out_degree: 0,
+            heft: 0,
+            blocked: false,
+            has_pending_decision: false,
+            execution_mode: None,
+            weight: None,
+            origin: None,
+            yaml_path: String::new(),
+        }
+    }
+
+    fn write_live_lease(root: &std::path::Path, spec: &str, branch: &str) {
+        let lease = SessionLease {
+            id: "live1043".to_string(),
+            scope: spec.to_string(),
+            slug: slugify(spec),
+            owner: "codex@example.test".to_string(),
+            worktree_path: root.canonicalize().unwrap(),
+            branch: branch.to_string(),
+            started_at: chrono::Utc::now(),
+            hostname: hostname(),
+            role: Some("implementer".to_string()),
+            creator_pid: None,
+            active_pid: Some(std::process::id()),
+            cargo_target_dir: None,
+            parent_project_root: Some(root.to_path_buf()),
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+            zen_intent_token: None,
+            escalated_to_human: None,
+            parent_branch: None,
+            parent_branch_sha: None,
+            review_verb: false,
+            claim_verb: false,
+            manual_enter_at: None,
+        };
+        std::fs::create_dir_all(leases_dir(root)).unwrap();
+        std::fs::write(
+            lease_path(root, "live1043"),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn detector_lists_unshipped_work_and_skips_live_terminal_and_open_pr_branches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        git(root, &["init"]);
+        git(root, &["checkout", "-b", "main"]);
+        git(root, &["config", "user.email", "codex@example.test"]);
+        git(root, &["config", "user.name", "Codex"]);
+        git(
+            root,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/example/aida-fixture.git",
+            ],
+        );
+        commit_file(root, "README.md", "fixture", "chore: init");
+
+        branch_with_commit(root, "story-1043-unshipped", "STORY-1043");
+        branch_with_commit(root, "story-1044-live", "STORY-1044");
+        branch_with_commit(root, "story-1045-done", "STORY-1045");
+        branch_with_commit(root, "story-1046-open-pr", "STORY-1046");
+        write_live_lease(root, "STORY-1044", "story-1044-live");
+
+        let fake_gh = root.join("fake-gh");
+        std::fs::write(
+            &fake_gh,
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* ]]; then
+  printf '[{"number":46,"title":"open","headRefName":"story-1046-open-pr","statusCheckRollup":[],"mergeable":"MERGEABLE","reviewDecision":""}]'
+  exit 0
+fi
+exit 1
+"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&fake_gh, perms).unwrap();
+        }
+
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[
+                summary("STORY-1043", "InProgress"),
+                summary("STORY-1044", "InProgress"),
+                summary("STORY-1045", "Completed"),
+                summary("STORY-1046", "InProgress"),
+            ],
+            false,
+            false,
+        );
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].spec_id, "STORY-1043");
+        assert_eq!(rows[0].branch, "story-1043-unshipped");
+        assert_eq!(rows[0].commits_ahead, 1);
+        assert_eq!(rows[0].pr_state, "absent");
+        assert_eq!(rows[0].recovery, "aida pr ship story-1043-unshipped");
+    }
+}
+
 /// Look up a PR's merge state via `gh pr view <N>`. Returns `Some(true)`
 /// when merged, `Some(false)` when open/closed-without-merge, `None` when
 /// gh is missing or the call fails.
@@ -62796,6 +63239,15 @@ fn collect_awaiting_report(
         }
     };
 
+    // trace:STORY-1043 | ai:codex
+    let unshipped_work = collect_unshipped_work_items(project_root, &summaries, no_ci, !no_ci);
+    // trace:STORY-1043 | ai:codex
+    let nightly_red = if no_ci {
+        None
+    } else {
+        nightly_red_status(project_root)
+    };
+
     awaiting_you::AwaitingReport {
         mergeable_prs,
         pending_briefs,
@@ -62805,6 +63257,8 @@ fn collect_awaiting_report(
         mail,
         worker_directives,
         shelved_total,
+        unshipped_work,
+        nightly_red,
     }
 }
 
@@ -62946,6 +63400,15 @@ fn handle_awaiting_command(
             "directives_next: {}",
             report.worker_directives.next.as_deref().unwrap_or("-")
         );
+        println!("unshipped: {}", report.unshipped_work.len());
+        println!(
+            "nightly_red: {}",
+            report
+                .nightly_red
+                .as_ref()
+                .map(|n| n.summary.as_str())
+                .unwrap_or("-")
+        );
         let prs: Vec<Vec<String>> = report
             .mergeable_prs
             .iter()
@@ -62971,6 +63434,28 @@ fn handle_awaiting_command(
         println!(
             "{}",
             crate::toon::table_raw("briefs", &["agent", "spec"], &briefs)
+        );
+        // trace:STORY-1043 | ai:codex
+        let unshipped: Vec<Vec<String>> = report
+            .unshipped_work
+            .iter()
+            .map(|u| {
+                vec![
+                    u.spec_id.clone(),
+                    u.branch.clone(),
+                    u.commits_ahead.to_string(),
+                    u.age.clone(),
+                    u.recovery.clone(),
+                ]
+            })
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw(
+                "unshipped_work",
+                &["spec", "branch", "ahead", "age", "recovery"],
+                &unshipped
+            )
         );
         let reviewer: Vec<Vec<String>> = report
             .reviewer_queue_items
@@ -64470,19 +64955,36 @@ fn cross_platform_ci_status(project_root: &std::path::Path) -> CrossPlatformCiSu
 fn fetch_cross_platform_ci_runs(
     project_root: &std::path::Path,
 ) -> std::result::Result<Vec<GhWorkflowRun>, String> {
+    fetch_cross_platform_ci_runs_with_args(project_root, &[])
+}
+
+// trace:STORY-1043 | ai:codex
+fn fetch_scheduled_cross_platform_ci_runs(
+    project_root: &std::path::Path,
+) -> std::result::Result<Vec<GhWorkflowRun>, String> {
+    fetch_cross_platform_ci_runs_with_args(project_root, &["--event", "schedule"])
+}
+
+// trace:STORY-1043 | ai:codex
+fn fetch_cross_platform_ci_runs_with_args(
+    project_root: &std::path::Path,
+    extra_args: &[&str],
+) -> std::result::Result<Vec<GhWorkflowRun>, String> {
+    let mut args = vec![
+        "run",
+        "list",
+        "--workflow",
+        "cross-platform.yml",
+        "--branch",
+        "main",
+        "--limit",
+        "20",
+        "--json",
+        "status,conclusion,createdAt,databaseId,url",
+    ];
+    args.extend_from_slice(extra_args);
     let output = std::process::Command::new("gh")
-        .args([
-            "run",
-            "list",
-            "--workflow",
-            "cross-platform.yml",
-            "--branch",
-            "main",
-            "--limit",
-            "20",
-            "--json",
-            "status,conclusion,createdAt,databaseId,url",
-        ])
+        .args(args)
         .current_dir(project_root)
         .output()
         .map_err(|err| err.to_string())?;
@@ -64611,6 +65113,60 @@ fn summarize_cross_platform_ci_runs(
             )
         }),
     }
+}
+
+// trace:STORY-1043 | ai:codex
+fn nightly_red_status(project_root: &std::path::Path) -> Option<awaiting_you::NightlyRedItem> {
+    let now = chrono::Utc::now();
+    summarize_nightly_red_runs(
+        now,
+        fetch_scheduled_cross_platform_ci_runs(project_root).ok(),
+    )
+}
+
+// trace:STORY-1043 | ai:codex
+fn summarize_nightly_red_runs(
+    now: chrono::DateTime<chrono::Utc>,
+    runs: Option<Vec<GhWorkflowRun>>,
+) -> Option<awaiting_you::NightlyRedItem> {
+    let runs = runs?;
+    let latest = runs.first()?;
+    if latest.status.as_deref() != Some("completed")
+        || latest.conclusion.as_deref() == Some("success")
+    {
+        return None;
+    }
+    let streak: Vec<&GhWorkflowRun> = runs
+        .iter()
+        .take_while(|run| {
+            run.status.as_deref() == Some("completed")
+                && run.conclusion.as_deref().is_some_and(|c| c != "success")
+        })
+        .collect();
+    let nights = streak.len().max(1);
+    let since_run = streak.last().copied().unwrap_or(latest);
+    let since = since_run
+        .created_at
+        .map(|dt| {
+            dt.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d")
+                .to_string()
+        })
+        .unwrap_or_else(|| "unknown date".to_string());
+    let run = latest.database_id;
+    let run_text = run
+        .map(|id| format!("run {id}"))
+        .unwrap_or_else(|| "run unknown".to_string());
+    let summary = format!(
+        "cross-platform nightly red since {since} ({run_text}, {nights} night{})",
+        if nights == 1 { "" } else { "s" }
+    );
+    let _ = now;
+    Some(awaiting_you::NightlyRedItem {
+        summary,
+        run_id: run,
+        nights,
+    })
 }
 
 fn format_ci_age(

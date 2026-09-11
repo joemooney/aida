@@ -127,6 +127,15 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if directives > 0 {
         v.push((directives, label(directives, "directive", "directives")));
     }
+    // trace:STORY-1043 | ai:codex
+    let unshipped = report.unshipped_work.len();
+    if unshipped > 0 {
+        v.push((unshipped, "unshipped".to_string()));
+    }
+    // trace:STORY-1043 | ai:codex
+    if report.nightly_red.is_some() {
+        v.push((1, "nightly-red".to_string()));
+    }
     let verdicts = report.reviewer_queue_items.len();
     if verdicts > 0 {
         // Invariant label — "2 approve" reads as "2 awaiting your approval".
@@ -291,7 +300,7 @@ mod tests {
     use super::*;
     use crate::awaiting_you::{
         AwaitingReport, DirectivesChannel, EscalationItem, MailChannel, MergeablePrItem,
-        PendingBriefItem, ReviewerQueueItem,
+        NightlyRedItem, PendingBriefItem, ReviewerQueueItem, UnshippedWorkItem,
     };
 
     #[test]
@@ -380,6 +389,19 @@ mod tests {
                 pending: 1,
                 next: None,
             },
+            unshipped_work: vec![UnshippedWorkItem {
+                spec_id: "".into(),
+                branch: "".into(),
+                commits_ahead: 1,
+                age: "".into(),
+                recovery: "".into(),
+                pr_state: "".into(),
+            }],
+            nightly_red: Some(NightlyRedItem {
+                summary: "".into(),
+                run_id: Some(1),
+                nights: 1,
+            }),
             reviewer_queue_items: vec![ReviewerQueueItem {
                 spec_id: "".into(),
                 title: "".into(),
@@ -405,6 +427,8 @@ mod tests {
                 "2 findings",
                 "3 mail",
                 "1 directive",
+                "1 unshipped",
+                "1 nightly-red",
                 "1 approve",
                 "2 punts"
             ]
@@ -415,7 +439,7 @@ mod tests {
             you: channels,
             ..Default::default()
         };
-        assert_eq!(c.you_total(), 11);
+        assert_eq!(c.you_total(), 13);
     }
 
     #[test]

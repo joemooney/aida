@@ -237,6 +237,25 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // trace:STORY-1043 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "ci")? {
+        if let Some(red) = nightly_red_status(&project_root) {
+            findings.push(DoctorFinding {
+                category: "ci".to_string(),
+                id: "cross-platform-nightly-red".to_string(),
+                summary: red.summary,
+                action: red
+                    .run_id
+                    .map(|id| format!("inspect `gh run view {id}` and fix-forward until green"))
+                    .unwrap_or_else(|| {
+                        "inspect `gh run list --workflow cross-platform.yml`".to_string()
+                    }),
+                safe_heal: false,
+            });
+            findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+        }
+    }
+
     // TASK-1124: rule-delivery-rot — hash the DEPLOYED vendor prompts/skills
     // (project `.claude/`+`.codex/` and the machine-global `~/.codex/prompts`)
     // against the binary's embedded source templates and flag drift. Turns the
@@ -2668,6 +2687,14 @@ mod story_462_doctor_tests {
                 normalize_doctor_category(alias).unwrap(),
                 "merged-agent-worktrees"
             );
+        }
+    }
+
+    #[test]
+    fn normalize_doctor_category_accepts_ci() {
+        // trace:STORY-1043 | ai:codex
+        for alias in ["ci", "cross-platform", "cross-platform-ci", "nightly-red"] {
+            assert_eq!(normalize_doctor_category(alias).unwrap(), "ci");
         }
     }
 

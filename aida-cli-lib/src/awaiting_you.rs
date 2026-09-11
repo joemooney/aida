@@ -66,6 +66,15 @@ pub(crate) struct AwaitingReport {
     /// directives view is the real surface — this is the breadcrumb.
     // trace:TASK-1146 | ai:claude
     pub worker_directives: DirectivesChannel,
+    /// Spec-linked branches ahead of main, with no open PR and no live lease.
+    /// These are recoverable pushed/local commits that can otherwise disappear
+    /// from the operator's field of view after a drain dies before PR creation.
+    // trace:STORY-1043 | ai:codex
+    pub unshipped_work: Vec<UnshippedWorkItem>,
+    /// Latest scheduled cross-platform run is red. Full report only; the
+    /// per-turn notice path skips the network-backed workflow probe.
+    // trace:STORY-1043 | ai:codex
+    pub nightly_red: Option<NightlyRedItem>,
 }
 
 /// Pending-worker-directives summary for the awaiting-you report: how many
@@ -182,6 +191,25 @@ pub(crate) struct EscalationItem {
     pub title: String,
 }
 
+// trace:STORY-1043 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct UnshippedWorkItem {
+    pub spec_id: String,
+    pub branch: String,
+    pub commits_ahead: u32,
+    pub age: String,
+    pub recovery: String,
+    pub pr_state: String,
+}
+
+// trace:STORY-1043 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct NightlyRedItem {
+    pub summary: String,
+    pub run_id: Option<u64>,
+    pub nights: usize,
+}
+
 impl AwaitingReport {
     /// Count of *lines* this report will render (PRs + briefs + 1 line
     /// for findings if any + 1 for unread mail + 1 for pending worker
@@ -199,6 +227,8 @@ impl AwaitingReport {
             } else {
                 0
             })
+            + self.unshipped_work.len()
+            + (if self.nightly_red.is_some() { 1 } else { 0 })
             + self.reviewer_queue_items.len()
             + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
@@ -353,6 +383,38 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // trace:STORY-1043 | ai:codex
+        for item in &self.unshipped_work {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  🧭 unshipped work: {} on `{}` — {} commit{} ahead, age {}, PR {} — `{}`",
+                item.spec_id.bold(),
+                item.branch,
+                item.commits_ahead,
+                if item.commits_ahead == 1 { "" } else { "s" },
+                item.age,
+                item.pr_state,
+                item.recovery.cyan(),
+            )?;
+            budget -= 1;
+        }
+        // trace:STORY-1043 | ai:codex
+        if let Some(item) = &self.nightly_red {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let inspect = item
+                    .run_id
+                    .map(|id| format!("gh run view {id}"))
+                    .unwrap_or_else(|| "gh run list --workflow cross-platform.yml".to_string());
+                writeln!(w, "  🔴 {} — `{}`", item.summary, inspect.cyan())?;
+                budget -= 1;
+            }
+        }
         for q in &self.reviewer_queue_items {
             if budget == 0 {
                 overflow += 1;
@@ -427,6 +489,19 @@ impl AwaitingReport {
                 "pending": self.worker_directives.pending,
                 "next": self.worker_directives.next,
             },
+            "unshipped_work": self.unshipped_work.iter().map(|i| serde_json::json!({
+                "spec_id": i.spec_id,
+                "branch": i.branch,
+                "commits_ahead": i.commits_ahead,
+                "age": i.age,
+                "pr_state": i.pr_state,
+                "recovery": i.recovery,
+            })).collect::<Vec<_>>(),
+            "nightly_red": self.nightly_red.as_ref().map(|n| serde_json::json!({
+                "summary": n.summary,
+                "run_id": n.run_id,
+                "nights": n.nights,
+            })),
             "reviewer_queue_items": self.reviewer_queue_items.iter().map(|q| serde_json::json!({
                 "spec_id": q.spec_id,
                 "title": q.title,
@@ -486,6 +561,13 @@ impl AwaitingReport {
                 "directive",
                 "directives",
             ));
+        }
+        // trace:STORY-1043 | ai:codex
+        if !self.unshipped_work.is_empty() {
+            parts.push(format!("unshipped:{}", self.unshipped_work.len()));
+        }
+        if self.nightly_red.is_some() {
+            parts.push("nightly-red".to_string());
         }
         if !self.reviewer_queue_items.is_empty() {
             parts.push(pluralize(
@@ -696,6 +778,36 @@ mod tests {
             .compact_line()
             .expect("shared mail yields a per-turn line");
         assert!(line.contains("18 shared mail"), "compact line: {line}");
+    }
+
+    #[test]
+    fn unshipped_work_renders_json_and_notice_count() {
+        let r = AwaitingReport {
+            unshipped_work: vec![UnshippedWorkItem {
+                spec_id: "STORY-1043".to_string(),
+                branch: "story-1043".to_string(),
+                commits_ahead: 2,
+                age: "3h".to_string(),
+                recovery: "aida pr ship story-1043".to_string(),
+                pr_state: "absent".to_string(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 1);
+        let line = r
+            .compact_line()
+            .expect("unshipped work yields a per-turn line");
+        assert!(line.contains("unshipped:1"), "compact line: {line}");
+
+        let mut buf = Vec::new();
+        r.render(false, &mut buf).unwrap();
+        let s = strip_ansi(&String::from_utf8(buf).unwrap());
+        assert!(s.contains("unshipped work: STORY-1043"), "{s}");
+        assert!(s.contains("aida pr ship story-1043"), "{s}");
+
+        let json = r.to_json();
+        assert_eq!(json["unshipped_work"][0]["spec_id"], "STORY-1043");
+        assert_eq!(json["unshipped_work"][0]["commits_ahead"], 2);
     }
 
     #[test]

@@ -256,6 +256,12 @@ pub(crate) struct NotifyRow {
 // trace:TASK-1177 | ai:claude
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub(crate) struct ReapReport {
+    /// Spec-linked branches ahead of main with no open PR and no live lease.
+    /// Reported alongside reap state so `aida session reap` never removes or
+    /// ignores work that still needs a PR/recovery drive.
+    // trace:STORY-1043 | ai:codex
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unshipped_work: Vec<awaiting_you::UnshippedWorkItem>,
     pub reapable: Vec<ReapRow>,
     pub skipped: Vec<ReapRow>,
     /// Finished sessions whose process is still alive — left in place, but told
@@ -307,6 +313,27 @@ fn finished_scopes(project_root: &std::path::Path, scopes: &[String]) -> HashSet
     out
 }
 
+// trace:STORY-1043 | ai:codex
+fn requirement_summaries(project_root: &std::path::Path) -> Vec<aida_core::RequirementSummary> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Vec::new();
+    };
+    let Ok(dispenser) = load_dispenser(&store_path) else {
+        return Vec::new();
+    };
+    let Ok(inner) = aida_core::GitBackend::new(&store_path).map(|b| b.with_dispenser(dispenser))
+    else {
+        return Vec::new();
+    };
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let Ok(backend) = aida_core::CachedGitBackend::with_inner(inner, &cache_path) else {
+        return Vec::new();
+    };
+    backend
+        .list_summaries(&aida_core::ListFilter::default())
+        .unwrap_or_default()
+}
+
 /// Gather the facts for every session lease and classify each. Read-only: git
 /// ancestry probes, a forge merged-PR lookup for the squash case, a store read,
 /// and the process-liveness probe. Nothing is mutated here.
@@ -314,6 +341,8 @@ fn finished_scopes(project_root: &std::path::Path, scopes: &[String]) -> HashSet
 pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
     let leases = list_leases(project_root);
     let mut report = ReapReport::default();
+    let summaries = requirement_summaries(project_root);
+    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
     if leases.is_empty() {
         return report;
     }
@@ -737,13 +766,30 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     }
     let mut report = scan_reapable(&project_root);
 
-    if report.reapable.is_empty() && report.skipped.is_empty() {
+    if report.reapable.is_empty() && report.skipped.is_empty() && report.unshipped_work.is_empty() {
         if opts.json {
             println!("{}", serde_json::to_string_pretty(&report)?);
         } else if !opts.quiet_when_empty {
             println!("No session leases found — nothing to reap.");
         }
         return Ok(());
+    }
+
+    // trace:STORY-1043 | ai:codex
+    if !opts.json && !report.unshipped_work.is_empty() && !opts.quiet_when_empty {
+        println!("Unshipped work detected ({}):", report.unshipped_work.len());
+        for row in &report.unshipped_work {
+            println!(
+                "  {} {} on `{}` — {} commit{} ahead, age {} — `{}`",
+                "recover".yellow(),
+                row.spec_id.cyan(),
+                row.branch,
+                row.commits_ahead,
+                if row.commits_ahead == 1 { "" } else { "s" },
+                row.age,
+                row.recovery.cyan()
+            );
+        }
     }
 
     // FR-284 NOTIFY: before any reap decision, tell each finished-but-still-live

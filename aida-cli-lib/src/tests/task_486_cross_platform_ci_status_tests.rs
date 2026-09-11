@@ -89,3 +89,34 @@ fn unreachable_gh_reports_unknown_without_blocking_status_command() {
         .unwrap()
         .contains("cannot be confirmed"));
 }
+
+#[test]
+fn scheduled_failures_render_nightly_red_streak() {
+    let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+    let red = summarize_nightly_red_runs(
+        now,
+        Some(vec![
+            run("completed", Some("failure"), 6, 300, now),
+            run("completed", Some("failure"), 30, 299, now),
+            run("completed", Some("success"), 54, 298, now),
+        ]),
+    )
+    .expect("latest scheduled failure should render");
+
+    assert_eq!(red.run_id, Some(300));
+    assert_eq!(red.nights, 2);
+    assert!(red.summary.contains("cross-platform nightly red since"));
+    assert!(red.summary.contains("2026-05-21"));
+    assert!(red.summary.contains("run 300"));
+    assert!(red.summary.contains("2 nights"));
+}
+
+#[test]
+fn latest_scheduled_success_clears_nightly_red() {
+    let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+    assert!(summarize_nightly_red_runs(
+        now,
+        Some(vec![run("completed", Some("success"), 6, 301, now)])
+    )
+    .is_none());
+}
