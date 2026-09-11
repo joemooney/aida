@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:13.951309021Z
-modified_at: 2026-09-11T17:19:18.700928094Z
+modified_at: 2026-09-11T17:25:17.924393566Z
 req_type: Story
 tags:
 - backpressure
@@ -42,3 +42,6 @@ relationships:
   target_id: 01a09075-880b-78d2-8212-ccdcd835a588
   created_at: 2026-09-11T17:19:18.700923445Z
   created_by: joe
+deferred: true
+deferred_at: 2026-09-11T17:25:17.924393566Z
+deferred_until: sustained intake>merge over a real window (not this operator's burst pattern) — backpressure addresses continuous-load, which is not the current usage
