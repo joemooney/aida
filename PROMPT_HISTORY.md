@@ -4869,3 +4869,16 @@ the section-preserving `config_edit::set_kv`, not raw `[agents]`/`[drain]` appen
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib handle_pull_command_tests -- --nocapture`.
 Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1025 PR #1721 review fixes
+
+Addressed review findings on PR #1721. The shared project config reader no longer swallows invalid
+`.aida/config.toml` silently: parse failures now print the same file/line/fix diagnostic used by the
+pull hardening path before legacy defaulting callers continue. The block-allocation config reader now
+returns an error on malformed TOML, so `aida db block status` and auto-claim paths fail loudly instead
+of using defaults. Replaced the init telemetry opt-out raw append with `config_edit::set_kv`, which
+updates `[telemetry] enabled = false` section-aware and avoids duplicate table appends.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib block_allocation_reader_tests`;
+`cargo test -p aida-cli-lib append_telemetry_disabled`. Existing unrelated Rust warnings remain in
+the focused test output.

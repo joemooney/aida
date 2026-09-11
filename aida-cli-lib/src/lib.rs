@@ -15246,11 +15246,28 @@ fn parse_type(type_str: &str) -> Result<RequirementType> {
 
 /// Handle feature management subcommands
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
-/// when absent / unparseable (so a missing file just means "all defaults").
+/// only when absent (so a missing file just means "all defaults"). Parse errors
+/// are printed with file/line context before callers fall back, so malformed
+/// config is never silently treated as default config.
 /// trace:BUG-533 | ai:claude
 pub(crate) fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
-    let body = std::fs::read_to_string(config_path_for_project(project_root)).ok()?;
-    toml::from_str(&body).ok()
+    let path = config_path_for_project(project_root);
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            eprintln!("{}: failed to read AIDA config: {e}", path.display());
+            return None;
+        }
+    };
+    match toml::from_str(&body) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            // trace:BUG-1025 | ai:codex
+            eprintln!("{}", config_parse_error_message(&path, &body, &err));
+            None
+        }
+    }
 }
 
 /// Look up `[section].key` in a parsed config, returning the raw `toml::Value`
@@ -15789,7 +15806,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-            let alloc_cfg = read_block_allocation_config(&project_dir);
+            let alloc_cfg = read_block_allocation_config(&project_dir)?;
             if my_blocks.is_empty() {
                 // trace:TASK-449 | ai:claude — empty-blocks is the case where
                 // a user benefits most from knowing what their first claim
@@ -16397,16 +16414,21 @@ fn auto_allocate_block_inner(
 /// defaults when the file or section is absent.
 ///
 /// trace:TASK-281 | ai:claude
-fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::BlockAllocationConfig {
+fn read_block_allocation_config(
+    project_dir: &std::path::Path,
+) -> Result<aida_core::BlockAllocationConfig> {
     let config_path = project_dir.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&config_path) else {
-        return aida_core::BlockAllocationConfig::default();
+        return Ok(aida_core::BlockAllocationConfig::default());
     };
-    let Ok(value) = content.parse::<toml::Value>() else {
-        return aida_core::BlockAllocationConfig::default();
-    };
+    let value = content.parse::<toml::Value>().map_err(|err| {
+        anyhow::anyhow!(
+            "{}",
+            config_parse_error_message(&config_path, &content, &err)
+        )
+    })?;
     let Some(section) = value.get("block_allocation").and_then(|v| v.as_table()) else {
-        return aida_core::BlockAllocationConfig::default();
+        return Ok(aida_core::BlockAllocationConfig::default());
     };
 
     let mut cfg = aida_core::BlockAllocationConfig::default();
@@ -16433,7 +16455,7 @@ fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::Blo
         }
         cfg.per_type.insert(key.to_ascii_lowercase(), tcfg);
     }
-    cfg
+    Ok(cfg)
 }
 
 /// Human-readable one-liner describing the effective auto-claim policy
@@ -16535,7 +16557,7 @@ fn ensure_block_capacity(
 ) -> Result<Option<AutoClaimOutcome>> {
     use aida_core::BlockRegistry;
 
-    let cfg = read_block_allocation_config(project_dir);
+    let cfg = read_block_allocation_config(project_dir)?;
     let scope = read_id_counter_scope(project_dir);
 
     // Under Global scope the shared `*` block backs every type; check and
@@ -22424,28 +22446,18 @@ fn maybe_prompt_init_config(project_root: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// TASK-859: append a `[telemetry] enabled = false` block to the project's
-/// `.aida/config.toml`, opting out of the local usage trail. The config file
-/// already exists (the scaffold wrote it just before this prompt runs); we
-/// only append, never rewrite, so the rest of the scaffolded config is
-/// untouched. trace:TASK-859 | ai:claude
+/// TASK-859: write `[telemetry] enabled = false` to the project's
+/// `.aida/config.toml`, opting out of the local usage trail. Use the shared
+/// section-aware editor so existing sections are updated in place and duplicate
+/// `[telemetry]` blocks are never raw-appended.
+// trace:TASK-859 trace:BUG-1025 | ai:codex
 fn append_telemetry_disabled(config_path: &std::path::Path) -> Result<()> {
-    use std::io::Write as _;
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(config_path)
-        .with_context(|| format!("opening {}", config_path.display()))?;
-    write!(
-        f,
-        "\n# Usage telemetry opt-out (chosen at init, TASK-859 / STORY-122).\n\
-         # Local-only command-shape trail; never phoned home. Re-enable by\n\
-         # deleting this block or setting `enabled = true`.\n\
-         [telemetry]\n\
-         enabled = false\n"
+    crate::config_edit::set_kv(
+        config_path,
+        "telemetry",
+        "enabled",
+        toml_edit::Value::from(false),
     )
-    .with_context(|| format!("appending telemetry opt-out to {}", config_path.display()))?;
-    Ok(())
 }
 
 /// Write the global `~/.aida/agents.toml` recording the chosen permission

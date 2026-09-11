@@ -8,7 +8,7 @@ fn write_config(dir: &std::path::Path, body: &str) {
 #[test]
 fn read_block_allocation_config_returns_defaults_when_file_missing() {
     let tmp = tempfile::tempdir().unwrap();
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert!(cfg.is_enabled_for("BUG"));
     assert_eq!(cfg.threshold_for("BUG"), 20);
     assert_eq!(cfg.size_for("BUG"), 100);
@@ -21,7 +21,7 @@ fn read_block_allocation_config_returns_defaults_when_section_missing() {
         tmp.path(),
         "[id_format]\npolicy = \"blocks-then-fallback\"\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert!(cfg.is_enabled_for("BUG"));
     assert_eq!(cfg.threshold_for("TASK"), 20);
 }
@@ -30,7 +30,7 @@ fn read_block_allocation_config_returns_defaults_when_section_missing() {
 fn read_block_allocation_config_parses_global_opt_out() {
     let tmp = tempfile::tempdir().unwrap();
     write_config(tmp.path(), "[block_allocation]\nauto_claim = false\n");
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert!(!cfg.is_enabled_for("BUG"));
     assert!(!cfg.is_enabled_for("TASK"));
 }
@@ -44,7 +44,7 @@ fn read_block_allocation_config_parses_per_type_section() {
              [block_allocation.bug]\nauto_claim_threshold = 50\nauto_claim_size = 200\n\n\
              [block_allocation.story]\nauto_claim = false\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert!(cfg.is_enabled_for("BUG"));
     assert_eq!(cfg.threshold_for("BUG"), 50);
     assert_eq!(cfg.size_for("BUG"), 200);
@@ -55,12 +55,13 @@ fn read_block_allocation_config_parses_per_type_section() {
 }
 
 #[test]
-fn read_block_allocation_config_handles_malformed_toml_gracefully() {
+fn read_block_allocation_config_rejects_malformed_toml() {
     let tmp = tempfile::tempdir().unwrap();
     write_config(tmp.path(), "not [valid toml at all\n");
-    let cfg = read_block_allocation_config(tmp.path());
-    // Should not panic — falls back to defaults.
-    assert!(cfg.is_enabled_for("BUG"));
+    let err = read_block_allocation_config(tmp.path()).unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains(".aida/config.toml"), "{msg}");
+    assert!(msg.contains("failed to parse AIDA config"), "{msg}");
 }
 
 #[test]
@@ -70,7 +71,7 @@ fn read_block_allocation_config_ignores_negative_threshold() {
         tmp.path(),
         "[block_allocation.bug]\nauto_claim_threshold = -5\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(cfg.threshold_for("BUG"), 20);
 }
 
@@ -92,7 +93,7 @@ fn auto_claim_summary_marks_configured_when_threshold_overridden() {
         tmp.path(),
         "[block_allocation.bug]\nauto_claim_threshold = 50\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         auto_claim_summary(&cfg, "BUG"),
         "auto-claim: threshold 50, size 100 (configured)"
@@ -106,7 +107,7 @@ fn auto_claim_summary_marks_configured_when_size_overridden() {
         tmp.path(),
         "[block_allocation.bug]\nauto_claim_size = 250\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         auto_claim_summary(&cfg, "BUG"),
         "auto-claim: threshold 20, size 250 (configured)"
@@ -123,7 +124,7 @@ fn auto_claim_summary_no_configured_tag_when_only_auto_claim_bool_set() {
         "[block_allocation]\nauto_claim = true\n\n\
              [block_allocation.bug]\nauto_claim = true\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         auto_claim_summary(&cfg, "BUG"),
         "auto-claim: threshold 20, size 100"
@@ -134,7 +135,7 @@ fn auto_claim_summary_no_configured_tag_when_only_auto_claim_bool_set() {
 fn auto_claim_summary_reports_global_opt_out() {
     let tmp = tempfile::tempdir().unwrap();
     write_config(tmp.path(), "[block_allocation]\nauto_claim = false\n");
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         auto_claim_summary(&cfg, "BUG"),
         "auto-claim: off (global opt-out)"
@@ -153,7 +154,7 @@ fn auto_claim_summary_reports_per_type_opt_out() {
         "[block_allocation]\nauto_claim = true\n\n\
              [block_allocation.story]\nauto_claim = false\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         auto_claim_summary(&cfg, "STORY"),
         "auto-claim: off (per-type opt-out)"
@@ -181,7 +182,7 @@ fn global_auto_claim_summary_shows_built_in_defaults_when_no_config() {
 fn global_auto_claim_summary_reports_global_opt_out() {
     let tmp = tempfile::tempdir().unwrap();
     write_config(tmp.path(), "[block_allocation]\nauto_claim = false\n");
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         global_auto_claim_summary(&cfg),
         "auto-claim: off (global opt-out)"
@@ -197,7 +198,7 @@ fn global_auto_claim_summary_surfaces_per_type_re_enable() {
         tmp.path(),
         "[block_allocation]\nauto_claim = false\n\n[block_allocation.bug]\nauto_claim = true\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         global_auto_claim_summary(&cfg),
         "auto-claim: off globally (re-enabled per-type)"
@@ -215,7 +216,7 @@ fn global_auto_claim_summary_picks_up_star_override() {
         tmp.path(),
         "[block_allocation.\"*\"]\nauto_claim_threshold = 30\nauto_claim_size = 250\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         global_auto_claim_summary(&cfg),
         "auto-claim: threshold 30, size 250 (configured)"
@@ -233,7 +234,7 @@ fn global_auto_claim_summary_tags_configured_for_any_per_type_section() {
         tmp.path(),
         "[block_allocation.bug]\nauto_claim_threshold = 50\n",
     );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         global_auto_claim_summary(&cfg),
         "auto-claim: threshold 20, size 100 (configured)"
@@ -250,7 +251,7 @@ fn auto_claim_summary_per_type_re_enable_wins_over_global_off() {
             "[block_allocation]\nauto_claim = false\n\n\
              [block_allocation.bug]\nauto_claim = true\nauto_claim_threshold = 10\nauto_claim_size = 50\n",
         );
-    let cfg = read_block_allocation_config(tmp.path());
+    let cfg = read_block_allocation_config(tmp.path()).unwrap();
     assert_eq!(
         auto_claim_summary(&cfg, "BUG"),
         "auto-claim: threshold 10, size 50 (configured)"
