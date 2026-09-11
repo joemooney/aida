@@ -13,3 +13,10 @@
   added_at: 2026-09-11T13:09:14.661417252Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-product-1
+  requirement_id: 01a0854a-be91-7e12-85fb-59d8aad4d176
+  position: 3000
+  added_by: claude-product-1
+  note: Promoted from finding TASK-1-129 via `aida findings promote`
+  added_at: 2026-09-11T16:22:27.369979318Z
+  for_role: implementer
