@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:52:12.377260948Z
+modified_at: 2026-09-11T14:00:04.777314689Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -60,6 +60,22 @@ comments:
   created_at: 2026-09-11T13:41:47.520775080Z
   modified_at: 2026-09-11T13:41:47.520775080Z
   session_id: 01a090ab-f06c-7fa3-97f2-b63b9af523bc
+- id: 01a090c4-b1a9-7e93-becc-bb988f7160d3
+  author: joe
+  content: |-
+    Cross-platform run 34605707196 on bug-1021 @ ceb471f45: macOS GREEN. Windows: 6 failures in aida-core, newly visible because cargo test without --no-fail-fast stops at the first failing test binary (aida-cli-lib now passes, so aida-core's binary runs).
+
+    1. db::cache::tests::foreign_writer_holds_lock_only_for_live_foreign_pid (cache.rs:3995) and worktree_pool::tests::heal_state_clears_dead_owner_keeps_lease (worktree_pool.rs:759, left: Some(2147483647)): the pid-liveness probe on Windows reports the i32::MAX sentinel pid as alive. Use OpenProcess/GetExitCodeProcess (or sysinfo) on Windows, or treat pid > u32-range/sentinel as dead.
+    2. git_ops::tests::test_restore_stranded_autostash_returns_worktree_to_pre_pull_state (git_ops.rs:3499): left "one\r\ndirty edit\r\n" — CRLF from the runner's core.autocrlf. Compare with line endings normalized, or set core.autocrlf=false in the test repo init.
+    3. worktree_pool::git_integration_tests::heal_state_self_heals_acquire_after_owner_exit (worktree_pool.rs:1130): 8.3 short path C:\Users\RUNNER~1\... vs long path — canonicalize both sides (same class as the previous round).
+    4. worktree_pool_destroy::git_integration_tests::destroy_disposable_removes_and_runs_pre_destroy_hook and teardown_path_runs_hook_removes_and_deregisters (worktree_pool_destroy.rs:477/560): the pre_destroy hook is a .sh script; Windows cannot exec it. Either run hooks through sh when available and gate these two tests #[cfg(unix)], or write a .cmd/.bat hook in the Windows test.
+
+    Also in this PR: change cross-platform.yml (and ci.yml) to cargo test --workspace --no-fail-fast so one run shows every failure across crates.
+
+    IMPLEMENTER: push the fixups to bug-1021 and END YOUR SESSION. Do NOT dispatch or wait on cross-platform.yml — waiting in silence trips the 10-minute watchdog (that is what killed the previous two attempts). The product session dispatches and watches the verification run.
+  created_at: 2026-09-11T14:00:04.777314689Z
+  modified_at: 2026-09-11T14:00:04.777314689Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 failure_reason:
   phase: implementer
