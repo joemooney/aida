@@ -53806,5 +53806,28 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4473
+- id: 01a08ee4-396a-7ac0-bbf8-b78cc445f7dd
+  target_id: 01a08ee4-030a-77c0-a47c-fe12e518df10
+  author: aida
+  node_id: '1'
+  lamport: 4474
+  timestamp: 2026-09-11T05:15:16.714188261Z
+  kind: !Create
+    title: 'aida commands: flat, grep-able listing of every command and subcommand from clap''s own tree'
+    description: |-
+      ## Why
+      Operator (2026-09-10): "I would like an aida help commands or something like that which would list all the commands/subcommands so that I can easily grep for something." Nested --help cannot be grepped. A recursive walk of --help on 2026-09-10 found 302 command nodes; done as subprocesses it takes minutes, from clap's Command tree at runtime it is milliseconds and always current.
+
+      ## Acceptance
+      1. aida commands prints one line per command node, depth-first, as the exact invocation followed by its one-line about text: "aida queue work    Pick and drive the next item ...". Leaves and intermediate nodes both appear (an intermediate node's line is how you discover its children). help subcommands are omitted.
+      2. --flags appends each node's long options (name only, no value placeholders) after the summary, so grep -- '--dry-run' finds every command that takes it.
+      3. --json emits [{path:[...], about, flags:[{name, takes_value, help}], hidden}] for tooling; --hidden includes clap-hidden commands and flags (default excludes them).
+      4. aida help commands is an alias for the same output.
+      5. Built from the clap Command tree (Command::get_subcommands / get_arguments) with no subprocess spawns; under 50 ms cold.
+      6. Golden test asserting the listing contains every top-level subcommand from aida --help and that adding a subcommand without an about string fails the test (forces a summary on every node).
+      7. README "CLI reference" and docs/cli/ index point at aida commands as the grep surface; the flag-vs-subcommand cleanup story uses --json as its inventory.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4474
 node_id: '1'
