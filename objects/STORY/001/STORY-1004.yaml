@@ -3,12 +3,12 @@ spec_id: STORY-1004
 agreed_id: STORY-1004
 title: 'aida report: compose a paste-ready bug report to stdout (email transport deferred)'
 description: 'Operator re-scope (2026-09-09): slice 1 is the COMPOSER + LOCAL FILING, no email transport. aida report [bug|idea] --title "..." (description from --description, stdin, or $EDITOR at a TTY) does two things: (1) PRINTS a paste-ready report to stdout — first line Subject: aida: <title> (matching the home-side retrieval convention), then the structured body: title, description, aida version + build SHA, project name, effective agent profile (vendor/enabled), OS; the operator pastes it into their mail client by hand; --copy also puts it on the clipboard (ultraplan mechanism). (2) FILES the same report as a spec in the CURRENT project''s own store: aida add --type bug --title "AIDA: <title>" with the body as description, tagged upstream:aida and observed-version:<aida version> — formalizing the operator''s existing local practice (their BUG-018/BUG-032). RESOLUTION RECHECK: aida report --recheck lists open AIDA:-prefixed / upstream:aida specs with observed version vs the currently installed aida version, flagging those observed on an OLDER version as re-test candidates after an upgrade; additionally the first store-reading command after an aida version change prints a one-line notice when such specs exist (N upstream aida reports predate this binary — aida report --recheck). --no-file skips the local spec for one-off sends. No transport, no config, no secrets in this slice; email transport + outbox stay SLICE 2, deferred until manual pasting becomes friction. Acceptance: command prints subject+body with all context fields; a spec titled AIDA: <title> with upstream:aida + observed-version tags exists in the local store afterward; --recheck lists it with observed vs current version and drops it when the spec closes; the post-upgrade one-line notice fires exactly once per version change; --no-file skips filing; plain text, no ANSI when piped; unit tests on composer format, tags, and recheck filtering.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:17:22.124798775Z
-modified_at: 2026-09-11T04:13:03.594649322Z
+modified_at: 2026-09-11T04:48:34.585905974Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -32,26 +32,30 @@ comments:
   created_at: 2026-09-11T02:15:46.227133268Z
   modified_at: 2026-09-11T02:15:46.227133268Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a08ecb-c712-7010-a707-1ebb95a7a43f
+  author: aida-auto-bump
+  timestamp: 2026-09-11T04:48:34.578729966Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a08ecb-c719-7700-b78a-f27c380f935c
+  timestamp: 2026-09-11T04:48:34.585904752Z
+  agent: aida
+  commit_sha: e217bb776d430345d76d0334a61ea002ffc783c1
+  summary: Completed via merge e217bb77
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1718 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md Recover with: aida pr rebase 1718 # clean rebase + force-push-with-lease aida pr rebase 1718 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: could not push implementer branch `story-1004` from `/home/joe/ai/aida-story-1004` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git ! [rejected] HEAD -> story-1004 (non-fast-forward) error: failed to push some refs to ''https://github.com/joemooney/aida.git'' hint: Updates were rejected because the tip of your current branch is behind hint: its remote counterpart. If you want to integrate the remote changes, hint: use ''git pull'' before pushing again. hint: See the ''Note about fast-forwards'' in ''git push --help'' for details. (attempt 2/2)'
+  - 'punted: PR-1718 base is 2 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1718 # clean rebase + force-push-with-lease aida pr rebase 1718 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1718 base is 3 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1718 # clean rebase + force-push-with-lease aida pr rebase 1718 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-10T09:47:30.249944740Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: |-
-    PR-1718 base is 3 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code.
-
-    Overlapping files:
-      PROMPT_HISTORY.md
-      aida-cli-lib/src/lib.rs
-
-    Recover with:
-      aida pr rebase 1718              # clean rebase + force-push-with-lease
-      aida pr rebase 1718 --interactive  # if conflicts need manual resolve
-
-    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1004 --work`'
-  shelved_at: 2026-09-11T04:13:03.594649322Z
+  completed_at: 2026-09-11T04:48:33.927313311Z
+  completion_sha: e217bb776d430345d76d0334a61ea002ffc783c1
