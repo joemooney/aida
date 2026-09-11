@@ -547,6 +547,153 @@ pub(crate) fn queue_json_rows(
         .collect()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueDestinationDetails {
+    pub(crate) identity: String,
+    pub(crate) queue: String,
+    pub(crate) routed_role: String,
+    pub(crate) observe_command: String,
+    pub(crate) pickup_command: String,
+}
+
+fn shell_arg(raw: &str) -> String {
+    if raw
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/' | '='))
+    {
+        raw.to_string()
+    } else {
+        format!("'{}'", raw.replace('\'', "'\\''"))
+    }
+}
+
+// trace:STORY-1002 | ai:codex
+pub(crate) fn queue_destination_details(
+    spec_id: &str,
+    user_id: &str,
+    queue_kind: &str,
+    role: Option<&str>,
+    pickup_available: bool,
+) -> QueueDestinationDetails {
+    let routed_role = match role.filter(|r| !r.trim().is_empty()) {
+        Some(role) if role.eq_ignore_ascii_case("all") => "all".to_string(),
+        Some(role) => canonical_role_name(role),
+        None => "any".to_string(),
+    };
+    let observe_role = shell_arg(&routed_role);
+    let observe_command = if queue_kind == "global-role" {
+        format!("aida queue list --global --for {observe_role}")
+    } else if routed_role == "all" {
+        format!("aida queue list --user {} --all", shell_arg(user_id))
+    } else {
+        format!(
+            "aida queue list --user {} --for {observe_role}",
+            shell_arg(user_id)
+        )
+    };
+    let pickup_command = if pickup_available {
+        let mut cmd = format!("aida queue work {}", shell_arg(spec_id));
+        if queue_kind != "global-role" {
+            cmd.push_str(&format!(" --user {}", shell_arg(user_id)));
+        }
+        if routed_role != "any" && routed_role != "all" {
+            cmd.push_str(&format!(" --role {}", shell_arg(&routed_role)));
+        }
+        cmd
+    } else {
+        "n/a (entry removed from queue)".to_string()
+    };
+    QueueDestinationDetails {
+        identity: user_id.to_string(),
+        queue: queue_kind.to_string(),
+        routed_role,
+        observe_command,
+        pickup_command,
+    }
+}
+
+// trace:STORY-1002 | ai:codex
+pub(crate) fn queue_mutation_destination_json(
+    action: &str,
+    spec_id: &str,
+    title: Option<&str>,
+    details: &QueueDestinationDetails,
+) -> serde_json::Value {
+    serde_json::json!({
+        "action": action,
+        "spec_id": spec_id,
+        "title": title,
+        "destination": {
+            "identity": details.identity,
+            "queue": details.queue,
+            "routed_role": details.routed_role,
+            "observe_command": details.observe_command,
+            "pickup_command": details.pickup_command,
+        }
+    })
+}
+
+// trace:STORY-1002 | ai:codex
+pub(crate) fn queue_mutation_destination_human(
+    summary: &str,
+    details: &QueueDestinationDetails,
+) -> String {
+    [
+        summary.to_string(),
+        "  Destination:".to_string(),
+        format!("    identity: {}", details.identity),
+        format!("    queue: {}", details.queue),
+        format!("    routed role: {}", details.routed_role),
+        format!("    observe: {}", details.observe_command),
+        format!("    pickup: {}", details.pickup_command),
+    ]
+    .join("\n")
+}
+
+// trace:STORY-1002 | ai:codex
+fn print_queue_mutation_destination(
+    action: &str,
+    spec_id: &str,
+    title: Option<&str>,
+    summary: &str,
+    details: &QueueDestinationDetails,
+) -> Result<()> {
+    if output_format_is_json() {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&queue_mutation_destination_json(
+                action, spec_id, title, details
+            ))?
+        );
+        return Ok(());
+    }
+    if matches!(output_format_override(), Some(OutputFormat::Toon)) {
+        println!("{}", crate::toon::scalar("action", action));
+        println!("{}", crate::toon::scalar("spec_id", spec_id));
+        if let Some(title) = title {
+            println!("{}", crate::toon::scalar("title", title));
+        }
+        println!("{}", crate::toon::scalar("identity", &details.identity));
+        println!("{}", crate::toon::scalar("queue", &details.queue));
+        println!(
+            "{}",
+            crate::toon::scalar("routed_role", &details.routed_role)
+        );
+        println!(
+            "{}",
+            crate::toon::scalar("observe_command", &details.observe_command)
+        );
+        println!(
+            "{}",
+            crate::toon::scalar("pickup_command", &details.pickup_command)
+        );
+        return Ok(());
+    }
+
+    println!("{}", queue_mutation_destination_human(summary, details));
+    Ok(())
+}
+
 /// STORY-672: render the fleet-wide `aida queue list --all-users` view.
 ///
 /// Aggregates every user's queue (enumerated via `storage.queue_users()`),
@@ -2695,7 +2842,7 @@ pub(crate) fn handle_queue_command(
                 // existing edit/show/comment events.
                 // trace:BUG-65 | ai:claude
                 record_role_activity(spec_id, "queue-add");
-                println!(
+                let summary = format!(
                     "{} Added {} ({}) to {} {}",
                     crate::glyph(crate::glyphs::Glyph::Check).green(),
                     display_id.bold(),
@@ -2703,6 +2850,20 @@ pub(crate) fn handle_queue_command(
                     "global queue".cyan(),
                     format!("[role:{}, origin:{}]", role, project_name).dimmed()
                 );
+                let details = queue_destination_details(
+                    display_id,
+                    &format!("role:{role}"),
+                    "global-role",
+                    Some(&role),
+                    true,
+                );
+                print_queue_mutation_destination(
+                    "add",
+                    display_id,
+                    Some(&req.title),
+                    &summary,
+                    &details,
+                )?;
                 return Ok(());
             }
 
@@ -2775,13 +2936,22 @@ pub(crate) fn handle_queue_command(
                     .cyan()
                     .to_string()
             };
-            println!(
+            let summary = format!(
                 "{} Added {} ({}) to queue{}",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display_id.bold(),
                 req.title,
                 routing
             );
+            let details =
+                queue_destination_details(display_id, &user_id, "local", r#for.as_deref(), true);
+            print_queue_mutation_destination(
+                "add",
+                display_id,
+                Some(&req.title),
+                &summary,
+                &details,
+            )?;
         }
         QueueCommand::Remove {
             id,
@@ -2845,13 +3015,27 @@ pub(crate) fn handle_queue_command(
                         .as_deref()
                         .or(target.spec_id.as_deref())
                         .unwrap_or("???");
-                    println!(
+                    let summary = format!(
                         "{} Removed {} from global queue [role:{}, origin:{}]",
                         crate::glyph(crate::glyphs::Glyph::Check).green(),
                         display_id.bold(),
                         role,
                         target.project_name
                     );
+                    let details = queue_destination_details(
+                        display_id,
+                        &format!("role:{role}"),
+                        "global-role",
+                        Some(&role),
+                        false,
+                    );
+                    print_queue_mutation_destination(
+                        "remove",
+                        display_id,
+                        target.title.as_deref(),
+                        &summary,
+                        &details,
+                    )?;
                 }
                 return Ok(());
             }
@@ -2875,6 +3059,19 @@ pub(crate) fn handle_queue_command(
                 None | Some("any") => None,
                 Some(role) => Some(canonical_role_name(role)),
             };
+            let existing_roles: Vec<String> = storage
+                .queue_list(&user_id, true)?
+                .iter()
+                .filter(|entry| entry.requirement_id == req.id)
+                .map(|entry| {
+                    entry
+                        .for_role
+                        .as_deref()
+                        .filter(|role| !role.trim().is_empty())
+                        .map(canonical_role_name)
+                        .unwrap_or_else(|| "any".to_string())
+                })
+                .collect();
             storage.queue_remove_for_role(&user_id, &req.id, remove_role.as_deref())?;
             // BUG-81: short id when present. trace:BUG-81 | ai:claude
             let display_id = req
@@ -2882,19 +3079,41 @@ pub(crate) fn handle_queue_command(
                 .as_deref()
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
-            match remove_role.as_deref() {
-                Some(role) => println!(
+            let role_for_destination =
+                remove_role
+                    .as_deref()
+                    .or_else(|| match existing_roles.as_slice() {
+                        [single] => Some(single.as_str()),
+                        [] => None,
+                        _ => Some("all"),
+                    });
+            let summary = match remove_role.as_deref() {
+                Some(role) => format!(
                     "{} Removed {} from queue [role:{}]",
                     crate::glyph(crate::glyphs::Glyph::Check).green(),
                     display_id.bold(),
                     role
                 ),
-                None => println!(
+                None => format!(
                     "{} Removed {} from queue",
                     crate::glyph(crate::glyphs::Glyph::Check).green(),
                     display_id.bold()
                 ),
-            }
+            };
+            let details = queue_destination_details(
+                display_id,
+                &user_id,
+                "local",
+                role_for_destination,
+                false,
+            );
+            print_queue_mutation_destination(
+                "remove",
+                display_id,
+                Some(&req.title),
+                &summary,
+                &details,
+            )?;
         }
         QueueCommand::Move {
             id,
@@ -2919,6 +3138,11 @@ pub(crate) fn handle_queue_command(
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let mut entries = storage.queue_list(&user_id, true)?;
+            let current_entry_role = entries
+                .iter()
+                .find(|entry| entry.requirement_id == req.id)
+                .and_then(|entry| entry.for_role.as_deref())
+                .map(canonical_role_name);
             // BUG-249: the relative paths (--top/--bottom/--before/--after)
             // never checked the target side — queue_reorder silently
             // no-ops when the target isn't in the queue file, so the
@@ -2988,7 +3212,7 @@ pub(crate) fn handle_queue_command(
                     .or(req.spec_id.as_deref())
                     .unwrap_or("???");
                 if *requested != slot {
-                    println!(
+                    let summary = format!(
                         "{} Moved {} to slot {} — --to {} is out of range (queue has {} item{})",
                         crate::glyph(crate::glyphs::Glyph::Check).green(),
                         display_id.bold(),
@@ -2997,13 +3221,41 @@ pub(crate) fn handle_queue_command(
                         ids.len(),
                         if ids.len() == 1 { "" } else { "s" },
                     );
+                    let details = queue_destination_details(
+                        display_id,
+                        &user_id,
+                        "local",
+                        current_entry_role.as_deref(),
+                        true,
+                    );
+                    print_queue_mutation_destination(
+                        "move",
+                        display_id,
+                        Some(&req.title),
+                        &summary,
+                        &details,
+                    )?;
                 } else {
-                    println!(
+                    let summary = format!(
                         "{} Moved {} to slot {} in queue",
                         crate::glyph(crate::glyphs::Glyph::Check).green(),
                         display_id.bold(),
                         slot,
                     );
+                    let details = queue_destination_details(
+                        display_id,
+                        &user_id,
+                        "local",
+                        current_entry_role.as_deref(),
+                        true,
+                    );
+                    print_queue_mutation_destination(
+                        "move",
+                        display_id,
+                        Some(&req.title),
+                        &summary,
+                        &details,
+                    )?;
                 }
                 return Ok(());
             }
@@ -3102,11 +3354,25 @@ pub(crate) fn handle_queue_command(
                 .as_deref()
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
-            println!(
+            let summary = format!(
                 "{} Moved {} in queue",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 display_id.bold()
             );
+            let details = queue_destination_details(
+                display_id,
+                &user_id,
+                "local",
+                current_entry_role.as_deref(),
+                true,
+            );
+            print_queue_mutation_destination(
+                "move",
+                display_id,
+                Some(&req.title),
+                &summary,
+                &details,
+            )?;
         }
         // trace:STORY-566 | ai:claude
         QueueCommand::Advance { id, yes, user } => {
@@ -6003,13 +6269,21 @@ pub(crate) fn handle_queue_rework(
         Some(r) => format!(" [for:{}]", r).cyan().to_string(),
         None => String::new(),
     };
-    println!(
+    let summary = format!(
         "{} Queued {} ({}){}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
         display_id.bold(),
         title,
         routing
     );
+    let details = queue_destination_details(
+        &display_id,
+        &user_id,
+        "local",
+        for_role_resolved.as_deref(),
+        true,
+    );
+    print_queue_mutation_destination("rework", &display_id, Some(&title), &summary, &details)?;
 
     // Optional --work chain. We don't run this in a sub-process — call
     // `handle_queue_work` directly with the same storage handle so any
@@ -6067,8 +6341,8 @@ pub(crate) fn handle_queue_rework(
         println!(
             "  ({})",
             format!(
-                "run `aida queue work {}` to start a session for this spec",
-                display_id
+                "run `{}` to start a session for this spec",
+                details.pickup_command
             )
             .dimmed()
         );

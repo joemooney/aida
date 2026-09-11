@@ -348,3 +348,120 @@ fn rework_tail_keeps_append_semantics() {
     assert_eq!(entries[1].position, 3000);
     assert_eq!(entries[1].for_role.as_deref(), Some("implementer"));
 }
+
+#[test]
+fn queue_destination_contract_names_local_role_queue() {
+    // trace:STORY-1002 | ai:codex
+    let details = queue_destination_details(
+        "STORY-1002",
+        "role:implementer",
+        "local",
+        Some("implementer"),
+        true,
+    );
+
+    assert_eq!(details.identity, "role:implementer");
+    assert_eq!(details.queue, "local");
+    assert_eq!(details.routed_role, "implementer");
+    assert_eq!(
+        details.observe_command,
+        "aida queue list --user role:implementer --for implementer"
+    );
+    assert_eq!(
+        details.pickup_command,
+        "aida queue work STORY-1002 --user role:implementer --role implementer"
+    );
+}
+
+#[test]
+fn queue_destination_contract_names_removed_entry() {
+    // trace:STORY-1002 | ai:codex
+    let details = queue_destination_details("TASK-1", "joe", "local", Some("reviewer"), false);
+
+    assert_eq!(details.identity, "joe");
+    assert_eq!(details.queue, "local");
+    assert_eq!(details.routed_role, "reviewer");
+    assert_eq!(
+        details.observe_command,
+        "aida queue list --user joe --for reviewer"
+    );
+    assert_eq!(details.pickup_command, "n/a (entry removed from queue)");
+}
+
+#[test]
+fn queue_destination_contract_names_all_role_destination() {
+    // trace:STORY-1002 | ai:codex
+    let details = queue_destination_details("TASK-1", "joe", "local", Some("all"), false);
+
+    assert_eq!(details.routed_role, "all");
+    assert_eq!(details.observe_command, "aida queue list --user joe --all");
+    assert_eq!(details.pickup_command, "n/a (entry removed from queue)");
+}
+
+#[test]
+fn queue_destination_contract_names_global_role_queue() {
+    // trace:STORY-1002 | ai:codex
+    let details = queue_destination_details(
+        "BUG-915",
+        "role:implementer",
+        "global-role",
+        Some("implementer"),
+        true,
+    );
+
+    assert_eq!(details.identity, "role:implementer");
+    assert_eq!(details.queue, "global-role");
+    assert_eq!(details.routed_role, "implementer");
+    assert_eq!(
+        details.observe_command,
+        "aida queue list --global --for implementer"
+    );
+    assert_eq!(
+        details.pickup_command,
+        "aida queue work BUG-915 --role implementer"
+    );
+}
+
+#[test]
+fn queue_destination_contract_renders_human_block() {
+    // trace:STORY-1002 | ai:codex
+    let details = queue_destination_details(
+        "STORY-1002",
+        "role:implementer",
+        "local",
+        Some("implementer"),
+        true,
+    );
+    let rendered = queue_mutation_destination_human("Added STORY-1002", &details);
+
+    assert!(rendered.contains("Destination:"));
+    assert!(rendered.contains("identity: role:implementer"));
+    assert!(rendered.contains("queue: local"));
+    assert!(rendered.contains("routed role: implementer"));
+    assert!(rendered.contains("observe: aida queue list --user role:implementer --for implementer"));
+    assert!(rendered
+        .contains("pickup: aida queue work STORY-1002 --user role:implementer --role implementer"));
+}
+
+#[test]
+fn queue_destination_contract_renders_json_fields() {
+    // trace:STORY-1002 | ai:codex
+    let details = queue_destination_details("STORY-1002", "joe", "local", Some("reviewer"), true);
+    let rendered =
+        queue_mutation_destination_json("move", "STORY-1002", Some("Queue output"), &details);
+
+    assert_eq!(rendered["action"], "move");
+    assert_eq!(rendered["spec_id"], "STORY-1002");
+    assert_eq!(rendered["title"], "Queue output");
+    assert_eq!(rendered["destination"]["identity"], "joe");
+    assert_eq!(rendered["destination"]["queue"], "local");
+    assert_eq!(rendered["destination"]["routed_role"], "reviewer");
+    assert_eq!(
+        rendered["destination"]["observe_command"],
+        "aida queue list --user joe --for reviewer"
+    );
+    assert_eq!(
+        rendered["destination"]["pickup_command"],
+        "aida queue work STORY-1002 --user joe --role reviewer"
+    );
+}
