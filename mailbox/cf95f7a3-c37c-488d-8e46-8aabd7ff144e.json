@@ -1,0 +1,15 @@
+{
+  "id": "cf95f7a3-c37c-488d-8e46-8aabd7ff144e",
+  "thread_id": "cf95f7a3-c37c-488d-8e46-8aabd7ff144e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789161810188,
+  "body": "Update on (3): triaged STORY-1043's ci-red immediately — it was a one-line TZ-dependent test (hardcoded local date failing on UTC runner), not a design fork. Fixed 02aa0f945, requeued for re-drive. TASK-1211 likewise: stale-base rebase + two Message initializers missing the new archived field, fixed e0425249e, requeued. Full rework tail is now back in the queue: 1205, 1211, 1043, plus BUG-1074 ordered ahead of the 1028 retry. Only 1041 stays out (guided).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
