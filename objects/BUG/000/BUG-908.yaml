@@ -19,12 +19,12 @@ description: |-
 
   ## Related
   STORY-975 (retry), BUG-909 (Codex silence; the first trigger), STORY-974 (typed causes), STORY-993 (victim; work salvaged by hand as commits 69223684b and e28c214ee on story-993).
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:41:07.999388001Z
-modified_at: 2026-09-11T16:51:59.855734360Z
+modified_at: 2026-09-11T17:14:03.172297129Z
 req_type: Bug
 tags:
 - drain
