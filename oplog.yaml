@@ -54321,5 +54321,17 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4497
+- id: 01a08f7a-63c4-79e0-a646-617619afeedb
+  target_id: 01a08f7a-5fcb-78a2-8429-a3a4d9e74e7c
+  author: aida
+  node_id: '1'
+  lamport: 4498
+  timestamp: 2026-09-11T07:59:17.956711924Z
+  kind: !Create
+    title: 'integrate --run: propagate headless mode to member re-drives and optionally wait on in-flight CI'
+    description: 'Maiden-night findings on the merge queue (2026-09-11): (1) HEADLESS PASSTHROUGH — integrate --run re-drives a member''s remaining phases via aida do, which errors ''needs a terminal for the interactive implementer'' in a headless invocation; the loop must run members with --no-human=both when integrate itself is headless (and inherit the interactive mode at a TTY). Four consecutive passes parked every member on this. (2) CI WAIT — a member whose CI is still running is skipped for the whole pass; add --wait-ci (default on for --run) that blocks on the member''s in-flight CI (bounded by the phase ceiling) instead of skipping, so a single --run converges without an external retry loop. Acceptance: headless integrate --run merges a green Done-with-PR member end-to-end with no TTY error; a member with in-flight CI is waited on and merged in the same pass; parked reasons unchanged for genuine failures.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4498
 node_id: '1'
