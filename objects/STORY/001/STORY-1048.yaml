@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:13:37.074808526Z
-modified_at: 2026-09-11T17:13:37.074808526Z
+modified_at: 2026-09-11T17:13:48.108493489Z
 req_type: Story
 tags:
 - from-product
@@ -36,3 +36,7 @@ relationships:
 - rel_type: Child
   target_id: 019ec824-8b71-7b73-a74a-27b973fb441f
   created_at: 2026-09-11T17:13:42.615506815Z
+- rel_type: References
+  target_id: 01a09171-c05d-7ca2-ae67-629b564615fc
+  created_at: 2026-09-11T17:13:48.108486356Z
+  created_by: joe
