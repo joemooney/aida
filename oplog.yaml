@@ -57429,5 +57429,31 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 4659
+- id: 01a090ed-df64-74b0-a7e2-4e8ef46c773c
+  target_id: 01a090ed-db69-7f32-b1d7-0115bdc79970
+  author: aida
+  node_id: '1'
+  lamport: 4660
+  timestamp: 2026-09-11T14:45:03.460790737Z
+  kind: !Create
+    title: 'CLI-manual drift guard: attribute cited flags to the exact command path (not the chapter''s top-level parent) and fix the 25 real citations that resolve nowhere'
+    description: |-
+      ## Why
+      docs/cli/verify-manual.py step 2 ("flag accuracy", advisory) checks each cited --flag against the --help of the chapter's TOP-LEVEL command only (help_text(cmd) where cmd is the chapter token). Any flag that belongs to a subcommand warns: --dry-run under aida advisor is really aida advisor watch --dry-run. On 2026-09-11 the step printed 101 WARN lines; walking the real help tree under each cited parent (depth 3) classifies them as 76 guard false-positives and 25 citations that exist nowhere under the parent.
+
+      ## Acceptance
+      1. verify-manual.py resolves a cited flag against the FULL command path written in the manual (parse the fenced/inline `aida a b c --flag` form and check `aida a b c --help`), falling back to the union of --help texts of the parent's whole subtree. Once STORY-1027 lands, read the tree from `aida commands --json --flags` in one call instead of N subprocesses.
+      2. Explicit cross-references are allowed and silent when the cited command exists: a chapter for aida autonomy may cite `aida queue work --no-human`; the check attributes to queue work, not autonomy.
+      3. The 25 real drifts are fixed in docs/cli/*.md (rewrite to the real command/flag, or delete). Verified nonexistent under the cited parent on 2026-09-11:
+         autonomy: --auto-complete --batch --contained --die-with-parent --epic --no-human --queue-empty --settings (mostly queue work / goal cross-refs written without the command; --die-with-parent/--settings/--contained need checking against the real flag set)
+         cache --centralized (an init flag) · defer --blocked-by · deps --batch --epic · doctor --repair (real flag is --heal) · feature --feature --tags --type (add's flags) · mailbox --notify (brief's flag) · metrics --failures --health (usage's flags) · release --skip-docs-check (real: --skip-xplat-check?) · review --auto-complete (queue work's) · type --type · undefer --all --deferred --until (list/defer flags)
+      4. After the fix the step prints "OK flags"; then flip it from advisory WARN to a hard fail so it cannot silently regrow (keep an allowlist file for deliberate cross-refs the parser cannot attribute).
+      5. Evidence: the CI step output before/after in the PR.
+
+      ## Related
+      STORY-1027 (aida commands), STORY-1028 (flag renames will churn these citations — land this guard fix first or in the same window so the sweep is checked by the guard), TASK-1206 (sibling CI hygiene).
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 4660
 node_id: '1'
