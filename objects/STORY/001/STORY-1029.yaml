@@ -1,0 +1,44 @@
+id: 01a08ee4-6120-7e82-929b-34f62cf53340
+spec_id: STORY-1029
+agreed_id: STORY-1029
+title: 'aida notify: rule-gated operator alerts through one configured shell command (idle-with-open-work, shelve, escalation)'
+description: |-
+  ## Why
+  Operator (2026-09-10): when the drain cannot make progress and the open list is not empty, alert the project owner; rules govern when. Decision: keep it simple — no mail client inside aida. One channel: a shell command from config, fed the message on stdin. mail, msmtp, notify-send, curl to ntfy/Slack — whatever the operator already has. Nothing pushes to a human today; the signals already exist in .aida/events.jsonl (QueueDrained, SpecShelved, AdvisorEscalated, PuntFiled, SpecRetried) and in aida awaiting --json.
+
+  ## Config
+  [notify]
+  command = "mail -s 'aida: {title}' joe@example.com"   # required to enable; unset = notify is off
+  min_interval = "30m"      # per rule; suppress repeats
+  quiet_hours = "23:00-07:00"   # optional; local time; queued, delivered after
+  [notify.rules]
+  idle_with_work = true     # no live drain/lease AND (queue empty with Approved specs remaining, or NeedsAttention > 0, or escalations > 0)
+  shelved = true            # SpecShelved
+  escalated = true          # AdvisorEscalated / punt escalated-to-human
+  drain_exit = "nonzero"    # off | always | nonzero
+
+  ## Acceptance
+  1. aida notify check evaluates the rules against events since .aida/notify-highwater (plus the idle predicate from the cache) and runs the command once per fired rule with a plain-text message on stdin: rule name, spec ids and titles, the drain id, the one recovery command (aida awaiting / aida why <id>), and local timestamps. {title} and {rule} placeholders substitute in the command string; the message never goes through a shell-interpolated argument.
+  2. Called automatically at the drain's exit path, from aida session reap, and from aida watch; aida notify check is also safe to run from cron. Dedupe by high-water mark and min_interval so a flapping drain sends one message, not twelve.
+  3. aida notify test sends a sample through the configured command and reports the exit code; aida notify status shows the rules, last fire time per rule, and suppressed count.
+  4. With [notify] unset nothing changes anywhere: no output, no file writes beyond the high-water mark being absent.
+  5. Failures of the command are logged to .aida/notify.log and never fail the caller (a broken mail setup must not shelve a spec).
+  6. Docs: docs/autonomous-drain.md gains a "getting told when it stalls" section with two examples (mail via msmtp, desktop via notify-send). docs/environment-variables.md unchanged unless an env override is added.
+  7. Tests: rule evaluation over a fixture events.jsonl (idle predicate true/false, min_interval suppression, quiet-hours deferral); command invocation with a fake script capturing stdin.
+
+  ## Out of scope
+  Multiple channels per rule, per-user routing, a built-in SMTP client, HTML mail. Add later only on demand.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T05:15:26.880471462Z
+modified_at: 2026-09-11T05:15:26.880471462Z
+req_type: Story
+tags:
+- drain
+- from-product
+- notify
+- operator-alert
+- recommend:approve
+- risk:low
