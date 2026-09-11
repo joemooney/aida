@@ -949,6 +949,27 @@ fn exec_claude(
 }
 
 // trace:STORY-994 | ai:codex
+struct TerminalTitleRestoreGuard(Option<crate::agent_registry::TerminalTitleRestore>);
+
+impl TerminalTitleRestoreGuard {
+    fn new(restore: Option<crate::agent_registry::TerminalTitleRestore>) -> Self {
+        Self(restore)
+    }
+
+    fn restore_now(&mut self) {
+        if let Some(restore) = self.0.take() {
+            crate::agent_registry::restore_terminal_title(restore);
+        }
+    }
+}
+
+impl Drop for TerminalTitleRestoreGuard {
+    fn drop(&mut self) {
+        self.restore_now();
+    }
+}
+
+// trace:STORY-994 | ai:codex
 fn run_claude_session(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -956,8 +977,9 @@ fn run_claude_session(
     session_id: Option<&str>,
     contained: bool,
     model: Option<&str>,
-    mut title_restore: Option<crate::agent_registry::TerminalTitleRestore>,
+    title_restore: Option<crate::agent_registry::TerminalTitleRestore>,
 ) -> Result<()> {
+    let mut title_restore = TerminalTitleRestoreGuard::new(title_restore);
     let mut cmd = std::process::Command::new("claude");
     cmd.args(claude_session_args(
         permission_mode,
@@ -970,24 +992,16 @@ fn run_claude_session(
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => {
-            if let Some(restore) = title_restore.take() {
-                crate::agent_registry::restore_terminal_title(restore);
-            }
             anyhow::bail!("failed to spawn claude: {}", err);
         }
     };
     let status = match child.wait() {
         Ok(status) => status,
         Err(err) => {
-            if let Some(restore) = title_restore.take() {
-                crate::agent_registry::restore_terminal_title(restore);
-            }
             anyhow::bail!("failed to wait for claude: {}", err);
         }
     };
-    if let Some(restore) = title_restore {
-        crate::agent_registry::restore_terminal_title(restore);
-    }
+    title_restore.restore_now();
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }

@@ -221,7 +221,7 @@ fn handle_role_enter(
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
-    crate::agent_registry::register_role_enter_agent(
+    let registry_entry = crate::agent_registry::register_role_enter_agent(
         project_root,
         &state.name,
         state
@@ -245,6 +245,7 @@ fn handle_role_enter(
         /* was_existing */ true,
         resume,
         no_title,
+        Some(&registry_entry),
     );
     Ok(())
 }
@@ -385,6 +386,7 @@ fn handle_role_add(
         /* was_existing */ false,
         None,
         /* no_title */ false,
+        None,
     );
     Ok(())
 }
@@ -455,6 +457,7 @@ fn emit_role_enter_eval(
     was_existing: bool,
     resume_session_id: Option<String>,
     no_title: bool,
+    registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -499,7 +502,7 @@ fn emit_role_enter_eval(
         println!("unset AIDA_SESSION_PURPOSE");
     }
     println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
-    if let Some(title) = role_enter_launch_title(project_root, state, no_title) {
+    if let Some(title) = role_enter_launch_title(project_root, state, no_title, registry_entry) {
         println!("printf '\\033]2;%s\\007' '{}'", sh_single_quote(&title));
     }
     println!("if [ -n \"${{PS1+x}}\" ]; then");
@@ -638,14 +641,18 @@ fn role_enter_launch_title(
     project_root: &std::path::Path,
     state: &RoleState,
     no_title: bool,
+    registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
 ) -> Option<String> {
     if no_title || !crate::agent_registry::terminal_title_enabled(project_root) {
         return None;
     }
+    let session_id = registry_entry
+        .map(|entry| entry.id.as_str())
+        .unwrap_or(state.name.as_str());
     Some(crate::agent_registry::launch_title(
         &state.name,
-        None,
-        &uuid::Uuid::now_v7().to_string(),
+        registry_entry.and_then(|entry| entry.current_spec.as_deref()),
+        session_id,
     ))
 }
 
@@ -1082,8 +1089,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let state = role_state_fixture("advisor");
 
-        assert!(role_enter_launch_title(dir.path(), &state, false).is_some());
-        assert!(role_enter_launch_title(dir.path(), &state, true).is_none());
+        assert!(role_enter_launch_title(dir.path(), &state, false, None).is_some());
+        assert!(role_enter_launch_title(dir.path(), &state, true, None).is_none());
     }
 
     // trace:STORY-994 | ai:codex
@@ -1098,7 +1105,26 @@ mod tests {
         .unwrap();
         let state = role_state_fixture("advisor");
 
-        assert!(role_enter_launch_title(dir.path(), &state, false).is_none());
+        assert!(role_enter_launch_title(dir.path(), &state, false, None).is_none());
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_launch_title_uses_registry_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = role_state_fixture("advisor");
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_SCOPE", "STORY-994")]);
+
+        let entry = crate::agent_registry::register_role_enter_agent(
+            dir.path(),
+            "advisor",
+            dir.path().into(),
+        )
+        .expect("role enter registry entry");
+        let title =
+            role_enter_launch_title(dir.path(), &state, false, Some(&entry)).expect("title");
+
+        assert!(title.starts_with("aida · advisor · STORY-994 · shell-"));
     }
 
     // trace:BUG-840 | ai:codex

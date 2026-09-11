@@ -2173,14 +2173,12 @@ mod tests {
     #[test]
     fn session_start_hook_touch_writes_terminal_block() {
         let tmp = TempDir::new().unwrap();
-        let prev_agent_type = std::env::var_os("AIDA_AGENT_TYPE");
-        let prev_role = std::env::var_os("AIDA_SESSION_ROLE");
-        let prev_scope = std::env::var_os("AIDA_SESSION_SCOPE");
-        let prev_term = std::env::var_os("TERMINATOR_UUID");
-        std::env::set_var("AIDA_AGENT_TYPE", "codex");
-        std::env::set_var("AIDA_SESSION_ROLE", "advisor");
-        std::env::set_var("AIDA_SESSION_SCOPE", "STORY-994");
-        std::env::set_var("TERMINATOR_UUID", "term-994");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "codex"),
+            ("AIDA_SESSION_ROLE", "advisor"),
+            ("AIDA_SESSION_SCOPE", "STORY-994"),
+            ("TERMINATOR_UUID", "term-994"),
+        ]);
 
         let binary = AgentBinaryIdentity::new("0.14.0".into(), "abc123".into());
         let entry = touch_session_start_agent(tmp.path(), Some("claude-sid"), &binary).unwrap();
@@ -2192,23 +2190,6 @@ mod tests {
         let terminal = entry.terminal.as_ref().expect("terminal block");
         assert_eq!(terminal.emulator.as_deref(), Some("terminator"));
         assert_eq!(terminal.terminator_uuid.as_deref(), Some("term-994"));
-
-        match prev_agent_type {
-            Some(v) => std::env::set_var("AIDA_AGENT_TYPE", v),
-            None => std::env::remove_var("AIDA_AGENT_TYPE"),
-        }
-        match prev_role {
-            Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-            None => std::env::remove_var("AIDA_SESSION_ROLE"),
-        }
-        match prev_scope {
-            Some(v) => std::env::set_var("AIDA_SESSION_SCOPE", v),
-            None => std::env::remove_var("AIDA_SESSION_SCOPE"),
-        }
-        match prev_term {
-            Some(v) => std::env::set_var("TERMINATOR_UUID", v),
-            None => std::env::remove_var("TERMINATOR_UUID"),
-        }
     }
 
     // trace:STORY-994 | ai:codex
@@ -2216,10 +2197,10 @@ mod tests {
     fn role_enter_registration_writes_terminal_block() {
         let tmp = TempDir::new().unwrap();
         let worktree = tmp.path().join("worktree");
-        let prev_scope = std::env::var_os("AIDA_SESSION_SCOPE");
-        let prev_term = std::env::var_os("TERMINATOR_UUID");
-        std::env::set_var("AIDA_SESSION_SCOPE", "STORY-994");
-        std::env::set_var("TERMINATOR_UUID", "role-term-994");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_SCOPE", "STORY-994"),
+            ("TERMINATOR_UUID", "role-term-994"),
+        ]);
 
         let entry = register_role_enter_agent(tmp.path(), "advisor", worktree.clone()).unwrap();
 
@@ -2231,15 +2212,6 @@ mod tests {
         let terminal = entry.terminal.as_ref().expect("terminal block");
         assert_eq!(terminal.emulator.as_deref(), Some("terminator"));
         assert_eq!(terminal.terminator_uuid.as_deref(), Some("role-term-994"));
-
-        match prev_scope {
-            Some(v) => std::env::set_var("AIDA_SESSION_SCOPE", v),
-            None => std::env::remove_var("AIDA_SESSION_SCOPE"),
-        }
-        match prev_term {
-            Some(v) => std::env::set_var("TERMINATOR_UUID", v),
-            None => std::env::remove_var("TERMINATOR_UUID"),
-        }
     }
 
     fn ctx(now: DateTime<Utc>, threshold_secs: u64, leases: Vec<PathBuf>) -> AgentClassifyContext {
