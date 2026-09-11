@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   BUG-1021, TASK-257, TASK-1204 (single compile profile; keep the two changes in separate PRs so their timings are attributable).
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:40.345435015Z
-modified_at: 2026-09-11T23:54:57.529334184Z
+modified_at: 2026-09-11T23:55:03.307049118Z
 req_type: Task
 tags:
 - ci
@@ -68,6 +68,10 @@ comments:
   created_at: 2026-09-11T20:40:00.405820280Z
   modified_at: 2026-09-11T20:40:00.405820280Z
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-11T23:55:03.307049118Z
+  implemented_by: joe
 failure_reason:
   phase: reviewer
   phase_index: 3
