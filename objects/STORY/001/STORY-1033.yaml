@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:27:49.414464744Z
-modified_at: 2026-09-11T18:55:44.296978251Z
+modified_at: 2026-09-11T19:06:48.431476544Z
 req_type: Story
 tags:
 - agents
@@ -84,6 +84,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-11T12:28:35.428424159Z
   modified_at: 2026-09-11T12:28:35.428424159Z
+- id: 01a091dd-82ef-7db0-a0bf-7b3076b06666
+  author: joe
+  content: 'Codex follow-up pushed a19caeb2c to origin/gitlab story-1033. Added tier parsing, retry_escalate_model config, PhaseEntered vendor/seat/model/effort fields, SpecRetried model_before/model_after fields, and actual retry attempt-2 model override via AIDA_AGENT_MODEL. Also removed the retired PROMPT_HISTORY.md session note from the branch. Verified cargo fmt --all -- --check, cargo test -p aida-core agents_config --lib, cargo test -p aida-cli-lib events::tests:: --lib, cargo check -p aida-cli-lib. Remaining acceptance not complete: spec tag overrides, usage drains --by-model, agent registry/show-context model+effort fields, result cost/duration rollups, and dogfood output capture.'
+  created_at: 2026-09-11T19:06:48.431476544Z
+  modified_at: 2026-09-11T19:06:48.431476544Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 failure_reason:
   phase: reviewer
