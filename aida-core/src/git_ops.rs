@@ -103,7 +103,7 @@ pub fn ensure_aida_runtime_excluded(worktree: &Path) -> Result<bool> {
 
 // trace:BUG-914 | ai:codex
 fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool> {
-    let existing = std::fs::read_to_string(exclude_path).unwrap_or_default();
+    let existing = crate::read_atomic(exclude_path).unwrap_or_default();
     let mut contents = existing.clone();
     let mut changed = false;
     for entry in entries {
@@ -123,7 +123,7 @@ fn append_exclude_entries(exclude_path: &Path, entries: &[&str]) -> Result<bool>
     if let Some(parent) = exclude_path.parent() {
         std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
-    std::fs::write(exclude_path, contents)
+    crate::write_atomic(exclude_path, contents.as_bytes())
         .with_context(|| format!("write {}", exclude_path.display()))?;
     Ok(true)
 }
