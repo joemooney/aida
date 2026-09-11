@@ -59276,5 +59276,17 @@ operations:
   timestamp: 2026-09-11T19:10:56.459586300Z
   kind: !SetStatus
     status: Approved
-clock: 4765
+- id: 01a091e1-5938-7490-98a5-1028ba86c9d0
+  target_id: 01a091e1-52b3-7fd3-ba3c-54cfc737dd61
+  author: aida
+  node_id: '1'
+  lamport: 4766
+  timestamp: 2026-09-11T19:10:59.896461329Z
+  kind: !Create
+    title: queue work on a fresh spec reused an unrelated recent PR branch — BUG-1023 head-reuse misfires beyond reworks
+    description: 'Observed 2026-09-11 12:07: the drain picked STORY-1028 (fresh spec, no prior PR) but its implementer worked on branch story-1033-followup and opened PR-1744 titled STORY-1028 while containing STORY-1033 follow-up commits — the BUG-1023 reuse-the-PR-head logic appears to have matched an unrelated recent branch/PR instead of creating story-1028. Consequences: mislinked PR (title/spec vs content), the intended spec unimplemented, trailer/auto-bump would complete the wrong spec. Fix: head-reuse applies ONLY when the spec itself has an open PR (rework case); a fresh spec always gets its own derived branch; assert the reused branch''s trailered spec matches the driven spec before adopting it. Acceptance: fresh-spec pickup with an unrelated recent PR present creates <spec>-derived branch; rework case unchanged; mismatch assertion tested. (PR-1744 retitled to its true content; STORY-1028 requeued fresh.)'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4766
 node_id: '1'
