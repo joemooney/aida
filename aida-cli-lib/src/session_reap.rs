@@ -928,6 +928,7 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     if opts.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     }
+    let _ = crate::notify::passive_check(&project_root);
     Ok(())
 }
 

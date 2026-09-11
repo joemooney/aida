@@ -34,6 +34,43 @@ which role queue to read. If the selected queue is empty while sibling role
 queues hold work, AIDA names those queues and prints the exact rerun command.
 trace:BUG-795
 
+### Getting told when it stalls
+
+`aida notify check` can send one operator alert when the drain reaches a state
+that needs attention: idle with open work, shelved work, or an advisor
+escalation. It is off unless `[notify].command` is set in `.aida/config.toml`.
+The command receives the alert body on stdin; `{title}` and `{rule}` are the
+only placeholders substituted into the command string.
+
+```toml
+[notify]
+command = "msmtp joe@example.com"
+min_interval = "30m"
+quiet_hours = "23:00-07:00"
+
+[notify.rules]
+idle_with_work = true
+shelve = true
+escalation = true
+```
+
+For `msmtp`, use your normal msmtp account configuration and let AIDA provide
+the plain-text message body. For a desktop alert, wrap `notify-send` so stdin
+becomes the body:
+
+```toml
+[notify]
+command = "notify-send 'aida: {rule}' \"$(cat)\""
+min_interval = "15m"
+```
+
+`aida notify test` sends a sample message and reports whether the command
+exited successfully. `aida notify status` shows enabled rules, last fire time,
+and suppression counts. `aida notify check` is safe from cron; the drain exit
+path, `aida session reap`, and `aida watch` also run the same best-effort check.
+Command failures are written to `.aida/notify.log` and never fail the caller.
+trace:STORY-1029
+
 ### Transient self-retries
 
 Before a phase failure parks a spec in `NeedsAttention`, the drain retries a

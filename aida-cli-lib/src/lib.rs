@@ -156,6 +156,8 @@ mod metrics_cmd;
 mod network_retry;
 mod node_cmd;
 mod not_found;
+// trace:STORY-1029 | ai:codex — rule-gated operator notifications.
+mod notify;
 // ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the
 // substrate-as-bouncer CI gate for the one-engine invariant), so it compiles
 // in test builds only. trace:ADR-7 trace:ADR-9
@@ -2592,7 +2594,18 @@ fn run() -> Result<()> {
                 once: *once,
                 backlog: *backlog,
             },
-        );
+        )
+        .and_then(|()| notify::passive_check(&project_root));
+    }
+
+    // `aida notify` has no need for the requirement store: it consumes the
+    // local event stream plus `.aida/config.toml`, so it is safe for cron and
+    // for hooks that run while the cache/store may be locked.
+    // trace:STORY-1029 | ai:codex
+    if let Command::Notify(cmd) = &cli.command {
+        let project_root =
+            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        return notify::handle_notify_command(&project_root, cmd);
     }
 
     // `aida integrate` is the integrator front door. Bare remains the read-only
@@ -4393,6 +4406,9 @@ fn run() -> Result<()> {
         }
         Command::Skill(_) => {
             unreachable!("Command::Skill dispatched before storage init");
+        }
+        Command::Notify(_) => {
+            unreachable!("Command::Notify dispatched before storage init");
         }
     }
 
@@ -73831,6 +73847,7 @@ fn finalize_drain_summary(
                 },
             ),
         );
+        let _ = notify::passive_check(root);
     }
 }
 
