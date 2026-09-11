@@ -88,6 +88,36 @@ fn rework_pr_head_lookup_ignores_missing_or_empty_branch() {
 }
 
 #[test]
+fn rework_pr_head_match_accepts_branch_for_same_spec() {
+    assert!(rework_pr_head_matches_spec(
+        "STORY-994",
+        "story-994-pr1704",
+        "Rework unrelated title",
+        "",
+    ));
+}
+
+#[test]
+fn rework_pr_head_match_rejects_branch_for_different_spec() {
+    assert!(!rework_pr_head_matches_spec(
+        "STORY-1028",
+        "story-1033-followup",
+        "STORY-1028",
+        "Body mentions STORY-1028, but the branch trailer owns STORY-1033.",
+    ));
+}
+
+#[test]
+fn rework_pr_head_match_allows_metadata_when_branch_has_no_spec_id() {
+    assert!(rework_pr_head_matches_spec(
+        "BUG-1074",
+        "followup-polish",
+        "[AI:codex] fix(queue): tighten rework reuse (BUG-1074)",
+        "",
+    ));
+}
+
+#[test]
 fn in_progress_single_spec_pickup_wants_pr_head_branch() {
     let r = req("STORY-994", None, RequirementType::Story);
     let e = resolved_with_status(
