@@ -59304,5 +59304,51 @@ operations:
   timestamp: 2026-09-11T19:26:40.099447706Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4768
+- id: 01a091ef-be1b-7c81-8fc8-dff24146416b
+  target_id: 01a091ef-b831-7c53-9517-971d83455659
+  author: aida
+  node_id: '1'
+  lamport: 4769
+  timestamp: 2026-09-11T19:26:43.227185957Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on STORY-1041'
+    description: |
+      Auto-drafted by `aida queue work STORY-1041 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `verdict:request-changes`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-1041 --work`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-11T19:26:40.935123805+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 438122 ms
+        - phase 2 (ci): 421578 ms
+        - phase 3 (reviewer): 244763 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-1041","started_at":"2026-09-11T19:08:14.445577360+00:00","completed_at":"2026-09-11T19:26:40.935123805+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":438122},{"phase":2,"slug":"ci","elapsed_ms":421578},{"phase":3,"slug":"reviewer","elapsed_ms":244763}],"total_ms":1105432,"binary_sha":"e5676286b"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4769
 node_id: '1'
