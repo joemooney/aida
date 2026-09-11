@@ -1,0 +1,35 @@
+id: 01a0907f-cd92-74f2-8829-994493ecced3
+spec_id: STORY-1043
+agreed_id: STORY-1043
+title: aida awaiting surfaces unshipped work (pushed branch, ahead of main, no PR, no live lease) and a red cross-platform nightly
+description: |-
+  ## Why
+  BUG-1021 twice went invisible. (1) The nightly was red for three nights; the workflow's tracking-issue job itself failed, so the only signal was an email found by mail intake. (2) The implementer's correct fix was committed and pushed to origin/bug-1021, then the run was parked by the BUG-908 lease collision before a PR was opened; the fix sat unowned for a day. Neither state is known to aida doctor, aida session reap, or aida awaiting today (verified 2026-09-11: no detector for "ahead of main, no PR"). Both are fully checkable from git, the lease files, and the forge.
+
+  ## Acceptance
+  1. Unshipped-work detector (local, no network for the git part): for every local or origin branch that (a) is ahead of main by at least one commit, (b) carries a (SPEC-ID) trailer or matches an AIDA branch name, (c) has no open PR (forge query, cached 10 min, tolerated offline as "unknown"), and (d) has no live lease (stale, dormant, or none), aida awaiting lists it under "Unshipped work" with the spec, branch, commit count, age, and the one command: aida queue work <SPEC> --from-pr N when a PR exists but the drive died, else aida pr ship <branch> / aida queue work <SPEC> --force-claim. Merged branches and branches whose spec is Completed/Rejected are excluded.
+  2. aida session reap reports the same set (it already walks leases and branches) and never removes a worktree whose branch is unshipped.
+  3. aida awaiting --notice (the per-turn hook line, cache/local only) shows a count "unshipped:N" when non-zero; the forge check is skipped there.
+  4. Nightly red: aida awaiting (full, network-allowed) and aida doctor --category ci show "cross-platform nightly red since <local date> (run <id>, N nights)" when the latest scheduled run of cross-platform.yml failed; cleared on the next green. The STORY-1029 notify rules gain nightly_red = true as a fifth rule.
+  5. Events: a new UnshippedWorkDetected event (spec, branch, first-seen) is appended once per branch so notify can fire on it and the history explains when it was noticed.
+  6. Tests: fixture repo with a pushed branch ahead of main and a stale lease -> listed; same branch with an open PR and a live lease -> not listed; merged branch -> not listed. Nightly-red rendering from a fixture gh JSON.
+  7. Docs: docs/autonomous-drain.md "when a drive dies after pushing" section pointing at the awaiting entry and the two recovery commands.
+
+  ## Related
+  BUG-908 (root cause of the lost fix), BUG-1021, STORY-1029 (notify), FR-284 (reap notifies live-but-finished sessions), STORY-741 (awaiting).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T12:44:49.938635015Z
+modified_at: 2026-09-11T12:44:49.938635015Z
+req_type: Story
+tags:
+- awaiting
+- ci
+- from-product
+- reap
+- recommend:approve
+- risk:low
+- substrate-as-bouncer
+- unshipped-work
