@@ -57292,5 +57292,56 @@ operations:
   timestamp: 2026-09-11T14:20:24.558191083Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4652
+- id: 01a090d7-52aa-7d23-877f-56ceeee76d59
+  target_id: 01a09096-c57b-7132-9bed-2aaf84a7ab73
+  author: aida
+  node_id: '1'
+  lamport: 4653
+  timestamp: 2026-09-11T14:20:25.642039206Z
+  kind: !SetDescription
+    description: |-
+      Auto-drafted by `aida queue work BUG-1021 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      PR-1738 base is 17 commits behind origin and overlaps 3 files touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+      Overlapping files:
+        PROMPT_HISTORY.md
+        aida-cli-lib/src/init_cmd.rs
+        aida-cli-lib/src/agent_registry.rs
+
+      Recover with:
+        aida pr rebase 1738              # clean rebase + force-push-with-lease
+        aida pr rebase 1738 --interactive  # if conflicts need manual resolve
+
+      Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)
+
+      Failure kind: `tool-exit`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework BUG-1021 --work`
+
+      ## Recurrence
+
+      Attempts: 3
+      Latest recurrence: 2026-09-11T14:20:25.324723666+00:00
+
+      ## Phase durations
+
+        - phase 3 (reviewer): 33748 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-1021","started_at":"2026-09-11T13:09:01.577965656+00:00","completed_at":"2026-09-11T13:09:54.448200018+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"tool-exit","failure_message":"PR-1738 base is 17 commits behind origin and overlaps 3 files touched on base since the PR forked — refusing to launch reviewer against stale code.\n\nOverlapping files:\n  PROMPT_HISTORY.md\n  aida-cli-lib/src/init_cmd.rs\n  aida-cli-lib/src/agent_registry.rs\n\nRecover with:\n  aida pr rebase 1738              # clean rebase + force-push-with-lease\n  aida pr rebase 1738 --interactive  # if conflicts need manual resolve\n\nOr pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)","phase_durations":[{"phase":3,"slug":"reviewer","elapsed_ms":33748}],"total_ms":52273,"binary_sha":"a5b176464","auto_rebase":[{"phase":3,"pr_number":1738,"outcome":"conflict"},{"phase":3,"pr_number":1738,"outcome":"conflict"}]}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+clock: 4653
 node_id: '1'

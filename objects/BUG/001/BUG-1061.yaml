@@ -28,8 +28,8 @@ description: |-
 
   ## Recurrence
 
-  Attempts: 2
-  Latest recurrence: 2026-09-11T13:21:52.339517237+00:00
+  Attempts: 3
+  Latest recurrence: 2026-09-11T14:20:25.324723666+00:00
 
   ## Phase durations
 
@@ -51,7 +51,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T13:09:55.195678094Z
-modified_at: 2026-09-11T13:21:52.589986667Z
+modified_at: 2026-09-11T14:20:25.578680536Z
 req_type: Bug
 tags:
 - auto-complete
