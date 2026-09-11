@@ -3,27 +3,41 @@ spec_id: STORY-1006
 agreed_id: STORY-1006
 title: '/aida-handoff: capture conversation residue to the substrate, then recommend fresh-session vs compact'
 description: 'Operator question (2026-09-09, deep into a multi-day session): can AIDA advise when a NEW conversation beats compacting, and do the handoff better than generic compaction? Thesis: in an AIDA session the substrate holds the durable state, so context is mostly re-derivable — the skill''s job is to make that true and then say which move is safe. /aida-handoff does three things: (1) CAPTURE — run the /aida-capture sweep for conversation-only residue (unfiled observations, undocumented decisions, promised follow-ups) and file it; (2) BRIEF — write a session-handoff brief into the substrate (aida brief / session notes + PROMPT_HISTORY entry): active role, running drains and their watchers, open PRs awaiting action, the next 3 actions, and any session-bound state that will NOT survive a fresh start (armed monitors/watchers, background processes) named explicitly; (3) RECOMMEND — a decision line: START FRESH when the substrate boundary is clean (no live drain, no session-bound watchers, capture complete) since a fresh session rebuilds losslessly from aida status/awaiting/role context; COMPACT when live session-bound state must survive, listing exactly what pins the session. Companion CLI probe aida session handoff --check prints the same recommendation from substrate facts alone (live drain? leases held by this session? unfiled residue unknowable from CLI — noted as the skill''s half). Scaffolded into the skill pack (propagation marker) so downstream projects get it. Acceptance: skill file + command registered; the brief lands in the substrate and a fresh session''s pickup surfaces it; the CLI probe reports the live-drain/lease pins correctly; discipline doc session-discipline.md gains the fresh-vs-compact rule.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:56:45.933921224Z
-modified_at: 2026-09-11T18:05:53.600040303Z
+modified_at: 2026-09-11T18:22:51.053441022Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08af1-631a-7940-8b27-9d1d7c096d0a
   created_at: 2026-09-10T10:51:15.180907254Z
   created_by: joe
+history:
+- id: 01a091b5-44a6-7332-b7e8-09bf3a9107e3
+  author: aida-auto-bump
+  timestamp: 2026-09-11T18:22:51.046352728Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a091b5-44ad-7213-9435-549fb85f971f
+  timestamp: 2026-09-11T18:22:51.053439394Z
+  agent: implementer
+  commit_sha: 590c160d5c58e688b0e8c840fb7d686271aab72a
+  summary: Completed via merge 590c160d
+  punted:
+  - 'punted: the reviewer session exited 1 (attempt 2/2)'
+  - 'punted: the reviewer phase watchdog stopped the session — no session output for 10m — likely a degenerate session (attempt 2/2)'
+  - 'punted: CI is red on PR-1720: Build (ubuntu-latest)'
+  - 'punted: phase 3 retry found dead predecessor lease 01a08b60 on `PR-1720`, but its worktree is dirty (2 uncommitted change(s)); worktree: /home/joe/ai/aida-pr-1720; changes: M PROMPT_HISTORY.md; M aida-core/templates/skills/aida-handoff.md (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-10T10:40:20.469076180Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: cache-locked
-  detail: 'phase 3 retry found dead predecessor lease 01a08b60 on `PR-1720`, but its worktree is dirty (2 uncommitted change(s)); worktree: /home/joe/ai/aida-pr-1720; changes: M PROMPT_HISTORY.md; M aida-core/templates/skills/aida-handoff.md (attempt 2/2)'
-  recovery_hint: 'The local cache was locked by another `aida` process (a sibling drain, an interactive shell, or a bulk archive/edit sweep) longer than the retry window — the spec is shelved, not failed. Avoid running bulk cache writes while a drain is live, then re-run: `aida queue work STORY-1006 --auto-complete`. If a lock looks stuck, run `aida doctor heal stale-locks`.'
-  shelved_at: 2026-09-11T18:05:53.600040303Z
+  completed_at: 2026-09-11T18:22:49.656585167Z
+  completion_sha: 590c160d5c58e688b0e8c840fb7d686271aab72a
