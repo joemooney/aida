@@ -463,3 +463,11 @@ blocks:
   range_end: 1116
   next: 1049
   allocated_at: 2026-09-08T02:48:22.373918177Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: STORY
+  range_start: 1041
+  range_end: 1140
+  next: 1041
+  allocated_at: 2026-09-11T03:31:25.111377900Z
