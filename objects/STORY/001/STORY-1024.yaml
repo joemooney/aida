@@ -8,5 +8,6 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T03:53:06.863311143Z
-modified_at: 2026-09-11T03:53:06.863311143Z
+modified_at: 2026-09-11T03:53:10.819491266Z
 req_type: Story
+execution_mode: drain
