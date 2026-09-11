@@ -59404,6 +59404,9 @@ fn print_status_agents_section(ctx: &UserStatusContext, show_stale: bool) {
     for line in agent_registry::format_agent_status_lines(shown) {
         println!("{line}");
     }
+    for line in agent_registry::mcp_authority_status_lines(shown) {
+        println!("{line}");
+    }
     if !stale.is_empty() && !show_stale {
         println!(
             "  {}",
@@ -61884,6 +61887,7 @@ fn print_status_coordination_section(
 struct FastStatusSnapshot {
     role: String,
     role_is_default: bool,
+    mcp_authority_lines: Vec<String>,
     branch: Option<String>,
     queue_depth: usize,
     /// STORY-723: of `queue_depth` items routed to this role, how many are
@@ -61993,12 +61997,14 @@ fn collect_fast_status_snapshot(project_root: &std::path::Path) -> FastStatusSna
     // STORY-723: the subset of the role queue that is actually actionable, so
     // the snapshot can reconcile "163 routed" against a far smaller live set.
     let queue_actionable = role_queue_actionable(project_root, &role).len();
+    let mcp_authority_lines = agent_registry::mcp_authority_status_lines_for_project(project_root);
     let cache_path = project_root.join(".aida/cache.db");
     let cache_present = cache_path.exists();
     let counts = fast_status_counts_from_cache(&cache_path);
     FastStatusSnapshot {
         role,
         role_is_default,
+        mcp_authority_lines,
         branch,
         queue_depth,
         queue_actionable,
@@ -62053,6 +62059,9 @@ fn print_fast_status(snap: &FastStatusSnapshot) {
         snap.role.clone()
     };
     println!("  {:<10} {}", "role:".bold(), role_cell.cyan());
+    for line in &snap.mcp_authority_lines {
+        println!("{line}");
+    }
     match &snap.branch {
         Some(b) => println!("  {:<10} {}", "branch:".bold(), b.cyan()),
         None => println!(
@@ -62137,6 +62146,9 @@ fn toon_status_scalar_lines(snap: &FastStatusSnapshot) -> Vec<String> {
         "role_default",
         &snap.role_is_default.to_string(),
     ));
+    for line in &snap.mcp_authority_lines {
+        lines.push(crate::toon::scalar("mcp_authority", line.trim()));
+    }
     lines.push(crate::toon::scalar(
         "branch",
         snap.branch.as_deref().unwrap_or(""),

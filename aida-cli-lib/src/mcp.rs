@@ -720,6 +720,40 @@ fn role_active_env() -> Option<String> {
         .map(|v| canonical_light_role_name(&v))
 }
 
+fn mcp_server_role_label() -> String {
+    role_active_env().unwrap_or_else(|| "(none)".to_string())
+}
+
+fn mcp_authority_line_for(server_role: Option<&str>, caller_role: Option<&str>) -> String {
+    // trace:BUG-1043 | ai:codex
+    let server_role = server_role
+        .map(canonical_light_role_name)
+        .filter(|r| !r.trim().is_empty())
+        .unwrap_or_else(|| "(none)".to_string());
+    let caller_role = caller_role
+        .map(canonical_light_role_name)
+        .filter(|r| !r.trim().is_empty())
+        .unwrap_or_else(|| "unknown over stdio MCP".to_string());
+    let advisor = crate::advisor_authority_from(&server_role, false, false);
+    format!(
+        "MCP authority: server role={} (advisor authority: {}); caller shell role={}; relaunch for advisor authority: AIDA_SESSION_ROLE=advisor aida mcp-serve",
+        server_role,
+        if advisor { "yes" } else { "no" },
+        caller_role
+    )
+}
+
+fn mcp_authority_line() -> String {
+    mcp_authority_line_for(role_active_env().as_deref(), None)
+}
+
+fn mcp_advisor_refusal_guidance(caller_role: Option<&str>) -> String {
+    format!(
+        "{}. The MCP server's environment is the authority boundary; a caller shell banner can differ from the already-running server. Relaunch the MCP server with advisor authority and reconnect the client: `AIDA_SESSION_ROLE=advisor aida mcp-serve`.",
+        mcp_authority_line_for(role_active_env().as_deref(), caller_role)
+    )
+}
+
 fn project_roles_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("roles")
 }
@@ -1986,13 +2020,12 @@ impl<'a> McpServer<'a> {
         // the BUG-449 status-gate principle. trace:STORY-776 | ai:claude
         if let Some(mode_arg) = args.get("execution_mode").and_then(|v| v.as_str()) {
             if !crate::has_advisor_authority() {
-                return Err(
+                return Err(format!(
                     "execution_mode is the advisor's routing classification — this MCP seat \
-                     lacks advisor authority. Have the advisor groom it (`aida groom`, or \
-                     `aida edit <id> --mode <m>`), or launch the MCP server from an advisor \
-                     seat (AIDA_SESSION_ROLE=advisor)."
-                        .to_string(),
-                );
+                     lacks advisor authority. {} Have the advisor groom it (`aida groom`, or \
+                     `aida edit <id> --mode <m>`).",
+                    mcp_advisor_refusal_guidance(None)
+                ));
             }
             if mode_arg.trim().is_empty() {
                 if req.execution_mode.is_some() {
@@ -4930,6 +4963,7 @@ impl<'a> McpServer<'a> {
         let by_status = |s: RequirementStatus| work.iter().filter(|r| r.status == s).count();
 
         let mut out = String::from("Project status\n");
+        out.push_str(&format!("  {}\n", mcp_authority_line()));
         out.push_str(&format!("  Total requirements: {}\n", work.len()));
         out.push_str("  By status:\n");
         for (label, status) in [
@@ -5232,7 +5266,8 @@ impl<'a> McpServer<'a> {
              - Needs Attention: {}\n\
              - Done: {}\n\
              - Completed: {}\n\
-             - Rejected: {}\n",
+             - Rejected: {}\n\n\
+             **{}**\n",
             total,
             by_status(RequirementStatus::Draft),
             by_status(RequirementStatus::Approved),
@@ -5242,6 +5277,7 @@ impl<'a> McpServer<'a> {
             by_status(RequirementStatus::Done),
             by_status(RequirementStatus::Completed),
             by_status(RequirementStatus::Rejected),
+            mcp_authority_line(),
         );
 
         if !store.features.is_empty() {
@@ -5606,13 +5642,12 @@ fn mcp_queue_authority_message_for(caller_is_advisor: bool) -> Option<String> {
     if caller_is_advisor {
         return None;
     }
-    Some(
+    Some(format!(
         "Cannot queue work for execution via MCP: committing a spec to the execution \
-         pipeline is the advisor's decision and needs advisor authority. File the spec (it \
-         lands as a draft for advisor triage) and let the advisor queue it, or run the CLI \
-         as the advisor (AIDA_SESSION_ROLE=advisor)."
-            .to_string(),
-    )
+             pipeline is the advisor's decision and needs advisor authority. {} File the spec \
+             (it lands as a draft for advisor triage) and let the advisor queue it.",
+        mcp_advisor_refusal_guidance(None)
+    ))
 }
 
 /// BUG-449 / BUG-481 / BUG-486: status transitions an MCP caller may NOT make
@@ -5690,19 +5725,17 @@ fn mcp_status_gate_message_for(
     match to {
         RequirementStatus::Approved | RequirementStatus::Planned => Some(format!(
             "Cannot set status to {to} via MCP: approving or planning a spec is the \
-             advisor's triage decision and needs advisor authority. To unlock this from an \
-             MCP client, (re)launch `aida mcp-serve` with AIDA_SESSION_ROLE=advisor in its \
-             environment, then retry. Otherwise file the spec and let the advisor promote it. \
+             advisor's triage decision and needs advisor authority. {} Otherwise file the spec and let the advisor promote it. \
              (Note: the role_enter tool is peek-only — it cannot self-elevate this session, \
-             so it will NOT unlock the gate.)"
+             so it will NOT unlock the gate.)",
+            mcp_advisor_refusal_guidance(None)
         )),
         _ => Some(format!(
             "Cannot advance {from} → {to} via MCP: moving an un-triaged or punted spec \
-             into the execution pipeline needs advisor authority. To unlock this from an MCP \
-             client, (re)launch `aida mcp-serve` with AIDA_SESSION_ROLE=advisor in its \
-             environment, then retry. Otherwise let the advisor approve it first (it will then \
+             into the execution pipeline needs advisor authority. {} Otherwise let the advisor approve it first (it will then \
              flip to {to} as implementation proceeds). (Note: the role_enter tool is peek-only \
-             — it cannot self-elevate this session, so it will NOT unlock the gate.)"
+             — it cannot self-elevate this session, so it will NOT unlock the gate.)",
+            mcp_advisor_refusal_guidance(None)
         )),
     }
 }
@@ -7819,8 +7852,9 @@ pub fn run_mcp_server(storage: &Storage, project_root: PathBuf) -> Result<()> {
     // trace:STORY-474 | ai:claude — surface the active profile on the stderr
     // banner so an operator can confirm an untrusted client got the safe surface.
     eprintln!(
-        "AIDA MCP server started (profile: {})",
-        server.profile.as_str()
+        "AIDA MCP server started (profile: {}, role: {})",
+        server.profile.as_str(),
+        mcp_server_role_label()
     );
 
     for line in stdin.lock().lines() {
@@ -11615,6 +11649,30 @@ mod tests {
         assert!(
             mcp_queue_authority_message().is_some(),
             "public queue gate refuses without an advisor role"
+        );
+    }
+
+    #[test]
+    fn mcp_authority_refusal_names_roles_and_relaunch_command() {
+        use RequirementStatus::*;
+
+        let line = mcp_authority_line_for(Some("implementer"), Some("advisor"));
+        assert!(line.contains("server role=implementer"), "{line}");
+        assert!(line.contains("caller shell role=advisor"), "{line}");
+        assert!(line.contains("advisor authority: no"), "{line}");
+        assert!(
+            line.contains("AIDA_SESSION_ROLE=advisor aida mcp-serve"),
+            "{line}"
+        );
+
+        let msg = mcp_status_gate_message_for(&Draft, &Approved, false)
+            .expect("non-advisor MCP server must refuse advisor-gated transition");
+        assert!(msg.contains("MCP authority:"), "{msg}");
+        assert!(msg.contains("server role="), "{msg}");
+        assert!(msg.contains("caller shell role="), "{msg}");
+        assert!(
+            msg.contains("AIDA_SESSION_ROLE=advisor aida mcp-serve"),
+            "{msg}"
         );
     }
 

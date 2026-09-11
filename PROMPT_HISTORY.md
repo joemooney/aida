@@ -4899,3 +4899,21 @@ while also carrying the pipeline queue owner in `AIDA_USER`.
 Verification: `cargo test -p aida-cli-lib real_phase_driver_wiring_tests -- --nocapture`;
 `cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture`;
 `cargo fmt --all -- --check`. Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1043 MCP authority diagnostics
+
+Picked up `BUG-1043` from the implementer queue. MCP advisor-gated refusals could conflict with
+the caller's visible shell role because the MCP server's process environment is the actual authority
+boundary.
+
+Added a shared MCP authority diagnostic naming the server role, caller shell role when known (or
+`unknown over stdio MCP`), advisor-authority verdict, and the relaunch command
+`AIDA_SESSION_ROLE=advisor aida mcp-serve`. Wired it into advisor-gated status, queue, and
+`execution_mode` refusals, the MCP startup banner, `status_unified`, `aida://project/summary`, and
+registered MCP-agent lines in `aida status`. Updated MCP setup docs to distinguish profile from
+role authority.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib mcp_authority -- --nocapture`;
+`cargo test -p aida-cli-lib status_unified -- --nocapture`;
+`tests/test_mcp_stdio.sh --skip-agent-contract`. Existing unrelated Rust warnings remain in the
+focused test output.
