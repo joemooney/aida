@@ -1127,6 +1127,43 @@ mod tests {
         assert!(title.starts_with("aida · advisor · STORY-994 · shell-"));
     }
 
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_handler_persists_terminal_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = role_state_fixture("advisor");
+        let save_path = role_save_path(dir.path(), &state).expect("role path");
+        save_role_at(&state, &save_path).expect("save role");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_SCOPE", "STORY-994"),
+            ("TERMINATOR_UUID", "role-handler-term-994"),
+        ]);
+
+        handle_role_enter(
+            dir.path(),
+            Some("advisor"),
+            /* cd */ false,
+            /* no_resume */ true,
+            /* no_title */ true,
+        )
+        .expect("role enter");
+
+        let agents_dir = dir.path().join(".aida").join("agents");
+        let mut entries = std::fs::read_dir(&agents_dir)
+            .expect("agents dir")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("agent entries");
+        entries.sort_by_key(|entry| entry.path());
+        assert_eq!(entries.len(), 1);
+        let persisted = std::fs::read_to_string(entries[0].path()).expect("registry entry");
+
+        assert!(persisted.contains("source = \"role-enter\""));
+        assert!(persisted.contains("role = \"advisor\""));
+        assert!(persisted.contains("[terminal]"));
+        assert!(persisted.contains("emulator = \"terminator\""));
+        assert!(persisted.contains("terminator_uuid = \"role-handler-term-994\""));
+    }
+
     // trace:BUG-840 | ai:codex
     #[test]
     fn role_enter_uuid_lookup_reads_display_from_cache() {
