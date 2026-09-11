@@ -163,6 +163,28 @@ status). Otherwise an implementer shipping in good faith on the original
 spec ends up with a branch rendered obsolete behind their back. If work is
 in flight, pause the rejection and coordinate first.
 
+## Re-read live state before acting on remembered IDs
+
+Conversation context can hold an identifier longer than the substrate holds
+the thing it names. Before acting on a remembered lease, brief, or queue item,
+re-read the current lease / brief / queue state and let that fresh state
+govern the next command. Treat cleanup verbs that return "not found" as
+idempotent success when the current state says there is no work left to clean
+up, not as evidence of a new bug.
+
+Concrete examples:
+
+- `release_task` returning `not-found` for a lease id from earlier context
+  usually means another session or cleanup path already released it. Re-run the
+  live lease listing, confirm the lease is absent, and move on.
+- Brief cleanup returning `no-briefs-found` after a handoff or pickup means
+  the brief queue is already empty for that agent. Re-read the brief list and
+  treat the absent brief as a no-work outcome.
+
+This is the same discipline as "verify before filing," applied to cleanup:
+fresh substrate state beats stale conversational memory. trace:TASK-1203 |
+ai:codex
+
 ## Ship infrastructure fixes through the system they fix
 
 When fixing the project's own automation (a merge hook, a status auto-bump,
