@@ -25,11 +25,11 @@ description: |-
   ## Related
   STORY-1041 (drain pipelining — the other CI-latency half; may want >1 runner), TASK-1204 (single compile profile — compounds the speedup), TASK-257 (Linux-only PR CI split), EPIC-44 (a gitlab-runner on the same box could serve GitLab CI similarly).
 status: Draft
-priority: Medium
+priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:07.876021726Z
-modified_at: 2026-09-11T17:19:12.966909009Z
+modified_at: 2026-09-11T17:25:15.314494130Z
 req_type: Story
 tags:
 - ci
