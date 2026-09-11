@@ -57770,5 +57770,38 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4675
+- id: 01a09173-9583-7a50-b690-55d565be671d
+  target_id: 01a09173-9170-7941-9341-f1f9a033b118
+  author: aida
+  node_id: '1'
+  lamport: 4676
+  timestamp: 2026-09-11T17:11:06.371121942Z
+  kind: !Create
+    title: 'aida schedule: a native periodic-task registry that runs due maintenance sweeps opportunistically (no daemon), plus emit-cron for the rest'
+    description: |-
+      ## Why
+      Operator (2026-09-11): maybe aida should have its own system of scheduled tasks to perform periodically. AIDA already has ~8 maintenance sweeps that today are hand-run or need external cron: cache verify, archive --older-than, queue gc, mailbox archive (TASK-1211), session reap, fetch --code-only, store compact/gc, notify check (STORY-1029, which itself wanted to be cron-invokable), and the cross-platform-nightly-red check (STORY-1043). There is a store [store.sync] periodic_interval knob but no general registry. .claude/scheduled_tasks.lock is Claude Code's, not AIDA's.
+
+      ## Design (smallest valuable slice — NOT a daemon)
+      - [schedule] table in .aida/config.toml declares tasks: name, the aida command, an interval (e.g. "24h", "7d"), optional quiet-hours, enabled. Ship a sensible default set (cache verify daily, session reap daily, mailbox+queue gc weekly, notify check hourly) all DISABLED by default so a fresh project is silent.
+      - Opportunistic runner: aida schedule tick runs every task whose interval has elapsed since its last recorded run (.aida/schedule-state.json), one at a time, best-effort (a failing task logs and never blocks the others or the caller). Wired into the SAME per-turn/SessionStart hook heartbeat that already fires aida awaiting --notice — so due tasks run during normal use with NO new process. A global min-gap (default 60s) keeps tick cheap when called every turn.
+      - aida schedule run [<name>] forces a task now; aida schedule status lists tasks, intervals, last-run, next-due; aida schedule emit-cron prints crontab lines for anyone who prefers real cron over the heartbeat (the escape hatch for tasks that must run even when no session is open, e.g. nightly-red check).
+
+      ## Acceptance
+      1. [schedule] config parses; unknown/misspelled task command is rejected at load with the valid set.
+      2. aida schedule tick runs only due tasks, records last-run, respects quiet-hours and the min-gap, and is a no-op (fast, no writes beyond nothing) when nothing is due. Best-effort: one task's non-zero exit is logged to .aida/schedule.log and does not stop the rest.
+      3. The per-turn hook calls tick (cache/local only; a task that needs network, e.g. fetch or nightly-red, is skipped in the hook path and only runs via aida schedule run or emit-cron'd cron).
+      4. aida schedule status / run / emit-cron behave as described; emit-cron output is a valid crontab a user can paste.
+      5. With no [schedule] config nothing runs and nothing is written (byte-identical to today).
+      6. Tests: due/not-due selection from a fixture schedule-state; min-gap suppression; a failing task does not block a later one; emit-cron golden output.
+
+      ## Out of scope
+      A background daemon; sub-minute scheduling; distributed/multi-machine coordination of runs. The heartbeat + emit-cron cover the real need.
+
+      ## Related
+      STORY-1029 (notify check — a scheduled task consumer), TASK-1211 (mailbox gc), STORY-1043 (nightly-red check), STORY-441 (archive auto-sweep already config-gated on pull), the [store.sync] periodic_interval precedent.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4676
 node_id: '1'
