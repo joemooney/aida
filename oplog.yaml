@@ -58550,5 +58550,30 @@ operations:
   timestamp: 2026-09-11T17:38:15.730173431Z
   kind: !SetStatus
     status: Rejected
-clock: 4712
+- id: 01a0918f-5b4d-7462-bdb4-4bb5916522c1
+  target_id: 01a0918f-56fb-7e31-b15a-93b2c5d57976
+  author: aida
+  node_id: '1'
+  lamport: 4713
+  timestamp: 2026-09-11T17:41:26.477929739Z
+  kind: !Create
+    title: Delete PROMPT_HISTORY.md and add a CI guard so no agent can recreate it (it duplicates the substrate and conflicts on every parallel rebase)
+    description: |-
+      ## Why
+      Operator (2026-09-11): "I have no need for PROMPT_HISTORY, that can go away — something is triggering it to be updated." Verified: NO current instruction or code generates it (the Claude-facing retirement landed 2026-09-09 in ~/.claude/CLAUDE.md); the trigger is the file's mere EXISTENCE plus agent habit — Codex implementers (drain vendor=codex) see the session log and append, so every parallel PR conflicts on PROMPT_HISTORY.md (observed on ~8 open PRs this session; the ONLY conflicting file on several rebases). The substrate already holds session history (aida history --events, aida digest, the spec+PR trail).
+
+      ## Acceptance
+      1. git rm PROMPT_HISTORY.md from main (its content is frozen in git history; not lost).
+      2. scripts/check-no-prompt-history.sh in the CI lint job (and a pre-commit hook): FAIL if PROMPT_HISTORY.md exists at repo root or is added in the diff. Substrate-as-bouncer — a programmatic gate, not a doc rule, so it cannot silently return.
+      3. .gitignore adds /PROMPT_HISTORY.md so a stray local write is not staged.
+      4. Scaffolding sweep: confirm aida-core/templates + generate_claude_md + AGENTS.md generation emit NO PROMPT_HISTORY guidance for AIDA-init'd projects (the Codex/AGENTS.md side of the 2026-09-09 retirement — verify it reaches Codex, not just Claude). If any downstream template still references it, strip it.
+      5. The dated docs/plans/*.md mention (2026-02-22 rename plan) stays frozen (a dated artifact); only the live file + generators are purged.
+      6. Evidence: a rebase of two branches that both would have touched PROMPT_HISTORY now has zero conflict on it; the guard fails a planted PROMPT_HISTORY.md.
+
+      ## Related
+      The 2026-09-09 Claude-side retirement (this is the enforcement + Codex-side completion), EPIC-62 (parallel-rebase friction hurts unattended closing), the substrate-as-bouncer principle.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 4713
 node_id: '1'
