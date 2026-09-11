@@ -145,6 +145,10 @@ One status sits **off** this mainline: **Needs Attention**. An autonomous drain 
 
 ### Commands at each stage
 
+Need a grep-able CLI reference instead of nested help pages? Run `aida commands`
+for one line per command, `aida commands --flags` to append long option names,
+or `aida commands --json` for tooling.
+
 | Transition | Command | What it does |
 |------------|---------|--------------|
 | File a spec | `aida add --title "..." --type task` | Creates the spec in Draft (or Approved with `--status approved`) |

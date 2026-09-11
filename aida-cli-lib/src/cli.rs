@@ -7893,7 +7893,7 @@ pub enum Command {
         json: bool,
     },
 
-    /// Mark a spec done — the simple "I finished it". e.g. `aida done TASK-1`.
+    /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
     /// A newcomer-friendly shortcut for completing a task without the
     /// `edit --status completed` jargon.
     // trace:TASK-727 | ai:claude
@@ -11126,6 +11126,22 @@ pub enum Command {
     /// `aida help --all`). Bare `aida` / `aida help` show the curated
     /// Getting-started view instead.
     HelpAll,
+
+    /// List every command and subcommand as grep-able one-line rows.
+    // trace:STORY-1027 | ai:codex
+    Commands {
+        /// Append each command's long options after its summary.
+        #[clap(long)]
+        flags: bool,
+
+        /// Emit a JSON array for tooling.
+        #[clap(long)]
+        json: bool,
+
+        /// Include clap-hidden commands and flags.
+        #[clap(long)]
+        hidden: bool,
+    },
 
     /// Stock and local skill tooling.
     #[clap(subcommand)]

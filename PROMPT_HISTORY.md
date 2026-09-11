@@ -5020,3 +5020,25 @@ drive failures keep their existing park/triage behavior.
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib integrate::tests -- --nocapture`;
 `cargo test -p aida-cli-lib task1169_integration_wait_tests -- --nocapture`;
 `cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-11 — STORY-1027 grep-able command catalog
+
+Picked up `STORY-1027` from the implementer queue. Added top-level `aida commands` plus the
+`aida help commands` alias as a flat, depth-first inventory derived from clap's live `Command`
+tree. Default text output is one grep-able row per visible command node; `--flags` appends long
+option names, `--json` emits `{path, about, flags, hidden}` objects for tooling, and `--hidden`
+includes clap-hidden commands and flags.
+
+Updated the existing help-catalog tests to enforce the new contract: visible commands only by
+default, hidden opt-in, every visible command has a one-line about string, all visible top-level
+help commands appear, help subcommands are omitted, flags are bare long names, and no user-facing
+SPEC-IDs leak into descriptions. Added README and CLI manual pointers to `aida commands` as the
+grep surface.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib help_catalog_tests`;
+`cargo build -p aida-cli`; `cargo build --release -p aida-cli`; `/home/joe/ai/aida/target/debug/aida commands`;
+`/home/joe/ai/aida/target/debug/aida commands --flags | rg -- '--dry-run'`;
+`/home/joe/ai/aida/target/debug/aida commands --json | jq ...`;
+`diff -u <(/home/joe/ai/aida/target/debug/aida commands --flags --hidden) <(/home/joe/ai/aida/target/debug/aida help commands --flags --hidden)`;
+release binary timing for `aida commands` measured 0.01-0.04 seconds across repeated runs. Existing
+unrelated Rust warnings remain in the focused test/build output.
