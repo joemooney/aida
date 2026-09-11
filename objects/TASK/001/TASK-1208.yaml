@@ -23,7 +23,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:47:20.184181777Z
-modified_at: 2026-09-11T16:47:20.184181777Z
+modified_at: 2026-09-11T16:49:45.146878502Z
 req_type: Task
 tags:
 - affordance
@@ -34,3 +34,10 @@ tags:
 - risk:low
 - statusline
 - ux
+comments:
+- id: 01a09160-08ba-7483-b5bd-abe348a7e20b
+  author: joe
+  content: Next-command hint should use 'aida drain tail' (TASK-1209) rather than 'aida tail drain' — reads naturally under aida drain status. Land TASK-1209 first or together.
+  created_at: 2026-09-11T16:49:45.146878502Z
+  modified_at: 2026-09-11T16:49:45.146878502Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
