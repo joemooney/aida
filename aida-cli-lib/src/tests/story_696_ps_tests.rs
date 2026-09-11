@@ -88,6 +88,7 @@ fn ps_process_backed_lease_uses_active_pid() {
         |_| None,
         |_| None,
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -122,6 +123,7 @@ fn ps_harness_lease_with_stamped_harness_pid_is_live() {
             ahead_of_main: 0,
             last_commit_subject: Some("wip".into()),
         },
+        |_| None,
         |_| None,
         |_| None,
         |_| None,
@@ -177,6 +179,45 @@ fn ps_role_prefers_live_jsonl_role_and_retains_lease_role() {
         |_| None,
         |_| None,
         |path| (path == jsonl).then(|| "advisor".to_string()),
+        |_| None,
+    );
+
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].pid, Some(std::process::id()));
+    assert_eq!(rows[0].role.as_deref(), Some("advisor"));
+    assert_eq!(rows[0].lease_role.as_deref(), Some("general-purpose"));
+}
+
+/// TASK-153: the same role preference must hold when the lease joins to a
+/// resumed Claude transcript through the manifest, even if the live `/proc`
+/// row no longer carries the JSONL path. This is the long-lived advisor shape:
+/// `aida ps` should agree with `aida session conversations` instead of falling
+/// back to the harness lease's `general-purpose` role.
+// trace:TASK-153 | ai:codex
+#[test]
+fn ps_role_prefers_manifest_jsonl_role_when_live_jsonl_is_absent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join(".claude/worktrees/agent-abc123");
+    std::fs::create_dir_all(&wt).unwrap();
+
+    let mut l = ps_lease(
+        "l-role-manifest",
+        worktree_lease::HARNESS_WORKTREE_SCOPE,
+        wt.clone(),
+    );
+    l.role = Some("general-purpose".into());
+    l.active_pid = Some(std::process::id());
+
+    let (rows, _) = build_running_work(
+        &[],
+        &[l],
+        &[],
+        chrono::Utc::now(),
+        |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |_| None,
+        |lease_id| (lease_id == "l-role-manifest").then(|| "advisor".to_string()),
     );
 
     assert_eq!(rows.len(), 1);
@@ -210,6 +251,7 @@ fn ps_harness_lease_without_pid_is_unknown_not_salvageable() {
             ahead_of_main: 0,
             last_commit_subject: Some("wip: half-done".into()),
         },
+        |_| None,
         |_| None,
         |_| None,
         |_| None,
@@ -254,6 +296,7 @@ fn ps_non_harness_dead_dirty_lease_still_salvageable() {
             ahead_of_main: 0,
             last_commit_subject: None,
         },
+        |_| None,
         |_| None,
         |_| None,
         |_| None,
@@ -552,6 +595,7 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         |_| None,
         |_| None,
         |_| None,
+        |_| None,
     );
 
     // Row: TASK-1's scope resolved to its display id; live pid attached.
@@ -652,6 +696,7 @@ fn build_running_work_surfaces_the_worktree_lock_owner() {
                 None
             }
         },
+        |_| None,
         |_| None,
         |_| None,
     );
@@ -902,6 +947,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| None,
         |_| Some(pid_started),
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -925,6 +971,7 @@ fn build_running_work_carries_pid_start_time() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| Some(pid_started),
+        |_| None,
         |_| None,
     );
     assert_eq!(rows.len(), 1);
@@ -999,6 +1046,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| None,
         |_| Some(now - chrono::Duration::minutes(3)),
         |_| None,
+        |_| None,
     );
     assert_eq!(rows.len(), 1);
     assert_eq!(
@@ -1015,6 +1063,7 @@ fn build_running_work_elapsed_is_process_uptime_when_adopted() {
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
         |_| None,
         |_| Some(lease_born),
+        |_| None,
         |_| None,
     );
     assert_eq!(rows.len(), 1);
@@ -1207,6 +1256,7 @@ fn ps_freshly_hand_entered_spec_reads_awaiting_agent_not_orphaned() {
         |_| None,
         |_| None,
         |_| None,
+        |_| None,
     );
 
     assert_eq!(rows.len(), 1);
@@ -1282,6 +1332,7 @@ fn ps_dead_agent_lease_still_flags_stalled_after_the_grace_window() {
         &[],
         now,
         |_| dispatch_health_ps::WorktreeGitProbe::default(),
+        |_| None,
         |_| None,
         |_| None,
         |_| None,

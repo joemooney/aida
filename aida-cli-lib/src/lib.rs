@@ -52820,6 +52820,17 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // per lease. trace:TASK-1072 | ai:claude
     let live = process_probe::probe_live_claude_sessions();
     let leases = list_leases(project_root);
+    let manifest_roles: std::collections::HashMap<String, String> =
+        session_manifest::list_all(project_root)
+            .into_iter()
+            .filter_map(|m| {
+                let role = m
+                    .claude_session_id
+                    .as_deref()
+                    .and_then(session::role_from_claude_session_id)?;
+                Some((m.session_id, role))
+            })
+            .collect();
 
     // The store gives us (a) the set of known spec ids (so a lease scope can be
     // resolved to a spec vs. a generic harness scope) and (b) the In-Progress
@@ -52848,6 +52859,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         |wt| worktree_lock::read_authorized_by(project_root, wt),
         pid_start_time,
         |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
+        |lease_id| manifest_roles.get(lease_id).cloned(),
     )
 }
 
@@ -52875,7 +52887,12 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
 /// returns that process's start time, or `None`. Feeds the adopted-lease
 /// annotation (a persistent lease whose pid is younger than the lease record);
 /// the real caller wires in [`pid_start_time`].
-// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 trace:TASK-1143 trace:BUG-763 | ai:claude
+///
+/// TASK-153: `manifest_role_probe` resolves the transcript role through the
+/// lease-manifest `claude_session_id` join, so long-lived resumed sessions do
+/// not fall back to the stale harness lease role when the live `/proc` JSONL
+/// association is absent.
+// trace:TASK-1072 trace:STORY-696 trace:TASK-1090 trace:TASK-1143 trace:BUG-763 trace:TASK-153 | ai:claude
 fn build_running_work(
     specs: &[RunningWorkSpec],
     leases: &[SessionLease],
@@ -52885,6 +52902,7 @@ fn build_running_work(
     lock_probe: impl Fn(&std::path::Path) -> Option<String>,
     pid_start_probe: impl Fn(u32) -> Option<chrono::DateTime<chrono::Utc>>,
     role_probe: impl Fn(&std::path::Path) -> Option<String>,
+    manifest_role_probe: impl Fn(&str) -> Option<String>,
 ) -> (Vec<PsRow>, Vec<PsOrphan>) {
     let rows: Vec<PsRow> = leases
         .iter()
@@ -52907,8 +52925,9 @@ fn build_running_work(
                 .or(live_in_worktree)
                 .and_then(|s| s.jsonl.as_deref())
                 .and_then(&role_probe);
+            let manifest_role = manifest_role_probe(&l.id);
             let lease_role = l.role.clone();
-            let role = jsonl_role.or_else(|| lease_role.clone());
+            let role = jsonl_role.or(manifest_role).or_else(|| lease_role.clone());
             // BUG-763: resolve the backing pid's own start time so an adopted
             // persistent lease (pid younger than the lease record) can name
             // both ages instead of mixing provenance silently.
