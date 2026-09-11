@@ -57961,5 +57961,37 @@ operations:
   timestamp: 2026-09-11T17:25:15.382782731Z
   kind: !SetPriority
     priority: Low
-clock: 4682
+- id: 01a09181-837c-7351-8a65-c7c7922b22e6
+  target_id: 01a09181-7c91-7131-a401-1b4524ac6c08
+  author: aida
+  node_id: '1'
+  lamport: 4683
+  timestamp: 2026-09-11T17:26:19.260027642Z
+  kind: !Create
+    title: 'Product-role backlog nudge loop: detect stuck work and nudge the advisor (or the operator when no advisor is live) — the ship-now stop-gap'
+    description: |-
+      ## Why
+      Operator (2026-09-11): a stop-gap (or permanent) — the product role has a background goal of checking open items and nudging the advisor forward. This is the DETECT-AND-NUDGE tier below STORY-1051's DETECT-AND-AUTO-RECOVER, and it ships on existing primitives (aida awaiting, mailbox, the /loop skill). It respects the seat model: product is propose-only (ADR-3), so it coordinates/nudges the advisor (who disposes+drives) rather than driving itself. This formalizes the manual nudging the product seat did throughout the 2026-09-11 session (mailing the advisor to move BUG-1021, the stranded PRs, the reliability backlog).
+
+      ## Design (thin, on existing primitives)
+      - A product-role standing loop (a saved /loop invocation, or `aida supervise --nudge`, or a scheduled tick from STORY-1047) runs every N minutes and computes the stuck set: NeedsAttention specs with a TRANSIENT typed cause (STORY-974), stranded PRs (STORY-1043 detector: ahead-of-main + no live lease), Approved-but-unqueued specs, and a non-empty queue with NO live drain.
+      - If the stuck set is non-empty:
+        - advisor session IS live (aida ps / session leases) -> mailbox-send the advisor a compact nudge: the specs, their park causes, and the one command per spec to move them (aida queue work <spec> --from-pr / --force-claim). Deduped (STORY-1029 min-interval) so it nudges once per new/changed stuck item, not every tick.
+        - NO advisor live -> fall back to notifying the OPERATOR (STORY-1029 channel): "N items stuck, no advisor running — start one: aida agent new claude --role advisor".
+      - Never executes a drive itself (seat rule). Never nudges on items that are correctly NEEDS-HUMAN and already surfaced (no double-signal with aida awaiting).
+
+      ## Acceptance
+      1. aida supervise --nudge (or the documented /loop form) computes the stuck set and, when non-empty + advisor live, sends ONE deduped mailbox nudge naming each stuck spec + its move command; a fixture with 2 transient parks + 1 live advisor asserts the message content.
+      2. No advisor live -> operator notification instead (STORY-1029), not a mailbox message into the void.
+      3. Dedupe: a stuck item already nudged this window is not re-nudged until it changes state or the min-interval elapses.
+      4. Seat-safe: the loop NEVER takes a lease, drives, or merges; it only reads + sends messages (assert it issues no queue-work/merge calls).
+      5. Quiet when clean: empty stuck set -> no message, no output (like aida mailbox notice).
+      6. Documented as a saved /loop the operator starts in a product-role session (the stop-gap), with a note that STORY-1051 is the permanent auto-recovery that reduces how often this fires.
+
+      ## Related
+      Parent EPIC-62. STORY-1051 (the auto-recover tier this precedes), STORY-1029 (notify — the no-advisor fallback + dedupe), STORY-1043 (stranded-work detector — the input), STORY-974 (typed causes — transient vs needs-human), STORY-1047 (schedule tick — a run trigger), aida-fleet-watch skill (prior art: read+route, no drive).
+    req_type: Story
+    status: Draft
+    priority: High
+clock: 4683
 node_id: '1'
