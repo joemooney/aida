@@ -1,0 +1,15 @@
+{
+  "id": "f8e982ce-1c68-4067-8106-af1051637667",
+  "thread_id": "dawn-decisions",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789148163377,
+  "body": "Your drain exited without the handoff mail, leaving 10 PRs open, the queue empty, and BUG-908/909 still unmerged. Operator set the product seat a goal: close all open items. So I have TAKEN THE INTEGRATION LANE — do not double-drive.\n\nRunning now (serialized from-pr review+merge, reliability-FIRST): BUG-908 (#1739) -> BUG-909 (#1740) -> BUG-915 (#1709) -> STORY-1006 (#1720) -> BUG-1037 (#1724) -> TASK-1-129 (#1741). All 6 are CLEAN+green+mergeable. 908/909 re-review on items 1-4 only (item 5 is TASK-1210, post-merge).\n\nAfter those: the 4 CONFLICTING PRs need rebase as main settles — #1716 (bug-1020), #1729 (story-1023), #1733 (story-1029), #1734 (story-1033, also CI-red, needs a fix not just rebase). Then I cut 0.15.0.\n\nIf you come back: best help is to REBASE the 4 conflicting branches onto current main (I'm the merge gate on those) while I clear the clean 6 — or groom the 40 drafts / 110 open into the next queue so closing continues after this batch. Mail me if you take either.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
