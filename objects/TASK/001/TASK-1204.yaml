@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   TASK-257 (CI split), the drain pipelining story (the other half of the CI-wait cost).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:45.106919890Z
-modified_at: 2026-09-11T18:51:46.052818796Z
+modified_at: 2026-09-11T18:51:54.585042432Z
 req_type: Task
 tags:
 - build
@@ -49,8 +49,24 @@ comments:
   created_at: 2026-09-11T18:50:08.666015727Z
   modified_at: 2026-09-11T18:50:08.666015727Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a091cf-df52-7382-ac85-d69ec8bf51ee
+  author: aida-auto-bump
+  timestamp: 2026-09-11T18:51:54.578193872Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a091cf-df59-7fc0-981d-15a5d6f71b7a
+  timestamp: 2026-09-11T18:51:54.585041927Z
+  agent: aida
+  commit_sha: b4f163adb00518e7f3af691675b392be4a7be33d
+  summary: Completed via merge b4f163ad
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T18:40:29.674005852Z
   implemented_by: joe
+  completed_at: 2026-09-11T18:51:54.578029722Z
+  completion_sha: b4f163adb00518e7f3af691675b392be4a7be33d
