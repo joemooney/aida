@@ -1,0 +1,32 @@
+id: 01a09171-c05d-7ca2-ae67-629b564615fc
+spec_id: TASK-1212
+agreed_id: TASK-1212
+title: 'Add a Windows release binary: x86_64-pc-windows-msvc target to release.yml (now that BUG-1021 made Windows tests pass)'
+description: |-
+  ## Why
+  Operator (2026-09-11): a first user on Windows has no binary. release.yml's matrix builds only x86_64/aarch64-unknown-linux-gnu and x86_64/aarch64-apple-darwin — no Windows. Until BUG-1021 landed (2026-09-11), Windows tests were red, so a Windows binary would have shipped broken; now that the cross-platform nightly is green on both legs, a Windows target is viable.
+
+  ## Acceptance
+  1. release.yml matrix gains target: x86_64-pc-windows-msvc on os: windows-latest. Build `aida` and `aida-server` (aida-cli + aida-server), stage them as aida.exe / aida-server.exe, and publish aida-windows-x86_64.zip (zip, not tar.gz — Windows convention) as a release asset.
+  2. install.sh: detect Windows only where it can act (Git Bash / MSYS / WSL); otherwise print the manual download line for the zip. Do not pretend to install into ~/.local/bin on native Windows.
+  3. README install section lists the Windows asset alongside the linux/darwin tarballs.
+  4. The nightly cross-platform workflow already validates Windows tests; this task only adds the RELEASE build+package. If the release build surfaces a Windows-only compile issue not caught by the test job, fix it or file a BUG and note it here.
+  5. Evidence: the next release (or a workflow_dispatch dry run) produces a working aida-windows-x86_64.zip; unzip + `aida.exe --version` on a Windows runner step confirms it runs.
+
+  ## Related
+  BUG-1021 (made Windows green), TASK-1205 (PR-time cross-target check — the compile-time half), release.sh / release.yml.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T17:09:06.269326411Z
+modified_at: 2026-09-11T17:09:06.269326411Z
+req_type: Task
+tags:
+- ci
+- cross-platform
+- from-product
+- recommend:approve
+- release
+- risk:low
+- windows
