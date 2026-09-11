@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:26.880471462Z
-modified_at: 2026-09-11T12:28:30.095133863Z
+modified_at: 2026-09-11T12:28:31.395748776Z
 req_type: Story
 tags:
 - drain
@@ -47,6 +47,17 @@ relationships:
   target_id: 01a0902c-20ab-79a1-a772-96b94a43ed65
   created_at: 2026-09-11T11:13:31.752706940Z
   created_by: joe
+comments:
+- id: 01a09070-de50-7b63-8176-744e99b7518c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1733):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. STORY-1029 acceptance 1/7: aida notify check must evaluate idle_with_work from cache state (no live drain/lease plus approved remaining, NeedsAttention, or escalations) and tests must cover idle predicate true/false; current code only derives idle_with_work from recent events such as QueueDrained/shelve/escalation.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-11T12:28:31.184212972Z
+  modified_at: 2026-09-11T12:28:31.184212972Z
 execution_mode: drain
 implementation_info:
   implemented: true
