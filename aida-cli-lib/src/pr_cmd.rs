@@ -646,9 +646,22 @@ pub(crate) fn fetch_change_info_via_forge(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<pr_rebase::PrInfo> {
-    let noun = crate::forge::resolve_forge_kind(project_root).change_noun();
-    let cli = crate::forge::resolve_forge_kind(project_root).cli_name();
-    let m = crate::forge::forge_for(project_root)
+    fetch_change_info_via_resolved_forge(
+        project_root,
+        n,
+        crate::forge::resolve_forge_kind(project_root),
+    )
+}
+
+// trace:BUG-1037 | ai:codex
+pub(crate) fn fetch_change_info_via_resolved_forge(
+    project_root: &std::path::Path,
+    n: u64,
+    forge_kind: crate::forge::ForgeKind,
+) -> Result<pr_rebase::PrInfo> {
+    let noun = forge_kind.change_noun();
+    let cli = forge_kind.cli_name();
+    let m = crate::forge::forge_for_kind(project_root, forge_kind)
         .change_metadata(n, &mut network_retry::NoopSink)
         .with_context(|| {
             if cli.is_empty() {
@@ -2715,6 +2728,16 @@ pub(crate) fn preflight_stale_base_check(
     preflight_stale_base_check_with_info(project_root, n, info)
 }
 
+// trace:BUG-1037 | ai:codex
+pub(crate) fn preflight_stale_base_check_with_forge(
+    project_root: &std::path::Path,
+    n: u64,
+    forge_kind: crate::forge::ForgeKind,
+) -> Result<pr_rebase::StaleBaseOutcome> {
+    let info = fetch_change_info_via_resolved_forge(project_root, n, forge_kind)?;
+    preflight_stale_base_check_with_info(project_root, n, info)
+}
+
 /// Test seam: same check with the metadata fetched via an injectable `gh`
 /// binary (the task-471 tests fake gh with a script), bypassing the forge
 /// routing the production wrapper uses.
@@ -2872,6 +2895,16 @@ pub(crate) fn preflight_intermediate_only_check(
     // STORY-621 Slice 2: metadata read forge-routed, mirroring
     // preflight_stale_base_check. trace:TASK-963 | ai:claude
     let info = fetch_change_info_via_forge(project_root, n)?;
+    preflight_intermediate_only_check_with_info(project_root, n, info)
+}
+
+// trace:BUG-1037 | ai:codex
+pub(crate) fn preflight_intermediate_only_check_with_forge(
+    project_root: &std::path::Path,
+    n: u64,
+    forge_kind: crate::forge::ForgeKind,
+) -> Result<pr_rebase::IntermediateOnlyOutcome> {
+    let info = fetch_change_info_via_resolved_forge(project_root, n, forge_kind)?;
     preflight_intermediate_only_check_with_info(project_root, n, info)
 }
 

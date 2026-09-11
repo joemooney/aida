@@ -943,7 +943,17 @@ pub fn init_forge_detection_message(project_root: &Path) -> (ForgeKind, String) 
 
 /// The forge provider for a project (config → detect → pure-git).
 pub fn forge_for(project_root: &Path) -> Box<dyn Forge> {
-    match resolve_forge_kind(project_root) {
+    forge_for_kind(project_root, resolve_forge_kind(project_root))
+}
+
+/// Build a forge provider from a forge kind resolved by the caller.
+///
+/// Auto-complete resolves the lifecycle forge once from the target project root
+/// and threads that value through each phase so config/cwd drift cannot make one
+/// phase pure-git while another phase opens a GitHub PR.
+// trace:BUG-1037 | ai:codex
+pub fn forge_for_kind(project_root: &Path, kind: ForgeKind) -> Box<dyn Forge> {
+    match kind {
         ForgeKind::GitHub => Box::new(GitHubForge::new(project_root)),
         ForgeKind::GitLab => Box::new(GitLabForge::new(project_root)),
         ForgeKind::None => Box::new(PureGitForge::new(project_root)),
@@ -952,11 +962,7 @@ pub fn forge_for(project_root: &Path) -> Box<dyn Forge> {
 
 /// The forge provider for opening a real PR/MR/change request.
 pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
-    match resolve_open_change_forge_kind(project_root) {
-        ForgeKind::GitHub => Box::new(GitHubForge::new(project_root)),
-        ForgeKind::GitLab => Box::new(GitLabForge::new(project_root)),
-        ForgeKind::None => Box::new(PureGitForge::new(project_root)),
-    }
+    forge_for_kind(project_root, resolve_open_change_forge_kind(project_root))
 }
 
 // ─────────────────────────── GitHub provider ───────────────────────────
