@@ -3,12 +3,12 @@ spec_id: STORY-1006
 agreed_id: STORY-1006
 title: '/aida-handoff: capture conversation residue to the substrate, then recommend fresh-session vs compact'
 description: 'Operator question (2026-09-09, deep into a multi-day session): can AIDA advise when a NEW conversation beats compacting, and do the handoff better than generic compaction? Thesis: in an AIDA session the substrate holds the durable state, so context is mostly re-derivable — the skill''s job is to make that true and then say which move is safe. /aida-handoff does three things: (1) CAPTURE — run the /aida-capture sweep for conversation-only residue (unfiled observations, undocumented decisions, promised follow-ups) and file it; (2) BRIEF — write a session-handoff brief into the substrate (aida brief / session notes + PROMPT_HISTORY entry): active role, running drains and their watchers, open PRs awaiting action, the next 3 actions, and any session-bound state that will NOT survive a fresh start (armed monitors/watchers, background processes) named explicitly; (3) RECOMMEND — a decision line: START FRESH when the substrate boundary is clean (no live drain, no session-bound watchers, capture complete) since a fresh session rebuilds losslessly from aida status/awaiting/role context; COMPACT when live session-bound state must survive, listing exactly what pins the session. Companion CLI probe aida session handoff --check prints the same recommendation from substrate facts alone (live drain? leases held by this session? unfiled residue unknowable from CLI — noted as the skill''s half). Scaffolded into the skill pack (propagation marker) so downstream projects get it. Acceptance: skill file + command registered; the brief lands in the substrate and a fresh session''s pickup surfaces it; the CLI probe reports the live-drain/lease pins correctly; discipline doc session-discipline.md gains the fresh-vs-compact rule.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:56:45.933921224Z
-modified_at: 2026-09-11T09:46:57.934995281Z
+modified_at: 2026-09-11T12:53:19.059720089Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
