@@ -57160,5 +57160,13 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4640
+- id: 01a090b3-4914-76f1-9913-f3ed306e9f34
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  author: aida
+  node_id: '1'
+  lamport: 4641
+  timestamp: 2026-09-11T13:41:03.892205834Z
+  kind: !SetStatus
+    status: Approved
+clock: 4641
 node_id: '1'
