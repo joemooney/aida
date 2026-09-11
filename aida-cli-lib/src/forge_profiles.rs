@@ -63,6 +63,13 @@ fn default_visibility() -> ForgeVisibility {
 }
 
 pub(crate) fn profiles_path() -> Result<PathBuf> {
+    // trace:BUG-1021 | ai:claude
+    // Test hook: `dirs::home_dir()` ignores `$HOME` on Windows, so tests that
+    // redirect the home dir set AIDA_TEST_HOME (same override as `glyphs.rs`).
+    #[cfg(test)]
+    if let Some(home) = std::env::var_os("AIDA_TEST_HOME") {
+        return Ok(PathBuf::from(home).join(".aida").join("forges.toml"));
+    }
     let home = dirs::home_dir().context("HOME not set; cannot locate ~/.aida/forges.toml")?;
     Ok(home.join(".aida").join("forges.toml"))
 }

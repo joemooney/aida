@@ -5091,23 +5091,3 @@ Verification: `cargo fmt --all -- --check`;
 `cargo test -p aida-cli-lib bug_775_commits_ahead_tests -- --nocapture`;
 `cargo test -p aida-cli-lib review_verdict_tests`. Existing unrelated Rust warnings remain in the
 focused test output.
-## Session 2026-09-10 — BUG-1021 cross-platform nightly red
-
-Picked up `BUG-1021` from the implementer queue. GitHub Actions logs for Sep 8 and Sep 9 showed
-macOS failing four tests around process ancestry and canonical temp paths, Windows failing shell/
-path/role-queue portability tests, and the scheduled notifier job failing because `gh issue`
-commands ran without repository context.
-
-Fixed macOS ancestry lookup by using `/proc` on Linux and `ps -o ppid=` on other Unix platforms.
-Normalized macOS temp-path assertions through canonical paths. Made project-registry tests emit
-TOML-safe escaped paths. Gated POSIX shell-wrapper subprocess tests to Unix, changed PATH tests to
-use `std::env::join_paths`, and made the remedy-log test assert path components rather than `/`
-separators. Fixed git-canonical queue storage for role queue identities like `role:implementer` by
-percent-encoding unsafe filename characters while preserving decoded logical queue users and legacy
-raw-file fallback. Added checkout steps to cross-platform nightly notifier jobs so `gh issue`
-commands can resolve the repository. Added `// trace:BUG-1021 | ai:codex` comments on the durable
-code paths and regression test.
-
-Verification: `cargo test -p aida-core --lib queue`; focused `aida-cli-lib` filters for the
-nightly failures; `cargo fmt --all -- --check`; clean-env `env -u AIDA_AUTO_COMPLETE cargo test -p
-aida-cli-lib --lib` (4597 passed). Existing unrelated Rust warnings remain in the test output.

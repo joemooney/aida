@@ -60,7 +60,9 @@ fn read_block_allocation_config_rejects_malformed_toml() {
     write_config(tmp.path(), "not [valid toml at all\n");
     let err = read_block_allocation_config(tmp.path()).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains(".aida/config.toml"), "{msg}");
+    // trace:BUG-1021 | ai:claude — the path renders with the platform separator.
+    let config_rel = std::path::Path::new(".aida").join("config.toml");
+    assert!(msg.contains(&config_rel.display().to_string()), "{msg}");
     assert!(msg.contains("failed to parse AIDA config"), "{msg}");
 }
 

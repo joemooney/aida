@@ -93,8 +93,10 @@ fn headless_bootstrap_uses_default_forge_profile() {
         "#,
     )
     .unwrap();
+    // trace:BUG-1021 | ai:claude — AIDA_TEST_HOME: `$HOME` is not honored on Windows.
     let _env = crate::test_env::EnvVarsGuard::set(&[
         ("HOME", home.path().to_str().unwrap()),
+        ("AIDA_TEST_HOME", home.path().to_str().unwrap()),
         ("AIDA_HEADLESS", "1"),
     ]);
 
@@ -122,7 +124,11 @@ fn explicit_unknown_forge_lists_configured_profiles() {
         "#,
     )
     .unwrap();
-    let _env = crate::test_env::EnvVarGuard::set("HOME", home.path());
+    // trace:BUG-1021 | ai:claude — AIDA_TEST_HOME: `$HOME` is not honored on Windows.
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("HOME", home.path().to_str().unwrap()),
+        ("AIDA_TEST_HOME", home.path().to_str().unwrap()),
+    ]);
 
     let mut plan = plain_plan(std::path::PathBuf::from("myproj"));
     plan.forge = Some("work-gitlab".to_string());

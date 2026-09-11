@@ -221,6 +221,8 @@ fn probe_resume_facts_is_conservative_when_nothing_exists() {
 }
 
 // trace:BUG-881 | ai:codex
+// trace:BUG-1021 | ai:claude — the fake `gh` is a bash script; Windows can't exec it.
+#[cfg(unix)]
 #[test]
 fn probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface() {
     let tmp = tempfile::tempdir().unwrap();

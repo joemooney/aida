@@ -231,7 +231,10 @@ global = true
 "#;
     std::fs::write(&product_path, custom_product).unwrap();
 
-    let _env = crate::test_env::EnvVarGuard::set("HOME", home.path());
+    // trace:BUG-1021 | ai:claude — AIDA_TEST_HOME: `$HOME` is not honored on Windows.
+    let home_str = home.path().to_str().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("HOME", home_str), ("AIDA_TEST_HOME", home_str)]);
     let (created, skipped) = scaffold_starter_roles(project.path()).unwrap();
 
     assert!(created.contains(&"implementer"));

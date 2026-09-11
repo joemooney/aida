@@ -375,8 +375,10 @@ fn post_pull_config_validation_quarantines_conflict_and_restores_pre_pull_config
     let err = validate_and_restore_project_configs_after_pull(&snapshots)
         .expect_err("conflicted config must make pull fail loudly");
     let msg = format!("{err:?}");
+    // trace:BUG-1021 | ai:claude — the path renders with the platform separator.
+    let config_rel = std::path::Path::new(".aida").join("config.toml");
     assert!(
-        msg.contains(".aida/config.toml:2: conflict marker"),
+        msg.contains(&format!("{}:2: conflict marker", config_rel.display())),
         "error should name conflicted file and line: {msg}"
     );
     assert!(
@@ -408,8 +410,10 @@ fn store_sync_config_parse_error_names_file_line_and_fix_hint() {
     let err = read_store_sync_config(tmp.path())
         .expect_err("invalid config TOML must be returned as a loud error");
     let msg = format!("{err:?}");
+    // trace:BUG-1021 | ai:claude — the path renders with the platform separator.
+    let config_rel = std::path::Path::new(".aida").join("config.toml");
     assert!(
-        msg.contains(".aida/config.toml:4"),
+        msg.contains(&format!("{}:4", config_rel.display())),
         "error should include config path and line: {msg}"
     );
     assert!(
