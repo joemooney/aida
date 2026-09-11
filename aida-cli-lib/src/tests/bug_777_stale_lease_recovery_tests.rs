@@ -353,3 +353,63 @@ fn phase_retry_dirty_dead_predecessor_parks_with_typed_cause() {
         err.reason
     );
 }
+
+#[test]
+fn implementer_retry_reclaims_dirty_dead_predecessor_and_preserves_worktree() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "story-993");
+    let wip = worktree.path().join("wip.rs");
+    std::fs::write(&wip, "// attempt 1 WIP\n").unwrap();
+    let mut lease = lease_at(worktree.path(), 5, Some(reaped_pid()), None);
+    lease.id = "019f908dirty".to_string();
+    lease.scope = "STORY-993".to_string();
+    lease.slug = "story-993".to_string();
+    lease.branch = "story-993".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let target = reclaim_implementer_retry_predecessor(project.path(), "STORY-993")
+        .expect("dirty dead implementer predecessor should be reclaimable")
+        .expect("retry should return the original branch/worktree");
+
+    assert_eq!(target.0, "story-993");
+    assert_eq!(target.1, worktree.path());
+    assert_eq!(target.2, lease.id);
+    assert!(
+        wip.exists(),
+        "retry reclaim must preserve uncommitted attempt-1 work"
+    );
+    assert!(
+        !lease_path(project.path(), &lease.id).exists(),
+        "old lease should be removed so the retry can force-claim the scope"
+    );
+}
+
+#[test]
+fn implementer_retry_live_predecessor_is_typed_lease_conflict() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "story-993-live");
+    let mut lease = lease_at(worktree.path(), 5, Some(std::process::id()), None);
+    lease.id = "019f908live".to_string();
+    lease.scope = "STORY-993".to_string();
+    lease.slug = "story-993".to_string();
+    lease.branch = "story-993-live".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let err = reclaim_implementer_retry_predecessor(project.path(), "STORY-993")
+        .expect_err("live predecessor must not be reclaimed");
+
+    assert_eq!(err.kind, auto_complete::FailureKind::LeaseConflict);
+    assert!(err.reason.contains(&lease.id[..8]), "{}", err.reason);
+    assert!(
+        err.reason
+            .contains(worktree.path().to_string_lossy().as_ref()),
+        "{}",
+        err.reason
+    );
+    assert!(
+        lease_path(project.path(), &lease.id).exists(),
+        "live lease must remain in place"
+    );
+}

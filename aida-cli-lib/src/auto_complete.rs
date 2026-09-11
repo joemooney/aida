@@ -434,6 +434,11 @@ pub(crate) enum FailureKind {
     /// same way a transient GH-API blip ([`Self::PrVerificationInconclusive`])
     /// is shelved. trace:BUG-455 | ai:claude
     CacheLocked,
+    /// BUG-908: a retry could not reclaim its own predecessor lease. This is a
+    /// typed self-collision, not a generic tool exit; telemetry records the
+    /// lease/worktree that blocked retry and auto-draft suppresses duplicates.
+    // trace:BUG-908 | ai:codex
+    LeaseConflict,
     /// BUG-826: the headless vendor process exited non-zero after creating a
     /// zero-byte JSONL log. That is a launch-layer transient, not evidence that
     /// the implementer attempted the work and failed.
@@ -475,6 +480,7 @@ impl FailureKind {
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
                 | Self::CacheLocked
+                | Self::LeaseConflict
                 // trace:BUG-826 | ai:codex
                 | Self::LaunchNoOutput
                 | Self::Failed
@@ -493,6 +499,7 @@ impl FailureKind {
             Self::NoPr => "no-pr",
             Self::Watchdog | Self::CiTimeout => "watchdog",
             Self::CacheLocked => "cache-locked",
+            Self::LeaseConflict => "lease-conflict",
             Self::Internal => "internal",
             Self::Spawn
             | Self::MissingTool
@@ -1355,6 +1362,20 @@ pub(crate) trait PhaseDriver {
         _attempt: u32,
         _max: u32,
     ) {
+    }
+
+    /// BUG-908: last hook before a transient retry re-runs the failed phase.
+    /// The real phase-1 driver uses it to release the just-dead predecessor
+    /// lease and aim the next child at the same worktree; mocks keep the
+    /// historical no-op behavior.
+    // trace:BUG-908 | ai:codex
+    fn prepare_transient_retry(
+        &mut self,
+        _spec: &str,
+        _phase: Phase,
+        _cause: &str,
+    ) -> Result<(), PhaseFailure> {
+        Ok(())
     }
 }
 
@@ -2597,17 +2618,18 @@ fn maybe_retry_transient_failure(
     retries_used: &mut usize,
     json: bool,
     start: &Instant,
-) -> bool {
+) -> Result<bool, PhaseFailure> {
     let failure = failure.clone().reclassify_transient();
     let budget = clamp_transient_retry_budget(driver.transient_retry_budget());
     if !should_retry_transient_failure(failure.kind, *retries_used, budget) {
-        return false;
+        return Ok(false);
     }
     *retries_used += 1;
     let attempt = (*retries_used + 1) as u32;
     let max = (budget + 1) as u32;
     let cause = failure.kind.cause_slug();
     driver.record_transient_retry(spec, phase, cause, attempt, max);
+    driver.prepare_transient_retry(spec, phase, cause)?;
     if json {
         let attempt_s = attempt.to_string();
         let max_s = max.to_string();
@@ -2634,7 +2656,7 @@ fn maybe_retry_transient_failure(
             phase.index(),
         );
     }
-    true
+    Ok(true)
 }
 
 /// STORY-975: when retry budget is exhausted, the eventual NeedsAttention
@@ -3110,7 +3132,7 @@ pub(crate) fn orchestrate_with_resume(
         loop {
             match driver.run_implementer() {
                 Err(f) => {
-                    if maybe_retry_transient_failure(
+                    match maybe_retry_transient_failure(
                         driver,
                         Phase::Implementer,
                         spec,
@@ -3119,7 +3141,20 @@ pub(crate) fn orchestrate_with_resume(
                         json,
                         &start,
                     ) {
-                        continue;
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(prep) => {
+                            durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                            return resolve_phase_failure(
+                                driver,
+                                Phase::Implementer,
+                                spec,
+                                json,
+                                &start,
+                                &prep,
+                                durations,
+                            );
+                        }
                     }
                     let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
@@ -3276,7 +3311,7 @@ pub(crate) fn orchestrate_with_resume(
                             continue;
                         }
                     }
-                    if maybe_retry_transient_failure(
+                    match maybe_retry_transient_failure(
                         driver,
                         Phase::Ci,
                         spec,
@@ -3285,7 +3320,20 @@ pub(crate) fn orchestrate_with_resume(
                         json,
                         &start,
                     ) {
-                        continue;
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(prep) => {
+                            durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
+                            return resolve_phase_failure(
+                                driver,
+                                Phase::Ci,
+                                spec,
+                                json,
+                                &start,
+                                &prep,
+                                durations,
+                            );
+                        }
                     }
                     let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Ci, phase_start.elapsed().as_millis()));
@@ -3333,7 +3381,7 @@ pub(crate) fn orchestrate_with_resume(
                     FailureKind::NoPr,
                     "no open PR resolved before the reviewer phase — refusing to launch reviewer for PR-0",
                 );
-                if maybe_retry_transient_failure(
+                match maybe_retry_transient_failure(
                     driver,
                     Phase::Reviewer,
                     spec,
@@ -3342,7 +3390,20 @@ pub(crate) fn orchestrate_with_resume(
                     json,
                     &start,
                 ) {
-                    continue;
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(prep) => {
+                        durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                        return resolve_phase_failure(
+                            driver,
+                            Phase::Reviewer,
+                            spec,
+                            json,
+                            &start,
+                            &prep,
+                            durations,
+                        );
+                    }
                 }
                 let f = failure_with_retry_attempt(driver, &f, retries_used);
                 durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
@@ -3358,7 +3419,7 @@ pub(crate) fn orchestrate_with_resume(
             }
             match driver.run_reviewer() {
                 Err(f) => {
-                    if maybe_retry_transient_failure(
+                    match maybe_retry_transient_failure(
                         driver,
                         Phase::Reviewer,
                         spec,
@@ -3367,7 +3428,20 @@ pub(crate) fn orchestrate_with_resume(
                         json,
                         &start,
                     ) {
-                        continue;
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(prep) => {
+                            durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                            return resolve_phase_failure(
+                                driver,
+                                Phase::Reviewer,
+                                spec,
+                                json,
+                                &start,
+                                &prep,
+                                durations,
+                            );
+                        }
                     }
                     let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
@@ -3493,7 +3567,7 @@ pub(crate) fn orchestrate_with_resume(
                             continue;
                         }
                     }
-                    if maybe_retry_transient_failure(
+                    match maybe_retry_transient_failure(
                         driver,
                         Phase::Merge,
                         spec,
@@ -3502,7 +3576,20 @@ pub(crate) fn orchestrate_with_resume(
                         json,
                         &start,
                     ) {
-                        continue;
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(prep) => {
+                            durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
+                            return resolve_phase_failure(
+                                driver,
+                                Phase::Merge,
+                                spec,
+                                json,
+                                &start,
+                                &prep,
+                                durations,
+                            );
+                        }
                     }
                     let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Merge, phase_start.elapsed().as_millis()));
@@ -3541,7 +3628,7 @@ pub(crate) fn orchestrate_with_resume(
             match driver.pull() {
                 Ok(()) => break,
                 Err(f) => {
-                    if maybe_retry_transient_failure(
+                    match maybe_retry_transient_failure(
                         driver,
                         Phase::Pull,
                         spec,
@@ -3550,7 +3637,20 @@ pub(crate) fn orchestrate_with_resume(
                         json,
                         &start,
                     ) {
-                        continue;
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(prep) => {
+                            durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
+                            return resolve_phase_failure(
+                                driver,
+                                Phase::Pull,
+                                spec,
+                                json,
+                                &start,
+                                &prep,
+                                durations,
+                            );
+                        }
                     }
                     let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Pull, phase_start.elapsed().as_millis()));
@@ -3587,7 +3687,7 @@ pub(crate) fn orchestrate_with_resume(
             match driver.build() {
                 Ok(()) => break,
                 Err(f) => {
-                    if maybe_retry_transient_failure(
+                    match maybe_retry_transient_failure(
                         driver,
                         Phase::Build,
                         spec,
@@ -3596,7 +3696,20 @@ pub(crate) fn orchestrate_with_resume(
                         json,
                         &start,
                     ) {
-                        continue;
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(prep) => {
+                            durations.push((Phase::Build, phase_start.elapsed().as_millis()));
+                            return resolve_phase_failure(
+                                driver,
+                                Phase::Build,
+                                spec,
+                                json,
+                                &start,
+                                &prep,
+                                durations,
+                            );
+                        }
                     }
                     let f = failure_with_retry_attempt(driver, &f, retries_used);
                     durations.push((Phase::Build, phase_start.elapsed().as_millis()));
@@ -5634,6 +5747,7 @@ mod tests {
             "verdict:request-changes",
             "verdict:reject",
             "ci-red",
+            "lease-conflict",
             "environmental",
             "internal",
         ] {
@@ -5649,6 +5763,8 @@ mod tests {
             0,
             1
         ));
+        assert!(FailureKind::LeaseConflict.is_shelvable());
+        assert_eq!(FailureKind::LeaseConflict.cause_slug(), "lease-conflict");
     }
 
     #[test]

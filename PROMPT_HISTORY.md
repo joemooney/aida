@@ -5091,3 +5091,22 @@ Verification: `cargo fmt --all -- --check`;
 `cargo test -p aida-cli-lib bug_775_commits_ahead_tests -- --nocapture`;
 `cargo test -p aida-cli-lib review_verdict_tests`. Existing unrelated Rust warnings remain in the
 focused test output.
+
+## Session 2026-09-11 — BUG-908 implementer retry lease reclaim
+
+Picked up `BUG-908` from the implementer queue. Fixed the whole-phase retry path so a transient
+implementer retry releases its dead predecessor lease but preserves and reuses the predecessor
+worktree, including dirty uncommitted attempt-1 changes. The retry child now force-claims the same
+scope and receives the original `--branch` and `--path`; it never needs `--steal`.
+
+Added a typed `lease-conflict` failure kind for cases where reclaim still cannot safely proceed
+(live or unknown predecessor), kept it shelvable for `FailureReason`, excluded it from transient
+retry causes, and suppressed duplicate auto-drafted BUG creation for that already-typed signature.
+
+Verification: `cargo fmt --all -- --check`;
+`cargo test -p aida-cli-lib bug_777_stale_lease_recovery_tests -- --nocapture`;
+`cargo test -p aida-cli-lib queue_work_tests::implementer_phase_args -- --nocapture`;
+`cargo test -p aida-cli-lib queue_work_tests::implementer_retry_args_thread_branch_and_existing_path_without_steal -- --nocapture`;
+`cargo test -p aida-cli-lib auto_complete::tests::transient_retry_policy_is_closed_and_bounded -- --nocapture`;
+`cargo test -p aida-cli-lib auto_complete::tests::orchestrate_retries_watchdog_reviewer_once_then_ships -- --nocapture`.
+Existing unrelated Rust warnings remain in the focused test output.

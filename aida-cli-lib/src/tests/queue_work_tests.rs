@@ -1565,6 +1565,8 @@ fn implementer_phase_args_threads_steal() {
         "0192f1c8-aaaa-7000-8000-000000000001",
         true,
         false,
+        None,
+        None,
         false,
         None,
     );
@@ -1582,7 +1584,8 @@ fn implementer_phase_args_threads_steal() {
 
 #[test]
 fn implementer_phase_args_omits_steal_by_default() {
-    let args = build_implementer_phase_args("BUG-311", "uuid", false, false, false, None);
+    let args =
+        build_implementer_phase_args("BUG-311", "uuid", false, false, None, None, false, None);
     assert!(
         args.iter().all(|a| a != "--steal"),
         "--steal must not appear when the outer drain did not pass it; got {:?}",
@@ -1597,6 +1600,8 @@ fn implementer_phase_args_threads_no_human_and_permission() {
         "uuid",
         true,
         false,
+        None,
+        None,
         true,
         Some("bypassPermissions"),
     );
@@ -1614,7 +1619,8 @@ fn implementer_phase_args_threads_no_human_and_permission() {
 
 #[test]
 fn implementer_phase_args_threads_force_claim() {
-    let args = build_implementer_phase_args("TASK-559", "uuid", false, true, false, None);
+    let args =
+        build_implementer_phase_args("TASK-559", "uuid", false, true, None, None, false, None);
     assert!(
         args.iter().any(|a| a == "--force-claim"),
         "--force-claim must be threaded to phase 1 when the outer drain set it; got {:?}",
@@ -1624,6 +1630,36 @@ fn implementer_phase_args_threads_force_claim() {
         args.iter().all(|a| a != "--steal"),
         "--force-claim should not imply --steal; got {:?}",
         args
+    );
+}
+
+#[test]
+fn implementer_retry_args_thread_branch_and_existing_path_without_steal() {
+    let path = std::path::Path::new("/tmp/aida-story-993");
+    let args = build_implementer_phase_args(
+        "STORY-993",
+        "uuid",
+        false,
+        true,
+        Some("story-993"),
+        Some(path),
+        true,
+        None,
+    );
+
+    assert!(args.iter().any(|a| a == "--force-claim"));
+    assert!(args.iter().all(|a| a != "--steal"), "{args:?}");
+    assert_eq!(
+        args.windows(2)
+            .find(|w| w[0] == "--branch")
+            .map(|w| w[1].as_str()),
+        Some("story-993")
+    );
+    assert_eq!(
+        args.windows(2)
+            .find(|w| w[0] == "--path")
+            .map(|w| w[1].as_str()),
+        Some("/tmp/aida-story-993")
     );
 }
 
