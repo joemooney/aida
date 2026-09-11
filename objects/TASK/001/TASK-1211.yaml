@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:54:08.117240448Z
-modified_at: 2026-09-11T18:18:01.252873647Z
+modified_at: 2026-09-11T18:21:29.622335408Z
 req_type: Task
 tags:
 - from-product
@@ -50,3 +50,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-11T18:18:01.252873647Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1742: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34632484731 — view it: `gh run view 34632484731`. Push fixups to the same branch: `aida queue work TASK-1211 --branch task-1211 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-11T18:21:29.622335408Z
