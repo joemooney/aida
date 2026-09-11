@@ -3,11 +3,11 @@ spec_id: BUG-1044
 agreed_id: BUG-1044
 title: aida status leads with a no-active-role banner after reboot — last-used role and a copyable re-enter command
 description: 'Field report from another project (2026-09-10): after a reboot, an advisor-gated action failed LATE in a workflow because the fresh shell had no active role — recoverable, but surfaced at the failure point instead of session start. Fix: aida status (bare, top of output) prominently shows ''no active role'' with the LAST-USED role and a copyable aida role enter <role> command when no role is active; gated-operation refusals include the same line; optional [role] restore_prompt = true config offers restoration at the first interactive command of a roleless shell (explicitly configured, default off — faithful to current behavior). Complements STORY-821''s role-enter resume. Acceptance: roleless shell status leads with the banner + last-used role + exact command; gated refusal carries it; the opt-in prompt fires once per shell when enabled.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T02:15:39.152833040Z
-modified_at: 2026-09-11T02:15:43.745015951Z
+modified_at: 2026-09-11T04:10:29.272438916Z
 req_type: Bug
 execution_mode: drain
