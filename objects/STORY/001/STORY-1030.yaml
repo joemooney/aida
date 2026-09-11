@@ -1,0 +1,26 @@
+id: 01a08eee-a4d5-7993-9bc3-2e716b19d068
+spec_id: STORY-1030
+agreed_id: STORY-1030
+title: 'Review PR-1728: [AI:codex] docs(discipline): re-read state before stale-id cleanup (TASK-1203)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08eeb`) for branch `task-1203`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1728>
+  - Branch: `task-1203` → `main`
+
+  ## Covers
+
+  - TASK-1203
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1728` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T05:26:39.573188055Z
+modified_at: 2026-09-11T05:26:39.573188055Z
+req_type: Story
