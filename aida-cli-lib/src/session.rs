@@ -1125,6 +1125,7 @@ pub(crate) fn compose_headless_command(
     session_id: &str,
     contained: bool,
     model: Option<&str>,
+    effort: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
     let worktree = headless_worktree_root();
     // BUG-799: Codex gets slash-commands inline-rendered; Claude expands its
@@ -1140,7 +1141,14 @@ pub(crate) fn compose_headless_command(
     os_wrapped_program_and_args(
         &worktree,
         &resolve_agent_program(vendor.program()),
-        headless_vendor_args(vendor, &effective_prompt, session_id, contained, model),
+        headless_vendor_args(
+            vendor,
+            &effective_prompt,
+            session_id,
+            contained,
+            model,
+            effort,
+        ),
     )
 }
 
@@ -1153,6 +1161,27 @@ pub(crate) fn compose_headless_command(
 /// pre-STORY-683 behavior. trace:STORY-683 | ai:claude
 pub fn spawn_vendor_headless(
     vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+) -> Result<std::process::ExitStatus> {
+    spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Implementer,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+    )
+}
+
+// trace:STORY-1033 | ai:codex
+pub fn spawn_vendor_headless_with_seat(
+    vendor: HeadlessVendor,
+    seat: aida_core::agents_config::AgentSeat,
     prompt: &str,
     session_id: &str,
     log_path: &Path,
@@ -1172,14 +1201,21 @@ pub fn spawn_vendor_headless(
     // stays silent so existing output is unchanged. trace:STORY-683 | ai:claude
     if vendor != HeadlessVendor::Claude {
         eprintln!(
-            "{} headless drain phase on vendor `{}`",
+            "{} headless drain phase on vendor `{}` seat `{}`",
             "Vendor:".cyan().bold(),
-            vendor.as_str()
+            vendor.as_str(),
+            seat.as_str()
         );
     }
-    let model = resolve_vendor_model(&headless_worktree_root(), vendor);
-    let (program, args) =
-        compose_headless_command(vendor, prompt, session_id, contained, model.as_deref())?;
+    let tuning = resolve_agent_tuning(&headless_worktree_root(), vendor, seat);
+    let (program, args) = compose_headless_command(
+        vendor,
+        prompt,
+        session_id,
+        contained,
+        tuning.model.as_deref(),
+        tuning.effort.as_deref(),
+    )?;
     // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
     // ourselves rather than inheriting whatever the ambient shell carried, so
     // every headless phase behaves identically whoever launched it.
@@ -1449,6 +1485,34 @@ pub(crate) fn resolve_vendor_model(worktree_root: &Path, vendor: HeadlessVendor)
         .or_else(|| aida_core::agents_config::resolve_vendor_model(worktree_root, vendor.as_str()))
 }
 
+/// Resolve model/effort for a vendor-backed launch seat.
+///
+/// `AIDA_AGENT_MODEL` remains the one-shot model override for legacy callers;
+/// `AIDA_AGENT_EFFORT` is the effort twin. Config fills any unset field from
+/// `[agents.<vendor>]` / `[agents.<vendor>.seats]`.
+// trace:STORY-1033 | ai:codex
+pub(crate) fn resolve_agent_tuning(
+    worktree_root: &Path,
+    vendor: HeadlessVendor,
+    seat: aida_core::agents_config::AgentSeat,
+) -> aida_core::agents_config::ResolvedAgentTuning {
+    let mut tuning =
+        aida_core::agents_config::resolve_agent_tuning(worktree_root, vendor.as_str(), seat);
+    if let Some(model) = std::env::var("AIDA_AGENT_MODEL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        tuning.model = Some(model);
+    }
+    if let Some(effort) = std::env::var("AIDA_AGENT_EFFORT")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        tuning.effort = Some(effort);
+    }
+    tuning
+}
+
 fn agent_selection_allows_vendor(
     selection: crate::init_cmd::AgentSelection,
     vendor: HeadlessVendor,
@@ -1621,13 +1685,14 @@ pub fn headless_vendor_args(
     session_id: &str,
     contained: bool,
     model: Option<&str>,
+    effort: Option<&str>,
 ) -> Vec<String> {
     match vendor {
-        HeadlessVendor::Claude => {
-            claude_headless_args_with_posture_and_model(prompt, session_id, contained, model)
-        }
-        HeadlessVendor::Codex => codex_headless_args_with_model(prompt, model),
-        HeadlessVendor::Agy => agy_headless_args(prompt),
+        HeadlessVendor::Claude => claude_headless_args_with_posture_model_and_effort(
+            prompt, session_id, contained, model, effort,
+        ),
+        HeadlessVendor::Codex => codex_headless_args_with_model_and_effort(prompt, model, effort),
+        HeadlessVendor::Agy => agy_headless_args_with_effort(prompt, effort),
     }
 }
 
@@ -1642,11 +1707,24 @@ pub fn headless_vendor_args(
 /// The prompt is the final positional. Pure — unit-tested without spawning.
 // trace:TASK-1048 | ai:claude
 pub fn agy_headless_args(prompt: &str) -> Vec<String> {
+    agy_headless_args_with_effort(prompt, None)
+}
+
+// trace:STORY-1033 | ai:codex
+pub fn agy_headless_args_with_effort(prompt: &str, effort: Option<&str>) -> Vec<String> {
     vec![
         "-p".to_string(),
         "--dangerously-skip-permissions".to_string(),
-        prompt.to_string(),
     ]
+    .into_iter()
+    .chain(
+        effort
+            .filter(|e| !e.trim().is_empty())
+            .map(|e| vec!["--effort".to_string(), e.to_string()])
+            .unwrap_or_default(),
+    )
+    .chain([prompt.to_string()])
+    .collect()
 }
 
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
@@ -1669,6 +1747,15 @@ pub fn codex_headless_args(prompt: &str) -> Vec<String> {
 
 // trace:STORY-1003 BUG-909 | ai:codex
 pub fn codex_headless_args_with_model(prompt: &str, model: Option<&str>) -> Vec<String> {
+    codex_headless_args_with_model_and_effort(prompt, model, None)
+}
+
+// trace:STORY-1033 | ai:codex
+pub fn codex_headless_args_with_model_and_effort(
+    prompt: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> Vec<String> {
     let mut args = vec![
         "exec".to_string(),
         "--json".to_string(),
@@ -1676,6 +1763,9 @@ pub fn codex_headless_args_with_model(prompt: &str, model: Option<&str>) -> Vec<
     ];
     if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
         args.extend(["--model".to_string(), model.to_string()]);
+    }
+    if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
+        args.extend(["-c".to_string(), format!("model_reasoning_effort={effort}")]);
     }
     args.push(prompt.to_string());
     args
@@ -1699,6 +1789,17 @@ pub fn claude_headless_args_with_posture_and_model(
     session_id: &str,
     contained: bool,
     model: Option<&str>,
+) -> Vec<String> {
+    claude_headless_args_with_posture_model_and_effort(prompt, session_id, contained, model, None)
+}
+
+// trace:STORY-1033 | ai:codex
+pub fn claude_headless_args_with_posture_model_and_effort(
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
 ) -> Vec<String> {
     let permission_mode = if contained {
         "dontAsk"
@@ -1729,6 +1830,12 @@ pub fn claude_headless_args_with_posture_and_model(
         model
             .filter(|m| !m.trim().is_empty())
             .map(|m| vec!["--model".to_string(), m.to_string()])
+            .unwrap_or_default(),
+    )
+    .chain(
+        effort
+            .filter(|e| !e.trim().is_empty())
+            .map(|e| vec!["--effort".to_string(), e.to_string()])
             .unwrap_or_default(),
     )
     .chain([prompt.to_string()])
@@ -2429,9 +2536,19 @@ pub fn exec_vendor_headless(
             vendor.as_str()
         );
     }
-    let model = resolve_vendor_model(&headless_worktree_root(), vendor);
-    let (program, args) =
-        compose_headless_command(vendor, prompt, session_id, contained, model.as_deref())?;
+    let tuning = resolve_agent_tuning(
+        &headless_worktree_root(),
+        vendor,
+        aida_core::agents_config::AgentSeat::Implementer,
+    );
+    let (program, args) = compose_headless_command(
+        vendor,
+        prompt,
+        session_id,
+        contained,
+        tuning.model.as_deref(),
+        tuning.effort.as_deref(),
+    )?;
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
@@ -2570,13 +2687,38 @@ pub fn advisor_tier_program_and_args(
     seeded_prompt: &str,
     advisor_uuid: &str,
 ) -> (String, Vec<String>) {
+    advisor_tier_program_and_args_with_tuning(
+        vendor,
+        is_fork,
+        seeded_prompt,
+        advisor_uuid,
+        None,
+        None,
+    )
+}
+
+// trace:STORY-1033 | ai:codex
+pub fn advisor_tier_program_and_args_with_tuning(
+    vendor: HeadlessVendor,
+    is_fork: bool,
+    seeded_prompt: &str,
+    advisor_uuid: &str,
+    model: Option<&str>,
+    effort: Option<&str>,
+) -> (String, Vec<String>) {
     match vendor {
         HeadlessVendor::Claude => {
             let args = if is_fork {
                 // Fork branch inherits the live advisor's context via --resume.
                 claude_headless_resume_args("/aida-advise", advisor_uuid)
             } else {
-                claude_headless_args(seeded_prompt, advisor_uuid)
+                claude_headless_args_with_posture_model_and_effort(
+                    seeded_prompt,
+                    advisor_uuid,
+                    false,
+                    model,
+                    effort,
+                )
             };
             // TASK-1081: route the vendor binary through the mock resolver — an
             // `AIDA_AGENT_CMD` override swaps the program, argv unchanged; unset
@@ -2592,7 +2734,7 @@ pub fn advisor_tier_program_and_args(
             // TASK-1081: same mock resolver as the Claude arm. trace:TASK-1081
             (
                 resolve_agent_program(HeadlessVendor::Codex.program()),
-                codex_headless_args(seeded_prompt),
+                codex_headless_args_with_model_and_effort(seeded_prompt, model, effort),
             )
         }
         HeadlessVendor::Agy => {
@@ -2602,7 +2744,7 @@ pub fn advisor_tier_program_and_args(
             // TASK-1081: same mock resolver as the other arms. trace:TASK-1048
             (
                 resolve_agent_program(HeadlessVendor::Agy.program()),
-                agy_headless_args(seeded_prompt),
+                agy_headless_args_with_effort(seeded_prompt, effort),
             )
         }
     }
@@ -4901,6 +5043,7 @@ mod tests {
             sid,
             false,
             Some("opus-alias"),
+            None,
         );
         assert_eq!(
             claude
@@ -4911,8 +5054,14 @@ mod tests {
         );
         assert_eq!(claude.last().map(String::as_str), Some(prompt));
 
-        let codex =
-            headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, Some("gpt-alias"));
+        let codex = headless_vendor_args(
+            HeadlessVendor::Codex,
+            prompt,
+            sid,
+            false,
+            Some("gpt-alias"),
+            None,
+        );
         assert_eq!(
             codex
                 .windows(2)
@@ -4922,8 +5071,64 @@ mod tests {
         );
         assert_eq!(codex.last().map(String::as_str), Some(prompt));
 
-        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, Some("ignored"));
+        let agy = headless_vendor_args(
+            HeadlessVendor::Agy,
+            prompt,
+            sid,
+            false,
+            Some("ignored"),
+            None,
+        );
         assert!(!agy.iter().any(|arg| arg == "--model"), "{agy:?}");
+    }
+
+    #[test]
+    fn headless_vendor_args_pass_effort_in_native_form() {
+        let prompt = "/aida-pickup STORY-1033";
+        let sid = "sid";
+
+        let claude = headless_vendor_args(
+            HeadlessVendor::Claude,
+            prompt,
+            sid,
+            false,
+            None,
+            Some("high"),
+        );
+        assert_eq!(
+            claude
+                .windows(2)
+                .find(|w| w[0] == "--effort")
+                .map(|w| w[1].as_str()),
+            Some("high")
+        );
+        assert_eq!(claude.last().map(String::as_str), Some(prompt));
+
+        let codex = headless_vendor_args(
+            HeadlessVendor::Codex,
+            prompt,
+            sid,
+            false,
+            None,
+            Some("medium"),
+        );
+        assert_eq!(
+            codex
+                .windows(2)
+                .find(|w| w[0] == "-c")
+                .map(|w| w[1].as_str()),
+            Some("model_reasoning_effort=medium")
+        );
+        assert_eq!(codex.last().map(String::as_str), Some(prompt));
+
+        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, Some("low"));
+        assert_eq!(
+            agy.windows(2)
+                .find(|w| w[0] == "--effort")
+                .map(|w| w[1].as_str()),
+            Some("low")
+        );
+        assert_eq!(agy.last().map(String::as_str), Some(prompt));
     }
 
     #[test]
@@ -4999,7 +5204,7 @@ mod tests {
         let sid = "019e0000-0000-7000-8000-000000000000";
 
         // Claude arm: -p print mode + the prompt survives, NOT a codex command.
-        let claude = headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None);
+        let claude = headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None);
         assert!(claude.contains(&"-p".to_string()), "claude -p: {claude:?}");
         assert!(
             claude.contains(&"bypassPermissions".to_string()),
@@ -5018,7 +5223,7 @@ mod tests {
 
         // Codex arm: `codex exec --json --dangerously-bypass-approvals-and-sandbox
         // <prompt>`, with the prompt as the final positional and NO claude `-p`.
-        let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None);
+        let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None);
         assert_eq!(codex.first().map(String::as_str), Some("exec"), "{codex:?}");
         assert!(
             codex.contains(&"--json".to_string()),
@@ -5036,7 +5241,7 @@ mod tests {
 
         // TASK-1048: Agy arm: `agy -p --dangerously-skip-permissions <prompt>`,
         // with the prompt as the final positional and NO codex `exec`.
-        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None);
+        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, None);
         assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
         assert_eq!(agy.first().map(String::as_str), Some("-p"), "{agy:?}");
         assert!(
@@ -5368,6 +5573,7 @@ mod tests {
             "sid",
             false,
             None,
+            None,
         )
         .unwrap();
         let joined = args.join(" ");
@@ -5386,6 +5592,7 @@ mod tests {
             "sid",
             false,
             None,
+            None,
         )
         .unwrap();
         assert!(
@@ -5397,16 +5604,28 @@ mod tests {
     #[test]
     fn compose_headless_command_routes_per_vendor() {
         let _env = AgentCmdEnvGuard::acquire();
-        let (prog, args) =
-            compose_headless_command(HeadlessVendor::Codex, "do a thing", "sid", false, None)
-                .unwrap();
+        let (prog, args) = compose_headless_command(
+            HeadlessVendor::Codex,
+            "do a thing",
+            "sid",
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(prog.ends_with("codex"), "{prog}");
         assert_eq!(args.first().map(String::as_str), Some("exec"), "{args:?}");
         assert!(!args.contains(&"-p".to_string()), "{args:?}");
 
-        let (prog, args) =
-            compose_headless_command(HeadlessVendor::Claude, "do a thing", "sid", false, None)
-                .unwrap();
+        let (prog, args) = compose_headless_command(
+            HeadlessVendor::Claude,
+            "do a thing",
+            "sid",
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(prog.ends_with("claude"), "{prog}");
         assert!(args.contains(&"-p".to_string()), "{args:?}");
         assert_eq!(

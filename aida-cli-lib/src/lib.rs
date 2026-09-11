@@ -79346,8 +79346,19 @@ impl RealPhaseDriver {
         // embedded skill body; Claude keeps the slash form and expands it.
         let is_claude = matches!(vendor, session::HeadlessVendor::Claude);
         let seeded = crate::intake::seeded_advise_prompt_for_vendor(&self.project_root, is_claude);
-        let (program, advisor_args) =
-            session::advisor_tier_program_and_args(vendor, is_fork, &seeded, &advisor_uuid);
+        let advisor_tuning = session::resolve_agent_tuning(
+            &self.project_root,
+            vendor,
+            aida_core::agents_config::AgentSeat::Advisor,
+        );
+        let (program, advisor_args) = session::advisor_tier_program_and_args_with_tuning(
+            vendor,
+            is_fork,
+            &seeded,
+            &advisor_uuid,
+            advisor_tuning.model.as_deref(),
+            advisor_tuning.effort.as_deref(),
+        );
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let status = std::process::Command::new(&program)
@@ -82148,7 +82159,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
-        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false, None);
+        let fix_args = session::headless_vendor_args(vendor, &prompt, &fix_uuid, false, None, None);
         // trace:TASK-1169 | ai:claude
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         let status = std::process::Command::new(&program)
