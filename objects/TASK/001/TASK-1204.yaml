@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:45.106919890Z
-modified_at: 2026-09-11T18:22:23.089902434Z
+modified_at: 2026-09-11T18:39:40.824301241Z
 req_type: Task
 tags:
 - build
@@ -31,4 +31,11 @@ tags:
 - perf
 - recommend:approve
 - risk:low
+comments:
+- id: 01a091c4-ad18-7ad2-8b31-62557f3bbd7a
+  author: joe
+  content: 'Implementation chose the dev-profile option: PR/drain CI now runs cargo build --workspace, cargo test --workspace --no-fail-fast, bwrap, MCP stdio, trace gates, manual drift guard, and clippy against dev-profile artifacts. Before-change green CI build-job durations from gh run view: 34631724851 Build (ubuntu-latest) 10m13s (18:09:46-18:19:59Z), 34630177858 10m57s (17:53:09-18:04:06Z), 34629846553 9m58s (17:49:31-17:59:29Z). Local test summary after change: aida-cli-lib 4643 passed; aida-core 909 passed; aida-tui 547 passed; launcher_intent 9 passed; doctests aida 1 passed, aida_cli_lib 0 passed/1 ignored, aida_core 0 passed/2 ignored, aida_tui 1 passed. First three GitHub after-change run durations require CI runs after this commit/PR.'
+  created_at: 2026-09-11T18:39:40.824301241Z
+  modified_at: 2026-09-11T18:39:40.824301241Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
