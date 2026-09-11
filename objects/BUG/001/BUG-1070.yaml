@@ -1,0 +1,50 @@
+id: 01a091a5-c3f1-79b2-8c7f-02213a49408d
+spec_id: BUG-1070
+agreed_id: BUG-1070
+title: 'auto-complete failure: phase 3 (reviewer) on STORY-1006'
+description: |
+  Auto-drafted by `aida queue work STORY-1006 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  phase 3 retry found dead predecessor lease 01a08b60 on `PR-1720`, but its worktree is dirty (2 uncommitted change(s)); worktree: /home/joe/ai/aida-pr-1720; changes: M PROMPT_HISTORY.md; M aida-core/templates/skills/aida-handoff.md (attempt 2/2)
+
+  Failure kind: `cache-locked`
+
+  ## Recovery hint shown to the user
+
+  The local cache was locked by another `aida` process (a sibling drain, an interactive shell, or a bulk archive/edit sweep) longer than the retry window — the spec is shelved, not failed. Avoid running bulk cache writes while a drain is live, then re-run: `aida queue work STORY-1006 --auto-complete`. If a lock looks stuck, run `aida doctor heal stale-locks`.
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-11T18:05:54.304253359+00:00
+
+  ## Phase durations
+
+    - phase 3 (reviewer): 8125 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"STORY-1006","started_at":"2026-09-11T18:05:45.081052936+00:00","completed_at":"2026-09-11T18:05:54.304253359+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"cache-locked","failure_message":"phase 3 retry found dead predecessor lease 01a08b60 on `PR-1720`, but its worktree is dirty (2 uncommitted change(s)); worktree: /home/joe/ai/aida-pr-1720; changes: M PROMPT_HISTORY.md; M aida-core/templates/skills/aida-handoff.md (attempt 2/2)","phase_durations":[{"phase":3,"slug":"reviewer","elapsed_ms":8125}],"total_ms":8483,"binary_sha":"e5676286b"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T18:05:55.057902333Z
+modified_at: 2026-09-11T18:05:55.057902333Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:cache-locked
+- reviewer
