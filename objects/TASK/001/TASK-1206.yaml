@@ -1,0 +1,31 @@
+id: 01a090e5-a717-7e33-928e-cdff2a63b298
+spec_id: TASK-1206
+agreed_id: TASK-1206
+title: 'CI trace gate: fetch aida-store into a remote-tracking ref (a prior step leaves the branch checked out in .aida-store), and fail hard when the store cannot be loaded'
+description: |-
+  ## Observed
+  PR CI annotation on 5 of the last 8 runs (e.g. run 34608191969, PR-1738): "could not fetch aida-store branch — trace gate may not resolve ids". The step's actual error: fatal: refusing to fetch into branch 'refs/heads/aida-store' checked out at '/home/runner/work/aida/aida/.aida-store'. An earlier step in the same job (the test suite or tests/test_distributed.sh exercising the TASK-621 fresh-clone auto-attach against the runner checkout) has already attached .aida-store/ as a worktree on the local aida-store branch, so `git fetch origin aida-store:aida-store` is refused. Intermittent because it depends on whether that attach happened earlier in the job. The gate then resolved ids from the already-attached worktree (this run passed "every (SPEC-ID) trailer resolves"), but that worktree is only as fresh as the moment it was attached, and if no worktree exists the gate's store load returns None and the gate's behaviour on a missing store is not enforced.
+
+  ## Acceptance
+  1. ci.yml trace-gate step (and the two sibling steps at lines ~171 and ~191 that repeat the fetch) fetch into a remote-tracking ref: git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store. If .aida-store/ is already a worktree, fast-forward it to origin/aida-store (git -C .aida-store merge --ff-only origin/aida-store); otherwise attach it from that ref. The ::warning:: path disappears; a fetch failure is an error.
+  2. aida trace gate exits non-zero with a clear message when load_store_for_lookup returns None (store not attachable) — a gate that cannot see the graph must not pass. Unit test with an empty tempdir.
+  3. Identify and note in the PR which earlier step attaches .aida-store in the checkout; if it is a test writing into the real repo root rather than a tempdir, file a follow-up BUG for that test hygiene (tests must not mutate the checkout).
+  4. Evidence: three consecutive PR CI runs with no aida-store annotation.
+
+  ## Related
+  STORY-498 (trace gate), TASK-621 (fresh-clone auto-attach), TASK-1205 (other CI guards; keep separate PRs).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T14:36:04.759429196Z
+modified_at: 2026-09-11T14:36:04.759429196Z
+req_type: Task
+tags:
+- aida-store
+- ci
+- from-product
+- lifecycle:no-review
+- recommend:approve
+- risk:low
+- trace-gate
