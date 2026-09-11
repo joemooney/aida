@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:40.345435015Z
-modified_at: 2026-09-11T13:41:30.371664926Z
+modified_at: 2026-09-11T13:41:32.309813700Z
 req_type: Task
 tags:
 - ci
@@ -36,3 +36,4 @@ relationships:
   target_id: 01a08986-deb1-7581-a3d1-a8e70d537e4f
   created_at: 2026-09-11T12:44:56.495962166Z
   created_by: joe
+execution_mode: drain
