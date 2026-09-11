@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:41.882954288Z
-modified_at: 2026-09-11T17:25:04.702926557Z
+modified_at: 2026-09-11T17:30:14.103794911Z
 req_type: Epic
 tags:
 - autonomy
@@ -65,3 +65,10 @@ relationships:
 - rel_type: Parent
   target_id: 01a09181-7c91-7131-a401-1b4524ac6c08
   created_at: 2026-09-11T17:26:20.112380560Z
+comments:
+- id: 01a09185-18d7-7903-86b0-9f1e31697879
+  author: joe
+  content: 'CROSS-VENDOR MANDATE (operator, 2026-09-11): this reliability mechanism MUST work on Codex AND Claude (tier-1, both required), with Antigravity as tier-2 (future). Maps onto AIDA''s layering: detection/coordination read the vendor-NEUTRAL substrate (git-canonical record, events.jsonl, leases); only EXECUTION (activity signal, wake, re-drive launch) is vendor-specific and MUST go behind one adapter seam (the vendor-at-exec-layer principle — never vendor logic in coordination). Constraint on every child: the supervisor (STORY-1051), the watchdog, and idle detection (STORY-998) consume a per-vendor activity/liveness adapter, not vendor-specific code inline. Tier-1 (Claude stream-json + Codex --json/rollout, BUG-909) ships; tier-2 (Antigravity agy --output-format stream-json) is a stub adapter, wired but not validated. Enabling spec: the vendor activity/liveness adapter (filed as a child).'
+  created_at: 2026-09-11T17:30:14.103794911Z
+  modified_at: 2026-09-11T17:30:14.103794911Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
