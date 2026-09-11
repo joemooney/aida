@@ -3,20 +3,36 @@ spec_id: BUG-1043
 agreed_id: BUG-1043
 title: MCP approval authority can disagree with the active shell role — refusals must name both roles and the relaunch command
 description: 'Field report from another project (2026-09-10): an advisor-gated approval through MCP was REFUSED because the MCP server was launched without advisor authority, while the caller''s shell banner showed AIDA_SESSION_ROLE=advisor — the same approval then succeeded via CLI. Contradictory authority signals cost agents retries or false blocked conclusions. Fix: (1) expose the MCP server''s EFFECTIVE role/authority in aida status and in the MCP server''s own status/summary resource; (2) every gated MCP refusal names the server''s role, the caller shell role when known, and the exact relaunch command/config for advisor authority; (3) consider inheriting/forwarding the client''s role where the transport can carry it safely, else document the two-authority model in the MCP setup docs. Repro: start mcp-serve without the role; export advisor in a client shell; attempt a gated transition via MCP. Acceptance: refusal message contains server role + caller role + relaunch command; aida status shows the MCP server authority line when a server is registered; docs updated.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T02:15:33.149879719Z
-modified_at: 2026-09-11T04:02:41.753208550Z
+modified_at: 2026-09-11T04:07:24.518664800Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08ea1-b493-71f2-99a0-fddb4b656c7d
   created_at: 2026-09-11T04:02:41.753202578Z
   created_by: joe
+history:
+- id: 01a08ea6-1652-72c0-979d-10f4aaec9f6d
+  author: aida-auto-bump
+  timestamp: 2026-09-11T04:07:24.498209734Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a08ea6-1666-7800-b813-18f31e7d450b
+  timestamp: 2026-09-11T04:07:24.518663119Z
+  agent: aida
+  commit_sha: ad9f63fe90e01e403988847edb8441311993f669
+  summary: Completed via merge ad9f63fe
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T03:51:47.967482399Z
   implemented_by: joe
+  completed_at: 2026-09-11T04:07:24.498043033Z
+  completion_sha: ad9f63fe90e01e403988847edb8441311993f669
