@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   TASK-257 (CI split), the drain pipelining story (the other half of the CI-wait cost).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:45.106919890Z
-modified_at: 2026-09-11T13:41:18.568465102Z
+modified_at: 2026-09-11T18:21:46.168856774Z
 req_type: Task
 tags:
 - build
