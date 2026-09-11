@@ -56726,5 +56726,30 @@ operations:
     req_type: Story
     status: Draft
     priority: High
-clock: 4624
+- id: 01a09075-b7e6-79e2-972a-66ab3d8331b1
+  target_id: 01a09075-a892-7fc0-a535-b1ce37caacae
+  author: aida
+  node_id: '1'
+  lamport: 4625
+  timestamp: 2026-09-11T12:33:49.030704369Z
+  kind: !Create
+    title: 'CI: compile the workspace once — share the release build with the test step instead of a second dev-profile compile'
+    description: |-
+      ## Why
+      Operator (2026-09-11): the drain is slow; CI wait is the largest fixed block per spec (median 9.0 min). The last green PR run (34597329394) took 10.7 min: Build all packages --release 3.8 min, Run tests 2.9 min (a second full compile in the dev/test profile), bwrap gate 1.0, MCP stdio 0.7, clippy 0.5, checkout + toolchain + rust-cache restore ~1.8. The workspace is compiled twice for real.
+
+      ## Acceptance
+      1. .github/workflows/ci.yml compiles the workspace once: either cargo test --workspace --release so the test step reuses the release artifacts the build step produced, or the build step drops --release and every later step that needs a binary uses the dev-profile one. Pick the option that keeps the MCP stdio suite and the bwrap gate running against the same binary they test today, and say which in the PR.
+      2. Swatinem/rust-cache keys include the chosen profile so the cache hit rate does not drop.
+      3. Clippy runs with the same profile flags where possible so its check build shares artifacts (accept the 0.5 min if not).
+      4. Evidence in the PR: job duration for the last three green runs before the change and the first three after, from gh run view; target is at least 2.5 min off the 10.7 min job.
+      5. The nightly cross-platform workflow is NOT touched (it is not on the drain path).
+      6. No test is skipped or moved; the same test count runs before and after (cargo test summary lines pasted).
+
+      ## Related
+      TASK-257 (CI split), the drain pipelining story (the other half of the CI-wait cost).
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 4625
 node_id: '1'
