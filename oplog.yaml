@@ -55885,5 +55885,17 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4581
+- id: 01a08fdc-bfd5-75d0-983d-94441664595b
+  target_id: 01a08fdc-ba10-7661-9907-c1064b3b3d8f
+  author: aida
+  node_id: '1'
+  lamport: 4582
+  timestamp: 2026-09-11T09:46:44.053259659Z
+  kind: !Create
+    title: queue rework leaves the spec NeedsAttention, which the unified pickability policy refuses — reworks became undrainable
+    description: 'Interaction regression (2026-09-11, diagnosed after four consecutive minutes-long drains): the BUG-1017 unified pickability policy refuses NeedsAttention specs without resolved triage or force — correct for stale parks — but aida queue rework re-queues a spec while LEAVING it NeedsAttention, so every findings-led rework entry is skipped by the next drain and snapshots burn in seconds. The two features contradict: a rework IS the triage resolution. Fix: queue rework transitions the spec out of NeedsAttention (back to Approved, or a rework-marked state the policy treats as pickable-with-findings); the policy recognizes a rework-queued entry as triaged. Acceptance: rework a parked spec, run a drain — the implementer session actually launches with the findings brief; pickability tests updated for the rework case; no other NeedsAttention pickup loosened.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4582
 node_id: '1'
