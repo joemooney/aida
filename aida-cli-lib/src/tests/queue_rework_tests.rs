@@ -57,6 +57,17 @@ fn in_progress_does_not_flip() {
     assert_eq!(rework_smart_target(&RequirementStatus::InProgress), None);
 }
 
+/// NeedsAttention → InProgress. A findings-led rework is the triage decision:
+/// the item must leave the parked state before unified pickability filters run.
+// trace:BUG-1056 | ai:codex
+#[test]
+fn needs_attention_flips_to_in_progress() {
+    assert_eq!(
+        rework_smart_target(&RequirementStatus::NeedsAttention),
+        Some(RequirementStatus::InProgress)
+    );
+}
+
 /// Done → InProgress. The canonical PR-review-found-issues case —
 /// implementer marked it done on a branch, reviewer sent it back.
 #[test]
@@ -117,7 +128,15 @@ fn smart_target_is_idempotent_on_its_own_output() {
 fn covers_every_status_variant() {
     use RequirementStatus::*;
     for s in &[
-        Draft, Approved, Planned, InProgress, Done, Completed, Rejected,
+        Draft,
+        Approved,
+        Planned,
+        InProgress,
+        NeedsAttention,
+        Done,
+        Completed,
+        Rejected,
+        Superseded,
     ] {
         // Just confirm the function doesn't panic on any variant.
         let _ = rework_smart_target(s);
@@ -347,6 +366,53 @@ fn rework_tail_keeps_append_semantics() {
     assert_eq!(entries[1].requirement_id, rework_id);
     assert_eq!(entries[1].position, 3000);
     assert_eq!(entries[1].for_role.as_deref(), Some("implementer"));
+}
+
+/// BUG-1056: a parked findings-led rework must not stay NeedsAttention, because
+/// the unified pickability policy refuses NeedsAttention specs at queue head.
+// trace:BUG-1056 | ai:codex
+#[test]
+fn rework_needs_attention_spec_becomes_pickable_queue_head() {
+    let _guard = crate::test_env::env_lock();
+    let tmp = tempfile::tempdir().unwrap();
+    let store_root = tmp.path().join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_root).unwrap();
+    let storage = Storage::new(&store_root);
+
+    let rework_req = req_for_test("BUG-1056", RequirementStatus::NeedsAttention);
+    let rework_id = rework_req.id;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(rework_req);
+    backend.save(&store).unwrap();
+
+    handle_queue_rework(
+        &storage,
+        "BUG-1056",
+        false,
+        Some("implementer"),
+        false,
+        None,
+        Some("review findings are the triage resolution"),
+        false,
+        false,
+        false,
+        None,
+        true,
+        Some("codex"),
+    )
+    .unwrap();
+
+    let updated = storage.load().unwrap();
+    let req = updated.get_requirement_by_spec_id("BUG-1056").unwrap();
+    assert_eq!(req.status, RequirementStatus::InProgress);
+    assert_eq!(
+        aida_core::pickability::pickability(req, &updated),
+        aida_core::pickability::Pickability::Pickable
+    );
+
+    let entries = storage.queue_list("codex", true).unwrap();
+    assert_eq!(entries[0].requirement_id, rework_id);
+    assert_eq!(entries[0].for_role.as_deref(), Some("implementer"));
 }
 
 #[test]

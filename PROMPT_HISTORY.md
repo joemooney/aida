@@ -5058,3 +5058,17 @@ pre-push hooks keep that compatibility probe, with `trace:TASK-154` on the hook 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib remote_create::tests::handle_remote_mirror_is_idempotent`;
 `cargo test -p aida-cli-lib remote_create::tests`; `cargo run -q -p aida-cli -- remote mirror-push --help`.
 Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-11 — BUG-1056 rework pickability
+
+Picked up `BUG-1056` from the implementer queue. The checked-out queue rework smart-status table
+already resumed `NeedsAttention` specs to `InProgress`, but the contract was not documented in the
+table comment and had no regression coverage. Added `trace:BUG-1056` on that branch and pinned the
+behavior with tests showing plain `queue rework` moves a parked findings-led spec out of
+`NeedsAttention`, requeues it for the implementer role, and leaves it pickable under the unified
+pickability policy. Expanded the smart-target status coverage to include `NeedsAttention` and
+`Superseded`.
+
+Verification: `cargo fmt --all -- --check`; `git diff --check`;
+`cargo test -p aida-cli-lib queue_rework_tests -- --nocapture`. Existing unrelated Rust warnings
+remain in the focused test output.

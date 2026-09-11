@@ -5655,6 +5655,7 @@ pub(crate) fn handle_queue_command(
 ///   Approved   → None         (ready to queue as-is)
 ///   Planned    → InProgress
 ///   InProgress → None         (already there; caller warns unless --force)
+///   NeedsAttention → InProgress (findings-led rework resumes paused work)
 ///   Done       → InProgress   (typical PR-review-found-issues case)
 ///   Completed  → InProgress   (requires --force at caller)
 ///   Rejected   → Approved     (requires --force at caller)
@@ -5677,6 +5678,9 @@ pub(crate) fn rework_smart_target(current: &RequirementStatus) -> Option<Require
         // trace:TASK-1176 | ai:claude
         RequirementStatus::Superseded => None,
         // STORY-332: reworking a punted spec resumes the paused work.
+        // A findings-led rework is the triage decision, so leave the
+        // NeedsAttention parking state before unified pickability checks run.
+        // trace:BUG-1056 | ai:codex
         RequirementStatus::NeedsAttention => Some(RequirementStatus::InProgress),
     }
 }
