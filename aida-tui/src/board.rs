@@ -190,6 +190,11 @@ pub struct ClassifiedItem {
     /// this `false`.
     // trace:TASK-904 | ai:claude
     pub intake_proposal: bool,
+    /// Optional human display label for status cells whose stored status is too
+    /// coarse for the operator view. STORY-1023 uses this for NeedsAttention:
+    /// `Shelved (<cause>)` vs `Needs Decision (<reason>)`.
+    // trace:STORY-1023 | ai:codex
+    pub status_label: Option<String>,
     /// The one-line reason this spec is PARKED — surfaced inline by the cockpit's
     /// advisor-backlog panel so a parked item explains itself (STORY-703): the
     /// deferred shelf's revisit trigger, a punt/needs-attention note, or the
@@ -243,8 +248,14 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
                     status: &str,
                     reason: Reason,
                     advisor_backlog: bool,
+                    status_label: Option<String>,
                     claimed: &mut HashSet<String>| {
         if claimed.insert(id.to_string()) {
+            let park_reason = if reason == Reason::NeedsAttention && status_label.is_some() {
+                None
+            } else {
+                park_reason(reason, advisor_backlog, None, None, None)
+            };
             out.push(ClassifiedItem {
                 spec_id: id.to_string(),
                 title: title.to_string(),
@@ -255,10 +266,11 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
                 // rows; those merge in async via `merge_intake_proposals` after
                 // the heavyweight `aida intake` fence lands. trace:TASK-904
                 intake_proposal: false,
+                status_label,
                 // STORY-703: the structural park reason (deferred shelf rows get
                 // their real revisit trigger patched in below, once the deferred
                 // pass has the row in hand). trace:STORY-703
-                park_reason: park_reason(reason, advisor_backlog, None, None, None),
+                park_reason,
             });
         }
     };
@@ -271,6 +283,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::InFlight,
             false,
+            None,
             &mut claimed,
         );
     }
@@ -282,6 +295,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::Blocked,
             false,
+            None,
             &mut claimed,
         );
     }
@@ -293,6 +307,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::NeedsAttention,
             false,
+            r.status_label.clone(),
             &mut claimed,
         );
     }
@@ -304,6 +319,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::AwaitingReview,
             false,
+            None,
             &mut claimed,
         );
     }
@@ -322,6 +338,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &status,
             Reason::NeedsAnswer,
             false,
+            None,
             &mut claimed,
         );
     }
@@ -333,6 +350,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::NeedsApproval,
             false,
+            None,
             &mut claimed,
         );
     }
@@ -352,6 +370,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::NeedsApproval,
             true,
+            None,
             &mut claimed,
         );
     }
@@ -363,6 +382,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &r.status,
             Reason::Deferred,
             false,
+            None,
             &mut claimed,
         );
     }
@@ -593,7 +613,7 @@ pub fn rows_for(items: &[ClassifiedItem], reason: Reason) -> Vec<ListRow> {
                 } else if it.advisor_backlog {
                     format!("backlog · {}", it.status)
                 } else {
-                    it.status.clone()
+                    it.status_label.clone().unwrap_or_else(|| it.status.clone())
                 };
                 match &it.park_reason {
                     Some(reason) => format!("{base} — {reason}"),
@@ -901,6 +921,7 @@ pub fn merge_intake_proposals(items: &mut Vec<ClassifiedItem>, candidate_ids: &[
                 reason: Reason::NeedsApproval,
                 advisor_backlog: false,
                 intake_proposal: true,
+                status_label: None,
                 // An intake proposal is a draft awaiting the advisor's verdict.
                 // trace:STORY-703
                 park_reason: park_reason(Reason::NeedsApproval, false, None, None, None),
@@ -920,6 +941,8 @@ mod tests {
             title: format!("title of {id}"),
             req_type: "story".to_string(),
             status: status.to_string(),
+            status_label: None,
+            status_lens: None,
             tags: vec![],
             queued,
             in_flight,
@@ -1368,6 +1391,29 @@ Answered (1)
         let deferred_rows = rows_for(&items, Reason::Deferred);
         let r3 = deferred_rows.iter().find(|r| r.id == "STORY-3").unwrap();
         assert!(r3.status.contains("returns when: demand is proven"));
+    }
+
+    #[test]
+    fn needs_attention_rows_use_split_display_label() {
+        let mut shelved = row("BUG-1023", "NeedsAttention", false, false, false);
+        shelved.status_label = Some("Shelved (stale-base)".to_string());
+        shelved.status_lens = Some("Shelved".to_string());
+        let mut decision = row("STORY-1023", "NeedsAttention", false, false, false);
+        decision.status_label = Some("Needs Decision (design-fork)".to_string());
+        decision.status_lens = Some("NeedsDecision".to_string());
+
+        let items = classify(&BoardInputs {
+            needs_attention_rows: vec![shelved, decision],
+            ..BoardInputs::default()
+        });
+        let rows = rows_for(&items, Reason::NeedsAttention);
+
+        assert_eq!(rows[0].status, "Shelved (stale-base)");
+        assert_eq!(rows[1].status, "Needs Decision (design-fork)");
+        assert!(
+            rows.iter().all(|r| !r.status.contains("parked")),
+            "status labels should not be diluted by the generic parked fallback: {rows:?}"
+        );
     }
 
     #[test]

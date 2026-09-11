@@ -62608,10 +62608,16 @@ fn collect_awaiting_report(
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
         let operator = current_user_id(None);
-        let shared: Vec<String> = inbox_identities()
-            .into_iter()
-            .filter(|i| i != &operator)
-            .collect();
+        let mut shared: Vec<String> = Vec::new();
+        if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
+            let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
+            if role != operator {
+                shared.push(role);
+            }
+        }
         awaiting_you::split_mail_scopes(&operator, &shared, &merged, &watermarks)
     };
 
