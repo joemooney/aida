@@ -14500,7 +14500,7 @@ fn list_requirements(
     // Apply filters if provided
     if let Some(status_str) = status {
         let status_filter = parse_status(status_str)?;
-        requirements.retain(|r| r.status == status_filter);
+        requirements.retain(|r| requirement_matches_status_filter(&store, r, &status_filter));
     }
 
     if let Some(priority_str) = priority {
@@ -14560,6 +14560,15 @@ fn list_requirements(
     Ok(())
 }
 
+fn requirement_matches_status_filter(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::models::Requirement,
+    status_filter: &RequirementStatus,
+) -> bool {
+    // trace:STORY-1023 | ai:codex
+    effective_display_status(store, req) == *status_filter
+}
+
 fn list_requirement_status_cell(
     req: &aida_core::models::Requirement,
     display_status: &RequirementStatus,
@@ -14568,7 +14577,7 @@ fn list_requirement_status_cell(
     // trace:STORY-1023 | ai:codex
     let (label, palette_key) = if matches!(display_status, RequirementStatus::NeedsAttention) {
         status_display::parked_status_label(req)
-            .unwrap_or_else(|| ("Needs Attention".to_string(), "NeedsAttention"))
+            .unwrap_or_else(|| ("Needs Decision".to_string(), "NeedsDecision"))
     } else {
         let label = match display_status {
             RequirementStatus::Draft => "Draft",
@@ -14634,6 +14643,49 @@ mod story_1023_list_render_tests {
             decision_cell.contains("Needs Decision (design-fork)"),
             "cell: {decision_cell:?}"
         );
+    }
+
+    #[test]
+    fn status_filter_uses_effective_display_status() {
+        let mut store = aida_core::RequirementsStore::new();
+
+        let mut epic = aida_core::models::Requirement::new("Epic".to_string(), String::new());
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Approved;
+        let mut child =
+            aida_core::models::Requirement::new("stale child".to_string(), String::new());
+        child.status = RequirementStatus::NeedsAttention;
+        child.failure_reason = Some(aida_core::FailureReason {
+            phase: "review".to_string(),
+            phase_index: 3,
+            kind: "stale-base".to_string(),
+            detail: "base moved under the branch".to_string(),
+            recovery_hint: Some("rebase and retry".to_string()),
+            shelved_by: Some("codex".to_string()),
+            shelved_at: chrono::Utc::now(),
+        });
+        epic.relationships.push(aida_core::models::Relationship {
+            rel_type: aida_core::models::RelationshipType::Parent,
+            target_id: child.id,
+            created_at: None,
+            created_by: None,
+        });
+
+        let epic_id = epic.id;
+        store.requirements.push(epic);
+        store.requirements.push(child);
+
+        let epic = store.get_requirement_by_id(&epic_id).unwrap();
+        assert_eq!(
+            effective_display_status(&store, epic),
+            RequirementStatus::NeedsAttention
+        );
+        assert_ne!(epic.status, RequirementStatus::NeedsAttention);
+        assert!(requirement_matches_status_filter(
+            &store,
+            epic,
+            &RequirementStatus::NeedsAttention
+        ));
     }
 }
 
