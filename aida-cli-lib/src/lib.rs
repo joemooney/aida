@@ -4026,9 +4026,17 @@ fn run() -> Result<()> {
                 }
             }
         }
-        Command::Report(report_cmd) => {
+        Command::Report {
+            recheck,
+            command: report_cmd,
+        } => {
             let db_path_str = requirements_path.display().to_string();
-            report_cmd::handle_report_command(report_cmd, &storage, &db_path_str)?;
+            report_cmd::handle_report_command(
+                *recheck,
+                report_cmd.as_ref(),
+                &storage,
+                &db_path_str,
+            )?;
         }
         Command::Scaffold(scaffold_cmd) => {
             scaffold_cmd::handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
@@ -20285,6 +20293,63 @@ fn agent_type_picker_choices() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+fn agent_selection_allows_agent_type(
+    selection: init_cmd::AgentSelection,
+    agent_type: &str,
+) -> bool {
+    match agent_type {
+        "claude" => selection.claude,
+        "codex" => selection.codex,
+        "antigravity" => selection.antigravity,
+        _ => true,
+    }
+}
+
+// trace:BUG-1020 | ai:codex
+fn enabled_agent_type_picker_choices_for_project(
+    project_root: &std::path::Path,
+) -> Vec<(&'static str, &'static str)> {
+    let choices = agent_type_picker_choices();
+    let Some(selection) = init_cmd::read_enabled_agent_selection(project_root) else {
+        return choices;
+    };
+    choices
+        .into_iter()
+        .filter(|(_, token)| agent_selection_allows_agent_type(selection, token))
+        .collect()
+}
+
+fn disabled_agent_type_hint(agent_type: &str, project_root: &std::path::Path) -> String {
+    let source_path = init_cmd::read_enabled_agent_selection_with_source(project_root)
+        .map(|s| s.path)
+        .unwrap_or_else(|| project_root.join(".aida/config.toml"));
+    let enabled = enabled_agent_type_picker_choices_for_project(project_root)
+        .into_iter()
+        .map(|(_, token)| token)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let enabled_hint = if enabled.is_empty() {
+        "none".to_string()
+    } else {
+        enabled
+    };
+    format!(
+        "`{agent_type}` is disabled by `[agents] enabled` in {} (enabled: {enabled_hint}). \
+         Enable it there, or launch one of the enabled agent types.",
+        source_path.display()
+    )
+}
+
+fn enforce_agent_type_enabled(project_root: &std::path::Path, agent_type: &str) -> Result<()> {
+    let Some(selection) = init_cmd::read_enabled_agent_selection(project_root) else {
+        return Ok(());
+    };
+    if agent_selection_allows_agent_type(selection, agent_type) {
+        return Ok(());
+    }
+    anyhow::bail!("{}", disabled_agent_type_hint(agent_type, project_root))
+}
+
 /// TASK-837: map a picked agent-type token to its default-options
 /// `AgentNewCommand` (the same value clap would build for a bare
 /// `aida agent new <type>` with no extra flags).
@@ -20379,7 +20444,21 @@ fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>> {
         return Ok(None);
     }
 
-    let choices = agent_type_picker_choices();
+    let project_root =
+        main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
+    let choices = enabled_agent_type_picker_choices_for_project(&project_root);
+    if choices.is_empty() {
+        let source_path = init_cmd::read_enabled_agent_selection_with_source(&project_root)
+            .map(|s| s.path)
+            .unwrap_or_else(|| project_root.join(".aida/config.toml"));
+        anyhow::bail!(
+            "no agent launch profiles are enabled by `[agents] enabled` in {}",
+            source_path.display()
+        );
+    }
+    if choices.len() == 1 {
+        return Ok(agent_new_command_for_type(choices[0].1));
+    }
     let labels: Vec<&str> = choices.iter().map(|(label, _)| *label).collect();
     let select = inquire::Select::new("Select an agent type to launch:", labels).with_help_message(
         "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
@@ -21452,6 +21531,12 @@ fn agent_new_with_config(
     description: Option<String>,
     explicit_permission: bool,
 ) -> Result<()> {
+    let base = cwd
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let discovered_root = find_aida_project_root_from(&base)?;
+    let project_root = main_worktree_root_from(&discovered_root);
+    enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
             "`{}` is not on PATH — install {} or activate the environment \
@@ -21461,11 +21546,6 @@ fn agent_new_with_config(
             config.agent_type
         )
     })?;
-    let base = cwd
-        .map(std::path::PathBuf::from)
-        .unwrap_or(std::env::current_dir()?);
-    let discovered_root = find_aida_project_root_from(&base)?;
-    let project_root = main_worktree_root_from(&discovered_root);
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -21611,17 +21691,18 @@ fn agent_new_bg_dispatch(
     description: Option<String>,
     explicit_permission: bool,
 ) -> Result<()> {
+    let base = cwd
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let discovered_root = find_aida_project_root_from(&base)?;
+    let project_root = main_worktree_root_from(&discovered_root);
+    enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
             "`claude` is not on PATH — install Claude Code (or activate the \
              environment that provides it), then retry `aida agent new claude --bg`"
         )
     })?;
-    let base = cwd
-        .map(std::path::PathBuf::from)
-        .unwrap_or(std::env::current_dir()?);
-    let discovered_root = find_aida_project_root_from(&base)?;
-    let project_root = main_worktree_root_from(&discovered_root);
     apply_agent_default_flags(
         &mut config,
         &project_root,
