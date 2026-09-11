@@ -1,0 +1,26 @@
+id: 01a09049-24cc-7f90-a030-dd3abe9d1dd5
+spec_id: STORY-1039
+agreed_id: STORY-1039
+title: 'Review PR-1735: [AI:codex] fix(remote): quiet stale mirror-push hook (TASK-154)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09044`) for branch `task-1-130`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1735>
+  - Branch: `task-1-130` → `main`
+
+  ## Covers
+
+  - TASK-154
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1735` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T11:45:07.788940079Z
+modified_at: 2026-09-11T11:45:07.788940079Z
+req_type: Story
