@@ -521,11 +521,3 @@
   added_at: 2026-09-11T03:53:11.610730835Z
   for_role: implementer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a08ed6-68d7-70e3-b89e-89c337d82ecf
-  position: 395000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a08ecf); covers 1 spec
-  added_at: 2026-09-11T05:00:16.556880300Z
-  for_role: reviewer
-  added_by_machine: imac
