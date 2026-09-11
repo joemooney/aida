@@ -3976,10 +3976,11 @@ pub(crate) fn handle_git_backend_command(
                         anyhow::bail!(
                             "promoting a {} spec to {} needs advisor authority (advisor role or \
                              an interactive session). Leave it for advisor triage, or run as \
-                             the advisor.{}",
+                             the advisor.{}{}",
                             req.status,
                             canonical,
-                            team_role_refusal_clause()
+                            team_role_refusal_clause(),
+                            roleless_recovery_sentence()
                         );
                     }
                     // BUG-498: a gated promotion that went through is advisor

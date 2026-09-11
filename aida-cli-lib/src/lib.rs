@@ -1977,6 +1977,11 @@ fn run() -> Result<()> {
     // `aida queue list` print "Your queue is empty". trace:BUG-108
     warn_if_cwd_removed();
 
+    // BUG-1044: when explicitly enabled, an interactive shell that lost its
+    // role env after a reboot gets one early, once-per-terminal restoration
+    // offer before a later advisor gate surprises it.
+    maybe_prompt_role_restore(&cli.command)?;
+
     // Handle init before path resolution (no DB exists yet)
     if let Command::Init {
         no_skills,
@@ -17265,6 +17270,157 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
     let mut seen = std::collections::HashSet::new();
     roles.retain(|r| seen.insert(r.name.clone()));
     Ok(roles)
+}
+
+/// True when this process has an explicitly-entered role in its environment.
+///
+/// The read side still defaults to `implementer` when unset, but operator-facing
+/// recovery surfaces need to distinguish "defaulted" from "seated".
+// trace:BUG-1044 | ai:codex
+pub(crate) fn active_role_env_present() -> bool {
+    std::env::var("AIDA_SESSION_ROLE")
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Most recently used role, derived from the same role files `aida role list`
+/// sorts by recency. Best-effort: a machine with no role files simply has no
+/// recovery hint to print.
+// trace:BUG-1044 | ai:codex
+pub(crate) fn last_used_role_name(project_root: &std::path::Path) -> Option<String> {
+    list_roles(project_root)
+        .ok()
+        .and_then(|roles| roles.into_iter().next())
+        .map(|role| role.name)
+}
+
+/// Pure core for [`roleless_recovery_line`], split out so tests don't need to
+/// mutate process-global environment variables.
+// trace:BUG-1044 | ai:codex
+pub(crate) fn roleless_recovery_line_for(
+    project_root: &std::path::Path,
+    active_role_present: bool,
+) -> Option<String> {
+    if active_role_present {
+        return None;
+    }
+    let role = last_used_role_name(project_root)?;
+    Some(format!(
+        "No active role. Last-used role: {role}. Run: `aida role enter {role}`"
+    ))
+}
+
+/// One-line recovery hint for shells that are relying on the implicit default
+/// role after a reboot/new terminal. Shared so `aida status` and gated-operation
+/// refusals use the same copyable command.
+// trace:BUG-1044 | ai:codex
+pub(crate) fn roleless_recovery_line(project_root: &std::path::Path) -> Option<String> {
+    roleless_recovery_line_for(project_root, active_role_env_present())
+}
+
+/// Append the roleless recovery line to advisor-authority refusals when the
+/// current shell is roleless. Empty when no role recovery clue is available.
+// trace:BUG-1044 | ai:codex
+pub(crate) fn roleless_recovery_sentence() -> String {
+    let Ok(project_root) = find_project_root() else {
+        return String::new();
+    };
+    roleless_recovery_line(&project_root)
+        .map(|line| format!(" {line}."))
+        .unwrap_or_default()
+}
+
+fn role_restore_prompt_enabled(project_root: &std::path::Path) -> bool {
+    role_restore_prompt_enabled_from(
+        &std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
+            .unwrap_or_default(),
+    )
+}
+
+fn role_restore_prompt_enabled_from(content: &str) -> bool {
+    let Ok(value) = content.parse::<toml::Value>() else {
+        return false;
+    };
+    value
+        .get("role")
+        .and_then(|role| role.get("restore_prompt"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+fn role_restore_prompt_marker_name(tty: &str) -> String {
+    let mut out = String::from(".role-restore-prompt-");
+    for ch in tty.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch);
+        } else {
+            out.push('-');
+        }
+    }
+    out
+}
+
+fn role_restore_prompt_tty_id() -> Option<String> {
+    std::fs::read_link("/proc/self/fd/0")
+        .ok()
+        .map(|p| p.display().to_string())
+        .filter(|s| !s.trim().is_empty())
+}
+
+fn role_restore_prompt_should_skip(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::Init { .. }
+            | Command::Role(_)
+            | Command::McpServe
+            | Command::Internal { .. }
+            | Command::Statusline { .. }
+            | Command::Statusbar { .. }
+    )
+}
+
+fn maybe_prompt_role_restore(command: &Command) -> Result<()> {
+    if role_restore_prompt_should_skip(command)
+        || active_role_env_present()
+        || std::env::var("AIDA_HEADLESS").as_deref() == Ok("1")
+        || agent_output_mode()
+        || !std::io::stdin().is_terminal()
+        || !std::io::stdout().is_terminal()
+    {
+        return Ok(());
+    }
+    let Ok(project_root) = find_project_root() else {
+        return Ok(());
+    };
+    if !role_restore_prompt_enabled(&project_root) {
+        return Ok(());
+    }
+    let Some(role) = last_used_role_name(&project_root) else {
+        return Ok(());
+    };
+    let tty = role_restore_prompt_tty_id().unwrap_or_else(|| "unknown".to_string());
+    let marker = project_root
+        .join(".aida")
+        .join(role_restore_prompt_marker_name(&tty));
+    if marker.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = marker.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&marker, chrono::Utc::now().to_rfc3339());
+    let restore = format!("aida role enter {role}");
+    let yes = prompt_yes_no(
+        &format!("No active AIDA role. Restore last-used role `{role}`? [y/N] "),
+        false,
+    )
+    .unwrap_or(false);
+    if yes {
+        println!("Run: `{restore}`");
+    } else {
+        println!("Skipped role restore. Run later: `{restore}`");
+    }
+    Ok(())
 }
 
 /// Append an activity entry to the active role's log (best-effort; silently

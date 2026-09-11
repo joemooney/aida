@@ -1,6 +1,7 @@
 use super::{
-    canonical_role_name, default_role_guidance, is_human_route, load_role, scaffold_starter_roles,
-    STARTER_ROLES,
+    canonical_role_name, default_role_guidance, is_human_route, load_role,
+    role_restore_prompt_enabled_from, role_restore_prompt_marker_name, roleless_recovery_line_for,
+    save_role_at, scaffold_starter_roles, RoleState, STARTER_ROLES,
 };
 
 // TASK-747: `human` is a first-class route target (the escalation-cascade
@@ -137,6 +138,81 @@ fn product_default_guidance_is_available_without_role_file() {
     assert!(guidance.contains("product seat"), "{guidance}");
     assert!(guidance.contains("capture requirements"), "{guidance}");
     assert!(guidance.contains("advisor"), "{guidance}");
+}
+
+#[test]
+fn roleless_recovery_uses_last_used_role_and_copyable_command() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = chrono::Utc::now();
+    let old = RoleState {
+        name: "implementer".to_string(),
+        purpose: None,
+        created_at: now - chrono::Duration::hours(2),
+        last_active_at: now - chrono::Duration::hours(2),
+        working_directory: None,
+        notes: None,
+        global: false,
+        activity: Vec::new(),
+        scope_tags: Vec::new(),
+        scope_status: None,
+        system_prompt: None,
+    };
+    let recent = RoleState {
+        name: "advisor".to_string(),
+        last_active_at: now,
+        ..old.clone()
+    };
+    save_role_at(&old, &root.join(".aida/roles/implementer.toml")).unwrap();
+    save_role_at(&recent, &root.join(".aida/roles/advisor.toml")).unwrap();
+
+    let line = roleless_recovery_line_for(root, false).unwrap();
+
+    assert!(line.starts_with("No active role."), "{line}");
+    assert!(line.contains("Last-used role: advisor"), "{line}");
+    assert!(line.contains("`aida role enter advisor`"), "{line}");
+}
+
+#[test]
+fn roleless_recovery_silent_when_role_is_active() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = chrono::Utc::now();
+    let role = RoleState {
+        name: "advisor".to_string(),
+        purpose: None,
+        created_at: now,
+        last_active_at: now,
+        working_directory: None,
+        notes: None,
+        global: false,
+        activity: Vec::new(),
+        scope_tags: Vec::new(),
+        scope_status: None,
+        system_prompt: None,
+    };
+    save_role_at(&role, &root.join(".aida/roles/advisor.toml")).unwrap();
+
+    assert!(roleless_recovery_line_for(root, true).is_none());
+}
+
+#[test]
+fn role_restore_prompt_config_defaults_off_and_can_enable() {
+    assert!(!role_restore_prompt_enabled_from(""));
+    assert!(!role_restore_prompt_enabled_from("[role]\n"));
+    assert!(role_restore_prompt_enabled_from(
+        "[role]\nrestore_prompt = true\n"
+    ));
+    assert!(!role_restore_prompt_enabled_from(
+        "[role]\nrestore_prompt = false\n"
+    ));
+}
+
+#[test]
+fn role_restore_prompt_marker_name_is_filesystem_safe() {
+    let name = role_restore_prompt_marker_name("/dev/pts/12");
+    assert_eq!(name, ".role-restore-prompt--dev-pts-12");
+    assert!(!name.contains('/'));
 }
 
 #[test]

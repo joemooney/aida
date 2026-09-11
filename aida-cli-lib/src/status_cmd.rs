@@ -301,6 +301,11 @@ pub(crate) fn handle_status_command_distributed(
         || stale;
     if !any_flag {
         let project_root = std::env::current_dir()?;
+        // trace:BUG-1044 | ai:codex
+        if let Some(line) = roleless_recovery_line(&project_root) {
+            println!("{}", line.yellow().bold());
+            println!();
+        }
         if let Some(report) = collect_absence_report(&project_root, store_path) {
             print_absence_report(&report);
         }
