@@ -257,6 +257,7 @@ mod ultraplan_cmd;
 mod upgrade_cmd;
 mod usage;
 mod usage_cmd;
+mod vendor_activity;
 // trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
 mod user_alias;
 mod worker;
@@ -33053,48 +33054,6 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
         }
     }
     newest_len
-}
-
-/// BUG-875: activity signature for a headless phase stream. Length catches
-/// normal JSONL growth; mtime also catches a stream file that is touched or
-/// rewritten without a length change. Reviewer phases key no-progress on this
-/// output activity because they are read-then-verdict and normally make no
-/// commits or file changes until the final verdict write.
-// trace:BUG-875 | ai:codex
-fn headless_log_activity_signature(
-    project_root: &std::path::Path,
-    session_id: &str,
-) -> Option<String> {
-    let dir = project_root.join(".aida").join("headless-logs");
-    let suffix = format!("-{session_id}.jsonl");
-    let mut newest: Option<(std::time::SystemTime, u64)> = None;
-    for entry in std::fs::read_dir(&dir).ok()?.flatten() {
-        let is_match = entry
-            .path()
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(|n| n.ends_with(&suffix))
-            .unwrap_or(false);
-        if !is_match {
-            continue;
-        }
-        if let Ok(meta) = entry.metadata() {
-            let mtime = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
-            if newest
-                .as_ref()
-                .map(|(best, _)| mtime >= *best)
-                .unwrap_or(true)
-            {
-                newest = Some((mtime, meta.len()));
-            }
-        }
-    }
-    let (mtime, len) = newest?;
-    let mtime_nanos = mtime
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    Some(format!("log:{len}:{mtime_nanos}"))
 }
 
 /// BUG-826: a non-zero headless vendor exit with a zero-byte JSONL log is a
@@ -76857,6 +76816,7 @@ fn watchdog_progress_signal_for_phase(phase: auto_complete::Phase) -> WatchdogPr
 struct PhaseWatchdog {
     project_root: std::path::PathBuf,
     session_id: String,
+    vendor: session::HeadlessVendor,
     root_pid: Option<u32>,
     phase_start: std::time::Instant,
     last_progress: std::time::Instant,
@@ -76890,9 +76850,11 @@ impl PhaseWatchdog {
         ceiling: std::time::Duration,
     ) -> Self {
         let now = std::time::Instant::now();
+        let vendor = session::resolve_headless_vendor(&project_root);
         Self {
             project_root,
             session_id,
+            vendor,
             root_pid: None,
             phase_start: now,
             last_progress: now,
@@ -77006,7 +76968,13 @@ impl PhaseWatchdog {
 
     // trace:BUG-875 | ai:codex
     fn observed_progress_signature(&self, worktree: &std::path::Path) -> Option<String> {
-        let output_sig = headless_log_activity_signature(&self.project_root, &self.session_id);
+        // trace:STORY-1054 | ai:codex
+        let output_sig = vendor_activity::activity_signature_for_vendor(
+            self.vendor,
+            &self.project_root,
+            &self.session_id,
+            self.root_pid,
+        );
         let worktree_sig = match self.progress_signal {
             WatchdogProgressSignal::WorktreeAndOutput => Self::progress_signature(worktree),
             WatchdogProgressSignal::OutputOnly => None,

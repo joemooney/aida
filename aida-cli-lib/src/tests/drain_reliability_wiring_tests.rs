@@ -151,6 +151,7 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Reviewer,
     );
+    streaming.vendor = session::HeadlessVendor::Claude;
     streaming.worktree = Some(worktree.clone());
     streaming.last_progress = old_progress;
     streaming.last_poll = old_poll;
@@ -162,7 +163,13 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
         "fresh reviewer stream output is progress even with no file changes",
     );
 
-    let current_sig = headless_log_activity_signature(root, session_id).unwrap();
+    let current_sig = vendor_activity::activity_signature_for_vendor(
+        session::HeadlessVendor::Claude,
+        root,
+        session_id,
+        None,
+    )
+    .unwrap();
     let mut silent = PhaseWatchdog::new_for_phase(
         root.to_path_buf(),
         session_id.to_string(),
@@ -170,6 +177,7 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Reviewer,
     );
+    silent.vendor = session::HeadlessVendor::Claude;
     silent.worktree = Some(worktree);
     silent.last_progress = old_progress;
     silent.last_poll = old_poll;
@@ -204,10 +212,16 @@ fn codex_watchdog_counts_streaming_headless_log_activity_as_progress() {
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Implementer,
     );
+    watchdog.vendor = session::HeadlessVendor::Codex;
     watchdog.worktree = Some(worktree);
     watchdog.last_progress = old_progress;
     watchdog.last_poll = old_poll;
-    watchdog.last_sig = headless_log_activity_signature(root, session_id);
+    watchdog.last_sig = vendor_activity::activity_signature_for_vendor(
+        session::HeadlessVendor::Codex,
+        root,
+        session_id,
+        None,
+    );
 
     std::thread::sleep(std::time::Duration::from_millis(5));
     std::fs::write(
@@ -252,8 +266,14 @@ fn bounded_polling_tool_events_feed_three_minute_watchdog() {
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Reviewer,
     );
+    watchdog.vendor = session::HeadlessVendor::Claude;
     watchdog.worktree = Some(worktree);
-    watchdog.last_sig = headless_log_activity_signature(root, session_id);
+    watchdog.last_sig = vendor_activity::activity_signature_for_vendor(
+        session::HeadlessVendor::Claude,
+        root,
+        session_id,
+        None,
+    );
 
     let mut body = String::new();
     for i in 1..=5 {
