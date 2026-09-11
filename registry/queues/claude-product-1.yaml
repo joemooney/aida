@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a08986-deb1-7581-a3d1-a8e70d537e4f
+  position: 0
+  added_by: claude-product-1
+  note: 'cross-platform run 34603101584 still red: 9 temp-path canonicalization failures (1 macOS, 8 Windows) listed in the spec comments; push fixups to bug-1021 / PR-1738'
+  added_at: 2026-09-11T13:32:57.890488301Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a08552-7ec6-7e50-b213-a48d7f33f464
   position: 1000
   added_by: claude-product-1
