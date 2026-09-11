@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   STORY-441 (spec archive tier — same pattern), queue gc, aida awaiting (the unread trigger that already works right).
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:54:08.117240448Z
-modified_at: 2026-09-11T22:59:09.443364533Z
+modified_at: 2026-09-11T23:09:20.612845148Z
 req_type: Task
 tags:
 - from-product
