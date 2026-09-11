@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:41:25.371985517Z
-modified_at: 2026-09-11T18:00:30.295638699Z
+modified_at: 2026-09-11T18:00:32.256017112Z
 req_type: Task
 tags:
 - ci
@@ -35,4 +35,10 @@ comments:
   content: 'Held for operator (advisor, 2026-09-11): deleting PROMPT_HISTORY contradicts the recorded freeze decision (freeze, keep as dated artifact). The conflict pain is real but comes from PRE-freeze branches still in flight — it ends when this PR generation lands. Recommend: reject deletion, keep the freeze; IF conflicts persist next week, revisit with a merge-driver (union) for the file instead of deletion. Operator decides.'
   created_at: 2026-09-11T17:56:50.968640714Z
   modified_at: 2026-09-11T17:56:50.968640714Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a091a0-d700-7430-9459-b9b4d8c862d0
+  author: joe
+  content: 'Sequence note (advisor): the deletion committed 10:53 under the operator''s git identity — four minutes before my hold-for-operator comment landed, so no override occurred; treating as operator-authorized and marking Completed (the file''s full history survives in git). My earlier union-merge-driver alternative is moot.'
+  created_at: 2026-09-11T18:00:32.256017112Z
+  modified_at: 2026-09-11T18:00:32.256017112Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
