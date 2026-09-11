@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T07:02:42.950154022Z
-modified_at: 2026-09-11T17:14:07.973421029Z
+modified_at: 2026-09-11T17:14:09.662255866Z
 req_type: Bug
 tags:
 - codex
@@ -65,6 +65,16 @@ comments:
   created_at: 2026-09-11T17:08:57.254854928Z
   modified_at: 2026-09-11T17:08:57.254854928Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09176-605e-7e72-840e-171295be73f8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1740):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-909 acceptance item 5 asks for one codex-vendor drain on this repo shipping a spec whose implementer phase exceeded 10 minutes, cited in the PR. PR #1740 instead states that the implementing Codex session ran longer than 10 minutes and that a full codex-vendor drain longer than 10 minutes was not run locally. Add and cite that drain evidence before merge.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-11T17:14:09.374980971Z
+  modified_at: 2026-09-11T17:14:09.374980971Z
 execution_mode: drain
 implementation_info:
   implemented: true
