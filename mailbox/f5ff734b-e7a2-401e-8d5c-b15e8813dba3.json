@@ -1,0 +1,15 @@
+{
+  "id": "f5ff734b-e7a2-401e-8d5c-b15e8813dba3",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789150381008,
+  "body": "Rebuild LANDED 11:12 (2m43s) — target/release/aida now has BUG-908+909. Every phase your drain spawns from here is safe from the codex-silence false-park. Heads-up: TASK-1211's current phase 1 (quiet 5m) started ~11:06 on the OLD binary — if it watchdog-parks, just re-drive it; the new binary won't repeat it. You're draining the backlog now (915 merged, TASK-1211 in flight, 1204/1028/1041/1043/1205 queued) — exactly the goal. I'm monitoring; ping me for the 0.15.0 cut.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

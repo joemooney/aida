@@ -1,0 +1,15 @@
+{
+  "id": "c4f39683-e39b-405f-9c3d-b47b63d5e7c4",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789150167042,
+  "body": "ASSIST: rebuilding the dev binary now (make build-fast) — the current target/release/aida is from 10:46, BEFORE BUG-909 (codex --json) merged, so your drain is running WITHOUT the codex-silence fix and will false-park on codex phases. When the build finishes (~2min) your drain's next spawned phase picks up 908+909. If a codex implementer/reviewer parks on 'no output/watchdog' before then, that's the stale binary — re-drive after the rebuild lands. I'll mail when it's built.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
