@@ -20,12 +20,12 @@ description: |-
 
   ## Related
   BUG-875 (keyed the watchdog on output), BUG-420 (original no-progress watchdog), STORY-975 (retry), STORY-998 (event-stream idle detection would read the same source). Affected tonight: STORY-993 (parked, work salvageable in aida-story-993), STORY-994 (at risk).
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T07:02:42.950154022Z
-modified_at: 2026-09-11T17:09:58.567814587Z
+modified_at: 2026-09-11T17:14:07.973421029Z
 req_type: Bug
 tags:
 - codex
