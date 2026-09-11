@@ -1554,20 +1554,27 @@ pub fn agy_headless_args(prompt: &str) -> Vec<String> {
 
 /// STORY-683: the `codex exec` argv (after the `codex` program name) for a
 /// one-shot headless run. Mirrors the working `compete.rs` adapter:
-/// `exec --dangerously-bypass-approvals-and-sandbox <prompt>`. Codex's headless
-/// `exec` is single-shot and exits on its own (the orchestrator analogue of
-/// claude's `-p`); approvals are bypassed so the run is unattended. The prompt
-/// is the final positional. Unlike claude there is no `--session-id` /
-/// `--output-format stream-json` (codex has no matching resumable session model),
-/// so the codex arm does not thread `session_id`. trace:STORY-683 | ai:claude
+/// `exec --json --dangerously-bypass-approvals-and-sandbox <prompt>`. Codex's
+/// headless `exec` is single-shot and exits on its own (the orchestrator
+/// analogue of claude's `-p`); approvals are bypassed so the run is unattended.
+/// The prompt is the final positional. Unlike claude there is no `--session-id`
+/// (codex has no matching caller-minted resumable session model), so the codex
+/// arm does not thread `session_id`.
+///
+/// `--json` is load-bearing for drains: without it, `codex exec` writes only the
+/// final message at process exit, leaving `.aida/headless-logs` at 0 bytes while
+/// Codex is actively working. Streaming JSONL makes the existing watchdog log
+/// mtime/length signal live for Codex phases.
+// trace:STORY-683 BUG-909 | ai:codex
 pub fn codex_headless_args(prompt: &str) -> Vec<String> {
     codex_headless_args_with_model(prompt, None)
 }
 
-// trace:STORY-1003 | ai:codex
+// trace:STORY-1003 BUG-909 | ai:codex
 pub fn codex_headless_args_with_model(prompt: &str, model: Option<&str>) -> Vec<String> {
     let mut args = vec![
         "exec".to_string(),
+        "--json".to_string(),
         "--dangerously-bypass-approvals-and-sandbox".to_string(),
     ];
     if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
@@ -4813,10 +4820,14 @@ mod tests {
             claude_headless_args_with_posture(prompt, sid, false)
         );
 
-        // Codex arm: `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`,
-        // with the prompt as the final positional and NO claude `-p`.
+        // Codex arm: `codex exec --json --dangerously-bypass-approvals-and-sandbox
+        // <prompt>`, with the prompt as the final positional and NO claude `-p`.
         let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None);
         assert_eq!(codex.first().map(String::as_str), Some("exec"), "{codex:?}");
+        assert!(
+            codex.contains(&"--json".to_string()),
+            "codex must stream JSONL so the drain watchdog sees live output: {codex:?}"
+        );
         assert!(
             codex.contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()),
             "codex bypass: {codex:?}"
