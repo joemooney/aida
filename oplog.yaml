@@ -56529,5 +56529,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4614
+- id: 01a0903f-5fb1-7180-8ca4-7981f7070eef
+  target_id: 01a0903f-5bda-7c00-8b79-d64278f00eba
+  author: aida
+  node_id: '1'
+  lamport: 4615
+  timestamp: 2026-09-11T11:34:27.505662321Z
+  kind: !Create
+    title: 'Review PR-1734: [AI:codex] feat(agents): add seat model effort tuning (STORY-1033)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09030`) for branch `story-1033`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1734>
+      - Branch: `story-1033` → `main`
+
+      ## Covers
+
+      - STORY-1033
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1734` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4615
 node_id: '1'
