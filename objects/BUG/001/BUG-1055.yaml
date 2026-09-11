@@ -2,7 +2,7 @@ id: 01a08fbd-7f21-7c03-912c-d5013edbdbb4
 spec_id: BUG-1055
 agreed_id: BUG-1055
 title: 'auto-complete failure: phase 1 (implementer) on BUG-1037'
-description: |
+description: |-
   Auto-drafted by `aida queue work BUG-1037 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
@@ -17,8 +17,8 @@ description: |
 
   ## Recurrence
 
-  Attempts: 1
-  Latest recurrence: 2026-09-11T09:12:33.479465100+00:00
+  Attempts: 2
+  Latest recurrence: 2026-09-11T09:13:00.705117634+00:00
 
   ## Phase durations
 
@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T09:12:35.873963636Z
-modified_at: 2026-09-11T09:12:35.873963636Z
+modified_at: 2026-09-11T09:13:01.875995547Z
 req_type: Bug
 tags:
 - auto-complete
