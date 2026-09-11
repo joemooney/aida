@@ -9493,6 +9493,11 @@ pub(crate) struct LeasePeek {
     // trace:BUG-749 | ai:codex
     #[serde(default)]
     pub(crate) creator_pid: Option<u32>,
+    /// PID of the hosted agent child for process-backed headless launches.
+    /// Preferred by vendor-neutral liveness; older leases omit it.
+    // trace:STORY-1054 | ai:codex
+    #[serde(default)]
+    pub(crate) active_pid: Option<u32>,
     /// Worktree path — re-read by the BUG-223 branch-swap reconciliation to
     /// recover the live branch when `/aida-pr` swapped it mid-phase.
     /// `#[serde(default)]` so a lease (or hand-written test fixture) without
