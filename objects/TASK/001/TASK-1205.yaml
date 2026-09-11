@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:40.345435015Z
-modified_at: 2026-09-11T20:19:25.296797783Z
+modified_at: 2026-09-11T20:36:12.475993947Z
 req_type: Task
 tags:
 - ci
@@ -46,5 +46,11 @@ comments:
   content: Implemented the portability ratchet, baseline, path-filtered cross-platform PR trigger, workflow_dispatch failure probe, and CI/docs wiring. The exact Linux-runner cargo check --workspace --tests --target x86_64-pc-windows-msvc/aarch64-apple-darwin acceptance remains blocked by third-party C build scripts requiring foreign SDK/tooling before AIDA code is reached; filed finding TASK-1-132 and made that check report-only rather than making every PR red for dependency toolchain reasons.
   created_at: 2026-09-11T20:11:34.438909674Z
   modified_at: 2026-09-11T20:11:34.438909674Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0922f-5c3c-79a0-9bd4-c3016b691ead
+  author: joe
+  content: 'Review PR-1746 request changes: Windows cross-platform job 103408917393 failed in Run tests. Failing test: git_ops::tests::container_marker_scan_and_gitdir_parse_are_precise at aida-core/src/git_ops.rs:4577; left C:/host/repo/.git/worktrees/repo-bug915, right /host/repo/.git/worktrees/repo-bug915. Acceptance item 3 needs the PR-triggered real OS matrix green before approval.'
+  created_at: 2026-09-11T20:36:12.475993947Z
+  modified_at: 2026-09-11T20:36:12.475993947Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
