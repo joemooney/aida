@@ -106,7 +106,14 @@ fn scheduled_failures_render_nightly_red_streak() {
     assert_eq!(red.run_id, Some(300));
     assert_eq!(red.nights, 2);
     assert!(red.summary.contains("cross-platform nightly red since"));
-    assert!(red.summary.contains("2026-05-21"));
+    // The since date renders in the viewer's local timezone, so derive the
+    // expectation through the same conversion instead of hardcoding a day
+    // that shifts with the test runner's TZ.
+    let since_local = (now - chrono::Duration::hours(30))
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string();
+    assert!(red.summary.contains(&since_local));
     assert!(red.summary.contains("run 300"));
     assert!(red.summary.contains("2 nights"));
 }
