@@ -1,0 +1,33 @@
+id: 01a0907f-a819-7ec0-a601-cdf7b77b25c0
+spec_id: TASK-1205
+agreed_id: TASK-1205
+title: 'Catch Linux-only assumptions at PR time: cross-target cargo check, a portability ratchet lint, and a paths-filtered cross-platform trigger'
+description: |-
+  ## Why
+  BUG-1021: ten tests broke macOS and Windows on three consecutive nightlies because PR CI is Linux-only (TASK-257) and nothing at PR time notices a /proc read, a hard-coded /tmp, a ':' PATH join, or a /bin/sh spawn in an ungated test. Counts on 2026-09-11: 33 files in test code with a hard-coded "/tmp", 4 reading /proc, 15 platform cfg gates in the whole test tree. Operator asked what prevents recurrence.
+
+  ## Acceptance
+  1. Cross-target check in ci.yml (Linux runner, no new runners): rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin, then cargo check --workspace --tests --target <each>. Fails the PR on any cfg / std::os::unix compile error. Budget: under 2 min with rust-cache; report the measured time in the PR.
+  2. Portability ratchet: scripts/check-portability.sh run in the lint job. Flags, in *.rs under any tests/ dir or #[cfg(test)] module, occurrences of "/proc/", "/tmp" as a string literal, join(":") / split(':') on PATH-like values, and Command::new("sh"|"bash"|"/bin/sh") that are not inside a #[cfg(unix)] / #[cfg(target_os = "linux")] item. A baseline file scripts/portability-allowlist.txt lists today's sites (path:line-pattern); only NEW sites fail. The allowlist may only shrink (a CI step diffs it against main and fails if it grew).
+  3. Paths-filtered real matrix: cross-platform.yml gains a pull_request trigger with a paths filter for the fragile set: aida-cli-lib/src/agent_registry.rs, worktree*.rs, init_cmd.rs, resolve_aida_exe*, session*.rs, aida-core/src/db/git_backend.rs, aida-core/templates/hooks/**, .github/workflows/**. PRs outside that set keep the Linux-only 10-minute CI. The matrix stays non-required (informational check) for one release, then becomes required for that path set.
+  4. The nightly schedule is unchanged. The "Open tracking issue" job's missing checkout is fixed by BUG-1021's PR; this task adds a test-of-the-guard: a deliberately failing dummy step behind workflow_dispatch input so the tracking-issue path can be exercised on demand.
+  5. Docs: CLAUDE.md CI paragraph (the TASK-257 note) gains two sentences on the three guards; docs/environment-variables.md unchanged.
+  6. Evidence: the PR shows the ratchet catching a planted /proc read in a test, then the plant removed.
+
+  ## Related
+  BUG-1021, TASK-257, TASK-1204 (single compile profile; keep the two changes in separate PRs so their timings are attributable).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T12:44:40.345435015Z
+modified_at: 2026-09-11T12:44:40.345435015Z
+req_type: Task
+tags:
+- ci
+- cross-platform
+- from-product
+- lint
+- portability
+- recommend:approve
+- risk:low
