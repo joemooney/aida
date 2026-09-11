@@ -30480,8 +30480,21 @@ fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiPr
 
 pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
     let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    ci_probe_with_forge(
+        &project_root,
+        crate::forge::resolve_forge_kind(&project_root),
+        branch,
+    )
+}
+
+// trace:BUG-1037 | ai:codex
+pub(crate) fn ci_probe_with_forge(
+    project_root: &std::path::Path,
+    forge_kind: crate::forge::ForgeKind,
+    branch: &str,
+) -> CiProbe {
     ci_probe_from_ci_probe_result(
-        crate::forge::forge_for(&project_root).ci_probe_for_branch(branch),
+        crate::forge::forge_for_kind(project_root, forge_kind).ci_probe_for_branch(branch),
     )
 }
 
@@ -30501,8 +30514,24 @@ pub(crate) fn watch_ci_for_context_via_forge(
     branch: &str,
     no_human_active: bool,
 ) -> CiProbe {
+    watch_ci_for_context_with_forge(
+        project_root,
+        crate::forge::resolve_forge_kind(project_root),
+        branch,
+        no_human_active,
+    )
+}
+
+// trace:BUG-1037 | ai:codex
+pub(crate) fn watch_ci_for_context_with_forge(
+    project_root: &std::path::Path,
+    forge_kind: crate::forge::ForgeKind,
+    branch: &str,
+    no_human_active: bool,
+) -> CiProbe {
     ci_probe_from_ci_probe_result(
-        crate::forge::forge_for(project_root).stream_ci_for_branch(branch, !no_human_active),
+        crate::forge::forge_for_kind(project_root, forge_kind)
+            .stream_ci_for_branch(branch, !no_human_active),
     )
 }
 
@@ -77106,6 +77135,12 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
 
 struct RealPhaseDriver {
     project_root: std::path::PathBuf,
+    /// BUG-1037: the auto-complete lifecycle forge, resolved once from the
+    /// target project root and reused by phase consumers. This intentionally
+    /// uses the open-change resolver so a stale pure-git config cannot make
+    /// reviewer preflights disagree with auto-open on a GitHub-origin repo.
+    // trace:BUG-1037 | ai:codex
+    lifecycle_forge: crate::forge::ForgeKind,
     spec: String,
     /// Queue owner captured when the drain selected this pipeline member. Phase
     /// children keep this identity while their role changes per phase.
@@ -77285,8 +77320,10 @@ impl RealPhaseDriver {
         variant: auto_complete::AutoCompleteVariant,
     ) -> Self {
         let drain_tuning = DrainTuning::resolve(&project_root);
+        let lifecycle_forge = crate::forge::resolve_open_change_forge_kind(&project_root);
         Self {
             project_root,
+            lifecycle_forge,
             spec,
             queue_user_id,
             permission_mode,
@@ -77331,6 +77368,10 @@ impl RealPhaseDriver {
 
     fn aida_exe(&self) -> std::path::PathBuf {
         self.aida_exe.clone()
+    }
+
+    fn lifecycle_forge(&self) -> Box<dyn crate::forge::Forge> {
+        crate::forge::forge_for_kind(&self.project_root, self.lifecycle_forge)
     }
 
     fn record_auto_rebase(&mut self, pr_number: u64, outcome: impl Into<String>) {
@@ -78166,6 +78207,7 @@ fn open_orchestrator_pr_for_implementer_worktree(
     project_root: &std::path::Path,
     worktree: &std::path::Path,
     branch: &str,
+    forge_kind: crate::forge::ForgeKind,
 ) -> Result<u64> {
     // trace:BUG-893 | ai:codex
     push_branch_from_implementer_worktree(worktree, branch)
@@ -78183,7 +78225,7 @@ fn open_orchestrator_pr_for_implementer_worktree(
     }
     let commit_msg = String::from_utf8_lossy(&commit_msg_out.stdout).to_string();
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
-    let change = crate::forge::forge_for_open_change(project_root)
+    let change = crate::forge::forge_for_kind(project_root, forge_kind)
         .open_change(crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
@@ -78281,6 +78323,7 @@ fn head_commit_message(project_root: &std::path::Path, rev: &str) -> Result<Stri
 fn open_orchestrator_pr_for_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
+    forge_kind: crate::forge::ForgeKind,
 ) -> Result<u64> {
     // BUG-895: phase 2 may have already pushed and removed the implementer
     // worktree. Recover from origin/<branch> without trying to push again.
@@ -78293,7 +78336,7 @@ fn open_orchestrator_pr_for_pushed_branch(
     let branch_ref = origin_branch_ref(branch);
     let commit_msg = head_commit_message(project_root, &branch_ref)?;
     let (title, body) = orchestrator_pr_title_and_body(&commit_msg)?;
-    let change = crate::forge::forge_for_open_change(project_root)
+    let change = crate::forge::forge_for_kind(project_root, forge_kind)
         .open_change(crate::forge::OpenChange {
             branch: branch.to_string(),
             base: crate::forge::default_branch_of(project_root),
@@ -78315,13 +78358,15 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
     project_root: &std::path::Path,
     worktree: &std::path::Path,
     branch: &str,
+    forge_kind: crate::forge::ForgeKind,
 ) -> Option<(u32, u64)> {
-    // trace:BUG-893 | ai:codex
+    // trace:BUG-893 trace:BUG-1037 | ai:codex
     let ahead = branch_commits_ahead_main(worktree, branch).unwrap_or(0);
     if ahead == 0 {
         return None;
     }
-    match open_orchestrator_pr_for_implementer_worktree(project_root, worktree, branch) {
+    match open_orchestrator_pr_for_implementer_worktree(project_root, worktree, branch, forge_kind)
+    {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
@@ -78337,13 +78382,14 @@ fn try_open_orchestrator_pr_for_no_pr_worktree(
 fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
     project_root: &std::path::Path,
     branch: &str,
+    forge_kind: crate::forge::ForgeKind,
 ) -> Option<(u32, u64)> {
-    // trace:BUG-895 | ai:codex
+    // trace:BUG-895 trace:BUG-1037 | ai:codex
     let ahead = match pushed_branch_commits_ahead_default(project_root, branch) {
         Ok(ahead) if ahead > 0 => ahead,
         _ => return None,
     };
-    match open_orchestrator_pr_for_pushed_branch(project_root, branch) {
+    match open_orchestrator_pr_for_pushed_branch(project_root, branch, forge_kind) {
         Ok(pr) => Some((ahead, pr)),
         Err(e) => {
             eprintln!(
@@ -78834,6 +78880,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         &self.project_root,
                         &worktree_path,
                         &branch,
+                        self.lifecycle_forge,
                     ) {
                         if !self.json {
                             eprintln!(
@@ -78878,6 +78925,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     &self.project_root,
                     &worktree_path,
                     &branch,
+                    self.lifecycle_forge,
                 ) {
                     if !self.json {
                         eprintln!(
@@ -78909,8 +78957,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // branch and seed the PR number so the reviewer preflight proceeds.
         // trace:BUG-895 | ai:codex
         let branch = self.branch.clone()?;
-        let (ahead, pr) =
-            try_open_orchestrator_pr_for_no_pr_pushed_branch(&self.project_root, &branch)?;
+        let (ahead, pr) = try_open_orchestrator_pr_for_no_pr_pushed_branch(
+            &self.project_root,
+            &branch,
+            self.lifecycle_forge,
+        )?;
         if !self.json {
             eprintln!(
                 "  {} pushed branch `{}` is {} commit(s) ahead with no review PR — opened PR-{} \
@@ -78939,7 +78990,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // lifecycle:no-ci-wait / lifecycle:trivial. The non-waiting path still
         // records the PR number and still ends the implementer lease below;
         // it just lets CI finish in parallel with review/merge. trace:STORY-442
-        let mut probe = ci_probe_via_forge(&branch); // STORY-516: forge-routed
+        let mut probe = ci_probe_with_forge(&self.project_root, self.lifecycle_forge, &branch); // STORY-516: forge-routed
         if matches!(probe, CiProbe::InProgress { .. }) && self.lifecycle_skip.no_ci_wait {
             eprintln!(
                 "  {} CI still running on `{}` — skipping wait per lifecycle tag.",
@@ -78958,7 +79009,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             probe = if self.json {
                 wait_for_ci_terminal(Some(&self.project_root), &branch)
             } else {
-                watch_ci_for_context_via_forge(&self.project_root, &branch, self.no_human.is_some())
+                watch_ci_for_context_with_forge(
+                    &self.project_root,
+                    self.lifecycle_forge,
+                    &branch,
+                    self.no_human.is_some(),
+                )
                 // STORY-516
             };
         }
@@ -79072,7 +79128,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // / `should_auto_rebase_stale_base` take it by `&mut` to guard a second
         // rebase attempt; with no re-entry it is always `false` here.
         let mut auto_rebase_attempted = false;
-        match preflight_stale_base_check(&self.project_root, pr as u64) {
+        match preflight_stale_base_check_with_forge(
+            &self.project_root,
+            pr as u64,
+            self.lifecycle_forge,
+        ) {
             Ok(pr_rebase::StaleBaseOutcome::Current) => {}
             Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
                 eprintln!(
@@ -79113,7 +79173,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             let allow = std::env::var("AIDA_ALLOW_INTERMEDIATE_ONLY")
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
-            match preflight_intermediate_only_check(&self.project_root, pr as u64) {
+            match preflight_intermediate_only_check_with_forge(
+                &self.project_root,
+                pr as u64,
+                self.lifecycle_forge,
+            ) {
                 Ok(pr_rebase::IntermediateOnlyOutcome::Clean) => {}
                 Ok(pr_rebase::IntermediateOnlyOutcome::SourcePlusIntermediate { intermediate }) => {
                     eprintln!(
@@ -79172,7 +79236,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 base: String::new(),
                 title: None,
             };
-            if let Err(e) = crate::forge::forge_for(&self.project_root)
+            if let Err(e) = self
+                .lifecycle_forge()
                 .comment(&review_change, "@claude review once")
             {
                 return Err(auto_complete::PhaseFailure::new(format!(
@@ -79330,7 +79395,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             // that the orchestrator is about to gate. This is advisory context,
             // so a transient forge failure does not block the existing review.
             let mut sink = crate::network_retry::NoopSink;
-            crate::forge::forge_for(&self.project_root)
+            self.lifecycle_forge()
                 .change_metadata(pr as u64, &mut sink)
                 .ok()
                 .map(|m| m.head_sha)
@@ -79524,14 +79589,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "internal: PR number not resolved before the merge phase",
             )
         })?;
-        // STORY-516/TASK-669: keep the `gh`-on-PATH guard as a MissingTool
-        // (non-shelvable → stop-the-drain) pre-check. An env failure should halt
-        // the batch, not shelve every member. The orchestrator is GitHub-only
-        // today; a GitLab orchestrator would make this forge-aware.
-        if resolve_gh_binary().is_none() {
+        // STORY-516/TASK-669 + BUG-1037: keep the forge CLI-on-PATH guard as a
+        // MissingTool (non-shelvable -> stop-the-drain) pre-check, but key it
+        // to the run's resolved lifecycle forge. Pure-git has no CLI precheck.
+        if !self.lifecycle_forge.cli_name().is_empty() && !self.lifecycle_forge.cli_on_path() {
             return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::MissingTool,
-                "`gh` is not on PATH — cannot merge the PR",
+                format!(
+                    "`{}` is not on PATH — cannot merge the {}",
+                    self.lifecycle_forge.cli_name(),
+                    self.lifecycle_forge.change_noun()
+                ),
             ));
         }
         // BUG-286/TASK-669: route the phase-4 merge through Forge::merge_change,
@@ -79570,10 +79638,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             squash_subject: None,
             delete_branch: true,
         };
-        crate::forge::forge_for(&self.project_root)
+        self.lifecycle_forge()
             .merge_change(&change_ref, &opts, &mut sink)
             .map_err(|e| {
-                auto_complete::PhaseFailure::new(format!("`gh pr merge {pr}` failed: {e:#}"))
+                let merge_tool = match self.lifecycle_forge.cli_name() {
+                    "" => "pure-git",
+                    cli => cli,
+                };
+                auto_complete::PhaseFailure::new(format!(
+                    "{} merge failed for {}-{pr}: {e:#}",
+                    merge_tool,
+                    self.lifecycle_forge.change_noun()
+                ))
             })?;
         println!(
             "  {} merged PR-{}",

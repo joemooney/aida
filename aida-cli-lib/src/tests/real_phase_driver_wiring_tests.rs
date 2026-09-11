@@ -104,6 +104,44 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
 }
 
 #[test]
+fn driver_resolves_lifecycle_forge_once_from_target_origin() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida").join("config.toml"),
+        "[forge]\nprovider = \"pure-git\"\n",
+    )
+    .unwrap();
+
+    let driver = driver(root, "BUG-1037");
+
+    assert_eq!(
+        crate::forge::resolve_forge_kind(root),
+        crate::forge::ForgeKind::None
+    );
+    assert_eq!(
+        crate::forge::resolve_open_change_forge_kind(root),
+        crate::forge::ForgeKind::GitHub
+    );
+    assert_eq!(driver.lifecycle_forge, crate::forge::ForgeKind::GitHub);
+    assert_eq!(
+        driver.lifecycle_forge().kind(),
+        crate::forge::ForgeKind::GitHub
+    );
+}
+
+#[test]
 fn phase3_auto_rebase_argv_is_pr_rebase_no_smoke() {
     // The reviewer-phase auto-rebase subprocess must run exactly
     // `aida pr rebase <N> --no-smoke` — the `--no-smoke` flag is
