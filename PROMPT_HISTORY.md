@@ -4882,3 +4882,13 @@ where `HOME/.aida/agents.toml` enables Claude while `AIDA_HOME/.aida/agents.toml
 the resolved source and selection now come from `AIDA_HOME`.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib enabled_agent_selection_honors_aida_home_for_global_agents_toml`; `cargo test -p aida-cli-lib enabled_agent_selection_`; `cargo test -p aida-cli-lib resolve_enabled_headless_vendor`. Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1020 PR #1716 launcher-path review guard
+
+Followed up on the PR #1716 review finding for the explicit `aida agent new claude` path with
+an additional launcher-level regression. The test sets conflicting global profiles under `HOME`
+and `AIDA_HOME`, verifies the launch gate reads the AIDA_HOME-backed `agents.toml`, and confirms
+Claude is refused with the Codex-only enabled hint before launch setup.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib aida_home -- --nocapture`.
+Existing unrelated Rust warnings remain in the focused test output.

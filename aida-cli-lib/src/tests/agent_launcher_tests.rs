@@ -1295,6 +1295,39 @@ fn explicit_agent_new_disabled_hint_uses_winning_agents_toml() {
     assert!(msg.contains("enabled: codex"));
 }
 
+// trace:BUG-1020 | ai:codex
+#[test]
+fn explicit_agent_new_refuses_disabled_profile_from_aida_home_global_agents_toml() {
+    let dir = TempDir::new().unwrap();
+    let project = dir.path().join("project");
+    let real_home = dir.path().join("home");
+    let aida_home = dir.path().join("aida-home");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::create_dir_all(real_home.join(".aida")).unwrap();
+    std::fs::create_dir_all(aida_home.join(".aida")).unwrap();
+    std::fs::write(
+        real_home.join(".aida/agents.toml"),
+        "[agents]\nenabled = [\"claude\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        aida_home.join(".aida/agents.toml"),
+        "[agents]\nenabled = [\"codex\"]\n",
+    )
+    .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("HOME", real_home.to_str().unwrap()),
+        ("AIDA_HOME", aida_home.to_str().unwrap()),
+    ]);
+
+    let err = enforce_agent_type_enabled(&project, "claude").unwrap_err();
+    let msg = err.to_string();
+
+    assert!(msg.contains("`claude` is disabled by `[agents] enabled`"));
+    assert!(msg.contains(&aida_home.join(".aida/agents.toml").display().to_string()));
+    assert!(msg.contains("enabled: codex"));
+}
+
 // trace:TASK-837 | ai:claude — a token picked interactively must produce the
 // same default-options command as the explicit `aida agent new <type>` lane,
 // so the two entry points share one launch path.
