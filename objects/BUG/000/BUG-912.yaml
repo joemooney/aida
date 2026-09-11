@@ -21,12 +21,12 @@ description: |
   `review record --pr` derives the handshake path from `AIDA_DRIVE_ROOT` (which the orchestrator points at the worktree) and ignores `AIDA_REVIEW_VERDICT_FILE`, which names the exact file phase 4 reads. Running the verb from `/home/joe/ai/aida` does not help because the env var wins over cwd. (`.aida/review-verdicts/` in the worktree is a real directory, not a symlink to the drive root, so the two paths are distinct files.)
 
   **Fix.** When `AIDA_REVIEW_VERDICT_FILE` is set, `review record --pr N` must write the handshake to exactly that path (and say so). Fallback order after that: `AIDA_PROJECT_ROOT`, then the session lease's `parent_project_root`, then `AIDA_DRIVE_ROOT`. Add a test that sets the env the orchestrator exports and asserts the file lands at the anchor. Substrate-as-bouncer: the review skill should not have to carry a "cd there first" instruction.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T08:50:38.538752064Z
-modified_at: 2026-09-11T12:35:35.725313787Z
+modified_at: 2026-09-11T12:50:56.492244793Z
 req_type: Bug
 tags:
 - aida:review:record
@@ -37,8 +37,25 @@ relationships:
   target_id: 01a09077-0a1c-7e53-8d3f-44532b362641
   created_at: 2026-09-11T12:35:29.514149165Z
   created_by: joe
+history:
+- id: 01a09085-6565-7712-a2c2-2421837b7ff9
+  author: aida-auto-bump
+  timestamp: 2026-09-11T12:50:56.485066663Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09085-656c-7ab1-aa31-5d75cb5eb514
+  timestamp: 2026-09-11T12:50:56.492243607Z
+  agent: aida
+  commit_sha: a5b1764643097e33434a51f20b4b59cce9f0c418
+  summary: 'PASS: PR handshake honors AIDA_REVIEW_VERDICT_FILE and preserves fallback review verdict behavior.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T12:35:35.725313787Z
   implemented_by: joe
+  completed_at: 2026-09-11T12:50:56.484942727Z
+  completion_sha: a5b1764643097e33434a51f20b4b59cce9f0c418
