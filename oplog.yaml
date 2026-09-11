@@ -57861,5 +57861,36 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 4678
+- id: 01a0917b-0bd5-7f02-9ba4-d45b5304ad42
+  target_id: 01a0917b-061f-76e2-93a9-c4195d1732bc
+  author: aida
+  node_id: '1'
+  lamport: 4679
+  timestamp: 2026-09-11T17:19:15.413442091Z
+  kind: !Create
+    title: 'Queue-depth backpressure: relax the REVIEWER (not build/test) for low-risk specs under load, with optimistic-merge + auto-revert on red CI'
+    description: |-
+      ## Why
+      Operator (2026-09-11): when open items / queue grow faster than burndown, temporarily short-circuit to catch up. Data: last 7d filed 276, merged 77 — intake is 3.6x merge. CAVEAT the operator agreed: CI is not the binding constraint (killing it entirely is only ~1.6x, still < intake), and relaxing verification when moving fastest is when a bad merge poisons main for every following spec. So this policy relaxes ONLY the reviewer (a judgment gate) for LOW-RISK specs, never the build/test/clippy integrity floor, and stays reversible.
+
+      ## Design (bounded, integrity-preserving)
+      - [drain.backpressure] config: enabled (default false), depth_threshold (e.g. 15 actionable), max_heft (only specs at/below this heft qualify), risk_tags_excluded (security/architecture/keystone never qualify).
+      - When the actionable queue depth exceeds depth_threshold AND a spec qualifies (low heft, no excluded risk tag, no design-fork), the drain applies lifecycle:no-review for THAT spec only — the existing short-circuit (auto_complete.rs skip.no_review), not a new path. Build + test + clippy + CI still run and still gate.
+      - Optimistic-merge safety net: a no-review merge is tracked; if the post-merge combined-main build or the next nightly goes red implicating it, the drain auto-files a revert PR for that spec and parks it NeedsAttention (never silently leaves main broken — the build-combined-main hazard).
+      - The policy is ADVISORY-OFF by default and logs every spec it short-circuited so the operator can audit what skipped review under load.
+
+      ## Acceptance
+      1. [drain.backpressure] parses; disabled = today's behaviour exactly.
+      2. Under threshold: a qualifying low-risk spec drains with no-review applied; a spec with an excluded risk tag or above max_heft is NEVER short-circuited even under load (test both).
+      3. Integrity floor is untouchable: build/test/clippy/CI still run and still block; only the reviewer phase is skipped. A red CI still shelves the spec.
+      4. Auto-revert: a fixture where a no-review-merged spec breaks combined-main → the drain files a revert PR and parks the spec; assert no silent broken main.
+      5. Every backpressure short-circuit emits an event (spec, depth-at-decision, reason) so aida history / an audit shows exactly what skipped review and why.
+      6. Docs/autonomous-drain.md gains a "backpressure" section stating plainly: this trades review latency for throughput under load, never correctness; the fix for sustained intake>merge is grooming/defer, not this valve.
+
+      ## Related
+      lifecycle short-circuit tags (TASK-525, the mechanism reused), STORY-1041 (pipelining — the safe throughput lever), build-combined-main hazard, the intake-discipline angle (groom/defer is the real fix for 3.6x filing).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4679
 node_id: '1'
