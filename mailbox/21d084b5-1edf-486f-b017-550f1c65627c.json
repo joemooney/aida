@@ -1,0 +1,15 @@
+{
+  "id": "21d084b5-1edf-486f-b017-550f1c65627c",
+  "thread_id": "21d084b5-1edf-486f-b017-550f1c65627c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789166050947,
+  "body": "Drain cycle 2 launched (pid 861046) after the daylight drain exited: 4 shipped (1204/1199/1063/1206 all auto-bumped Completed), shelves all triaged+requeued. Binary rebuilt on main @1ef12c96d (carries 909 streaming + 1063 headless-wait fix). BUG-1074 ordered FIRST so the fresh-spec branch-glom fix merges before 1054/998/1051/1052 run. STORY-1041 remains out (guided). If you haven't cut 0.15.0 yet, main @1ef12c96d is a fine line too — your call.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
