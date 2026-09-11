@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:21:51.679488154Z
+modified_at: 2026-09-11T13:32:40.049076742Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -22,6 +22,27 @@ comments:
   created_at: 2026-09-10T09:20:43.737712667Z
   modified_at: 2026-09-10T09:20:43.737712667Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a090ab-98f1-7721-b89e-17724f9302c0
+  author: joe
+  content: |-
+    Cross-platform run 34603101584 on bug-1021 @ 517b9dd28 (rebased onto main, PR-1738, PR CI green): fix is PARTIAL.
+
+    macOS: 1 remaining — init_cmd::task_510_init_scaffold_task_tests::post_init_hooks_run_executable_sh_files_in_lexical_order_with_context (panics at init_cmd.rs:1976 after "post-init hooks: 2 ok, 0 failed").
+
+    Windows: 8 remaining, all path-shape assertions. GitHub's Windows temp dir is reported by the code as the 8.3 short name C:\Users\RUNNER~1\AppData\Local\Temp\... while the tests compare against the long path tempfile created. Same class as the macOS /private/var vs /var issue: canonicalize both sides (or compare on canonicalized paths) in:
+    - block_allocation_reader_tests::read_block_allocation_config_rejects_malformed_toml (…\.aida\config.toml:1:5)
+    - handle_pull_command_tests::post_pull_config_validation_quarantines_conflict_and_restores_pre_pull_config (…\.aida\config.toml:2)
+    - handle_pull_command_tests::store_sync_config_parse_error_names_file_line_and_fix_hint (…\.aida\config.toml:4:8)
+    - drain_reliability_wiring_tests::probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface (left == right)
+    - role_identity_tests::starter_scaffold_adds_product_and_preserves_existing_product_role ("existing product role must not be overwritten")
+    - story_780_init_bootstrap_tests::explicit_unknown_forge_lists_configured_profiles (err.contains("unknown --forge `work-gitlab`"))
+    - story_780_init_bootstrap_tests::headless_bootstrap_uses_default_forge_profile (left == right)
+    - story_827_init_readme_registry_tests::project_registry_is_created_with_current_project
+
+    Verify with gh workflow run cross-platform.yml --ref bug-1021 before pushing the PR for review; pass = both legs green.
+  created_at: 2026-09-11T13:32:40.049076742Z
+  modified_at: 2026-09-11T13:32:40.049076742Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 failure_reason:
   phase: reviewer
