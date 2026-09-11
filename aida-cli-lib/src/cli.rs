@@ -11376,22 +11376,34 @@ pub enum HumanCommand {
 pub enum StatuslineAction {
     /// Print (or install) client-appropriate statusline configuration so a
     /// user can enable the AIDA-aware statusline segment. Prints by default;
-    /// pass `--install` to write the Claude Code `settings.json` entry.
+    /// pass `--install` to write the supported client's `settings.json` entry.
     // trace:TASK-0414
     Setup {
         /// Which client to emit setup for: `claude` (command-backed
         /// statusLine in settings.json), `codex` (built-in TUI footer
         /// fields — Codex does not run arbitrary commands in its footer),
+        /// `antigravity` (command-backed statusLine plus title command),
         /// or `all` (default — print guidance for every supported client).
-        #[clap(long, value_parser = ["claude", "codex", "all"], default_value = "all")]
+        #[clap(long, value_parser = ["claude", "codex", "antigravity", "all"], default_value = "all")]
         client: String,
 
         /// Install the configuration instead of only printing it. Only the
-        /// `claude` client supports install (it writes/merges the
-        /// `statusLine` block into `.claude/settings.json`); other clients
-        /// stay print-only because their footer config is hand-edited.
+        /// `claude` and `antigravity` clients support install (they
+        /// write/merge the `statusLine` block into settings.json); Codex
+        /// stays print-only because its footer config is hand-edited.
         #[clap(long)]
         install: bool,
+
+        /// Antigravity settings path. Defaults to
+        /// `$AIDA_ANTIGRAVITY_SETTINGS`, then
+        /// `~/.gemini/antigravity-cli/settings.json`.
+        #[clap(long)]
+        settings_path: Option<std::path::PathBuf>,
+
+        /// For Antigravity, replace its default status line instead of
+        /// stacking AIDA with it (`stack_with_default: false`).
+        #[clap(long)]
+        replace_default: bool,
     },
 }
 

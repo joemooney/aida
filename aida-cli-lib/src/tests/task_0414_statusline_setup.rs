@@ -1,7 +1,7 @@
-use super::*;
 use crate::statusline_cmd::{
-    claude_statusline_block, codex_statusline_setup_text, install_claude_statusline,
-    osc_terminal_title, STATUSLINE_SETUP_COMMAND,
+    antigravity_statusline_fragment, claude_statusline_block, codex_statusline_setup_text,
+    install_antigravity_statusline, install_claude_statusline, osc_terminal_title,
+    print_statusline_setup_text_for_test, STATUSLINE_SETUP_COMMAND,
 };
 
 /// The Claude Code statusLine block uses the same command string the
@@ -81,6 +81,125 @@ fn install_refuses_invalid_json() {
     assert!(err.to_string().contains("valid JSON"));
     // The original bytes are untouched.
     assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
+}
+
+// trace:TASK-1199 | ai:codex
+#[test]
+fn antigravity_fragment_uses_claude_command_and_stacks_by_default() {
+    let fragment = antigravity_statusline_fragment(true);
+
+    assert_eq!(fragment["statusLine"]["type"], "command");
+    assert_eq!(fragment["statusLine"]["command"], STATUSLINE_SETUP_COMMAND);
+    assert_eq!(fragment["statusLine"]["stack_with_default"], true);
+    assert_eq!(fragment["title"]["type"], "command");
+    assert_eq!(fragment["title"]["command"], "aida statusline --title");
+}
+
+// trace:TASK-1199 | ai:codex
+#[test]
+fn antigravity_fragment_pretty_json_golden() {
+    let fragment = antigravity_statusline_fragment(true);
+    let pretty = serde_json::to_string_pretty(&fragment).unwrap();
+
+    assert_eq!(
+        pretty,
+        r#"{
+  "statusLine": {
+    "command": "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"",
+    "stack_with_default": true,
+    "type": "command"
+  },
+  "title": {
+    "command": "aida statusline --title",
+    "type": "command"
+  }
+}"#
+    );
+}
+
+// trace:TASK-1199 | ai:codex
+#[test]
+fn antigravity_fragment_replace_default_emits_false() {
+    let fragment = antigravity_statusline_fragment(false);
+
+    assert_eq!(fragment["statusLine"]["stack_with_default"], false);
+}
+
+// trace:TASK-1199 | ai:codex
+#[test]
+fn antigravity_install_merges_preserves_keys_and_writes_backup() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let settings = dir
+        .path()
+        .join(".gemini")
+        .join("antigravity-cli")
+        .join("settings.json");
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(
+        &settings,
+        r#"{"theme": "solarized", "mcpServers": {"aida": {"command": "aida"}}}"#,
+    )
+    .unwrap();
+
+    let (created, backup) =
+        install_antigravity_statusline(&settings, true).expect("install should succeed");
+    assert!(!created, "should merge existing settings");
+    let backup = backup.expect("existing settings should be backed up");
+    assert!(
+        backup.exists(),
+        "backup should exist at {}",
+        backup.display()
+    );
+    assert_eq!(
+        std::fs::read_to_string(&backup).unwrap(),
+        r#"{"theme": "solarized", "mcpServers": {"aida": {"command": "aida"}}}"#
+    );
+
+    let v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+    assert_eq!(v["theme"], "solarized");
+    assert_eq!(v["mcpServers"]["aida"]["command"], "aida");
+    assert_eq!(v["statusLine"]["command"], STATUSLINE_SETUP_COMMAND);
+    assert_eq!(v["statusLine"]["stack_with_default"], true);
+    assert_eq!(v["title"]["command"], "aida statusline --title");
+}
+
+// trace:TASK-1199 | ai:codex
+#[test]
+fn antigravity_install_refuses_invalid_json_without_backup_or_overwrite() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let settings = dir
+        .path()
+        .join(".gemini")
+        .join("antigravity-cli")
+        .join("settings.json");
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(&settings, "{ not json").unwrap();
+
+    let err =
+        install_antigravity_statusline(&settings, true).expect_err("invalid JSON should error");
+    assert!(err.to_string().contains("valid JSON"));
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{ not json");
+    let backups: Vec<_> = std::fs::read_dir(settings.parent().unwrap())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_name().to_string_lossy().contains("aida-bak"))
+        .collect();
+    assert!(
+        backups.is_empty(),
+        "invalid JSON must not be backed up/written"
+    );
+}
+
+// trace:TASK-1199 | ai:codex
+#[test]
+fn setup_all_mentions_claude_codex_and_antigravity() {
+    let out = print_statusline_setup_text_for_test("all", true);
+
+    assert!(out.contains("Claude Code"));
+    assert!(out.contains("Codex CLI"));
+    assert!(out.contains("Antigravity CLI"));
+    assert!(out.contains("\"stack_with_default\": true"));
 }
 
 // trace:TASK-1188 | ai:codex — Codex now writes its own terminal title, so

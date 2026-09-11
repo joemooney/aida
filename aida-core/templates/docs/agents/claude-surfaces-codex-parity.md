@@ -65,12 +65,13 @@ script-class boundaries already, so they are the *correct* portable shape and
 need no Claude-to-Codex migration: they run from git or the shell regardless of
 agent client.
 
-## 2. `.claude/settings.json` — config + statusline
+## 2. `.claude/settings.json` / Antigravity settings — config + statusline
 
-| Surface | What it does | Class | Codex equivalent | Gap + coverage |
+| Surface | What it does | Class | Codex / Antigravity equivalent | Gap + coverage |
 |---|---|---|---|---|
 | `settings.json` `hooks` block | Maps Claude lifecycle events to the command hooks in §1 | enforcement/observation | `.codex/config.toml` / `.codex/hooks.json` (project) or `~/.codex/hooks.json` | A whole-file analog is needed; Codex's event set is narrower (no defer, no mutation). Coverage: TASK-0422 (defer/mutation) + TASK-0424 (scaffold the Codex equivalent) |
 | `settings.json` `statusLine` (`aida statusline ...`) | Command-backed status footer showing role/queue/scope | UX | Codex built-in TUI footer fields (`[tui] status_line = [...]`) — fixed field set, no arbitrary command; set `[tui] terminal_title = null` so Codex does not overwrite external status integrations | Codex cannot run an arbitrary status command in its footer today (open upstream request; re-check upstream for a command-backed `status_line` item at each competitive refresh). Current Codex releases own the terminal title, so `aida statusline --title` is no longer the Codex parity path. Recommended full-fidelity path: tmux `set -g status-right '#(aida statusline --color=never)'` plus `set -g status-interval 15`, or `aida statusbar --plain` for the ambient meter. Coverage: TASK-1188 updates `statusline setup --client codex` guidance + scaffolded `AGENTS.md`; a richer command-backed footer awaits the upstream Codex feature |
+| Antigravity `settings.json` `statusLine` + `title` | Command-backed status footer plus terminal-title command | UX | `aida statusline setup --client antigravity` emits the Claude-equivalent command string with `stack_with_default: true`; `--replace-default` emits false; `--install` merges into `~/.gemini/antigravity-cli/settings.json` (or override path) with a timestamped backup | Full parity for this surface. Antigravity can run both `aida statusline --color=always ...` for the footer and `aida statusline --title` for title parity, making it a superset of the Codex path and equivalent to Claude for the footer. Coverage: TASK-1199 |
 | `$CLAUDE_PROJECT_DIR` path convention in hook commands | Resolves hook scripts regardless of CWD | enforcement plumbing | Codex hook env vars differ; project trust must be granted | Hook command paths must be rewritten for Codex's env + trust model. Coverage: TASK-0424 |
 
 ## 3. `.claude/skills` and `.claude/commands`
