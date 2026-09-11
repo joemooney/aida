@@ -28,7 +28,7 @@
 //! trace:STORY-301 | ai:claude
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -114,6 +114,11 @@ pub(crate) struct DrainState {
     /// writes a `.aida/headless-logs/*-<session>.jsonl` stream.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) current_session_id: Option<String>,
+    /// Headless vendor for the current phase. Legacy drain-state files omit
+    /// this and fall back to the resolved project vendor at read time.
+    // trace:STORY-1054 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) current_vendor: Option<String>,
     /// PID of the orchestrator process — corroborated by `aida drain status`
     /// to tell a live drain from a stale crashed file.
     pub(crate) orchestrator_pid: u32,
@@ -208,6 +213,7 @@ impl DrainState {
             current_phase: None,
             phase_started_at: None,
             current_session_id: None,
+            current_vendor: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_single(spec),
@@ -231,6 +237,7 @@ impl DrainState {
             current_phase: None,
             phase_started_at: None,
             current_session_id: None,
+            current_vendor: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_batch(batch_name),
@@ -253,6 +260,7 @@ impl DrainState {
             current_phase: None,
             phase_started_at: None,
             current_session_id: None,
+            current_vendor: None,
             orchestrator_pid: std::process::id(),
             started_at: chrono::Utc::now().to_rfc3339(),
             on_drain_complete: predict_next_n(n),
@@ -503,6 +511,7 @@ pub(crate) fn clear_run(project_root: &Path) {
     state.current_phase = None;
     state.phase_started_at = None;
     state.current_session_id = None;
+    state.current_vendor = None;
     let _ = state.write(project_root);
 }
 
@@ -511,13 +520,14 @@ pub(crate) fn clear_run(project_root: &Path) {
 /// `current_phase` and flips the member's own state to `in-phase-N`.
 /// Best-effort — a missing file is a no-op. trace:STORY-301 | ai:claude
 pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase_slug: &str) {
-    set_phase_inner(project_root, spec, phase_index, phase_slug, None);
+    set_phase_inner(project_root, spec, phase_index, phase_slug, None, None);
 }
 
 /// BUG-872: record the concrete phase session id alongside the phase. Drain
 /// status and `aida tail drain` use this id to resolve the active log; retries
 /// for the same spec must never inherit an older sibling attempt's mtime.
 // trace:BUG-872 | ai:codex
+#[allow(dead_code)] // compatibility wrapper; new call sites use set_phase_session_vendor
 pub(crate) fn set_phase_session(
     project_root: &Path,
     spec: &str,
@@ -525,12 +535,33 @@ pub(crate) fn set_phase_session(
     phase_slug: &str,
     session_id: &str,
 ) {
+    let vendor = crate::session::resolve_headless_vendor(project_root);
+    set_phase_session_vendor(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        session_id,
+        vendor,
+    );
+}
+
+// trace:STORY-1054 | ai:codex
+pub(crate) fn set_phase_session_vendor(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    session_id: &str,
+    vendor: crate::session::HeadlessVendor,
+) {
     set_phase_inner(
         project_root,
         spec,
         phase_index,
         phase_slug,
         Some(session_id),
+        Some(vendor.as_str()),
     );
 }
 
@@ -540,6 +571,7 @@ fn set_phase_inner(
     phase_index: i32,
     phase_slug: &str,
     session_id: Option<&str>,
+    vendor: Option<&str>,
 ) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
@@ -548,6 +580,7 @@ fn set_phase_inner(
     state.current_phase = Some(format!("{phase_index} ({phase_slug})"));
     state.phase_started_at = Some(chrono::Utc::now().to_rfc3339());
     state.current_session_id = session_id.map(str::to_string);
+    state.current_vendor = vendor.map(str::to_string);
     if let Some(member) = state.members.iter_mut().find(|m| m.spec == spec) {
         member
             .started_at
@@ -773,7 +806,7 @@ fn duration_between_strings(start: &str, end: &str) -> Option<Duration> {
     duration_between(start, end)
 }
 
-fn system_time_rfc3339(t: SystemTime) -> String {
+fn system_time_rfc3339(t: std::time::SystemTime) -> String {
     chrono::DateTime::<chrono::Utc>::from(t).to_rfc3339()
 }
 
@@ -791,31 +824,24 @@ fn drain_quiet_warn_minutes(project_root: Option<&Path>) -> u64 {
     .unwrap_or(5)
 }
 
-fn active_log_mtime(project_root: &Path, state: &DrainState) -> Option<SystemTime> {
-    let dir = project_root.join(".aida").join("headless-logs");
-    let entries = crate::headless_tail::discover_logs(&dir).ok()?;
-    if let Some(session_id) = state.current_session_id.as_deref() {
-        return entries
-            .iter()
-            .find(|entry| entry.lease.as_deref() == Some(session_id))
-            .map(|entry| entry.mtime);
-    }
-    // Legacy drain-state files did not record a phase session id. Falling back
-    // to "newest log for spec" can report a previous retry's log as live
-    // output; prefer the phase-entry timestamp instead.
-    // trace:BUG-872 | ai:codex
-    state.current_phase.as_ref()?;
-    None
-}
-
 fn last_activity_time(
     project_root: Option<&Path>,
     state: &DrainState,
     spec: &str,
 ) -> Option<(String, &'static str)> {
-    if let Some(root) = project_root {
-        if let Some(mtime) = active_log_mtime(root, state) {
-            return Some((system_time_rfc3339(mtime), "log_mtime"));
+    if let (Some(root), Some(session_id)) = (project_root, state.current_session_id.as_deref()) {
+        let vendor = state
+            .current_vendor
+            .as_deref()
+            .and_then(crate::session::HeadlessVendor::parse)
+            .unwrap_or_else(|| crate::session::resolve_headless_vendor(root));
+        let ctx = crate::vendor_activity::VendorActivityContext::new(root, session_id);
+        let snap = crate::vendor_activity::snapshot(vendor, &ctx);
+        if let Some(mtime) = snap.last_activity {
+            return Some((
+                system_time_rfc3339(mtime),
+                snap.source.unwrap_or("vendor_activity"),
+            ));
         }
     }
     state
@@ -1274,6 +1300,7 @@ mod tests {
             current_phase: None,
             phase_started_at: None,
             current_session_id: None,
+            current_vendor: None,
             orchestrator_pid: std::process::id(),
             started_at: "2026-05-18T23:28:00+00:00".to_string(),
             on_drain_complete: predict_single("STORY-301"),

@@ -84,6 +84,7 @@ fn watchdog_trip_reason_names_the_threshold_minutes() {
     let wd = PhaseWatchdog::new(
         std::path::PathBuf::from("/tmp/nonexistent"),
         "sess".to_string(),
+        session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
     );
@@ -147,6 +148,7 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
     let mut streaming = PhaseWatchdog::new_for_phase(
         root.to_path_buf(),
         session_id.to_string(),
+        session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Reviewer,
@@ -162,10 +164,16 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
         "fresh reviewer stream output is progress even with no file changes",
     );
 
-    let current_sig = headless_log_activity_signature(root, session_id).unwrap();
+    let current_sig = vendor_activity::snapshot(
+        session::HeadlessVendor::Claude,
+        &vendor_activity::VendorActivityContext::new(root, session_id),
+    )
+    .signature()
+    .unwrap();
     let mut silent = PhaseWatchdog::new_for_phase(
         root.to_path_buf(),
         session_id.to_string(),
+        session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Reviewer,
@@ -200,6 +208,7 @@ fn codex_watchdog_counts_streaming_headless_log_activity_as_progress() {
     let mut watchdog = PhaseWatchdog::new_for_phase(
         root.to_path_buf(),
         session_id.to_string(),
+        session::HeadlessVendor::Codex,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Implementer,
@@ -207,7 +216,11 @@ fn codex_watchdog_counts_streaming_headless_log_activity_as_progress() {
     watchdog.worktree = Some(worktree);
     watchdog.last_progress = old_progress;
     watchdog.last_poll = old_poll;
-    watchdog.last_sig = headless_log_activity_signature(root, session_id);
+    watchdog.last_sig = vendor_activity::snapshot(
+        session::HeadlessVendor::Codex,
+        &vendor_activity::VendorActivityContext::new(root, session_id),
+    )
+    .signature();
 
     std::thread::sleep(std::time::Duration::from_millis(5));
     std::fs::write(
@@ -248,12 +261,17 @@ fn bounded_polling_tool_events_feed_three_minute_watchdog() {
     let mut watchdog = PhaseWatchdog::new_for_phase(
         root.to_path_buf(),
         session_id.to_string(),
+        session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(3 * 60),
         std::time::Duration::from_secs(45 * 60),
         auto_complete::Phase::Reviewer,
     );
     watchdog.worktree = Some(worktree);
-    watchdog.last_sig = headless_log_activity_signature(root, session_id);
+    watchdog.last_sig = vendor_activity::snapshot(
+        session::HeadlessVendor::Claude,
+        &vendor_activity::VendorActivityContext::new(root, session_id),
+    )
+    .signature();
 
     let mut body = String::new();
     for i in 1..=5 {

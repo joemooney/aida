@@ -123,6 +123,7 @@ mod goal_cmd;
 // trace:EPIC-36 | ai:claude — session-vs-drain misclassification-gap metric.
 mod headless_tail;
 mod headless_tee;
+mod vendor_activity;
 // trace:TASK-990 | ai:claude — `aida watch` streaming event classifier.
 mod watch;
 // trace:STORY-658 | ai:claude — `aida health` at-a-glance vital-signs read.
@@ -33053,48 +33054,6 @@ fn headless_log_len(project_root: &std::path::Path, session_id: &str) -> Option<
         }
     }
     newest_len
-}
-
-/// BUG-875: activity signature for a headless phase stream. Length catches
-/// normal JSONL growth; mtime also catches a stream file that is touched or
-/// rewritten without a length change. Reviewer phases key no-progress on this
-/// output activity because they are read-then-verdict and normally make no
-/// commits or file changes until the final verdict write.
-// trace:BUG-875 | ai:codex
-fn headless_log_activity_signature(
-    project_root: &std::path::Path,
-    session_id: &str,
-) -> Option<String> {
-    let dir = project_root.join(".aida").join("headless-logs");
-    let suffix = format!("-{session_id}.jsonl");
-    let mut newest: Option<(std::time::SystemTime, u64)> = None;
-    for entry in std::fs::read_dir(&dir).ok()?.flatten() {
-        let is_match = entry
-            .path()
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(|n| n.ends_with(&suffix))
-            .unwrap_or(false);
-        if !is_match {
-            continue;
-        }
-        if let Ok(meta) = entry.metadata() {
-            let mtime = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
-            if newest
-                .as_ref()
-                .map(|(best, _)| mtime >= *best)
-                .unwrap_or(true)
-            {
-                newest = Some((mtime, meta.len()));
-            }
-        }
-    }
-    let (mtime, len) = newest?;
-    let mtime_nanos = mtime
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    Some(format!("log:{len}:{mtime_nanos}"))
 }
 
 /// BUG-826: a non-zero headless vendor exit with a zero-byte JSONL log is a
@@ -76372,7 +76331,12 @@ fn find_orchestrated_lease(
     let lease_path = leases_dir(project_root).join(format!("{}.toml", manifest.session_id));
     let body = std::fs::read_to_string(&lease_path).ok()?;
     let peek: LeasePeek = toml::from_str(&body).ok()?;
-    Some((peek.id, peek.branch, peek.worktree_path, peek.creator_pid))
+    Some((
+        peek.id,
+        peek.branch,
+        peek.worktree_path,
+        peek.active_pid.or(peek.creator_pid),
+    ))
 }
 
 /// Decide whether the worktree's live branch represents a mid-phase swap
@@ -76857,6 +76821,7 @@ fn watchdog_progress_signal_for_phase(phase: auto_complete::Phase) -> WatchdogPr
 struct PhaseWatchdog {
     project_root: std::path::PathBuf,
     session_id: String,
+    vendor: session::HeadlessVendor,
     root_pid: Option<u32>,
     phase_start: std::time::Instant,
     last_progress: std::time::Instant,
@@ -76886,6 +76851,7 @@ impl PhaseWatchdog {
     fn new(
         project_root: std::path::PathBuf,
         session_id: String,
+        vendor: session::HeadlessVendor,
         no_progress: std::time::Duration,
         ceiling: std::time::Duration,
     ) -> Self {
@@ -76893,6 +76859,7 @@ impl PhaseWatchdog {
         Self {
             project_root,
             session_id,
+            vendor,
             root_pid: None,
             phase_start: now,
             last_progress: now,
@@ -76912,11 +76879,12 @@ impl PhaseWatchdog {
     fn new_for_phase(
         project_root: std::path::PathBuf,
         session_id: String,
+        vendor: session::HeadlessVendor,
         no_progress: std::time::Duration,
         ceiling: std::time::Duration,
         phase: auto_complete::Phase,
     ) -> Self {
-        Self::new(project_root, session_id, no_progress, ceiling)
+        Self::new(project_root, session_id, vendor, no_progress, ceiling)
             .with_progress_signal(watchdog_progress_signal_for_phase(phase))
     }
 
@@ -77006,7 +76974,8 @@ impl PhaseWatchdog {
 
     // trace:BUG-875 | ai:codex
     fn observed_progress_signature(&self, worktree: &std::path::Path) -> Option<String> {
-        let output_sig = headless_log_activity_signature(&self.project_root, &self.session_id);
+        let ctx = vendor_activity::VendorActivityContext::new(&self.project_root, &self.session_id);
+        let output_sig = vendor_activity::snapshot(self.vendor, &ctx).signature();
         let worktree_sig = match self.progress_signal {
             WatchdogProgressSignal::WorktreeAndOutput => Self::progress_signature(worktree),
             WatchdogProgressSignal::OutputOnly => None,
@@ -77765,13 +77734,19 @@ impl RealPhaseDriver {
     /// should be treated as current. Status/tail readers must not select an
     /// older retry's log for the same spec while the fresh phase is starting.
     // trace:BUG-872 | ai:codex
-    fn mark_drain_phase_session(&self, phase: auto_complete::Phase, session_id: &str) {
-        drain_state::set_phase_session(
+    fn mark_drain_phase_session(
+        &self,
+        phase: auto_complete::Phase,
+        session_id: &str,
+        vendor: session::HeadlessVendor,
+    ) {
+        drain_state::set_phase_session_vendor(
             &self.project_root,
             &self.spec,
             phase.index(),
             phase.slug(),
             session_id,
+            vendor,
         );
     }
 
@@ -78568,7 +78543,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let session_uuid = uuid::Uuid::now_v7().to_string();
         // trace:BUG-1063 | ai:codex
         let implementer_started_at = std::time::SystemTime::now();
-        self.mark_drain_phase_session(auto_complete::Phase::Implementer, &session_uuid);
+        let headless_vendor = session::resolve_headless_vendor(&self.project_root);
+        self.mark_drain_phase_session(
+            auto_complete::Phase::Implementer,
+            &session_uuid,
+            headless_vendor,
+        );
         // STORY-306: remember the minted session id — if phase 1 punts and the
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
         // exactly this session. trace:STORY-306 | ai:claude
@@ -78653,6 +78633,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             let wd = PhaseWatchdog::new_for_phase(
                 self.project_root.clone(),
                 session_uuid.clone(),
+                headless_vendor,
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
                 auto_complete::Phase::Implementer,
@@ -79514,7 +79495,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let reviewer_started_at = std::time::SystemTime::now();
 
         let session_uuid = uuid::Uuid::now_v7().to_string();
-        self.mark_drain_phase_session(auto_complete::Phase::Reviewer, &session_uuid);
+        let headless_vendor = session::resolve_headless_vendor(&self.project_root);
+        self.mark_drain_phase_session(
+            auto_complete::Phase::Reviewer,
+            &session_uuid,
+            headless_vendor,
+        );
         let scope = format!("PR-{pr}");
         // BUG-906: a transient retry can relaunch this phase immediately after
         // a predecessor reviewer process died. Reap that dead PR-scoped lease
@@ -79610,6 +79596,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             PhaseWatchdog::new_for_phase(
                 self.project_root.clone(),
                 session_uuid.clone(),
+                headless_vendor,
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
                 auto_complete::Phase::Reviewer,
