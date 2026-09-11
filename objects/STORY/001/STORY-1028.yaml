@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-11T05:15:31.010450599Z
+modified_at: 2026-09-11T08:33:20.791234752Z
 req_type: Story
 tags:
 - breaking
@@ -44,3 +44,10 @@ relationships:
   target_id: 01a08ee4-030a-77c0-a47c-fe12e518df10
   created_at: 2026-09-11T05:15:31.010445868Z
   created_by: joe
+comments:
+- id: 01a08f99-8f97-78f0-983d-87efd137ede6
+  author: joe
+  content: 'Held for operator decision (advisor, 2026-09-11): a clean-break CLI restructure with NO aliases is a breaking change for every script, doc, and muscle memory — approve/reject/soften (deprecation aliases?) is yours.'
+  created_at: 2026-09-11T08:33:20.791234752Z
+  modified_at: 2026-09-11T08:33:20.791234752Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
