@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-11T13:41:20.321710428Z
+modified_at: 2026-09-11T13:41:21.562110723Z
 req_type: Story
 tags:
 - breaking
@@ -63,3 +63,4 @@ comments:
   created_at: 2026-09-11T12:39:56.166454874Z
   modified_at: 2026-09-11T12:39:56.166454874Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+execution_mode: drain
