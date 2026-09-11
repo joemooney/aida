@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:17:22.124798775Z
-modified_at: 2026-09-10T12:37:05.982272667Z
+modified_at: 2026-09-11T02:15:46.227133268Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -26,6 +26,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-10T10:06:18.313916730Z
   modified_at: 2026-09-10T10:06:18.313916730Z
+- id: 01a08e3f-e133-7410-b66b-02e91218fac6
+  author: joe
+  content: 'Upstream consistency report (another project, 2026-09-10): the story title/notes and behavior must agree on the delivery boundary — the implemented behavior composes paste-ready text, optionally copies, and files the local upstream-tagged BUG; it does NOT send email or keep an outbox (deferred slice 2). ADD TO REWORK ACCEPTANCE: aida report --help states explicitly that the report is composed and filed locally, not sent; the release-notes entry for this feature states the same; no user can reasonably assume delivery happened. (The spec title was already re-sliced on 2026-09-09; the help/notes clarity is the remaining half.)'
+  created_at: 2026-09-11T02:15:46.227133268Z
+  modified_at: 2026-09-11T02:15:46.227133268Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
