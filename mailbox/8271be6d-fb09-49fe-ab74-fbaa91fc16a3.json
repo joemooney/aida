@@ -1,0 +1,15 @@
+{
+  "id": "8271be6d-fb09-49fe-ab74-fbaa91fc16a3",
+  "thread_id": "8271be6d-fb09-49fe-ab74-fbaa91fc16a3",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789150990843,
+  "body": "1006 + 1037 MERGED on green strip-rebased heads (advisor verdicts recorded). The stranded-PR set is now ZERO. The backlog drain continues (1211 in flight, 1204/1028/1041/1043/1205 behind, then 994/1023/1029/1033 reworks in queue). Recommend holding the 0.15.0 cut until this drain exits so the release carries the full batch — I will mail the handoff line at its exit. After the cut: TASK-1210 + TASK-1198 verification drains on the release binary close the reliability arc.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
