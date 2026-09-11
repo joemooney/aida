@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:30:15.452401410Z
-modified_at: 2026-09-11T17:30:15.452401410Z
+modified_at: 2026-09-11T17:30:22.947366457Z
 req_type: Story
 tags:
 - adapter
@@ -46,3 +46,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-11T17:30:18.554189510Z
+- rel_type: References
+  target_id: 01a084f9-de06-76c1-9236-d2aff53a1a74
+  created_at: 2026-09-11T17:30:22.947361532Z
+  created_by: joe
