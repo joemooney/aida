@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:45:02.441681831Z
-modified_at: 2026-09-11T21:49:00.641301470Z
+modified_at: 2026-09-11T21:51:28.990670393Z
 req_type: Task
 tags:
 - ci
@@ -38,6 +38,13 @@ relationships:
   target_id: 01a08ee4-030a-77c0-a47c-fe12e518df10
   created_at: 2026-09-11T14:45:07.756399096Z
   created_by: joe
+comments:
+- id: 01a09274-46de-7271-b75d-8770b2ad3980
+  author: joe
+  content: 'Advisor steering on the ci-red (PR-1749): the reworked guard reports 314 citations, not ~25 — the attribution is still section-scoped. Sample: 02-specs.md:243 flags --deferred/--all ''under aida defer'' — that line almost certainly cites ''aida list --deferred'' inline; a flag appearing in the same backtick span as a command must attribute to THAT command, not the enclosing section''s. Fix the attribution to prefer (1) same code-span command path, (2) nearest preceding fenced command, (3) section heading — in that order; then the residue should collapse to the genuinely-wrong ~25 and those get manual edits. Do not bulk-edit 300 manual lines to satisfy a misattributing guard.'
+  created_at: 2026-09-11T21:51:28.990670393Z
+  modified_at: 2026-09-11T21:51:28.990670393Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
