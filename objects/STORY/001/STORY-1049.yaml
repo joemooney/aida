@@ -29,7 +29,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:07.876021726Z
-modified_at: 2026-09-11T17:25:17.064837248Z
+modified_at: 2026-09-11T17:56:52.073879241Z
 req_type: Story
 tags:
 - ci
@@ -54,3 +54,9 @@ comments:
   created_at: 2026-09-11T17:25:17.064837248Z
   modified_at: 2026-09-11T17:25:17.064837248Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0919d-7ae9-7840-b9d7-66cac60bd1e9
+  author: joe
+  content: 'Held for operator (advisor): self-hosted runner = your hardware, cost and security posture — needs your call on where it runs and what secrets it can see. Recommend yes-in-principle with the GitHub-hosted clean-room kept as the required gate exactly as spec''d.'
+  created_at: 2026-09-11T17:56:52.073879241Z
+  modified_at: 2026-09-11T17:56:52.073879241Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
