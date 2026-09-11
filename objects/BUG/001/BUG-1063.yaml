@@ -22,12 +22,12 @@ description: |-
 
   ## Related
   BUG-908 (the retry that should have saved every one of these), BUG-909 (Codex silence, the other blind spot), STORY-974 (typed causes), STORY-998 (spinning detection reads the same stream).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:21:21.779925377Z
-modified_at: 2026-09-11T21:06:52.037912152Z
+modified_at: 2026-09-11T21:19:31.954178542Z
 req_type: Bug
 tags:
 - drain
@@ -60,8 +60,24 @@ relationships:
   target_id: 01a0924b-2f4d-7b90-84a7-d2fdbb8c7fa1
   created_at: 2026-09-11T21:06:47.026660516Z
   created_by: joe
+history:
+- id: 01a09257-066a-7cc1-9d6e-520ffd104d13
+  author: aida-auto-bump
+  timestamp: 2026-09-11T21:19:31.946790326Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09257-0672-7932-8923-b2b81bdc9659
+  timestamp: 2026-09-11T21:19:31.954176734Z
+  agent: aida
+  commit_sha: 90f1f030081f21f793849f9070b23dff5e6a2fc2
+  summary: Completed via merge 90f1f030
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T21:06:52.037912152Z
   implemented_by: joe
+  completed_at: 2026-09-11T21:19:31.946613601Z
+  completion_sha: 90f1f030081f21f793849f9070b23dff5e6a2fc2
