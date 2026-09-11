@@ -5612,6 +5612,8 @@ pub(crate) fn handle_queue_command(
             watch,
             interval,
             max,
+            wait_ci: _,
+            no_wait_ci,
             rebase,
             strategy,
             focus,
@@ -5633,6 +5635,7 @@ pub(crate) fn handle_queue_command(
                 *watch,
                 *interval,
                 *max,
+                !*no_wait_ci,
                 *rebase,
                 *strategy,
                 focus.clone(),
@@ -10348,6 +10351,39 @@ pub(crate) fn probe_pr_integration_state(
     }
 }
 
+fn ci_state_from_terminal_probe(probe: &CiProbe) -> integrate::CiState {
+    match probe {
+        CiProbe::Green { .. } => integrate::CiState::Passing,
+        CiProbe::Red { .. } => integrate::CiState::Failing,
+        CiProbe::PrNoChecks { .. } | CiProbe::NoSignal(_) => integrate::CiState::None,
+        CiProbe::InProgress { .. } => integrate::CiState::Running,
+    }
+}
+
+fn wait_for_integrate_ci(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    branch: Option<&str>,
+    mut state: integrate::PrIntegrationState,
+) -> integrate::PrIntegrationState {
+    let Some(branch) = branch else {
+        println!(
+            "  {} {} — CI still running but no PR branch resolved; skipping this pass",
+            crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
+            spec_id
+        );
+        return state;
+    };
+    println!(
+        "  {} {} — CI still running on `{branch}`; waiting for terminal verdict…",
+        crate::glyph(crate::glyphs::Glyph::Hourglass).yellow(),
+        spec_id
+    );
+    // trace:BUG-1052 | ai:codex
+    state.ci = ci_state_from_terminal_probe(&wait_for_ci_terminal(Some(project_root), branch));
+    state
+}
+
 /// STORY-520: `aida queue integrate` — the thin integrator watch-loop.
 ///
 /// The consumer half of a producer/consumer split: parallel implementers
@@ -10403,6 +10439,7 @@ pub(crate) fn handle_queue_integrate(
     watch: bool,
     interval: u64,
     max: usize,
+    wait_ci: bool,
     rebase: bool,
     strategy: Option<integrate::IntegrateStrategy>,
     // TASK-1036: scope the candidate scan to a focus subtree. `--focus <id>`
@@ -10493,6 +10530,9 @@ pub(crate) fn handle_queue_integrate(
     let drive_cwd: &std::path::Path = integrator_checkout
         .as_deref()
         .unwrap_or(project_root.as_path());
+    let integrate_headless = std::env::var("AIDA_HEADLESS")
+        .map(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(false);
 
     let mut integrated_total: usize = 0;
     let mut pass: usize = 0;
@@ -10996,8 +11036,20 @@ pub(crate) fn handle_queue_integrate(
             // the loop continues; CI-running waits (re-decided next --watch
             // pass). trace:TASK-836 | ai:claude
             let branch = branches.get(id).and_then(|b| b.clone());
-            let pr_state =
+            let mut pr_state =
                 probe_pr_integration_state(&project_root, id, branch.as_deref(), &pr_snapshot);
+            // BUG-1052: `integrate --run` is itself the retry loop; when a
+            // ready PR's CI is already in-flight, wait once under the standard
+            // bounded CI watcher and re-classify instead of skipping the entire
+            // pass. `--no-wait-ci` preserves the old skip behavior.
+            if wait_ci
+                && matches!(
+                    integrate::classify_integration_action(&pr_state),
+                    integrate::IntegrationAction::WaitCi
+                )
+            {
+                pr_state = wait_for_integrate_ci(&project_root, id, branch.as_deref(), pr_state);
+            }
             match integrate::classify_integration_action(&pr_state) {
                 integrate::IntegrationAction::Park(reason) => {
                     println!("  {} {} — {}", "⏸".yellow(), id, reason.message());
@@ -11225,7 +11277,7 @@ pub(crate) fn handle_queue_integrate(
                 // the child does not overwrite and release `.aida/drain.lock`
                 // before the parent loop finishes. trace:BUG-748 | ai:codex
                 .env("AIDA_DRAIN_BORROW", "1")
-                .args(integrate::drive_args(pr_num))
+                .args(integrate::drive_args(pr_num, integrate_headless))
                 .status();
             match status {
                 Ok(s) if s.success() => {

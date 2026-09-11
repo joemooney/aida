@@ -5004,3 +5004,19 @@ limit: retained logs did not prove the exact OS parent for pid 2759412, so the d
 runner/wrapper path rather than claiming systemd specifically.
 
 Verification: documentation diff review.
+
+## Session 2026-09-11 — BUG-1052 integrate headless re-drive and CI wait
+
+Picked up `BUG-1052` from the implementer queue. Fixed `integrate --run`/`queue integrate` so a
+headless parent (`AIDA_HEADLESS=1`) re-drives ready PR members with `--no-human=both` instead of
+falling into the interactive `aida do`/agent path.
+
+Added default-on CI waiting for ready PRs whose pre-merge snapshot says CI is still running. The
+integrator now waits once with the existing bounded CI watcher, reclassifies the PR state, and then
+uses the same merge/park decision path; `--no-wait-ci` restores the old skip-this-pass behavior and
+`--wait-ci` is accepted for explicit scripts. Red CI, RequestChanges, merge conflicts, and genuine
+drive failures keep their existing park/triage behavior.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib integrate::tests -- --nocapture`;
+`cargo test -p aida-cli-lib task1169_integration_wait_tests -- --nocapture`;
+`cargo check -p aida-cli-lib`. Existing unrelated Rust warnings remain in the focused test output.

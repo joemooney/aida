@@ -5802,6 +5802,15 @@ pub enum QueueCommand {
         /// no cap. A guardrail for a first cautious run.
         #[clap(long, value_name = "N", default_value_t = 0)]
         max: usize,
+        /// Wait for in-flight CI on ready PRs before deciding whether to merge.
+        /// Default behavior; accepted for explicit scripts.
+        // trace:BUG-1052 | ai:codex
+        #[clap(long, conflicts_with = "no_wait_ci")]
+        wait_ci: bool,
+        /// Restore the old one-pass behavior: skip PRs whose CI is still running.
+        // trace:BUG-1052 | ai:codex
+        #[clap(long)]
+        no_wait_ci: bool,
         // trace:STORY-335 | ai:claude
         /// Rebase each member's PR branch onto current main before merging it.
         /// A deferred batch cuts every branch from the same stale main, so
@@ -8705,6 +8714,15 @@ pub enum Command {
         // trace:STORY-1024 | ai:codex
         #[clap(long, value_name = "N", default_value_t = 0)]
         max: usize,
+        /// Wait for in-flight CI on ready PRs before deciding whether to merge.
+        /// Default for --run; accepted for explicit scripts.
+        // trace:BUG-1052 | ai:codex
+        #[clap(long, conflicts_with = "no_wait_ci")]
+        wait_ci: bool,
+        /// Do not wait for in-flight CI; skip it until a later pass.
+        // trace:BUG-1052 | ai:codex
+        #[clap(long)]
+        no_wait_ci: bool,
         /// Do not rebase PR branches before merge. The default for top-level
         /// `integrate --run` is to rebase first so stale-base churn cannot race.
         // trace:STORY-1024 | ai:codex

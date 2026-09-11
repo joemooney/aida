@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn integrate_argv_actually_routes_through_the_engine() {
-        let args = crate::integrate::drive_args(46);
+        let args = crate::integrate::drive_args(46, false);
         assert!(
             args.contains(&"--auto-complete".to_string()),
             "aida integrate must hand the spec to the --auto-complete engine, not an inlined merge"
