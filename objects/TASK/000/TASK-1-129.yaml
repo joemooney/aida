@@ -4,11 +4,11 @@ agreed_id: TASK-153
 title: aida ps still shows lease role for a long-lived advisor whose transcript conversations calls advisor
 description: 'Observed 2026-09-09 while verifying STORY-993 (PR #1706): pid 23126 renders as role general-purpose in aida ps (from the harness-worktree lease abf9f7f0) but as advisor in aida session conversations (jsonl hook role, transcript 3653ac9c). TASK-152 made ps prefer the live transcript role only when a row correlates to a RECENT jsonl by pid or worktree; this transcript resumed 3 days ago, so ps falls back to the lease role. STORY-993 acceptance 4 (agree on role for the same pid) holds on the conversations side; the ps side needs the correlation window widened or the STORY-993 resolver reused (lease-manifest claude_session_id join) instead of a recency window. Not a blocker for STORY-993.'
 status: Approved
-priority: Medium
+priority: Low
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-09T08:31:03.313102729Z
-modified_at: 2026-09-11T16:22:27.723488296Z
+modified_at: 2026-09-11T16:22:30.764815686Z
 req_type: Task
 tags:
 - from-advisor:general
