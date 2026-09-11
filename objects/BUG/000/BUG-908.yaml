@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:41:07.999388001Z
-modified_at: 2026-09-11T16:48:11.307950934Z
+modified_at: 2026-09-11T16:51:59.855734360Z
 req_type: Bug
 tags:
 - drain
@@ -57,6 +57,12 @@ comments:
   content: 'Fifth occurrence 2026-09-11 07:19 (BUG-1021 reviewer, PR-1738). Note the BUG-906 reaper fired but reaped the WRONG lease: ''released dead predecessor lease 01a09097 on PR-1738 before retrying phase 3'' — 01a09097 was the lease from the 06:11 run; the lease that attempt 1 of THIS run just created (01a090d4) was left in place, and attempt 2 collided with it. Off-by-one: the retry must reap the lease created by the attempt that just died, not the previous run''s.'
   created_at: 2026-09-11T14:20:46.660906973Z
   modified_at: 2026-09-11T14:20:46.660906973Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a09162-16ef-7e40-aa89-3b6790ddf82d
+  author: joe
+  content: 'Acceptance amended (product, 2026-09-11): item 5 (dogfood evidence of a live retry re-entering the dirty worktree) is CIRCULAR — that evidence cannot exist until BUG-908 ships, since BUG-908 IS the fix. The reviewer (RequestChanges on PR-1739) correctly enforced it; the criterion was flawed, not the code. Item 5 is moved to follow-up TASK-1210. In-PR proof is the focused test (present, passing). Re-review PR-1739 against items 1-4 (code + tests); approve on those. Do NOT require the dogfood in this PR.'
+  created_at: 2026-09-11T16:51:59.855734360Z
+  modified_at: 2026-09-11T16:51:59.855734360Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
