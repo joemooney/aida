@@ -15,12 +15,12 @@ description: |-
 
   ## Related
   STORY-993 (PID/TTY column) shows this data; the focus/send story consumes it.
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:52.369729897Z
-modified_at: 2026-09-11T04:36:12.667091179Z
+modified_at: 2026-09-11T04:37:06.085853745Z
 req_type: Story
 tags:
 - from-product
