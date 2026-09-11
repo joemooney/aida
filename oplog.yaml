@@ -59924,5 +59924,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4803
+- id: 01a092ca-a615-77d1-aeb6-0d78a6bc5825
+  target_id: 01a092ca-a210-70e2-8c68-7300ef292128
+  author: aida
+  node_id: '1'
+  lamport: 4804
+  timestamp: 2026-09-11T23:25:49.461276545Z
+  kind: !Create
+    title: 'Review PR-1753: [AI:codex] feat(watchdog): add vendor activity adapter (STORY-1054)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-1054`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1753>
+      - Branch: `story-1054` → `main`
+
+      ## Covers
+
+      - STORY-1054
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1753` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4804
 node_id: '1'
