@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:27:49.414464744Z
-modified_at: 2026-09-11T11:18:17.290292675Z
+modified_at: 2026-09-11T11:26:47.070257308Z
 req_type: Story
 tags:
 - agents
@@ -61,4 +61,11 @@ relationships:
   target_id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
   created_at: 2026-09-11T06:27:54.442313028Z
   created_by: joe
+comments:
+- id: 01a09038-591e-7161-ab50-8bb7f6436b8c
+  author: joe
+  content: 'Codex partial slice committed/pushed as 9d9b9a62b on origin/story-1033: added AgentSeat/ResolvedAgentTuning config resolution, native model+effort argv wiring for Claude/Codex/AGY, and implementer/reviewer/advisor seat launch plumbing plus docs. Remaining acceptance: retry tier escalation, spec tag overrides, PhaseEntered/result telemetry, usage drains --by-model, registry display, and dogfood capture.'
+  created_at: 2026-09-11T11:26:47.070257308Z
+  modified_at: 2026-09-11T11:26:47.070257308Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
