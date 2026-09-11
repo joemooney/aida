@@ -15,6 +15,10 @@ tags:
 - from-product
 - gitlab
 - strategic
+relationships:
+- rel_type: Parent
+  target_id: 01a09175-e232-7c40-8ee6-bd8ed3f0a448
+  created_at: 2026-09-11T17:13:42.615506815Z
 comments:
 - id: 019ec9aa-e252-77a3-8ebd-709b7170058d
   author: joe
