@@ -1,5 +1,6 @@
 id: 01a091dd-b19d-7681-8b8d-b950ed37b50f
 spec_id: TASK-1-131
+agreed_id: TASK-155
 title: STORY-1033 queue item still exceeds shipped slice
 description: 'Headless Codex pickup shipped a focused STORY-1033 follow-up (a19caeb2c) for retry model escalation telemetry and docs, but the queue item still has unmet acceptance: spec tag overrides, usage drains --by-model, agent registry/show-context model+effort fields, result cost/duration rollups, and dogfood output capture. Do not mark queue done until those are implemented or split into follow-ups.'
 status: Rejected
