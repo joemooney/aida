@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:51:52.902310808Z
-modified_at: 2026-09-11T16:52:00.683924336Z
+modified_at: 2026-09-11T17:14:59.892046816Z
 req_type: Task
 tags:
 - dogfood
@@ -32,3 +32,10 @@ relationships:
   target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
   created_at: 2026-09-11T16:52:00.683918807Z
   created_by: joe
+comments:
+- id: 01a09177-25b4-7673-b89f-7897d4f3d3b4
+  author: joe
+  content: 'Scope note (advisor): this dogfood pass covers BOTH reliability fixes — BUG-908 (retry reclaims its own dirty worktree) and BUG-909 (codex implementer surviving past the old watchdog window) — items 5 moved here from both specs'' acceptance.'
+  created_at: 2026-09-11T17:14:59.892046816Z
+  modified_at: 2026-09-11T17:14:59.892046816Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
