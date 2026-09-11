@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:32:55.751166973Z
+modified_at: 2026-09-11T13:32:57.014172255Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -49,6 +49,11 @@ comments:
   created_at: 2026-09-11T13:32:52.037273022Z
   modified_at: 2026-09-11T13:32:52.037273022Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a090ab-da61-7d51-bd5d-bce0cf46d1db
+  author: joe
+  content: 'cross-platform run 34603101584 still red: 9 temp-path canonicalization failures (1 macOS, 8 Windows) listed in the spec comments; push fixups to bug-1021 / PR-1738'
+  created_at: 2026-09-11T13:32:56.801038324Z
+  modified_at: 2026-09-11T13:32:56.801038324Z
 execution_mode: drain
 failure_reason:
   phase: reviewer
