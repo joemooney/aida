@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:36:04.759429196Z
-modified_at: 2026-09-11T16:25:00.845588546Z
+modified_at: 2026-09-11T16:25:02.131026258Z
 req_type: Task
 tags:
 - aida-store
@@ -29,3 +29,4 @@ tags:
 - recommend:approve
 - risk:low
 - trace-gate
+execution_mode: drain
