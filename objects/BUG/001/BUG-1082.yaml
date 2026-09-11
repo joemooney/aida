@@ -1,0 +1,27 @@
+id: 01a092d1-30ae-7d82-857d-ce8797a529d3
+spec_id: BUG-1082
+agreed_id: BUG-1082
+title: headless implementer re-polls `aida queue next` and implements a different spec than its orchestrator assignment
+description: |
+  ## Observed
+  2026-09-11 16:16, drain pid 915029: orchestrator assigned STORY-1051 (branch story-1051-2, lease/session 01a092c1). The headless codex implementer's early action was `/bin/bash -lc 'aida queue next'` (session log story-1051-2-01a092c1, item_3), which returned STORY-1054 (queue order had shifted). The implementer then implemented STORY-1054's scope end-to-end and committed with trailer (STORY-1054) — on STORY-1051's branch, inside STORY-1051's drain slot (PR-1754). Meanwhile STORY-1054 also has the prior drain's duplicate implementation open as PR-1753.
+
+  ## Why it matters
+  The assignment seam is advisory: nothing pins the headless session to the spec the orchestrator leased. Any queue mutation between pickup and the session's own re-poll re-routes the implementer, producing wrong-spec PRs, duplicate implementations, and lifecycle mis-attribution (the drain would merge 1054's work and mark 1051 done).
+
+  ## Acceptance
+  1. The headless pickup context pins the assigned spec id; the implementer prompt/skill instructs: implement THE ASSIGNED SPEC; `aida queue next` inside a leased implementer session is refused (or returns the leased spec) — substrate gate, not prose.
+  2. `aida queue next`/`work` from a session holding an implementer lease on spec X errors (or echoes X) instead of dispensing a different spec.
+  3. Regression test: leased session calling queue next gets the leased spec, not the queue head.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T23:32:58.158191259Z
+modified_at: 2026-09-11T23:32:58.158191259Z
+req_type: Bug
+tags:
+- drain
+- orchestrator
+- reliability
+- substrate-as-bouncer
