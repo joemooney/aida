@@ -1321,6 +1321,16 @@ pub enum SessionCommand {
         plan: bool,
     },
 
+    /// Probe whether it is safer to start a fresh agent session or compact
+    /// the current conversation. This is substrate-only: it can see live drains
+    /// and this session's live leases, but not conversation-only residue.
+    // trace:STORY-1006 | ai:codex
+    Handoff {
+        /// Print the fresh-session vs compact recommendation.
+        #[clap(long)]
+        check: bool,
+    },
+
     /// Manage the planned-cluster manifest for the active session
     /// (`.aida/sessions/<id>.manifest.toml`). Used by /aida-pickup to
     /// record which items the session intends to work, and by other

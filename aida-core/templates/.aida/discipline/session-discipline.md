@@ -185,6 +185,33 @@ This is the same discipline as "verify before filing," applied to cleanup:
 fresh substrate state beats stale conversational memory. trace:TASK-1203 |
 ai:codex
 
+## Prefer fresh sessions once the substrate is clean
+
+When context is near compaction, do not assume compaction is the safest move.
+In an AIDA project, the durable substrate should carry the state: specs,
+comments, briefs, queue membership, leases, findings, PR links, and trace
+comments. If conversation-only residue has been captured and no live
+session-bound process needs continuity, start a fresh session. The new
+session can rebuild from `aida status`, `aida queue next`, pending briefs,
+leases, and the handoff note.
+
+Use `/aida-handoff` or `aida session handoff --check` at the boundary.
+The CLI probe can identify live drain and current-session lease pins; the
+skill must also capture residue the CLI cannot know, such as undocumented
+decisions, promised follow-ups, and live watchers started only in this
+conversation.
+
+Decision rule:
+
+- **START FRESH** when capture is complete and there is no live drain,
+  current-session lease, watcher, monitor, background process, or other
+  session-bound state.
+- **COMPACT** when live session-bound state must survive. Name every pin
+  explicitly so the next turn knows what is being preserved.
+
+Context size alone is not a compact pin. AIDA's job is to make fresh-session
+restart lossless once the substrate boundary is clean.
+
 ## Ship infrastructure fixes through the system they fix
 
 When fixing the project's own automation (a merge hook, a status auto-bump,
