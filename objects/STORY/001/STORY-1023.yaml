@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T03:51:00.272848490Z
-modified_at: 2026-09-11T09:42:03.747926230Z
+modified_at: 2026-09-11T09:42:05.083154953Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -38,6 +38,17 @@ comments:
   created_at: 2026-09-11T09:26:42.626957481Z
   modified_at: 2026-09-11T09:26:42.626957481Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a08fd8-7d48-7c13-8bde-756b9dab99e9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1729):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. STORY-1023 acceptance names the TUI, but aida-tui/src/board.rs still labels every NeedsAttention row as parked and rows_for() renders the original status plus a generic park_reason; it does not display Shelved (<cause>) for FailureReason rows or Needs Decision (<reason>) for AttentionReason rows.
+    2. CI is red for PR #1729: cargo test --workspace fails in story_465_awaiting_report_tests::role_addressed_mail_does_not_inflate_the_operator_mail_count with left Some("advisor + claude") right Some("advisor").
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-11T09:42:04.872067095Z
+  modified_at: 2026-09-11T09:42:04.872067095Z
 execution_mode: drain
 implementation_info:
   implemented: true
