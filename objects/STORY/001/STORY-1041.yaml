@@ -1,0 +1,41 @@
+id: 01a09075-880b-78d2-8212-ccdcd835a588
+spec_id: STORY-1041
+agreed_id: STORY-1041
+title: 'Pipeline the single-spec drain: start the next implementer while the previous spec waits on CI/review/merge (two in flight, serial merges)'
+description: |-
+  ## Why
+  Operator (2026-09-11): the queue drain is very slow. Measured from .aida/events.jsonl over the last four days (37 merges): median first-event-to-merge 24 min; CI wait median 9.0 min (p75 10.3), implementer 6.9 (p75 10.8), reviewer 0.1 (p75 4.4), merge and pull 0.1. Only 23 of 73 CI windows had another spec's implementer running at the same time, so the drain sits idle through CI for most specs. The Windows/macOS matrix is NOT on this path (PR CI is Linux-only since TASK-257; cross-platform runs on the 06:00 UTC cron; the release job is tag-only), so CI-matrix pruning buys nothing here.
+
+  ## Design
+  - aida queue work --drain (and the next-N form) keeps a small in-flight set. When spec A enters phase 2 (ci), the drain immediately starts spec B's phase 1 (implementer) in its own worktree. [drain] pipeline_depth = 2 (default 2; 1 = today's strictly sequential behaviour; max 3).
+  - Phases 4-6 (merge, pull, build verify) stay serial and ordered: a spec's merge waits for any earlier spec's merge to finish, so main never receives two PRs racing and the pull/auto-bump sees one change at a time. A merged spec's post-merge build verify may overlap the next implementer.
+  - B's implementer branches from the current main at its start; before B's merge the orchestrator rebases B onto main (the existing pr rebase path) if A landed in between, then re-checks CI only if the rebase changed the tree (BUG-tracked stale-base rules in queue_cmd.rs apply: StaleOverlap refuses unless allow_stale_base).
+  - Dependency-aware: a spec with BlockedBy on an in-flight spec is not started until that spec merges (same rule as the EPIC-28 skip logic).
+  - The single-drain lock is unchanged: one orchestrator process owns the pipeline. burndown run --concurrency remains the wide fan-out for many independent specs; this story is about the common sequential drain.
+
+  ## Acceptance
+  1. With pipeline_depth = 2 and two independent Approved specs, the events show spec B's PhaseEntered implementer within 10 s of spec A's PhaseEntered ci.
+  2. Merges are serial: PrMerged events for A and B never interleave with an open merge phase; a test with a fake forge asserts the ordering.
+  3. Throughput on this repo: a drain of 6 small specs merges them in at most 65% of the sequential wall-clock measured by the same drain with pipeline_depth = 1 (both numbers recorded in the PR from events.jsonl; the sequential baseline is ~24 min/spec).
+  4. aida drain status shows the in-flight set with each spec's phase, and the "spec N of M" line becomes "N merged, K in flight".
+  5. Failure isolation: a shelve on B never aborts A's CI/review/merge, and vice versa; the --max-failures budget counts across the set.
+  6. Watchdogs (no-progress, spinning once STORY-998 lands) run per in-flight spec.
+  7. docs/autonomous-drain.md gains a "pipelining" section with the depth knob and the serial-merge rule; docs/environment-variables.md unchanged unless an env override is added.
+
+  ## Related
+  EPIC-28 (resilient drain), STORY-975 (retry), STORY-974 (typed causes), TASK-1116 (--vendor), the burndown fan-out. CI-side companion: the one-compile-profile task.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T12:33:36.779816829Z
+modified_at: 2026-09-11T12:33:36.779816829Z
+req_type: Story
+tags:
+- drain
+- from-product
+- orchestrator
+- pipelining
+- recommend:approve
+- risk:medium
+- throughput
