@@ -3,12 +3,12 @@ spec_id: BUG-1074
 agreed_id: BUG-1074
 title: queue work on a fresh spec reused an unrelated recent PR branch — BUG-1023 head-reuse misfires beyond reworks
 description: 'Observed 2026-09-11 12:07: the drain picked STORY-1028 (fresh spec, no prior PR) but its implementer worked on branch story-1033-followup and opened PR-1744 titled STORY-1028 while containing STORY-1033 follow-up commits — the BUG-1023 reuse-the-PR-head logic appears to have matched an unrelated recent branch/PR instead of creating story-1028. Consequences: mislinked PR (title/spec vs content), the intended spec unimplemented, trailer/auto-bump would complete the wrong spec. Fix: head-reuse applies ONLY when the spec itself has an open PR (rework case); a fresh spec always gets its own derived branch; assert the reused branch''s trailered spec matches the driven spec before adopting it. Acceptance: fresh-spec pickup with an unrelated recent PR present creates <spec>-derived branch; rework case unchanged; mismatch assertion tested. (PR-1744 retitled to its true content; STORY-1028 requeued fresh.)'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T19:10:58.227020933Z
-modified_at: 2026-09-11T22:48:59.158508665Z
+modified_at: 2026-09-11T22:52:55.211593151Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
