@@ -79,8 +79,8 @@ path is an active drain runner that notices the queued head and invokes the
 same per-spec orchestrator again. In the built-in resilient loop, that runner is
 `scripts/drain-loop.sh:57` (`while true`) and `scripts/drain-loop.sh:82`
 (`aida queue work "next${CHUNK}" --auto-complete …`), and the `nextN` driver
-resolves the current head in `aida-cli-lib/src/lib.rs:72945`
-(`RealNextNDriver::next_head`) before calling `aida-cli-lib/src/lib.rs:72958`
+resolves the current head in `aida-cli-lib/src/lib.rs:73523`
+(`RealNextNDriver::next_head`) before calling `aida-cli-lib/src/lib.rs:73536`
 (`RealNextNDriver::run_spec`) to re-enter `run_auto_complete` for that spec.
 trace:TASK-1201 | ai:codex
 
