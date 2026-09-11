@@ -1,0 +1,41 @@
+id: 01a09180-1adf-7ae1-9cd5-d158da41e7a6
+spec_id: STORY-1051
+agreed_id: STORY-1051
+title: 'Re-drive supervisor: auto-retry TRANSIENT-parked specs on a loop (backoff + cap), leave genuine-needs-human parks for escalation'
+description: |-
+  ## Why
+  The missing keystone of unattended reliability (parent EPIC). Today a parked spec sits until a human re-drives; the drain is next-N-then-exit with no re-attempt of NeedsAttention work. This adds the loop that makes "days don't go by stuck" true.
+
+  ## Design
+  - aida drain --supervise (or aida supervise): after a next-N/batch drain exits, and/or on a schedule (STORY-1047 tick), scan NeedsAttention specs with a typed FailureReason (STORY-974).
+  - Classify each park: TRANSIENT (cause ∈ watchdog, no-verdict, no-pr, tool-exit, lease-conflict, cache-locked, headless-wait) vs NEEDS-HUMAN (design-fork/punt, verdict:request-changes on substance, ci-red on a real test failure, environmental). Only the transient set is re-drivable.
+  - Re-drive transient parks with exponential backoff (e.g. 2m, 8m, 30m) and a per-spec cap (default 3 supervised re-drives beyond the in-phase STORY-975 retries); after the cap, RECLASSIFY to needs-human and escalate. A re-drive that reaches a genuine block flips the spec to needs-human immediately (no wasted cap).
+  - NEEDS-HUMAN parks are never auto-re-driven; they surface via aida awaiting + notify (STORY-1029/1043) with the one recovery command.
+  - Idempotent + lock-aware: honors the single-drain lock; a supervised re-drive is a normal --from-pr/--force-claim drive, not a new path.
+
+  ## Acceptance
+  1. A fixture backlog with one watchdog-parked spec and one design-fork-parked spec: the supervisor re-drives the watchdog one (and it ships on retry) and leaves the design-fork one for the human (test both).
+  2. Backoff + cap honored; after the cap a still-transient-failing spec is reclassified needs-human with the attempt history in the finding.
+  3. A transient re-drive that hits a genuine block (RequestChanges on substance) stops immediately and escalates — cap not burned.
+  4. Never touches the integrity floor: a ci-red-on-real-bug park is NEEDS-HUMAN, not retried.
+  5. Emits events (SpecReDriven, ReclassifiedNeedsHuman) so aida history shows the recovery trail.
+  6. DoD tie-in: with 908/909/1063 landed + this loop, a >=8-spec drain on this repo completes with zero human relaunches (cite the run).
+
+  ## Related
+  Parent EPIC (unattended reliability), STORY-974 (typed causes — the classifier input), STORY-975 (in-phase retry — this is the ABOVE-phase loop), BUG-908/909/1063 (the false-park fixes this loop assumes), STORY-1047 (schedule tick — a run trigger), STORY-1043 (surface the needs-human residue), STORY-1029 (notify).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T17:24:46.943966857Z
+modified_at: 2026-09-11T17:24:46.943966857Z
+req_type: Story
+tags:
+- drain
+- from-product
+- parent:EPIC-62
+- re-drive
+- recommend:approve
+- reliability
+- risk:medium
+- supervisor
