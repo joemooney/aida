@@ -53347,5 +53347,31 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 4452
+- id: 01a08ea1-b875-7570-a2d9-bde81a56dce2
+  target_id: 01a08ea1-b493-71f2-99a0-fddb4b656c7d
+  author: aida
+  node_id: '1'
+  lamport: 4453
+  timestamp: 2026-09-11T04:02:38.325239187Z
+  kind: !Create
+    title: 'Review PR-1726: [AI:codex] fix(mcp): surface server authority in refusals and status (BUG-1043)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08e8e`) for branch `bug-1043`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1726>
+      - Branch: `bug-1043` → `main`
+
+      ## Covers
+
+      - BUG-1043
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1726` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4453
 node_id: '1'
