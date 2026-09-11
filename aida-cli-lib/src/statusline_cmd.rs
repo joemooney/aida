@@ -455,6 +455,24 @@ pub(crate) fn claude_statusline_block() -> serde_json::Value {
     })
 }
 
+/// Render the Antigravity `settings.json` statusLine/title fragment. Antigravity
+/// can run a command for both the footer and terminal title, so it gets the full
+/// Claude command-backed statusline plus AIDA's OSC-title parity hook.
+// trace:TASK-1199 | ai:codex
+pub(crate) fn antigravity_statusline_fragment(stack_with_default: bool) -> serde_json::Value {
+    serde_json::json!({
+        "statusLine": {
+            "type": "command",
+            "command": STATUSLINE_SETUP_COMMAND,
+            "stack_with_default": stack_with_default,
+        },
+        "title": {
+            "type": "command",
+            "command": "aida statusline --title",
+        },
+    })
+}
+
 /// Print the Claude Code statusline setup guidance (and the JSON snippet).
 // trace:TASK-0414
 fn print_claude_statusline_setup(settings_path: &std::path::Path) {
@@ -479,6 +497,67 @@ fn print_claude_statusline_setup(settings_path: &std::path::Path) {
         settings_path.display()
     );
     println!("  deleting it to re-add). Claude Code falls back to its built-in footer.");
+}
+
+/// Print the Antigravity statusline setup guidance (and the JSON fragment).
+// trace:TASK-1199 | ai:codex
+fn print_antigravity_statusline_setup(settings_path: &std::path::Path, stack_with_default: bool) {
+    println!(
+        "{}",
+        antigravity_statusline_setup_text(settings_path, stack_with_default)
+    );
+}
+
+// trace:TASK-1199 | ai:codex
+fn antigravity_statusline_setup_text(
+    settings_path: &std::path::Path,
+    stack_with_default: bool,
+) -> String {
+    let snippet =
+        serde_json::to_string_pretty(&antigravity_statusline_fragment(stack_with_default))
+            .unwrap_or_else(|_| "{}".to_string());
+
+    [
+        "Antigravity CLI — command-backed statusLine + title".to_string(),
+        format!("  Add this to {}:", settings_path.display()),
+        String::new(),
+        snippet
+            .lines()
+            .map(|line| format!("  {line}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        String::new(),
+        "  Or install it for this user:".to_string(),
+        "    aida statusline setup --client antigravity --install".to_string(),
+        String::new(),
+        "  Use `--replace-default` to emit/install `stack_with_default: false`.".to_string(),
+        "  To disable later, remove the \"statusLine\" and \"title\" keys from".to_string(),
+        format!("  {}.", settings_path.display()),
+    ]
+    .join("\n")
+}
+
+#[cfg(test)]
+// trace:TASK-1199 | ai:codex
+pub(crate) fn print_statusline_setup_text_for_test(
+    client: &str,
+    stack_with_default: bool,
+) -> String {
+    let claude_path = std::path::Path::new("/tmp/aida-test/.claude/settings.json");
+    let antigravity_path =
+        std::path::Path::new("/tmp/aida-test/.gemini/antigravity-cli/settings.json");
+    match client {
+        "codex" => codex_statusline_setup_text(),
+        "antigravity" => antigravity_statusline_setup_text(antigravity_path, stack_with_default),
+        "all" => [
+            "Claude Code — command-backed statusLine".to_string(),
+            format!("  Add this to {}:", claude_path.display()),
+            codex_statusline_setup_text(),
+            antigravity_statusline_setup_text(antigravity_path, stack_with_default),
+        ]
+        .join("\n\n"),
+        _ => "Claude Code — command-backed statusLine".to_string(),
+    }
 }
 
 /// Render the Codex TUI footer guidance. Codex's footer renders built-in
@@ -569,35 +648,127 @@ pub(crate) fn install_claude_statusline(settings_path: &std::path::Path) -> Resu
     Ok(!existed)
 }
 
+/// Merge the AIDA Antigravity `statusLine` and `title` blocks into
+/// `~/.gemini/antigravity-cli/settings.json` (or an override path), preserving
+/// unrelated keys. Existing valid files are backed up before writing; invalid
+/// JSON is refused untouched, matching Antigravity's own save behavior.
+// trace:TASK-1199 | ai:codex
+pub(crate) fn install_antigravity_statusline(
+    settings_path: &std::path::Path,
+    stack_with_default: bool,
+) -> Result<(bool, Option<std::path::PathBuf>)> {
+    let existed = settings_path.exists();
+    let mut root: serde_json::Value = if existed {
+        let raw = std::fs::read_to_string(settings_path).with_context(|| {
+            format!(
+                "reading existing settings.json at {}",
+                settings_path.display()
+            )
+        })?;
+        serde_json::from_str(&raw).with_context(|| {
+            format!(
+                "{} is not valid JSON — fix it by hand, then re-run install",
+                settings_path.display()
+            )
+        })?
+    } else {
+        if let Some(parent) = settings_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {} for settings.json", parent.display()))?;
+        }
+        serde_json::json!({})
+    };
+
+    let obj = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("{} is not a JSON object", settings_path.display()))?;
+    let fragment = antigravity_statusline_fragment(stack_with_default);
+    let fragment_obj = fragment.as_object().ok_or_else(|| {
+        anyhow::anyhow!("internal Antigravity statusline fragment was not an object")
+    })?;
+    for (key, value) in fragment_obj {
+        obj.insert(key.clone(), value.clone());
+    }
+
+    let backup_path = if existed {
+        let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+        let backup = settings_path.with_extension(format!("json.aida-bak-{stamp}"));
+        std::fs::copy(settings_path, &backup).with_context(|| {
+            format!(
+                "writing backup {} before updating {}",
+                backup.display(),
+                settings_path.display()
+            )
+        })?;
+        Some(backup)
+    } else {
+        None
+    };
+
+    let mut serialized = serde_json::to_string_pretty(&root)?;
+    serialized.push('\n');
+    std::fs::write(settings_path, serialized)
+        .with_context(|| format!("writing {}", settings_path.display()))?;
+    Ok((!existed, backup_path))
+}
+
+// trace:TASK-1199 | ai:codex
+fn default_antigravity_settings_path() -> Result<std::path::PathBuf> {
+    if let Ok(raw) = std::env::var("AIDA_ANTIGRAVITY_SETTINGS") {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            return Ok(std::path::PathBuf::from(trimmed));
+        }
+    }
+    let home = dirs::home_dir()
+        .context("HOME not set; cannot locate ~/.gemini/antigravity-cli/settings.json")?;
+    Ok(home
+        .join(".gemini")
+        .join("antigravity-cli")
+        .join("settings.json"))
+}
+
 // trace:TASK-0414
 /// Dispatch for `aida statusline setup`.
 pub(crate) fn handle_statusline_setup_command(action: &cli::StatuslineAction) -> Result<()> {
-    let cli::StatuslineAction::Setup { client, install } = action;
+    let cli::StatuslineAction::Setup {
+        client,
+        install,
+        settings_path,
+        replace_default,
+    } = action;
 
     let project_root = statusline_project_root();
-    let settings_path = project_root.join(".claude").join("settings.json");
+    let claude_settings_path = project_root.join(".claude").join("settings.json");
+    let antigravity_settings_path = || -> Result<std::path::PathBuf> {
+        match settings_path {
+            Some(path) => Ok(path.clone()),
+            None => default_antigravity_settings_path(),
+        }
+    };
+    let antigravity_stack_with_default = !*replace_default;
 
     match client.as_str() {
         "claude" => {
             if *install {
-                let created = install_claude_statusline(&settings_path)?;
+                let created = install_claude_statusline(&claude_settings_path)?;
                 if created {
                     println!(
                         "Created {} with the AIDA statusLine.",
-                        settings_path.display()
+                        claude_settings_path.display()
                     );
                 } else {
                     println!(
                         "Merged the AIDA statusLine into {} (existing keys preserved).",
-                        settings_path.display()
+                        claude_settings_path.display()
                     );
                 }
                 println!(
                     "To disable later, remove the \"statusLine\" key from {}.",
-                    settings_path.display()
+                    claude_settings_path.display()
                 );
             } else {
-                print_claude_statusline_setup(&settings_path);
+                print_claude_statusline_setup(&claude_settings_path);
             }
         }
         "codex" => {
@@ -609,17 +780,55 @@ pub(crate) fn handle_statusline_setup_command(action: &cli::StatuslineAction) ->
             }
             print_codex_statusline_setup();
         }
+        "antigravity" => {
+            let antigravity_settings_path = antigravity_settings_path()?;
+            if *install {
+                let (created, backup_path) = install_antigravity_statusline(
+                    &antigravity_settings_path,
+                    antigravity_stack_with_default,
+                )?;
+                if created {
+                    println!(
+                        "Created {} with the AIDA statusLine and title command.",
+                        antigravity_settings_path.display()
+                    );
+                } else {
+                    println!(
+                        "Merged the AIDA statusLine and title command into {} (existing keys preserved).",
+                        antigravity_settings_path.display()
+                    );
+                    if let Some(backup) = backup_path {
+                        println!("Backup: {}", backup.display());
+                    }
+                }
+                println!(
+                    "To disable later, remove the \"statusLine\" and \"title\" keys from {}.",
+                    antigravity_settings_path.display()
+                );
+            } else {
+                print_antigravity_statusline_setup(
+                    &antigravity_settings_path,
+                    antigravity_stack_with_default,
+                );
+            }
+        }
         // "all" (default): print every supported client's guidance. Install
         // is meaningless for the mixed view, so it prints rather than writes.
         _ => {
             if *install {
                 anyhow::bail!(
-                    "--install needs a specific client. Use `--client claude --install`."
+                    "--install needs a specific client. Use `--client claude --install` or `--client antigravity --install`."
                 );
             }
-            print_claude_statusline_setup(&settings_path);
+            print_claude_statusline_setup(&claude_settings_path);
             println!();
             print_codex_statusline_setup();
+            println!();
+            let antigravity_settings_path = antigravity_settings_path()?;
+            print_antigravity_statusline_setup(
+                &antigravity_settings_path,
+                antigravity_stack_with_default,
+            );
         }
     }
     Ok(())

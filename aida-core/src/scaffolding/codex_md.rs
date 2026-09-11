@@ -138,6 +138,18 @@ footer path.
 
 Run `aida statusline setup --client codex` for the copy-paste version.
 
+Antigravity CLI can run AIDA's command-backed status line and terminal-title
+command directly. Install the user settings fragment with:
+
+```bash
+aida statusline setup --client antigravity --install
+```
+
+Use `--replace-default` if you want AIDA to replace Antigravity's default
+status line instead of stacking with it. Run
+`aida statusline setup --client antigravity` to print the fragment without
+writing `~/.gemini/antigravity-cli/settings.json`.
+
 ### MCP Coordination
 
 Use AIDA MCP for substrate operations: `show_requirement`,

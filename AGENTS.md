@@ -81,6 +81,9 @@ For per-client MCP setup and marketplace/distribution notes, see
 `docs/agents/aida-mcp-install-matrix.md`. It records the current config
 surface for Claude Code, Codex, Cursor, Windsurf, Continue, Cline, Copilot,
 Devin, Sourcegraph/Amp, and adjacent clients.
+For Antigravity's AIDA-aware footer/title setup, run
+`aida statusline setup --client antigravity --install` (or omit `--install` to
+print the settings fragment).
 Before publishing AIDA through a marketplace or registry, run
 `docs/security/marketplace-publication-checklist.md`.
 
