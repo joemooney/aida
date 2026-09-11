@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:49.938635015Z
-modified_at: 2026-09-11T13:41:28.708802475Z
+modified_at: 2026-09-11T14:29:11.371129194Z
 req_type: Story
 tags:
 - awaiting
@@ -42,4 +42,11 @@ relationships:
   target_id: 01a08ee4-6120-7e82-929b-34f62cf53340
   created_at: 2026-09-11T12:44:58.316136192Z
   created_by: joe
+comments:
+- id: 01a090df-584b-7623-8ba5-88ef9dc6a9d3
+  author: joe
+  content: 'Add to acceptance (operator 2026-09-11 07:28): a parked or Done spec whose branch has a GitHub Actions run in progress (PR CI or a dispatched cross-platform run) must show in aida awaiting / aida status <spec> as ''verification running: <workflow> run <id>, started <local time>'' instead of ''no active session''. Today such a spec reads as idle while the only thing working on it is a CI run. Also: any raw helper process a session launches for a spec should be registered via aida agent register so aida ps lists it (product session omitted this for its BUG-1021 verifier).'
+  created_at: 2026-09-11T14:29:11.371129194Z
+  modified_at: 2026-09-11T14:29:11.371129194Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
