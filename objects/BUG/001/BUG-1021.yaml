@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:32:57.014172255Z
+modified_at: 2026-09-11T13:41:47.520775080Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -54,6 +54,12 @@ comments:
   content: 'cross-platform run 34603101584 still red: 9 temp-path canonicalization failures (1 macOS, 8 Windows) listed in the spec comments; push fixups to bug-1021 / PR-1738'
   created_at: 2026-09-11T13:32:56.801038324Z
   modified_at: 2026-09-11T13:32:56.801038324Z
+- id: 01a090b3-f380-70a3-9e3a-79c08ea292bd
+  author: joe
+  content: 'Cause (two passes). Pass 1 (codex, 517b9dd28): macOS lacked /proc for pid ancestry + /private/var canonical temp paths; Windows PATH-list/separator assumptions, POSIX-shell subprocess tests, and role:implementer used as a raw queue filename; nightly notifier ran gh issue without a checkout. Pass 2 (claude, ceb471f45) for the 9 left: macOS hook $PWD realpath vs as-passed env path; Windows backslash in .aida/config.toml assertions; bash fake gh on Windows; dirs::home_dir ignores $HOME on Windows (added AIDA_TEST_HOME hook to global_roles_dir + forge_profiles); toml_edit literal-string quoting of backslash paths in the registry test. Verification run: 34605707196.'
+  created_at: 2026-09-11T13:41:47.520775080Z
+  modified_at: 2026-09-11T13:41:47.520775080Z
+  session_id: 01a090ab-f06c-7fa3-97f2-b63b9af523bc
 execution_mode: drain
 failure_reason:
   phase: reviewer
