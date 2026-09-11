@@ -56988,5 +56988,45 @@ operations:
   timestamp: 2026-09-11T13:04:33.124956168Z
   kind: !SetStatus
     status: Approved
-clock: 4636
+- id: 01a09091-dfed-78d1-8b4f-06074a0bb2ba
+  target_id: 01a08fbd-7f21-7c03-912c-d5013edbdbb4
+  author: aida
+  node_id: '1'
+  lamport: 4637
+  timestamp: 2026-09-11T13:04:34.285850841Z
+  kind: !SetDescription
+    description: |-
+      Auto-drafted by `aida queue work BUG-1037 --auto-complete` after phase 1 (implementer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      the implementer session exited 1 — it was aborted or errored (attempt 2/2)
+
+      Failure kind: `tool-exit`
+
+      ## Recovery hint shown to the user
+
+      Continue the implementer session: `aida queue work BUG-1037 --resume`
+
+      ## Recurrence
+
+      Attempts: 22
+      Latest recurrence: 2026-09-11T13:04:33.034317535+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 10868 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-1037","started_at":"2026-09-11T09:12:21.660811607+00:00","completed_at":"2026-09-11T09:12:33.479465100+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"tool-exit","failure_message":"the implementer session exited 1 — it was aborted or errored (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":10868}],"total_ms":10868,"binary_sha":"5c5826bb2"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+clock: 4637
 node_id: '1'
