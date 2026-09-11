@@ -1,0 +1,40 @@
+id: 01a0917a-ee64-7d22-bcfb-51c5307737e2
+spec_id: STORY-1049
+agreed_id: STORY-1049
+title: Self-hosted GitHub runner for fast PR CI (warm cache ~3min vs 10.7min), GitHub-hosted clean-room kept as the required merge gate
+description: |-
+  ## Why
+  Operator (2026-09-11): reduce CI reliance/latency. Measured: the GitHub PR job is 10.7 min, mostly cold-runner cost (build --release 3.8m, test 2.9m, plus checkout/toolchain/rust-cache restore ~1.8m). CI is ~9 of a spec's 24-min cycle (37%). A self-hosted runner on the dev box (70GB RAM, build-fast incremental release ~2min) with a warm target dir does build+test+clippy in ~2-4 min. Setup is ~15 min (config.sh + a runs-on label).
+
+  ## Design (fast path + clean-room gate — NOT self-hosted-only)
+  - Register the dev machine as a self-hosted runner (label e.g. self-hosted, linux, x64, aida-fast); install as a service so it survives reboots.
+  - ci.yml PR build job gains a FAST variant that runs-on the self-hosted label and is the quick feedback signal; the existing GitHub-hosted ubuntu-latest job STAYS and remains the REQUIRED status check for merge (clean-room, no local contamination). So a green self-hosted run is fast feedback; merge still waits on the clean GitHub run.
+  - Warm cache: the self-hosted job does NOT use rust-cache (it keeps target/ between runs); add a periodic `cargo clean`-if-stale guard and a disk-space check so a runaway target dir cannot wedge the box.
+
+  ## Acceptance
+  1. A self-hosted runner is documented (docs/ci-self-hosted.md): exact config.sh/svc.sh steps, the label, service install, and teardown. Setup is reproducible from the doc on a fresh machine.
+  2. SECURITY: the self-hosted job triggers on push and on pull_request ONLY from the same repo (not forks) — gate with `if: github.event.pull_request.head.repo.full_name == github.repository` (or require-approval). Document the public-repo fork-PR risk explicitly and the chosen mitigation.
+  3. The GitHub-hosted ubuntu-latest job remains a required check; branch protection is unchanged. A self-hosted-green / hosted-red PR does NOT merge.
+  4. AVAILABILITY: when the self-hosted runner is offline, the self-hosted job is skipped/neutral (not a hard red) so CI degrades to the hosted job alone; document this.
+  5. CLEAN-ROOM: note that the self-hosted run can pass while hosted fails (local state) — the hosted job is authoritative; the self-hosted one is advisory speed.
+  6. Evidence: three PRs showing the self-hosted job completing in <4 min alongside the ~10.7-min hosted job.
+
+  ## Out of scope
+  Self-hosted macOS/Windows (cross-platform stays GitHub-hosted — you need real OS runners). Multiple runners for pipelined concurrency (STORY-1041) — a follow-up if one runner serializes.
+
+  ## Related
+  STORY-1041 (drain pipelining — the other CI-latency half; may want >1 runner), TASK-1204 (single compile profile — compounds the speedup), TASK-257 (Linux-only PR CI split), EPIC-44 (a gitlab-runner on the same box could serve GitLab CI similarly).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T17:19:07.876021726Z
+modified_at: 2026-09-11T17:19:07.876021726Z
+req_type: Story
+tags:
+- ci
+- from-product
+- performance
+- recommend:approve
+- risk:medium
+- self-hosted-runner
