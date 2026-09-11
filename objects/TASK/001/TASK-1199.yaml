@@ -15,12 +15,12 @@ description: |-
   4. docs/agents/claude-surfaces-codex-parity.md (or a sibling antigravity parity table) gains a statusLine row: full parity, command-backed, superset payload. docs/agents/aida-mcp-install-matrix.md Antigravity row links to it.
   5. The scaffolded .antigravity/ pack or AGENTS.md mentions the one-liner so a new project gets the hint.
   6. Tests: fragment golden test for --client antigravity; merge test that preserves unrelated keys and refuses on invalid JSON; --client all contains all three.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:40:50.046442969Z
-modified_at: 2026-09-11T20:53:56.854666379Z
+modified_at: 2026-09-11T20:54:08.666161631Z
 req_type: Task
 tags:
 - antigravity
@@ -39,8 +39,24 @@ relationships:
   target_id: 01a0923f-869a-7cf1-ac73-25263e2dc2c2
   created_at: 2026-09-11T20:53:56.854661142Z
   created_by: joe
+history:
+- id: 01a0923f-c812-78f3-861d-88027ad69a6b
+  author: aida-auto-bump
+  timestamp: 2026-09-11T20:54:08.658896569Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0923f-c81a-7193-89d8-8d16190cb441
+  timestamp: 2026-09-11T20:54:08.666160364Z
+  agent: aida
+  commit_sha: ec0644481f9ea14e3fa52ae4df23741cadb6df8a
+  summary: Completed via merge ec064448
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T20:46:09.501623092Z
   implemented_by: joe
+  completed_at: 2026-09-11T20:54:08.658744249Z
+  completion_sha: ec0644481f9ea14e3fa52ae4df23741cadb6df8a
