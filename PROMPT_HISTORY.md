@@ -5110,3 +5110,20 @@ Verification: `cargo fmt --all -- --check`;
 `cargo test -p aida-cli-lib auto_complete::tests::transient_retry_policy_is_closed_and_bounded -- --nocapture`;
 `cargo test -p aida-cli-lib auto_complete::tests::orchestrate_retries_watchdog_reviewer_once_then_ships -- --nocapture`.
 Existing unrelated Rust warnings remain in the focused test output.
+## Session 2026-09-11 — BUG-909 Codex headless watchdog liveness
+
+Picked up `BUG-909` from the implementer queue. Fixed Codex-backed headless drain phases to invoke
+`codex exec --json`, making Codex stream JSONL events into `.aida/headless-logs` while it works
+instead of writing only a final stdout message at process exit. The existing watchdog log
+mtime/length signal is therefore live for Codex implementer and reviewer phases. Updated the Codex
+argv documentation and assertion to make `--json` a pinned part of the contract.
+
+Added a regression test that simulates a quiet Codex implementer whose headless log advances after
+the no-progress window; the phase watchdog now treats that stream movement as progress and resets
+the no-progress timer instead of tripping.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib drain_reliability_wiring_tests`;
+`cargo test -p aida-cli-lib headless_vendor_args_builds_correct_command_per_vendor`;
+`cargo test -p aida-cli-lib codex_phase_argv_carries_the_expanded_body_and_claude_is_unchanged`;
+`cargo test -p aida-cli-lib compose_headless_command_routes_per_vendor`. Existing unrelated Rust
+warnings remain in the focused test output.

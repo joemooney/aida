@@ -182,6 +182,56 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
     );
 }
 
+// trace:BUG-909 | ai:codex
+#[test]
+fn codex_watchdog_counts_streaming_headless_log_activity_as_progress() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let worktree = root.join("codex-wt");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let log_dir = root.join(".aida/headless-logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let session_id = "codex-session";
+    let log = log_dir.join(format!("implementer-{session_id}.jsonl"));
+    std::fs::write(&log, r#"{"type":"thread.started"}"#).unwrap();
+
+    let old_progress = std::time::Instant::now() - std::time::Duration::from_secs(15 * 60);
+    let old_poll = std::time::Instant::now() - std::time::Duration::from_secs(31);
+    let mut watchdog = PhaseWatchdog::new_for_phase(
+        root.to_path_buf(),
+        session_id.to_string(),
+        std::time::Duration::from_secs(10 * 60),
+        std::time::Duration::from_secs(45 * 60),
+        auto_complete::Phase::Implementer,
+    );
+    watchdog.worktree = Some(worktree);
+    watchdog.last_progress = old_progress;
+    watchdog.last_poll = old_poll;
+    watchdog.last_sig = headless_log_activity_signature(root, session_id);
+
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    std::fs::write(
+        &log,
+        concat!(
+            r#"{"type":"thread.started"}"#,
+            "\n",
+            r#"{"type":"turn.started","payload":{"source":"codex-jsonl"}}"#,
+            "\n"
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(
+        watchdog.check(),
+        None,
+        "a Codex phase whose JSONL headless log advances is still progressing"
+    );
+    assert!(
+        watchdog.last_progress > old_progress,
+        "log activity should reset the no-progress timer"
+    );
+}
+
 #[test]
 fn resume_start_phase_clamp_bumps_ci_to_reviewer_only() {
     use auto_complete::Phase;
