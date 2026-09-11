@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T07:02:42.950154022Z
-modified_at: 2026-09-11T16:54:42.003951332Z
+modified_at: 2026-09-11T17:08:57.254854928Z
 req_type: Bug
 tags:
 - codex
@@ -59,6 +59,12 @@ comments:
   created_at: 2026-09-11T16:30:18.588894952Z
   modified_at: 2026-09-11T16:30:18.588894952Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a09171-9d26-7ee1-8287-b94a95f1d16d
+  author: joe
+  content: 'Review PR-1740 verdict: REQUEST CHANGES. Code, CI, and focused tests pass, but BUG-909 acceptance item 5 is not satisfied: the PR must cite one codex-vendor drain on this repo shipping a spec whose implementer phase exceeded 10 minutes. The PR body currently says only that the implementing Codex session exceeded 10 minutes and that a full codex-vendor drain longer than 10 minutes was not run locally.'
+  created_at: 2026-09-11T17:08:57.254854928Z
+  modified_at: 2026-09-11T17:08:57.254854928Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
