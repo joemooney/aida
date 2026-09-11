@@ -57521,5 +57521,32 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4666
+- id: 01a0915d-d631-7f11-bbdb-2ba76666a1fa
+  target_id: 01a0915d-d278-7752-bbf4-14aec330a00b
+  author: aida
+  node_id: '1'
+  lamport: 4667
+  timestamp: 2026-09-11T16:47:21.137553819Z
+  kind: !Create
+    title: 'aida drain status: append a context-aware next-command hint (watch live / triage shelved / awaiting)'
+    description: |-
+      ## Why
+      Operator (2026-09-11): aida drain status should show the next logical command to delve deeper. Today it prints the members and phases but no next[] line, while aida status already uses the next[1]{cmd,to} convention. The natural drill-down (aida tail drain — stream the running phase log live) exists but is not surfaced, so a reader watching "BUG-908 phase 3 (reviewer) quiet 4m" has no pointer to the command that shows whether it is stuck or thinking.
+
+      ## Acceptance
+      1. aida drain status appends one context-aware next-command line, reusing the existing next[]/→ rendering used by aida status:
+         - an active phase (implementer/reviewer/ci), especially one flagged quiet: "watch live → aida tail drain" (or aida tail <spec> for the specific member)
+         - a member shelved this run: "triage → aida why <spec> · aida findings list"
+         - nothing drivable / drain about to exit: "→ aida awaiting"
+      2. The line is chosen from the drain's own state (the same data the table renders), not hardcoded; when multiple apply, prefer the most actionable (shelved > quiet-active > normal-active > exiting).
+      3. --json gains a next: {cmd, why} field mirroring the human line so a supervisor can route on it.
+      4. Honors AIDA_AGENT_OUTPUT/TOON like the rest of the surface; suppressed when there is no active drain (the "No drain in progress" path keeps its current single line).
+      5. Unit test: a fixture drain-state with a quiet reviewer yields the tail-drain hint; one with a shelved member yields the why/findings hint.
+
+      ## Related
+      aida tail (TASK-1167/1173, the drill-down target), aida status next[] convention (STORY-707), STORY-1023 (shelved-vs-needs-decision rendering the triage hint should match).
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 4667
 node_id: '1'
