@@ -3,20 +3,39 @@ spec_id: BUG-1044
 agreed_id: BUG-1044
 title: aida status leads with a no-active-role banner after reboot — last-used role and a copyable re-enter command
 description: 'Field report from another project (2026-09-10): after a reboot, an advisor-gated action failed LATE in a workflow because the fresh shell had no active role — recoverable, but surfaced at the failure point instead of session start. Fix: aida status (bare, top of output) prominently shows ''no active role'' with the LAST-USED role and a copyable aida role enter <role> command when no role is active; gated-operation refusals include the same line; optional [role] restore_prompt = true config offers restoration at the first interactive command of a roleless shell (explicitly configured, default off — faithful to current behavior). Complements STORY-821''s role-enter resume. Acceptance: roleless shell status leads with the banner + last-used role + exact command; gated refusal carries it; the opt-in prompt fires once per shell when enabled.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T02:15:39.152833040Z
-modified_at: 2026-09-11T05:00:21.305192422Z
+modified_at: 2026-09-11T05:19:36.679475632Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08ed6-68d7-70e3-b89e-89c337d82ecf
   created_at: 2026-09-11T05:00:16.005819460Z
   created_by: joe
+history:
+- id: 01a08ee8-3063-7b50-b270-f8eb102e5946
+  author: aida-auto-bump
+  timestamp: 2026-09-11T05:19:36.547511688Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a08ee8-30e7-7fb1-a13c-6e2505817122
+  timestamp: 2026-09-11T05:19:36.679469746Z
+  agent: aida
+  commit_sha: 0529539817f7ce3a6fa36ba14a545ec685f5a989
+  summary: Completed via merge 05295398
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T05:00:21.305192422Z
   implemented_by: joe
+  completed_at: 2026-09-11T05:19:36.547055353Z
+  completion_sha: 0529539817f7ce3a6fa36ba14a545ec685f5a989
