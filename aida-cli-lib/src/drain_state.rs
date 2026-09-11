@@ -548,6 +548,30 @@ pub(crate) fn set_phase_with_tuning(
     );
 }
 
+// trace:STORY-1033 | ai:codex
+pub(crate) fn set_phase_with_tuning(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    vendor: Option<&str>,
+    seat: Option<&str>,
+    model: Option<&str>,
+    effort: Option<&str>,
+) {
+    set_phase_inner_with_tuning(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        None,
+        vendor,
+        seat,
+        model,
+        effort,
+    );
+}
+
 /// BUG-872: record the concrete phase session id alongside the phase. Drain
 /// status and `aida tail drain` use this id to resolve the active log; retries
 /// for the same spec must never inherit an older sibling attempt's mtime.
@@ -597,6 +621,31 @@ fn set_phase_inner(
     phase_slug: &str,
     session_id: Option<&str>,
     vendor: Option<&str>,
+) {
+    set_phase_inner_with_tuning(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        session_id,
+        None,
+        None,
+        None,
+        None,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn set_phase_inner_with_tuning(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    session_id: Option<&str>,
+    vendor: Option<&str>,
+    seat: Option<&str>,
+    model: Option<&str>,
+    effort: Option<&str>,
 ) {
     set_phase_inner_with_tuning(
         project_root,
