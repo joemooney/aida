@@ -14499,7 +14499,7 @@ fn list_requirements(
 
     // Apply filters if provided
     if let Some(status_str) = status {
-        let status_filter = parse_status(status_str)?;
+        let status_filter = parse_list_status_filter(status_str)?;
         requirements.retain(|r| requirement_matches_status_filter(&store, r, &status_filter));
     }
 
@@ -14537,7 +14537,8 @@ fn list_requirements(
 
     for req in requirements {
         let display_status = effective_display_status(&store, &req);
-        let status_str = list_requirement_status_cell(&req, &display_status, STATUS_COLUMN_WIDTH);
+        let status_str =
+            list_requirement_status_cell(&store, &req, &display_status, STATUS_COLUMN_WIDTH);
         let priority_str = match req.priority {
             RequirementPriority::High => "High".red(),
             RequirementPriority::Medium => "Medium".yellow(),
@@ -14560,23 +14561,62 @@ fn list_requirements(
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ListStatusFilter {
+    Stored(RequirementStatus),
+    Shelved,
+    NeedsDecision,
+}
+
+fn parse_list_status_filter(status_str: &str) -> Result<ListStatusFilter> {
+    let normalized: String = status_str
+        .trim()
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')
+        .flat_map(char::to_lowercase)
+        .collect();
+    match normalized.as_str() {
+        // trace:STORY-1023 | ai:codex
+        "shelved" => Ok(ListStatusFilter::Shelved),
+        "needsdecision" => Ok(ListStatusFilter::NeedsDecision),
+        _ => parse_status(status_str).map(ListStatusFilter::Stored),
+    }
+}
+
 fn requirement_matches_status_filter(
     store: &aida_core::RequirementsStore,
     req: &aida_core::models::Requirement,
-    status_filter: &RequirementStatus,
+    status_filter: &ListStatusFilter,
 ) -> bool {
     // trace:STORY-1023 | ai:codex
-    effective_display_status(store, req) == *status_filter
+    let display_status = effective_display_status(store, req);
+    match status_filter {
+        ListStatusFilter::Stored(status) => display_status == *status,
+        ListStatusFilter::Shelved => matches!(
+            effective_needs_attention_lens(store, req, &display_status),
+            Some(status_display::NeedsAttentionLens::Shelved { .. })
+        ),
+        ListStatusFilter::NeedsDecision => matches!(
+            effective_needs_attention_lens(store, req, &display_status),
+            Some(status_display::NeedsAttentionLens::NeedsDecision { .. })
+        ),
+    }
 }
 
 fn list_requirement_status_cell(
+    store: &aida_core::RequirementsStore,
     req: &aida_core::models::Requirement,
     display_status: &RequirementStatus,
     width: usize,
 ) -> String {
     // trace:STORY-1023 | ai:codex
     let (label, palette_key) = if matches!(display_status, RequirementStatus::NeedsAttention) {
-        status_display::parked_status_label(req)
+        effective_needs_attention_lens(store, req, display_status)
+            .map(|lens| {
+                let label = lens.label();
+                let key = lens.palette_key();
+                (label, key)
+            })
             .unwrap_or_else(|| ("Needs Decision".to_string(), "NeedsDecision"))
     } else {
         let label = match display_status {
@@ -14594,6 +14634,47 @@ fn list_requirement_status_cell(
     };
     let padded = format!("{label:<width$}");
     status_display::paint_status(&padded, palette_key).to_string()
+}
+
+fn effective_needs_attention_lens(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::models::Requirement,
+    display_status: &RequirementStatus,
+) -> Option<status_display::NeedsAttentionLens> {
+    if !matches!(display_status, RequirementStatus::NeedsAttention) {
+        return None;
+    }
+    if let Some(lens) = status_display::needs_attention_lens(req) {
+        return Some(lens);
+    }
+    if req.req_type == RequirementType::Epic {
+        let mut decision_lens = None;
+        for rel in req
+            .relationships
+            .iter()
+            .filter(|r| r.rel_type == aida_core::models::RelationshipType::Parent)
+        {
+            let Some(child) = store.get_requirement_by_id(&rel.target_id) else {
+                continue;
+            };
+            let child_display_status = effective_display_status(store, child);
+            match effective_needs_attention_lens(store, child, &child_display_status) {
+                Some(status_display::NeedsAttentionLens::Shelved { cause }) => {
+                    return Some(status_display::NeedsAttentionLens::Shelved { cause });
+                }
+                Some(status_display::NeedsAttentionLens::NeedsDecision { reason }) => {
+                    decision_lens.get_or_insert(
+                        status_display::NeedsAttentionLens::NeedsDecision { reason },
+                    );
+                }
+                None => {}
+            }
+        }
+        if decision_lens.is_some() {
+            return decision_lens;
+        }
+    }
+    Some(status_display::NeedsAttentionLens::NeedsDecision { reason: None })
 }
 
 #[cfg(test)]
@@ -14626,9 +14707,10 @@ mod story_1023_list_render_tests {
             raised_at: chrono::Utc::now(),
         });
 
+        let store = aida_core::RequirementsStore::new();
         colored::control::set_override(false);
-        let shelved_cell = list_requirement_status_cell(&shelved, &shelved.status, 22);
-        let decision_cell = list_requirement_status_cell(&decision, &decision.status, 22);
+        let shelved_cell = list_requirement_status_cell(&store, &shelved, &shelved.status, 22);
+        let decision_cell = list_requirement_status_cell(&store, &decision, &decision.status, 22);
         colored::control::unset_override();
 
         assert!(
@@ -14646,7 +14728,7 @@ mod story_1023_list_render_tests {
     }
 
     #[test]
-    fn status_filter_uses_effective_display_status() {
+    fn status_filter_uses_effective_display_status_and_parked_lens() {
         let mut store = aida_core::RequirementsStore::new();
 
         let mut epic = aida_core::models::Requirement::new("Epic".to_string(), String::new());
@@ -14681,10 +14763,30 @@ mod story_1023_list_render_tests {
             RequirementStatus::NeedsAttention
         );
         assert_ne!(epic.status, RequirementStatus::NeedsAttention);
+
+        colored::control::set_override(false);
+        let epic_cell =
+            list_requirement_status_cell(&store, epic, &RequirementStatus::NeedsAttention, 22);
+        colored::control::unset_override();
+        assert!(
+            epic_cell.contains("Shelved (stale-base)"),
+            "cell: {epic_cell:?}"
+        );
+
         assert!(requirement_matches_status_filter(
             &store,
             epic,
-            &RequirementStatus::NeedsAttention
+            &ListStatusFilter::Stored(RequirementStatus::NeedsAttention)
+        ));
+        assert!(requirement_matches_status_filter(
+            &store,
+            epic,
+            &ListStatusFilter::Shelved
+        ));
+        assert!(!requirement_matches_status_filter(
+            &store,
+            epic,
+            &ListStatusFilter::NeedsDecision
         ));
     }
 }

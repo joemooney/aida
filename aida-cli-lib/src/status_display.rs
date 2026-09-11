@@ -267,16 +267,6 @@ pub(crate) fn parked_status_badge(req: &aida_core::models::Requirement) -> Strin
     }
 }
 
-pub(crate) fn parked_status_label(
-    req: &aida_core::models::Requirement,
-) -> Option<(String, &'static str)> {
-    needs_attention_lens(req).map(|lens| {
-        let label = lens.label();
-        let key = lens.palette_key();
-        (label, key)
-    })
-}
-
 /// A fixed-width status cell for list tables: `"<glyph> <coloured label>"` with
 /// the PLAIN label left-padded to `label_width` BEFORE colouring (ANSI escapes
 /// would otherwise inflate `{:<}` byte counts and break column alignment). The
