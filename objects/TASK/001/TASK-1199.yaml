@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:40:50.046442969Z
-modified_at: 2026-09-11T13:41:34.159223577Z
+modified_at: 2026-09-11T13:41:35.379957805Z
 req_type: Task
 tags:
 - antigravity
@@ -35,3 +35,4 @@ relationships:
   target_id: 01a0508e-03eb-7960-8511-feae315c8f93
   created_at: 2026-09-09T06:40:57.127537385Z
   created_by: joe
+execution_mode: drain
