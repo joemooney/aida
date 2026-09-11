@@ -79,6 +79,14 @@ codex --cd /path/to/aida-project
 
 The MCP server is launched by Codex over stdio. You do not need to run `aida mcp-serve` in a separate terminal for the Codex integration. Running it manually is still useful for debugging JSON-RPC framing or the black-box stdio tests.
 
+Advisor-gated MCP tools use the role inherited by the `aida mcp-serve` process, not a later shell banner in the calling agent. If an MCP refusal reports `server role=(none)` or any non-advisor role while your interactive shell says `AIDA_SESSION_ROLE=advisor`, restart/reconnect the MCP server with the role in its launch environment:
+
+```bash
+AIDA_SESSION_ROLE=advisor aida mcp-serve
+```
+
+`aida status`, the `status_unified` MCP tool, and `aida://project/summary` surface the MCP server authority line when a server is registered. Refusals for advisor-gated MCP actions also name the server role, the caller role when the transport supplied one, and the relaunch command. trace:BUG-1043
+
 ## Optional AIDA-Aware Status Lines
 
 AIDA is meant to bootstrap other projects, so status-line setup should stay
@@ -325,6 +333,7 @@ the first refresh brings it current and saves the previous copy alongside as
 - Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
+- MCP role authority is process-scoped: configure advisor authority by launching the server with `AIDA_SESSION_ROLE=advisor`, then reconnect the client. `role_enter` is peek-only from MCP and cannot elevate an already-running server. trace:BUG-1043
 - Project-local Codex registration IS scaffolded by `aida init` (a `.codex/config.toml` with an `[mcp_servers.aida]` block, plus a baseline `project_trust_level = "trusted"`). Manual `codex mcp add aida -- aida mcp-serve` remains available for pre-scaffold projects or a personal `~/.codex/config.toml`. trace:TASK-0424
 - **Live probe finding (2026-07-07, codex-cli 0.142.3):** a headless `codex exec` run in a project carrying the scaffolded `.codex/config.toml` reported MCP-MISSING — the project-local config was not merged, and the AIDA MCP tools were not discoverable. The TASK-0424 assumption that Codex merges a project `.codex/config.toml` over the user config did not hold for that Codex version (candidate causes: project-config support changed, or gated on interactive project-trust that a headless `exec` never grants). If a headless drain reports missing MCP tools, verify current `codex` config-merge semantics against its docs rather than assuming the scaffold alone is sufficient, and fall back to registering the server in the **user** `~/.codex/config.toml` (or `codex mcp add aida -- aida mcp-serve` run once interactively) instead. The mitigation: the token-efficient CLI (`AIDA_AGENT_OUTPUT`/TOON) is the primary agent surface, so MCP absence degrades typed access, not capability. trace:TASK-1046
 - `aida mcp translate [--project-root <dir>] [--force] [--dry-run]` derives both the Codex (`.codex/config.toml`) and Gemini CLI (`.gemini/settings.json`) MCP configs from whatever this project's `.mcp.json` actually registers — the reverse direction from the init-time scaffold, useful when `.mcp.json` was hand-edited (renamed server, custom env) or when only the Gemini target is needed. It merges into an existing file rather than clobbering it: an existing file without an aida-shaped entry gets one added, a matching entry is left alone, and a differing entry is skipped unless `--force`. `.mcp.json` absent or with no aida server reports "nothing to translate" rather than erroring. trace:TASK-1046

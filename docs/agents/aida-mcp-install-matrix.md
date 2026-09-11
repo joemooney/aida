@@ -24,6 +24,8 @@ Select the profile (first match wins):
 
 The default is `full` so existing trusted local installs are unchanged. **Marketplace and any non-local/untrusted install should set `read-only` (or `coordination`) explicitly.** The profile is a real boundary: an out-of-profile tool is both hidden from `tools/list` and rejected at `tools/call` with a `permission_denied` envelope, even if the client calls it by name. The active profile is printed on the server's stderr startup banner.
 
+Profile controls which tools exist; role controls advisor authority. Advisor-gated MCP tools read the role from the `aida mcp-serve` process environment. A client shell that later shows `AIDA_SESSION_ROLE=advisor` does not elevate an already-running server; relaunch/reconnect with `AIDA_SESSION_ROLE=advisor aida mcp-serve`. `aida status` and the MCP project summary/status surfaces report the registered server authority line. trace:BUG-1043
+
 ## Recommended Defaults
 
 - Default to local stdio for solo/local agents.

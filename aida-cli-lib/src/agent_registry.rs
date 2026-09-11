@@ -1255,6 +1255,32 @@ pub(crate) fn format_agent_status_lines(agents: &[AgentRegistryView]) -> Vec<Str
         .collect()
 }
 
+pub(crate) fn mcp_authority_status_lines(agents: &[AgentRegistryView]) -> Vec<String> {
+    // trace:BUG-1043 | ai:codex
+    agents
+        .iter()
+        .filter(|agent| agent.source == "mcp" && agent.status != AgentStatus::Stale)
+        .map(|agent| {
+            let server_role = agent.role.as_deref().unwrap_or("(none)");
+            let advisor = crate::advisor_authority_from(server_role, false, false);
+            format!(
+                "  MCP authority: {} server#{} role={} (advisor authority: {}); relaunch: AIDA_SESSION_ROLE=advisor aida mcp-serve",
+                agent.agent_type,
+                agent.pid,
+                server_role,
+                if advisor { "yes" } else { "no" }
+            )
+        })
+        .collect()
+}
+
+pub(crate) fn mcp_authority_status_lines_for_project(project_root: &Path) -> Vec<String> {
+    let cfg = Config::load(project_root);
+    let ctx = AgentClassifyContext::new(Utc::now(), cfg.busy_threshold_secs, Vec::new());
+    let agents = list_agent_views(project_root, &ctx);
+    mcp_authority_status_lines(&agents)
+}
+
 fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
     let path = registry_path(project_root, &entry.id);
     if let Some(parent) = path.parent() {
@@ -1928,6 +1954,46 @@ mod tests {
             "unexpected line: {line:?}"
         );
         assert!(line.contains("s)"), "expected (Xs) hint, got: {line:?}");
+    }
+
+    #[test]
+    fn mcp_authority_status_lines_name_role_and_relaunch_command() {
+        let now = Utc::now();
+        let view = AgentRegistryView {
+            id: "codex-42".to_string(),
+            agent_type: "codex".to_string(),
+            pid: 42,
+            name: None,
+            description: None,
+            tty: None,
+            started_at: now,
+            last_active_at: now,
+            role: Some("implementer".to_string()),
+            current_spec: Some("BUG-1043".to_string()),
+            worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
+            source: "mcp".to_string(),
+            binary_version: None,
+            build_sha: None,
+            status: AgentStatus::Busy,
+            availability: Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+            native_session_id: None,
+            ended_at: None,
+            resumed_from: None,
+        };
+
+        let lines = mcp_authority_status_lines(&[view]);
+        assert_eq!(lines.len(), 1);
+        let line = &lines[0];
+        assert!(line.contains("MCP authority:"), "{line}");
+        assert!(line.contains("role=implementer"), "{line}");
+        assert!(line.contains("advisor authority: no"), "{line}");
+        assert!(
+            line.contains("AIDA_SESSION_ROLE=advisor aida mcp-serve"),
+            "{line}"
+        );
     }
 
     #[test]
