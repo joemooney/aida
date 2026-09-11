@@ -1,0 +1,36 @@
+id: 01a09180-071a-7712-8b42-9e6f1b646259
+spec_id: EPIC-62
+agreed_id: EPIC-62
+title: 'Unattended drain reliability: a spec never sits parked for days — the drain self-recovers transient failures and escalates only genuine human-needs'
+description: |-
+  ## Why
+  Operator (2026-09-11): usage is BURST-file then quiet — the backlog is not growing continuously (my earlier 3.6x intake framing was wrong for this pattern), it is SITTING STUCK. The real problem is that draining/closing open items is unreliable: days go by with items parked. Speed (self-hosted runner, backpressure) is secondary; ROBUSTNESS is the goal.
+
+  Evidence (this session, 2026-09-11): BUG-1021 took ~4 hours and 6 relaunches, dying on tooling every time — Codex silence (BUG-909), retry-lease collision (BUG-908, x3), headless-wait (BUG-1063), watchdog false-positives. Each death PARKED the spec. Confirmed in code: a non-trivial phase failure prints "parked for triage — fix the blocker, then re-drive" and the drain (next-N) EXITS. Nothing re-drives parked work; the one auto-retry (STORY-975) is broken by BUG-908. So without a human babysitting, BUG-1021 sits from its first park (06:41) indefinitely.
+
+  ## Definition of done (the metric)
+  A drain over a real backlog of >=8 mixed specs completes with ZERO human relaunches: every spec either merges or lands in a small, correctly-labeled NEEDS-HUMAN set (a genuine design/decision block), and NO spec is parked for a transient/tooling reason that the system could have retried. Demonstrated twice on this repo and once on a non-aida project (ties to TASK-1198).
+
+  ## The two layers
+  1. STOP false-parks (the foundation — bug fixes, mostly filed): BUG-908 (retry reclaims its own lease), BUG-909 (Codex --json so silence isn't a false watchdog trip), BUG-1063 (headless sessions never end a turn waiting for a notification), STORY-998 (information-based idle/spinning detection), the watchdog CI-wait exemptions.
+  2. AUTO-RECOVER real parks (the missing keystone — new): a supervisor loop that periodically re-drives TRANSIENT-parked specs (typed cause ∈ watchdog/no-verdict/tool-exit/lease-conflict/cache-locked), with backoff and a cap, and leaves GENUINE-needs-human parks (design-fork, RequestChanges-on-substance, CI-red-on-real-bug) for the human — surfacing those via aida awaiting + notify (STORY-1029/1043). Filed as the keystone child.
+
+  ## Children (existing, to associate)
+  BUG-908, BUG-909, BUG-1063, STORY-975 (retry — needs 908), STORY-998 (idle detection), STORY-974 (typed causes — the transient/genuine split depends on these, DONE), STORY-1043 (surface stuck work), STORY-1029 (notify on stall). Plus the new re-drive keystone.
+
+  ## Non-goals
+  Speed (STORY-1049 self-hosted runner is an OPT-IN toggle, not part of this; STORY-1050 backpressure addresses sustained-load which is NOT this operator's pattern). Robustness first; those stay parked/low.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T17:24:41.882954288Z
+modified_at: 2026-09-11T17:24:41.882954288Z
+req_type: Epic
+tags:
+- autonomy
+- drain
+- from-product
+- recommend:approve
+- reliability
+- unattended
