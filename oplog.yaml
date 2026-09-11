@@ -52654,5 +52654,17 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4415
+- id: 01a08e3f-b1f1-7221-92fa-280f059e46fd
+  target_id: 01a08e3f-ae1d-70e3-8234-6a26359ae405
+  author: aida
+  node_id: '1'
+  lamport: 4416
+  timestamp: 2026-09-11T02:15:34.129931107Z
+  kind: !Create
+    title: MCP approval authority can disagree with the active shell role — refusals must name both roles and the relaunch command
+    description: 'Field report from another project (2026-09-10): an advisor-gated approval through MCP was REFUSED because the MCP server was launched without advisor authority, while the caller''s shell banner showed AIDA_SESSION_ROLE=advisor — the same approval then succeeded via CLI. Contradictory authority signals cost agents retries or false blocked conclusions. Fix: (1) expose the MCP server''s EFFECTIVE role/authority in aida status and in the MCP server''s own status/summary resource; (2) every gated MCP refusal names the server''s role, the caller shell role when known, and the exact relaunch command/config for advisor authority; (3) consider inheriting/forwarding the client''s role where the transport can carry it safely, else document the two-authority model in the MCP setup docs. Repro: start mcp-serve without the role; export advisor in a client shell; attempt a gated transition via MCP. Acceptance: refusal message contains server role + caller role + relaunch command; aida status shows the MCP server authority line when a server is registered; docs updated.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4416
 node_id: '1'
