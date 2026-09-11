@@ -17,12 +17,12 @@ description: |-
 
   ## Related
   BUG-908 (root cause of the lost fix), BUG-1021, STORY-1029 (notify), FR-284 (reap notifies live-but-finished sessions), STORY-741 (awaiting).
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:49.938635015Z
-modified_at: 2026-09-11T19:26:47.421556923Z
+modified_at: 2026-09-11T19:55:14.127925952Z
 req_type: Story
 tags:
 - awaiting
@@ -54,3 +54,7 @@ comments:
   modified_at: 2026-09-11T14:29:11.371129194Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-11T19:55:14.127925952Z
+  implemented_by: joe
