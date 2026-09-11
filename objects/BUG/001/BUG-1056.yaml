@@ -3,20 +3,36 @@ spec_id: BUG-1056
 agreed_id: BUG-1056
 title: queue rework leaves the spec NeedsAttention, which the unified pickability policy refuses — reworks became undrainable
 description: 'Interaction regression (2026-09-11, diagnosed after four consecutive minutes-long drains): the BUG-1017 unified pickability policy refuses NeedsAttention specs without resolved triage or force — correct for stale parks — but aida queue rework re-queues a spec while LEAVING it NeedsAttention, so every findings-led rework entry is skipped by the next drain and snapshots burn in seconds. The two features contradict: a rework IS the triage resolution. Fix: queue rework transitions the spec out of NeedsAttention (back to Approved, or a rework-marked state the policy treats as pickable-with-findings); the policy recognizes a rework-queued entry as triaged. Acceptance: rework a parked spec, run a drain — the implementer session actually launches with the findings brief; pickability tests updated for the rework case; no other NeedsAttention pickup loosened.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T09:46:42.576862298Z
-modified_at: 2026-09-11T12:18:32.215124529Z
+modified_at: 2026-09-11T12:22:11.405206304Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a09067-a577-7c01-996e-8cbfabdf06bb
   created_at: 2026-09-11T12:18:32.215118893Z
   created_by: joe
+history:
+- id: 01a0906b-12bb-7653-bf86-47865a6902e2
+  author: aida-auto-bump
+  timestamp: 2026-09-11T12:22:11.387531590Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0906b-12cd-7492-b8f5-96b4dc5459c8
+  timestamp: 2026-09-11T12:22:11.405205393Z
+  agent: aida
+  commit_sha: fe58844d5d37534f0cd818167ef179d76f3e449c
+  summary: Completed via merge fe58844d
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T12:07:39.822499392Z
   implemented_by: joe
+  completed_at: 2026-09-11T12:22:11.387417402Z
+  completion_sha: fe58844d5d37534f0cd818167ef179d76f3e449c
