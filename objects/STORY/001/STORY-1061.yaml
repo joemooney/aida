@@ -1,0 +1,26 @@
+id: 01a09278-e20a-76a1-b1d6-a591fe156257
+spec_id: STORY-1061
+agreed_id: STORY-1061
+title: 'Review PR-1750: [AI:codex] fix(ci): harden trace gate store fetch (TASK-1206)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09272`) for branch `story-1054`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1750>
+  - Branch: `story-1054` → `main`
+
+  ## Covers
+
+  - TASK-1206
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1750` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T21:56:30.858575802Z
+modified_at: 2026-09-11T21:56:30.858575802Z
+req_type: Story
