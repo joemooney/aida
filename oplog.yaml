@@ -54805,5 +54805,31 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4524
+- id: 01a08fb6-8cab-7372-80ae-acdddf37eef1
+  target_id: 01a08fb6-83f0-7cc2-acca-0ccd2da1749e
+  author: aida
+  node_id: '1'
+  lamport: 4525
+  timestamp: 2026-09-11T09:05:00.587568001Z
+  kind: !Create
+    title: 'Review PR-1731: [AI:codex] fix(integrate): carry headless mode and wait on CI (BUG-1052)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08fa5`) for branch `bug-1052`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1731>
+      - Branch: `bug-1052` → `main`
+
+      ## Covers
+
+      - BUG-1052
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1731` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4525
 node_id: '1'

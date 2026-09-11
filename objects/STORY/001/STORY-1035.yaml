@@ -1,0 +1,26 @@
+id: 01a08fb6-83f0-7cc2-acca-0ccd2da1749e
+spec_id: STORY-1035
+agreed_id: STORY-1035
+title: 'Review PR-1731: [AI:codex] fix(integrate): carry headless mode and wait on CI (BUG-1052)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a08fa5`) for branch `bug-1052`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1731>
+  - Branch: `bug-1052` → `main`
+
+  ## Covers
+
+  - BUG-1052
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1731` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T09:04:58.352829284Z
+modified_at: 2026-09-11T09:04:58.352829284Z
+req_type: Story
