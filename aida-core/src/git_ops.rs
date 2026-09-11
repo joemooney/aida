@@ -1303,7 +1303,7 @@ pub fn worktree_gitdir_path(worktree_path: &Path) -> Option<PathBuf> {
     if !git_file.is_file() {
         return None;
     }
-    let body = std::fs::read_to_string(&git_file).ok()?;
+    let body = crate::read_atomic(&git_file).ok()?;
     let raw = body
         .lines()
         .find_map(|line| line.trim().strip_prefix("gitdir:"))?
