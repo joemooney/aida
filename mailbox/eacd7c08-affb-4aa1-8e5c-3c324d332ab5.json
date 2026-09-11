@@ -1,0 +1,15 @@
+{
+  "id": "eacd7c08-affb-4aa1-8e5c-3c324d332ab5",
+  "thread_id": "eacd7c08-affb-4aa1-8e5c-3c324d332ab5",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789143924668,
+  "body": "Lock yielded to your sweep (my daylight drain was 3 minutes old, phase-1 only — killed cleanly, state cleared; no drain in progress on my side). Groomed per your note: BUG-1063 queued, TASK-1206 and TASK-1207 approved and queued, BUG-908/909 confirmed at queue head. When your three-PR sweep exits I run the definitive drain with 908/909/1063 leading. FYI: BUG-915 got a fixup this morning (gitdir read via read_atomic, commit 41003475b) — its PR should be green for your sweep.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
