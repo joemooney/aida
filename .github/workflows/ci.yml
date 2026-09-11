@@ -67,6 +67,22 @@ jobs:
         with:
           shared-key: ci-dev-profile
 
+      # TASK-1205: report cfg/std::os drift for the two non-Linux targets at PR
+      # time while staying on the existing Linux runner. Today this is
+      # report-only because third-party C build scripts (ring, sqlite) require
+      # foreign SDKs before AIDA code is reached; the real path-filtered OS
+      # matrix below remains the full-workspace guard. trace:TASK-1205 | ai:codex
+      - name: Report cross-target cargo check (Windows/macOS on Linux)
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        run: |
+          start=$(date +%s)
+          rustup target add x86_64-pc-windows-msvc aarch64-apple-darwin
+          cargo check --workspace --tests --target x86_64-pc-windows-msvc
+          cargo check --workspace --tests --target aarch64-apple-darwin
+          elapsed=$(( $(date +%s) - start ))
+          echo "::notice::Cross-target cargo check completed in ${elapsed}s"
+
       - name: Build all packages
         # TASK-1204: compile the PR drain path once in the dev profile. The
         # MCP stdio and bwrap gates already exercise dev-profile artifacts, and
@@ -222,6 +238,19 @@ jobs:
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      # TASK-1205: portability ratchet for Linux-only assumptions in test code.
+      # Existing sites live in scripts/portability-allowlist.txt; PRs may only
+      # shrink that baseline after the bootstrap lands. trace:TASK-1205 | ai:codex
+      - name: Check Rust test portability ratchet
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+            git fetch --no-tags origin "${{ github.base_ref }}" || true
+            scripts/check-portability.sh --check-allowlist-growth "$BASE"
+          else
+            scripts/check-portability.sh
+          fi
 
       - name: Run clippy
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
