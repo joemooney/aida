@@ -4944,3 +4944,21 @@ Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib roleless
 `cargo test -p aida-cli-lib role_restore_prompt -- --nocapture`;
 `env -u AIDA_SESSION_ROLE cargo run -p aida-cli --quiet -- status | sed -n '1,8p'`. Existing unrelated
 Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — STORY-1024 serialized merge queue front door
+
+Picked up `STORY-1024`. Promoted top-level `aida integrate` from read-only-only into the integrator
+front door: bare `aida integrate` still renders the throughput view, while `aida integrate --run`,
+`--watch`, or `--dry-run` now dispatch through the existing serialized `queue integrate` engine.
+Top-level runs rebase by default, with `--no-rebase` as the explicit escape hatch, so Done-with-PR
+branches land one at a time against current main instead of racing stale-base gates.
+
+Extended the read view and JSON/TOON projections with `merge_queue_depth` plus `merge_queue` rows.
+Done specs with open, unmerged PRs now render as `In merge queue (position N)` using the same PR
+probe/classification path as the integrator loop.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib integrate::`;
+`cargo test -p aida-cli-lib orchestration_routing::`; `cargo test -p aida-cli-lib integrate_view::`;
+`cargo check -p aida-cli`; `cargo run -p aida-cli -- integrate --help`;
+`cargo run -p aida-cli -- integrate --json`. Existing unrelated Rust warnings remain in the focused
+test output.

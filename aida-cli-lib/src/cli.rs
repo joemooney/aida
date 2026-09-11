@@ -8666,22 +8666,71 @@ pub enum Command {
         no_timestamp: bool,
     },
 
-    /// The integrator seat at a glance — a read-only throughput view (writes
-    /// nothing, no drain).
+    /// The integrator seat: bare shows the merge queue; --run drains it.
     ///
     /// One screen, scoped to the active focus, answering "what would I work
     /// next, and is main actually moving?": the focus-scoped queue (specs + the
     /// role each is routed to), live throughput (time since the last merge to
     /// the default branch, recent-merge counts, and a main-idle indicator), and
     /// the active fan-out (which sessions/agents hold which specs right now).
-    /// A cheap cache-backed read — no full store load, no network beyond a
-    /// local git read.
-    // trace:TASK-1034 | ai:claude
+    /// A cheap cache-backed read when bare; `--run` is the single serialized
+    /// merge loop over Done-with-PR specs.
+    // trace:TASK-1034 trace:STORY-1024 | ai:claude codex
     Integrate {
         /// Emit the view as JSON instead of the human summary.
         // trace:TASK-1034
         #[clap(long)]
         json: bool,
+        /// Drain the merge queue: rebase each Done-with-PR branch onto current
+        /// main, wait/reuse the standing verdict, merge, pull, then continue
+        /// serially. Bare `aida integrate` remains the read-only view.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long)]
+        run: bool,
+        /// Inspect the merge queue and print what WOULD be driven, without
+        /// merging anything. Alias for `--run --dry-run`.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long)]
+        dry_run: bool,
+        /// Keep watching for newly-ready Done-with-PR specs and drain them
+        /// serially as they appear.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long)]
+        watch: bool,
+        /// Idle backstop (seconds) for --watch. Default 60.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long, value_name = "SECS", default_value_t = 60)]
+        interval: u64,
+        /// Cap the number of specs integrated this run. 0 = no cap.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long, value_name = "N", default_value_t = 0)]
+        max: usize,
+        /// Do not rebase PR branches before merge. The default for top-level
+        /// `integrate --run` is to rebase first so stale-base churn cannot race.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long)]
+        no_rebase: bool,
+        /// Accumulation strategy for the batch. Falls back to `[integrate]
+        /// strategy` in .aida/config.toml, then `per-item`.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long, value_enum)]
+        strategy: Option<crate::integrate::IntegrateStrategy>,
+        /// Scope the scan to a focus epic/spec and its transitive descendants.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long, value_name = "ID")]
+        focus: Option<String>,
+        /// Idle backstop for `--watch`, in minutes.
+        // trace:STORY-1024 | ai:codex
+        #[clap(long, value_name = "N")]
+        idle_minutes: Option<u64>,
+        /// Bypass the team RBAC guardrail (`[team.permissions] integrate`).
+        // trace:STORY-1024 | ai:codex
+        #[clap(long)]
+        force: bool,
+        /// User ID (defaults to AIDA_USER or system user).
+        // trace:STORY-1024 | ai:codex
+        #[clap(long)]
+        user: Option<String>,
     },
 
     /// Stream the drain event feed and wake on actionable verbs only.

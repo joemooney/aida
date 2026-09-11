@@ -2566,14 +2566,40 @@ fn run() -> Result<()> {
         );
     }
 
-    // `aida integrate` (bare) is the read-only integrator throughput view
-    // (TASK-1034): the focus-scoped queue, merge throughput off `git log
-    // origin/main` + the `.aida/events.jsonl` stream, and the `aida ps`
-    // running-work table. It self-resolves the distributed store for the queue
-    // read and otherwise touches only local git + the lease dir, so dispatch
-    // early like `aida ps` / `aida watch`. trace:TASK-1034 | ai:claude
-    if let Command::Integrate { json } = &cli.command {
-        return handle_integrate(*json);
+    // `aida integrate` is the integrator front door. Bare remains the read-only
+    // throughput/merge-queue view (TASK-1034); `--run` / `--watch` / `--dry-run`
+    // enter the same serialized engine as `aida queue integrate`, with rebase
+    // enabled by default so Done-with-PR specs land through one current-main
+    // queue instead of racing each other stale. trace:STORY-1024 | ai:codex
+    if let Command::Integrate {
+        json,
+        run,
+        dry_run,
+        watch,
+        interval,
+        max,
+        no_rebase,
+        strategy,
+        focus,
+        idle_minutes,
+        force,
+        user,
+    } = &cli.command
+    {
+        return handle_integrate(IntegrateCommandOpts {
+            json: *json,
+            run: *run,
+            dry_run: *dry_run,
+            watch: *watch,
+            interval: *interval,
+            max: *max,
+            rebase: !*no_rebase,
+            strategy: *strategy,
+            focus: focus.clone(),
+            idle_minutes: *idle_minutes,
+            force: *force,
+            user: user.clone(),
+        });
     }
 
     // TASK-957: `aida claim` / `aida unclaim` self-load the store read-only to
@@ -52012,16 +52038,67 @@ fn ps_orphan_excluded_type(req_type: &aida_core::RequirementType) -> bool {
 /// a pass over In-Progress specs with no live spec-scoped lease so orphaned
 /// flags surface. Reuses the per-spec liveness machinery wholesale.
 // trace:STORY-696 trace:STORY-694 | ai:claude
+// trace:STORY-1024 | ai:codex
+struct IntegrateCommandOpts {
+    json: bool,
+    run: bool,
+    dry_run: bool,
+    watch: bool,
+    interval: u64,
+    max: usize,
+    rebase: bool,
+    strategy: Option<integrate::IntegrateStrategy>,
+    focus: Option<String>,
+    idle_minutes: Option<u64>,
+    force: bool,
+    user: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct MergeQueueRow {
+    id: String,
+    title: String,
+    state: String,
+    position: Option<usize>,
+}
+
+// trace:STORY-1024 | ai:codex
+fn merge_queue_state_label(position: Option<usize>, ready: bool, has_open_pr: bool) -> String {
+    match (position, ready, has_open_pr) {
+        (Some(n), _, _) => format!("In merge queue (position {n})"),
+        (None, true, true) => "In merge queue".to_string(),
+        (None, false, true) => "Not ready for merge queue".to_string(),
+        (None, _, false) => "Done without open PR".to_string(),
+    }
+}
+
 /// `aida integrate` (bare) — the read-only integrator throughput view
-/// (TASK-1034). One screen, scoped to the active focus: the focus-scoped queue
-/// (specs + routed role + depth), live throughput (time since the last merge to
-/// `origin/main`, recent-merge counts, a main-idle indicator), and the active
-/// fan-out (the `aida ps` running-work table). Writes nothing; the only network
-/// touch is a local `git log` read. Reuses the queue read, the cache summaries,
-/// `focus::resolve_focus`, the `.aida/events.jsonl` stream, and
-/// [`gather_running_work`] — no machinery is reimplemented.
-// trace:TASK-1034 trace:STORY-718 | ai:claude
-fn handle_integrate(json: bool) -> Result<()> {
+/// (TASK-1034). One screen, scoped to the active focus: the focus-scoped queue,
+/// the Done-with-PR merge queue, live throughput, and active fan-out. `--run`
+/// hands off to the serialized merge engine.
+// trace:TASK-1034 trace:STORY-718 trace:STORY-1024 | ai:claude codex
+fn handle_integrate(opts: IntegrateCommandOpts) -> Result<()> {
+    if opts.run || opts.watch || opts.dry_run {
+        enforce_team_gate(permissions::GatedOp::Integrate, opts.force)?;
+        let store_path = detect_distributed_store().ok_or_else(|| {
+            anyhow::anyhow!("could not locate AIDA store for `aida integrate --run`")
+        })?;
+        let storage = Storage::new(store_path);
+        let user_id = current_user_id(opts.user.as_deref());
+        return queue_cmd::handle_queue_integrate(
+            &storage,
+            &user_id,
+            opts.dry_run,
+            opts.watch,
+            opts.interval,
+            opts.max,
+            opts.rebase,
+            opts.strategy,
+            opts.focus,
+            opts.idle_minutes,
+        );
+    }
+
     use std::collections::HashSet;
 
     let project_root =
@@ -52038,6 +52115,7 @@ fn handle_integrate(json: bool) -> Result<()> {
     let store_path = detect_distributed_store();
     let user_id = current_user_id(None);
     let mut queue_rows: Vec<(String, String, String, String)> = Vec::new(); // (id, title, status, role)
+    let mut merge_rows: Vec<MergeQueueRow> = Vec::new();
     if let Some(sp) = store_path.as_deref() {
         let storage = Storage::new(sp);
         if let Ok(backend) = advance_backend(sp) {
@@ -52093,6 +52171,56 @@ fn handle_integrate(json: bool) -> Result<()> {
                     s.status.clone(),
                     e.for_role.clone().unwrap_or_default(),
                 ));
+            }
+
+            let store = storage.load().ok();
+            let mut ready_position = 0usize;
+            for req in store
+                .as_ref()
+                .map(|s| s.requirements.as_slice())
+                .unwrap_or(&[])
+            {
+                if req.status != aida_core::RequirementStatus::Done || req.archived {
+                    continue;
+                }
+                let id = req.display_id();
+                if let Some(set) = subtree.as_ref() {
+                    if !set.contains(&req.id) {
+                        continue;
+                    }
+                }
+                let lookup = detect_open_pr_for_spec_via_forge(&project_root, &id);
+                let inconclusive = matches!(
+                    lookup,
+                    PrLookup::GhMissing | PrLookup::GhFailed(_) | PrLookup::GhUnreachable(_)
+                );
+                let (facts, _branch, pr) = probe_resume_facts(&project_root, &storage, &id, None);
+                let candidate = integrate::IntegrationCandidate {
+                    id: id.clone(),
+                    is_done: true,
+                    has_open_pr: pr.is_some(),
+                    pr_merged: facts.pr_merged,
+                    pr_lookup_inconclusive: inconclusive,
+                    held_for_human: req.tags.iter().any(|t| {
+                        let t = t.trim();
+                        t.eq_ignore_ascii_case("supervised")
+                            || t.eq_ignore_ascii_case("review:draft-only")
+                    }),
+                };
+                let ready = integrate::classify_candidate(&candidate)
+                    == integrate::CandidateVerdict::Integrate;
+                let position = if ready {
+                    ready_position += 1;
+                    Some(ready_position)
+                } else {
+                    None
+                };
+                merge_rows.push(MergeQueueRow {
+                    id,
+                    title: req.title.clone(),
+                    state: merge_queue_state_label(position, ready, candidate.has_open_pr),
+                    position,
+                });
             }
         }
     }
@@ -52155,11 +52283,22 @@ fn handle_integrate(json: bool) -> Result<()> {
     }
 
     // ---------------------------------------------------------------- JSON ----
-    if json {
+    if opts.json {
         let queue_json: Vec<serde_json::Value> = queue_rows
             .iter()
             .map(|(id, title, status, role)| {
                 serde_json::json!({ "id": id, "title": title, "status": status, "role": role })
+            })
+            .collect();
+        let merge_queue_json: Vec<serde_json::Value> = merge_rows
+            .iter()
+            .map(|row| {
+                serde_json::json!({
+                    "id": row.id,
+                    "title": row.title,
+                    "state": row.state,
+                    "position": row.position,
+                })
             })
             .collect();
         let running_json: Vec<serde_json::Value> = run_rows
@@ -52182,6 +52321,8 @@ fn handle_integrate(json: bool) -> Result<()> {
                 "focus": focus_label,
                 "queue_depth": queue_rows.len(),
                 "queue": queue_json,
+                "merge_queue_depth": merge_rows.iter().filter(|r| r.position.is_some()).count(),
+                "merge_queue": merge_queue_json,
                 "throughput": {
                     "last_merge": throughput.last_merge.map(|t| t.to_rfc3339()),
                     "merges_last_hour": throughput.merges_last_hour,
@@ -52226,6 +52367,10 @@ fn handle_integrate(json: bool) -> Result<()> {
         println!("merges_last_day: {}", throughput.merges_last_day);
         println!("drains_last_day: {drains_last_day}");
         println!("queue_depth: {}", queue_rows.len());
+        println!(
+            "merge_queue_depth: {}",
+            merge_rows.iter().filter(|r| r.position.is_some()).count()
+        );
         println!("running: {}", run_rows.len());
         println!("stale_hidden: {stale_hidden}");
         let q: Vec<Vec<String>> = queue_rows
@@ -52242,6 +52387,14 @@ fn handle_integrate(json: bool) -> Result<()> {
         println!(
             "{}",
             crate::toon::table_raw("queue", &["id", "title", "status", "role"], &q)
+        );
+        let mq: Vec<Vec<String>> = merge_rows
+            .iter()
+            .map(|row| vec![row.id.clone(), row.title.clone(), row.state.clone()])
+            .collect();
+        println!(
+            "{}",
+            crate::toon::table_raw("merge_queue", &["id", "title", "state"], &mq)
         );
         let r: Vec<Vec<String>> = run_rows
             .iter()
@@ -52303,6 +52456,39 @@ fn handle_integrate(json: bool) -> Result<()> {
             println!(
                 "  {}",
                 format!("(+{} more)", queue_rows.len() - 15).dimmed()
+            );
+        }
+    }
+    println!();
+
+    // Merge queue ------------------------------------------------------------
+    let merge_queue_depth = merge_rows.iter().filter(|r| r.position.is_some()).count();
+    println!(
+        "{}  {}",
+        "Merge queue".bold(),
+        format!("{} ready", merge_queue_depth).dimmed()
+    );
+    if merge_rows.is_empty() {
+        println!("  {}", "(no Done specs awaiting integration)".dimmed());
+    } else {
+        for row in merge_rows.iter().take(15) {
+            let marker = if row.position.is_some() {
+                arrow.green()
+            } else {
+                "·".dimmed()
+            };
+            println!(
+                "  {} {:<14} {}  {}",
+                marker,
+                row.id.yellow(),
+                truncate(&row.title, 48),
+                row.state.cyan(),
+            );
+        }
+        if merge_rows.len() > 15 {
+            println!(
+                "  {}",
+                format!("(+{} more)", merge_rows.len() - 15).dimmed()
             );
         }
     }
@@ -52390,7 +52576,7 @@ fn handle_integrate(json: bool) -> Result<()> {
     println!();
     println!(
         "{}",
-        format!("{hourglass} read-only view — `aida queue work` to pick up, `aida ps` for full session detail").dimmed()
+        format!("{hourglass} read-only view — `aida integrate --run` to drain the merge queue, `aida ps` for full session detail").dimmed()
     );
 
     Ok(())
