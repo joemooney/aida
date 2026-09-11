@@ -53966,5 +53966,31 @@ operations:
   timestamp: 2026-09-11T05:40:54.596056432Z
   kind: !SetStatus
     status: Completed
-clock: 4482
+- id: 01a08f12-8703-72e3-8bf9-859e044b6acc
+  target_id: 01a08f12-830f-70c0-a148-592525232dd8
+  author: aida
+  node_id: '1'
+  lamport: 4483
+  timestamp: 2026-09-11T06:05:51.235026771Z
+  kind: !Create
+    title: 'Review PR-1729: [AI:codex] fix(display): split NeedsAttention rendering (STORY-1023)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08efe`) for branch `story-1023`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1729>
+      - Branch: `story-1023` → `main`
+
+      ## Covers
+
+      - STORY-1023
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1729` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4483
 node_id: '1'
