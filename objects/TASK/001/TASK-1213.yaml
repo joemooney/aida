@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   The 2026-09-09 Claude-side retirement (this is the enforcement + Codex-side completion), EPIC-62 (parallel-rebase friction hurts unattended closing), the substrate-as-bouncer principle.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:41:25.371985517Z
-modified_at: 2026-09-11T17:56:50.968640714Z
+modified_at: 2026-09-11T18:00:30.295638699Z
 req_type: Task
 tags:
 - ci
