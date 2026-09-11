@@ -3,12 +3,12 @@ spec_id: BUG-1021
 agreed_id: BUG-1021
 title: cross-platform nightly red on macOS two consecutive nights (main d6cdad0 and 18e7ee5)
 description: 'Surfaced via mail intake (2026-09-09): GitHub nightly cross-platform runs failed on macos-latest for main at 18e7ee5 (Sep 8) and d6cdad0 (Sep 9) — two consecutive reds, unread in the inbox. Releases require cross-platform green within 24h of tagging (pre-release gate), so the next release is blocked until this is fixed. Investigate via gh run logs for the failing macos jobs, fix the platform-specific breakage, and verify with a manual workflow_dispatch of cross-platform.yml. Acceptance: a dispatched cross-platform run is green on all three platforms; the cause is noted on this spec.'
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:32:52.037273022Z
+modified_at: 2026-09-11T13:32:55.751166973Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
