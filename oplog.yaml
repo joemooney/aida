@@ -53178,5 +53178,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4445
+- id: 01a08e85-2cbb-77e3-b78e-c4e7da27962c
+  target_id: 01a08e85-1f69-7082-a058-5e8cbba0d13d
+  author: aida
+  node_id: '1'
+  lamport: 4446
+  timestamp: 2026-09-11T03:31:27.547116567Z
+  kind: !Create
+    title: 'Review PR-1725: [AI:codex] fix(orchestrator): propagate phase child queue identity (BUG-1038)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08e7a`) for branch `bug-1038`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1725>
+      - Branch: `bug-1038` → `main`
+
+      ## Covers
+
+      - BUG-1038
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1725` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4446
 node_id: '1'
