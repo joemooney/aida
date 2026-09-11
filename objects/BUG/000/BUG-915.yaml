@@ -3,12 +3,12 @@ spec_id: BUG-915
 agreed_id: BUG-915
 title: worktree .git file breaks git inside dev containers — gitdir points at a host path the container cannot see
 description: 'Field report (2026-09-09): commands run through a project''s container wrapper from an AIDA worktree fail with fatal: not a git repository: .../.git/worktrees/<name> — the worktree''s .git FILE references the main checkout''s metadata path, which is not mounted at the same location in the container, so rev-parse, revision capture, hooks and repo discovery fail or silently omit metadata. Bounded slice: DETECT and WARN — at worktree creation (and in aida doctor), if the repo contains container tooling markers (Dockerfile, docker/, devcontainer.json, compose files), print a one-time note that git worktrees need the shared git dir mounted (naming the gitdir path that must be visible) and document the worktree-safe mount pattern in docs. Full fix (relative gitdir via git worktree repair or GIT_DIR env injection guidance) evaluated in the same change if cheap. Acceptance: worktree creation in a repo with container markers prints the portability note with the exact gitdir path; doctor reports it as a category; docs section added.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:20.234628340Z
-modified_at: 2026-09-11T12:59:23.990724816Z
+modified_at: 2026-09-11T13:03:25.202768663Z
 req_type: Bug
 comments:
 - id: 01a089c4-7d11-77e0-8c23-cd27f19be363
