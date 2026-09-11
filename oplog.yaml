@@ -59753,5 +59753,31 @@ operations:
   timestamp: 2026-09-11T22:30:54.662018376Z
   kind: !SetStatus
     status: Approved
-clock: 4793
+- id: 01a092a8-daa5-75d0-b0d3-591cb3ff5ea5
+  target_id: 01a092a8-d6d9-7470-ad5c-09f97a739871
+  author: aida
+  node_id: '1'
+  lamport: 4794
+  timestamp: 2026-09-11T22:48:54.693598203Z
+  kind: !Create
+    title: 'Review PR-1751: [AI:codex] fix(queue): validate rework PR head reuse (BUG-1074)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0929b`) for branch `bug-1074`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1751>
+      - Branch: `bug-1074` → `main`
+
+      ## Covers
+
+      - BUG-1074
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1751` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4794
 node_id: '1'
