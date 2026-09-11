@@ -57803,5 +57803,30 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 4676
+- id: 01a09175-e851-7031-9a2a-8cd37c45d693
+  target_id: 01a09175-e232-7c40-8ee6-bd8ed3f0a448
+  author: aida
+  node_id: '1'
+  lamport: 4677
+  timestamp: 2026-09-11T17:13:38.641058612Z
+  kind: !Create
+    title: Mirror release tags and publish binaries to GitLab (releases are GitHub-only today)
+    description: |-
+      ## Why
+      Operator (2026-09-11): filing the release-mirror gap under EPIC-44 (canonical-hub migration). Today scripts/release.sh pushes the version-bump commit and the vN tag to origin (GitHub) ONLY (lines ~438-439), and .github/workflows/release.yml publishes the four platform tarballs to GitHub Releases. The gitlab remote exists and .gitlab-ci.yml runs verify/build stages, but it does NOT publish releases, and the vN tag is never pushed to gitlab. So code and the aida-store branch are mirrored to GitLab (per docs/multi-hub-sync.md) but TAGS and RELEASE BINARIES are not — a first user pointed at gitlab.joemooney.com cannot download a release. This is the release-leg gap in EPIC-44's canonical-hub goal.
+
+      ## Acceptance
+      1. release.sh pushes the vN tag to every configured hub, not just origin: after the origin push, push the tag to each remote in [store.sync] mirror_remotes (or a new [release] mirror_remotes), best-effort — a failing mirror leg WARNS and never fails the release (same contract as the store mirror-push, docs/multi-hub-sync.md). The github release remains the source of record.
+      2. GitLab publishes the same binaries: .gitlab-ci.yml gains a release stage, triggered on a vN tag, that either (a) builds the tarballs and creates a GitLab Release via the release-cli / API, or (b) mirrors the four assets GitHub Actions built (download-from-github-release then upload to the GitLab release). Prefer (a) so GitLab is self-sufficient if GitHub goes private/away, matching EPIC-44's intent; note the trade-off (a = second full build matrix on GitLab runners) in the PR.
+      3. install.sh learns a hub preference: AIDA_RELEASE_HOST or a --host flag so a user on the GitLab track fetches from gitlab.joemooney.com/api/v4/... instead of github.com/releases; default stays GitHub until the EPIC-44 cutover (TASK-826) flips it.
+      4. aida remote status / doctor --category remote-drift gains a check: latest vN tag present on all hubs, and a GitLab release exists for it — so tag/release drift is caught like branch drift already is.
+      5. crates.io is explicitly out of scope here (separate publish decision).
+      6. Evidence: cut a throwaway pre-release tag (or the next real release) and show the GitLab release page + assets alongside the GitHub one.
+
+      ## Related
+      EPIC-44 (canonical hub), TASK-826 (the origin/provider cutover — depends on this so gitlab can serve releases before the flip), TASK-825 (.gitlab-ci.yml gates), docs/multi-hub-sync.md (the mirror contract this extends), TASK-1212 (Windows target — the GitLab release stage should build/publish it too).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 4677
 node_id: '1'
