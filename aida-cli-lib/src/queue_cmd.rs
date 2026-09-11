@@ -321,10 +321,11 @@ pub(crate) fn advance_dispatch(
             {
                 println!(
                     "  {} approving {} needs the advisor role (or an interactive terminal). \
-                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor aida queue advance {}`.",
+                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor aida queue advance {}`.{}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
                     display.bold(),
-                    display
+                    display,
+                    roleless_recovery_sentence()
                 );
                 return Ok(());
             }
@@ -381,9 +382,10 @@ pub(crate) fn advance_dispatch(
                 {
                     println!(
                         "  {} rejecting {} needs the advisor role. \
-                         Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.",
+                         Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.{}",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        display.bold()
+                        display.bold(),
+                        roleless_recovery_sentence()
                     );
                     return Ok(());
                 }
@@ -456,9 +458,10 @@ pub(crate) fn advance_dispatch(
             {
                 println!(
                     "  {} closing {} needs the advisor role (or an interactive terminal). \
-                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.",
+                     Re-run as advisor: `AIDA_SESSION_ROLE=advisor`.{}",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                    display.bold()
+                    display.bold(),
+                    roleless_recovery_sentence()
                 );
                 return Ok(());
             }
@@ -2447,7 +2450,8 @@ pub(crate) fn handle_queue_command(
                     "queuing work for execution needs advisor authority (advisor role or an \
                      interactive session). File the spec for advisor triage instead, or run \
                      as the advisor. (Routing for review — `--for advisor`/`--for human`/\
-                     `--for reviewer` — needs no advisor authority.)"
+                     `--for reviewer` — needs no advisor authority.){}",
+                    roleless_recovery_sentence()
                 );
             }
             // BUG-498: queuing work is advisor-style — nudge the operator to

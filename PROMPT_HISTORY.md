@@ -4925,3 +4925,22 @@ Addressed the PR #1718 review finding for `STORY-1004`: `aida report bug|idea` m
 Added a Linux black-box CLI regression test that initializes a throwaway project, runs `aida report bug`, asserts stdout starts with the composed `Subject:` report and excludes the filing confirmation, and asserts stderr names the locally filed `AIDA:` report.
 
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli --test report_channels`; `cargo test -p aida-cli-lib report_cmd`. Existing unrelated Rust warnings remain in the focused test output.
+
+## Session 2026-09-10 — BUG-1044 roleless shell recovery banner
+
+Picked up `BUG-1044` from the implementer queue. Added a shared roleless recovery helper that detects
+when `AIDA_SESSION_ROLE` is absent, derives the most recent role from role files, and emits the
+copyable command `aida role enter <role>`.
+
+Bare `aida status` now prints that recovery line first, before the normal status snapshot. The same
+line is appended to the main advisor-authority refusals for status promotion and queue execution
+routing so a fresh post-reboot shell fails with a recovery hint instead of only saying it lacks
+authority. Added default-off `[role] restore_prompt = true` handling for an interactive once-per-
+terminal restoration offer, skipping headless/agent mode and role-management commands. Added focused
+role identity tests for last-used-role selection, the active-role silent case, restore-prompt config,
+and marker naming.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib roleless_recovery -- --nocapture`;
+`cargo test -p aida-cli-lib role_restore_prompt -- --nocapture`;
+`env -u AIDA_SESSION_ROLE cargo run -p aida-cli --quiet -- status | sed -n '1,8p'`. Existing unrelated
+Rust warnings remain in the focused test output.
