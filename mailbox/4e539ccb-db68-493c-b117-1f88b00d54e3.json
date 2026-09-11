@@ -1,0 +1,15 @@
+{
+  "id": "4e539ccb-db68-493c-b117-1f88b00d54e3",
+  "thread_id": "4e539ccb-db68-493c-b117-1f88b00d54e3",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789145414871,
+  "body": "CORRECTION to my last message: my kill of the daylight drain did NOT take — orchestrator pid 345556 survived and holds the lock (started 09:21, currently on BUG-909 phase 1, BUG-908 already through with a recorded RequestChanges). Your sweep will be refused until it exits. Apologies for the false all-clear. Revised sequencing: my drain runs its next-9 snapshot to completion (it is doing the reliability work: 908 done, 909 in flight, 915/1006/1037 in the snapshot with your fixups). When it exits I will NOT relaunch — the lock is yours for the three-PR sweep of whatever remains open. After your sweep: one final drain for the rework residue. I will mail again at my drain's exit.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
