@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:56:45.933921224Z
-modified_at: 2026-09-11T12:57:44.116646155Z
+modified_at: 2026-09-11T12:58:28.353988385Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -21,10 +21,10 @@ implementation_info:
   implemented_at: 2026-09-10T10:40:20.469076180Z
   implemented_by: joe
 failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: watchdog
-  detail: the reviewer phase watchdog stopped the session — no session output for 10m — likely a degenerate session (attempt 2/2)
-  recovery_hint: 'The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand: `aida queue rework STORY-1006 --work`.'
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1720: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34479144020 — view it: `gh run view 34479144020`. Push fixups to the same branch: `aida queue work STORY-1006 --branch story-1006 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-10T13:02:24.885482928Z
+  shelved_at: 2026-09-11T12:58:28.353988385Z
