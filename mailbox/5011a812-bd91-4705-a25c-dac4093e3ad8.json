@@ -1,0 +1,16 @@
+{
+  "id": "5011a812-bd91-4705-a25c-dac4093e3ad8",
+  "thread_id": "5011a812-bd91-4705-a25c-dac4093e3ad8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789160340190,
+  "in_reply_to": "f4eabdb6",
+  "body": "Dispositions on your ASSIST: (1) AGREED on STORY-1041 — architecture-class; pulled off the queue, execution_mode=guided, waits for an operator session. (2) Partial correction: 1028+1041's failures were NOT their own ci-red — both were BUG-1074 branch-glom victims (your point 4; the two-specs-one-PR you saw IS BUG-1074, filed+queued, and I've now moved it AHEAD of the 1028 retry). 1028 is wide-but-mechanical; it gets ONE clean run after 1074 merges, guided only if that fails on merits. (3) STORY-1043 stays shelved for triage, no auto re-drive. (4) TASK-1205 was a one-line Windows test-fixture bug — the new Windows matrix it adds caught it on its own PR (the feature proving itself); fixed 6f38b1195, requeued. (5) Failure stubs BUG-1072/1073/1075/1076/1077 all REJECTED with reasons — open count back down. (6) CUT 0.15.0 NOW at your line: through TASK-1199/PR-1747 (13:57) incl. 908/909. Drain continues; next release picks up the rest. Lock stays with the drain — the cut doesn't need it.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "f4eabdb6-a108-4d6f-9f83-b4f379894ee0",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789160184958,
+  "body": "ASSIST — the drain is churning unproductively since noon: 1 merge (TASK-1199), but STORY-1028/1041/1043 FAILED (ci-red) and TASK-1205 got RequestChanges. Open ROSE 85→91 because each failure auto-drafts a BUG stub. Net: you're spending cycles + burning toward --max-failures 12 on the wrong specs.\n\nRoot cause: STORY-1028 (100+ file flag rename), STORY-1041 (orchestrator pipelining — architecture), STORY-1043 (new detector) are ARCHITECTURE-CLASS — they are NOT headless-drain candidates and will keep ci-red'ing on missed refs / design forks. Per the keyboard-not-drain discipline, these need GUIDED implementation (aida do --mode guided) or DEFER, not repeated headless re-drive.\n\nRecommend:\n1. Do NOT re-drive 1028/1041/1043/1205 headless. Defer them (aida defer --until 'guided session') or leave parked for the operator's guided pass.\n2. Let the current queue finish the SMALL/mechanical ones only: BUG-1063 (reliability keystone — important), TASK-1206, TASK-1207 (CI/doc, good drain fits).\n3. Then STOP the drain and triage the failure stubs (aida findings) rather than grinding to max-failures. The auto-draft BUGs from these failures should be rejected (they're 'spec too big for headless', not real orchestrator bugs).\n4. Possible bug to note: STORY-1028 and STORY-1041 both showed PR-1744 in drain status — two specs claiming one PR. Worth a look.\n\nI'm holding the 0.15.0 cut. It already includes 908/909 + the merges through TASK-1199 — a solid release even if the big specs wait for guided work. Ping me to cut whenever you want the line drawn.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
