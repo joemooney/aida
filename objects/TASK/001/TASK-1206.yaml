@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:36:04.759429196Z
-modified_at: 2026-09-11T21:49:44.322005404Z
+modified_at: 2026-09-11T21:55:24.876149677Z
 req_type: Task
 tags:
 - aida-store
@@ -29,6 +29,13 @@ tags:
 - recommend:approve
 - risk:low
 - trace-gate
+comments:
+- id: 01a09277-e04c-70e3-a9f4-ea15b06941a6
+  author: joe
+  content: 'Implementation note: updated CI fetches to use refs/remotes/origin/aida-store and sync/attach .aida-store from that ref before the trace/doc-intent gates. The earlier .aida-store attachment source is tests/test_distributed.sh Test 8 (aida init --distributed), and it runs under mktemp rather than the real checkout, so I did not file a follow-up hygiene BUG.'
+  created_at: 2026-09-11T21:55:24.876149677Z
+  modified_at: 2026-09-11T21:55:24.876149677Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 failure_reason:
   phase: implementer
