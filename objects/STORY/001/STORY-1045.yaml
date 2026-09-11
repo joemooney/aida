@@ -1,0 +1,26 @@
+id: 01a09157-a610-7ce3-93ec-ac9a6cb84231
+spec_id: STORY-1045
+agreed_id: STORY-1045
+title: 'Review PR-1739: [AI:codex] fix(drain): reclaim implementer retry lease (BUG-908)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09146`) for branch `bug-908`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1739>
+  - Branch: `bug-908` → `main`
+
+  ## Covers
+
+  - BUG-908
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1739` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T16:40:35.600620170Z
+modified_at: 2026-09-11T16:40:35.600620170Z
+req_type: Story
