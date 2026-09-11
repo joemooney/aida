@@ -5,9 +5,10 @@
 // appears here the moment it exists, a removed one disappears.
 // trace:TASK-1098 | ai:claude
 
-use clap::{Command, CommandFactory};
+use clap::{ArgAction, Command, CommandFactory};
 use colored::Colorize;
 use rusqlite::{params, Connection, OptionalExtension};
+use serde::Serialize;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
@@ -15,50 +16,107 @@ use std::path::{Path, PathBuf};
 /// first line of its clap `about`, and whether it (or an ancestor) is hidden
 /// from the default `--help`.
 // trace:TASK-1098 | ai:claude
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct CatalogRow {
-    pub path: String,
+    pub path: Vec<String>,
     pub about: String,
+    pub flags: Vec<CatalogFlag>,
     pub hidden: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CatalogFlag {
+    pub name: String,
+    pub takes_value: bool,
+    pub help: String,
+}
+
 /// Collect every command and subcommand from the live clap definition,
-/// depth-first, as full runnable paths, sorted so each command family's
-/// subcommands read directly under it. Clap's auto-generated `help`
-/// subcommands are skipped — they are navigation, not surface.
-// trace:TASK-1098 | ai:claude
-pub(crate) fn catalog_rows() -> Vec<CatalogRow> {
+/// depth-first, as full runnable paths. Clap's auto-generated `help`
+/// subcommands are skipped — they are navigation, not surface. Hidden commands
+/// and flags stay out of the default grep surface unless explicitly requested.
+// trace:STORY-1027 | ai:codex
+pub(crate) fn catalog_rows(include_hidden: bool) -> Vec<CatalogRow> {
     let mut cmd = crate::cli::Cli::command();
     cmd.build();
     let mut rows = Vec::new();
-    collect(&cmd, "aida", false, &mut rows);
-    rows.sort_by(|a, b| a.path.cmp(&b.path));
+    collect(
+        &cmd,
+        &["aida".to_string()],
+        false,
+        include_hidden,
+        &mut rows,
+    );
     rows
 }
 
-// trace:TASK-1098 | ai:claude
-fn collect(cmd: &clap::Command, path: &str, parent_hidden: bool, rows: &mut Vec<CatalogRow>) {
+// trace:STORY-1027 | ai:codex
+fn collect(
+    cmd: &clap::Command,
+    path: &[String],
+    parent_hidden: bool,
+    include_hidden: bool,
+    rows: &mut Vec<CatalogRow>,
+) {
     for sub in cmd.get_subcommands() {
         // Skip clap's auto-generated `help` navigation subcommand at every
         // level; every other name is real surface.
         if sub.get_name() == "help" {
             continue;
         }
-        let full = format!("{path} {}", sub.get_name());
-        let about_full = sub.get_about().map(|s| s.to_string()).unwrap_or_default();
-        let about = short_desc(&about_full);
         let hidden = parent_hidden || sub.is_hide_set();
+        if hidden && !include_hidden {
+            continue;
+        }
+        let mut full = path.to_vec();
+        full.push(sub.get_name().to_string());
+        let about_full = sub.get_about().map(|s| s.to_string()).unwrap_or_default();
+        let about = one_line_desc(&about_full);
         rows.push(CatalogRow {
             path: full.clone(),
             about,
+            flags: command_flags(sub, include_hidden),
             hidden,
         });
-        collect(sub, &full, hidden, rows);
+        collect(sub, &full, hidden, include_hidden, rows);
     }
 }
 
-/// Reduce a clap `about` paragraph to one short scannable line: first line,
-/// then first sentence, then a hard cap with an ellipsis. Keeps every row of
-/// the catalog one terminal line-ish so 480+ rows stay skimmable.
+fn command_flags(cmd: &clap::Command, include_hidden: bool) -> Vec<CatalogFlag> {
+    let mut flags: Vec<CatalogFlag> = cmd
+        .get_arguments()
+        .filter(|arg| include_hidden || !arg.is_hide_set())
+        .filter_map(|arg| {
+            let long = arg.get_long()?;
+            Some(CatalogFlag {
+                name: long.to_string(),
+                takes_value: arg_takes_value(arg.get_action()),
+                help: one_line_desc(
+                    &arg.get_help()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(String::new),
+                ),
+            })
+        })
+        .collect();
+    flags.sort_by(|a, b| a.name.cmp(&b.name));
+    flags.dedup_by(|a, b| a.name == b.name);
+    flags
+}
+
+fn arg_takes_value(action: &ArgAction) -> bool {
+    matches!(action, ArgAction::Set | ArgAction::Append)
+}
+
+/// Keep catalog fields faithful to clap's one-line help source. The grep
+/// surface should not silently truncate the strings tooling may inspect.
+// trace:STORY-1027 | ai:codex
+fn one_line_desc(about: &str) -> String {
+    about.lines().next().unwrap_or("").trim().to_string()
+}
+
+/// Reduce a clap `about` paragraph to one short scannable snippet for semantic
+/// help search fallbacks: first line, then first sentence, then a hard cap.
 // trace:TASK-1098 | ai:claude
 fn short_desc(about: &str) -> String {
     const MAX: usize = 88;
@@ -75,51 +133,44 @@ fn short_desc(about: &str) -> String {
     format!("{}…", truncated.trim_end())
 }
 
-/// Print the full catalog. Hidden commands are included (they run fine and
-/// show up in usage telemetry — the whole point is a large catalog for
-/// finding a forgotten command) but rendered dimmed with a marker so the
-/// two tiers stay distinguishable.
-// trace:TASK-1098 | ai:claude
-pub(crate) fn print_command_catalog() {
-    let rows = catalog_rows();
-    let total = rows.len();
-    let hidden_count = rows.iter().filter(|r| r.hidden).count();
-
-    println!("{}", "📖 AIDA — complete command catalog".bold());
-    println!(
-        "{}",
-        "Every command and subcommand, one line each — derived live from the CLI itself.".dimmed()
-    );
-    println!();
-
-    // Pad the plain path first, THEN colorize — ANSI escape bytes would
-    // otherwise count toward the field width and break column alignment.
-    let width = rows.iter().map(|r| r.path.len()).max().unwrap_or(0);
-    for row in &rows {
-        let padded = format!("{:<width$}", row.path);
-        if row.hidden {
-            println!(
-                "  {}  {} {}",
-                padded.dimmed(),
-                row.about.dimmed(),
-                "· hidden".dimmed()
-            );
-        } else {
-            println!("  {}  {}", padded.green(), row.about);
-        }
+/// Print the grep-able command catalog: one row per command node, no framing.
+// trace:STORY-1027 | ai:codex
+pub(crate) fn print_command_catalog(include_flags: bool, include_hidden: bool, json: bool) {
+    let rows = catalog_rows(include_hidden);
+    if json {
+        let _ = serde_json::to_writer_pretty(std::io::stdout(), &rows);
+        println!();
+        return;
     }
 
-    println!();
-    println!(
-        "{} commands ({} hidden — still runnable, just kept out of `--help`).",
-        total.to_string().bold(),
-        hidden_count
-    );
-    println!(
-        "Run {} for one command's options, or {} for the grouped view.",
-        "`aida <command> --help`".bold(),
-        "`aida help --all`".bold()
-    );
+    let width = rows
+        .iter()
+        .map(|r| invocation(&r.path).len())
+        .max()
+        .unwrap_or(0);
+    for row in &rows {
+        let path = invocation(&row.path);
+        let mut summary = row.about.clone();
+        if include_flags && !row.flags.is_empty() {
+            let flags = row
+                .flags
+                .iter()
+                .map(|flag| format!("--{}", flag.name))
+                .collect::<Vec<_>>()
+                .join(" ");
+            if summary.is_empty() {
+                summary = flags;
+            } else {
+                summary.push_str("  ");
+                summary.push_str(&flags);
+            }
+        }
+        println!("{path:<width$}  {summary}");
+    }
+}
+
+fn invocation(path: &[String]) -> String {
+    path.join(" ")
 }
 
 #[derive(Debug, Clone, Copy)]

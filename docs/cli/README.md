@@ -15,6 +15,10 @@ Two ways in:
 
 Each chapter covers exactly the commands `aida help-all` lists under the named group — we deliberately **don't** hand-list them here (that table would drift from the binary; the drift-guard enforces coverage instead). Run `aida help-all` for the live membership.
 
+For a flat, grep-able inventory of the live command tree, run `aida commands`.
+Use `aida commands --flags` to include long option names on each row, or
+`aida commands --json` when tooling needs the same inventory as structured data.
+
 | # | Chapter | `help-all` group | Status |
 |---|---------|------------------|--------|
 | 1 | [Getting started & the daily drivers](01-getting-started.md) | *Getting started* (+ `edit`) | ✅ |
@@ -50,6 +54,9 @@ Every command in the chapters follows the same shape, so you can scan for the pa
 > **Chains with** — what usually comes before/after in the lifecycle.
 
 We deliberately **do not** reproduce the full flag list or exact defaults — `aida <command> --help` is the source of truth for that, and copying it here guarantees drift. This manual owns *rationale*; `--help` owns *facts*.
+
+For discovery across the whole CLI, `aida commands --flags | grep -- '--dry-run'`
+answers "which commands take this flag?" without walking nested help pages.
 
 ## Drift-guard
 

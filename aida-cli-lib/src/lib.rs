@@ -1837,6 +1837,25 @@ fn rewrite_list_alias(args: &[String]) -> Vec<String> {
     args.to_vec()
 }
 
+// trace:STORY-1027 | ai:codex
+fn parse_help_commands_args(args: &[String]) -> Result<(bool, bool, bool)> {
+    let mut flags = false;
+    let mut json = false;
+    let mut hidden = false;
+    for arg in args {
+        match arg.as_str() {
+            "--flags" => flags = true,
+            "--json" => json = true,
+            "--hidden" => hidden = true,
+            other => anyhow::bail!(
+                "unknown option for `aida help commands`: {other}\n\
+                 supported options: --flags, --json, --hidden"
+            ),
+        }
+    }
+    Ok((flags, json, hidden))
+}
+
 fn run() -> Result<()> {
     let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
@@ -1874,13 +1893,22 @@ fn run() -> Result<()> {
             } else {
                 None
             };
+        if first == Some("help")
+            && rest
+                .first()
+                .is_some_and(|topic| topic.eq_ignore_ascii_case("commands"))
+        {
+            let (flags, json, hidden) = parse_help_commands_args(&rest[1..])?;
+            help_catalog::print_command_catalog(flags, hidden, json);
+            return Ok(());
+        }
         if let Some(topic) = help_topic {
             // `aida help commands` — the flat clap-derived catalog of every
             // command and subcommand, one line each. Intercepted before the
             // group-topic resolver so it can't be shadowed by a group name.
             // trace:TASK-1098 | ai:claude
             if topic.eq_ignore_ascii_case("commands") {
-                help_catalog::print_command_catalog();
+                help_catalog::print_command_catalog(false, false, false);
                 return Ok(());
             }
             // Exact command help keeps clap's native rendering ahead of the
@@ -2765,9 +2793,18 @@ fn run() -> Result<()> {
         return sandbox_cmd::handle_sandbox_command(sandbox_cmd);
     }
 
-    // Help-all is pure text; no storage needed.
+    // Help-all / commands are pure text; no storage needed.
     if let Command::HelpAll = &cli.command {
         print_help_all();
+        return Ok(());
+    }
+    if let Command::Commands {
+        flags,
+        json,
+        hidden,
+    } = &cli.command
+    {
+        help_catalog::print_command_catalog(*flags, *hidden, *json);
         return Ok(());
     }
 
@@ -3903,6 +3940,7 @@ fn run() -> Result<()> {
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Commands { .. } => unreachable!("commands is dispatched before storage init"),
         Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
