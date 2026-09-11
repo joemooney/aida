@@ -8,6 +8,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T03:51:00.272848490Z
-modified_at: 2026-09-11T03:51:04.155694253Z
+modified_at: 2026-09-11T03:53:12.087785431Z
 req_type: Story
+comments:
+- id: 01a08e99-1497-75b1-b060-ee7f595f054c
+  author: joe
+  content: 'Amendment (operator insight, 2026-09-10): the rendering split is THREE-way, not two — ⚠ Needs Decision (human required) / ⏸ Shelved (typed cause, machine-recoverable) / ⇥ In merge queue (Done-with-PR, waiting for the serialized integrator — see the merge-queue story). The third state is the calmest of all: work finished, landing scheduled. awaiting counts only Needs Decision.'
+  created_at: 2026-09-11T03:53:12.087785431Z
+  modified_at: 2026-09-11T03:53:12.087785431Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
