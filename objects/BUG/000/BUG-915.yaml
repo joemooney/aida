@@ -3,12 +3,12 @@ spec_id: BUG-915
 agreed_id: BUG-915
 title: worktree .git file breaks git inside dev containers — gitdir points at a host path the container cannot see
 description: 'Field report (2026-09-09): commands run through a project''s container wrapper from an AIDA worktree fail with fatal: not a git repository: .../.git/worktrees/<name> — the worktree''s .git FILE references the main checkout''s metadata path, which is not mounted at the same location in the container, so rev-parse, revision capture, hooks and repo discovery fail or silently omit metadata. Bounded slice: DETECT and WARN — at worktree creation (and in aida doctor), if the repo contains container tooling markers (Dockerfile, docker/, devcontainer.json, compose files), print a one-time note that git worktrees need the shared git dir mounted (naming the gitdir path that must be visible) and document the worktree-safe mount pattern in docs. Full fix (relative gitdir via git worktree repair or GIT_DIR env injection guidance) evaluated in the same change if cheap. Acceptance: worktree creation in a repo with container markers prints the portability note with the exact gitdir path; doctor reports it as a category; docs section added.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:20.234628340Z
-modified_at: 2026-09-11T18:05:18.115280582Z
+modified_at: 2026-09-11T18:22:50.353636400Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -28,25 +28,30 @@ comments:
   created_at: 2026-09-11T14:31:59.091682965Z
   modified_at: 2026-09-11T14:31:59.091682965Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a091b5-41ea-73c1-94af-a05df7b6a693
+  author: aida-auto-bump
+  timestamp: 2026-09-11T18:22:50.346631209Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a091b5-41f1-77d3-a7c1-1a642929adf0
+  timestamp: 2026-09-11T18:22:50.353635364Z
+  agent: aida
+  commit_sha: 39424603f624f92cf4330ad38e2e4eb103f42274
+  summary: Completed via merge 39424603
+  punted:
+  - 'punted: CI is red on PR-1709: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1709: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1709: Build (ubuntu-latest)'
+  - 'punted: the reviewer session exited 1 (attempt 2/2)'
+  - 'punted: PR-1709 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md Recover with: aida pr rebase 1709 # clean rebase + force-push-with-lease aida pr rebase 1709 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-10T05:11:11.316535548Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: |-
-    PR-1709 base is 1 commit behind origin and overlaps 1 file touched on base since the PR forked — refusing to launch reviewer against stale code.
-
-    Overlapping files:
-      PROMPT_HISTORY.md
-
-    Recover with:
-      aida pr rebase 1709              # clean rebase + force-push-with-lease
-      aida pr rebase 1709 --interactive  # if conflicts need manual resolve
-
-    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-915 --work`'
-  shelved_at: 2026-09-11T18:05:18.115280582Z
+  completed_at: 2026-09-11T18:22:49.656585167Z
+  completion_sha: 39424603f624f92cf4330ad38e2e4eb103f42274
