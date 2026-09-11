@@ -23,12 +23,12 @@ description: |-
 
   ## Related
   Parent EPIC (unattended reliability), STORY-974 (typed causes — the classifier input), STORY-975 (in-phase retry — this is the ABOVE-phase loop), BUG-908/909/1063 (the false-park fixes this loop assumes), STORY-1047 (schedule tick — a run trigger), STORY-1043 (surface the needs-human residue), STORY-1029 (notify).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:46.943966857Z
-modified_at: 2026-09-11T17:24:46.943966857Z
+modified_at: 2026-09-11T17:56:18.086245480Z
 req_type: Story
 tags:
 - drain
