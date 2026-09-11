@@ -24,12 +24,12 @@ description: |-
 
   ## Related
   Parent EPIC-62. BUG-909 (Codex --json — becomes the Codex adapter impl), BUG-1063 (headless-wait — the adapter makes 'is it working' answerable), STORY-998 (idlewatch consumes it), STORY-993 (liveness), STORY-1051 (supervisor consumes it), TASK-1116 (--vendor precedence), the vendor-at-exec-layer principle.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:30:15.452401410Z
-modified_at: 2026-09-11T22:56:15.221159195Z
+modified_at: 2026-09-11T22:58:21.767617407Z
 req_type: Story
 tags:
 - adapter
@@ -63,3 +63,11 @@ relationships:
   created_at: 2026-09-11T17:30:31.210782479Z
   created_by: joe
 execution_mode: drain
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: lease-conflict
+  detail: 'phase 1 retry cannot reclaim predecessor lease 01a092af on `STORY-1054`; worktree: /home/joe/ai/aida-story-1054'
+  recovery_hint: 'Continue the implementer session: `aida queue work STORY-1054 --resume 01a092afd303`'
+  shelved_by: advisor
+  shelved_at: 2026-09-11T22:58:21.767617407Z
