@@ -3,12 +3,12 @@ spec_id: BUG-1037
 agreed_id: BUG-1037
 title: reviewer preflight checks resolve the forge as pure-git on a github-origin project — one forge resolution for the whole pipeline
 description: 'TASK-1198 attempt 6 (2026-09-10 05:39, testbed with github origin): the phase-3 stale-base and intermediate-only preflight checks both warned could not resolve change metadata — this project has no forge (pure-git) and proceeded degraded, while the same pipeline''s auto-open resolved GitHub fine post-BUG-896. Forge resolution is still computed independently per call site with different context (cwd/root), so the same project is GitHub in one phase and forge-less in the next. Fix: resolve the forge ONCE per pipeline run from the target project root and thread it through every phase consumer (preflights, auto-open, merge, linkage); a resolution mismatch between call sites becomes impossible by construction. Acceptance: a github-origin project resolves GitHub in every phase message; regression test asserting the preflight and auto-open use the shared resolution; the pure-git warning appears only for genuinely forge-less projects.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T12:39:57.063812074Z
-modified_at: 2026-09-11T17:32:47.384076984Z
+modified_at: 2026-09-11T17:32:57.209535623Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -31,3 +31,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-11T03:11:03.874531861Z
   implemented_by: joe
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: tool-exit
+  detail: the implementer session exited 1 — it was aborted or errored (attempt 2/2)
+  recovery_hint: 'Continue the implementer session: `aida queue work BUG-1037 --resume`'
+  shelved_by: advisor
+  shelved_at: 2026-09-11T17:32:57.209535623Z
