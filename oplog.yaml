@@ -59512,5 +59512,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4776
+- id: 01a0923f-8a79-74e2-986c-f748b9d3067c
+  target_id: 01a0923f-869a-7cf1-ac73-25263e2dc2c2
+  author: aida
+  node_id: '1'
+  lamport: 4777
+  timestamp: 2026-09-11T20:53:52.889843536Z
+  kind: !Create
+    title: 'Review PR-1747: [AI:codex] feat(statusline): add Antigravity setup support (TASK-1199)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09230`) for branch `task-1199`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1747>
+      - Branch: `task-1199` → `main`
+
+      ## Covers
+
+      - TASK-1199
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1747` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4777
 node_id: '1'
