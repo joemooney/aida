@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:07:20.234628340Z
-modified_at: 2026-09-11T13:03:25.202768663Z
+modified_at: 2026-09-11T13:04:11.622344214Z
 req_type: Bug
 comments:
 - id: 01a089c4-7d11-77e0-8c23-cd27f19be363
@@ -27,6 +27,6 @@ failure_reason:
   phase_index: 2
   kind: ci-red
   detail: 'CI is red on PR-1709: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34440056153 — view it: `gh run view 34440056153`. Push fixups to the same branch: `aida queue work BUG-915 --branch bug-915 --steal`'
+  recovery_hint: 'CI failed on run 34554795337 — view it: `gh run view 34554795337`. Push fixups to the same branch: `aida queue work BUG-915 --branch bug-915 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-10T12:41:52.317323587Z
+  shelved_at: 2026-09-11T13:04:11.622344214Z
