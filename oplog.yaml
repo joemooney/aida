@@ -52678,5 +52678,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 4417
+- id: 01a08e3f-ec9a-7d82-8f2e-401aa78f91c5
+  target_id: 01a08e3f-e734-7141-9858-e3545374b75c
+  author: aida
+  node_id: '1'
+  lamport: 4418
+  timestamp: 2026-09-11T02:15:49.146884499Z
+  kind: !Create
+    title: 'discipline: agents re-read lease/brief state before acting on remembered identifiers — idempotent not-found outcomes are not bugs'
+    description: 'Report guidance (2026-09-10): release_task returning not-found or no-briefs-found are legitimate idempotent/no-work outcomes, not bugs — an agent holding an identifier from earlier in its context must re-read current lease/brief/queue state before assuming the identifier is still live, and treat not-found on cleanup verbs as success. Add this rule to the scaffolded discipline pack (session-discipline.md or machinery-glossary.md, whichever fits) with the two concrete examples, delivered via the refresh mechanism. Acceptance: discipline doc carries the rule + examples; template refresh test covers the updated file.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 4418
 node_id: '1'
