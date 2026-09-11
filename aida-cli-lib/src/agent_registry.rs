@@ -2212,6 +2212,14 @@ mod tests {
         let terminal = entry.terminal.as_ref().expect("terminal block");
         assert_eq!(terminal.emulator.as_deref(), Some("terminator"));
         assert_eq!(terminal.terminator_uuid.as_deref(), Some("role-term-994"));
+
+        let persisted = std::fs::read_to_string(registry_path(tmp.path(), &entry.id)).unwrap();
+        assert!(
+            persisted.contains("[terminal]"),
+            "role-enter registry entry must persist a [terminal] block: {persisted}"
+        );
+        assert!(persisted.contains("terminator_uuid = \"role-term-994\""));
+        assert!(persisted.contains("emulator = \"terminator\""));
     }
 
     fn ctx(now: DateTime<Utc>, threshold_secs: u64, leases: Vec<PathBuf>) -> AgentClassifyContext {

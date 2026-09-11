@@ -4025,6 +4025,47 @@ mod tests {
         assert_eq!(got, vec!["github.com", "*.crates.io"]);
     }
 
+    // trace:STORY-994 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn run_claude_session_restores_terminal_title_after_child_exit() {
+        use std::os::unix::fs::PermissionsExt;
+
+        fn write_executable(path: &std::path::Path, body: &str) {
+            std::fs::write(path, body).unwrap();
+            let mut permissions = std::fs::metadata(path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(path, permissions).unwrap();
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let log = tmp.path().join("calls.log");
+        write_executable(&bin.join("claude"), "#!/bin/sh\nexit 0\n");
+        write_executable(
+            &bin.join("tmux"),
+            &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", log.display()),
+        );
+        let old_path = std::env::var("PATH").unwrap_or_default();
+        let path = format!("{}:{old_path}", bin.display());
+        let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+        let terminal = crate::agent_registry::terminal_identity_from_env(
+            Some("/dev/pts/4".to_string()),
+            vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
+        )
+        .unwrap();
+        let restore = crate::agent_registry::TerminalTitleRestore {
+            terminal: Some(terminal),
+            previous_title: Some("before launch".to_string()),
+        };
+
+        run_claude_session(None, None, None, None, false, None, Some(restore)).unwrap();
+
+        let calls = std::fs::read_to_string(log).unwrap();
+        assert_eq!(calls.trim(), "rename-window before launch");
+    }
+
     // TASK-809: the os_wrap launch binds the generated managed-settings doc over
     // `/etc/claude-code/managed-settings.json` (hard `--ro-bind`) ONLY when
     // `[contained] managed_domains_only = true`; absent the flag the launch has
