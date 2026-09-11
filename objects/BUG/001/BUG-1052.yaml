@@ -3,11 +3,15 @@ spec_id: BUG-1052
 agreed_id: BUG-1052
 title: 'integrate --run: propagate headless mode to member re-drives and optionally wait on in-flight CI'
 description: 'Maiden-night findings on the merge queue (2026-09-11): (1) HEADLESS PASSTHROUGH — integrate --run re-drives a member''s remaining phases via aida do, which errors ''needs a terminal for the interactive implementer'' in a headless invocation; the loop must run members with --no-human=both when integrate itself is headless (and inherit the interactive mode at a TTY). Four consecutive passes parked every member on this. (2) CI WAIT — a member whose CI is still running is skipped for the whole pass; add --wait-ci (default on for --run) that blocks on the member''s in-flight CI (bounded by the phase ceiling) instead of skipping, so a single --run converges without an external retry loop. Acceptance: headless integrate --run merges a green Done-with-PR member end-to-end with no TTY error; a member with in-flight CI is waited on and merged in the same pass; parked reasons unchanged for genuine failures.'
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T07:59:16.939417461Z
-modified_at: 2026-09-11T08:46:29.155241131Z
+modified_at: 2026-09-11T08:54:23.275845584Z
 req_type: Bug
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-11T08:54:23.275845584Z
+  implemented_by: joe
