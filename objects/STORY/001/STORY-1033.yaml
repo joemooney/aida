@@ -1,0 +1,54 @@
+id: 01a08f26-a426-7460-a781-01e497382b67
+spec_id: STORY-1033
+agreed_id: STORY-1033
+title: 'Per-seat model and effort tuning: [agents.<vendor>.seats] table, retry escalation, model:<tier> spec tag, and cost-per-seat telemetry'
+description: |-
+  ## Why
+  Operator (2026-09-10): does AIDA use different models for implementation versus advising and planning, and can model usage be tuned? Today: one model per vendor ([agents.claude] model / [agents.codex] model, both unset here), a run-level --model on queue work / burndown run / agent new passed through opaquely, and no effort level anywhere. Implementer, reviewer, headless advisor (punt judge, groom) and compete all get the same model. All three vendor CLIs accept a model and an effort from outside: claude --model/--effort, agy --model/--effort, codex exec --model plus -c model_reasoning_effort=. The seat is known at every spawn site (claude_headless_args_with_posture_and_model / codex_headless_args_with_model in session.rs), so this is a config lookup plus one argument per launch.
+
+  ## Config
+  [agents.claude]
+  model = "opus"        # default for any seat not listed; unset = vendor default (today's behaviour)
+
+  [agents.claude.seats]
+  implementer = { model = "sonnet", effort = "medium" }
+  reviewer    = { model = "opus",   effort = "high" }
+  advisor     = { model = "opus",   effort = "high" }   # headless punt judge, groom, calibration shadow
+  trivial     = { model = "haiku",  effort = "low" }    # lifecycle:trivial / fasttrack tier
+
+  [agents.codex.seats] and [agents.antigravity.seats] take the same shape. Values are opaque strings passed through; AIDA does not validate model names (matches the existing --model contract).
+
+  ## Resolution order (highest wins)
+  run-level --model / --effort flag > spec tag model:<name> / effort:<level> > seat entry > vendor default > vendor CLI default. Retry escalation applies after seat resolution (below).
+
+  ## Acceptance
+  1. Every headless and supervised launch resolves (model, effort) through one function keyed by (vendor, seat) where seat ∈ implementer | reviewer | advisor | integrator | product | trivial; the aida-core role name is the seat name. The compete verb uses the implementer seat per vendor. Unit tests cover the resolution order.
+  2. Effort is passed as the vendor's native flag: claude --effort, agy --effort, codex -c model_reasoning_effort=<level>. Absent config passes nothing (byte-identical argv to today; golden test).
+  3. Retry escalation: [drain] retry_escalate_model = true (default true). When STORY-975 fires attempt 2, the seat's model is replaced by the vendor's next tier from an ordered [agents.<vendor>] tiers = ["haiku","sonnet","opus"] list (if the current model is not in the list, no escalation, log why). The SpecRetried event records model_before / model_after.
+  4. Spec-level override: tags model:<name> and effort:<level> on a spec force that value for every seat on that spec (keystone work never runs on the economy tier). aida do and aida queue work print the resolved (model, effort) per phase in the human contract line so the choice is visible before launch.
+  5. Telemetry: every phase start event (PhaseEntered) carries vendor, seat, model, effort; the phase result carries cost_usd and duration parsed from the vendor's result line (the headless log already reports e.g. "$7.1746"). aida usage drains --by-model (or the renamed aida usage drains once STORY-1028 lands) prints success rate, median duration, and median cost per (seat, model), which is the evidence for editing the seats table.
+  6. aida agent new --show-context and the registry entry record the resolved model and effort so aida ps / session conversations can show them (column optional, JSON always).
+  7. Docs: docs/autonomous-drain.md "tuning model per seat" section with the table above and the resolution order; docs/environment-variables.md unchanged unless an AIDA_MODEL_* override is added (prefer not; config + flag suffice).
+  8. Dogfood: one drain on this repo with implementer = sonnet and reviewer = opus, its aida usage drains --by-model output pasted in the PR.
+
+  ## Out of scope
+  Automatic model selection from spec heft or history; cross-vendor tier mapping (each vendor's tiers list is its own); per-user routing.
+
+  ## Related
+  STORY-975 (retry), STORY-1028 (usage subcommand rename), STORY-709 (usage telemetry), compete verb, TASK-1116 (--vendor flag precedence pattern to mirror).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T06:27:49.414464744Z
+modified_at: 2026-09-11T06:27:49.414464744Z
+req_type: Story
+tags:
+- agents
+- config
+- cost
+- from-product
+- model
+- orchestrator
+- recommend:approve
+- risk:medium
