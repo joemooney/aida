@@ -14,12 +14,12 @@ description: |-
 
   ## Related
   STORY-498 (trace gate), TASK-621 (fresh-clone auto-attach), TASK-1205 (other CI guards; keep separate PRs).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:36:04.759429196Z
-modified_at: 2026-09-11T21:56:46.680189330Z
+modified_at: 2026-09-11T22:24:48.011507638Z
 req_type: Task
 tags:
 - aida-store
