@@ -4882,3 +4882,20 @@ updates `[telemetry] enabled = false` section-aware and avoids duplicate table a
 Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib block_allocation_reader_tests`;
 `cargo test -p aida-cli-lib append_telemetry_disabled`. Existing unrelated Rust warnings remain in
 the focused test output.
+
+## Session 2026-09-10 — BUG-1038 orchestrator phase queue identity
+
+Picked up `BUG-1038` from the implementer queue. The reviewer phase child could hit
+"isn't in your queue" when the parent drain selected work from one queue owner but the child
+resolved queue membership through its own shell identity after `AIDA_SESSION_ROLE` was pinned to
+`reviewer`.
+
+Stored the parent drain's selected queue owner on `RealPhaseDriver`, propagated it to every phase
+child as `AIDA_USER`, and routed the reviewer subprocess through the same phase-env helper as the
+implementer so token, variant, phase, role, and queue identity travel together. Added regression
+coverage beside the BUG-901 wiring tests asserting reviewer children keep `AIDA_SESSION_ROLE=reviewer`
+while also carrying the pipeline queue owner in `AIDA_USER`.
+
+Verification: `cargo test -p aida-cli-lib real_phase_driver_wiring_tests -- --nocapture`;
+`cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture`;
+`cargo fmt --all -- --check`. Existing unrelated Rust warnings remain in the focused test output.
