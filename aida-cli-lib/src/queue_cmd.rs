@@ -6405,11 +6405,32 @@ pub(crate) struct QueueWorkEntry {
     pub(crate) status_at_plan: String,
 }
 
+#[cfg(test)]
 pub(crate) fn rework_pr_head_branch_from_lookup(lookup: PrLookup) -> Option<String> {
     match lookup {
         PrLookup::Found(pr) => pr.head_branch.filter(|branch| !branch.trim().is_empty()),
         _ => None,
     }
+}
+
+pub(crate) fn rework_pr_head_matches_spec(
+    spec: &str,
+    head_branch: &str,
+    pr_title: &str,
+    pr_body: &str,
+) -> bool {
+    let wanted = spec.trim().to_ascii_uppercase();
+    if wanted.is_empty() {
+        return false;
+    }
+
+    let branch_ids = pr_ship::extract_spec_ids_from_text(head_branch);
+    if !branch_ids.is_empty() {
+        return branch_ids.iter().any(|id| id.eq_ignore_ascii_case(&wanted));
+    }
+
+    let meta_ids = pr_ship::derive_squash_subject_spec_ids(pr_title, head_branch, pr_body);
+    meta_ids.iter().any(|id| id.eq_ignore_ascii_case(&wanted))
 }
 
 pub(crate) fn queue_work_plan_wants_pr_head_branch(plan: &QueueWorkPlan) -> bool {
@@ -6436,7 +6457,22 @@ fn rework_pr_head_branch_override(
     // Seed session_start with that head so the implementer lease and phase 2
     // drive the same branch instead of deriving the plain spec branch.
     // trace:BUG-1023 | ai:codex
-    rework_pr_head_branch_from_lookup(crate::detect_open_pr_for_spec_via_forge(project_root, spec))
+    // BUG-1074: the spec-search fallback can see unrelated recent PRs when a
+    // fresh pickup has only been pre-bumped to In Progress. Reuse only a PR
+    // whose head branch or PR metadata names the driven spec; otherwise derive
+    // the normal fresh branch.
+    // trace:BUG-1074 | ai:codex
+    let lookup = crate::detect_open_pr_for_spec_via_forge(project_root, spec);
+    let PrLookup::Found(pr) = lookup else {
+        return None;
+    };
+    let Some(head_branch) = pr.head_branch.filter(|branch| !branch.trim().is_empty()) else {
+        return None;
+    };
+    let body = fetch_pr_ship_metadata_via_gh(project_root, pr.number)
+        .map(|meta| meta.body)
+        .unwrap_or_default();
+    rework_pr_head_matches_spec(spec, &head_branch, &pr.title, &body).then_some(head_branch)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
