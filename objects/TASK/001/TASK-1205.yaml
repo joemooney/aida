@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:40.345435015Z
-modified_at: 2026-09-11T19:59:59.511514663Z
+modified_at: 2026-09-11T20:11:34.438909674Z
 req_type: Task
 tags:
 - ci
@@ -36,4 +36,11 @@ relationships:
   target_id: 01a08986-deb1-7581-a3d1-a8e70d537e4f
   created_at: 2026-09-11T12:44:56.495962166Z
   created_by: joe
+comments:
+- id: 01a09218-cea6-7a61-805c-503f4b8c15d7
+  author: joe
+  content: Implemented the portability ratchet, baseline, path-filtered cross-platform PR trigger, workflow_dispatch failure probe, and CI/docs wiring. The exact Linux-runner cargo check --workspace --tests --target x86_64-pc-windows-msvc/aarch64-apple-darwin acceptance remains blocked by third-party C build scripts requiring foreign SDK/tooling before AIDA code is reached; filed finding TASK-1-132 and made that check report-only rather than making every PR red for dependency toolchain reasons.
+  created_at: 2026-09-11T20:11:34.438909674Z
+  modified_at: 2026-09-11T20:11:34.438909674Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
