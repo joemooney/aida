@@ -26,10 +26,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T08:50:38.538752064Z
-modified_at: 2026-09-11T12:29:42.814460147Z
+modified_at: 2026-09-11T12:35:29.514157804Z
 req_type: Bug
 tags:
 - aida:review:record
 - headless
 - orchestrator
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a09077-0a1c-7e53-8d3f-44532b362641
+  created_at: 2026-09-11T12:35:29.514149165Z
+  created_by: joe
 execution_mode: drain
