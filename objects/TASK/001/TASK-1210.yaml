@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:51:52.902310808Z
-modified_at: 2026-09-11T16:51:52.902310808Z
+modified_at: 2026-09-11T16:52:00.683924336Z
 req_type: Task
 tags:
 - dogfood
@@ -27,3 +27,8 @@ tags:
 - recommend:approve
 - risk:low
 - verification
+relationships:
+- rel_type: References
+  target_id: 01a084e6-1b9f-7b31-b227-9b20c9ab4849
+  created_at: 2026-09-11T16:52:00.683918807Z
+  created_by: joe
