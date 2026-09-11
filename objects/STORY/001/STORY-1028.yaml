@@ -1,10 +1,10 @@
 id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
 spec_id: STORY-1028
 agreed_id: STORY-1028
-title: Promote mode-selecting flags to subcommands (usage, graph, release, focus, drain, upgrade, statusline, history) — clean break, no aliases
+title: Promote mode-selecting flags to subcommands (usage, graph, release, focus, drain, upgrade, statusline, history) — old flags kept as hidden aliases for one release
 description: |-
   ## Why
-  Operator (2026-09-10): flags like aida foo --xyz where xyz is really a command. Decision: "nobody else uses aida so now is a good time to clean up any technical debt" — break clean, no compatibility aliases. Rule applied: a flag that selects a mutually exclusive alternate behavior is a subcommand; a flag that composes with others (--dry-run, --force, --json, --archived, the AND-composing aida goal flags) stays a flag.
+  Operator (2026-09-10): flags like aida foo --xyz where xyz is really a command. Rule applied: a flag that selects a mutually exclusive alternate behavior is a subcommand; a flag that composes with others (--dry-run, --force, --json, --archived, the AND-composing aida goal flags) stays a flag. Decision revised 2026-09-11: keep the old spellings as HIDDEN aliases for one release (the operator does not care either way; aliases mean a missed reference in a skill or hook degrades to still-works instead of breaking a drain mid-phase).
 
   ## Renames
   | today | becomes |
@@ -19,18 +19,18 @@ description: |-
   | aida history --events | aida history events (keeps --id and the other filters) |
 
   ## Acceptance
-  1. Each rename above lands; the old flag is REMOVED (clap rejects it with the normal unknown-argument error, plus a one-line "did you mean aida usage slowest" hint from a small static map for the eight families — cheap and honest, not an alias).
-  2. Every caller is swept in the same PR. Reference counts on 2026-09-10 (files): graph --tree 27, history --events 26, graph --blocked-by 22, graph --impact 14, usage --auto-complete 12, usage --errors 8, usage --unused 6, statusline --title 5, usage --slowest 3, usage --health 3, focus --clear 3, drain status --clear 3, usage --events 2, graph --blocks 1. Locations: aida-core/templates (skills, commands, hooks — /aida-insights wraps aida usage --auto-complete), docs/, scripts/, README.md, CLAUDE.md, OVERVIEW.md, and hint strings inside aida-cli-lib/src. A CI grep guard (scripts/check-removed-flags.sh, run in the lint job) fails on any reintroduction of the removed spellings.
+  1. Each rename above lands as a real subcommand with its own about text (so aida commands lists it). The old flag keeps working as a clap-hidden alias: not shown in --help, and when used it prints one stderr line "note: aida usage --slowest is now aida usage slowest" and proceeds. A unit test per family asserts old and new produce identical output.
+  2. Every caller in the repo is swept to the new spelling in the same PR. Reference counts on 2026-09-10 (files): graph --tree 27, history --events 26, graph --blocked-by 22, graph --impact 14, usage --auto-complete 12, usage --errors 8, usage --unused 6, statusline --title 5, usage --slowest 3, usage --health 3, focus --clear 3, drain status --clear 3, usage --events 2, graph --blocks 1. Locations: aida-core/templates (skills, commands, hooks — /aida-insights wraps aida usage --auto-complete), docs/, scripts/, README.md, CLAUDE.md, OVERVIEW.md, and hint strings inside aida-cli-lib/src. A CI grep guard (scripts/check-removed-flags.sh, run in the lint job) fails on any reintroduction of the old spellings in the repo, even though the binary still accepts them.
   3. MCP tool schemas that mirror these (usage_query, query_graph mode enum, history) keep their argument shapes; only the CLI surface changes. Note it in the STORY-82 parity comment.
   4. The scaffold pack refresh (aida scaffold refresh) delivers the updated skills to Claude/Codex/Antigravity packs; verify on aida-hub.
-  5. CHANGELOG entry under a "Breaking" heading listing the eight families.
-  6. aida commands --json (the listing story) before/after diff is attached to the PR as the inventory of what moved.
+  5. CHANGELOG entry under "Changed" listing the eight families and stating the aliases are removed in the next minor release; file a follow-up TASK "remove STORY-1028 hidden aliases" tagged for that release at sign-off.
+  6. aida commands --json (STORY-1027) before/after diff is attached to the PR as the inventory of what moved.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-11T12:35:51.896400246Z
+modified_at: 2026-09-11T12:39:54.981545397Z
 req_type: Story
 tags:
 - breaking
