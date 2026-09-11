@@ -3,20 +3,37 @@ spec_id: BUG-1038
 agreed_id: BUG-1038
 title: reviewer phase-child hits the queue-membership identity refusal — phase children need the pipeline's queue user, not just the phase role
 description: 'TASK-1198 attempt 6 (2026-09-10): the phase-3 reviewer child failed with TASK-7 isn''t in your queue, but it IS queued (help: aida role enter implementer) and exited 1 — the BUG-901 fix pinned AIDA_SESSION_ROLE per phase but the child still resolves a queue USER whose personal queue lacks the entry, so the queue-membership check refuses. For orchestrated phase children the queue identity must come from the pipeline (the entry''s owning queue captured at drain pickup, passed via env/flag to every phase child), and a reviewer-phase child arguably should not run a queue-membership check at all (it reviews a PR, not a queue entry — sibling of BUG-897''s PR-scoping). Acceptance: pipeline whose entry lives in user X''s queue runs all phase children successfully when launched by user Y; the reviewer child performs no queue-membership refusal; regression beside the BUG-901 tests.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T12:40:03.425414061Z
-modified_at: 2026-09-11T03:31:32.711783467Z
+modified_at: 2026-09-11T03:38:54.167976926Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a08e85-1f69-7082-a058-5e8cbba0d13d
   created_at: 2026-09-11T03:31:32.711778776Z
   created_by: joe
+history:
+- id: 01a08e8b-fd43-7591-a959-1e8187ec3ca3
+  author: aida-auto-bump
+  timestamp: 2026-09-11T03:38:54.147345222Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a08e8b-fd57-7fb2-9989-07e70247f857
+  timestamp: 2026-09-11T03:38:54.167970594Z
+  agent: aida
+  commit_sha: f83852d80842075803a94e52685e530efbca051e
+  summary: 'BUG-1038 passes: phase children now carry the drain-selected queue owner as AIDA_USER while reviewer role remains pinned, with focused regression coverage and green CI.'
+  review_verdict: approved
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T03:27:53.243727786Z
   implemented_by: joe
+  completed_at: 2026-09-11T03:38:54.147222383Z
+  completion_sha: f83852d80842075803a94e52685e530efbca051e
