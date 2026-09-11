@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T07:02:42.950154022Z
-modified_at: 2026-09-11T13:41:15.626929980Z
+modified_at: 2026-09-11T16:30:18.588894952Z
 req_type: Bug
 tags:
 - codex
@@ -48,4 +48,11 @@ relationships:
   target_id: 01a08497-3c0b-7a10-84d4-24e573f46ec4
   created_at: 2026-09-09T07:02:52.453303695Z
   created_by: joe
+comments:
+- id: 01a0914e-3bdc-7801-b8f2-75c5df1e6856
+  author: joe
+  content: 'Confirmed 2026-09-11: installed codex-cli 0.151.0 already supports ''codex exec --json'' (Print events to stdout as JSONL) — this is a launch-flag omission in codex_headless_args (session.rs:1568), not a version gap. When wiring --json, verify the JSONL event shape against 0.151.0 specifically (event types: response_item / event_msg / item_completed / function_call / function_call_output, per the rollout files) so the final-message parser reads the streamed ''item_completed''/result event rather than expecting one trailing blob. The rollout-watch fallback in acceptance #1 needs no parser change and is the safe option if the --json parse proves fiddly.'
+  created_at: 2026-09-11T16:30:18.588894952Z
+  modified_at: 2026-09-11T16:30:18.588894952Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
