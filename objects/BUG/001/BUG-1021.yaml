@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:32:40.049076742Z
+modified_at: 2026-09-11T13:32:52.037273022Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -42,6 +42,12 @@ comments:
     Verify with gh workflow run cross-platform.yml --ref bug-1021 before pushing the PR for review; pass = both legs green.
   created_at: 2026-09-11T13:32:40.049076742Z
   modified_at: 2026-09-11T13:32:40.049076742Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a090ab-c7c5-7b01-ad7e-26870491422a
+  author: joe
+  content: 'macOS remaining failure is the same class: the hook receives cwd as /private/var/... and project root as /var/... (init_cmd.rs:1976 asserts they match). Canonicalize both before comparing/exporting. All nine remaining failures are therefore temp-path canonicalization (macOS /private/var vs /var; Windows 8.3 RUNNER~1 short path vs long path).'
+  created_at: 2026-09-11T13:32:52.037273022Z
+  modified_at: 2026-09-11T13:32:52.037273022Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 failure_reason:
