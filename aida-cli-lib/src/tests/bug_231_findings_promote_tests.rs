@@ -64,7 +64,7 @@ fn resolve_node_name_rejects_invalid() {
     assert!(resolve_node_name(Some("bad name!"), "imac", "joe", "1").is_err());
 }
 
-/// TASK-859: appending the telemetry opt-out leaves prior config intact and
+/// TASK-859: writing the telemetry opt-out leaves prior config intact and
 /// produces a `[telemetry] enabled = false` that `parse_telemetry_enabled`
 /// (the live reader) recognises — proving the init prompt's write round-trips
 // to the actual opt-out path. trace:TASK-859
@@ -79,6 +79,22 @@ fn append_telemetry_disabled_round_trips() {
     assert!(body.contains("[id_format]"));
     // The opt-out is readable by the live telemetry reader.
     assert_eq!(crate::usage::parse_telemetry_enabled(&body), Some(false));
+}
+
+#[test]
+fn append_telemetry_disabled_updates_existing_section_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("config.toml");
+    std::fs::write(
+        &cfg,
+        "[telemetry]\nenabled = true\n\n[id_format]\npolicy = \"blocks-then-fallback\"\n",
+    )
+    .unwrap();
+    append_telemetry_disabled(&cfg).unwrap();
+    let body = std::fs::read_to_string(&cfg).unwrap();
+    assert_eq!(body.matches("[telemetry]").count(), 1, "{body}");
+    assert_eq!(crate::usage::parse_telemetry_enabled(&body), Some(false));
+    assert!(body.contains("[id_format]"));
 }
 
 // `--for <role>` overrides the default queue route. trace:BUG-231

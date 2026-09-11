@@ -12213,6 +12213,122 @@ fn config_path_for_project(project_root: &std::path::Path) -> std::path::PathBuf
     project_root.join(".aida").join("config.toml")
 }
 
+fn config_parse_error_message(path: &std::path::Path, body: &str, err: &toml::de::Error) -> String {
+    let loc = err
+        .span()
+        .map(|span| byte_offset_line_col(body, span.start))
+        .map(|(line, col)| format!(":{line}:{col}"))
+        .unwrap_or_default();
+    format!(
+        "{}{}: failed to parse AIDA config: {err}\n  Fix the TOML syntax, then re-run the command. If this came from `aida pull`, inspect any sibling `{}.conflicted` file and merge it manually.",
+        path.display(),
+        loc,
+        path.display()
+    )
+}
+
+fn byte_offset_line_col(body: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1usize;
+    let mut col = 1usize;
+    for (idx, ch) in body.char_indices() {
+        if idx >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+fn config_conflict_marker_line(body: &str) -> Option<usize> {
+    body.lines().enumerate().find_map(|(idx, line)| {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("<<<<<<< ")
+            || trimmed == "<<<<<<<"
+            || trimmed.starts_with("=======")
+            || trimmed.starts_with(">>>>>>> ")
+            || trimmed == ">>>>>>>"
+        {
+            Some(idx + 1)
+        } else {
+            None
+        }
+    })
+}
+
+#[derive(Debug)]
+struct ConfigSnapshot {
+    path: std::path::PathBuf,
+    before: Option<String>,
+}
+
+fn known_project_config_paths(project_root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let aida = project_root.join(".aida");
+    vec![aida.join("config.toml"), aida.join("agents.toml")]
+}
+
+fn snapshot_known_project_configs(project_root: &std::path::Path) -> Vec<ConfigSnapshot> {
+    known_project_config_paths(project_root)
+        .into_iter()
+        .map(|path| ConfigSnapshot {
+            before: std::fs::read_to_string(&path).ok(),
+            path,
+        })
+        .collect()
+}
+
+fn validate_and_restore_project_configs_after_pull(snapshots: &[ConfigSnapshot]) -> Result<()> {
+    for snapshot in snapshots {
+        let Ok(after) = std::fs::read_to_string(&snapshot.path) else {
+            continue;
+        };
+        let failure = if let Some(line) = config_conflict_marker_line(&after) {
+            Some(format!(
+                "{}:{line}: conflict marker found in AIDA config after pull",
+                snapshot.path.display()
+            ))
+        } else {
+            match toml::from_str::<toml::Value>(&after) {
+                Ok(_) => None,
+                Err(err) => Some(config_parse_error_message(&snapshot.path, &after, &err)),
+            }
+        };
+        let Some(message) = failure else {
+            continue;
+        };
+
+        let conflicted = snapshot.path.with_extension("toml.conflicted");
+        aida_core::write_atomic(&conflicted, after)
+            .with_context(|| format!("failed to quarantine {}", conflicted.display()))?;
+        match &snapshot.before {
+            Some(before) => {
+                // trace:BUG-1025 | ai:codex
+                aida_core::write_atomic(&snapshot.path, before.clone())
+                    .with_context(|| format!("failed to restore {}", snapshot.path.display()))?;
+            }
+            None => match std::fs::remove_file(&snapshot.path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(e)
+                        .with_context(|| format!("failed to remove {}", snapshot.path.display()));
+                }
+            },
+        }
+        anyhow::bail!(
+            "{message}\n  Quarantined the conflicted version at {}.\n  Restored the pre-pull version at {}.\n  Manual merge step: compare both files, edit {}, then re-run `aida pull`.",
+            conflicted.display(),
+            snapshot.path.display(),
+            snapshot.path.display()
+        );
+    }
+    Ok(())
+}
+
 /// TASK-304: `[ultraplan] mode` governs whether AIDA proactively suggests
 /// `aida ultraplan <SPEC>` for chunky specs. /ultraplan is inherently
 /// interactive (claude.ai web approval), so the realistic surface is
@@ -12704,8 +12820,8 @@ fn read_store_sync_config(project_root: &std::path::Path) -> Result<StoreSyncCon
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Ok(StoreSyncConfig::default());
     };
-    let value: toml::Value =
-        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let value: toml::Value = toml::from_str(&body)
+        .map_err(|err| anyhow::anyhow!(config_parse_error_message(&path, &body, &err)))?;
     let Some(sync) = value.get("store").and_then(|s| s.get("sync")) else {
         return Ok(StoreSyncConfig {
             source: path.display().to_string(),
@@ -12759,8 +12875,8 @@ fn read_store_allocation_config(project_root: &std::path::Path) -> Result<StoreA
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Ok(StoreAllocationConfig::default());
     };
-    let value: toml::Value =
-        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    let value: toml::Value = toml::from_str(&body)
+        .map_err(|err| anyhow::anyhow!(config_parse_error_message(&path, &body, &err)))?;
     let Some(allocation) = value
         .get("store")
         .and_then(|s| s.get("allocation"))
@@ -15130,11 +15246,28 @@ fn parse_type(type_str: &str) -> Result<RequirementType> {
 
 /// Handle feature management subcommands
 /// Parse a project `.aida/config.toml` into a `toml::Value`, returning `None`
-/// when absent / unparseable (so a missing file just means "all defaults").
+/// only when absent (so a missing file just means "all defaults"). Parse errors
+/// are printed with file/line context before callers fall back, so malformed
+/// config is never silently treated as default config.
 /// trace:BUG-533 | ai:claude
 pub(crate) fn read_project_config_value(project_root: &std::path::Path) -> Option<toml::Value> {
-    let body = std::fs::read_to_string(config_path_for_project(project_root)).ok()?;
-    toml::from_str(&body).ok()
+    let path = config_path_for_project(project_root);
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            eprintln!("{}: failed to read AIDA config: {e}", path.display());
+            return None;
+        }
+    };
+    match toml::from_str(&body) {
+        Ok(value) => Some(value),
+        Err(err) => {
+            // trace:BUG-1025 | ai:codex
+            eprintln!("{}", config_parse_error_message(&path, &body, &err));
+            None
+        }
+    }
 }
 
 /// Look up `[section].key` in a parsed config, returning the raw `toml::Value`
@@ -15673,7 +15806,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-            let alloc_cfg = read_block_allocation_config(&project_dir);
+            let alloc_cfg = read_block_allocation_config(&project_dir)?;
             if my_blocks.is_empty() {
                 // trace:TASK-449 | ai:claude — empty-blocks is the case where
                 // a user benefits most from knowing what their first claim
@@ -16281,16 +16414,21 @@ fn auto_allocate_block_inner(
 /// defaults when the file or section is absent.
 ///
 /// trace:TASK-281 | ai:claude
-fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::BlockAllocationConfig {
+fn read_block_allocation_config(
+    project_dir: &std::path::Path,
+) -> Result<aida_core::BlockAllocationConfig> {
     let config_path = project_dir.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&config_path) else {
-        return aida_core::BlockAllocationConfig::default();
+        return Ok(aida_core::BlockAllocationConfig::default());
     };
-    let Ok(value) = content.parse::<toml::Value>() else {
-        return aida_core::BlockAllocationConfig::default();
-    };
+    let value = content.parse::<toml::Value>().map_err(|err| {
+        anyhow::anyhow!(
+            "{}",
+            config_parse_error_message(&config_path, &content, &err)
+        )
+    })?;
     let Some(section) = value.get("block_allocation").and_then(|v| v.as_table()) else {
-        return aida_core::BlockAllocationConfig::default();
+        return Ok(aida_core::BlockAllocationConfig::default());
     };
 
     let mut cfg = aida_core::BlockAllocationConfig::default();
@@ -16317,7 +16455,7 @@ fn read_block_allocation_config(project_dir: &std::path::Path) -> aida_core::Blo
         }
         cfg.per_type.insert(key.to_ascii_lowercase(), tcfg);
     }
-    cfg
+    Ok(cfg)
 }
 
 /// Human-readable one-liner describing the effective auto-claim policy
@@ -16419,7 +16557,7 @@ fn ensure_block_capacity(
 ) -> Result<Option<AutoClaimOutcome>> {
     use aida_core::BlockRegistry;
 
-    let cfg = read_block_allocation_config(project_dir);
+    let cfg = read_block_allocation_config(project_dir)?;
     let scope = read_id_counter_scope(project_dir);
 
     // Under Global scope the shared `*` block backs every type; check and
@@ -22308,28 +22446,18 @@ fn maybe_prompt_init_config(project_root: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// TASK-859: append a `[telemetry] enabled = false` block to the project's
-/// `.aida/config.toml`, opting out of the local usage trail. The config file
-/// already exists (the scaffold wrote it just before this prompt runs); we
-/// only append, never rewrite, so the rest of the scaffolded config is
-/// untouched. trace:TASK-859 | ai:claude
+/// TASK-859: write `[telemetry] enabled = false` to the project's
+/// `.aida/config.toml`, opting out of the local usage trail. Use the shared
+/// section-aware editor so existing sections are updated in place and duplicate
+/// `[telemetry]` blocks are never raw-appended.
+// trace:TASK-859 trace:BUG-1025 | ai:codex
 fn append_telemetry_disabled(config_path: &std::path::Path) -> Result<()> {
-    use std::io::Write as _;
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(config_path)
-        .with_context(|| format!("opening {}", config_path.display()))?;
-    write!(
-        f,
-        "\n# Usage telemetry opt-out (chosen at init, TASK-859 / STORY-122).\n\
-         # Local-only command-shape trail; never phoned home. Re-enable by\n\
-         # deleting this block or setting `enabled = true`.\n\
-         [telemetry]\n\
-         enabled = false\n"
+    crate::config_edit::set_kv(
+        config_path,
+        "telemetry",
+        "enabled",
+        toml_edit::Value::from(false),
     )
-    .with_context(|| format!("appending telemetry opt-out to {}", config_path.display()))?;
-    Ok(())
 }
 
 /// Write the global `~/.aida/agents.toml` recording the chosen permission
@@ -55202,6 +55330,7 @@ fn handle_pull_command(
             // ff-update, we detect + restore it below by the top having moved.
             // trace:BUG-691 | ai:claude
             let pre_stash_top = git_ops::stash_top_sha(&project_root);
+            let config_snapshots = snapshot_known_project_configs(&project_root);
             // BUG-691: refuse the pull UP FRONT if another git process holds the
             // index lock. Otherwise git's autostash can stash the dirty tree,
             // then die on the reset when the lock reappears — stranding the
@@ -55243,6 +55372,12 @@ fn handle_pull_command(
                     .status();
                 match res {
                     Ok(s) if s.success() => {
+                        if let Err(e) =
+                            validate_and_restore_project_configs_after_pull(&config_snapshots)
+                        {
+                            eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+                            anyhow::bail!("aida pull: code leg failed (post-pull AIDA config validation failed: {e})");
+                        }
                         println!("  {}", "code pull complete".green());
                         // STORY-86: scan the just-pulled commits for
                         // refs to specs currently in Done and bump them.
@@ -55423,6 +55558,13 @@ fn handle_pull_command(
                         // uncommitted work is not silently stranded in the stash.
                         // trace:BUG-691 | ai:claude
                         report_autostash_restore(&project_root, pre_stash_top.as_deref());
+                        if let Err(e) =
+                            validate_and_restore_project_configs_after_pull(&config_snapshots)
+                        {
+                            eprintln!("  {} {}", "Warning:".yellow().bold(), e);
+                            code_failed =
+                                Some(format!("post-pull AIDA config validation failed: {e}"));
+                        }
                     }
                     Err(e) => {
                         // BUG-691: same recovery on the process-spawn failure path
