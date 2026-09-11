@@ -5,12 +5,6 @@
   added_at: 2026-09-11T21:51:31.448267563Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a090e5-a717-7e33-928e-cdff2a63b298
-  position: -2000
-  added_by: joe
-  added_at: 2026-09-11T21:33:49.736478917Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a09164-0bf5-7e22-b15a-853e942055ce
   position: -1000
   added_by: joe
