@@ -59594,5 +59594,31 @@ operations:
   timestamp: 2026-09-11T20:58:43.277237789Z
   kind: !SetStatus
     status: Rejected
-clock: 4784
+- id: 01a0924b-35fd-7f01-be7b-8bf875361641
+  target_id: 01a0924b-2f4d-7b90-84a7-d2fdbb8c7fa1
+  author: aida
+  node_id: '1'
+  lamport: 4785
+  timestamp: 2026-09-11T21:06:37.693823818Z
+  kind: !Create
+    title: 'Review PR-1748: [AI:codex] fix(drain): classify headless notification waits (BUG-1063)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09242`) for branch `bug-1063`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1748>
+      - Branch: `bug-1063` → `main`
+
+      ## Covers
+
+      - BUG-1063
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1748` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4785
 node_id: '1'
