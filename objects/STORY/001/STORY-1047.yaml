@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:11:05.328535330Z
-modified_at: 2026-09-11T17:11:05.328535330Z
+modified_at: 2026-09-11T17:11:09.589880101Z
 req_type: Story
 tags:
 - from-product
@@ -38,3 +38,8 @@ tags:
 - recommend:approve
 - risk:medium
 - scheduler
+relationships:
+- rel_type: References
+  target_id: 01a08ee4-6120-7e82-929b-34f62cf53340
+  created_at: 2026-09-11T17:11:09.589872543Z
+  created_by: joe
