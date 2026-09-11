@@ -1,5 +1,6 @@
 id: 01a08eaf-f286-7e62-826c-d2500f7c711d
 spec_id: TASK-1-130
+agreed_id: TASK-154
 title: git push hook calls missing aida remote mirror-push
 description: 'During the headless BUG-1037 branch update, `git push --force-with-lease origin bug-1037` printed: `error: unrecognized subcommand ''mirror-push''` from an AIDA hook before Git completed the forced update successfully. The hook appears to expect an `aida remote mirror-push` subcommand that this binary does not expose.'
 status: Draft
