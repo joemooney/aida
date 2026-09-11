@@ -5042,3 +5042,19 @@ Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib help_cat
 `diff -u <(/home/joe/ai/aida/target/debug/aida commands --flags --hidden) <(/home/joe/ai/aida/target/debug/aida help commands --flags --hidden)`;
 release binary timing for `aida commands` measured 0.01-0.04 seconds across repeated runs. Existing
 unrelated Rust warnings remain in the focused test/build output.
+
+## Session 2026-09-11 — TASK-154 mirror-push hook compatibility
+
+Picked up `TASK-154` from the implementer queue. The source-built CLI already exposes
+`aida remote mirror-push`, so the observed `error: unrecognized subcommand 'mirror-push'`
+was treated as generated hook / installed-binary drift.
+
+Updated the `aida remote mirror` pre-push shim to quietly probe
+`aida remote mirror-push --help` before invoking the hidden plumbing command. Older
+installed binaries now skip mirror fan-out silently instead of printing a scary hook
+error during a successful `git push`. Added a regression assertion that scaffolded
+pre-push hooks keep that compatibility probe, with `trace:TASK-154` on the hook body.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib remote_create::tests::handle_remote_mirror_is_idempotent`;
+`cargo test -p aida-cli-lib remote_create::tests`; `cargo run -q -p aida-cli -- remote mirror-push --help`.
+Existing unrelated Rust warnings remain in the focused test output.
