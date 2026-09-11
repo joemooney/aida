@@ -253,26 +253,17 @@ fn lock_path(project_root: &Path) -> PathBuf {
 
 // ── PID liveness ─────────────────────────────────────────────────────────────
 
-/// True when `pid` is a live process. Unix uses `kill(pid, 0)`; other
-/// platforms conservatively return true (treat unknown as alive, so a tree is
-/// never wrongly reclaimed — cross-platform parity is a tracked followup).
+/// True when `pid` is a live process. Delegates to the one canonical probe
+/// (`liveness::pid_is_alive`: `kill(pid, 0)` on Unix, a single-pid sysinfo
+/// refresh elsewhere). The previous local copy returned `true` for every pid
+/// on non-Unix, so a dead owner was never healed on Windows — `acquire`
+/// minted a second tree instead of reusing the crashed owner's. A pid that
+/// is not a positive u32 can never name a live process.
+// trace:BUG-1021 | ai:claude
 fn pid_is_alive(pid: i32) -> bool {
-    if pid <= 0 {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        // SAFETY: signal 0 only probes existence/permission; it sends nothing.
-        let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
-        if rc == 0 {
-            return true;
-        }
-        std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = pid;
-        true
+    match u32::try_from(pid) {
+        Ok(p) if p > 0 => crate::liveness::pid_is_alive(p),
+        _ => false,
     }
 }
 

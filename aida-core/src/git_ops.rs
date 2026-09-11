@@ -3459,6 +3459,12 @@ mod tests {
         let repo = dir.path().join("test-repo");
         init(&repo).unwrap();
         configure_user(&repo, "Test User", "test@example.com").unwrap();
+        // The stash pop below re-checks-out f.txt; on a runner with
+        // core.autocrlf=true (GitHub's Windows image) that rewrites LF → CRLF
+        // and the byte-exact assertion fails. Pin the test repo to LF so the
+        // assertion is about the autostash restore, not the host's line-ending
+        // policy. trace:BUG-1021 | ai:claude
+        git(&repo, &["config", "core.autocrlf", "false"]).unwrap();
         std::fs::write(repo.join("f.txt"), "one\n").unwrap();
         add(&repo, &["f.txt"]).unwrap();
         commit(&repo, "initial").unwrap();

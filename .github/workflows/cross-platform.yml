@@ -73,7 +73,9 @@ jobs:
         run: cargo build --workspace --release
 
       - name: Run tests
-        run: cargo test --workspace
+        # --no-fail-fast: one run reports every failing test binary across
+        # crates, instead of stopping at the first (BUG-1021).
+        run: cargo test --workspace --no-fail-fast
 
   # TASK-687: the nightly matrix was red 3 days unnoticed before a release gate
   # forced the issue. PR CI is Linux-only (TASK-257), so cross-platform debt

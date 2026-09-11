@@ -69,7 +69,9 @@ jobs:
         run: cargo build --workspace --release
 
       - name: Run tests
-        run: cargo test --workspace
+        # --no-fail-fast: one run reports every failing test binary across
+        # crates, instead of stopping at the first (BUG-1021).
+        run: cargo test --workspace --no-fail-fast
 
       # STORY-612: the LIVE OS-wrap confinement gate. The `os_wrap` bwrap wrapper
       # is a security boundary, so a real bubblewrap run must prove write-inside-OK
