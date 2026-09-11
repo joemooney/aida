@@ -66349,18 +66349,8 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
     let commits = read_commits_in_range(&project_root, &range)?;
 
     // Load the live requirement graph once, then resolve each id against it.
-    let store = load_store_for_lookup(&project_root);
-    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(store.as_ref(), id) };
-
-    if store.is_none() {
-        eprintln!(
-            "{} trace gate: no requirement store reachable from {} — cannot validate references. \
-             Ensure the gate runs where the store is attached (`aida cache rebuild` / fresh-clone \
-             auto-attach).",
-            crate::glyph(crate::glyphs::Glyph::Warning),
-            project_root.display()
-        );
-    }
+    let store = load_store_for_trace_gate(&project_root)?;
+    let resolve = |id: &str| -> SpecResolution { resolve_spec_in_store(Some(&store), id) };
 
     let violations = validate_trailer_references(&commits, resolve);
 
@@ -66405,6 +66395,34 @@ fn handle_trace_gate(range: Option<&str>, json: bool) -> Result<()> {
         std::process::exit(1);
     }
     Ok(())
+}
+
+fn load_store_for_trace_gate(
+    project_root: &std::path::Path,
+) -> Result<aida_core::RequirementsStore> {
+    // trace:TASK-1206 | ai:codex
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            if let Ok(store) = aida_core::DatabaseBackend::load(&backend) {
+                return Ok(store);
+            }
+        }
+    }
+
+    for legacy_name in ["requirements.db", "requirements.yaml"] {
+        let legacy_path = project_root.join(legacy_name);
+        if legacy_path.exists() {
+            return Storage::new(legacy_path).load();
+        }
+    }
+
+    anyhow::bail!(
+        "{} trace gate: no requirement store reachable from {} — cannot validate references. \
+         Ensure the gate runs where the store is attached (`aida cache rebuild` / fresh-clone \
+         auto-attach).",
+        crate::glyph(crate::glyphs::Glyph::Cross),
+        project_root.display()
+    )
 }
 
 // ============================================================================
