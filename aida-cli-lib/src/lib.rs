@@ -27788,6 +27788,9 @@ fn session_start(
         if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
         }
+        aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
+            format!("exclude AIDA runtime files in {}", worktree_path.display())
+        })?;
         aida_core::git_ops::init_submodules_or_warn(
             &worktree_path,
             worktree_config_init_submodules(&project_root),
@@ -27866,6 +27869,9 @@ fn session_start(
                 branch_name
             );
         }
+        aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
+            format!("exclude AIDA runtime files in {}", worktree_path.display())
+        })?;
         aida_core::git_ops::init_submodules_or_warn(
             &worktree_path,
             worktree_config_init_submodules(&project_root),
@@ -27981,6 +27987,9 @@ fn session_start(
             if !res.status.success() {
                 anyhow::bail!("`git worktree add` failed");
             }
+            aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(
+                || format!("exclude AIDA runtime files in {}", worktree_path.display()),
+            )?;
             aida_core::git_ops::init_submodules_or_warn(
                 &worktree_path,
                 worktree_config_init_submodules(&project_root),
@@ -50126,6 +50135,10 @@ fn ensure_epic_worktree_core(
         .unwrap_or_default();
 
     if crate::worktree::is_registered(&porcelain, &path) {
+        if aida_core::git_ops::is_git_repo(&path) {
+            aida_core::git_ops::ensure_aida_runtime_excluded(&path)
+                .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
+        }
         crate::focus::write_focus_marker(&path, &focus_label)?;
         return Ok(WorktreeOutcome {
             path,
@@ -50186,6 +50199,8 @@ fn ensure_epic_worktree_core(
             String::from_utf8_lossy(&res.stderr).trim()
         );
     }
+    aida_core::git_ops::ensure_aida_runtime_excluded(&path)
+        .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
     aida_core::git_ops::init_submodules_or_warn(&path, worktree_config_init_submodules(main_root))
         .with_context(|| format!("prepare submodules in worktree {}", path.display()))?;
 
@@ -50289,6 +50304,11 @@ fn ensure_spec_worktree_core(
     // Idempotent re-entry: a lease already covers this spec — re-affirm focus at
     // that worktree and report it, don't mint a second one.
     if let Some((worktree_path, lease_branch, lease_id, has_session_env)) = existing {
+        if aida_core::git_ops::is_git_repo(&worktree_path) {
+            aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(
+                || format!("exclude AIDA runtime files in {}", worktree_path.display()),
+            )?;
+        }
         crate::focus::write_focus_marker(&worktree_path, focus_label)?;
         return Ok(WorktreeOutcome {
             path: worktree_path,
@@ -50303,6 +50323,10 @@ fn ensure_spec_worktree_core(
     // A worktree is registered at the default path but carries no lease — treat
     // it as already-there (re-affirm focus) rather than recreating it.
     if registered {
+        if aida_core::git_ops::is_git_repo(&path) {
+            aida_core::git_ops::ensure_aida_runtime_excluded(&path)
+                .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
+        }
         crate::focus::write_focus_marker(&path, focus_label)?;
         return Ok(WorktreeOutcome {
             path,

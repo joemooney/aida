@@ -445,6 +445,8 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
             let path = pool.entries[idx].path.clone();
             git_ops::reset_worktree_to(&path, &base_ref)
                 .with_context(|| format!("reset pooled worktree {}", path.display()))?;
+            git_ops::ensure_aida_runtime_excluded(&path)
+                .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
             git_ops::init_submodules_or_warn(&path, opts.init_submodules).with_context(|| {
                 format!("prepare submodules in pooled worktree {}", path.display())
             })?;
@@ -470,6 +472,8 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         let path = pool_path_for(project_root, &name);
         git_ops::add_detached_worktree(project_root, &path, &base_ref)
             .with_context(|| format!("create pool worktree {}", path.display()))?;
+        git_ops::ensure_aida_runtime_excluded(&path)
+            .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
         git_ops::init_submodules_or_warn(&path, opts.init_submodules)
             .with_context(|| format!("prepare submodules in pool worktree {}", path.display()))?;
 
@@ -1005,6 +1009,33 @@ mod git_integration_tests {
         assert_eq!(pool.create_count, 1, "first acquire minted a fresh tree");
         assert_eq!(pool.reuse_count, 1, "second acquire reused the warm tree");
         assert_eq!(pool.hit_rate(), Some(0.5));
+    }
+
+    // trace:BUG-914 | ai:codex
+    #[test]
+    fn acquire_excludes_aida_runtime_paths_from_pooled_worktree_status() {
+        let repo = init_repo();
+        let root = repo.path();
+        let path = acquire(root, &opts()).unwrap();
+
+        std::fs::create_dir_all(path.join(".aida/sessions")).unwrap();
+        std::fs::create_dir_all(path.join(".aida-store/objects")).unwrap();
+
+        assert!(
+            !root.join(".gitignore").exists(),
+            "pool acquire must not touch the product .gitignore"
+        );
+        let status = Command::new("git")
+            .current_dir(&path)
+            .args(["status", "--short"])
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&status.stdout).trim(),
+            "",
+            "pooled worktree should hide AIDA runtime paths from git status"
+        );
     }
 
     // trace:BUG-899 | ai:codex

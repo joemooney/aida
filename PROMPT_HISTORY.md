@@ -4962,3 +4962,11 @@ Verification: `cargo fmt --all -- --check`; `cargo test -p aida-cli-lib integrat
 `cargo check -p aida-cli`; `cargo run -p aida-cli -- integrate --help`;
 `cargo run -p aida-cli -- integrate --json`. Existing unrelated Rust warnings remain in the focused
 test output.
+
+## Session 2026-09-09 — BUG-914 worktree-local AIDA runtime excludes
+
+Picked up `BUG-914` from the implementer queue because `STORY-995` was blocked by `STORY-994`. The bug was that AIDA-created worktrees in projects without tracked AIDA scaffolding could show `.aida/` and `.aida-store` as untracked, making coordination artifacts easy to stage accidentally.
+
+Added `aida_core::git_ops::ensure_aida_runtime_excluded`, which resolves each worktree's private `info/exclude` via `git rev-parse --git-path info/exclude` and idempotently appends `.aida/`, `.aida-store`, `.aida-store/`, and the legacy compete log glob without touching product `.gitignore`. Wired it through fresh session worktree creation, direct `aida worktree add|enter`, single-spec re-entry repair, and warm-pool create/reuse paths. Added `// trace:BUG-914 | ai:codex` comments on the helper and pool regression.
+
+Verification: `cargo fmt --all -- --check`; `cargo test -p aida-core git_ops::tests::aida_runtime_excludes_hide_materialized_worktree_state`; `cargo test -p aida-core worktree_pool::git_integration_tests::acquire_excludes_aida_runtime_paths_from_pooled_worktree_status`; `cargo test -p aida-cli-lib worktree_handler_tests::spec_worktree_core_registered_without_lease_reaffirms`; `cargo test -p aida-cli-lib session_start_args_tests`. Existing unrelated Rust warnings remain in the CLI test output.
