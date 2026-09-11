@@ -851,7 +851,8 @@ const MIRROR_HOOK_MARKER: &str = "aida remote mirror-push";
 /// The pre-push hook shim `aida remote mirror` installs. POSIX sh — git runs
 /// hooks under /bin/sh. Pipes the ref lines git feeds the hook straight
 /// through to the plumbing subcommand and always exits 0, so mirroring can
-/// never block the origin push (even when `aida` is not on PATH).
+/// never block the origin push (even when `aida` is not on PATH or an older
+/// binary lacks the hidden plumbing subcommand).
 pub fn mirror_pre_push_hook_script() -> String {
     "#!/bin/sh\n\
      # Mirror fan-out pre-push hook — installed by `aida remote mirror`.\n\
@@ -860,7 +861,8 @@ pub fn mirror_pre_push_hook_script() -> String {
      # mirror failure warns and never blocks the push. Safe to delete;\n\
      # reinstall with `aida remote mirror <name>`.\n\
      unset GIT_DIR GIT_WORK_TREE\n\
-     if command -v aida >/dev/null 2>&1; then\n\
+     # trace:TASK-154 | ai:codex\n\
+     if command -v aida >/dev/null 2>&1 && aida remote mirror-push --help >/dev/null 2>&1; then\n\
      \u{20} aida remote mirror-push \"$1\" || true\n\
      fi\n\
      exit 0\n"
@@ -2065,6 +2067,10 @@ host = \"should.not.count\"
         let hook = project.join(".git").join("hooks").join("pre-push");
         let body = std::fs::read_to_string(&hook).unwrap();
         assert!(body.contains(MIRROR_HOOK_MARKER));
+        assert!(
+            body.contains("aida remote mirror-push --help >/dev/null 2>&1"),
+            "hook must quietly skip older aida binaries without mirror-push"
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
