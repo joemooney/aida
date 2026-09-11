@@ -57,6 +57,8 @@ aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-376".into(),
 aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),
 aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),
 aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/x".into(),
+aida-cli-lib/src/statusline_cmd.rs:let claude_path = std::path::Path::new("/tmp/aida-test/.claude/settings.json");
+aida-cli-lib/src/statusline_cmd.rs:std::path::Path::new("/tmp/aida-test/.gemini/antigravity-cli/settings.json");
 aida-cli-lib/src/tests/agent_launcher_tests.rs:"/tmp/project",
 aida-cli-lib/src/tests/agent_launcher_tests.rs:assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
 aida-cli-lib/src/tests/agent_launcher_tests.rs:"/tmp/project",
