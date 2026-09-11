@@ -53106,5 +53106,31 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4443
+- id: 01a08e72-5e3c-7bb1-bd75-d8a276fa4c64
+  target_id: 01a08e72-5a7e-7033-a656-509cc0615511
+  author: aida
+  node_id: '1'
+  lamport: 4444
+  timestamp: 2026-09-11T03:10:55.036602931Z
+  kind: !Create
+    title: 'Review PR-1724: fix(review): share auto-complete forge resolution'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08e6a`) for branch `bug-1037`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1724>
+      - Branch: `bug-1037` → `main`
+
+      ## Covers
+
+      - BUG-1037
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1724` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4444
 node_id: '1'
