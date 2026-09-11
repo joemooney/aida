@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:27:49.414464744Z
-modified_at: 2026-09-11T12:28:34.384114843Z
+modified_at: 2026-09-11T12:28:35.641576622Z
 req_type: Story
 tags:
 - agents
@@ -72,6 +72,18 @@ comments:
   created_at: 2026-09-11T11:26:47.070257308Z
   modified_at: 2026-09-11T11:26:47.070257308Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09070-eee4-70e3-a2f4-c3f42c4f7dd2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1033):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9d9b9a62b770
+    Recorded: 2026-09-11T11:38:23.034523720+00:00
+    Findings:
+    1. Implement the remaining STORY-1033 acceptance criteria before merge: retry tier escalation with model_before/model_after, model:/effort: spec tag overrides, PhaseEntered/result model-cost telemetry, usage drains --by-model, agent registry/context model+effort, and dogfood output.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-11T12:28:35.428424159Z
+  modified_at: 2026-09-11T12:28:35.428424159Z
 execution_mode: drain
 failure_reason:
   phase: reviewer
