@@ -36,12 +36,12 @@ description: |-
 
   ## Related
   STORY-975 (retry), STORY-1028 (usage subcommand rename), STORY-709 (usage telemetry), compete verb, TASK-1116 (--vendor flag precedence pattern to mirror).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:27:49.414464744Z
-modified_at: 2026-09-11T19:12:19.135989998Z
+modified_at: 2026-09-11T19:15:11.780027139Z
 req_type: Story
 tags:
 - agents
@@ -101,6 +101,10 @@ comments:
   modified_at: 2026-09-11T19:12:19.135989998Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-11T19:15:11.780027139Z
+  implemented_by: joe
 failure_reason:
   phase: reviewer
   phase_index: 3
