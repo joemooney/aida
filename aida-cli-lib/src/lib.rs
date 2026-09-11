@@ -27470,7 +27470,22 @@ fn session_start(
             .ok_or_else(|| anyhow::anyhow!("project root has no parent"))?
             .join(format!("{}-{}", repo_name, slug)),
     };
-    if worktree_path.exists() {
+    let reuse_existing_worktree_path = explicit_path.is_some()
+        && force_claim
+        && worktree_path.exists()
+        && aida_core::git_ops::is_git_repo(&worktree_path)
+        && std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(["worktree", "list", "--porcelain"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| {
+                crate::worktree::is_registered(&String::from_utf8_lossy(&o.stdout), &worktree_path)
+            })
+            .unwrap_or(false);
+    if worktree_path.exists() && !reuse_existing_worktree_path {
         anyhow::bail!(
             "{} already exists — pick a different --path or remove it first",
             worktree_path.display()
@@ -27700,7 +27715,25 @@ fn session_start(
     let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
     let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
-    if let Some((forge, n)) = review_target {
+    if reuse_existing_worktree_path {
+        let current = current_branch_at(&worktree_path);
+        if current.as_deref() != Some(branch_name.as_str()) {
+            anyhow::bail!(
+                "{} exists but is on branch `{}`; retry expected `{}`",
+                worktree_path.display(),
+                current.unwrap_or_else(|| "<detached>".to_string()),
+                branch_name,
+            );
+        }
+        aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
+            format!("exclude AIDA runtime files in {}", worktree_path.display())
+        })?;
+        aida_core::git_ops::init_submodules_or_warn(
+            &worktree_path,
+            worktree_config_init_submodules(&project_root),
+        )
+        .with_context(|| format!("prepare submodules in worktree {}", worktree_path.display()))?;
+    } else if let Some((forge, n)) = review_target {
         // TASK-76: pre-flight check — if PR-N's source branch is held by
         // another active lease, any subsequent `gh pr checkout` (manual
         // or future auto) will fail with `branch already used by worktree
@@ -74241,6 +74274,20 @@ fn record_auto_complete_run(
                     );
                 }
             }
+            // BUG-908: a lease-conflict shelve already names the blocking
+            // lease/worktree in the spec's FailureReason. Auto-drafting a new
+            // BUG for that same typed cause recreated the spam loop this fix
+            // is meant to stop.
+            // trace:BUG-908 | ai:codex
+            None if failure.kind == auto_complete::FailureKind::LeaseConflict => {
+                if !json {
+                    eprintln!(
+                        "  {} lease-conflict failure — not auto-drafting a BUG \
+                         (inspect the named lease/worktree, then re-drive)",
+                        "📋".dimmed(),
+                    );
+                }
+            }
             None => {
                 let hint = auto_complete::recovery_hint(
                     phase,
@@ -76212,6 +76259,8 @@ fn build_implementer_phase_args(
     session_uuid: &str,
     steal: bool,
     force_claim: bool,
+    branch: Option<&str>,
+    path: Option<&std::path::Path>,
     headless_implementer: bool,
     permission_mode: Option<&str>,
 ) -> Vec<String> {
@@ -76231,6 +76280,14 @@ fn build_implementer_phase_args(
     }
     if force_claim {
         args.push("--force-claim".into());
+    }
+    if let Some(branch) = branch {
+        args.push("--branch".into());
+        args.push(branch.into());
+    }
+    if let Some(path) = path {
+        args.push("--path".into());
+        args.push(path.to_string_lossy().into_owned());
     }
     // STORY-276: under `--no-human=both` the implementer phase runs headless;
     // `ReviewerOnly` (and a plain `--auto-complete`) leave phase 1 interactive.
@@ -76949,6 +77006,12 @@ struct RealPhaseDriver {
     /// of real implementer work.
     // trace:BUG-826 | ai:codex
     empty_launch_retries_used: usize,
+    /// BUG-908: a transient phase-1 retry re-enters the predecessor worktree
+    /// after releasing its dead lease, instead of creating a fresh worktree and
+    /// colliding with the dirty WIP the first attempt intentionally preserved.
+    // trace:BUG-908 | ai:codex
+    retry_implementer_worktree: Option<std::path::PathBuf>,
+    retry_implementer_branch: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -77051,6 +77114,8 @@ impl RealPhaseDriver {
             from_pr: false,
             drain_tuning,
             empty_launch_retries_used: 0,
+            retry_implementer_worktree: None,
+            retry_implementer_branch: None,
         }
     }
 
@@ -78147,7 +78212,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &self.spec,
             &session_uuid,
             self.steal,
-            self.force_claim,
+            self.force_claim || self.retry_implementer_worktree.is_some(),
+            self.retry_implementer_branch.as_deref(),
+            self.retry_implementer_worktree.as_deref(),
             headless_impl,
             self.permission_mode.as_deref(),
         );
@@ -80101,6 +80168,33 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         );
     }
 
+    // trace:BUG-908 | ai:codex
+    fn prepare_transient_retry(
+        &mut self,
+        spec: &str,
+        phase: auto_complete::Phase,
+        _cause: &str,
+    ) -> Result<(), auto_complete::PhaseFailure> {
+        if phase != auto_complete::Phase::Implementer {
+            return Ok(());
+        }
+        if let Some((branch, worktree, lease_id)) =
+            reclaim_implementer_retry_predecessor(&self.project_root, spec)?
+        {
+            if !self.json {
+                eprintln!(
+                    "  {} released predecessor lease {} on `{spec}`; retrying in {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    (&lease_id[..lease_id.len().min(8)]).yellow(),
+                    worktree.display(),
+                );
+            }
+            self.retry_implementer_branch = Some(branch);
+            self.retry_implementer_worktree = Some(worktree);
+        }
+        Ok(())
+    }
+
     /// TASK-975: one in-drain CI-fix cycle — spawn a headless fix session
     /// (vendor-routed, same adapter as the other drain phases) in the
     /// still-leased phase-1 worktree with the failing-check log + spec
@@ -80883,6 +80977,71 @@ fn release_dead_phase_predecessor_leases(
             phase.index()
         ),
     ))
+}
+
+fn remove_session_lease_record_only(project_root: &std::path::Path, lease_id: &str) -> bool {
+    let lease_file = lease_path(project_root, lease_id);
+    let removed = match std::fs::remove_file(&lease_file) {
+        Ok(()) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+        Err(_) => false,
+    };
+    let manifest = session_manifest::manifest_path(project_root, lease_id);
+    if manifest.exists() {
+        let _ = std::fs::remove_file(manifest);
+    }
+    let activity = session_activity_path(project_root, lease_id);
+    if activity.exists() {
+        let _ = std::fs::remove_file(activity);
+    }
+    removed
+}
+
+/// BUG-908: a phase-1 transient retry is continuation, not takeover. Release
+/// the dead predecessor lease even when its worktree is dirty, then relaunch
+/// the implementer against that same branch/path with force-claim. The dirty
+/// tree is the attempt-1 work product; `--steal` is never involved.
+// trace:BUG-908 | ai:codex
+fn reclaim_implementer_retry_predecessor(
+    project_root: &std::path::Path,
+    scope: &str,
+) -> Result<Option<(String, std::path::PathBuf, String)>, auto_complete::PhaseFailure> {
+    let leases = list_leases(project_root);
+    let Some(conflict) = find_scope_lease_conflict(&leases, scope) else {
+        return Ok(None);
+    };
+    let report = stale_lease_recovery_for_lease(&conflict);
+    match report.verdict {
+        StaleLeaseRecovery::ReclaimableClean { .. } | StaleLeaseRecovery::StaleDirty { .. } => {
+            if !remove_session_lease_record_only(project_root, &conflict.id) {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::LeaseConflict,
+                    format!(
+                        "phase 1 retry could not release predecessor lease {} on `{scope}`; \
+                         worktree: {}",
+                        &conflict.id[..conflict.id.len().min(8)],
+                        conflict.worktree_path.display(),
+                    ),
+                ));
+            }
+            Ok(Some((
+                conflict.branch.clone(),
+                conflict.worktree_path.clone(),
+                conflict.id.clone(),
+            )))
+        }
+        StaleLeaseRecovery::Live | StaleLeaseRecovery::UnknownLiveness => {
+            Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::LeaseConflict,
+                format!(
+                    "phase 1 retry cannot reclaim predecessor lease {} on `{scope}`; \
+                     worktree: {}",
+                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.worktree_path.display(),
+                ),
+            ))
+        }
+    }
 }
 
 /// BUG-438: on `--resume-drain`, proactively release the crashed orchestrator's
