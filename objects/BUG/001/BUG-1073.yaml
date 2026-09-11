@@ -53,7 +53,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T19:07:57.634007314Z
-modified_at: 2026-09-11T20:58:29.679269421Z
+modified_at: 2026-09-11T20:58:30.870145733Z
 req_type: Bug
 tags:
 - auto-complete
@@ -61,3 +61,10 @@ tags:
 - failure-3
 - failure-kind:tool-exit
 - reviewer
+comments:
+- id: 01a09243-c856-7232-8dde-02b6b951d368
+  author: joe
+  content: 'Rejected: STORY-1028''s failure was the BUG-1074 branch-glom (PR-1744), not a 1028 defect. Covered by BUG-1074.'
+  created_at: 2026-09-11T20:58:30.870145733Z
+  modified_at: 2026-09-11T20:58:30.870145733Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
