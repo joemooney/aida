@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:52.369729897Z
-modified_at: 2026-09-11T02:54:24.800387086Z
+modified_at: 2026-09-11T03:01:02.823455092Z
 req_type: Story
 tags:
 - from-product
@@ -61,6 +61,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-10T12:37:04.085433504Z
   modified_at: 2026-09-10T12:37:04.085433504Z
+- id: 01a08e69-54e7-7402-81ed-7950f9bee93d
+  author: joe
+  content: 'Addressed PR #1704 review finding: added --no-title to aida role enter, threaded it through role-enter eval title emission, and covered parsing plus per-invocation/config title opt-outs. Commit e53fe0fbc.'
+  created_at: 2026-09-11T03:01:02.823455092Z
+  modified_at: 2026-09-11T03:01:02.823455092Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
