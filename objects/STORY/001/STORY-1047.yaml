@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:11:05.328535330Z
-modified_at: 2026-09-11T17:56:30.027340214Z
+modified_at: 2026-09-11T17:56:31.778354423Z
 req_type: Story
 tags:
 - from-product
@@ -51,3 +51,4 @@ relationships:
   target_id: 01a09164-0bf5-7e22-b15a-853e942055ce
   created_at: 2026-09-11T17:11:11.605649734Z
   created_by: joe
+execution_mode: drain
