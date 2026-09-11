@@ -14,12 +14,12 @@ description: |-
   5. Built from the clap Command tree (Command::get_subcommands / get_arguments) with no subprocess spawns; under 50 ms cold.
   6. Golden test asserting the listing contains every top-level subcommand from aida --help and that adding a subcommand without an about string fails the test (forces a summary on every node).
   7. README "CLI reference" and docs/cli/ index point at aida commands as the grep surface; the flag-vs-subcommand cleanup story uses --json as its inventory.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:02.794991062Z
-modified_at: 2026-09-11T10:41:30.811810713Z
+modified_at: 2026-09-11T10:41:35.943520008Z
 req_type: Story
 tags:
 - cli
@@ -35,3 +35,7 @@ relationships:
   created_at: 2026-09-11T10:41:30.811804552Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-11T10:41:35.943520008Z
+  implemented_by: joe
