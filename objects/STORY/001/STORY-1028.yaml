@@ -1,0 +1,41 @@
+id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
+spec_id: STORY-1028
+agreed_id: STORY-1028
+title: Promote mode-selecting flags to subcommands (usage, graph, release, focus, drain, upgrade, statusline, history) — clean break, no aliases
+description: |-
+  ## Why
+  Operator (2026-09-10): flags like aida foo --xyz where xyz is really a command. Decision: "nobody else uses aida so now is a good time to clean up any technical debt" — break clean, no compatibility aliases. Rule applied: a flag that selects a mutually exclusive alternate behavior is a subcommand; a flag that composes with others (--dry-run, --force, --json, --archived, the AND-composing aida goal flags) stays a flag.
+
+  ## Renames
+  | today | becomes |
+  |---|---|
+  | aida usage --slowest / --unused <d> / --errors / --events / --auto-complete [--failures|--pattern] / --health | aida usage slowest / unused <d> / errors / events / drains [--failures|--pattern] / health (bare aida usage = today's top-20) |
+  | aida graph <id> --blocked-by / --blocks / --tree / --impact | aida graph blocked-by <id> / blocks <id> / tree <id> / impact <id> (bare aida graph <id> = tree) |
+  | aida release --patch / --minor / --major / --check | aida release patch / minor / major / check |
+  | aida focus --clear / --show | aida focus clear / show |
+  | aida drain status --clear | aida drain clear |
+  | aida upgrade --check / --diff | aida upgrade check / diff |
+  | aida statusline --title | aida statusline title |
+  | aida history --events | aida history events (keeps --id and the other filters) |
+
+  ## Acceptance
+  1. Each rename above lands; the old flag is REMOVED (clap rejects it with the normal unknown-argument error, plus a one-line "did you mean aida usage slowest" hint from a small static map for the eight families — cheap and honest, not an alias).
+  2. Every caller is swept in the same PR. Reference counts on 2026-09-10 (files): graph --tree 27, history --events 26, graph --blocked-by 22, graph --impact 14, usage --auto-complete 12, usage --errors 8, usage --unused 6, statusline --title 5, usage --slowest 3, usage --health 3, focus --clear 3, drain status --clear 3, usage --events 2, graph --blocks 1. Locations: aida-core/templates (skills, commands, hooks — /aida-insights wraps aida usage --auto-complete), docs/, scripts/, README.md, CLAUDE.md, OVERVIEW.md, and hint strings inside aida-cli-lib/src. A CI grep guard (scripts/check-removed-flags.sh, run in the lint job) fails on any reintroduction of the removed spellings.
+  3. MCP tool schemas that mirror these (usage_query, query_graph mode enum, history) keep their argument shapes; only the CLI surface changes. Note it in the STORY-82 parity comment.
+  4. The scaffold pack refresh (aida scaffold refresh) delivers the updated skills to Claude/Codex/Antigravity packs; verify on aida-hub.
+  5. CHANGELOG entry under a "Breaking" heading listing the eight families.
+  6. aida commands --json (the listing story) before/after diff is attached to the PR as the inventory of what moved.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T05:15:22.477889680Z
+modified_at: 2026-09-11T05:15:22.477889680Z
+req_type: Story
+tags:
+- breaking
+- cli
+- from-product
+- recommend:approve
+- risk:medium
+- tech-debt
