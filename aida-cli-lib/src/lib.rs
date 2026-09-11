@@ -18382,6 +18382,42 @@ fn collect_doctor_findings(
         }
     };
 
+    // BUG-915: repos with container tooling and linked worktrees need the
+    // worktree `.git` file's target mounted inside the container. Otherwise
+    // `git rev-parse`, hooks, revision capture, and repo discovery fail from
+    // inside the dev container. Detection only; the fix belongs in the
+    // project's container wrapper/mount config.
+    // trace:BUG-915 | ai:codex
+    let container_markers = aida_core::git_ops::container_tooling_markers(project_root);
+    if !container_markers.is_empty() {
+        let project_canon = project_root
+            .canonicalize()
+            .unwrap_or_else(|_| project_root.to_path_buf());
+        for wt in aida_core::git_ops::list_worktree_paths(project_root) {
+            let wt_canon = wt.canonicalize().unwrap_or_else(|_| wt.clone());
+            if wt_canon == project_canon {
+                continue;
+            }
+            if let Some(gitdir) = aida_core::git_ops::worktree_gitdir_path(&wt) {
+                push(DoctorFinding {
+                    category: "worktree-container-gitdir".to_string(),
+                    id: wt.display().to_string(),
+                    summary: format!(
+                        "container tooling detected ({}) and linked worktree {} uses gitdir {}",
+                        container_markers.join(", "),
+                        wt.display(),
+                        gitdir.display()
+                    ),
+                    action: format!(
+                        "mount {} into dev containers, or run git from a checkout whose shared gitdir is visible",
+                        gitdir.display()
+                    ),
+                    safe_heal: false,
+                });
+            }
+        }
+    }
+
     // TASK-696: an ANCESTOR CLAUDE.md / CLAUDE.local.md / AGENTS.md whose
     // @-imports resolve OUTSIDE this project bleeds into every child project —
     // it pollutes the child's context AND trips Claude Code's "Allow external
@@ -18961,6 +18997,13 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // STORY-835: enabled agent profile lacks one of its required runtime
         // wiring surfaces (instruction file or MCP registration).
         "agents-wiring" | "agent-wiring" | "wiring" => "agents-wiring",
+        // BUG-915: linked worktree `.git` file points at shared git metadata
+        // that container wrappers must mount.
+        "worktree-container-gitdir"
+        | "container-gitdir"
+        | "container-worktree"
+        | "devcontainer-gitdir"
+        | "worktree-gitdir" => "worktree-container-gitdir",
         other => anyhow::bail!(
             "unknown doctor category `{}` (valid: stale-leases, abandoned-leases, \
              brief-lease-drift, brief-spec-drift, spec-status-drift, orphan-worktrees, \
@@ -18968,7 +19011,7 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
              store-tracked-runtime, remote-drift, vendor-binary, scaffold-drift, \
-             store-scrub, agents-wiring)",
+             store-scrub, agents-wiring, worktree-container-gitdir)",
             other
         ),
     };
@@ -27873,6 +27916,7 @@ fn session_start(
         aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
             format!("exclude AIDA runtime files in {}", worktree_path.display())
         })?;
+        aida_core::git_ops::warn_worktree_container_gitdir(&project_root, &worktree_path);
         aida_core::git_ops::init_submodules_or_warn(
             &worktree_path,
             worktree_config_init_submodules(&project_root),
@@ -27954,6 +27998,7 @@ fn session_start(
         aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
             format!("exclude AIDA runtime files in {}", worktree_path.display())
         })?;
+        aida_core::git_ops::warn_worktree_container_gitdir(&project_root, &worktree_path);
         aida_core::git_ops::init_submodules_or_warn(
             &worktree_path,
             worktree_config_init_submodules(&project_root),
@@ -28072,6 +28117,7 @@ fn session_start(
             aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(
                 || format!("exclude AIDA runtime files in {}", worktree_path.display()),
             )?;
+            aida_core::git_ops::warn_worktree_container_gitdir(&project_root, &worktree_path);
             aida_core::git_ops::init_submodules_or_warn(
                 &worktree_path,
                 worktree_config_init_submodules(&project_root),
@@ -50286,6 +50332,7 @@ fn ensure_epic_worktree_core(
     }
     aida_core::git_ops::ensure_aida_runtime_excluded(&path)
         .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
+    aida_core::git_ops::warn_worktree_container_gitdir(main_root, &path);
     aida_core::git_ops::init_submodules_or_warn(&path, worktree_config_init_submodules(main_root))
         .with_context(|| format!("prepare submodules in worktree {}", path.display()))?;
 

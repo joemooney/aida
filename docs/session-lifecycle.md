@@ -87,6 +87,40 @@ The implementer session must start on a *fresh* base — otherwise every commit 
 
 Together: a fresh worktree on a freshly-pulled base, with the plan (if any) already loaded as context.
 
+### Worktrees inside dev containers
+
+Git linked worktrees do not contain a real `.git/` directory. They contain a
+`.git` file like:
+
+```text
+gitdir: /host/path/project/.git/worktrees/project-story-86
+```
+
+That path is part of the checkout's working Git repository. If a project wraps
+commands in Docker, Compose, or a devcontainer, mount both the worktree and the
+shared gitdir target into the container at paths Git can see. Mounting only the
+worktree leaves the `.git` file pointing at a host path that does not exist
+inside the container, so `git rev-parse`, revision capture, hooks, and repo
+discovery fail from inside the worktree.
+
+Safe pattern:
+
+```yaml
+services:
+  app:
+    volumes:
+      - /host/path/project-story-86:/workspace/project
+      - /host/path/project/.git:/host/path/project/.git
+```
+
+AIDA prints this portability note when it creates a linked worktree in a repo
+with container markers such as `Dockerfile`, `docker/`, `.devcontainer/`, or
+Compose files. Existing worktrees are reported by:
+
+```bash
+aida doctor --category worktree-container-gitdir
+```
+
 ---
 
 ## Transition 2→3: Wrap-up rejects stale base

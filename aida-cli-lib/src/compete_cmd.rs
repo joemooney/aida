@@ -853,6 +853,7 @@ fn run_compete_arm(
             String::from_utf8_lossy(&add.stderr).trim()
         );
     }
+    aida_core::git_ops::warn_worktree_container_gitdir(project_root, &worktree_dir);
     aida_core::git_ops::init_submodules_or_warn(
         &worktree_dir,
         crate::worktree_config_init_submodules(project_root),

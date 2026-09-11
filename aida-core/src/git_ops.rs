@@ -1217,6 +1217,7 @@ pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Resul
             result.stderr
         );
     }
+    warn_worktree_container_gitdir(repo_root, path);
     Ok(())
 }
 
@@ -1259,6 +1260,82 @@ pub fn init_submodules_or_warn(worktree_path: &Path, enabled: bool) -> Result<()
         );
     }
     Ok(())
+}
+
+/// Repo-local files/directories that imply container tooling may run commands
+/// from an AIDA-created worktree. In a linked worktree, `.git` is a file whose
+/// `gitdir:` points back to the main checkout's shared git metadata; container
+/// wrappers must mount that target path too or git discovery fails inside the
+/// container.
+// trace:BUG-915 | ai:codex
+pub fn container_tooling_markers(repo_root: &Path) -> Vec<String> {
+    let candidates = [
+        ("Dockerfile", false),
+        ("docker", true),
+        ("devcontainer.json", false),
+        (".devcontainer/devcontainer.json", false),
+        ("docker-compose.yml", false),
+        ("docker-compose.yaml", false),
+        ("compose.yml", false),
+        ("compose.yaml", false),
+        (".aida/docker-compose.yml", false),
+        (".aida/docker-compose.yaml", false),
+        ("docker/docker-compose.yml", false),
+        ("docker/docker-compose.yaml", false),
+        ("docker/compose.yml", false),
+        ("docker/compose.yaml", false),
+    ];
+    candidates
+        .iter()
+        .filter_map(|(rel, dir)| {
+            let path = repo_root.join(rel);
+            let hit = if *dir { path.is_dir() } else { path.is_file() };
+            hit.then(|| (*rel).to_string())
+        })
+        .collect()
+}
+
+/// Parse a linked worktree's `.git` file and return the gitdir path containers
+/// must be able to see. A real `.git/` directory (main checkout) returns None.
+// trace:BUG-915 | ai:codex
+pub fn worktree_gitdir_path(worktree_path: &Path) -> Option<PathBuf> {
+    let git_file = worktree_path.join(".git");
+    if !git_file.is_file() {
+        return None;
+    }
+    let body = crate::read_atomic(&git_file).ok()?;
+    let raw = body
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("gitdir:"))?
+        .trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let path = PathBuf::from(raw);
+    if path.is_absolute() {
+        Some(path)
+    } else {
+        Some(worktree_path.join(path))
+    }
+}
+
+/// Print the one-shot portability note after creating an AIDA worktree in a
+/// repo that appears to use container wrappers. Best-effort by design: guidance
+/// must never break worktree creation.
+// trace:BUG-915 | ai:codex
+pub fn warn_worktree_container_gitdir(repo_root: &Path, worktree_path: &Path) {
+    let markers = container_tooling_markers(repo_root);
+    if markers.is_empty() {
+        return;
+    }
+    let Some(gitdir) = worktree_gitdir_path(worktree_path) else {
+        return;
+    };
+    eprintln!(
+        "warning: container tooling detected ({}); this linked worktree's .git file points at {}. Mount that gitdir path into dev containers so git commands work inside the worktree.",
+        markers.join(", "),
+        gitdir.display()
+    );
 }
 
 // trace:BUG-899 trace:BUG-916 | ai:codex
@@ -4478,6 +4555,42 @@ mod tests {
             "gc.autoDetach should be set on the store repo"
         );
         assert_eq!(detach.stdout, "true");
+    }
+
+    #[test]
+    fn container_marker_scan_and_gitdir_parse_are_precise() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        let worktree = dir.path().join("repo-bug915");
+        std::fs::create_dir_all(repo.join("docker")).unwrap();
+        std::fs::write(repo.join("Dockerfile"), "FROM scratch\n").unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(
+            worktree.join(".git"),
+            "gitdir: /host/repo/.git/worktrees/repo-bug915\n",
+        )
+        .unwrap();
+
+        let markers = container_tooling_markers(&repo);
+        assert!(markers.contains(&"Dockerfile".to_string()));
+        assert!(markers.contains(&"docker".to_string()));
+        assert_eq!(
+            worktree_gitdir_path(&worktree).unwrap(),
+            PathBuf::from("/host/repo/.git/worktrees/repo-bug915")
+        );
+    }
+
+    #[test]
+    fn worktree_gitdir_parse_resolves_relative_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let worktree = dir.path().join("repo-bug915");
+        std::fs::create_dir_all(&worktree).unwrap();
+        std::fs::write(worktree.join(".git"), "gitdir: ../repo/.git/worktrees/wt\n").unwrap();
+
+        assert_eq!(
+            worktree_gitdir_path(&worktree).unwrap(),
+            worktree.join("../repo/.git/worktrees/wt")
+        );
     }
 
     /// `configure_store_gc_auto` sets BOTH `gc.auto` and `gc.autoDetach = true`

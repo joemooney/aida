@@ -283,6 +283,7 @@ pub(crate) fn pr_rebase_handler(
             pr_local_branch
         );
     }
+    aida_core::git_ops::warn_worktree_container_gitdir(&project_root, &wt_path);
     aida_core::git_ops::init_submodules_or_warn(
         &wt_path,
         crate::worktree_config_init_submodules(&project_root),
