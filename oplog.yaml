@@ -56751,5 +56751,31 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 4625
+- id: 01a09077-0e29-7300-a7d1-32f1ea133801
+  target_id: 01a09077-0a1c-7e53-8d3f-44532b362641
+  author: aida
+  node_id: '1'
+  lamport: 4626
+  timestamp: 2026-09-11T12:35:16.649124677Z
+  kind: !Create
+    title: 'Review PR-1737: [AI:codex] fix(review): honor verdict-file PR handshake anchor (BUG-912)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09071`) for branch `bug-912`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1737>
+      - Branch: `bug-912` → `main`
+
+      ## Covers
+
+      - BUG-912
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1737` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4626
 node_id: '1'
