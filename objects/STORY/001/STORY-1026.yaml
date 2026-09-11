@@ -1,0 +1,26 @@
+id: 01a08ed6-68d7-70e3-b89e-89c337d82ecf
+spec_id: STORY-1026
+agreed_id: STORY-1026
+title: 'Review PR-1727: [AI:codex] fix(role): surface roleless shell recovery (BUG-1044)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a08ecf`) for branch `bug-1044`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1727>
+  - Branch: `bug-1044` → `main`
+
+  ## Covers
+
+  - BUG-1044
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1727` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T05:00:11.351547526Z
+modified_at: 2026-09-11T05:00:11.351547526Z
+req_type: Story
