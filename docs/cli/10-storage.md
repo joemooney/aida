@@ -80,7 +80,7 @@ What this means in practice: **a normal user needs almost none of the commands b
 - `status` — shows the cache's recorded HEAD vs the store's actual HEAD, the requirement count, and last build time. The diagnostic: a HEAD mismatch that *isn't* auto-clearing is the signal to rebuild.
 - `rebuild` — drops and recomputes the whole cache from the git store. The repair. It's cheap and side-effect-free (the store is untouched), so it's the safe thing to try when the cache is the suspect.
 
-**Gotchas.** Rebuilding the cache **cannot lose data** — the store is canonical and the cache is regenerated from it — so it's a no-risk operation, unlike most "rebuild the database" commands. But it also *fixes nothing in the store itself*: if a spec is wrong in the YAML, rebuilding the cache faithfully re-projects the wrong value. The cache is only ever as right as the store it mirrors. (Also: `cache` is git-canonical-mode only; legacy `--centralized` projects have no cache to rebuild.)
+**Gotchas.** Rebuilding the cache **cannot lose data** — the store is canonical and the cache is regenerated from it — so it's a no-risk operation, unlike most "rebuild the database" commands. But it also *fixes nothing in the store itself*: if a spec is wrong in the YAML, rebuilding the cache faithfully re-projects the wrong value. The cache is only ever as right as the store it mirrors. (Also: `cache` is git-canonical-mode only; legacy centralized projects have no cache to rebuild.)
 
 **Chains with** — `cache status` to diagnose, `cache rebuild` to fix; both sit *beneath* `list`/`search`/`findings`, which read the cache without you thinking about it.
 

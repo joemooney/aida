@@ -77,7 +77,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 **Don't reach for it when** — `task` already covers it. The built-in 19 are deliberately broad (`task` is the catch-all for chores/docs/tooling); adding a custom type you'll use twice is taxonomy bloat. Reach for this only when the category is load-bearing and recurring.
 
-**Gotchas.** `type list` is the quickest way to see the canonical type set and their prefixes if you've forgotten which `--type` value to pass to `aida add`.
+**Gotchas.** `type list` is the quickest way to see the canonical type set and their prefixes if you've forgotten which `aida add --type` value to pass.
 
 **Chains with** — defines the vocabulary that `aida add --type` consumes.
 
@@ -87,13 +87,13 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 **One line** — manage *feature categories* (named groupings with their own ID prefix), distinct from types.
 
-**Mental model.** A *feature* is an organizational bucket with a prefix — a way to give a coherent area of the product its own ID namespace, orthogonal to the type taxonomy. `aida feature add` creates one with a prefix; `list`/`show`/`edit` manage them. Don't confuse it with `--type`: type is *what kind of spec*, feature is *what area of the product*.
+**Mental model.** A *feature* is an organizational bucket with a prefix — a way to give a coherent area of the product its own ID namespace, orthogonal to the type taxonomy. `aida feature add` creates one with a prefix; `list`/`show`/`edit` manage them. Don't confuse it with `aida add --type`: type is *what kind of spec*, feature is *what area of the product*.
 
 **Reach for it when** — you want specs in a subsystem to share a recognizable prefix and group cleanly in views.
 
-**Don't reach for it when** — a tag would do. Features are heavier (they mint a prefix); for a lightweight grouping, `--tags` is cheaper and reversible. Reach for a feature only when the grouping is structural and long-lived.
+**Don't reach for it when** — a tag would do. Features are heavier (they mint a prefix); for a lightweight grouping, tags are cheaper and reversible. Reach for a feature only when the grouping is structural and long-lived.
 
-**Gotchas.** `--feature` on `aida add` takes a feature *name*, not a type — a common mix-up. Define the feature here first, then reference it by name.
+**Gotchas.** `aida add --feature` takes a feature *name*, not a type — a common mix-up. Define the feature here first, then reference it by name.
 
 **Chains with** — set up at project-shaping time; referenced by `aida add --feature`.
 
@@ -203,7 +203,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 **Reach for it when** — you've captured a real idea but it's blocked on a future condition and you don't want it cluttering the open-work view — yet you also don't want to lose the *why it'll come back*. The EPIC-shaped "smallest slice now, revisit-trigger filed" discipline lands here.
 
-**Don't reach for it when** — the spec is genuinely *done with* (that's `archive`, Ch.2); or it's actually *blocked by another spec* — that's a `--blocked-by` relationship, which the graph tracks, not a view flag. Defer is for conditions the graph can't express.
+**Don't reach for it when** — the spec is genuinely *done with* (that's `archive`, Ch.2); or it's actually *blocked by another spec* — that's an `aida edit --blocked-by` relationship, which the graph tracks, not a view flag. Defer is for conditions the graph can't express.
 
 **Key options (rationale only).**
 - `--until <condition>` — the whole reason to defer rather than archive. Record the revisit trigger; a deferred spec with no `--until` is just a hidden spec you'll forget. Always set it.

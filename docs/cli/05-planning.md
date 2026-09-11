@@ -225,7 +225,7 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **Mental model.** Before an overnight drain, the failure you most want to catch is a *missed dependency* — two specs that touch the same files, where building B before A means rework. `deps sweep` infers likely edges from the trace graph (specs sharing trace-link files, ranked: ≥2 shared files = high, 1 = medium; same-parent siblings, weaker) and **lists them without writing anything**. It's a "did I miss a dependency?" check, not an edge-writer — confirmed edges you add by hand.
 
-**Reach for it when** — before a `--batch` / `--epic` autonomous drain, to sanity-check that the specs you're about to fan out don't have undeclared ordering between them. The pre-drain dependency audit.
+**Reach for it when** — before a batch or epic autonomous drain, to sanity-check that the specs you're about to fan out don't have undeclared ordering between them. The pre-drain dependency audit.
 
 **Don't reach for it when** — you want the dependency *written*: sweep is strictly read-only by design (it never writes edges — inferred-from-traces guesses shouldn't auto-become hard `BlockedBy` edges). Confirm a real one with `aida edit <id> --blocked-by <dep>`.
 
