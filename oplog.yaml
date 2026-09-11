@@ -53648,5 +53648,47 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4464
+- id: 01a08eb8-362e-7c20-a382-41bdde38aae5
+  target_id: 01a08508-ebe1-7961-a908-4146a7a6c2c8
+  author: aida
+  node_id: '1'
+  lamport: 4465
+  timestamp: 2026-09-11T04:27:12.302181062Z
+  kind: !SetDescription
+    description: |-
+      Auto-drafted by `aida queue work STORY-994 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `verdict:request-changes`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-994 --work`
+
+      ## Recurrence
+
+      Attempts: 3
+      Latest recurrence: 2026-09-11T04:27:11.957382126+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 1328418 ms
+        - phase 2 (ci): 550918 ms
+        - phase 3 (reviewer): 385589 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-994","started_at":"2026-09-09T06:41:19.321381369+00:00","completed_at":"2026-09-09T07:19:09.265221829+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":1328418},{"phase":2,"slug":"ci","elapsed_ms":550918},{"phase":3,"slug":"reviewer","elapsed_ms":385589}],"total_ms":2266051,"binary_sha":"26d41c8d0"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+clock: 4465
 node_id: '1'
