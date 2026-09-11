@@ -29,7 +29,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:07.876021726Z
-modified_at: 2026-09-11T17:25:15.314494130Z
+modified_at: 2026-09-11T17:25:17.064837248Z
 req_type: Story
 tags:
 - ci
@@ -47,3 +47,10 @@ relationships:
   target_id: 01a09075-a892-7fc0-a535-b1ce37caacae
   created_at: 2026-09-11T17:19:12.966904316Z
   created_by: joe
+comments:
+- id: 01a09180-9088-7142-a1e5-00bb0df40fe0
+  author: joe
+  content: 'Operator 2026-09-11: self-hosted runner is an OPT-IN toggle to turn on in times of need, NOT a dependency — burst-file-then-quiet usage means speed is secondary. Reprioritized low; keep as an available option. Robustness (EPIC-62) is the priority.'
+  created_at: 2026-09-11T17:25:17.064837248Z
+  modified_at: 2026-09-11T17:25:17.064837248Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
