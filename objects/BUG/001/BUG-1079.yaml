@@ -1,0 +1,51 @@
+id: 01a09272-08bb-77a3-a8a9-fb1c0096cb61
+spec_id: BUG-1079
+agreed_id: BUG-1079
+title: 'auto-complete failure: phase 2 (ci) on TASK-1207'
+description: |
+  Auto-drafted by `aida queue work TASK-1207 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  CI is red on PR-1749: Build (ubuntu-latest)
+
+  Failure kind: `ci-red`
+
+  ## Recovery hint shown to the user
+
+  CI failed on run 34650559710 — view it: `gh run view 34650559710`. Push fixups to the same branch: `aida queue work TASK-1207 --branch task-1207 --steal`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-11T21:49:01.216161098+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 591885 ms
+    - phase 2 (ci): 445840 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-1207","started_at":"2026-09-11T21:31:42.311659488+00:00","completed_at":"2026-09-11T21:49:01.216161098+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-1749: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":591885},{"phase":2,"slug":"ci","elapsed_ms":445840}],"total_ms":1038320,"binary_sha":"e5676286b","lifecycle_skips":["no-review"]}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T21:49:02.011734666Z
+modified_at: 2026-09-11T21:49:02.011734666Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- ci
+- failure-2
+- failure-kind:ci-red
