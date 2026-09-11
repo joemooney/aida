@@ -57028,5 +57028,31 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4637
+- id: 01a09096-0e11-7b60-a252-2f7778a50c5a
+  target_id: 01a09095-ff42-7e32-9a65-8e3a99180ef1
+  author: aida
+  node_id: '1'
+  lamport: 4638
+  timestamp: 2026-09-11T13:09:08.241256218Z
+  kind: !Create
+    title: 'Review PR-1738: [AI:codex] fix(ci): restore cross-platform nightly portability (BUG-1021)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09095`) for branch `bug-1021`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1738>
+      - Branch: `bug-1021` → `main`
+
+      ## Covers
+
+      - BUG-1021
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1738` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4638
 node_id: '1'
