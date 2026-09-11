@@ -1,0 +1,26 @@
+id: 01a0902c-20ab-79a1-a772-96b94a43ed65
+spec_id: STORY-1037
+agreed_id: STORY-1037
+title: 'Review PR-1733: [AI:codex] feat(notify): add rule-gated operator alerts (STORY-1029)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0901a`) for branch `story-1029`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1733>
+  - Branch: `story-1029` → `main`
+
+  ## Covers
+
+  - STORY-1029
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1733` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T11:13:26.187945228Z
+modified_at: 2026-09-11T11:13:26.187945228Z
+req_type: Story
