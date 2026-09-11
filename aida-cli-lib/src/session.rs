@@ -343,6 +343,7 @@ fn print_json(
             "pid": p.pid,
             "pids": p.candidates,
             "tty": p.tty,
+            "terminal": s.terminal,
             "liveness": p.liveness.label(),
             "resolution": p.resolution.label(),
         })
