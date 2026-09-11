@@ -1,0 +1,26 @@
+id: 01a09264-472d-77a0-a07a-34fe474beb25
+spec_id: BUG-1078
+agreed_id: BUG-1078
+title: 'transient-retry lease reclaim races predecessor teardown: Live verdict seconds after death shelves a recoverable retry'
+description: |
+  ## Observed
+  2026-09-11 14:31, drain pid 480454: TASK-1206 attempt 1 died; the [drain] retry_transient=1 retry fired immediately and shelved with lease-conflict: "phase 1 retry cannot reclaim predecessor lease 01a0925b". Two minutes later `aida why TASK-1206` showed the same lease stalled with NO live process — the predecessor was in teardown when the retry probed it.
+
+  ## Root cause (verified in code)
+  reclaim_implementer_retry_predecessor (aida-cli-lib/src/lib.rs, trace:BUG-908) refuses instantly when stale_lease_recovery_for_lease returns Live or UnknownLiveness. A transient death + immediate retry races the predecessor's process teardown: the pid is still in the process table for a few seconds, verdict reads Live, and a recoverable retry becomes a NeedsAttention shelve.
+
+  ## Acceptance
+  1. On Live/UnknownLiveness, the retry re-probes liveness over a short grace window (e.g. 3 probes across ~15s) before giving up; a predecessor that dies within the window is reclaimed and the retry proceeds.
+  2. A genuinely live predecessor still refuses after the window (the 908 safety stands; --steal never involved).
+  3. Unit test: verdict transitions Live->dead across probes -> reclaim succeeds; stays Live -> refusal unchanged.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T21:34:00.493790700Z
+modified_at: 2026-09-11T21:34:00.493790700Z
+req_type: Bug
+tags:
+- drain
+- orchestrator
+- reliability
