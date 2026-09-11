@@ -23,12 +23,12 @@ description: |-
 
   ## Related
   Parent EPIC (unattended reliability), STORY-974 (typed causes — the classifier input), STORY-975 (in-phase retry — this is the ABOVE-phase loop), BUG-908/909/1063 (the false-park fixes this loop assumes), STORY-1047 (schedule tick — a run trigger), STORY-1043 (surface the needs-human residue), STORY-1029 (notify).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:46.943966857Z
-modified_at: 2026-09-11T23:15:58.111135161Z
+modified_at: 2026-09-11T23:15:59.198538370Z
 req_type: Story
 tags:
 - drain
@@ -44,11 +44,3 @@ relationships:
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-11T17:24:49.904265068Z
 execution_mode: drain
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: tool-exit
-  detail: the implementer session exited 1 — it was aborted or errored (attempt 2/2)
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-1051 --resume`'
-  shelved_by: advisor
-  shelved_at: 2026-09-11T23:15:58.111135161Z
