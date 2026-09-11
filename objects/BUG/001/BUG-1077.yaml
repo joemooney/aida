@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T20:36:56.194785434Z
-modified_at: 2026-09-11T20:58:37.234249782Z
+modified_at: 2026-09-11T20:58:38.467075589Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,10 @@ tags:
 - failure-3
 - failure-kind:verdict:request-changes
 - reviewer
+comments:
+- id: 01a09243-e603-75e2-98c4-95be10276f37
+  author: joe
+  content: 'Rejected: TASK-1205''s RequestChanges was the Windows fixture bug — fixed (6f38b1195 on PR-1746) and requeued same hour.'
+  created_at: 2026-09-11T20:58:38.467075589Z
+  modified_at: 2026-09-11T20:58:38.467075589Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
