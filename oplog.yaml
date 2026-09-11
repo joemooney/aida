@@ -54377,5 +54377,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4499
+- id: 01a08f84-c508-73e2-8596-cbd6f85f3454
+  target_id: 01a08f84-bf53-7350-832b-e85bb8236c0c
+  author: aida
+  node_id: '1'
+  lamport: 4500
+  timestamp: 2026-09-11T08:10:38.216631379Z
+  kind: !Create
+    title: 'Review PR-1708: [AI:codex] fix(worktree): hide AIDA runtime paths in local excludes (BUG-914)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a08f84`) for branch `bug-914`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1708>
+      - Branch: `bug-914` → `main`
+
+      ## Covers
+
+      - BUG-914
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1708` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4500
 node_id: '1'
