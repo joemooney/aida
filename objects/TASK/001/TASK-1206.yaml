@@ -14,12 +14,12 @@ description: |-
 
   ## Related
   STORY-498 (trace gate), TASK-621 (fresh-clone auto-attach), TASK-1205 (other CI guards; keep separate PRs).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:36:04.759429196Z
-modified_at: 2026-09-11T21:23:33.009303936Z
+modified_at: 2026-09-11T21:31:39.046030346Z
 req_type: Task
 tags:
 - aida-store
@@ -30,3 +30,11 @@ tags:
 - risk:low
 - trace-gate
 execution_mode: drain
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: lease-conflict
+  detail: 'phase 1 retry cannot reclaim predecessor lease 01a0925b on `TASK-1206`; worktree: /home/joe/ai/aida-task-1206'
+  recovery_hint: 'Continue the implementer session: `aida queue work TASK-1206 --resume 01a0925b080a`'
+  shelved_by: advisor
+  shelved_at: 2026-09-11T21:31:39.046030346Z
