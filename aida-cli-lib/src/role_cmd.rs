@@ -221,6 +221,14 @@ fn handle_role_enter(
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
+    crate::agent_registry::register_role_enter_agent(
+        project_root,
+        &state.name,
+        state
+            .working_directory
+            .clone()
+            .unwrap_or_else(|| project_root.to_path_buf()),
+    )?;
     // STORY-768: entering the advisor seat under tmux registers this pane so
     // `aida human audit --inject` can send-keys the reconcile pass here even
     // when the advisor is idle. Idempotent; a no-op (and never an error) when

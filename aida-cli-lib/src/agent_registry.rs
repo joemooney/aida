@@ -645,6 +645,51 @@ pub(crate) fn register_spawned_agent(
     Ok(entry)
 }
 
+/// Register the interactive shell seat that just evaluated `aida role enter`.
+///
+/// `role enter` itself is a short-lived helper whose stdout is shell code; the
+/// durable launch identity is the parent shell that keeps the exported role.
+// trace:STORY-994 | ai:codex
+pub(crate) fn register_role_enter_agent(
+    project_root: &Path,
+    role: &str,
+    worktree_path: PathBuf,
+) -> Result<AgentRegistryEntry> {
+    let now = Utc::now();
+    let pid = role_enter_shell_pid();
+    let agent_type = "shell".to_string();
+    let tty = process_tty(pid).or_else(current_tty);
+    let terminal = terminal_identity_for_tty(tty.clone());
+    let entry = AgentRegistryEntry {
+        id: agent_id(&agent_type, pid),
+        agent_type,
+        pid,
+        name: Some(format!("role:{role}")),
+        description: Some("aida role enter shell".to_string()),
+        tty,
+        terminal,
+        started_at: now,
+        last_active_at: now,
+        role: Some(role.to_string()),
+        current_spec: env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s)),
+        worktree_path,
+        source: "role-enter".to_string(),
+        binary_version: None,
+        build_sha: None,
+        availability: Availability::Available,
+        paused_since: None,
+        paused_reason: None,
+        expected_back: None,
+        native_session_id: None,
+        claude_session_id: None,
+        ended_at: None,
+        spec_status_at_end: None,
+        resumed_from: None,
+    };
+    write_entry(project_root, &entry)?;
+    Ok(entry)
+}
+
 /// Validate a custom agent name or generate a default '<type>-<role>-<seq>' name.
 /// Validates uniqueness across all active (non-stale) agents.
 // trace:TASK-542 | ai:antigravity
@@ -1540,6 +1585,7 @@ pub(crate) fn normalize_agent_type(raw: String) -> String {
         "claude" | "claudecode" => "claude".to_string(),
         "codex" => "codex".to_string(),
         "antigravity" | "gemini" => "antigravity".to_string(),
+        "shell" => "shell".to_string(),
         "web" => "web".to_string(),
         _ => "other".to_string(),
     }
@@ -1866,6 +1912,16 @@ fn parent_pid(pid: u32) -> Option<u32> {
 }
 
 #[cfg(unix)]
+fn role_enter_shell_pid() -> u32 {
+    parent_pid(std::process::id()).unwrap_or_else(std::process::id)
+}
+
+#[cfg(not(unix))]
+fn role_enter_shell_pid() -> u32 {
+    std::process::id()
+}
+
+#[cfg(unix)]
 fn process_cmdline(pid: u32) -> Option<String> {
     let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
     let text = raw
@@ -2145,6 +2201,37 @@ mod tests {
             Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
             None => std::env::remove_var("AIDA_SESSION_ROLE"),
         }
+        match prev_scope {
+            Some(v) => std::env::set_var("AIDA_SESSION_SCOPE", v),
+            None => std::env::remove_var("AIDA_SESSION_SCOPE"),
+        }
+        match prev_term {
+            Some(v) => std::env::set_var("TERMINATOR_UUID", v),
+            None => std::env::remove_var("TERMINATOR_UUID"),
+        }
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_registration_writes_terminal_block() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("worktree");
+        let prev_scope = std::env::var_os("AIDA_SESSION_SCOPE");
+        let prev_term = std::env::var_os("TERMINATOR_UUID");
+        std::env::set_var("AIDA_SESSION_SCOPE", "STORY-994");
+        std::env::set_var("TERMINATOR_UUID", "role-term-994");
+
+        let entry = register_role_enter_agent(tmp.path(), "advisor", worktree.clone()).unwrap();
+
+        assert_eq!(entry.agent_type, "shell");
+        assert_eq!(entry.source, "role-enter");
+        assert_eq!(entry.role.as_deref(), Some("advisor"));
+        assert_eq!(entry.current_spec.as_deref(), Some("STORY-994"));
+        assert_eq!(entry.worktree_path, worktree);
+        let terminal = entry.terminal.as_ref().expect("terminal block");
+        assert_eq!(terminal.emulator.as_deref(), Some("terminator"));
+        assert_eq!(terminal.terminator_uuid.as_deref(), Some("role-term-994"));
+
         match prev_scope {
             Some(v) => std::env::set_var("AIDA_SESSION_SCOPE", v),
             None => std::env::remove_var("AIDA_SESSION_SCOPE"),

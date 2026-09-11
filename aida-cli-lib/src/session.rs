@@ -664,6 +664,7 @@ pub fn new_session(
 
     // STORY-495: record `native` in the launch-log when no mode is injected.
     append_launch_log(&role, permission_mode.unwrap_or("native"), &title)?;
+    let mut title_restore = None;
     if set_terminal_title {
         let project_root = crate::find_main_worktree_root()
             .or_else(|_| crate::find_project_root())
@@ -673,7 +674,10 @@ pub fn new_session(
             let session_id = uuid::Uuid::now_v7().to_string();
             let scope = std::env::var("AIDA_SESSION_SCOPE").ok();
             let title = crate::agent_registry::launch_title(&role, scope.as_deref(), &session_id);
-            crate::agent_registry::apply_terminal_title(&title, terminal.as_ref());
+            title_restore = Some(crate::agent_registry::apply_terminal_title(
+                &title,
+                terminal.as_ref(),
+            ));
         }
     }
 
@@ -693,13 +697,14 @@ pub fn new_session(
         name_for_log,
     );
 
-    exec_claude(
+    run_claude_session(
         permission_mode,
         display_name.as_deref(),
         None,
         None,
         contained,
         None,
+        title_restore,
     )
 }
 
@@ -941,6 +946,52 @@ fn exec_claude(
         let status = cmd.status().context("failed to spawn claude")?;
         std::process::exit(status.code().unwrap_or(1));
     }
+}
+
+// trace:STORY-994 | ai:codex
+fn run_claude_session(
+    permission_mode: Option<&str>,
+    name: Option<&str>,
+    initial_prompt: Option<&str>,
+    session_id: Option<&str>,
+    contained: bool,
+    model: Option<&str>,
+    mut title_restore: Option<crate::agent_registry::TerminalTitleRestore>,
+) -> Result<()> {
+    let mut cmd = std::process::Command::new("claude");
+    cmd.args(claude_session_args(
+        permission_mode,
+        name,
+        initial_prompt,
+        session_id,
+        contained,
+        model,
+    ));
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            if let Some(restore) = title_restore.take() {
+                crate::agent_registry::restore_terminal_title(restore);
+            }
+            anyhow::bail!("failed to spawn claude: {}", err);
+        }
+    };
+    let status = match child.wait() {
+        Ok(status) => status,
+        Err(err) => {
+            if let Some(restore) = title_restore.take() {
+                crate::agent_registry::restore_terminal_title(restore);
+            }
+            anyhow::bail!("failed to wait for claude: {}", err);
+        }
+    };
+    if let Some(restore) = title_restore {
+        crate::agent_registry::restore_terminal_title(restore);
+    }
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
 }
 
 /// BUG-226: spawn an interactive `claude` session (inherited stdio) and
