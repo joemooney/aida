@@ -18,9 +18,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T21:34:00.493790700Z
-modified_at: 2026-09-11T21:34:00.493790700Z
+modified_at: 2026-09-11T22:59:50.075607364Z
 req_type: Bug
 tags:
 - drain
 - orchestrator
 - reliability
+comments:
+- id: 01a092b2-dabb-7c51-8994-986731a62604
+  author: joe
+  content: 'Recurrence 2 (2026-09-11 15:58): STORY-1054 phase-1 retry refused reclaim of lease 01a092af whose session died ~30 min earlier with the OLD drain (pid long gone; aida why showed no live process). Not a teardown race this time — liveness read Live/Unknown for a genuinely dead session, so also check pid-recycling: the verdict should require the pid''s start-time/cmdline to match the lease record, not bare pid existence.'
+  created_at: 2026-09-11T22:59:50.075607364Z
+  modified_at: 2026-09-11T22:59:50.075607364Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
