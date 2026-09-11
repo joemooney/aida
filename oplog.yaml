@@ -59135,5 +59135,31 @@ operations:
   timestamp: 2026-09-11T18:22:55.398846395Z
   kind: !SetStatus
     status: Rejected
-clock: 4758
+- id: 01a091cf-a910-7ad1-ac7f-3fcbb4231656
+  target_id: 01a091cf-a4e9-7ca2-82c5-9ab7c8813fbc
+  author: aida
+  node_id: '1'
+  lamport: 4759
+  timestamp: 2026-09-11T18:51:40.688657629Z
+  kind: !Create
+    title: 'Review PR-1743: [AI:codex] ci: reuse dev-profile build artifacts (TASK-1204)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a091b4`) for branch `task-1204`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1743>
+      - Branch: `task-1204` → `main`
+
+      ## Covers
+
+      - TASK-1204
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1743` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4759
 node_id: '1'
