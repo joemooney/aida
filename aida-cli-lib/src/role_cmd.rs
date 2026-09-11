@@ -22,7 +22,8 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             name,
             cd,
             no_resume,
-        } => handle_role_enter(&project_root, name.as_deref(), *cd, *no_resume),
+            no_title,
+        } => handle_role_enter(&project_root, name.as_deref(), *cd, *no_resume, *no_title),
         RoleCommand::Add {
             name,
             purpose,
@@ -172,6 +173,7 @@ fn handle_role_enter(
     name: Option<&str>,
     cd: bool,
     no_resume: bool,
+    no_title: bool,
 ) -> Result<()> {
     // TASK-644: resolve the role name. When the name is omitted, or names a
     // role that doesn't exist, fall back to an interactive picker — but ONLY
@@ -234,6 +236,7 @@ fn handle_role_enter(
         cd,
         /* was_existing */ true,
         resume,
+        no_title,
     );
     Ok(())
 }
@@ -373,6 +376,7 @@ fn handle_role_add(
         /* cd */ false,
         /* was_existing */ false,
         None,
+        /* no_title */ false,
     );
     Ok(())
 }
@@ -442,6 +446,7 @@ fn emit_role_enter_eval(
     cd: bool,
     was_existing: bool,
     resume_session_id: Option<String>,
+    no_title: bool,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -486,12 +491,7 @@ fn emit_role_enter_eval(
         println!("unset AIDA_SESSION_PURPOSE");
     }
     println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
-    if crate::agent_registry::terminal_title_enabled(project_root) {
-        let title = crate::agent_registry::launch_title(
-            &state.name,
-            None,
-            &uuid::Uuid::now_v7().to_string(),
-        );
+    if let Some(title) = role_enter_launch_title(project_root, state, no_title) {
         println!("printf '\\033]2;%s\\007' '{}'", sh_single_quote(&title));
     }
     println!("if [ -n \"${{PS1+x}}\" ]; then");
@@ -623,6 +623,22 @@ fn emit_role_enter_eval(
     if let Some(id) = resume_session_id {
         println!("claude --resume '{}'", sh_single_quote(&id));
     }
+}
+
+// trace:STORY-994 | ai:codex
+fn role_enter_launch_title(
+    project_root: &std::path::Path,
+    state: &RoleState,
+    no_title: bool,
+) -> Option<String> {
+    if no_title || !crate::agent_registry::terminal_title_enabled(project_root) {
+        return None;
+    }
+    Some(crate::agent_registry::launch_title(
+        &state.name,
+        None,
+        &uuid::Uuid::now_v7().to_string(),
+    ))
 }
 
 /// `aida role active` — one-line stub that prints just the active role
@@ -991,6 +1007,7 @@ fn handle_role_scaffold() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
 
     fn role_cache_fixture() -> (tempfile::TempDir, uuid::Uuid) {
         let dir = tempfile::tempdir().unwrap();
@@ -1014,6 +1031,66 @@ mod tests {
         .unwrap();
         drop(conn);
         (dir, id)
+    }
+
+    fn role_state_fixture(name: &str) -> RoleState {
+        RoleState {
+            name: name.to_string(),
+            purpose: None,
+            created_at: chrono::Utc::now(),
+            last_active_at: chrono::Utc::now(),
+            working_directory: None,
+            notes: None,
+            global: false,
+            activity: Vec::new(),
+            scope_tags: Vec::new(),
+            scope_status: None,
+            system_prompt: None,
+        }
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn parses_role_enter_no_title_flag() {
+        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--no-title"])
+            .expect("parse role enter");
+        let Command::Role(RoleCommand::Enter {
+            name,
+            cd: false,
+            no_resume: false,
+            no_title,
+        }) = cli.command
+        else {
+            panic!("expected role enter command");
+        };
+
+        assert_eq!(name.as_deref(), Some("advisor"));
+        assert!(no_title);
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_launch_title_honors_per_invocation_opt_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = role_state_fixture("advisor");
+
+        assert!(role_enter_launch_title(dir.path(), &state, false).is_some());
+        assert!(role_enter_launch_title(dir.path(), &state, true).is_none());
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_launch_title_honors_terminal_config_opt_out() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "[terminal]\ntitle = false\n",
+        )
+        .unwrap();
+        let state = role_state_fixture("advisor");
+
+        assert!(role_enter_launch_title(dir.path(), &state, false).is_none());
     }
 
     // trace:BUG-840 | ai:codex

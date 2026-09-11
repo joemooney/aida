@@ -1729,6 +1729,11 @@ pub enum RoleCommand {
         // trace:STORY-821 | ai:codex
         #[clap(long)]
         no_resume: bool,
+
+        /// Do not set the terminal/tab title for this role enter.
+        // trace:STORY-994 | ai:codex
+        #[clap(long)]
+        no_title: bool,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
