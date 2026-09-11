@@ -1,0 +1,12 @@
+id: 01a08e99-002f-7323-9774-a85ac7ced217
+spec_id: STORY-1024
+agreed_id: STORY-1024
+title: 'merge queue: Done-with-PR specs land through one serialized integrator loop — aida integrate --run'
+description: 'Operator insight (2026-09-10), naming the structure behind tonight''s stale-base treadmill: finished PRs re-reviewing and merging independently race each other onto main — every merge stales the rest, the stale-base gate bounces them, and the drain burns iterations re-shelving finished work. The advisor''s hand-run serialized closer (rebase → drive from-pr → merge → pull, one spec at a time — the working prototype is scratchpad/serial-close.sh from this session) IS a merge queue; productize it as the integrator seat''s executable: aida integrate --run drains the MERGE QUEUE — every spec that is Done with an open approved-or-reviewable PR — strictly serially: (1) pick next by dependency order then queue order; (2) rebase its branch onto current main (auto; on conflict park THAT spec with a typed merge-conflict cause and continue); (3) wait CI on the rebased head; (4) if the last verdict predates the rebase and the rebase was not clean-trivial, re-run the reviewer (else reuse standing Approved); (5) merge, pull for auto-bump, next. One loop, no races by construction. The six-phase drain then ENDS at Done-with-PR: phases 4-6 move into the integrator loop (config-gated transition: [integrate] own_merges = true, default on once proven; drains keep the old inline path when off). Entry is automatic on reaching Done-with-PR; aida integrate (read view) shows the queue order and each entry''s state. Rendering: these specs read ''In merge queue (position N)'' — see STORY-1023 for the three-way split. Acceptance: with 3 Done-with-PR specs whose branches all touch the same file, integrate --run lands all 3 with zero stale-base bounces; a conflicting branch parks with typed cause and the loop continues; verdict-reuse rule covered by tests; drain hands off at Done-with-PR when own_merges is on.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T03:53:06.863311143Z
+modified_at: 2026-09-11T03:53:06.863311143Z
+req_type: Story
