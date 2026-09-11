@@ -62020,6 +62020,7 @@ fn collect_remote_branch_name_set(
 struct UnshippedBranchCandidate {
     branch: String,
     refname: String,
+    local_branch: String,
     spec_id: String,
     commits_ahead: u32,
     age: String,
@@ -62122,12 +62123,14 @@ fn collect_unshipped_work_items(
         if !seen.insert(display_branch.clone()) {
             continue;
         }
+        let age = branch_tip_age(project_root, &refname);
         candidates.push(UnshippedBranchCandidate {
             branch: display_branch,
             refname,
+            local_branch: short_branch.clone(),
             spec_id,
             commits_ahead,
-            age: branch_tip_age(project_root, &short_branch),
+            age,
             has_local,
         });
     }
@@ -62146,16 +62149,12 @@ fn collect_unshipped_work_items(
             } else {
                 "absent".to_string()
             };
-            let recovery = if !no_forge {
-                format!("aida pr ship {}", c.branch)
-            } else if c.has_local {
+            let recovery = if c.has_local {
                 format!("aida pr ship {}", c.branch)
             } else {
                 format!(
                     "git switch -c {} {} && aida pr ship {}",
-                    c.spec_id.to_ascii_lowercase(),
-                    c.refname,
-                    c.spec_id.to_ascii_lowercase()
+                    &c.local_branch, c.refname, &c.local_branch
                 )
             };
             let age = if first_seen.is_empty() {
@@ -62409,6 +62408,16 @@ mod story_1043_unshipped_work_tests {
         branch_with_commit(root, "story-1044-live", "STORY-1044");
         branch_with_commit(root, "story-1045-done", "STORY-1045");
         branch_with_commit(root, "story-1046-open-pr", "STORY-1046");
+        branch_with_commit(root, "story-1047-remote", "STORY-1047");
+        git(
+            root,
+            &[
+                "update-ref",
+                "refs/remotes/origin/story-1047-remote",
+                "refs/heads/story-1047-remote",
+            ],
+        );
+        git(root, &["branch", "-D", "story-1047-remote"]);
         write_live_lease(root, "STORY-1044", "story-1044-live");
 
         let fake_gh = root.join("fake-gh");
@@ -62442,17 +62451,33 @@ exit 1
                 summary("STORY-1044", "InProgress"),
                 summary("STORY-1045", "Completed"),
                 summary("STORY-1046", "InProgress"),
+                summary("STORY-1047", "InProgress"),
             ],
             false,
             false,
         );
 
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].spec_id, "STORY-1043");
-        assert_eq!(rows[0].branch, "story-1043-unshipped");
-        assert_eq!(rows[0].commits_ahead, 1);
-        assert_eq!(rows[0].pr_state, "absent");
-        assert_eq!(rows[0].recovery, "aida pr ship story-1043-unshipped");
+        assert_eq!(rows.len(), 2);
+        let local = rows
+            .iter()
+            .find(|row| row.branch == "story-1043-unshipped")
+            .unwrap();
+        assert_eq!(local.spec_id, "STORY-1043");
+        assert_eq!(local.commits_ahead, 1);
+        assert_eq!(local.pr_state, "absent");
+        assert_eq!(local.recovery, "aida pr ship story-1043-unshipped");
+
+        let remote = rows
+            .iter()
+            .find(|row| row.branch == "origin/story-1047-remote")
+            .unwrap();
+        assert_eq!(remote.spec_id, "STORY-1047");
+        assert_eq!(remote.commits_ahead, 1);
+        assert_ne!(remote.age, "unknown");
+        assert_eq!(
+            remote.recovery,
+            "git switch -c story-1047-remote origin/story-1047-remote && aida pr ship story-1047-remote"
+        );
     }
 }
 
