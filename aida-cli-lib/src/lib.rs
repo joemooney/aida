@@ -78130,6 +78130,19 @@ fn build_integrate_rebase_args(pr_number: u32) -> Vec<String> {
     ]
 }
 
+// trace:STORY-1033 | ai:codex
+fn agent_seat_for_phase(phase: auto_complete::Phase) -> aida_core::agents_config::AgentSeat {
+    match phase {
+        auto_complete::Phase::Implementer | auto_complete::Phase::Ci => {
+            aida_core::agents_config::AgentSeat::Implementer
+        }
+        auto_complete::Phase::Reviewer => aida_core::agents_config::AgentSeat::Reviewer,
+        auto_complete::Phase::Merge | auto_complete::Phase::Pull | auto_complete::Phase::Build => {
+            aida_core::agents_config::AgentSeat::Integrator
+        }
+    }
+}
+
 /// TASK-1080: live three-state probe — is `branch` GONE on origin?
 /// `git ls-remote --exit-code origin refs/heads/<branch>` distinguishes
 /// "ref absent" (exit 2 → `Some(true)`, the merged+deleted signature) from
@@ -78208,6 +78221,9 @@ struct DrainTuning {
     /// Default 1 retry, clamped to 3.
     // trace:STORY-975 | ai:codex
     retry_transient: usize,
+    /// STORY-1033: retry attempt 2 may move to the next configured model tier.
+    /// Defaults true; `[drain] retry_escalate_model = false` disables it.
+    retry_escalate_model: bool,
 }
 
 impl DrainTuning {
@@ -78239,12 +78255,18 @@ impl DrainTuning {
                 .or(cfg.retry_transient)
                 .unwrap_or(1),
         );
+        let retry_escalate_model = std::env::var("AIDA_RETRY_ESCALATE_MODEL")
+            .ok()
+            .and_then(|s| parse_boolish(&s))
+            .or(cfg.retry_escalate_model)
+            .unwrap_or(true);
         Self {
             gh_verify_retries,
             no_progress: std::time::Duration::from_secs(no_progress_min.saturating_mul(60)),
             ceiling: std::time::Duration::from_secs(ceiling_min.saturating_mul(60)),
             ci_auto_fix,
             retry_transient,
+            retry_escalate_model,
         }
     }
 }
@@ -78668,6 +78690,8 @@ struct DrainConfigToml {
     /// transient typed shelve causes. Default 1, max 3.
     // trace:STORY-975 | ai:codex
     retry_transient: Option<usize>,
+    /// STORY-1033: `[drain] retry_escalate_model = true|false`.
+    retry_escalate_model: Option<bool>,
 }
 
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
@@ -78703,11 +78727,21 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 // trace:TASK-975 | ai:claude
                 "ci_auto_fix" => out.ci_auto_fix = val.parse().ok(),
                 "retry_transient" => out.retry_transient = val.parse().ok(),
+                "retry_escalate_model" => out.retry_escalate_model = parse_boolish(val),
                 _ => {}
             }
         }
     }
     out
+}
+
+// trace:STORY-1033 | ai:codex
+fn parse_boolish(raw: &str) -> Option<bool> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "true" | "yes" | "on" | "1" => Some(true),
+        "false" | "no" | "off" | "0" => Some(false),
+        _ => None,
+    }
 }
 
 struct RealPhaseDriver {
@@ -79211,7 +79245,19 @@ impl RealPhaseDriver {
     /// Best-effort — a missing file is a silent no-op, never blocks the phase.
     /// trace:STORY-301 | ai:claude
     fn mark_drain_phase(&self, phase: auto_complete::Phase) {
-        drain_state::set_phase(&self.project_root, &self.spec, phase.index(), phase.slug());
+        let vendor = session::resolve_headless_vendor(&self.project_root);
+        let seat = agent_seat_for_phase(phase);
+        let tuning = session::resolve_agent_tuning(&self.project_root, vendor, seat);
+        drain_state::set_phase_with_tuning(
+            &self.project_root,
+            &self.spec,
+            phase.index(),
+            phase.slug(),
+            Some(vendor.as_str()),
+            Some(seat.as_str()),
+            tuning.model.as_deref(),
+            tuning.effort.as_deref(),
+        );
     }
 
     /// BUG-872: stamp the phase with the exact headless session id whose log
@@ -82034,6 +82080,35 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         attempt: u32,
         max: u32,
     ) {
+        let vendor = session::resolve_headless_vendor(&self.project_root);
+        let seat = agent_seat_for_phase(phase);
+        let tuning = session::resolve_agent_tuning(&self.project_root, vendor, seat);
+        let model_before = tuning.model;
+        let model_after = if self.drain_tuning.retry_escalate_model && attempt == 2 {
+            model_before.as_deref().map(|model| {
+                let tiers = aida_core::agents_config::resolve_agent_model_tiers(
+                    &self.project_root,
+                    vendor.as_str(),
+                );
+                match aida_core::agents_config::next_model_tier(model, &tiers.tiers) {
+                    Some(next) => {
+                        std::env::set_var("AIDA_AGENT_MODEL", &next);
+                        next
+                    }
+                    None => {
+                        eprintln!(
+                            "  {} retry model escalation skipped: `{}` has no next tier for vendor `{}`",
+                            "Note:".dimmed(),
+                            model,
+                            vendor.as_str()
+                        );
+                        model.to_string()
+                    }
+                }
+            })
+        } else {
+            model_before.clone()
+        };
         let phase_label = format!("{} ({})", phase.index(), phase.slug());
         drain_state::append_phase_retry(
             &self.project_root,
@@ -82054,6 +82129,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                     cause: cause.to_string(),
                     attempt,
                     max,
+                    model_before,
+                    model_after,
                 },
             ),
         );

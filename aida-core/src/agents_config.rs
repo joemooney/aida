@@ -72,6 +72,15 @@ pub struct ResolvedAgentTuning {
     pub effort: Option<String>,
 }
 
+/// Ordered model tiers for retry escalation.
+///
+/// Values are opaque vendor-native model tokens. AIDA only knows their order.
+// trace:STORY-1033 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AgentModelTiers {
+    pub tiers: Vec<String>,
+}
+
 /// Read `[agents] vendor` from one agents.toml file. `None` when the file,
 /// table, or key is absent, unparseable, or carries an unrecognized vendor.
 fn vendor_from_file(path: &Path) -> Option<String> {
@@ -123,6 +132,23 @@ fn tuning_from_file(path: &Path, vendor: &str, seat: AgentSeat) -> Option<Resolv
         model: model.unwrap_or(None),
         effort: effort.unwrap_or(None),
     })
+}
+
+fn tiers_from_file(path: &Path, vendor: &str) -> Option<AgentModelTiers> {
+    let body = std::fs::read_to_string(path).ok()?;
+    let value: toml::Value = toml::from_str(&body).ok()?;
+    let tiers = value
+        .get("agents")?
+        .get(vendor.trim().to_ascii_lowercase())?
+        .get("tiers")?
+        .as_array()?
+        .iter()
+        .filter_map(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    Some(AgentModelTiers { tiers })
 }
 
 /// Resolve the default vendor from explicit file paths — the testable core.
@@ -212,6 +238,41 @@ pub fn resolve_agent_tuning_from(
     ResolvedAgentTuning::default()
 }
 
+/// Resolve `[agents.<vendor>] tiers = [...]` for retry escalation.
+///
+/// File precedence mirrors model/seat tuning. Empty arrays deliberately shadow
+/// lower files and mean "do not escalate".
+// trace:STORY-1033 | ai:codex
+pub fn resolve_agent_model_tiers_from(
+    global_agents_toml: Option<&Path>,
+    project_config_toml: Option<&Path>,
+    project_agents_toml: Option<&Path>,
+    vendor: &str,
+) -> AgentModelTiers {
+    let vendor = vendor.trim().to_ascii_lowercase();
+    if vendor.is_empty() {
+        return AgentModelTiers::default();
+    }
+    if let Some(tiers) = project_agents_toml.and_then(|p| tiers_from_file(p, &vendor)) {
+        return tiers;
+    }
+    if let Some(tiers) = project_config_toml.and_then(|p| tiers_from_file(p, &vendor)) {
+        return tiers;
+    }
+    if let Some(tiers) = global_agents_toml.and_then(|p| tiers_from_file(p, &vendor)) {
+        return tiers;
+    }
+    AgentModelTiers::default()
+}
+
+/// Return the next tier after `current`, or `None` when escalation is undefined.
+// trace:STORY-1033 | ai:codex
+pub fn next_model_tier(current: &str, tiers: &[String]) -> Option<String> {
+    let current = current.trim();
+    let idx = tiers.iter().position(|tier| tier == current)?;
+    tiers.get(idx + 1).cloned()
+}
+
 /// Resolve the default vendor for a project: project `.aida/agents.toml`
 /// overrides the user-global `~/.aida/agents.toml`; `None` when neither sets
 /// a recognized `[agents] vendor`.
@@ -259,6 +320,21 @@ pub fn resolve_agent_tuning(
         Some(&project_agents),
         vendor,
         seat,
+    )
+}
+
+/// Resolve retry-escalation tiers for this project/vendor.
+// trace:STORY-1033 | ai:codex
+#[cfg(feature = "native")]
+pub fn resolve_agent_model_tiers(project_root: &Path, vendor: &str) -> AgentModelTiers {
+    let global = dirs::home_dir().map(|h| h.join(".aida").join("agents.toml"));
+    let project_config = project_root.join(".aida").join("config.toml");
+    let project_agents = project_root.join(".aida").join("agents.toml");
+    resolve_agent_model_tiers_from(
+        global.as_deref(),
+        Some(&project_config),
+        Some(&project_agents),
+        vendor,
     )
 }
 
@@ -469,5 +545,36 @@ reviewer = { effort = "high" }
                 effort: None,
             }
         );
+    }
+
+    #[test]
+    fn model_tiers_resolve_with_file_precedence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let g = write(
+            tmp.path(),
+            "g.toml",
+            "[agents.claude]\ntiers = [\"haiku\", \"sonnet\"]\n",
+        );
+        let cfg = write(
+            tmp.path(),
+            "config.toml",
+            "[agents.claude]\ntiers = [\"haiku\", \"sonnet\", \"opus\"]\n",
+        );
+        assert_eq!(
+            resolve_agent_model_tiers_from(Some(&g), Some(&cfg), None, "claude").tiers,
+            vec!["haiku", "sonnet", "opus"]
+        );
+    }
+
+    #[test]
+    fn next_model_tier_advances_only_known_non_terminal_models() {
+        let tiers = vec![
+            "haiku".to_string(),
+            "sonnet".to_string(),
+            "opus".to_string(),
+        ];
+        assert_eq!(next_model_tier("haiku", &tiers).as_deref(), Some("sonnet"));
+        assert_eq!(next_model_tier("opus", &tiers), None);
+        assert_eq!(next_model_tier("unknown", &tiers), None);
     }
 }

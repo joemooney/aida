@@ -101,6 +101,7 @@ AIDA seat. The seat names are the role names AIDA already uses:
 ```toml
 [agents.claude]
 model = "opus"        # default for any seat not listed; unset = vendor default
+tiers = ["haiku", "sonnet", "opus"]
 
 [agents.claude.seats]
 implementer = { model = "sonnet", effort = "medium" }
@@ -127,6 +128,17 @@ Within the selected file, `[agents.<vendor>.seats].<seat>.model` overrides
 `[agents.<vendor>].model`; `effort` is seat-scoped. Empty strings deliberately
 select the vendor default for that field. Claude and AGY receive
 `--effort <level>`; Codex receives `-c model_reasoning_effort=<level>`.
+
+Transient retry attempt 2 escalates to the next configured
+`[agents.<vendor>] tiers` entry by default. For example, an implementer seated
+on `sonnet` moves to `opus` when the tier list is `["haiku", "sonnet",
+"opus"]`. If the current model is missing from the list, or already the last
+tier, AIDA records the retry without changing the model. Disable this with:
+
+```toml
+[drain]
+retry_escalate_model = false
+```
 trace:STORY-1033 | ai:codex
 
 > **This serial engine is the vendor-agnostic drain.** `aida queue work

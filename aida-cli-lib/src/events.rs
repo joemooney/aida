@@ -62,6 +62,18 @@ pub enum EventKind {
         idx: i32,
         /// Phase machine name, e.g. `implementer`.
         slug: String,
+        /// Launch vendor selected for this phase, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        vendor: Option<String>,
+        /// AIDA seat used for model/effort resolution, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        seat: Option<String>,
+        /// Resolved vendor-native model token, when AIDA set one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        /// Resolved vendor-native effort token, when AIDA set one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        effort: Option<String>,
     },
     /// CI reached a terminal verdict (green/red). A real decision point.
     /// **Actionable.**
@@ -95,6 +107,12 @@ pub enum EventKind {
         attempt: u32,
         /// Maximum attempts for this phase, including the first try.
         max: u32,
+        /// Model before retry escalation, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model_before: Option<String>,
+        /// Model after retry escalation, when known.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model_after: Option<String>,
     },
     /// A design-fork punt hit the cascade — the load-bearing case.
     /// **Actionable.**
@@ -568,6 +586,10 @@ mod tests {
         assert!(!EventKind::PhaseEntered {
             idx: 2,
             slug: "ci".into(),
+            vendor: None,
+            seat: None,
+            model: None,
+            effort: None,
         }
         .is_actionable());
     }
@@ -794,6 +816,10 @@ mod tests {
                 EventKind::PhaseEntered {
                     idx,
                     slug: "implementer".into(),
+                    vendor: None,
+                    seat: None,
+                    model: None,
+                    effort: None,
                 },
             );
         }
@@ -862,6 +888,10 @@ mod tests {
                 EventKind::PhaseEntered {
                     idx: 1,
                     slug: "implementer".into(),
+                    vendor: None,
+                    seat: None,
+                    model: None,
+                    effort: None,
                 },
             ),
             Event::new(

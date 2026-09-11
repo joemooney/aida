@@ -314,7 +314,7 @@ fn run_tag(run_uuid: &str) -> String {
 fn describe(ek: &EventKind) -> (&'static str, String) {
     match ek {
         EventKind::RunStarted => ("run-started", "orchestration run started".to_string()),
-        EventKind::PhaseEntered { idx, slug } => {
+        EventKind::PhaseEntered { idx, slug, .. } => {
             ("phase-entered", format!("phase {} ({})", idx, slug))
         }
         EventKind::CiTerminal { green } => (
@@ -336,6 +336,7 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             cause,
             attempt,
             max,
+            ..
         } => (
             "spec-retried",
             format!(
@@ -445,6 +446,10 @@ mod tests {
                     EventKind::PhaseEntered {
                         idx: 2,
                         slug: "ci".into(),
+                        vendor: None,
+                        seat: None,
+                        model: None,
+                        effort: None,
                     },
                 ), // benign
                 Event::new(
@@ -675,6 +680,10 @@ mod tests {
                     EventKind::PhaseEntered {
                         idx: 2,
                         slug: "ci".into(),
+                        vendor: None,
+                        seat: None,
+                        model: None,
+                        effort: None,
                     },
                 ), // benign
                 Event::new(
