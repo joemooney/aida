@@ -14,12 +14,12 @@ description: |-
 
   ## Related
   STORY-498 (trace gate), TASK-621 (fresh-clone auto-attach), TASK-1205 (other CI guards; keep separate PRs).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:36:04.759429196Z
-modified_at: 2026-09-11T21:56:35.336253272Z
+modified_at: 2026-09-11T21:56:46.680189330Z
 req_type: Task
 tags:
 - aida-store
@@ -42,6 +42,10 @@ comments:
   modified_at: 2026-09-11T21:55:24.876149677Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-11T21:56:46.680189330Z
+  implemented_by: joe
 failure_reason:
   phase: implementer
   phase_index: 1
