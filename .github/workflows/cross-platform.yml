@@ -15,7 +15,28 @@ name: Cross-platform (nightly)
 on:
   schedule:
     - cron: '0 6 * * *'   # 06:00 UTC daily
+  # TASK-1205: keep the full Windows/macOS matrix informational on PRs that
+  # touch the fragile cross-platform surface, without expanding the required
+  # Linux-only PR CI path. trace:TASK-1205 | ai:codex
+  pull_request:
+    branches: [main]
+    paths:
+      - 'aida-cli-lib/src/agent_registry.rs'
+      - 'aida-cli-lib/src/**/worktree*.rs'
+      - 'aida-core/src/**/worktree*.rs'
+      - 'aida-cli-lib/src/init_cmd.rs'
+      - 'aida-cli-lib/src/**/resolve_aida_exe*'
+      - 'aida-cli-lib/src/**/session*.rs'
+      - 'aida-core/src/db/git_backend.rs'
+      - 'aida-core/templates/hooks/**'
+      - '.github/workflows/**'
   workflow_dispatch:
+    inputs:
+      exercise_tracking_issue:
+        description: 'Deliberately fail the matrix so the tracking-issue notifier can be exercised'
+        required: false
+        default: false
+        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,6 +52,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+
+      # TASK-1205: manual, opt-in tripwire for exercising the red-matrix
+      # tracking-issue path without waiting for a genuine nightly failure.
+      # trace:TASK-1205 | ai:codex
+      - name: Exercise tracking issue notifier
+        if: github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue
+        run: |
+          echo "::error::Deliberate cross-platform failure requested by workflow_dispatch"
+          exit 1
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -86,7 +116,7 @@ jobs:
   notify-failure:
     name: Open tracking issue on nightly failure
     needs: build
-    if: failure() && github.event_name == 'schedule'
+    if: failure() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.exercise_tracking_issue))
     runs-on: ubuntu-latest
     permissions:
       issues: write
