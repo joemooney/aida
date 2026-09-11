@@ -1858,7 +1858,9 @@ pub(crate) fn handle_queue_command(
                                 .unwrap_or_else(|| "Unknown".to_string());
                             // TASK-269: shared glyph + colour palette.
                             // trace:TASK-269 | ai:claude
-                            let status_badge = status_display::status_badge(&status);
+                            let status_badge = req
+                                .map(status_display::parked_status_badge)
+                                .unwrap_or_else(|| status_display::status_badge(&status));
                             let glyph = if is_last { "└─" } else { "├─" };
                             let pad =
                                 " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
@@ -2017,7 +2019,9 @@ pub(crate) fn handle_queue_command(
                         .unwrap_or_else(|| "Unknown".to_string());
                     // TASK-269: shared glyph + colour palette.
                     // trace:TASK-269 | ai:claude
-                    let status_badge = status_display::status_badge(&status);
+                    let status_badge = req
+                        .map(status_display::parked_status_badge)
+                        .unwrap_or_else(|| status_display::status_badge(&status));
 
                     print!(
                         "  {}. {} {}",

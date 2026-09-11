@@ -40,6 +40,57 @@
 
 use colored::{ColoredString, Colorize};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NeedsAttentionLens {
+    Shelved { cause: Option<String> },
+    NeedsDecision { reason: Option<String> },
+}
+
+impl NeedsAttentionLens {
+    pub(crate) fn label(&self) -> String {
+        match self {
+            NeedsAttentionLens::Shelved { cause } => label_with_reason("Shelved", cause.as_deref()),
+            NeedsAttentionLens::NeedsDecision { reason } => {
+                label_with_reason("Needs Decision", reason.as_deref())
+            }
+        }
+    }
+
+    pub(crate) fn palette_key(&self) -> &'static str {
+        match self {
+            NeedsAttentionLens::Shelved { .. } => "Shelved",
+            NeedsAttentionLens::NeedsDecision { .. } => "NeedsDecision",
+        }
+    }
+}
+
+fn label_with_reason(label: &str, reason: Option<&str>) -> String {
+    match reason.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(reason) => format!("{label} ({reason})"),
+        None => label.to_string(),
+    }
+}
+
+// trace:STORY-1023 | ai:codex
+pub(crate) fn needs_attention_lens(
+    req: &aida_core::models::Requirement,
+) -> Option<NeedsAttentionLens> {
+    if !matches!(req.status, aida_core::RequirementStatus::NeedsAttention) {
+        return None;
+    }
+    if let Some(fr) = req.failure_reason.as_ref() {
+        return Some(NeedsAttentionLens::Shelved {
+            cause: Some(fr.kind.clone()),
+        });
+    }
+    Some(NeedsAttentionLens::NeedsDecision {
+        reason: req
+            .attention_reason
+            .as_ref()
+            .map(|a| a.category.to_string()),
+    })
+}
+
 /// Collapse a status string to a bare match key: lowercase, with whitespace,
 /// `-` and `_` stripped. Lets "In Progress", "InProgress", "in-progress" and
 /// even a column-padded "Approved   " all resolve to the same arm.
@@ -76,6 +127,8 @@ pub(crate) fn status_glyph_for_profile(
         "completed" => Glyph::Check,
         "rejected" => Glyph::Cross,
         "needsattention" => Glyph::Blocked,
+        "needsdecision" => Glyph::Blocked,
+        "shelved" => Glyph::Pause,
         // trace:BUG-781 | ai:claude — the decision-class terminal label.
         "accepted" => Glyph::Accepted,
         // trace:TASK-1176 | ai:claude — adopted, then replaced.
@@ -118,6 +171,9 @@ fn status_glyph_literal(status: &str) -> &'static str {
         "rejected" => "✗",
         // STORY-332: a punted spec — paused mid-work, awaiting triage.
         "needsattention" => "⚠",
+        "needsdecision" => "⚠",
+        // STORY-1023: mechanically parked with a typed recovery path.
+        "shelved" => "⏸",
         // trace:BUG-781 | ai:claude — a ratified decision: checked and closed.
         "accepted" => "☑",
         // trace:TASK-1176 | ai:claude — adopted, then replaced: the same box
@@ -150,6 +206,10 @@ pub(crate) fn paint_status(text: &str, status: &str) -> ColoredString {
         // STORY-332: bold magenta — a colour no other status uses, so a
         // punted spec visibly pops out of a list as "decide something here".
         "needsattention" => text.magenta().bold(),
+        "needsdecision" => text.magenta().bold(),
+        // STORY-1023: a typed mechanical shelf should stay visible without
+        // looking like an operator escalation.
+        "shelved" => text.blue(),
         // BUG-781: a ratified decision is terminal, so it paints in the closed
         // green family — never the cyan `Approved` wears on a task that has yet
         // to be started. trace:BUG-781 | ai:claude
@@ -194,6 +254,17 @@ pub(crate) fn display_status_for_type<'a>(req_type: &str, status: &'a str) -> &'
 /// cell instead, since the glyph would break column alignment.
 pub(crate) fn status_badge(status: &str) -> String {
     format!("{} {}", status_glyph(status), paint_status(status, status))
+}
+
+pub(crate) fn parked_status_badge(req: &aida_core::models::Requirement) -> String {
+    match needs_attention_lens(req) {
+        Some(lens) => {
+            let label = lens.label();
+            let key = lens.palette_key();
+            format!("{} {}", status_glyph(key), paint_status(&label, key))
+        }
+        None => status_badge(&req.status.to_string()),
+    }
 }
 
 /// A fixed-width status cell for list tables: `"<glyph> <coloured label>"` with
@@ -327,6 +398,41 @@ mod tests {
         let painted = paint_status("Needs Attention", "Needs Attention");
         assert_eq!(painted.fgcolor, Some(colored::Color::Magenta));
         assert!(painted.style.contains(colored::Styles::Bold));
+    }
+
+    #[test]
+    fn needs_attention_lens_splits_shelved_from_decision() {
+        let mut shelved =
+            aida_core::models::Requirement::new("stale base".to_string(), String::new());
+        shelved.status = aida_core::RequirementStatus::NeedsAttention;
+        shelved.failure_reason = Some(aida_core::FailureReason {
+            phase: "preflight".to_string(),
+            phase_index: 1,
+            kind: "stale-base".to_string(),
+            detail: "branch is behind main".to_string(),
+            recovery_hint: Some("rebase and retry".to_string()),
+            shelved_by: Some("codex".to_string()),
+            shelved_at: chrono::Utc::now(),
+        });
+        assert_eq!(
+            needs_attention_lens(&shelved).map(|lens| lens.label()),
+            Some("Shelved (stale-base)".to_string())
+        );
+
+        let mut decision =
+            aida_core::models::Requirement::new("design fork".to_string(), String::new());
+        decision.status = aida_core::RequirementStatus::NeedsAttention;
+        decision.attention_reason = Some(aida_core::AttentionReason {
+            category: aida_core::PuntCategory::DesignFork,
+            detail: "pick a migration path".to_string(),
+            lean: None,
+            raised_by: Some("codex".to_string()),
+            raised_at: chrono::Utc::now(),
+        });
+        assert_eq!(
+            needs_attention_lens(&decision).map(|lens| lens.label()),
+            Some("Needs Decision (design-fork)".to_string())
+        );
     }
 
     #[test]

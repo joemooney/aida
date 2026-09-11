@@ -890,8 +890,10 @@ batch:nightly = [A, B, C, D, E]   (D declared blocked-by B via `aida rel add D B
 
 ### What's recorded on a shelve
 
-A shelved spec carries the same `NeedsAttention` status as a punt, plus a
-**`FailureReason`** sibling to `AttentionReason`:
+A shelved spec carries the same stored `NeedsAttention` status as a punt, plus
+a **`FailureReason`** sibling to `AttentionReason`. Human-facing surfaces render
+these as **Shelved (`kind`)** rather than **Needs Decision**, so mechanical
+rework does not count as a decision escalation:
 
 | field | shape | example |
 |---|---|---|

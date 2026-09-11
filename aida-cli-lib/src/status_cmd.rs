@@ -127,6 +127,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
             serde_json::to_string_pretty(&serde_json::json!({
                 "spec": disp,
                 "status": status_label,
+                "status_lens": status_display::needs_attention_lens(req).map(|lens| lens.label()),
                 "in_progress": in_progress,
                 "liveness": verdict_key,
                 "live": verdict == SpecLiveness::Live,
@@ -149,7 +150,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
         "{} {}  {}",
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold(),
         disp.cyan().bold(),
-        status_display::status_badge(&status_label),
+        status_display::parked_status_badge(req),
     );
     println!();
     println!("{}", "Liveness".bold());

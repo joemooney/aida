@@ -257,7 +257,7 @@ stateDiagram-v2
     Done --> Completed: merge auto-bump (aida pull)
     Completed --> Released: release tag (scripts/release.sh)
 
-    InProgress --> NeedsAttention: punt (design-fork)
+    InProgress --> NeedsAttention: punt / shelve
     NeedsAttention --> InProgress: aida edit --status in-progress
     NeedsAttention --> Approved: aida edit --status approved
     NeedsAttention --> Rejected: aida edit --status rejected
@@ -323,7 +323,10 @@ mode; see [`docs/review-process.md`](review-process.md) for the topology.
 
 *When an agent hits a fork it can't safely resolve, who gets the call next?*
 The implementer never guesses past a design-fork — it **punts**, parking the
-spec `NeedsAttention`. Under a headless drain that punt climbs a cascade.
+spec in the stored `NeedsAttention` state. Display surfaces render that as
+**Needs Decision** when an `AttentionReason` is present. Mechanical drain
+failures park in the same stored state with a `FailureReason` and render as
+**Shelved**. Under a headless drain a punt climbs a cascade.
 
 ```mermaid
 stateDiagram-v2

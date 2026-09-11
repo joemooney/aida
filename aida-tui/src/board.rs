@@ -31,7 +31,9 @@ pub enum Reason {
     InFlight,
     /// A `BlockedBy` edge points at an incomplete spec — waiting on a dep.
     Blocked,
-    /// Parked in `NeedsAttention` (a punt) — an implementer must triage.
+    /// Parked in `NeedsAttention` — either mechanically shelved or awaiting
+    /// a human decision, depending on the recorded reason available to richer
+    /// CLI renderers.
     NeedsAttention,
     /// Done on a branch with an open PR — a reviewer must act.
     AwaitingReview,
@@ -63,7 +65,7 @@ impl Reason {
         match self {
             Reason::InFlight => "in flight",
             Reason::Blocked => "blocked by dep",
-            Reason::NeedsAttention => "needs attention",
+            Reason::NeedsAttention => "parked",
             Reason::AwaitingReview => "awaiting review",
             Reason::NeedsAnswer => "needs an answer",
             Reason::NeedsApproval => "needs approval",
@@ -283,7 +285,7 @@ pub fn classify(inputs: &BoardInputs) -> Vec<ClassifiedItem> {
             &mut claimed,
         );
     }
-    // 3. needs attention — the NeedsAttention status query.
+    // 3. parked — the NeedsAttention status query.
     for r in &inputs.needs_attention_rows {
         take(
             &r.spec_id,
@@ -423,7 +425,7 @@ pub fn park_reason(
         }),
         Reason::NeedsAttention => Some(match clean(punt_note).or_else(|| clean(finding)) {
             Some(n) => format!("parked: {n}"),
-            None => "needs attention — parked for triage".to_string(),
+            None => "parked — inspect the recorded reason".to_string(),
         }),
         Reason::NeedsApproval => Some(if advisor_backlog {
             "blessed by the advisor — awaiting routing to the implementer queue".to_string()

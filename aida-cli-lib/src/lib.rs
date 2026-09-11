@@ -14667,17 +14667,21 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // BUG-626: an epic's displayed status is the read-only rollup of its
     // children, not the stored field. trace:BUG-626 | ai:claude
     let display_status = effective_display_status(&store, req);
-    let status_str = match display_status {
-        RequirementStatus::Draft => "Draft".yellow(),
-        RequirementStatus::Approved => "Approved".blue(),
-        RequirementStatus::Planned => "Planned".cyan(),
-        RequirementStatus::InProgress => "In Progress".magenta(),
-        RequirementStatus::Done => "Done".bright_green().bold(),
-        RequirementStatus::Completed => "Completed".green(),
-        RequirementStatus::Rejected => "Rejected".red(),
-        // trace:TASK-1176 | ai:claude
-        RequirementStatus::Superseded => "Superseded".green().dimmed(),
-        RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
+    let status_str = if matches!(display_status, RequirementStatus::NeedsAttention) {
+        status_display::parked_status_badge(req)
+    } else {
+        match display_status {
+            RequirementStatus::Draft => "Draft".yellow().to_string(),
+            RequirementStatus::Approved => "Approved".blue().to_string(),
+            RequirementStatus::Planned => "Planned".cyan().to_string(),
+            RequirementStatus::InProgress => "In Progress".magenta().to_string(),
+            RequirementStatus::Done => "Done".bright_green().bold().to_string(),
+            RequirementStatus::Completed => "Completed".green().to_string(),
+            RequirementStatus::Rejected => "Rejected".red().to_string(),
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded => "Superseded".green().dimmed().to_string(),
+            RequirementStatus::NeedsAttention => unreachable!("handled above"),
+        }
     };
     println!("{}: {}", "Status".blue(), status_str);
 
@@ -50302,6 +50306,77 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // trace:STORY-1023 | ai:codex
+    if matches!(eff_status, aida_core::RequirementStatus::NeedsAttention) {
+        if let Some(fr) = req.failure_reason.as_ref() {
+            let cause = auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
+            let detail = auto_complete_telemetry::failure_detail_first_line(Some(&fr.detail));
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "spec": disp,
+                        "bucket": "shelved",
+                        "reason": format!("Shelved ({cause}) — {detail}"),
+                        "needs_human": false,
+                        "failure_reason": {
+                            "phase": fr.phase,
+                            "kind": fr.kind,
+                            "detail": fr.detail,
+                            "hint": fr.recovery_hint,
+                        },
+                    }))?
+                );
+            } else {
+                println!("{}{}", why_headline_prefix(), disp.cyan().bold());
+                println!(
+                    "  {} {} — {}",
+                    crate::glyph(crate::glyphs::Glyph::Pause).blue(),
+                    format!("Shelved ({cause})").bold(),
+                    detail
+                );
+                if let Some(hint) = fr.recovery_hint.as_deref() {
+                    println!(
+                        "    {} hint: {}",
+                        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                        hint.dimmed()
+                    );
+                }
+            }
+            return Ok(());
+        }
+        let reason = req
+            .attention_reason
+            .as_ref()
+            .map(|a| a.category.to_string())
+            .unwrap_or_else(|| "no recorded reason".to_string());
+        let detail = req
+            .attention_reason
+            .as_ref()
+            .map(|a| a.detail.as_str())
+            .unwrap_or("parked for a human decision");
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "bucket": "needs-decision",
+                    "reason": format!("Needs Decision ({reason}) — {detail}"),
+                    "needs_human": true,
+                }))?
+            );
+        } else {
+            println!("{}{}", why_headline_prefix(), disp.cyan().bold());
+            println!(
+                "  {} {} — {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                format!("Needs Decision ({reason})").bold(),
+                detail
+            );
+        }
+        return Ok(());
+    }
+
     // BUG-623 (subsumed by STORY-694): a spec with a spec-scoped lease whose
     // holder process is NOT live (pid dead, or idle past threshold) is in-flight
     // but STALLED — a hung/abandoned session reads as active otherwise. The Live
@@ -62250,18 +62325,28 @@ fn collect_awaiting_report(
             &findings::FindingsFilter::default(),
         ))
     };
-    let escalations: Vec<_> = summaries
+    // trace:STORY-1023 | ai:codex
+    let mut shelved_total = 0usize;
+    let mut escalations: Vec<awaiting_you::EscalationItem> = Vec::new();
+    for s in summaries
         .iter()
         .filter(|s| s.status.eq_ignore_ascii_case("NeedsAttention"))
-        .map(|s| awaiting_you::EscalationItem {
-            spec_id: s
-                .agreed_id
-                .clone()
-                .or_else(|| s.spec_id.clone())
-                .unwrap_or_else(|| "?".to_string()),
-            title: s.title.clone(),
-        })
-        .collect();
+    {
+        let spec_id = s
+            .agreed_id
+            .clone()
+            .or_else(|| s.spec_id.clone())
+            .unwrap_or_else(|| "?".to_string());
+        match backend.get_requirement_by_spec_id(&spec_id) {
+            Ok(Some(req)) if req.failure_reason.is_some() => {
+                shelved_total += 1;
+            }
+            _ => escalations.push(awaiting_you::EscalationItem {
+                spec_id,
+                title: s.title.clone(),
+            }),
+        }
+    }
 
     // Reviewer-queue items — surface queue entries where the verdict is
     // the operator's only when the active role IS reviewer. Otherwise
@@ -62332,6 +62417,7 @@ fn collect_awaiting_report(
         escalations,
         mail,
         worker_directives,
+        shelved_total,
     }
 }
 
@@ -65677,7 +65763,6 @@ fn render_spec_card(
     let id = req.display_id();
     let req_type = req.req_type.to_string();
     let priority = req.effective_priority();
-    let status = req.effective_status();
 
     // Brief: a single line, no box — for autonomous / scripted flows.
     // TASK-269: badge the status (glyph + colour) here too. trace:TASK-269
@@ -65687,7 +65772,7 @@ fn render_spec_card(
             id,
             req_type,
             priority,
-            status_display::status_badge(&status),
+            status_display::parked_status_badge(req),
             req.title
         );
         return;
@@ -65728,7 +65813,7 @@ fn render_spec_card(
         id.bold(),
         req_type,
         priority,
-        status_display::status_badge(&status),
+        status_display::parked_status_badge(req),
         human_only_chip,
     );
     println!();

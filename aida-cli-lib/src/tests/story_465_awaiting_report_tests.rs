@@ -155,6 +155,33 @@ fn needs_attention_spec_surfaces_as_escalation() {
     assert_eq!(report.escalations[0].title, "punted overnight");
 }
 
+#[test]
+fn failure_reason_shelf_surfaces_as_rework_not_escalation() {
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+
+    let mut parked = Requirement::new("stale base retry".into(), String::new());
+    parked.spec_id = Some("BUG-1023".into());
+    parked.status = RequirementStatus::NeedsAttention;
+    parked.failure_reason = Some(aida_core::FailureReason {
+        phase: "preflight".into(),
+        phase_index: 1,
+        kind: "stale-base".into(),
+        detail: "branch is behind main".into(),
+        recovery_hint: Some("rebase and retry".into()),
+        shelved_by: Some("codex".into()),
+        shelved_at: chrono::Utc::now(),
+    });
+    backend.add_requirement(parked).unwrap();
+
+    let ctx = empty_user_ctx(Some("implementer"));
+    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+    assert_eq!(report.escalations.len(), 0);
+    assert_eq!(report.shelved_total, 1);
+    assert_eq!(report.compact_line().unwrap().contains("1 in rework"), true);
+}
+
 // Briefs are filed under `.aida/agent-briefs/<agent>/`. The classifier
 // narrows to the running agent's directory when `AIDA_AGENT_TYPE` is a
 // known value, so we set it explicitly to make detection deterministic
