@@ -3,11 +3,11 @@ spec_id: BUG-1056
 agreed_id: BUG-1056
 title: queue rework leaves the spec NeedsAttention, which the unified pickability policy refuses — reworks became undrainable
 description: 'Interaction regression (2026-09-11, diagnosed after four consecutive minutes-long drains): the BUG-1017 unified pickability policy refuses NeedsAttention specs without resolved triage or force — correct for stale parks — but aida queue rework re-queues a spec while LEAVING it NeedsAttention, so every findings-led rework entry is skipped by the next drain and snapshots burn in seconds. The two features contradict: a rework IS the triage resolution. Fix: queue rework transitions the spec out of NeedsAttention (back to Approved, or a rework-marked state the policy treats as pickable-with-findings); the policy recognizes a rework-queued entry as triaged. Acceptance: rework a parked spec, run a drain — the implementer session actually launches with the findings brief; pickability tests updated for the rework case; no other NeedsAttention pickup loosened.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T09:46:42.576862298Z
-modified_at: 2026-09-11T09:46:48.734973845Z
+modified_at: 2026-09-11T12:02:47.757710129Z
 req_type: Bug
 execution_mode: drain
