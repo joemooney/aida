@@ -544,6 +544,40 @@ mod tests {
         assert!(gitignore.contains("!.aida/discipline/**"), "{gitignore}");
     }
 
+    #[test]
+    fn refresh_installs_current_session_discipline_template_when_missing() {
+        // trace:TASK-1203 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/discipline")).unwrap();
+
+        let packs = refresh_agent_packs(root, None);
+        let discipline = packs
+            .iter()
+            .find(|p| p.label == "Discipline pack")
+            .expect("discipline pack refresh row");
+        assert!(
+            discipline
+                .report
+                .refreshed
+                .contains(&PathBuf::from(".aida/discipline/session-discipline.md")),
+            "{:?}",
+            discipline.report
+        );
+
+        let body =
+            std::fs::read_to_string(root.join(".aida/discipline/session-discipline.md")).unwrap();
+        assert!(
+            body.contains("Re-read live state before acting on remembered IDs"),
+            "{body}"
+        );
+        assert!(
+            body.contains("release_task") && body.contains("not-found"),
+            "{body}"
+        );
+        assert!(body.contains("no-briefs-found"), "{body}");
+    }
+
     /// BUG-838: the `[scaffold] agents_md_block = false` opt-out leaves an
     /// unmarked AGENTS.md byte-identical through a refresh.
     #[test]
