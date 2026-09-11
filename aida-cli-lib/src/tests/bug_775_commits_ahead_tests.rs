@@ -331,6 +331,55 @@ fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
     }
 }
 
+/// BUG-912: when the orchestrator exports the exact phase-4 verdict anchor,
+/// `review record --pr` must write there even if AIDA_DRIVE_ROOT names the
+/// review worktree.
+// trace:BUG-912 | ai:codex
+#[test]
+fn review_record_pr_handshake_honors_explicit_verdict_file() {
+    let drive = tempfile::tempdir().unwrap();
+    let parent = tempfile::tempdir().unwrap();
+    let verdict_file = parent
+        .path()
+        .join(".aida")
+        .join("review-verdicts")
+        .join("PR-1706.json");
+    let drive_s = drive.path().to_string_lossy().into_owned();
+    let parent_s = parent.path().to_string_lossy().into_owned();
+    let verdict_s = verdict_file.to_string_lossy().into_owned();
+
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_DRIVE_ROOT", &drive_s),
+        ("AIDA_PROJECT_ROOT", &parent_s),
+        ("AIDA_REVIEW_VERDICT_FILE", &verdict_s),
+    ]);
+
+    crate::handle_review_record(
+        "STORY-993",
+        "approved",
+        Some("abc123"),
+        Some("story-993"),
+        Some("looks good"),
+        &[],
+        Some(1706),
+    )
+    .unwrap();
+
+    assert!(
+        verdict_file.exists(),
+        "handshake must land at the orchestrator-provided anchor"
+    );
+    assert!(
+        !drive
+            .path()
+            .join(".aida")
+            .join("review-verdicts")
+            .join("PR-1706.json")
+            .exists(),
+        "the worktree drive root must not receive the PR handshake when the explicit anchor exists"
+    );
+}
+
 // ── BUG-806: spec-keyed verdict fallback + drive-binary PATH ─────────────────
 
 #[test]

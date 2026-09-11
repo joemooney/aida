@@ -5072,3 +5072,22 @@ pickability policy. Expanded the smart-target status coverage to include `NeedsA
 Verification: `cargo fmt --all -- --check`; `git diff --check`;
 `cargo test -p aida-cli-lib queue_rework_tests -- --nocapture`. Existing unrelated Rust warnings
 remain in the focused test output.
+
+## Session 2026-09-11 — BUG-912 review record verdict-file anchor
+
+Picked up `BUG-912` from the implementer queue. Fixed `aida review record --pr N` so the phase-3
+PR handshake honors `AIDA_REVIEW_VERDICT_FILE` exactly when the orchestrator exports it, before
+falling back through `AIDA_PROJECT_ROOT`, the active session's parent project root, `AIDA_DRIVE_ROOT`,
+and finally the command's resolved project root. This preserves the existing spec-keyed review
+record behavior while making the PR-keyed handshake land where phase 4 polls.
+
+Added a regression test for the observed headless environment: `AIDA_DRIVE_ROOT` points at the
+review worktree, `AIDA_PROJECT_ROOT` points at the parent project, and `AIDA_REVIEW_VERDICT_FILE`
+points at `.aida/review-verdicts/PR-N.json` under the parent. The test asserts the PR handshake is
+written only to the explicit anchor.
+
+Verification: `cargo fmt --all -- --check`;
+`cargo test -p aida-cli-lib bug_775_commits_ahead_tests::review_record_pr_handshake_honors_explicit_verdict_file -- --nocapture`;
+`cargo test -p aida-cli-lib bug_775_commits_ahead_tests -- --nocapture`;
+`cargo test -p aida-cli-lib review_verdict_tests`. Existing unrelated Rust warnings remain in the
+focused test output.

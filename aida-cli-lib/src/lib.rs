@@ -69214,6 +69214,38 @@ fn drive_root_or_project_root() -> Result<std::path::PathBuf> {
     find_project_root()
 }
 
+// BUG-912: phase-3 reviewers may run inside the review worktree while the
+// orchestrator polls an explicit verdict-file anchor in the parent project.
+// The PR handshake must honor that exact file when present; otherwise prefer
+// roots that phase 4 can observe before falling back to the worktree.
+// trace:BUG-912 | ai:codex
+fn review_pr_handshake_path(project_root: &std::path::Path, pr_number: u64) -> std::path::PathBuf {
+    if let Some(path) = std::env::var_os("AIDA_REVIEW_VERDICT_FILE")
+        .map(std::path::PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        return path;
+    }
+    if let Some(root) = std::env::var_os("AIDA_PROJECT_ROOT")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_dir())
+    {
+        return review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(root) = parent_project_root_for_session(&cwd).filter(|p| p.is_dir()) {
+            return review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+        }
+    }
+    if let Some(root) = std::env::var_os("AIDA_DRIVE_ROOT")
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_dir())
+    {
+        return review_verdict::verdict_path(&root, &format!("PR-{pr_number}"));
+    }
+    review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
+}
+
 fn handle_review_record(
     spec: &str,
     verdict: &str,
@@ -69279,12 +69311,13 @@ fn handle_review_record(
     );
 
     // BUG-802: with --pr, also write the orchestrator's phase-3 handshake at
-    // the drive root. The verdict string is the tolerant-parse canonical label
-    // so `auto_complete::Verdict::parse` accepts it byte-for-byte.
+    // the orchestrator-visible anchor. The verdict string is the tolerant-parse
+    // canonical label so `auto_complete::Verdict::parse` accepts it byte-for-byte.
     if let Some(n) = pr {
-        let dir = project_root.join(".aida").join("review-verdicts");
-        std::fs::create_dir_all(&dir)?;
-        let handshake = dir.join(format!("PR-{n}.json"));
+        let handshake = review_pr_handshake_path(&project_root, n);
+        if let Some(dir) = handshake.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
         let mut body = serde_json::json!({
             "verdict": kind.label(),
             "summary": summary.unwrap_or(""),
