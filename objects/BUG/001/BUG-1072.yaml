@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T18:21:30.995685229Z
-modified_at: 2026-09-11T20:58:43.208230403Z
+modified_at: 2026-09-11T20:58:44.341244727Z
 req_type: Bug
 tags:
 - auto-complete
@@ -55,4 +55,10 @@ comments:
   content: 'Rejected: drain-failure stub; TASK-1211 ci-red is tracked on the shelved spec itself (rework tail).'
   created_at: 2026-09-11T20:58:28.456621190Z
   modified_at: 2026-09-11T20:58:28.456621190Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09243-fcf5-7c42-8768-c5678ddef04e
+  author: joe
+  content: 'Rejected: drain-failure stub; TASK-1211 ci-red is tracked on the shelved spec itself (rework tail).'
+  created_at: 2026-09-11T20:58:44.341244727Z
+  modified_at: 2026-09-11T20:58:44.341244727Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
