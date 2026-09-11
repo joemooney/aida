@@ -14495,7 +14495,7 @@ fn list_requirements(
 ) -> Result<()> {
     // Load requirements
     let store = storage.load()?;
-    let mut requirements = store.requirements;
+    let mut requirements = store.requirements.clone();
 
     // Apply filters if provided
     if let Some(status_str) = status {
@@ -14528,27 +14528,16 @@ fn list_requirements(
         return Ok(());
     }
 
+    const STATUS_COLUMN_WIDTH: usize = 22;
     println!(
-        "{:<10} | {:<36} | {:<30} | {:<10} | {:<10} | {:<15}",
+        "{:<10} | {:<36} | {:<30} | {:<STATUS_COLUMN_WIDTH$} | {:<10} | {:<15}",
         "SPEC-ID", "UUID", "Title", "Status", "Priority", "Feature"
     );
-    println!("{}", "-".repeat(120));
+    println!("{}", "-".repeat(132));
 
     for req in requirements {
-        let status_str = match req.status {
-            RequirementStatus::Draft => "Draft".yellow(),
-            RequirementStatus::Approved => "Approved".blue(),
-            RequirementStatus::Planned => "Planned".cyan(),
-            RequirementStatus::InProgress => "In Progress".magenta(),
-            RequirementStatus::Done => "Done".bright_green().bold(),
-            RequirementStatus::Completed => "Completed".green(),
-            RequirementStatus::Rejected => "Rejected".red(),
-            // trace:TASK-1176 | ai:claude — closed-green family (adopted),
-            // dimmed (history) — never the red a DECLINED spec wears.
-            RequirementStatus::Superseded => "Superseded".green().dimmed(),
-            RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
-        };
-
+        let display_status = effective_display_status(&store, &req);
+        let status_str = list_requirement_status_cell(&req, &display_status, STATUS_COLUMN_WIDTH);
         let priority_str = match req.priority {
             RequirementPriority::High => "High".red(),
             RequirementPriority::Medium => "Medium".yellow(),
@@ -14558,7 +14547,7 @@ fn list_requirements(
         let spec_id_display = req.spec_id.as_deref().unwrap_or("-");
 
         println!(
-            "{:<10} | {:<36} | {:<30} | {:<10} | {:<10} | {:<15}",
+            "{:<10} | {:<36} | {:<30} | {} | {:<10} | {:<15}",
             spec_id_display,
             req.id.to_string(),
             req.title,
@@ -14569,6 +14558,83 @@ fn list_requirements(
     }
 
     Ok(())
+}
+
+fn list_requirement_status_cell(
+    req: &aida_core::models::Requirement,
+    display_status: &RequirementStatus,
+    width: usize,
+) -> String {
+    // trace:STORY-1023 | ai:codex
+    let (label, palette_key) = if matches!(display_status, RequirementStatus::NeedsAttention) {
+        status_display::parked_status_label(req)
+            .unwrap_or_else(|| ("Needs Attention".to_string(), "NeedsAttention"))
+    } else {
+        let label = match display_status {
+            RequirementStatus::Draft => "Draft",
+            RequirementStatus::Approved => "Approved",
+            RequirementStatus::Planned => "Planned",
+            RequirementStatus::InProgress => "In Progress",
+            RequirementStatus::Done => "Done",
+            RequirementStatus::Completed => "Completed",
+            RequirementStatus::Rejected => "Rejected",
+            RequirementStatus::Superseded => "Superseded",
+            RequirementStatus::NeedsAttention => unreachable!("handled above"),
+        };
+        (label.to_string(), label)
+    };
+    let padded = format!("{label:<width$}");
+    status_display::paint_status(&padded, palette_key).to_string()
+}
+
+#[cfg(test)]
+mod story_1023_list_render_tests {
+    use super::*;
+
+    #[test]
+    fn list_status_cell_splits_shelved_from_needs_decision() {
+        let mut shelved =
+            aida_core::models::Requirement::new("stale base".to_string(), String::new());
+        shelved.status = RequirementStatus::NeedsAttention;
+        shelved.failure_reason = Some(aida_core::FailureReason {
+            phase: "review".to_string(),
+            phase_index: 3,
+            kind: "stale-base".to_string(),
+            detail: "base moved under the branch".to_string(),
+            recovery_hint: Some("rebase and retry".to_string()),
+            shelved_by: Some("codex".to_string()),
+            shelved_at: chrono::Utc::now(),
+        });
+
+        let mut decision =
+            aida_core::models::Requirement::new("design fork".to_string(), String::new());
+        decision.status = RequirementStatus::NeedsAttention;
+        decision.attention_reason = Some(aida_core::AttentionReason {
+            category: aida_core::PuntCategory::DesignFork,
+            detail: "choose the public API shape".to_string(),
+            lean: None,
+            raised_by: Some("codex".to_string()),
+            raised_at: chrono::Utc::now(),
+        });
+
+        colored::control::set_override(false);
+        let shelved_cell = list_requirement_status_cell(&shelved, &shelved.status, 22);
+        let decision_cell = list_requirement_status_cell(&decision, &decision.status, 22);
+        colored::control::unset_override();
+
+        assert!(
+            shelved_cell.contains("Shelved (stale-base)"),
+            "cell: {shelved_cell:?}"
+        );
+        assert!(
+            !shelved_cell.contains("Needs Attention"),
+            "cell: {shelved_cell:?}"
+        );
+        assert!(
+            decision_cell.contains("Needs Decision (design-fork)"),
+            "cell: {decision_cell:?}"
+        );
+    }
 }
 
 /// Read the `[external_refs]` provider → base-URL map from `.aida/config.toml`.
