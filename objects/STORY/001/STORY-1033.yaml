@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:27:49.414464744Z
-modified_at: 2026-09-11T08:33:13.513263473Z
+modified_at: 2026-09-11T08:33:15.060104657Z
 req_type: Story
 tags:
 - agents
@@ -61,3 +61,4 @@ relationships:
   target_id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
   created_at: 2026-09-11T06:27:54.442313028Z
   created_by: joe
+execution_mode: drain
