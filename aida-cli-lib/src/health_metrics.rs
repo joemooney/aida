@@ -375,6 +375,7 @@ pub fn failure_kind_is_shelvable(slug: &str) -> bool {
             | "ci-red"
             | "watchdog"
             | "tool-exit"
+            | "headless-wait"
             | "environmental"
             | "cache-locked"
             | "ci-timeout"
@@ -833,6 +834,7 @@ mod tests {
             "ci-red",
             "watchdog",
             "tool-exit",
+            "headless-wait",
             "environmental",
             "ci-timeout",
             "no-verdict",

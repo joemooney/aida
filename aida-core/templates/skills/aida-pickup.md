@@ -140,6 +140,17 @@ overrides `--zen`. An un-annotated prompt defaults to `design-fork`
 (pause-safe). Author guidance: `.aida/discipline/skill-prompt-kinds.md`.
 trace:STORY-287
 
+## Headless waiting rule (`AIDA_HEADLESS=1`) — trace:BUG-1063 | ai:codex
+
+Under a headless drain there is no next conversational turn. Never end your
+turn waiting for a background notification, watcher, monitor, or CI callback.
+Never block inside one tool call for longer than 60 seconds. Poll long waits in
+bounded steps (`sleep <= 60s` per tool call), printing the current state on
+each step so the stream-json log advances and feeds the watchdog. If the wait
+would exceed the phase's remaining budget, write the best available result
+with the current wait state and exit instead of parking the session on a
+future notification.
+
 ## Workflow
 
 ### Step 1: Check the queue

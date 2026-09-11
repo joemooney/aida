@@ -232,6 +232,46 @@ fn codex_watchdog_counts_streaming_headless_log_activity_as_progress() {
     );
 }
 
+// trace:BUG-1063 | ai:codex
+#[test]
+fn bounded_polling_tool_events_feed_three_minute_watchdog() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let worktree = root.join("review-wt");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let log_dir = root.join(".aida/headless-logs");
+    std::fs::create_dir_all(&log_dir).unwrap();
+    let session_id = "bounded-poll-session";
+    let log = log_dir.join(format!("review-{session_id}.jsonl"));
+    std::fs::write(&log, "").unwrap();
+
+    let mut watchdog = PhaseWatchdog::new_for_phase(
+        root.to_path_buf(),
+        session_id.to_string(),
+        std::time::Duration::from_secs(3 * 60),
+        std::time::Duration::from_secs(45 * 60),
+        auto_complete::Phase::Reviewer,
+    );
+    watchdog.worktree = Some(worktree);
+    watchdog.last_sig = headless_log_activity_signature(root, session_id);
+
+    let mut body = String::new();
+    for i in 1..=5 {
+        watchdog.last_progress = std::time::Instant::now() - std::time::Duration::from_secs(4 * 60);
+        watchdog.last_poll = std::time::Instant::now() - std::time::Duration::from_secs(31);
+        body.push_str(&format!(
+            "{{\"type\":\"assistant\",\"message\":{{\"content\":[{{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{{\"command\":\"gh run view --json status # poll {i}\"}}}}]}}}}\n"
+        ));
+        std::fs::write(&log, &body).unwrap();
+
+        assert_eq!(
+            watchdog.check(),
+            None,
+            "bounded poll tool event {i} should reset a 3-minute no-progress window",
+        );
+    }
+}
+
 #[test]
 fn resume_start_phase_clamp_bumps_ci_to_reviewer_only() {
     use auto_complete::Phase;

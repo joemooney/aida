@@ -444,6 +444,12 @@ pub(crate) enum FailureKind {
     /// the implementer attempted the work and failed.
     // trace:BUG-826 | ai:codex
     LaunchNoOutput,
+    /// BUG-1063: a headless phase ended its turn while waiting for a future
+    /// notification / monitor / watcher callback. Under headless vendor exec
+    /// there is no next turn, so this is a typed waiting-contract violation
+    /// rather than a generic tool exit.
+    // trace:BUG-1063 | ai:codex
+    HeadlessWait,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -483,6 +489,8 @@ impl FailureKind {
                 | Self::LeaseConflict
                 // trace:BUG-826 | ai:codex
                 | Self::LaunchNoOutput
+                // trace:BUG-1063 | ai:codex
+                | Self::HeadlessWait
                 | Self::Failed
         )
     }
@@ -505,6 +513,7 @@ impl FailureKind {
             | Self::MissingTool
             | Self::PrVerificationInconclusive
             | Self::LaunchNoOutput => "environmental",
+            Self::HeadlessWait => "headless-wait",
             Self::Failed => "tool-exit",
         }
     }
@@ -866,7 +875,7 @@ pub(crate) fn should_attempt_conflict_rebase(budget: usize, attempted: bool, rea
 pub(crate) fn is_transient_retry_cause(cause: &str) -> bool {
     matches!(
         cause,
-        "watchdog" | "no-verdict" | "no-pr" | "tool-exit" | "cache-locked"
+        "watchdog" | "no-verdict" | "no-pr" | "tool-exit" | "cache-locked" | "headless-wait"
     )
 }
 
@@ -1529,6 +1538,15 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                  window — the spec is shelved, not failed. Avoid running bulk cache writes \
                  while a drain is live, then re-run: `aida queue work {spec} --auto-complete`. \
                  If a lock looks stuck, run `aida doctor heal stale-locks`."
+            );
+        }
+        // trace:BUG-1063 | ai:codex
+        FailureKind::HeadlessWait => {
+            return format!(
+                "The headless phase ended while waiting for a future notification, but \
+                 headless runs have no next turn. Re-run it and poll waits in <=60s \
+                 bounded steps that print state, then write the phase result before exit: \
+                 `aida queue rework {spec} --work`."
             );
         }
         _ => {}
@@ -5740,6 +5758,7 @@ mod tests {
             "no-pr",
             "tool-exit",
             "cache-locked",
+            "headless-wait",
         ] {
             assert!(is_transient_retry_cause(cause), "{cause}");
         }
@@ -5758,6 +5777,11 @@ mod tests {
         assert_eq!(clamp_transient_retry_budget(99), 3);
         assert!(should_retry_transient_failure(FailureKind::Watchdog, 0, 1));
         assert!(!should_retry_transient_failure(FailureKind::Watchdog, 1, 1));
+        assert!(should_retry_transient_failure(
+            FailureKind::HeadlessWait,
+            0,
+            1
+        ));
         assert!(!should_retry_transient_failure(
             FailureKind::VerdictRequestChanges,
             0,
@@ -8246,6 +8270,7 @@ mod tests {
             "no-pr",
             "watchdog",
             "cache-locked",
+            "headless-wait",
             "environmental",
             "internal",
         ];
@@ -8263,6 +8288,7 @@ mod tests {
             FailureKind::Watchdog,
             FailureKind::CacheLocked,
             FailureKind::LaunchNoOutput,
+            FailureKind::HeadlessWait,
             FailureKind::Failed,
         ] {
             assert!(
