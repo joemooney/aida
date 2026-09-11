@@ -2604,6 +2604,7 @@ mod tests {
             last_active_at: now,
             role: Some("implementer".to_string()),
             current_spec: Some("BUG-1043".to_string()),
+            terminal: None,
             worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
             source: "mcp".to_string(),
             binary_version: None,
