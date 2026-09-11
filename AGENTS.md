@@ -60,6 +60,8 @@ aida queue work <SPEC-ID>
 aida agent new codex --role implementer --spec <SPEC-ID>
 aida agent new codex --role advisor --show-context
 aida pr ship
+aida integrate
+aida integrate --run
 aida brief list --for-agent <agent>
 aida brief ack .aida/agent-briefs/<agent>/<brief>.md
 aida --asciinema --cast-title "Demo" queue work --batch <name> --auto-complete

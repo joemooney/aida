@@ -217,6 +217,7 @@ For details on any of these see the [CLI reference](docs/cli/README.md).
 - **MCP resources**: `aida://project/summary`, `aida://requirements/tree`
 - **Hooks**: `aida-stop-check.sh` warns about untraced edits; `aida-session-context.sh` injects role + project context at session start
 - **Roles & sessions**: `aida role` manages persistent named contexts (architect, implementer, reviewer, and **advisor** — "trusted counsel" across the project's lifetime; `dialog` is a deprecated alias for it) with per-role scope filters and Claude Code system-prompt addenda; `aida session list/resume/new` enriches Claude Code's session list with the active role and most-recent spec id
+- **Integrator**: bare `aida integrate` shows Done-with-PR work as a merge queue with positions; `aida integrate --run` drains that queue through one serialized rebase/review/merge/pull loop so finished PRs do not stale-base race each other.
 - **Statusline**: `aida statusline` is sub-50ms and suitable for `~/.claude/settings.json`'s `statusLine.command`
 
 ### Web dashboard highlights
