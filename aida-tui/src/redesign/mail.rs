@@ -223,6 +223,7 @@ mod tests {
             intent: Intent::Fyi,
             retracted: false,
             deleted: false,
+            archived: false,
         }
     }
 
