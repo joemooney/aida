@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T04:15:12.561180857Z
-modified_at: 2026-09-11T13:09:13.875919970Z
+modified_at: 2026-09-11T13:09:53.870010020Z
 req_type: Bug
 relationships:
 - rel_type: !Custom implemented-by
@@ -24,10 +24,22 @@ comments:
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 failure_reason:
-  phase: implementer
-  phase_index: 1
+  phase: reviewer
+  phase_index: 3
   kind: tool-exit
-  detail: the implementer session exited 1 — it was aborted or errored (attempt 2/2)
-  recovery_hint: 'Continue the implementer session: `aida queue work BUG-1021 --resume`'
+  detail: |-
+    PR-1738 base is 17 commits behind origin and overlaps 3 files touched on base since the PR forked — refusing to launch reviewer against stale code.
+
+    Overlapping files:
+      PROMPT_HISTORY.md
+      aida-cli-lib/src/init_cmd.rs
+      aida-cli-lib/src/agent_registry.rs
+
+    Recover with:
+      aida pr rebase 1738              # clean rebase + force-push-with-lease
+      aida pr rebase 1738 --interactive  # if conflicts need manual resolve
+
+    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1021 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-10T09:31:26.554148103Z
+  shelved_at: 2026-09-11T13:09:53.870010020Z
