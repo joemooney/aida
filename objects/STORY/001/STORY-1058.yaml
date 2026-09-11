@@ -1,0 +1,26 @@
+id: 01a0921f-e9ee-7733-9a20-9f4b4e80853b
+spec_id: STORY-1058
+agreed_id: STORY-1058
+title: 'Review PR-1746: [AI:codex] ci(portability): add cross-platform PR guards (TASK-1205)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0920e`) for branch `task-1205`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1746>
+  - Branch: `task-1205` → `main`
+
+  ## Covers
+
+  - TASK-1205
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1746` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-11T20:19:20.174870092Z
+modified_at: 2026-09-11T20:19:20.174870092Z
+req_type: Story
