@@ -70949,6 +70949,7 @@ fn run_auto_complete(
     let mut driver = RealPhaseDriver::new(
         project_root.clone(),
         spec.to_string(),
+        user_id.to_string(),
         permission_mode.map(|s| s.to_string()),
         json,
         no_human,
@@ -76305,6 +76306,10 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
 struct RealPhaseDriver {
     project_root: std::path::PathBuf,
     spec: String,
+    /// Queue owner captured when the drain selected this pipeline member. Phase
+    /// children keep this identity while their role changes per phase.
+    // trace:BUG-1038 | ai:codex
+    queue_user_id: String,
     permission_mode: Option<String>,
     json: bool,
     branch: Option<String>,
@@ -76457,6 +76462,7 @@ impl RealPhaseDriver {
     fn new(
         project_root: std::path::PathBuf,
         spec: String,
+        queue_user_id: String,
         permission_mode: Option<String>,
         json: bool,
         no_human: Option<auto_complete::NoHumanMode>,
@@ -76475,6 +76481,7 @@ impl RealPhaseDriver {
         Self {
             project_root,
             spec,
+            queue_user_id,
             permission_mode,
             json,
             branch: None,
@@ -77186,6 +77193,7 @@ fn orchestrator_phase_child_env(
     run_token: &str,
     phase: auto_complete::Phase,
     variant: auto_complete::AutoCompleteVariant,
+    queue_user_id: &str,
 ) -> Vec<(&'static str, String)> {
     let phase_role = match phase {
         auto_complete::Phase::Implementer => Some("implementer"),
@@ -77199,6 +77207,10 @@ fn orchestrator_phase_child_env(
         (orchestrator::VARIANT_ENV, variant.slug().to_string()),
         (orchestrator::PHASE_ENV, phase.index().to_string()),
     ];
+    // trace:BUG-1038 | ai:codex
+    if !queue_user_id.trim().is_empty() {
+        env.push(("AIDA_USER", queue_user_id.to_string()));
+    }
     if let Some(role) = phase_role {
         env.push(("AIDA_SESSION_ROLE", role.to_string()));
     }
@@ -77603,6 +77615,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &self.run_token,
             auto_complete::Phase::Implementer,
             self.variant,
+            &self.queue_user_id,
         ) {
             cmd.env(key, value);
         }
@@ -78524,11 +78537,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &session_uuid,
                 "--no-pull",
             ])
-            .env(orchestrator::AUTO_COMPLETE_ENV, "1")
-            // BUG-233: corroboration token — same contract as the implementer
-            // phase. The reviewer additionally keys off the verdict-file path.
-            .env(orchestrator::TOKEN_ENV, &self.run_token)
             .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path);
+        // BUG-233/BUG-901/BUG-1038: use the same orchestrator phase envelope as
+        // the implementer child: token, variant, phase role, and captured queue
+        // owner all travel together.
+        for (key, value) in orchestrator_phase_child_env(
+            &self.run_token,
+            auto_complete::Phase::Reviewer,
+            self.variant,
+            &self.queue_user_id,
+        ) {
+            cmd.env(key, value);
+        }
         if self.from_pr {
             cmd.env("AIDA_FROM_PR_REVIEW", "1")
                 .env("AIDA_FROM_PR_NUMBER", pr.to_string());
@@ -78536,15 +78556,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 cmd.env("AIDA_FROM_PR_HEAD_SHA", head_sha);
             }
         }
-        // TASK-306: phase index + `--no-human` scope for the child statusline,
-        // consistent with the implementer phase. The reviewer runs headless
+        // TASK-306: `--no-human` scope for the child statusline. The reviewer runs headless
         // under `--no-human` (so usually no statusline renders), but a plain
-        // `--auto-complete` reviewer is interactive and shows `auto:3/6`.
+        // `--auto-complete` reviewer is interactive and shows `auto:3/6`; the
+        // phase index itself comes from orchestrator_phase_child_env above.
         // trace:TASK-306 | ai:claude
-        cmd.env(
-            orchestrator::PHASE_ENV,
-            auto_complete::Phase::Reviewer.index().to_string(),
-        );
         if let Some(mode) = self.no_human {
             cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
         }

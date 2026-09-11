@@ -88,6 +88,7 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
     RealPhaseDriver::new(
         root.to_path_buf(),
         spec.to_string(),
+        "test-queue".to_string(),
         None,
         false,
         None,
@@ -155,6 +156,7 @@ fn phase_child_env_carries_auto_complete_variant() {
         "run-token",
         crate::auto_complete::Phase::Implementer,
         crate::auto_complete::AutoCompleteVariant::ThroughCi,
+        "queue-owner",
     );
     assert!(env
         .iter()
@@ -171,6 +173,9 @@ fn phase_child_env_carries_auto_complete_variant() {
     assert!(env
         .iter()
         .any(|(k, v)| *k == "AIDA_SESSION_ROLE" && v == "implementer"));
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == "AIDA_USER" && v == "queue-owner"));
 }
 
 #[test]
@@ -179,12 +184,18 @@ fn reviewer_phase_child_env_sets_reviewer_role() {
         "run-token",
         crate::auto_complete::Phase::Reviewer,
         crate::auto_complete::AutoCompleteVariant::Full,
+        "pipeline-owner",
     );
     // BUG-901: phase children must not inherit the launcher/advisor shell role;
     // queue-work's strict role-routed lookup reads AIDA_SESSION_ROLE.
     assert!(env
         .iter()
         .any(|(k, v)| *k == "AIDA_SESSION_ROLE" && v == "reviewer"));
+    // BUG-1038: the reviewer role must not replace the queue identity selected
+    // by the parent drain; queue membership reads AIDA_USER.
+    assert!(env
+        .iter()
+        .any(|(k, v)| *k == "AIDA_USER" && v == "pipeline-owner"));
 }
 
 #[test]

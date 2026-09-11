@@ -8,6 +8,7 @@ fn driver(
     RealPhaseDriver::new(
         std::env::temp_dir().join(format!("aida-story-429-{}", uuid::Uuid::now_v7())),
         "STORY-429".to_string(),
+        "test-queue".to_string(),
         None,
         true,
         no_human,

@@ -979,6 +979,7 @@ fn phase_driver_carries_autonomy_mode_and_is_zen_run_reads_the_field() {
         RealPhaseDriver::new(
             std::env::temp_dir().join(format!("aida-adr10-{}", uuid::Uuid::now_v7())),
             "ADR-10".to_string(),
+            "test-queue".to_string(),
             None,
             false,
             // `no_human` is independent of the carried autonomy mode here —
