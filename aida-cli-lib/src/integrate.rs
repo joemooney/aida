@@ -838,14 +838,19 @@ pub(crate) fn describe_pr_completion(c: &PrCompletion) -> String {
 /// part of the routing argv asserted here.
 // trace:ADR-7 trace:ADR-9 | ai:claude
 // trace:BUG-897 | ai:codex
-pub(crate) fn drive_args(pr_number: u32) -> Vec<String> {
-    vec![
+pub(crate) fn drive_args(pr_number: u32, headless: bool) -> Vec<String> {
+    let mut args = vec![
         "queue".to_string(),
         "work".to_string(),
         format!("PR-{pr_number}"),
         "--auto-complete".to_string(),
         "--from-pr".to_string(),
-    ]
+    ];
+    // trace:BUG-1052 | ai:codex
+    if headless {
+        args.push("--no-human=both".to_string());
+    }
+    args
 }
 
 #[cfg(test)]
@@ -1611,7 +1616,7 @@ enabled = true
 
     #[test]
     fn drive_args_routes_through_the_auto_complete_engine() {
-        let args = drive_args(12);
+        let args = drive_args(12, false);
         // The routing invariant the orchestration_routing guardrail relies on:
         // integrate hands the PR to `queue work --auto-complete`, never an
         // inlined merge lifecycle.
@@ -1629,5 +1634,21 @@ enabled = true
         // `--from-pr` is the re-entry seam — the engine starts at the reviewer
         // phase (phases 3-6) rather than from-scratch implement.
         assert!(args.contains(&"--from-pr".to_string()));
+    }
+
+    #[test]
+    fn drive_args_propagates_headless_mode_to_child_drive() {
+        let args = drive_args(12, true);
+        assert_eq!(
+            args,
+            vec![
+                "queue".to_string(),
+                "work".to_string(),
+                "PR-12".to_string(),
+                "--auto-complete".to_string(),
+                "--from-pr".to_string(),
+                "--no-human=both".to_string(),
+            ]
+        );
     }
 }

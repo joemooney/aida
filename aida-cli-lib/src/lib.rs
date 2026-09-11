@@ -2578,6 +2578,8 @@ fn run() -> Result<()> {
         watch,
         interval,
         max,
+        wait_ci: _,
+        no_wait_ci,
         no_rebase,
         strategy,
         focus,
@@ -2593,6 +2595,7 @@ fn run() -> Result<()> {
             watch: *watch,
             interval: *interval,
             max: *max,
+            wait_ci: !*no_wait_ci,
             rebase: !*no_rebase,
             strategy: *strategy,
             focus: focus.clone(),
@@ -30525,7 +30528,10 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
 /// dropping a stray `./.aida/events.jsonl` outside any project; the git probes
 /// below still degrade to the cwd, which is what they always did.
 // trace:TASK-111 trace:TASK-968 trace:TASK-1165 | ai:claude
-fn wait_for_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> CiProbe {
+pub(crate) fn wait_for_ci_terminal(
+    project_root: Option<&std::path::Path>,
+    branch: &str,
+) -> CiProbe {
     use crate::ci_idle_timeout::{ci_progress_fingerprint, ci_wait_verdict, CiWaitVerdict};
     const POLL_INTERVAL_SECS: u64 = 30;
     let idle_window = crate::ci_idle_timeout::ci_idle_window_secs();
@@ -52070,6 +52076,7 @@ struct IntegrateCommandOpts {
     watch: bool,
     interval: u64,
     max: usize,
+    wait_ci: bool,
     rebase: bool,
     strategy: Option<integrate::IntegrateStrategy>,
     focus: Option<String>,
@@ -52116,6 +52123,7 @@ fn handle_integrate(opts: IntegrateCommandOpts) -> Result<()> {
             opts.watch,
             opts.interval,
             opts.max,
+            opts.wait_ci,
             opts.rebase,
             opts.strategy,
             opts.focus,
