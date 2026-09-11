@@ -66,6 +66,29 @@ trace:STORY-975
 > here. See `docs/aida/discipline/autonomous-burndown.md` for the fan-out path
 > and the Claude-only caveat in full.
 
+### Why a shelved spec can start again after re-queue
+
+`aida queue add` does not launch work by itself. It only makes a spec visible
+to the queue again. A relaunch happens when an already-running drain runner
+polls the queue and starts a new pass.
+
+The built-in resilient runner is `scripts/drain-loop.sh`: its main loop
+(`scripts/drain-loop.sh:57`) checks whether the active role has queued work,
+then runs `aida queue work "next${CHUNK}" --auto-complete …`
+(`scripts/drain-loop.sh:82`). Inside AIDA, that enters the `nextN` path
+(`aida-cli-lib/src/lib.rs:73579`, `handle_auto_complete_next_n`), whose
+`RealNextNDriver::next_head` (`aida-cli-lib/src/lib.rs:73523`) re-resolves the
+queue head on each iteration and whose `RealNextNDriver::run_spec`
+(`aida-cli-lib/src/lib.rs:73536`) calls `run_auto_complete` for the selected
+spec. That is why a re-added shelved item can appear seconds later as a fresh
+single-spec `aida queue work SPEC --auto-complete` run in process listings,
+events, and `~/.aida/auto-complete.jsonl`.
+
+If no drain runner or wrapper is active, a re-added shelved spec stays queued
+until someone explicitly runs `aida queue work`, `aida queue work nextN
+--auto-complete`, a batch drain, or an equivalent wrapper.
+trace:TASK-1201 | ai:codex
+
 ## The three autonomy modes
 
 `--no-human` is the far end of a three-mode ladder. The middle rung,
