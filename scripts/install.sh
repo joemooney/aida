@@ -16,6 +16,7 @@
 # Auto-detects platform via `uname -sm`. Supported targets:
 #   linux  x86_64  aarch64
 #   darwin x86_64  arm64
+#   windows x86_64 (Git Bash / MSYS / Cygwin)
 #
 # trace:EPIC-1-001 | ai:claude
 
@@ -72,7 +73,15 @@ uname_m=$(uname -m)
 case "$uname_s" in
     Linux)  os=linux  ;;
     Darwin) os=darwin ;;
-    *) echo "error: unsupported OS: $uname_s (expected Linux or Darwin)" >&2; exit 1 ;;
+    MINGW*|MSYS*|CYGWIN*) os=windows ;;
+    *)
+        echo "error: unsupported OS: $uname_s (expected Linux, Darwin, Git Bash, MSYS, or Cygwin)" >&2
+        if [ "${OS:-}" = "Windows_NT" ]; then
+            echo "Download the Windows zip manually:" >&2
+            echo "  https://github.com/${REPO}/releases/latest/download/aida-windows-x86_64.zip" >&2
+        fi
+        exit 1
+        ;;
 esac
 case "$uname_m" in
     x86_64|amd64) arch=x86_64 ;;
@@ -80,6 +89,22 @@ case "$uname_m" in
     *) echo "error: unsupported architecture: $uname_m" >&2; exit 1 ;;
 esac
 target="${os}-${arch}"
+archive_ext="tar.gz"
+download_name="aida.tar.gz"
+
+# WSL reports as Linux, so install the Linux binary there. Git Bash/MSYS/Cygwin
+# report Windows-flavored uname values and can install the Windows zip.
+# trace:TASK-1212 | ai:codex
+if [ "$os" = "windows" ]; then
+    if [ "$arch" != "x86_64" ]; then
+        echo "error: no Windows release asset for architecture: $uname_m" >&2
+        echo "Download the Windows zip manually when an asset is available:" >&2
+        echo "  https://github.com/${REPO}/releases/latest/download/aida-windows-x86_64.zip" >&2
+        exit 1
+    fi
+    archive_ext="zip"
+    download_name="aida.zip"
+fi
 
 # ---- URL resolution --------------------------------------------------------
 
@@ -98,20 +123,20 @@ esac
 
 if [ "$VERSION" = "latest" ]; then
     if [ "$host" = "github" ]; then
-        asset_url="https://github.com/${REPO}/releases/latest/download/aida-${target}.tar.gz"
+        asset_url="https://github.com/${REPO}/releases/latest/download/aida-${target}.${archive_ext}"
     else
         latest_json=$(curl -fsSL "${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/releases/permalink/latest")
         tag=$(printf '%s\n' "$latest_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
         [ -n "$tag" ] || { echo "error: could not resolve latest GitLab release tag" >&2; exit 1; }
-        asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.tar.gz"
+        asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.${archive_ext}"
     fi
 else
     # Strip any leading "v" the user might have already included to avoid v vv.
     tag="v${VERSION#v}"
     if [ "$host" = "github" ]; then
-        asset_url="https://github.com/${REPO}/releases/download/${tag}/aida-${target}.tar.gz"
+        asset_url="https://github.com/${REPO}/releases/download/${tag}/aida-${target}.${archive_ext}"
     else
-        asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.tar.gz"
+        asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.${archive_ext}"
     fi
 fi
 
@@ -121,13 +146,27 @@ tmpdir=$(mktemp -d -t aida-install-XXXXXX)
 trap 'rm -rf "$tmpdir"' EXIT
 
 echo "Downloading $asset_url"
-if ! curl -fSL -o "$tmpdir/aida.tar.gz" "$asset_url"; then
+if ! curl -fSL -o "$tmpdir/$download_name" "$asset_url"; then
     echo "error: download failed. Verify the release exists at $asset_url" >&2
     exit 1
 fi
 
 echo "Extracting..."
-tar xzf "$tmpdir/aida.tar.gz" -C "$tmpdir"
+if [ "$archive_ext" = "zip" ]; then
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -q "$tmpdir/$download_name" -d "$tmpdir"
+    elif command -v powershell.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
+        win_tmpdir=$(cygpath -w "$tmpdir")
+        powershell.exe -NoLogo -NoProfile -Command "Expand-Archive -LiteralPath '$win_tmpdir\\$download_name' -DestinationPath '$win_tmpdir' -Force"
+    else
+        echo "error: unzip is required to extract the Windows release asset" >&2
+        echo "Download and extract manually:" >&2
+        echo "  $asset_url" >&2
+        exit 1
+    fi
+else
+    tar xzf "$tmpdir/$download_name" -C "$tmpdir"
+fi
 
 # ---- Install ---------------------------------------------------------------
 
@@ -166,10 +205,20 @@ if [ -f "$tmpdir/aida-server" ]; then
     echo "  installed $PREFIX/aida-server"
     installed_any=1
 fi
+if [ -f "$tmpdir/aida.exe" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida.exe" "$PREFIX/aida.exe"
+    echo "  installed $PREFIX/aida.exe"
+    installed_any=1
+fi
+if [ -f "$tmpdir/aida-server.exe" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida-server.exe" "$PREFIX/aida-server.exe"
+    echo "  installed $PREFIX/aida-server.exe"
+    installed_any=1
+fi
 
 if [ "$installed_any" = "0" ]; then
     echo "error: extracted tarball at $tmpdir contains no aida binary I recognize." >&2
-    echo "       expected one of: aida-${target}, aida" >&2
+    echo "       expected one of: aida-${target}, aida, aida.exe" >&2
     echo "       tarball contents:" >&2
     ls -la "$tmpdir" >&2
     exit 1
@@ -188,4 +237,10 @@ case ":$PATH:" in
 esac
 
 echo
-"$PREFIX/aida" --version 2>/dev/null || echo "(installed; run 'aida --version' to verify)"
+if [ -x "$PREFIX/aida" ]; then
+    "$PREFIX/aida" --version 2>/dev/null || echo "(installed; run 'aida --version' to verify)"
+elif [ -x "$PREFIX/aida.exe" ]; then
+    "$PREFIX/aida.exe" --version 2>/dev/null || echo "(installed; run 'aida.exe --version' to verify)"
+else
+    echo "(installed; run 'aida --version' or 'aida.exe --version' to verify)"
+fi
