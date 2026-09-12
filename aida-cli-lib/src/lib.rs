@@ -67,6 +67,7 @@ mod queue_cmd;
 mod solo_cmd;
 mod status_cmd;
 mod supervise_cmd;
+mod supervisor;
 mod terminal_cmd;
 mod zen_cmd;
 use drain_cmd::*;

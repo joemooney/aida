@@ -2126,6 +2126,25 @@ pub enum SuperviseCommand {
     /// Nudge a live advisor about transiently parked work, or fall back to
     /// operator notification when no advisor is live.
     Nudge,
+    /// Re-drive transiently-parked specs (typed tooling causes) on a capped,
+    /// backed-off loop; leave genuine needs-human parks for escalation. Lets an
+    /// unattended drain self-recover. Reads parks from the store and its attempt
+    /// history from the event log, so it recovers a park regardless of which
+    /// drain parked it or whether that drain crashed.
+    // trace:STORY-1051 | ai:claude
+    Redrive {
+        /// Actually re-drive (default is a dry-run report of what it WOULD do).
+        #[clap(long)]
+        execute: bool,
+        /// Re-drive cap before reclassifying to needs-human (default 3).
+        #[clap(long)]
+        max_attempts: Option<u32>,
+        /// Re-drive at most N specs in this run.
+        #[clap(long)]
+        max: Option<usize>,
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// of an in-repo build, running dev servers, installing shell helpers).
