@@ -791,7 +791,14 @@ fn list_light_roles(project_root: &Path) -> Vec<LightRole> {
     }
     // Newest-active first, then drop the canonical-name duplicate (a machine
     // mid-migration can have both `advisor.toml` and the legacy `dialog.toml`).
-    roles.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    // trace:BUG-1116 | ai:codex
+    // Keep light-role recency consistent with the main role listing: newest
+    // stored activity first, with deterministic ordering for timestamp ties.
+    roles.sort_by(|a, b| {
+        b.last_active_at
+            .cmp(&a.last_active_at)
+            .then_with(|| a.name.cmp(&b.name))
+    });
     let mut seen = std::collections::HashSet::new();
     roles.retain(|r| seen.insert(r.name.clone()));
     roles

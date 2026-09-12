@@ -18013,7 +18013,14 @@ fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
             }
         }
     }
-    roles.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    // trace:BUG-1116 | ai:codex
+    // Recovery hints must be driven by stored role activity, not filesystem
+    // traversal order; equal timestamps use a deterministic role-name winner.
+    roles.sort_by(|a, b| {
+        b.last_active_at
+            .cmp(&a.last_active_at)
+            .then_with(|| a.name.cmp(&b.name))
+    });
     // TASK-586: a machine mid-migration can have both `advisor.toml` and the
     // legacy `dialog.toml` — both canonicalize to `advisor`. Keep the
     // most-recently-active (the sort above already put it first) and drop the
