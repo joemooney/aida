@@ -116,7 +116,10 @@ fn headless_env_launches_route_through_shared_argv_builders() {
             if !line.contains(".env(\"AIDA_HEADLESS\", \"1\")") {
                 continue;
             }
-            let start = idx.saturating_sub(12);
+            // 20-line window: multi-line builder calls (vendor, prompt,
+            // session, containment, model/effort tuning) plus interleaved
+            // comments can put the builder name well above the .env anchor.
+            let start = idx.saturating_sub(20);
             let end = (idx + 3).min(lines.len());
             let window = lines[start..end].join("\n");
             assert!(

@@ -268,6 +268,10 @@ mod tests {
                     EventKind::PhaseEntered {
                         idx: 1,
                         slug: "implementer".into(),
+                        vendor: None,
+                        seat: None,
+                        model: None,
+                        effort: None,
                     },
                 ),
             ],
@@ -350,6 +354,10 @@ mod tests {
                     EventKind::PhaseEntered {
                         idx: 2,
                         slug: "ci".into(),
+                        vendor: None,
+                        seat: None,
+                        model: None,
+                        effort: None,
                     },
                 ),
             ],

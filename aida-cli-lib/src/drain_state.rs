@@ -519,8 +519,33 @@ pub(crate) fn clear_run(project_root: &Path) {
 /// the phase's machine name, e.g. `implementer`). Updates the top-level
 /// `current_phase` and flips the member's own state to `in-phase-N`.
 /// Best-effort — a missing file is a no-op. trace:STORY-301 | ai:claude
+#[allow(dead_code)] // compatibility wrapper; new drains use set_phase_with_tuning (STORY-1033)
 pub(crate) fn set_phase(project_root: &Path, spec: &str, phase_index: i32, phase_slug: &str) {
     set_phase_inner(project_root, spec, phase_index, phase_slug, None, None);
+}
+
+// trace:STORY-1033 | ai:codex
+pub(crate) fn set_phase_with_tuning(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    vendor: Option<&str>,
+    seat: Option<&str>,
+    model: Option<&str>,
+    effort: Option<&str>,
+) {
+    set_phase_inner_with_tuning(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        None,
+        vendor,
+        seat,
+        model,
+        effort,
+    );
 }
 
 /// BUG-872: record the concrete phase session id alongside the phase. Drain
@@ -573,6 +598,31 @@ fn set_phase_inner(
     session_id: Option<&str>,
     vendor: Option<&str>,
 ) {
+    set_phase_inner_with_tuning(
+        project_root,
+        spec,
+        phase_index,
+        phase_slug,
+        session_id,
+        None,
+        None,
+        None,
+        None,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn set_phase_inner_with_tuning(
+    project_root: &Path,
+    spec: &str,
+    phase_index: i32,
+    phase_slug: &str,
+    session_id: Option<&str>,
+    vendor: Option<&str>,
+    seat: Option<&str>,
+    model: Option<&str>,
+    effort: Option<&str>,
+) {
     let Some(mut state) = DrainState::read(project_root) else {
         return;
     };
@@ -599,6 +649,10 @@ fn set_phase_inner(
             crate::events::EventKind::PhaseEntered {
                 idx: phase_index,
                 slug: phase_slug.to_string(),
+                vendor: vendor.map(str::to_string),
+                seat: seat.map(str::to_string),
+                model: model.map(str::to_string),
+                effort: effort.map(str::to_string),
             },
         ),
     );

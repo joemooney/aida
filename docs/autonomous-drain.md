@@ -92,6 +92,55 @@ state. `aida drain status` shows the current retry as `attempt 2/2`, and the
 drain appends a `SpecRetried` event to `.aida/events.jsonl`.
 trace:STORY-975
 
+### Tuning model per seat
+
+Headless launches resolve model and reasoning effort from the vendor plus the
+AIDA seat. The seat names are the role names AIDA already uses:
+`implementer`, `reviewer`, `advisor`, `integrator`, `product`, and `trivial`.
+
+```toml
+[agents.claude]
+model = "opus"        # default for any seat not listed; unset = vendor default
+tiers = ["haiku", "sonnet", "opus"]
+
+[agents.claude.seats]
+implementer = { model = "sonnet", effort = "medium" }
+reviewer    = { model = "opus",   effort = "high" }
+advisor     = { model = "opus",   effort = "high" }
+
+[agents.codex]
+model = "gpt-5-codex"
+
+[agents.codex.seats]
+implementer = { model = "gpt-5-codex", effort = "medium" }
+reviewer    = { model = "gpt-5.1",     effort = "high" }
+```
+
+Resolution order is:
+
+1. `AIDA_AGENT_MODEL` / `AIDA_AGENT_EFFORT` for the current process.
+2. Project `.aida/agents.toml`.
+3. Project `.aida/config.toml`.
+4. User `~/.aida/agents.toml`.
+5. Vendor default, by omitting the native flag.
+
+Within the selected file, `[agents.<vendor>.seats].<seat>.model` overrides
+`[agents.<vendor>].model`; `effort` is seat-scoped. Empty strings deliberately
+select the vendor default for that field. Claude and AGY receive
+`--effort <level>`; Codex receives `-c model_reasoning_effort=<level>`.
+
+Transient retry attempt 2 escalates to the next configured
+`[agents.<vendor>] tiers` entry by default. For example, an implementer seated
+on `sonnet` moves to `opus` when the tier list is `["haiku", "sonnet",
+"opus"]`. If the current model is missing from the list, or already the last
+tier, AIDA records the retry without changing the model. Disable this with:
+
+```toml
+[drain]
+retry_escalate_model = false
+```
+trace:STORY-1033 | ai:codex
+
 > **This serial engine is the vendor-agnostic drain.** `aida queue work
 > --auto-complete` drives one spec at a time and the **orchestrator** owns the
 > drive, so it runs under any vendor (Codex, Cursor, Amp, a bare `claude -p`

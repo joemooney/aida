@@ -270,6 +270,10 @@ mod tests {
             EventKind::PhaseEntered {
                 idx: 1,
                 slug: "implementer".into(),
+                vendor: None,
+                seat: None,
+                model: None,
+                effort: None,
             },
         );
         let mut drained = Event::new(

@@ -7709,7 +7709,8 @@ pub(crate) fn deferred_headless_launch_hint(
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            let argv = session::headless_vendor_args(vendor, prompt, session_id, contained, model);
+            let argv =
+                session::headless_vendor_args(vendor, prompt, session_id, contained, model, None);
             format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv))
         }
     }
@@ -9465,6 +9466,7 @@ pub(crate) fn run_standalone_reviewer(
         }
         QueueWorkLaunch::Fresh(id) => {
             if no_human {
+                let launch_vendor = session::resolve_enabled_headless_vendor(project_root)?;
                 let log_path = project_root
                     .join(".aida")
                     .join("headless-logs")
@@ -9475,8 +9477,14 @@ pub(crate) fn run_standalone_reviewer(
                         .green()
                         .bold(),
                     format!(
-                        "launching claude headless reviewer in {} (claude -p, {})",
+                        "launching {} headless reviewer in {} ({}, {})",
+                        launch_vendor.as_str(),
                         worktree.display(),
+                        match launch_vendor {
+                            session::HeadlessVendor::Claude => "claude -p",
+                            session::HeadlessVendor::Codex => "codex exec",
+                            session::HeadlessVendor::Agy => "agy -p",
+                        },
                         claude_posture_display(permission_mode, contained)
                     )
                     .cyan()
@@ -9492,8 +9500,15 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let status =
-                    session::spawn_claude_headless(prompt, &id, &log_path, &tee_opts, contained)?;
+                let status = session::spawn_vendor_headless_with_seat(
+                    launch_vendor,
+                    aida_core::agents_config::AgentSeat::Reviewer,
+                    prompt,
+                    &id,
+                    &log_path,
+                    &tee_opts,
+                    contained,
+                )?;
                 (status, Some(log_path))
             } else {
                 let name = session::derive_session_name(scope, branch, role);
