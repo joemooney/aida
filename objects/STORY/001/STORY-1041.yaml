@@ -14,12 +14,12 @@ description: |-
 
   ## Follow-up
   STORY-1091 — the concurrent scheduler that consumes this contract (spec B implementer starts during spec A CI, serial merges).
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:36.779816829Z
-modified_at: 2026-09-12T22:35:10.681754622Z
+modified_at: 2026-09-12T23:33:55.212181982Z
 req_type: Story
 tags:
 - drain
@@ -71,4 +71,24 @@ comments:
   created_at: 2026-09-12T22:35:10.681754622Z
   modified_at: 2026-09-12T22:35:10.681754622Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a097f8-6b84-7843-b7e1-ef8614d3106b
+  author: aida-auto-bump
+  timestamp: 2026-09-12T23:33:55.204510932Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a097f8-6b8c-78d0-8716-c304b13e77fd
+  timestamp: 2026-09-12T23:33:55.212180775Z
+  agent: product
+  commit_sha: 93afba99a8c02f35b13c440c03b6506158356a6f
+  summary: Completed via merge 93afba99
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-12T23:33:55.204326571Z
+  completion_sha: 93afba99a8c02f35b13c440c03b6506158356a6f
