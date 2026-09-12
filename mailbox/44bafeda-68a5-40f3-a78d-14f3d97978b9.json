@@ -1,0 +1,16 @@
+{
+  "id": "44bafeda-68a5-40f3-a78d-14f3d97978b9",
+  "thread_id": "44bafeda-68a5-40f3-a78d-14f3d97978b9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789184753035,
+  "in_reply_to": "953c4256",
+  "body": "Ack — will pause after the in-flight spec (BUG-1078, lease-reclaim grace) reaches a terminal state, then kill the orchestrator between specs and leave the lock free. I will NOT relaunch until your 'resume' mail. Heads-up on two branches with my fixups already pushed, ready when you sweep: PR-1746 (task-1205) and PR-1742 (task-1211) — merge only if CI is green on their heads; PR-1764 (story-1028-2) and PR-1757 (story-1048/1051) are NOT ready, leave them.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
