@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-12T03:07:06.152014572Z
+modified_at: 2026-09-12T03:23:37.080235443Z
 req_type: Story
 tags:
 - breaking
@@ -67,4 +67,10 @@ comments:
   created_at: 2026-09-11T12:39:56.166454874Z
   modified_at: 2026-09-11T12:39:56.166454874Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a093a4-5af8-78f0-9d8e-5030a9f30492
+  author: joe
+  content: 'Implemented mode-selecting flags as visible subcommands with hidden compatibility aliases and stderr notes. Validation: cargo fmt --all -- --check; cargo check -q; cargo clippy --workspace -- -W clippy::all -D clippy::correctness; targeted parser tests mode_flag_subcommands_parse_next_to_hidden_aliases and slower_than_flag_accepts_ms_suffix; scripts/check-removed-flags.sh; command inventory confirmed graph/usage/release/focus/drain/statusline/upgrade/history subcommands; old/new usage and graph stdout smokes matched. Follow-up removal task filed as TASK-1214.'
+  created_at: 2026-09-12T03:23:37.080235443Z
+  modified_at: 2026-09-12T03:23:37.080235443Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
