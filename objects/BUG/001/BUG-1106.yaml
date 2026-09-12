@@ -15,15 +15,19 @@ description: |
   1. A phase child spawned by the orchestrator for spec X (any phase role) is never refused by queue role-routing for X — the orchestrator's assignment IS the authorization (substrate gate keyed on the drain lease, not the row's for_role).
   2. Rerun the TASK-1198 testbed drain: three merges, zero human relaunches.
   3. Regression test: drain over a for:implementer row reaches phase 3 and the reviewer session picks up without a role-queue refusal.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T16:50:09.273073069Z
-modified_at: 2026-09-12T16:51:30.197406243Z
+modified_at: 2026-09-12T17:07:51.770197310Z
 req_type: Bug
 tags:
 - drain
 - orchestrator
 - queue
 - reliability
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T17:07:51.770197310Z
+  implemented_by: joe
