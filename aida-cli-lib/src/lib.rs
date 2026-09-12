@@ -1057,6 +1057,7 @@ pub(crate) fn handle_tail_cli(
     no_follow: bool,
     with_tools: bool,
     no_timestamp: bool,
+    annotate: bool,
 ) -> Result<()> {
     let project_root = find_main_worktree_root()
         .or_else(|_| find_project_root())
@@ -1086,6 +1087,7 @@ pub(crate) fn handle_tail_cli(
         color: std::io::IsTerminal::is_terminal(&std::io::stdout())
             && std::env::var_os("NO_COLOR").is_none(),
         no_timestamp,
+        annotate,
     };
     tail_cmd::handle_tail(&project_root, sessions, &opts)
 }
@@ -2855,6 +2857,7 @@ fn run() -> Result<()> {
         no_follow,
         with_tools,
         no_timestamp,
+        annotate,
     } = &cli.command
     {
         return handle_tail_cli(
@@ -2866,6 +2869,7 @@ fn run() -> Result<()> {
             *no_follow,
             *with_tools,
             *no_timestamp,
+            *annotate,
         );
     }
 

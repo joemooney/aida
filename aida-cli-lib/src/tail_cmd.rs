@@ -62,6 +62,9 @@ pub struct TailOptions {
     /// Drop the per-line `[HH:MM:SS]` event-time prefix (clean copy-paste).
     // trace:TASK-1173 | ai:claude
     pub no_timestamp: bool,
+    /// Annotate idlewatch transitions in the rendered stream.
+    // trace:STORY-998 | ai:codex
+    pub annotate: bool,
 }
 
 /// One running session, projected from the session lease to what the resolver
@@ -592,6 +595,7 @@ pub fn handle_tail(
                 // rendered, so the flag is moot on that path.
                 // trace:TASK-1173 | ai:claude
                 timestamps: !opts.no_timestamp,
+                annotate: opts.annotate,
             };
             let stream_opts = StreamOpts {
                 follow: !opts.no_follow,
@@ -655,6 +659,7 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
     let mut pos: u64 = 0;
     let mut emitted: u64 = 0;
     let mut initial_backlog = stream.backlog_lines;
+    let mut annotations = opts.annotate.then(headless_tail::AnnotationState::new);
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
@@ -720,6 +725,7 @@ fn stream_live_drain(project_root: &Path, opts: &FormatOpts, stream: &StreamOpts
             initial_backlog.take(),
             &mut emitted,
             &mut out,
+            annotations.as_mut(),
         )?;
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -736,6 +742,7 @@ fn stream_path_once(
     backlog_lines: Option<usize>,
     emitted: &mut u64,
     out: &mut std::io::StdoutLock<'_>,
+    mut annotations: Option<&mut headless_tail::AnnotationState>,
 ) -> Result<bool> {
     let mut file = fs::File::open(path)?;
     let file_len = file.metadata().map(|m| m.len()).unwrap_or(*pos);
@@ -765,6 +772,9 @@ fn stream_path_once(
         }
         let fmt = headless_tail::format_line(raw_line, opts);
         let _raw_fallback = fmt.malformed;
+        if let Some(state) = annotations.as_deref_mut() {
+            rendered.extend(state.observe(&fmt.lines, std::time::Instant::now(), opts.color));
+        }
         rendered.extend(fmt.lines);
         if fmt.is_result {
             saw_result = true;

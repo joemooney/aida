@@ -223,7 +223,8 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
 fn process_legend() -> String {
     format!(
         "(● = a process is alive for this session · {} = transcript written in the last 5m but \
-         no process resolved · blank = neither; PID `?` = two candidate processes — \
+         no process resolved · ⟳ = process alive but transcript is low-information/spinning · \
+         blank = neither; PID `?` = two candidate processes — \
          `--format json` lists them; AGE = process elapsed for ● rows, time since last write otherwise)",
         glyph(crate::glyphs::Glyph::InFlight)
     )
@@ -304,6 +305,11 @@ impl ProcessResolver {
                 },
                 &last_start,
                 self.now,
+            )
+            .with_spinning(
+                s.path
+                    .as_deref()
+                    .and_then(|path| sl::transcript_spinning(path, self.now)),
             );
             if s.role.is_none() {
                 s.role = s.process.lease_role.clone();
@@ -343,6 +349,7 @@ fn print_json(
             "pid": p.pid,
             "pids": p.candidates,
             "tty": p.tty,
+            "spinning": p.spinning,
             "terminal": s.terminal,
             "liveness": p.liveness.label(),
             "resolution": p.resolution.label(),
@@ -3598,7 +3605,8 @@ fn print_table(sessions: &[SessionMeta]) {
 // trace:STORY-993 | ai:claude
 fn age_cell(s: &SessionMeta) -> String {
     match (s.process.liveness, s.process.elapsed_secs) {
-        (crate::session_liveness::Liveness::Alive, Some(e)) => humanize_age(e),
+        (crate::session_liveness::Liveness::Alive, Some(e))
+        | (crate::session_liveness::Liveness::Spinning, Some(e)) => humanize_age(e),
         _ => humanize_age(s.age_seconds),
     }
 }
@@ -3611,6 +3619,7 @@ fn process_liveness_glyph(s: &SessionMeta) -> &'static str {
     use crate::session_liveness::Liveness;
     match s.process.liveness {
         Liveness::Alive => "●",
+        Liveness::Spinning => "⟳",
         Liveness::FileTouched => glyph(crate::glyphs::Glyph::InFlight),
         Liveness::None => " ",
     }
@@ -3663,6 +3672,7 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
         let live = process_liveness_glyph(s);
         let live_colored = match s.process.liveness {
             crate::session_liveness::Liveness::Alive => live.green().bold().to_string(),
+            crate::session_liveness::Liveness::Spinning => live.yellow().bold().to_string(),
             crate::session_liveness::Liveness::FileTouched => live.yellow().to_string(),
             crate::session_liveness::Liveness::None => live.dimmed().to_string(),
         };

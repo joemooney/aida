@@ -303,6 +303,7 @@ pub fn handle_tail(project_root: &Path, opts: &TailOptions) -> Result<()> {
         // The filename-driven legacy tailer keeps its unstamped shape; the
         // id-driven `aida tail` is where the clock lives. trace:TASK-1173
         timestamps: false,
+        annotate: false,
     };
     eprintln!(
         "{} {}",
@@ -374,6 +375,10 @@ pub struct FormatOpts {
     /// existing shape; the id-driven `aida tail` turns it on.
     // trace:TASK-1173 | ai:claude
     pub timestamps: bool,
+    /// Emit idlewatch transition annotations, e.g. when the rendered stream
+    /// becomes low-information spinning. Off by default.
+    // trace:STORY-998 | ai:codex
+    pub annotate: bool,
 }
 
 impl Default for FormatOpts {
@@ -385,6 +390,7 @@ impl Default for FormatOpts {
             color: true,
             since: None,
             timestamps: false,
+            annotate: false,
         }
     }
 }
@@ -726,6 +732,7 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
     // followed output is live. trace:TASK-1167
     let mut backlog: Vec<String> = Vec::new();
     let mut buffering = stream.backlog_lines.is_some();
+    let mut annotations = opts.annotate.then(AnnotationState::new);
 
     'outer: loop {
         // Reopen each tick so a file truncated/rotated between iterations is
@@ -770,6 +777,15 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
             }
             let fmt = format_line(raw_line, opts);
             let _raw_fallback = fmt.malformed;
+            if let Some(state) = annotations.as_mut() {
+                for line in state.observe(&fmt.lines, std::time::Instant::now(), opts.color) {
+                    if buffering {
+                        backlog.push(line);
+                    } else if writeln!(out, "{}", line).is_err() {
+                        break 'outer;
+                    }
+                }
+            }
             for line in &fmt.lines {
                 if buffering {
                     backlog.push(line.clone());
@@ -809,6 +825,102 @@ fn stream_path_inner(path: &Path, opts: &FormatOpts, stream: &StreamOpts) -> Res
         std::thread::sleep(FOLLOW_POLL);
     }
     finish(out)
+}
+
+// trace:STORY-998 | ai:codex
+pub(crate) struct AnnotationState {
+    detector: aida_core::idle::IdleDetector,
+    last: AnnotationVerdict,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum AnnotationVerdict {
+    Working,
+    Quiet,
+    Spinning { template: String, count: usize },
+    Runaway,
+}
+
+impl AnnotationState {
+    pub(crate) fn new() -> Self {
+        Self {
+            detector: aida_core::idle::IdleDetector::new(aida_core::idle::IdleConfig::default()),
+            last: AnnotationVerdict::Quiet,
+        }
+    }
+
+    pub(crate) fn observe(
+        &mut self,
+        rendered: &[String],
+        at: std::time::Instant,
+        color: bool,
+    ) -> Vec<String> {
+        let mut out = Vec::new();
+        for line in rendered {
+            let payload = strip_rendered_stamp(line);
+            if payload.trim().is_empty() {
+                continue;
+            }
+            let verdict = self.detector.feed_line(payload, at);
+            let next = AnnotationVerdict::from(verdict);
+            if next != self.last {
+                if let Some(line) = render_annotation(&next, color) {
+                    out.push(line);
+                }
+                self.last = next;
+            }
+        }
+        out
+    }
+}
+
+impl From<aida_core::idle::IdleVerdict> for AnnotationVerdict {
+    fn from(value: aida_core::idle::IdleVerdict) -> Self {
+        match value {
+            aida_core::idle::IdleVerdict::Working => Self::Working,
+            aida_core::idle::IdleVerdict::Quiet => Self::Quiet,
+            aida_core::idle::IdleVerdict::Spinning { template, count } => {
+                Self::Spinning { template, count }
+            }
+            aida_core::idle::IdleVerdict::Runaway { .. } => Self::Runaway,
+        }
+    }
+}
+
+fn render_annotation(verdict: &AnnotationVerdict, color: bool) -> Option<String> {
+    let stamp = Local::now().format("%H:%M:%S");
+    let body = match verdict {
+        AnnotationVerdict::Spinning { template, count } => {
+            format!("⟳ spinning: '{}' x{}", template, count)
+        }
+        AnnotationVerdict::Quiet => "quiet".to_string(),
+        AnnotationVerdict::Runaway => "runaway".to_string(),
+        AnnotationVerdict::Working => "working".to_string(),
+    };
+    let line = format!("[{stamp}] {body}");
+    Some(if color {
+        line.yellow().bold().to_string()
+    } else {
+        line
+    })
+}
+
+fn strip_rendered_stamp(line: &str) -> &str {
+    let bytes = line.as_bytes();
+    if bytes.len() >= 11
+        && bytes[0] == b'['
+        && bytes[3] == b':'
+        && bytes[6] == b':'
+        && bytes[9] == b']'
+        && bytes[10] == b' '
+        && bytes[1..3].iter().all(u8::is_ascii_digit)
+        && bytes[4..6].iter().all(u8::is_ascii_digit)
+        && bytes[7..9].iter().all(u8::is_ascii_digit)
+    {
+        &line[11..]
+    } else {
+        line
+    }
 }
 
 fn finish(mut out: std::io::StdoutLock<'_>) -> Result<()> {
@@ -1120,6 +1232,27 @@ mod tests {
         let res = format_line("", &opts_default());
         assert!(!res.malformed);
         assert!(res.lines.is_empty());
+    }
+
+    // trace:STORY-998 | ai:codex
+    #[test]
+    fn annotation_state_emits_spinning_transition() {
+        let start = std::time::Instant::now();
+        let mut state = AnnotationState::new();
+        let mut annotations = Vec::new();
+        for i in 0..100 {
+            annotations.extend(state.observe(
+                &[format!("[23:14:{:02}] poll: no work 0 jobs", i % 60)],
+                start + Duration::from_secs(i),
+                false,
+            ));
+        }
+        assert!(
+            annotations.iter().any(|line| line.contains("⟳ spinning:")
+                && line.contains("poll: no work")
+                && line.contains("x")),
+            "annotations: {annotations:?}"
+        );
     }
 
     #[test]

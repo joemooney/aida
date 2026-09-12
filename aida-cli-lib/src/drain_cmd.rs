@@ -124,6 +124,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             no_follow,
             with_tools,
             no_timestamp,
+            annotate,
         } => handle_tail_cli(
             Some("drain".to_string()),
             false,
@@ -133,6 +134,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             *no_follow,
             *with_tools,
             *no_timestamp,
+            *annotate,
         ),
     }
 }
