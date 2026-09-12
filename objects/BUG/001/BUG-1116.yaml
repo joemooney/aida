@@ -16,12 +16,12 @@ description: |
   1. The roleless-recovery 'last-used role' is selected by the stored last_active_at field (not file mtime / dir order); ties broken deterministically (e.g. by name) so the result is stable.
   2. The test is deterministic across runs and run-order (seed distinct last_active_at, assert the newer wins every time).
   3. Regression: 100x loop of the test is green; two roles with equal last_active_at pick a defined winner.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T23:24:08.948284140Z
-modified_at: 2026-09-12T23:32:21.001491786Z
+modified_at: 2026-09-12T23:32:25.900681100Z
 req_type: Bug
 tags:
 - ci
@@ -33,3 +33,7 @@ relationships:
   target_id: 01a097f6-e959-7fa1-a897-107fe82b2341
   created_at: 2026-09-12T23:32:21.001485026Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T23:32:25.900681100Z
+  implemented_by: joe
