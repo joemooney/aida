@@ -2,7 +2,7 @@ id: 01a09359-71c9-7241-b341-fe40231167c3
 spec_id: BUG-1086
 agreed_id: BUG-1086
 title: 'auto-complete failure: phase 2 (ci) on TASK-1212'
-description: |
+description: |-
   Auto-drafted by `aida queue work TASK-1212 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
@@ -17,8 +17,8 @@ description: |
 
   ## Recurrence
 
-  Attempts: 1
-  Latest recurrence: 2026-09-12T02:01:46.953126037+00:00
+  Attempts: 2
+  Latest recurrence: 2026-09-12T04:52:04.092830687+00:00
 
   ## Phase durations
 
@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T02:01:47.721513506Z
-modified_at: 2026-09-12T02:01:47.721513506Z
+modified_at: 2026-09-12T04:52:04.362315343Z
 req_type: Bug
 tags:
 - auto-complete
