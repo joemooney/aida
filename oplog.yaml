@@ -62790,5 +62790,13 @@ operations:
   timestamp: 2026-09-12T17:23:10.167569397Z
   kind: !SetDescription
     description: "## Observed (TASK-1198 evidence run, testbed aida-codex-test, 2026-09-12 09:35)\nFresh drain (aida queue work --drain --no-human=both, binary at main ff36b75+) over three decision-free specs queued --user joe --for implementer. Phase 1 (codex implementer) succeeded for all three: implemented, pushed, PRs 10/11/12 opened. Phase 3 (reviewer session) exited 1 on BOTH attempts for all three with:\n  error: \"`TASK-7` isn't in your queue, but it IS queued:\"  /  help: aida role enter implementer\nAll three shelved; 0 merges. Same phase-3 failure class as the 2026-09-06 testbed attempt.\n\n## Root cause hypothesis\nThe phase-3 reviewer child inherits AIDA_SESSION_ROLE=reviewer and its in-session pickup (post-BUG-1082 leased-pickup pin / TASK-647 role gating) refuses a queue row routed for:implementer â\x80\x94 the reviewer cannot claim the spec it is supposed to review. In the aida dev repo this is masked (review stories are separate reviewer-routed rows); on a fresh project the drain's own phase 3 hits the gate.\n\n## Acceptance\n1. A phase child spawned by the orchestrator for spec X (any phase role) is never refused by queue role-routing for X â\x80\x94 the orchestrator's assignment IS the authorization (substrate gate keyed on the drain lease, not the row's for_role).\n2. [Moved to TASK-1198, 2026-09-12: the rerun requires this fix MERGED and the binary rebuilt - pre-merge dogfood is circular. TASK-1198 holds the rerun pass condition.]\n3. Regression test: drain over a for:implementer row reaches phase 3 and the reviewer session picks up without a role-queue refusal.\n\"\nrelationships[1]{rel,id,title}:\n  Related,STORY-1088,\"Review PR-1780: [AI:codex] fix(queue): authorize orchestrated phase pickup (BUG-1106)"
-clock: 4981
+- id: 01a096a5-493c-74c0-a863-97f97ad151df
+  target_id: 01a09686-c2f9-7240-baa6-147c6615b107
+  author: aida
+  node_id: '1'
+  lamport: 4982
+  timestamp: 2026-09-12T17:23:29.724268860Z
+  kind: !SetStatus
+    status: Completed
+clock: 4982
 node_id: '1'
