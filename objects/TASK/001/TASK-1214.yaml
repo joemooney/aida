@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-09-12T03:07:05.518729951Z
+modified_at: 2026-09-12T14:39:53.399428869Z
 req_type: Task
 tags:
 - cli
@@ -19,3 +19,6 @@ relationships:
   target_id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
   created_at: 2026-09-12T03:07:05.518724917Z
   created_by: joe
+deferred: true
+deferred_at: 2026-09-12T14:39:53.399428869Z
+deferred_until: after the first release that ships the STORY-1028 subcommands (0.16.0) plus one release of alias grace
