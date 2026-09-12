@@ -24,12 +24,12 @@ description: |-
 
   ## Related
   STORY-1029 (notify check — a scheduled task consumer), TASK-1211 (mailbox gc), STORY-1043 (nightly-red check), STORY-441 (archive auto-sweep already config-gated on pull), the [store.sync] periodic_interval precedent.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:11:05.328535330Z
-modified_at: 2026-09-12T05:04:27.031445998Z
+modified_at: 2026-09-12T05:18:41.661742024Z
 req_type: Story
 tags:
 - from-product
@@ -52,3 +52,7 @@ relationships:
   created_at: 2026-09-11T17:11:11.605649734Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T05:18:41.661742024Z
+  implemented_by: joe
