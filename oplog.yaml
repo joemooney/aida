@@ -60293,5 +60293,31 @@ operations:
   timestamp: 2026-09-12T01:01:13.260425479Z
   kind: !SetStatus
     status: Approved
-clock: 4822
+- id: 01a09326-8eb7-7130-8077-36485abf6fca
+  target_id: 01a09326-8a8d-7883-9f6f-6c1a28ab0101
+  author: aida
+  node_id: '1'
+  lamport: 4823
+  timestamp: 2026-09-12T01:06:12.791512192Z
+  kind: !Create
+    title: 'Review PR-1758: [AI:codex] feat(supervise): add product-role nudge loop (STORY-1052)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09320`) for branch `story-1047`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1758>
+      - Branch: `story-1047` → `main`
+
+      ## Covers
+
+      - STORY-1052
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1758` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4823
 node_id: '1'
