@@ -61282,5 +61282,41 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 4884
+- id: 01a09428-3274-7e10-9365-4964c03bb650
+  target_id: 01a09428-2bfd-7903-b652-1d998c86dfa9
+  author: aida
+  node_id: '1'
+  lamport: 4885
+  timestamp: 2026-09-12T05:47:37.460555791Z
+  kind: !Create
+    title: aida scaffold codex-prompts claims /aida-* slash commands work, but Codex CLI 0.142 does not discover them (overclaimed parity)
+    description: |-
+      ## Field report (2026-09-11, work machine, rex_mission_gen)
+      `aida scaffold codex-prompts` reports success (writes 49 prompts to ~/.codex/prompts) and its help documents them as the slash-command parity surface, but Codex CLI 0.142.0 does NOT recognize `/aida-capture` OR `/prompts:aida-capture` ("Unrecognized command … Type / for a list"). The file exists at ~/.codex/prompts/aida-capture.md but is not discoverable via the current Codex command menu. So the advertised invocation path is dead.
+
+      Env: AIDA 0.14.0 (b4f163adb+dirty), Codex CLI 0.142.0.
+
+      ## Expected
+      AIDA must EITHER (a) install artifacts the supported Codex version actually discovers, invoked by the documented syntax; OR (b) STOP promising slash-command parity and point users at the supported skill path (`/skills` picker or `$aida-capture`). The current `aida scaffold codex-prompts` help says it writes prompts so `/aida-…` works in Codex — FALSE in this environment.
+
+      ## Working surface (for the doc fix)
+      Project-local .codex/skills/aida-capture/SKILL.md is valid (has frontmatter), selected via `/skills` or invoked as `$aida-capture`. That is WORKFLOW parity, not SLASH-COMMAND parity.
+
+      ## Proposed fix
+      1. Validate Codex prompt discovery against supported Codex CLI versions in CI / an integration smoke test.
+      2. Update `aida scaffold codex-prompts` help + onboarding docs to the exact currently-supported invocation.
+      3. If Codex retired/gated custom-prompt slash commands, deprecate this subcommand or replace it with a supported skill/plugin install path.
+      4. Keep the .codex/skills surface and document `$aida-capture` vs the `/skills` picker.
+
+      ## Acceptance
+      1. On the supported Codex version, every command surfaced by `aida scaffold codex-prompts` has a documented invocation that works in a fresh session.
+      2. If slash commands are unsupported, AIDA does not claim `/aida-*` works.
+      3. Codex onboarding documents `$aida-capture` and `/skills`.
+      4. A version-gated validation catches a generated prompt dir the installed Codex ignores.
+
+      Ties to the user-facing-text / don't-overclaim discipline. Workaround: `$aida-capture` or `/skills` → aida-capture.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4885
 node_id: '1'
