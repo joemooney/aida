@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-10T08:18:28.912177259Z
-modified_at: 2026-09-12T16:21:34.681138444Z
+modified_at: 2026-09-12T16:21:35.946675335Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a08982-3dd3-75f1-b4ae-29cace968190
   created_at: 2026-09-10T08:18:32.563557015Z
   created_by: joe
+comments:
+- id: 01a0966c-9e4a-70f0-8d12-7fa0501361da
+  author: joe
+  content: Review target PR-1716 was closed; BUG-1020's fix landed via PR-1718 (e217bb776, spec Completed). Review story moot.
+  created_at: 2026-09-12T16:21:35.946675335Z
+  modified_at: 2026-09-12T16:21:35.946675335Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
