@@ -13,12 +13,12 @@ description: |
   1. The headless pickup context pins the assigned spec id; the implementer prompt/skill instructs: implement THE ASSIGNED SPEC; `aida queue next` inside a leased implementer session is refused (or returns the leased spec) — substrate gate, not prose.
   2. `aida queue next`/`work` from a session holding an implementer lease on spec X errors (or echoes X) instead of dispensing a different spec.
   3. Regression test: leased session calling queue next gets the leased spec, not the queue head.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T23:32:58.158191259Z
-modified_at: 2026-09-12T01:48:06.384659701Z
+modified_at: 2026-09-12T02:24:54.387651602Z
 req_type: Bug
 tags:
 - drain
@@ -37,7 +37,23 @@ comments:
   created_at: 2026-09-12T01:01:14.660927300Z
   modified_at: 2026-09-12T01:01:14.660927300Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0936e-9a6c-7b52-9778-0986dd844799
+  author: aida-auto-bump
+  timestamp: 2026-09-12T02:24:54.380317898Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0936e-9a73-7e82-91a8-1ba80210522f
+  timestamp: 2026-09-12T02:24:54.387650823Z
+  agent: aida
+  commit_sha: be0c78a79cf8daa6bae3d7dcdaaddc68da02aa6c
+  summary: Completed via merge be0c78a7
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T01:40:12.259144493Z
   implemented_by: joe
+  completed_at: 2026-09-12T02:24:54.380147970Z
+  completion_sha: be0c78a79cf8daa6bae3d7dcdaaddc68da02aa6c
