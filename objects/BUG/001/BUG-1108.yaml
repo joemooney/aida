@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T17:44:04.926428818Z
-modified_at: 2026-09-12T17:44:24.031882206Z
+modified_at: 2026-09-12T17:44:25.230926347Z
 req_type: Bug
 tags:
 - drain
@@ -16,3 +16,10 @@ tags:
 - forge
 - init
 - reliability
+comments:
+- id: 01a096b8-718e-7190-82a2-e50b41a134b4
+  author: joe
+  content: Duplicate of BUG-1109 (double-submit; 1109 carries the full description).
+  created_at: 2026-09-12T17:44:25.230926347Z
+  modified_at: 2026-09-12T17:44:25.230926347Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
