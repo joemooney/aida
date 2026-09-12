@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   STORY-441 (spec archive tier — same pattern), queue gc, aida awaiting (the unread trigger that already works right).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:54:08.117240448Z
-modified_at: 2026-09-12T07:01:57.679734741Z
+modified_at: 2026-09-12T16:02:49.209604990Z
 req_type: Task
 tags:
 - from-product
@@ -51,15 +51,25 @@ comments:
   created_at: 2026-09-11T17:05:03.535574878Z
   modified_at: 2026-09-11T17:05:03.535574878Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0965b-6cf2-7d41-9f9a-10c126c2a161
+  author: aida-auto-bump
+  timestamp: 2026-09-12T16:02:49.202612316Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0965b-6cf9-7630-95dc-254eabf62e53
+  timestamp: 2026-09-12T16:02:49.209604191Z
+  agent: aida
+  commit_sha: d23a3eff65743ccf05657147c667cfdfee457bac
+  summary: Completed via merge d23a3eff
+  punted:
+  - 'punted: CI is red on PR-1742: Build (ubuntu-latest)'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T18:18:01.252873647Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1742: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34632484731 — view it: `gh run view 34632484731`. Push fixups to the same branch: `aida queue work TASK-1211 --branch task-1211 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-11T18:21:29.622335408Z
+  completed_at: 2026-09-12T16:02:49.202464825Z
+  completion_sha: d23a3eff65743ccf05657147c667cfdfee457bac
