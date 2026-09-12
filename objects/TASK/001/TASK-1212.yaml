@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:09:06.269326411Z
-modified_at: 2026-09-12T04:51:44.605140134Z
+modified_at: 2026-09-12T04:52:03.381583707Z
 req_type: Task
 tags:
 - ci
@@ -51,4 +51,4 @@ failure_reason:
   detail: 'CI is red on PR-1760: Build (ubuntu-latest)'
   recovery_hint: 'CI failed on run 34666291370 — view it: `gh run view 34666291370`. Push fixups to the same branch: `aida queue work TASK-1212 --branch task-1212 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-12T02:01:46.223413419Z
+  shelved_at: 2026-09-12T04:52:03.381583707Z
