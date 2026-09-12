@@ -19,12 +19,12 @@ description: |-
 
   ## Related
   STORY-991 (launcher live-duplicate alert) consumes the same resolver; build it once here.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:14:58.955676870Z
-modified_at: 2026-09-12T15:55:43.427531005Z
+modified_at: 2026-09-12T15:57:45.571647781Z
 req_type: Story
 tags:
 - from-product
