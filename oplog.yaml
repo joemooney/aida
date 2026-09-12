@@ -62484,5 +62484,32 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4961
+- id: 01a09640-893d-7361-9bf9-6a45f25501aa
+  target_id: 01a09640-8083-7de2-8616-87e44060459d
+  author: aida
+  node_id: '1'
+  lamport: 4962
+  timestamp: 2026-09-12T15:33:26.973573887Z
+  kind: !Create
+    title: 'Review PR-1778: [AI:codex] fix(codex): stop overclaiming prompt slash parity (BUG-1095)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09633`) for branch `bug-1095`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1778>
+      - Branch: `bug-1095` → `main`
+
+      ## Covers
+
+      - BUG-1095
+      - BUG-1094
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1778` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4962
 node_id: '1'
