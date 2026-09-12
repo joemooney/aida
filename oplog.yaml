@@ -63035,5 +63035,51 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4995
+- id: 01a09732-97c8-7493-8252-3abca8afdf38
+  target_id: 01a09732-93db-7492-8421-f3ed14cf2c6f
+  author: aida
+  node_id: '1'
+  lamport: 4996
+  timestamp: 2026-09-12T19:57:50.408681543Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on BUG-1111'
+    description: |
+      Auto-drafted by `aida queue work BUG-1111 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `verdict:request-changes`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework BUG-1111 --work`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-12T19:57:46.513309645+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 325370 ms
+        - phase 2 (ci): 150882 ms
+        - phase 3 (reviewer): 427830 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-1111","started_at":"2026-09-12T19:42:36.759510003+00:00","completed_at":"2026-09-12T19:57:46.513309645+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":325370},{"phase":2,"slug":"ci","elapsed_ms":150882},{"phase":3,"slug":"reviewer","elapsed_ms":427830}],"total_ms":905195,"binary_sha":"f134e5e0a"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4996
 node_id: '1'
