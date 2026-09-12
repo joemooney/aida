@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:36.779816829Z
-modified_at: 2026-09-12T22:35:05.948825841Z
+modified_at: 2026-09-12T22:35:10.681754622Z
 req_type: Story
 tags:
 - drain
@@ -64,5 +64,11 @@ comments:
   content: 'Advisor (2026-09-12): the guided slice ef9204575 (branch story-1041-2) is the pipeline_depth STATE CONTRACT + rendering + docs + ADR-27 — a prerequisite, NOT the concurrent scheduler. The commit carries a completing (STORY-1041) trailer, so merging it will auto-bump THIS story to Completed while the scheduler is still unbuilt (false completion). The remaining scheduler acceptance is captured in STORY-1091 (draft, guided). Disposition is your call at merge time — see the report I''m sending.'
   created_at: 2026-09-12T22:32:19.945989791Z
   modified_at: 2026-09-12T22:32:19.945989791Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a097c2-a3d9-7232-8c34-13adb78d94dd
+  author: joe
+  content: Re-scoped to the state-contract slice per operator decision (option 1). The pending story-1041-2 merge (ef9204575) now completes this story honestly; the concurrent scheduler is STORY-1091 (approved, guided).
+  created_at: 2026-09-12T22:35:10.681754622Z
+  modified_at: 2026-09-12T22:35:10.681754622Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: guided
