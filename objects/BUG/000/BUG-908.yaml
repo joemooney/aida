@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:41:07.999388001Z
-modified_at: 2026-09-12T19:30:13.294042367Z
+modified_at: 2026-09-12T19:42:29.633552551Z
 req_type: Bug
 tags:
 - drain
@@ -83,6 +83,12 @@ comments:
   content: 'REOPENED per TASK-1210 acceptance #3 with a controlled in-the-wild specimen (2026-09-12 12:23, testbed aida-codex-test, TASK-28): codex implementer kill-9''d mid-phase-1 with a dirty worktree (1 file +8/-2). The [drain] transient retry fired, ran BUG-1078''s THREE liveness re-probes, and still refused: ''phase 1 retry cannot reclaim predecessor lease 01a09712 on TASK-28 after 3 liveness re-probe(s)''. The predecessor pids were verifiably dead (kill -9). Hypothesis: the lease''s liveness anchor is the ORCHESTRATOR''S own (still-alive) pid rather than the codex child — in-process phase-1 records the parent as creator, so the probe reads Live forever and no grace window helps. Fix direction: the lease liveness anchor for a headless phase child must be the vendor child pid (or the reclaim must treat a lease created by THIS orchestrator run as its own — continuation, not takeover). Also observed: contradictory teardown lines (''leaving it shelved for triage, not resetting'' then ''status restored to Approved''). Evidence: lease .aida/sessions/01a09712e724.toml, worktree aida-pool-aida-codex-test-1 (diff preserved), scratchpad drive-t28.log.'
   created_at: 2026-09-12T19:24:30.434727996Z
   modified_at: 2026-09-12T19:24:30.434727996Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09724-8b01-7df2-b208-49a0b66624c4
+  author: joe
+  content: 'Note: the 12:31 ''shipped (reconciled)'' was a PHANTOM completion — the reconciler credited the days-old PR-1739 against the reopened scope (filed as BUG-1112). The reopened scope itself is re-filed as BUG-1111 (anchor-pid defect). 908 stays Completed for its ORIGINAL scope only.'
+  created_at: 2026-09-12T19:42:29.633552551Z
+  modified_at: 2026-09-12T19:42:29.633552551Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a0918c-6794-7143-96b0-c346e17f07c1
