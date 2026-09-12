@@ -3,12 +3,12 @@ spec_id: TASK-1-129
 agreed_id: TASK-153
 title: aida ps still shows lease role for a long-lived advisor whose transcript conversations calls advisor
 description: 'Observed 2026-09-09 while verifying STORY-993 (PR #1706): pid 23126 renders as role general-purpose in aida ps (from the harness-worktree lease abf9f7f0) but as advisor in aida session conversations (jsonl hook role, transcript 3653ac9c). TASK-152 made ps prefer the live transcript role only when a row correlates to a RECENT jsonl by pid or worktree; this transcript resumed 3 days ago, so ps falls back to the lease role. STORY-993 acceptance 4 (agree on role for the same pid) holds on the conversations side; the ps side needs the correlation window widened or the STORY-993 resolver reused (lease-manifest claude_session_id join) instead of a recency window. Not a blocker for STORY-993.'
-status: Done
+status: Completed
 priority: Low
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-09T08:31:03.313102729Z
-modified_at: 2026-09-11T17:27:46.168763938Z
+modified_at: 2026-09-12T03:41:08.461181343Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -18,7 +18,23 @@ relationships:
   target_id: 01a09182-abe3-7811-a8a1-537c3da17e7c
   created_at: 2026-09-11T17:27:46.168759350Z
   created_by: joe
+history:
+- id: 01a093b4-65e5-71a0-969f-32e9cf066c6b
+  author: aida-auto-bump
+  timestamp: 2026-09-12T03:41:08.453677396Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a093b4-65ed-7da2-a686-ebaf33fe4106
+  timestamp: 2026-09-12T03:41:08.461175909Z
+  agent: aida
+  commit_sha: b1f8dbd49db1d96ba4010b2f62b8f29732794d62
+  summary: Completed via merge b1f8dbd4
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T17:16:53.465441892Z
   implemented_by: joe
+  completed_at: 2026-09-12T03:41:08.406815606Z
+  completion_sha: b1f8dbd49db1d96ba4010b2f62b8f29732794d62
