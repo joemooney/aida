@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:47:24.970776476Z
-modified_at: 2026-09-12T06:29:59.163338323Z
+modified_at: 2026-09-12T06:38:28.046117531Z
 req_type: Bug
 tags:
 - agent-launcher
@@ -23,6 +23,10 @@ relationships:
 - rel_type: !Custom relates-to
   target_id: 01a09428-155b-7623-b243-a51e1bd7b0f5
   created_at: 2026-09-12T05:47:41.301035158Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a09456-aae5-7531-afaf-be4ad0f11308
+  created_at: 2026-09-12T06:38:28.046112758Z
   created_by: joe
 implementation_info:
   implemented: true
