@@ -597,7 +597,13 @@ fn run_command(
         .spawn()
         .with_context(|| format!("spawn notify command `{command}`"))?;
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(message.as_bytes())?;
+        // A notify command is not required to read stdin (`notify-send` takes
+        // everything as arguments); if it exits first the write sees EPIPE,
+        // which is not a delivery failure.
+        match stdin.write_all(message.as_bytes()) {
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+            other => other?,
+        }
     }
     let output = child.wait_with_output()?;
     if output.status.success() {
