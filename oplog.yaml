@@ -62848,5 +62848,13 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4986
+- id: 01a096b8-6d26-7292-87f9-e3b615fc254c
+  target_id: 01a096b8-223e-7b02-88ff-cd3fe4da8d8a
+  author: aida
+  node_id: '1'
+  lamport: 4987
+  timestamp: 2026-09-12T17:44:24.102704597Z
+  kind: !SetStatus
+    status: Rejected
+clock: 4987
 node_id: '1'

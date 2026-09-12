@@ -3,12 +3,12 @@ spec_id: BUG-1108
 agreed_id: BUG-1108
 title: '[forge] provider frozen as pure-git at pre-remote init silently breaks drains on GitHub repos (no PR concept, reviewer dead-ends)'
 description: ''
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T17:44:04.926428818Z
-modified_at: 2026-09-12T17:44:04.926428818Z
+modified_at: 2026-09-12T17:44:24.031882206Z
 req_type: Bug
 tags:
 - drain
