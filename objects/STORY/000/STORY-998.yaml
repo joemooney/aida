@@ -27,12 +27,12 @@ description: |-
 
   ## Related
   STORY-974 (typed causes), STORY-993 (liveness), STORY-994/995 (display only), BUG-420, BUG-749, BUG-875. Prototype source: _ignore/terminator (untracked).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-12T05:57:24.004688456Z
+modified_at: 2026-09-12T06:08:24.117347158Z
 req_type: Story
 tags:
 - drain
@@ -60,3 +60,7 @@ relationships:
   created_at: 2026-09-11T17:25:01.371086355Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T06:08:24.117347158Z
+  implemented_by: joe
