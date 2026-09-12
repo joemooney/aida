@@ -1,0 +1,29 @@
+id: 01a09686-c2f9-7240-baa6-147c6615b107
+spec_id: BUG-1106
+agreed_id: BUG-1106
+title: drain phase-3 reviewer child is refused by queue role-gating on fresh projects - for:implementer row blocks its own review phase
+description: |
+  ## Observed (TASK-1198 evidence run, testbed aida-codex-test, 2026-09-12 09:35)
+  Fresh drain (aida queue work --drain --no-human=both, binary at main ff36b75+) over three decision-free specs queued --user joe --for implementer. Phase 1 (codex implementer) succeeded for all three: implemented, pushed, PRs 10/11/12 opened. Phase 3 (reviewer session) exited 1 on BOTH attempts for all three with:
+    error: "`TASK-7` isn't in your queue, but it IS queued:"  /  help: aida role enter implementer
+  All three shelved; 0 merges. Same phase-3 failure class as the 2026-09-06 testbed attempt.
+
+  ## Root cause hypothesis
+  The phase-3 reviewer child inherits AIDA_SESSION_ROLE=reviewer and its in-session pickup (post-BUG-1082 leased-pickup pin / TASK-647 role gating) refuses a queue row routed for:implementer — the reviewer cannot claim the spec it is supposed to review. In the aida dev repo this is masked (review stories are separate reviewer-routed rows); on a fresh project the drain's own phase 3 hits the gate.
+
+  ## Acceptance
+  1. A phase child spawned by the orchestrator for spec X (any phase role) is never refused by queue role-routing for X — the orchestrator's assignment IS the authorization (substrate gate keyed on the drain lease, not the row's for_role).
+  2. Rerun the TASK-1198 testbed drain: three merges, zero human relaunches.
+  3. Regression test: drain over a for:implementer row reaches phase 3 and the reviewer session picks up without a role-queue refusal.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T16:50:09.273073069Z
+modified_at: 2026-09-12T16:50:09.273073069Z
+req_type: Bug
+tags:
+- drain
+- orchestrator
+- queue
+- reliability
