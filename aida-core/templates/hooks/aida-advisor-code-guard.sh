@@ -25,7 +25,19 @@
 # Hooks run under their shebang (bash) when invoked as an executable path.
 # trace:STORY-670
 
-set -euo pipefail
+set -Eeuo pipefail
+
+# Unexpected hook failures must be visible to the agent runtime. Claude/Codex
+# treat a silent non-zero hook as a block with no useful reason, so only the
+# deliberate `exit 2` path below should ever produce a non-zero status.
+# trace:BUG-1092 | ai:codex
+__aida_hook_unexpected_error() {
+    local status=$?
+    [ "$status" -eq 0 ] && return
+    printf 'AIDA hook internal error: aida-advisor-code-guard.sh aborted unexpectedly at line %s (exit %s). This is a hook bug, not a policy block.\n' "${BASH_LINENO[0]:-unknown}" "$status" >&2
+    exit "$status"
+}
+trap __aida_hook_unexpected_error ERR
 
 INPUT=$(cat)
 
