@@ -1,0 +1,32 @@
+id: 01a09776-907b-7392-80c0-a7ee21b2eef0
+spec_id: ADR-27
+agreed_id: ADR-27
+title: 'STORY-1041: bounded two-slot drain scheduler over the existing per-spec phase engine'
+description: |
+  ## Context
+  STORY-1041 needs the single-spec drain to stop idling while an already-open PR waits on CI/review/merge. The load-bearing choice is whether to rewrite the orchestrator around fully concurrent phase execution, or add a bounded scheduler that overlaps only the next implementer with the current spec's later gates.
+
+  ## Options considered
+  - Full concurrent phase graph — maximizes throughput but rewrites the core phase model, merge ordering, watchdog ownership, and failure accounting in one risky step.
+  - Bounded scheduler over the existing per-spec engine — keeps the proven phase driver and serial merge path, while allowing a small in-flight window where a later spec can run phase 1 as an earlier spec waits on CI/review/merge.
+  - Status-only/config-only slice — lowers immediate risk but does not satisfy the acceptance criterion that the next implementer starts during the previous spec's CI window.
+
+  ## Decision
+  Use a bounded scheduler with a small pipeline depth, defaulting to two slots. The scheduler may start the next independent spec's implementer once the earlier spec has left phase 1, but phases 4-6 remain ordered and serial.
+
+  ## Rationale
+  This matches the story's design, gives the throughput win from hiding CI wait, and preserves the existing merge/pull/build safety boundaries. It also keeps failure accounting and status reporting local to the drain process instead of introducing a broad new orchestration substrate.
+
+  ## Consequences
+  The first implementation focuses on overlapping phase 1 with a previous spec's later phases, plus status/docs/tests for the new in-flight view. More general fan-out remains the job of burndown/concurrency features, not this drain path.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T21:12:04.987183577Z
+modified_at: 2026-09-12T21:12:04.987183577Z
+req_type: Decision
+tags:
+- adr
+- from-guided-implement:STORY-1041
+- keystone
