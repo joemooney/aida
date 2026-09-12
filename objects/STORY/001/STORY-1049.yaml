@@ -29,7 +29,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:07.876021726Z
-modified_at: 2026-09-11T17:56:52.073879241Z
+modified_at: 2026-09-12T21:09:41.705863936Z
 req_type: Story
 tags:
 - ci
@@ -60,3 +60,6 @@ comments:
   created_at: 2026-09-11T17:56:52.073879241Z
   modified_at: 2026-09-11T17:56:52.073879241Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+deferred: true
+deferred_at: 2026-09-12T21:09:41.705863936Z
+deferred_until: PR CI cycle time becomes a felt bottleneck (>15min or blocking releases), or non-Linux contributors need fast pre-merge feedback
