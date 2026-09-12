@@ -78869,6 +78869,7 @@ fn parse_boolish(raw: &str) -> Option<bool> {
         "false" | "no" | "off" | "0" => Some(false),
         _ => None,
     }
+}
 
 // trace:STORY-998 | ai:codex
 fn parse_duration_seconds(raw: &str) -> Option<u64> {
