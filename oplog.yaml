@@ -62535,5 +62535,31 @@ operations:
   timestamp: 2026-09-12T15:40:41.462258487Z
   kind: !SetStatus
     status: Completed
-clock: 4965
+- id: 01a0964a-8322-76a0-b3c5-5eefdfd7e79d
+  target_id: 01a0964a-7485-72b1-a3fa-479b35a29298
+  author: aida
+  node_id: '1'
+  lamport: 4966
+  timestamp: 2026-09-12T15:44:20.770435597Z
+  kind: !Create
+    title: 'Review PR-1779: [AI:codex] fix(liveness): classify claude only from executable argv (BUG-911)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09647`) for branch `bug-911`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1779>
+      - Branch: `bug-911` → `main`
+
+      ## Covers
+
+      - BUG-911
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1779` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4966
 node_id: '1'
