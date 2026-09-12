@@ -4,8 +4,13 @@ use super::{
     head_commit_message, headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
     orchestrator_pr_title_and_body, pushed_branch_commits_ahead_default, RealPhaseDriver,
 };
-use crate::auto_complete::PhaseDriver;
+use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
+use aida_core::{
+    DatabaseBackend, FieldChange, HistoryEntry, Requirement, RequirementStatus, RequirementsStore,
+};
+use chrono::{DateTime, Utc};
 use std::process::Command;
+use uuid::Uuid;
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -26,6 +31,25 @@ fn write_commit(root: &std::path::Path, file: &str, body: &str, msg: &str) {
     std::fs::write(root.join(file), body).unwrap();
     git(root, &["add", file]);
     git(root, &["commit", "-q", "-m", msg]);
+}
+
+fn dt(ts: &str) -> DateTime<Utc> {
+    DateTime::parse_from_rfc3339(ts)
+        .unwrap()
+        .with_timezone(&Utc)
+}
+
+fn hist_status(ts: &str, old_value: &str, new_value: &str) -> HistoryEntry {
+    HistoryEntry {
+        id: Uuid::now_v7(),
+        author: "test".to_string(),
+        timestamp: dt(ts),
+        changes: vec![FieldChange {
+            field_name: "status".to_string(),
+            old_value: old_value.to_string(),
+            new_value: new_value.to_string(),
+        }],
+    }
 }
 
 fn git_repo_with_origin() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
@@ -103,6 +127,19 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
     )
 }
 
+fn fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
+    let path = root.join("gh");
+    std::fs::write(&path, body).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms).unwrap();
+    }
+    path
+}
+
 #[test]
 fn driver_resolves_lifecycle_forge_once_from_target_origin() {
     let tmp = tempfile::tempdir().unwrap();
@@ -141,6 +178,81 @@ fn driver_resolves_lifecycle_forge_once_from_target_origin() {
     assert_eq!(
         driver.lifecycle_forge().kind(),
         crate::forge::ForgeKind::GitHub
+    );
+}
+
+#[test]
+fn reconcile_failure_does_not_credit_stale_merged_pr_after_reopen() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    git(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/repo.git",
+        ],
+    );
+
+    let mut req = Requirement::new("reopened bug".to_string(), String::new());
+    req.spec_id = Some("BUG-1112".to_string());
+    req.status = RequirementStatus::Approved;
+    req.history = vec![
+        hist_status("2026-09-10T12:00:00Z", "Done", "Completed"),
+        hist_status("2026-09-12T12:00:00Z", "Completed", "Approved"),
+    ];
+    let mut store = RequirementsStore::default();
+    store.requirements.push(req);
+    aida_core::GitBackend::new(&root.join(".aida-store"))
+        .unwrap()
+        .save(&store)
+        .unwrap();
+
+    let gh = fake_gh(
+        root,
+        r#"#!/usr/bin/env bash
+if [[ "${1:-}" == "pr" && "${2:-}" == "view" && "${3:-}" == "1739" ]]; then
+  if [[ "$*" == *"commits"* ]]; then
+    printf '[AI:codex] fix(orchestrator): original ship (BUG-1112)\n'
+    exit 0
+  fi
+  cat <<'JSON'
+{
+  "state": "MERGED",
+  "title": "[AI:codex] fix(orchestrator): original ship (BUG-1112)",
+  "mergedAt": "2026-09-10T12:30:00Z",
+  "baseRefName": "main",
+  "headRefName": "bug-1112",
+  "headRefOid": "abc123",
+  "isCrossRepository": false,
+  "headRepository": {"nameWithOwner": "acme/repo"},
+  "isDraft": false
+}
+JSON
+  exit 0
+fi
+exit 1
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
+
+    let mut driver = driver(root, "BUG-1112");
+    driver.pr_number = Some(1739);
+
+    // BUG-1112 acceptance #2: the real phase-1 reconciliation path must not
+    // phantom-ship reopened work by reusing the PR that completed the previous
+    // lifecycle. The stale PR merged before the latest terminal->open status
+    // transition, so phase 1 remains a genuine no-PR failure and the spec can
+    // be driven again or shelved as new work.
+    // trace:BUG-1112 | ai:codex
+    assert_eq!(
+        driver.reconcile_failure(
+            Phase::Implementer,
+            &PhaseFailure::of(FailureKind::NoPr, "phase 1 opened no PR"),
+        ),
+        PhaseReconcile::GenuineFailure
     );
 }
 
