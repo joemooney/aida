@@ -63383,5 +63383,28 @@ operations:
     req_type: Decision
     status: Approved
     priority: Medium
-clock: 5016
+- id: 01a097bf-dadf-7003-a30e-b37081416ed3
+  target_id: 01a097bf-d52e-7522-9ad7-88d1e5dec468
+  author: aida
+  node_id: '1'
+  lamport: 5017
+  timestamp: 2026-09-12T22:32:08.159411109Z
+  kind: !Create
+    title: 'Concurrent single-spec drain scheduler: run spec B''s implementer while spec A waits on CI/review/merge (the STORY-1041 scheduler, beyond the depth-state slice)'
+    description: |-
+      ## Why
+      STORY-1041's foundation slice (ef9204575, branch story-1041-2) shipped the [drain] pipeline_depth STATE CONTRACT + rendering + docs + ADR-27, but NOT the concurrent scheduler. The batch driver still runs specs sequentially, so 1041's core acceptance ('spec B implementer starts during spec A CI', two in flight, serial merges) is still open. The slice's commit carries a completing (STORY-1041) trailer, so a merge would auto-bump STORY-1041 to Completed while the real scheduler is unbuilt — a false completion. This child holds the remaining acceptance.
+
+      ## Acceptance
+      1. The batch/drain driver starts the next spec's implementer phase while the previous spec is in a waiting phase (CI/review/merge), up to [drain] pipeline_depth concurrent in-flight.
+      2. Merges stay SERIAL (one integrator at a time) even with N implementers in flight.
+      3. A pipelined failure shelves only its own spec; the others continue.
+      4. Evidence: a drain log showing two specs' implementer phases overlapping in time, and serial merges.
+
+      ## Related
+      STORY-1041 (parent story + the depth-state slice), ADR-27.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5017
 node_id: '1'
