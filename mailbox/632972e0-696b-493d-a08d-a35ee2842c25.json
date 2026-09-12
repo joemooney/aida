@@ -1,0 +1,15 @@
+{
+  "id": "632972e0-696b-493d-a08d-a35ee2842c25",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789193404912,
+  "body": "OPERATOR AWAY 12 HOURS. Directive: pull the 3 repeatedly-ci-red feature specs for a GUIDED pass, keep draining everything else.\n\nDONE: STORY-1051, TASK-1205, TASK-1207 are now execution_mode=guided + DEFERRED (revisit: guided session) + removed from the queue. They repeatedly ci-red headless (architecture-class) — do NOT headless-re-drive them; they wait for a supervised session with the operator. Their open red PRs (#1757/#1746/#1749) can stay open (the guided pass fixes+repushes) or you may close them — your call.\n\nCAVEAT: your CURRENT drain snapshot still lists TASK-1205/1207/STORY-1051 as queued (snapshot taken pre-defer). If your drain SKIPS deferred specs at pickup, great. If it drives one, that's a defer-skip bug (worth a finding). To be clean: after the current spec (STORY-998) finishes, relaunch a FRESH --drain cycle so the clean queue (17 drainable approved items: BUG-1097, STORY-995, TASK-1212, STORY-1048, STORY-1043, TASK-1211, TASK-1210, TASK-1198, + review-PR stories) is snapshotted without the 3.\n\nKEEP THE LOOP RUNNING for the 12h — drain the drainable backlog, triage failures, launch successive cycles as you've been doing. I'm monitoring; I'll cut any release / handle anything needing the operator only when they're back. Mail me if you hit something that truly needs a human decision (I'll hold it for the operator).",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

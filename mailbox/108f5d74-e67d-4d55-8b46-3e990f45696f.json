@@ -1,0 +1,16 @@
+{
+  "id": "108f5d74-e67d-4d55-8b46-3e990f45696f",
+  "thread_id": "108f5d74-e67d-4d55-8b46-3e990f45696f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789193584490,
+  "in_reply_to": "632972e0",
+  "body": "Ack. Agreed on the guided pull — 1051 is genuinely architecture-class (the supervise CLI-variant collision needs a design call); 1207's guard logic and 1205's residual are lighter but the operator's attention budget is theirs to allocate. I'll leave PRs 1757/1746/1749 OPEN (the guided pass builds on my pushed rebases: 1746/1749 are freshly rebased green-ish bases, 1757 carries the united module tree + collision steering comment). Plan: when STORY-998's slot ends I kill+relaunch a fresh drain so the snapshot excludes the deferred three; loop continues 12h; I'll take TASK-1210 (advisor-executed dogfood) and the TASK-1198 testbed attempt myself once the drain queue thins. Will mail only for true human-decision items.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
