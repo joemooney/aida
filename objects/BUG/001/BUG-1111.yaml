@@ -3,12 +3,12 @@ spec_id: BUG-1111
 agreed_id: BUG-1111
 title: headless phase-1 lease anchors liveness on the live orchestrator pid - dead vendor child is unreclaimable (retry re-entry structurally broken)
 description: "## Observed (TASK-1210 controlled specimen, 2026-09-12 12:23, testbed TASK-28)\nCodex implementer kill-9'd mid-phase-1 with a dirty worktree. The transient retry ran BUG-1078's 3 liveness re-probes and still refused: 'phase 1 retry cannot reclaim predecessor lease 01a09712 after 3 liveness re-probe(s)' â\x80\x94 with the predecessor pids verifiably dead.\n\n## Root cause hypothesis\nThe lease created for an in-process headless phase-1 records the ORCHESTRATOR'S own pid as its liveness anchor (creator pid), not the vendor child. The orchestrator is alive while retrying, so the probe reads Live forever; no reprobe/grace helps. (Split from reopened BUG-908 â\x80\x94 its original release-path fix shipped in PR-1739; this is the anchor defect. 908's reopen was phantom-shipped by the reconciler, see companion bug.)\n\n## Acceptance\n1. A lease for a headless vendor phase child anchors liveness on the CHILD pid (or records both, with the child authoritative for reclaim); alternatively the reclaim treats a lease created by this same orchestrator run as continuation and reclaims regardless of liveness.\n2. [Moved to TASK-1210, 2026-09-12: the injection rerun requires this fix MERGED and the binary rebuilt - pre-merge evidence is circular. TASK-1210 holds the rerun pass condition.]\n3. Unit test: lease with live creator pid + dead child pid is reclaimable by the same run's retry.\n\"\nrelationships[1]{rel,id,title}:\n  Related,STORY-1089,\"Review PR-1782: [AI:codex] fix(orchestrator): reclaim dead headless child leases (BUG-1111)"
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T19:41:59.963962262Z
-modified_at: 2026-09-12T20:00:43.715015084Z
+modified_at: 2026-09-12T20:00:56.704494431Z
 req_type: Bug
 tags:
 - drain
@@ -19,15 +19,25 @@ relationships:
   target_id: 01a0972b-d480-7151-afd0-039b1c45f564
   created_at: 2026-09-12T19:50:32.146645981Z
   created_by: joe
+history:
+- id: 01a09735-6f79-7ee0-ba6e-b2bacf2f9c2a
+  author: aida-auto-bump
+  timestamp: 2026-09-12T20:00:56.697278996Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09735-6f80-7703-85f0-ddc893fce130
+  timestamp: 2026-09-12T20:00:56.704493785Z
+  agent: aida
+  commit_sha: cfd412f7b7bae3df7aeb95c6f11d942e27a446b3
+  summary: Completed via merge cfd412f7
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T19:47:44.639256507Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1111 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T19:57:45.832249607Z
+  completed_at: 2026-09-12T20:00:56.697145430Z
+  completion_sha: cfd412f7b7bae3df7aeb95c6f11d942e27a446b3
