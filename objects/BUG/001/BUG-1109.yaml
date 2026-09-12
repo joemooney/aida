@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T17:44:10.569889743Z
-modified_at: 2026-09-12T18:37:14.228444438Z
+modified_at: 2026-09-12T18:41:50.274974829Z
 req_type: Bug
 tags:
 - drain
@@ -30,3 +30,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-12T18:37:14.228444438Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1781: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34711744223 — view it: `gh run view 34711744223`. Push fixups to the same branch: `aida queue work BUG-1109 --branch bug-1109 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T18:41:50.274974829Z
