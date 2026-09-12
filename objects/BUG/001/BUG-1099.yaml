@@ -1,0 +1,28 @@
+id: 01a09449-a8ad-7332-9bba-9e5f41078baa
+spec_id: BUG-1099
+agreed_id: BUG-1099
+title: deferred specs stay in the queue and a drain will drive them - defer must park queue rows and drain pickup must skip deferred
+description: |
+  ## Observed
+  2026-09-11 23:25: TASK-1205/TASK-1207/STORY-1051 were deferred (aida defer, execution_mode=guided) by the product seat, and aida list --deferred shows all three — yet the very next aida queue work --drain captured all three as members and would have headless-driven them against an explicit operator directive. Advisor removed the queue rows by hand mid-drain.
+
+  ## Gap (two layers, both needed)
+  1. aida defer leaves existing queue rows in place (or the defer path removed them from a different queue identity than the drain reads — the BUG-89 identity split). Defer should park/remove the spec's queue rows across the identity the row lives under, or at minimum warn which rows remain.
+  2. Drain member capture + queue pickup do not consult the deferred flag: a deferred spec must be skipped at BOTH member-snapshot time and pickup time (substrate gate, not operator vigilance) — same skip semantics as archived.
+
+  ## Acceptance
+  1. aida defer <ID> removes (or parks) every queue row for the spec and prints what it removed.
+  2. queue work --drain member capture excludes deferred specs; a deferred spec reached at pickup is skipped with an explicit 'deferred — skipped' line, not driven.
+  3. Regression tests for both layers (defer-with-queued-row; drain-snapshot-with-deferred-spec).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T06:24:10.413442950Z
+modified_at: 2026-09-12T06:24:10.413442950Z
+req_type: Bug
+tags:
+- drain
+- queue
+- reliability
+- substrate-as-bouncer
