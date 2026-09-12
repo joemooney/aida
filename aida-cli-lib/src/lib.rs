@@ -81461,49 +81461,82 @@ fn remove_session_lease_record_only(project_root: &std::path::Path, lease_id: &s
     removed
 }
 
+const IMPLEMENTER_RETRY_PREDECESSOR_REPROBES: usize = 3;
+const IMPLEMENTER_RETRY_PREDECESSOR_REPROBE_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(5);
+
 /// BUG-908: a phase-1 transient retry is continuation, not takeover. Release
 /// the dead predecessor lease even when its worktree is dirty, then relaunch
 /// the implementer against that same branch/path with force-claim. The dirty
 /// tree is the attempt-1 work product; `--steal` is never involved.
-// trace:BUG-908 | ai:codex
+// trace:BUG-908 BUG-1078 | ai:codex
 fn reclaim_implementer_retry_predecessor(
     project_root: &std::path::Path,
     scope: &str,
 ) -> Result<Option<(String, std::path::PathBuf, String)>, auto_complete::PhaseFailure> {
-    let leases = list_leases(project_root);
-    let Some(conflict) = find_scope_lease_conflict(&leases, scope) else {
-        return Ok(None);
-    };
-    let report = stale_lease_recovery_for_lease(&conflict);
-    match report.verdict {
-        StaleLeaseRecovery::ReclaimableClean { .. } | StaleLeaseRecovery::StaleDirty { .. } => {
-            if !remove_session_lease_record_only(project_root, &conflict.id) {
+    reclaim_implementer_retry_predecessor_with(
+        project_root,
+        scope,
+        IMPLEMENTER_RETRY_PREDECESSOR_REPROBES,
+        IMPLEMENTER_RETRY_PREDECESSOR_REPROBE_DELAY,
+        |lease| stale_lease_recovery_for_lease(lease),
+        std::thread::sleep,
+    )
+}
+
+// trace:BUG-1078 | ai:codex
+fn reclaim_implementer_retry_predecessor_with(
+    project_root: &std::path::Path,
+    scope: &str,
+    reprobes: usize,
+    reprobe_delay: std::time::Duration,
+    mut recovery_for_lease: impl FnMut(&SessionLease) -> StaleLeaseRecoveryReport,
+    mut sleep: impl FnMut(std::time::Duration),
+) -> Result<Option<(String, std::path::PathBuf, String)>, auto_complete::PhaseFailure> {
+    let mut live_or_unknown_seen = 0usize;
+    loop {
+        let leases = list_leases(project_root);
+        let Some(conflict) = find_scope_lease_conflict(&leases, scope) else {
+            return Ok(None);
+        };
+        let report = recovery_for_lease(&conflict);
+        match report.verdict {
+            StaleLeaseRecovery::ReclaimableClean { .. } | StaleLeaseRecovery::StaleDirty { .. } => {
+                if !remove_session_lease_record_only(project_root, &conflict.id) {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::LeaseConflict,
+                        format!(
+                            "phase 1 retry could not release predecessor lease {} on `{scope}`; \
+                             worktree: {}",
+                            &conflict.id[..conflict.id.len().min(8)],
+                            conflict.worktree_path.display(),
+                        ),
+                    ));
+                }
+                return Ok(Some((
+                    conflict.branch.clone(),
+                    conflict.worktree_path.clone(),
+                    conflict.id.clone(),
+                )));
+            }
+            StaleLeaseRecovery::Live | StaleLeaseRecovery::UnknownLiveness
+                if live_or_unknown_seen < reprobes =>
+            {
+                live_or_unknown_seen += 1;
+                sleep(reprobe_delay);
+            }
+            StaleLeaseRecovery::Live | StaleLeaseRecovery::UnknownLiveness => {
                 return Err(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::LeaseConflict,
                     format!(
-                        "phase 1 retry could not release predecessor lease {} on `{scope}`; \
-                         worktree: {}",
+                        "phase 1 retry cannot reclaim predecessor lease {} on `{scope}` after \
+                         {} liveness re-probe(s); worktree: {}",
                         &conflict.id[..conflict.id.len().min(8)],
+                        reprobes,
                         conflict.worktree_path.display(),
                     ),
                 ));
             }
-            Ok(Some((
-                conflict.branch.clone(),
-                conflict.worktree_path.clone(),
-                conflict.id.clone(),
-            )))
-        }
-        StaleLeaseRecovery::Live | StaleLeaseRecovery::UnknownLiveness => {
-            Err(auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::LeaseConflict,
-                format!(
-                    "phase 1 retry cannot reclaim predecessor lease {} on `{scope}`; \
-                     worktree: {}",
-                    &conflict.id[..conflict.id.len().min(8)],
-                    conflict.worktree_path.display(),
-                ),
-            ))
         }
     }
 }
