@@ -62814,5 +62814,17 @@ operations:
   timestamp: 2026-09-12T17:23:31.353398694Z
   kind: !SetStatus
     status: Rejected
-clock: 4984
+- id: 01a096b8-27f8-7c90-8694-7cb97c982ee1
+  target_id: 01a096b8-223e-7b02-88ff-cd3fe4da8d8a
+  author: aida
+  node_id: '1'
+  lamport: 4985
+  timestamp: 2026-09-12T17:44:06.392960550Z
+  kind: !Create
+    title: '[forge] provider frozen as pure-git at pre-remote init silently breaks drains on GitHub repos (no PR concept, reviewer dead-ends)'
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4985
 node_id: '1'
