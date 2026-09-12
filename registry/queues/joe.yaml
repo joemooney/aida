@@ -501,3 +501,10 @@
   added_at: 2026-09-12T06:16:49.274761970Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a09449-a8ad-7332-9bba-9e5f41078baa
+  position: 385000
+  added_by: joe
+  added_at: 2026-09-12T06:24:22.793863540Z
+  for_role: implementer
+  added_by_machine: imac
