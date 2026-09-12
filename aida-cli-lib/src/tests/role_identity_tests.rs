@@ -143,8 +143,11 @@ fn product_default_guidance_is_available_without_role_file() {
 #[test]
 fn roleless_recovery_uses_last_used_role_and_copyable_command() {
     let tmp = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
     let root = tmp.path();
-    let now = chrono::Utc::now();
+    let now = "2026-09-12T16:00:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .unwrap();
     let old = RoleState {
         name: "implementer".to_string(),
         purpose: None,
@@ -166,9 +169,53 @@ fn roleless_recovery_uses_last_used_role_and_copyable_command() {
     save_role_at(&old, &root.join(".aida/roles/implementer.toml")).unwrap();
     save_role_at(&recent, &root.join(".aida/roles/advisor.toml")).unwrap();
 
+    // trace:BUG-1116 | ai:codex
+    // Keep the recovery assertion hermetic; global roles can otherwise outrank
+    // this fixture and make the "last-used" winner machine-dependent.
+    let home_str = home.path().to_str().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("HOME", home_str), ("AIDA_TEST_HOME", home_str)]);
     let line = roleless_recovery_line_for(root, false).unwrap();
 
     assert!(line.starts_with("No active role."), "{line}");
+    assert!(line.contains("Last-used role: advisor"), "{line}");
+    assert!(line.contains("`aida role enter advisor`"), "{line}");
+}
+
+#[test]
+fn roleless_recovery_ties_last_active_at_by_role_name() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let when = "2026-09-12T16:00:00Z"
+        .parse::<chrono::DateTime<chrono::Utc>>()
+        .unwrap();
+    let base = RoleState {
+        name: "implementer".to_string(),
+        purpose: None,
+        created_at: when,
+        last_active_at: when,
+        working_directory: None,
+        notes: None,
+        global: false,
+        activity: Vec::new(),
+        scope_tags: Vec::new(),
+        scope_status: None,
+        system_prompt: None,
+    };
+    let advisor = RoleState {
+        name: "advisor".to_string(),
+        ..base.clone()
+    };
+    save_role_at(&base, &root.join(".aida/roles/implementer.toml")).unwrap();
+    save_role_at(&advisor, &root.join(".aida/roles/advisor.toml")).unwrap();
+
+    // trace:BUG-1116 | ai:codex
+    let home_str = home.path().to_str().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[("HOME", home_str), ("AIDA_TEST_HOME", home_str)]);
+    let line = roleless_recovery_line_for(root, false).unwrap();
+
     assert!(line.contains("Last-used role: advisor"), "{line}");
     assert!(line.contains("`aida role enter advisor`"), "{line}");
 }
