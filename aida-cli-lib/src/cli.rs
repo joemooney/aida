@@ -7414,6 +7414,27 @@ pub enum NotifyCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
+    /// Re-drive transient NeedsAttention parks, leaving genuine human blockers
+    /// for triage.
+    // trace:STORY-1051 | ai:codex
+    Supervise {
+        /// Mutate specs and launch retries. Omit for a dry-run plan.
+        #[clap(long)]
+        execute: bool,
+
+        /// Maximum supervised re-drives per spec before escalating to a human.
+        #[clap(long, default_value = "3")]
+        max_attempts: u32,
+
+        /// Run at most this many supervised re-drives in one invocation.
+        #[clap(long)]
+        max: Option<usize>,
+
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Do one spec: dispatch it to the right harness based on its groomed
     /// execution mode (drain, drive, guided, operator, or decide), printing
     /// what will be asked of you before anything starts.

@@ -128,6 +128,28 @@ pub(crate) fn handle_git_backend_command(
                 &db_path_str,
             );
         }
+        Command::Supervise {
+            execute,
+            max_attempts,
+            max,
+            json,
+        } => {
+            let storage = Storage::new(store_path.to_path_buf());
+            let project_root = store_path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            return supervisor::handle_supervise_command(
+                &storage,
+                &project_root,
+                supervisor::SuperviseOpts {
+                    execute: *execute,
+                    max_attempts: *max_attempts,
+                    max: *max,
+                    json: *json,
+                },
+            );
+        }
         Command::Advisor { short, command } => {
             // STORY-262 / STORY-559: two advisor subcommands reach storage init
             // — `schedule` (files TASKs) and the default `advisor status`

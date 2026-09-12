@@ -67,6 +67,7 @@ mod queue_cmd;
 mod solo_cmd;
 mod status_cmd;
 mod supervise_cmd;
+mod supervisor;
 mod zen_cmd;
 use drain_cmd::*;
 use mcp_cmd::*;
@@ -4260,6 +4261,25 @@ fn run() -> Result<()> {
             // trace:SPIKE-67 | ai:claude — observe-only rule-adherence study
             // over the git log; opt-in, local-only.
             field_study_cmd::handle_field_study_command(cmd)?;
+        }
+        Command::Supervise {
+            execute,
+            max_attempts,
+            max,
+            json,
+        } => {
+            let project_root =
+                find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            supervisor::handle_supervise_command(
+                &storage,
+                &project_root,
+                supervisor::SuperviseOpts {
+                    execute: *execute,
+                    max_attempts: *max_attempts,
+                    max: *max,
+                    json: *json,
+                },
+            )?;
         }
         Command::Push { .. } => {
             anyhow::bail!(
@@ -62638,6 +62658,7 @@ fn is_write_command(command: &Command) -> bool {
     matches!(
         command,
         Command::Do { .. }
+            | Command::Supervise { execute: true, .. }
             | Command::Add { .. }
             | Command::Edit { .. }
             | Command::Comment(_)

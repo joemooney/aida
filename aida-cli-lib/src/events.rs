@@ -96,6 +96,15 @@ pub enum EventKind {
         /// Maximum attempts for this phase, including the first try.
         max: u32,
     },
+    /// A supervised retry cap was exhausted and a transient park was promoted
+    /// to a human-facing escalation. **Actionable.**
+    // trace:STORY-1051 | ai:codex
+    ReclassifiedNeedsHuman {
+        /// Failure kind that exhausted the retry cap.
+        kind: String,
+        /// Number of supervised re-drive attempts recorded for this spec.
+        attempts: u32,
+    },
     /// A design-fork punt hit the cascade — the load-bearing case.
     /// **Actionable.**
     PuntFiled {
@@ -170,6 +179,7 @@ impl EventKind {
             | EventKind::PhaseDonePr { .. }
             | EventKind::SpecShelved { .. }
             | EventKind::SpecRetried { .. }
+            | EventKind::ReclassifiedNeedsHuman { .. }
             | EventKind::PuntFiled { .. }
             | EventKind::AdvisorEscalated { .. }
             | EventKind::PrMerged { .. }

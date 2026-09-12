@@ -343,6 +343,14 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 phase, cause, attempt, max
             ),
         ),
+        // trace:STORY-1051 | ai:codex
+        EventKind::ReclassifiedNeedsHuman { kind, attempts } => (
+            "reclassified-needs-human",
+            format!(
+                "retry cap exhausted for {} after {} attempt(s)",
+                kind, attempts
+            ),
+        ),
         EventKind::PuntFiled { .. } => {
             ("punt-filed", "design-fork at .aida/punts.jsonl".to_string())
         }
