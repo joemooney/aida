@@ -60498,5 +60498,31 @@ operations:
   timestamp: 2026-09-12T02:24:55.092536690Z
   kind: !SetStatus
     status: Completed
-clock: 4834
+- id: 01a09379-33f1-7201-93dc-f066320b8312
+  target_id: 01a09379-2ff6-7d83-8ed0-71d9afcee855
+  author: aida
+  node_id: '1'
+  lamport: 4835
+  timestamp: 2026-09-12T02:36:29.041525035Z
+  kind: !Create
+    title: 'Review PR-1763: [AI:codex] feat(drain): add drain tail alias (TASK-1209)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0936e`) for branch `task-1209`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1763>
+      - Branch: `task-1209` → `main`
+
+      ## Covers
+
+      - TASK-1209
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1763` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4835
 node_id: '1'
