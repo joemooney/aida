@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T20:07:27.872186948Z
-modified_at: 2026-09-12T21:06:35.301012384Z
+modified_at: 2026-09-12T21:06:36.788751169Z
 req_type: Decision
 tags:
 - from-product
@@ -48,3 +48,10 @@ relationships:
   target_id: 01a09180-1adf-7ae1-9cd5-d158da41e7a6
   created_at: 2026-09-12T20:07:35.891056714Z
   created_by: joe
+comments:
+- id: 01a09771-8e74-7670-8e61-9f838844ac83
+  author: joe
+  content: 'Accepted: implemented as STORY-1051 and merged (PR-1784, commit b1bafe3). Forks A (substrate-reading command), B (event-log attempt state), C (default-off) all shipped as decided.'
+  created_at: 2026-09-12T21:06:36.788751169Z
+  modified_at: 2026-09-12T21:06:36.788751169Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
