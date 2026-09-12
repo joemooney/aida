@@ -61204,5 +61204,34 @@ operations:
   timestamp: 2026-09-12T05:33:56.304198326Z
   kind: !SetStatus
     status: Completed
-clock: 4881
+- id: 01a09423-ab28-7ca1-8712-ae928ab159f3
+  target_id: 01a09423-9f1a-7792-9dc6-fa032b055f99
+  author: aida
+  node_id: '1'
+  lamport: 4882
+  timestamp: 2026-09-12T05:42:40.680798643Z
+  kind: !Create
+    title: Scaffolded set -euo pipefail hooks false-BLOCK safe commands when an internal grep finds no match (exit-status fragility) — same root as the advisor's shell-gate feedback
+    description: |-
+      ## Observed (live, 2026-09-11)
+      Cutting 0.15.0, a routine `git checkout -- .claude/scheduled_tasks.lock` (restore ONE file, non-destructive) was BLOCKED twice by .claude/hooks/aida-git-guardrails.sh with the bare error "PreToolUse hook error: [aida-git-guardrails.sh]: No stderr output". The command matches NO destructive pattern the hook guards (it is not `checkout -- .`, not reset --hard, not force-push). The hook should have exited 0 (allow). Instead it exited NONZERO SILENTLY — which Claude Code treats as a block.
+
+      ## Cause
+      The scaffolded hooks run `set -euo pipefail` (aida-git-guardrails.sh:18, and aida-track-commits.sh / aida-validate-commit.sh / aida-advisor-code-guard.sh). Under set -e, an unguarded `grep` (or a `$(...)` whose inner command) that finds NO match exits 1 and kills the whole script before it reaches the deliberate `exit 0`/`exit 2`. So when the guardrail scans a SAFE command and its internal pattern-check grep finds nothing (the safe case), set -e aborts the hook with no message, and Claude Code blocks the tool. Net: the guardrail FALSE-BLOCKS safe git commands — the failure mode is exactly inverted (safe = blocked). The obvious greps (lines 24/137/221) are `|| true`-guarded, so the trip is in a helper (strip_quoted_args / is_protected_branch / resolve_push_targets) or a substitution that isn't.
+
+      This is the AIDA-side twin of the model-behavior feedback the advisor sent 2026-09-11 ("Shell test-gate chains repeatedly composed off the wrong exit status" — grep -c/grep exit status mis-gating under set -e). Same root; also plausibly behind some drain ci-red false-parks (STORY-1043/TASK-1211) if the CI-gate composes checks this way.
+
+      ## Acceptance
+      1. Audit EVERY scaffolded hook (aida-core/templates/hooks/*.sh) for `set -e`/`set -euo pipefail` + any grep or command-substitution whose no-match exit (1) can abort the script. Guard each: `grep ... || true`, move into `if grep ...; then`, or drop `set -e` where a controlled-exit flow is clearer.
+      2. Invariant test: a shell harness runs each guardrail hook with a SAFE command as JSON stdin and asserts exit 0 (allow) — no false block. Include the exact `git checkout -- <one-file>` case.
+      3. The guardrail must ONLY exit non-zero via its deliberate `exit 2` block path (which prints the reason to stdout); a silent nonzero exit is itself a bug (add a top-level trap that, on an unexpected nonzero, prints a diagnostic instead of a bare block).
+      4. Same audit + fix for the drain's own CI/test gating if it composes exit status via grep chains (the advisor's feedback).
+      5. Ship via `aida scaffold refresh` so downstream projects get the fixed hooks.
+
+      ## Related
+      The advisor's 2026-09-11 Claude Code feedback (shell test-gate exit status), the 0.15.0 release cut (where this blocked me), STORY-1043/TASK-1211 (ci-red parks — check if same root), the substrate-as-bouncer principle (a bouncer that false-blocks safe ops is worse than none).
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 4882
 node_id: '1'
