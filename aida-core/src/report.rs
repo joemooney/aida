@@ -414,7 +414,7 @@ impl ReportGenerator {
         let mut status = ScaffoldStatus::new();
 
         for artifact in &preview.artifacts {
-            let full_path = project_root.join(&artifact.path);
+            let full_path = crate::scaffolding::resolve_artifact_path(project_root, &artifact.path);
 
             if full_path.exists() {
                 // Read actual content
@@ -876,7 +876,7 @@ pub fn check_scaffold_status(
     let templates_root = fs::canonicalize(project_root.join("aida-core").join("templates")).ok();
 
     for artifact in &preview.artifacts {
-        let full_path = project_root.join(&artifact.path);
+        let full_path = crate::scaffolding::resolve_artifact_path(project_root, &artifact.path);
 
         if let Some(root) = &templates_root {
             let symlinked_master = fs::symlink_metadata(&full_path)

@@ -245,6 +245,45 @@ pub fn symlink_target(path: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Resolve where a scaffold artifact actually lives on disk.
+///
+/// Git hook artifacts are displayed as `.git/hooks/<name>` because that is the
+/// stable project-facing scaffold identity, but linked worktrees and submodules
+/// store hooks under Git's resolved admin directory rather than under the
+/// `.git` pointer file. Use `git rev-parse --git-path ...` for those paths and
+/// fall back to the project-relative path for non-hook artifacts.
+// trace:BUG-1094 | ai:codex
+pub fn resolve_artifact_path(project_root: &Path, artifact_path: &Path) -> PathBuf {
+    let s = artifact_path.to_string_lossy();
+    let Some(git_rel) = s.strip_prefix(".git/") else {
+        return project_root.join(artifact_path);
+    };
+    if git_rel != "hooks" && !git_rel.starts_with("hooks/") {
+        return project_root.join(artifact_path);
+    }
+
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "--git-path", git_rel])
+        .current_dir(project_root)
+        .output();
+    let Ok(output) = output else {
+        return project_root.join(artifact_path);
+    };
+    if !output.status.success() {
+        return project_root.join(artifact_path);
+    }
+    let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if resolved.is_empty() {
+        return project_root.join(artifact_path);
+    }
+    let resolved_path = PathBuf::from(resolved);
+    if resolved_path.is_absolute() {
+        resolved_path
+    } else {
+        project_root.join(resolved_path)
+    }
+}
+
 /// Normalize CRLF/CR line endings to LF. Scaffold files are written with LF;
 /// a Windows checkout (or an editor that rewrote the file) must not read as a
 /// user edit just because the newlines changed.
@@ -935,7 +974,7 @@ aida show <SPEC-ID>
         description: String,
         is_shell: bool,
     ) -> ScaffoldArtifact {
-        let full_path = self.project_root.join(&path);
+        let full_path = resolve_artifact_path(&self.project_root, &path);
         let exists = full_path.exists();
 
         // Check file status against the raw content (what we're comparing against)
@@ -2345,7 +2384,7 @@ aida show <SPEC-ID>
 
         // Create directories first
         for dir in &preview.new_dirs {
-            let full_path = self.project_root.join(dir);
+            let full_path = resolve_artifact_path(&self.project_root, dir);
             fs::create_dir_all(&full_path).map_err(|e| ScaffoldError::IoError {
                 path: full_path.clone(),
                 message: e.to_string(),
@@ -2355,7 +2394,7 @@ aida show <SPEC-ID>
         // Also ensure parent directories exist for all artifacts
         for artifact in &preview.artifacts {
             if let Some(parent) = artifact.path.parent() {
-                let full_parent = self.project_root.join(parent);
+                let full_parent = resolve_artifact_path(&self.project_root, parent);
                 if !full_parent.exists() {
                     fs::create_dir_all(&full_parent).map_err(|e| ScaffoldError::IoError {
                         path: full_parent.clone(),
@@ -2395,7 +2434,7 @@ aida show <SPEC-ID>
                 continue;
             }
 
-            let full_path = self.project_root.join(&artifact.path);
+            let full_path = resolve_artifact_path(&self.project_root, &artifact.path);
             // BUG-718: never write through a symlink. In the AIDA dev repo (and
             // any project that symlinks a scaffold file into a source-of-truth
             // dir) fs::write would follow the link and corrupt the master.
@@ -3133,6 +3172,51 @@ mod tests {
             title: "Test Project".to_string(),
             description: "A test project for scaffolding".to_string(),
             ..Default::default()
+        }
+    }
+
+    fn run_git_in(dir: &Path, args: &[&str]) {
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(args).current_dir(dir);
+        for (key, _) in std::env::vars() {
+            if key.starts_with("GIT_") {
+                cmd.env_remove(&key);
+            }
+        }
+        let status = cmd.status().unwrap();
+        assert!(
+            status.success(),
+            "git command {:?} failed in {}",
+            args,
+            dir.display()
+        );
+    }
+
+    fn git_stdout_in(dir: &Path, args: &[&str]) -> String {
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(args).current_dir(dir);
+        for (key, _) in std::env::vars() {
+            if key.starts_with("GIT_") {
+                cmd.env_remove(&key);
+            }
+        }
+        let output = cmd.output().unwrap();
+        assert!(
+            output.status.success(),
+            "git command {:?} failed in {}: {}",
+            args,
+            dir.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn resolved_git_path(repo: &Path, git_path: &str) -> PathBuf {
+        let path = PathBuf::from(git_stdout_in(repo, &["rev-parse", "--git-path", git_path]));
+        if path.is_absolute() {
+            path
+        } else {
+            repo.join(path)
         }
     }
 
@@ -4112,6 +4196,105 @@ mod tests {
         assert!(
             output.status.success(),
             "hook should succeed when on aida-store branch"
+        );
+    }
+
+    #[test]
+    fn git_hooks_scaffold_into_linked_worktree_git_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let main = temp_dir.path().join("main");
+        let linked = temp_dir.path().join("linked");
+        std::fs::create_dir(&main).unwrap();
+
+        run_git_in(&main, &["init"]);
+        run_git_in(&main, &["config", "user.email", "test@aida.dev"]);
+        run_git_in(&main, &["config", "user.name", "AIDA Test"]);
+        std::fs::write(main.join("README.md"), "main\n").unwrap();
+        run_git_in(&main, &["add", "README.md"]);
+        run_git_in(&main, &["commit", "-m", "initial"]);
+        run_git_in(
+            &main,
+            &["worktree", "add", linked.to_str().unwrap(), "-b", "linked"],
+        );
+
+        assert!(
+            linked.join(".git").is_file(),
+            "linked worktree uses .git file"
+        );
+
+        let mut scaffolder = Scaffolder::new(linked.clone(), ScaffoldConfig::default());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        let pre_commit_artifact = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".git/hooks/pre-commit"))
+            .expect("pre-commit hook artifact should be present");
+        assert_eq!(
+            pre_commit_artifact.file_status,
+            FileStatus::New,
+            "linked worktree hook status should inspect the resolved git hook path"
+        );
+
+        scaffolder.apply(&preview).unwrap();
+        let hook_path = resolved_git_path(&linked, "hooks/pre-commit");
+        assert!(
+            hook_path.is_file(),
+            "hook should be written to resolved git hook path {}",
+            hook_path.display()
+        );
+        assert!(
+            !linked.join(".git/hooks/pre-commit").exists(),
+            "scaffolding must not try to write through the .git pointer file"
+        );
+    }
+
+    #[test]
+    fn git_hooks_scaffold_into_submodule_git_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let lib = temp_dir.path().join("lib");
+        let super_repo = temp_dir.path().join("super");
+        std::fs::create_dir(&lib).unwrap();
+        std::fs::create_dir(&super_repo).unwrap();
+
+        run_git_in(&lib, &["init"]);
+        run_git_in(&lib, &["config", "user.email", "test@aida.dev"]);
+        run_git_in(&lib, &["config", "user.name", "AIDA Test"]);
+        std::fs::write(lib.join("lib.txt"), "lib\n").unwrap();
+        run_git_in(&lib, &["add", "lib.txt"]);
+        run_git_in(&lib, &["commit", "-m", "initial lib"]);
+
+        run_git_in(&super_repo, &["init"]);
+        run_git_in(&super_repo, &["config", "user.email", "test@aida.dev"]);
+        run_git_in(&super_repo, &["config", "user.name", "AIDA Test"]);
+        run_git_in(
+            &super_repo,
+            &[
+                "-c",
+                "protocol.file.allow=always",
+                "submodule",
+                "add",
+                lib.to_str().unwrap(),
+                "modules/lib",
+            ],
+        );
+        let submodule = super_repo.join("modules/lib");
+        assert!(submodule.join(".git").is_file(), "submodule uses .git file");
+
+        let mut scaffolder = Scaffolder::new(submodule.clone(), ScaffoldConfig::default());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let hook_path = resolved_git_path(&submodule, "hooks/pre-commit");
+        assert!(
+            hook_path.is_file(),
+            "hook should be written to submodule git hook path {}",
+            hook_path.display()
+        );
+        assert!(
+            !submodule.join(".git/hooks/pre-commit").exists(),
+            "scaffolding must not traverse the submodule .git pointer file"
         );
     }
 
