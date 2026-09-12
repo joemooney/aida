@@ -6629,6 +6629,17 @@ pub(crate) fn resolve_queue_work_plan(
 
     if let Some(arg_str) = arg {
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
+            // trace:BUG-1106 | ai:codex
+            // A phase child is assigned by the live orchestrator, not by its
+            // temporary phase role. If the reviewer phase is asked to pick up
+            // the current drain spec, pull that exact queued row into view even
+            // when the row lives in a different queue identity or is routed for
+            // the implementer. The live token + drain-state current spec are
+            // the authorization; ordinary/stale reviewer sessions still see
+            // the normal role-gated view.
+            if orchestrator_authorizes_explicit_queue_pickup(storage, arg_str, req) {
+                merge_current_spec_queue_entries(storage, &mut entries, req.id);
+            }
             let is_queued = entries.iter().any(|e| e.requirement_id == req.id);
             if !is_queued && req.status == RequirementStatus::Approved && !strict {
                 let role = std::env::var("AIDA_SESSION_ROLE")
@@ -7111,6 +7122,88 @@ pub(crate) fn resolve_queue_work_plan(
         anchor_display: anchor_id_upper,
         anchor_title: anchor_req.title.clone(),
     })
+}
+
+fn orchestrator_authorizes_explicit_queue_pickup(
+    storage: &Storage,
+    arg: &str,
+    req: &aida_core::Requirement,
+) -> bool {
+    if !spec_matches(req, arg) {
+        return false;
+    }
+    let Ok(auto_complete) = std::env::var(orchestrator::AUTO_COMPLETE_ENV) else {
+        return false;
+    };
+    if auto_complete.is_empty() {
+        return false;
+    }
+    let Ok(token) = std::env::var(orchestrator::TOKEN_ENV) else {
+        return false;
+    };
+    orchestrator_authorizes_explicit_queue_pickup_with_token(storage, arg, req, &token)
+}
+
+pub(crate) fn orchestrator_authorizes_explicit_queue_pickup_with_token(
+    storage: &Storage,
+    arg: &str,
+    req: &aida_core::Requirement,
+    token: &str,
+) -> bool {
+    if !spec_matches(req, arg) {
+        return false;
+    }
+    if token.is_empty() {
+        return false;
+    }
+    let mut roots = Vec::new();
+    if let Some(root) = storage.path().parent().map(std::path::Path::to_path_buf) {
+        roots.push(root);
+    }
+    if let Ok(root) = find_main_worktree_root() {
+        if !roots.iter().any(|existing| existing == &root) {
+            roots.push(root);
+        }
+    }
+    roots.into_iter().any(|project_root| {
+        if !orchestrator::run_is_live(&project_root, &token) {
+            return false;
+        }
+        let Some(state) = drain_state::DrainState::read(&project_root) else {
+            return false;
+        };
+        state
+            .current
+            .as_deref()
+            .map(|current| spec_matches(req, current))
+            .unwrap_or(false)
+    })
+}
+
+pub(crate) fn merge_current_spec_queue_entries(
+    storage: &Storage,
+    entries: &mut Vec<aida_core::QueueEntry>,
+    requirement_id: uuid::Uuid,
+) {
+    if entries.iter().any(|e| e.requirement_id == requirement_id) {
+        return;
+    }
+    let Ok(users) = storage.queue_users() else {
+        return;
+    };
+    for user in users {
+        let Ok(user_entries) = storage.queue_list(&user, /* include_completed */ false) else {
+            continue;
+        };
+        for entry in user_entries {
+            if entry.requirement_id == requirement_id
+                && !entries.iter().any(|e| e.requirement_id == requirement_id)
+            {
+                entries.push(entry);
+                return;
+            }
+        }
+    }
 }
 
 /// STORY-42: zip a queue entry with its current requirement state so
