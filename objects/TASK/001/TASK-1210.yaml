@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:51:52.902310808Z
-modified_at: 2026-09-12T19:24:37.677684494Z
+modified_at: 2026-09-12T19:42:31.044995779Z
 req_type: Task
 tags:
 - dogfood
@@ -56,4 +56,10 @@ comments:
   content: 'Specimen produced (acceptance #1 EXECUTED, controlled injection): 2026-09-12 12:23 testbed TASK-28 drive — Monitor killed the codex implementer the moment the worktree turned dirty (+8/-2). Result: FAIL — retry + BUG-1078''s 3 re-probes still refused reclaim (lease 01a09712, dead pids). Per acceptance #3, BUG-908 REOPENED with the full evidence + anchor-pid hypothesis (queued). This task stays open: rerun the same injection after the reopened 908 lands; pass = attempt 2 re-enters pool-1 with the preserved src/main.rs diff and ships.'
   created_at: 2026-09-12T19:24:37.677684494Z
   modified_at: 2026-09-12T19:24:37.677684494Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09724-9085-7dd2-af05-b061f8b18357
+  author: joe
+  content: 'Chain update: reopened-908 drive was phantom-shipped by the reconciler (BUG-1112 filed); the anchor defect is re-filed as BUG-1111 (both high, queued). The rerun-injection pass condition now waits on BUG-1111.'
+  created_at: 2026-09-12T19:42:31.044995779Z
+  modified_at: 2026-09-12T19:42:31.044995779Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
