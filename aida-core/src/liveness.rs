@@ -685,10 +685,15 @@ pub enum StaleLeaseRecovery {
 
 /// Is the session that minted this lease verifiably gone?
 ///
-/// `Some(true)` — every pid the lease recorded is absent from the process
-/// table. `Some(false)` — at least one is still alive. `None` — the lease
-/// recorded no pid at all, so liveness is *undeterminable* and the caller must
-/// not treat absence of evidence as evidence of death.
+/// `Some(true)` — the authoritative pid signal is absent from the process
+/// table. `Some(false)` — the authoritative pid signal is still alive. `None`
+/// — the lease recorded no pid at all, so liveness is *undeterminable* and the
+/// caller must not treat absence of evidence as evidence of death.
+///
+/// When `active_pid` is present it is authoritative: process-backed headless
+/// launches record the vendor child there, while `creator_pid` may be the live
+/// orchestrator that spawned it. A dead child must therefore be reclaimable even
+/// if the creator/orchestrator process is still alive.
 ///
 /// `pid_alive` is injected so the matrix is unit-testable without spawning or
 /// killing real processes; production callers pass [`pid_is_alive`].
@@ -698,11 +703,8 @@ pub fn lease_owner_process_gone(
     creator_pid: Option<u32>,
     pid_alive: impl Fn(u32) -> bool,
 ) -> Option<bool> {
-    let pids: Vec<u32> = [active_pid, creator_pid].into_iter().flatten().collect();
-    if pids.is_empty() {
-        return None;
-    }
-    Some(!pids.into_iter().any(pid_alive))
+    let pid = active_pid.or(creator_pid)?;
+    Some(!pid_alive(pid))
 }
 
 /// Pure recovery verdict for one same-scope lease conflict.
@@ -1409,10 +1411,25 @@ started_at = "2026-01-01T00:00:00Z"
         assert_eq!(gone, Some(true));
     }
 
-    /// One surviving pid is enough to say the session is still around.
+    /// A live creator pid pins leases that have no active child pid.
     #[test]
-    fn owner_not_gone_when_any_recorded_pid_is_alive() {
+    fn owner_not_gone_when_creator_pid_is_alive_without_active_pid() {
+        let gone = lease_owner_process_gone(None, Some(22), |p| p == 22);
+        assert_eq!(gone, Some(false));
+    }
+
+    /// BUG-1111: active_pid is the authoritative child for process-backed
+    /// headless leases; a live creator/orchestrator pid must not mask a dead
+    /// vendor child.
+    #[test]
+    fn active_pid_is_authoritative_over_live_creator_pid() {
         let gone = lease_owner_process_gone(Some(11), Some(22), |p| p == 22);
+        assert_eq!(gone, Some(true));
+    }
+
+    #[test]
+    fn live_active_pid_is_not_gone_even_if_creator_pid_is_dead() {
+        let gone = lease_owner_process_gone(Some(11), Some(22), |p| p == 11);
         assert_eq!(gone, Some(false));
     }
 
