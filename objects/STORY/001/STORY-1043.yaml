@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:49.938635015Z
-modified_at: 2026-09-12T07:51:12.920879154Z
+modified_at: 2026-09-12T07:51:44.057349341Z
 req_type: Story
 tags:
 - awaiting
@@ -63,6 +63,14 @@ implementation_info:
     cargo fmt --all -- --check
   implemented_at: 2026-09-11T19:55:14.127925952Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: tool-exit
+  detail: implementer worktree `/home/joe/ai/aida-story-1043` is on `DETACHED` but phase 2 is driving `story-1043` — refusing to push or tear down (attempt 2/2)
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a094930660 --skip-ci`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T07:51:44.057349341Z
 interface_changes:
   cli:
   - aida awaiting — lists unshipped work and cross-platform nightly-red status
