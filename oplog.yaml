@@ -62826,5 +62826,27 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4985
+- id: 01a096b8-3c1f-7bf2-8e67-ebcadef177af
+  target_id: 01a096b8-3849-7f03-be34-3a63bf6501f1
+  author: aida
+  node_id: '1'
+  lamport: 4986
+  timestamp: 2026-09-12T17:44:11.551390104Z
+  kind: !Create
+    title: '[forge] provider frozen as pure-git at pre-remote init silently breaks drains on GitHub repos (no PR concept, reviewer dead-ends)'
+    description: |
+      ## Observed (TASK-1198 evidence run 2, testbed aida-codex-test, 2026-09-12 10:30)
+      The testbed's .aida/config.toml carried [forge] provider = "pure-git" — frozen at init time BEFORE the GitHub remote existed (the bootstrap ran aida init, then added origin). Every subsequent drain honored the stale value: "this forge has no pull-request concept (synthetic change id 0) — no reviewer story was filed", so the reviewer phase had no PR to review and dead-ended (its fallback pickup refused Done-awaiting-merge). BUG-1037's open-change resolver protects the dev repo's lifecycle path, but the stored config still governs enough of the drain on a fresh project to break it.
+
+      ## Why it matters
+      This is a silent first-user trap: init-before-remote is the NORMAL bootstrap order (aida init <DIR> --github does init THEN remote), and the frozen pure-git answer makes headless drains structurally unable to pass review on a GitHub repo — with no warning.
+
+      ## Acceptance
+      1. Forge resolution re-checks the origin host when the stored provider is pure-git but origin points at github.com/gitlab.*: either auto-correct the config (with a printed notice) or hard-warn at drain launch ("config says pure-git but origin is github — review phase will have no PR; fix with aida config forge github").
+      2. aida init --github / --remote writes the provider AFTER the remote is attached, not from the pre-remote state.
+      3. Regression: init-then-add-remote flow ends with provider matching the origin host.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4986
 node_id: '1'
