@@ -60335,5 +60335,31 @@ operations:
   timestamp: 2026-09-12T01:19:56.313328055Z
   kind: !SetStatus
     status: Completed
-clock: 4825
+- id: 01a0934c-d9fe-72d2-842e-ecad7f7c3c66
+  target_id: 01a0934c-d5ff-7052-ae6f-f7185e40066c
+  author: aida
+  node_id: '1'
+  lamport: 4826
+  timestamp: 2026-09-12T01:48:02.430130977Z
+  kind: !Create
+    title: 'Review PR-1759: [AI:codex] fix(queue): pin leased implementer pickup (BUG-1082)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09340`) for branch `bug-1082`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1759>
+      - Branch: `bug-1082` → `main`
+
+      ## Covers
+
+      - BUG-1082
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1759` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4826
 node_id: '1'
