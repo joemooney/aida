@@ -110,11 +110,68 @@ pub(crate) fn passive_check(project_root: &Path) -> Result<()> {
 }
 
 #[derive(Debug, Clone, Default)]
+pub(crate) struct DirectNotifyOutcome {
+    pub(crate) configured: bool,
+    pub(crate) sent: usize,
+    pub(crate) suppressed: usize,
+    pub(crate) pending: usize,
+}
+
+#[derive(Debug, Clone, Default)]
 struct CheckOutcome {
     configured: bool,
     sent: usize,
     suppressed: usize,
     pending: usize,
+}
+
+pub(crate) fn send_direct(
+    project_root: &Path,
+    rule: &str,
+    title: &str,
+    message: &str,
+) -> Result<DirectNotifyOutcome> {
+    let Some(config) = NotifyConfig::load(project_root)? else {
+        return Ok(DirectNotifyOutcome::default());
+    };
+    let mut state = load_state(project_root).unwrap_or_default();
+    let mut outcome = DirectNotifyOutcome {
+        configured: true,
+        ..DirectNotifyOutcome::default()
+    };
+
+    let now = Utc::now();
+    if should_suppress(&mut state, rule, now, config.min_interval) {
+        outcome.suppressed += 1;
+        save_state(project_root, &state)?;
+        return Ok(outcome);
+    }
+
+    if config.is_quiet(Local::now().time()) {
+        state.pending.push(PendingNotification {
+            rule: rule.to_string(),
+            title: title.to_string(),
+            message: message.to_string(),
+            queued_at: Some(now),
+        });
+        outcome.pending += 1;
+        save_state(project_root, &state)?;
+        return Ok(outcome);
+    }
+
+    match run_command(project_root, &config, rule, title, message) {
+        Ok(()) => {
+            mark_sent(&mut state, rule, now);
+            outcome.sent += 1;
+        }
+        Err(err) => {
+            log_failure(project_root, err);
+            save_state(project_root, &state)?;
+            anyhow::bail!("notify command failed; see .aida/{LOG_FILE}");
+        }
+    }
+    save_state(project_root, &state)?;
+    Ok(outcome)
 }
 
 fn run_check(project_root: &Path, report_failures: bool) -> Result<CheckOutcome> {
