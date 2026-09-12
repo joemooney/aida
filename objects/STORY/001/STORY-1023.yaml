@@ -3,12 +3,12 @@ spec_id: STORY-1023
 agreed_id: STORY-1023
 title: 'split the NeedsAttention rendering: Shelved (typed cause, machine-recoverable) vs Needs Decision (human required)'
 description: 'Operator question (2026-09-10): is NeedsAttention the right name? No — it conflates two opposite states: (a) HUMAN-REQUIRED (punts, escalated forks, decision requests — attention is correct) and (b) MECHANICALLY SHELVED (stale-base, ci-red, reviewer tool-exit — typed cause recorded, retry/rework path known, no human needed). Tonight''s list showed five ⚠ rows of which four were queued mechanical retries — false alarm density that trains the operator to ignore the glyph. Since the typed-cause work the substrate already knows which kind each park is (FailureReason/AttentionReason), so this is a DISPLAY/LENS split, not a state-machine migration: (1) list/show/why/TUI render machine-recoverable parks as calm ''⏸ Shelved (<cause>)'' and human-required as ''⚠ Needs Decision (<reason>)'' — same stored status, presentation split on the recorded reason; (2) aida awaiting counts ONLY the human-required kind in its escalations (shelved-with-known-path items move to a separate ''in rework'' line); (3) the lifecycle docs and machinery glossary get the two terms defined (shelved = parked mechanical, aligned with the existing EPIC-28 shelve vocabulary; needs-decision = parked on a human). Explicitly NOT renaming the stored status value in this slice (compat: cache, MCP schemas, queries); a stored-status rename is a follow-up decision if the display split proves out. Acceptance: a stale-base park renders Shelved with its cause in list/why; a punt renders Needs Decision; awaiting counts only the latter as escalations; docs updated; tests on the reason-to-rendering mapping.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T03:51:00.272848490Z
-modified_at: 2026-09-12T04:49:53.601139982Z
+modified_at: 2026-09-12T04:52:05.936553371Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
