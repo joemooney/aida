@@ -36,12 +36,12 @@ description: |-
 
   ## Related
   STORY-975 (retry), STORY-1028 (usage subcommand rename), STORY-709 (usage telemetry), compete verb, TASK-1116 (--vendor flag precedence pattern to mirror).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:27:49.414464744Z
-modified_at: 2026-09-11T19:30:25.683506467Z
+modified_at: 2026-09-12T09:04:12.792933303Z
 req_type: Story
 tags:
 - agents
@@ -106,16 +106,27 @@ comments:
   created_at: 2026-09-11T19:30:25.683506467Z
   modified_at: 2026-09-11T19:30:25.683506467Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a094dc-2df1-7550-b2ca-c8ea72b19e45
+  author: aida-auto-bump
+  timestamp: 2026-09-12T09:04:12.785645604Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a094dc-2df8-75a3-af90-e532e2b87ac9
+  timestamp: 2026-09-12T09:04:12.792932145Z
+  agent: aida
+  commit_sha: 2d30873cb452f0b17300aa2bfad3b9559a37a5ba
+  summary: STORY-1033 is only a partial slice; retry escalation, spec overrides, telemetry, usage reporting, registry context, and dogfood evidence are not implemented.
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  review_verdict: request-changes
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T19:15:11.780027139Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1033 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-11T11:39:28.735727490Z
+  completed_at: 2026-09-12T09:04:12.785414236Z
+  completion_sha: 2d30873cb452f0b17300aa2bfad3b9559a37a5ba
