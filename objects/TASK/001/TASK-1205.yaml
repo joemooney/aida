@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:40.345435015Z
-modified_at: 2026-09-12T06:08:50.263923382Z
+modified_at: 2026-09-12T06:08:51.123641450Z
 req_type: Task
 tags:
 - ci
@@ -67,6 +67,9 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-11T20:40:00.405820280Z
   modified_at: 2026-09-11T20:40:00.405820280Z
+deferred: true
+deferred_at: 2026-09-12T06:08:51.123641450Z
+deferred_until: guided session with operator — headless drain repeatedly ci-reds; needs a supervised fix, not headless retry (2026-09-11)
 execution_mode: guided
 implementation_info:
   implemented: true
