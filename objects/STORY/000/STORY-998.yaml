@@ -27,12 +27,12 @@ description: |-
 
   ## Related
   STORY-974 (typed causes), STORY-993 (liveness), STORY-994/995 (display only), BUG-420, BUG-749, BUG-875. Prototype source: _ignore/terminator (untracked).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-12T03:54:25.689838264Z
+modified_at: 2026-09-12T03:55:28.476964981Z
 req_type: Story
 tags:
 - drain
@@ -60,3 +60,11 @@ relationships:
   created_at: 2026-09-11T17:25:01.371086355Z
   created_by: joe
 execution_mode: drain
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: lease-conflict
+  detail: 'phase 1 retry cannot reclaim predecessor lease 01a093c0 on `STORY-998`; worktree: /home/joe/ai/aida-story-998'
+  recovery_hint: 'Continue the implementer session: `aida queue work STORY-998 --resume`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T03:55:28.476964981Z
