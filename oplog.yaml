@@ -62412,5 +62412,31 @@ operations:
   timestamp: 2026-09-12T15:02:18.397703384Z
   kind: !SetStatus
     status: Completed
-clock: 4959
+- id: 01a09629-24c2-74a1-8b9e-ef278b55fb5f
+  target_id: 01a09629-20c7-7ff3-9735-04b9b4173aff
+  author: aida
+  node_id: '1'
+  lamport: 4960
+  timestamp: 2026-09-12T15:07:53.922065884Z
+  kind: !Create
+    title: 'Review PR-1777: [BUG-1092] fix(hooks): allow safe dotted checkout paths'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09624`) for branch `bug-1092`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1777>
+      - Branch: `bug-1092` → `main`
+
+      ## Covers
+
+      - BUG-1092
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1777` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4960
 node_id: '1'
