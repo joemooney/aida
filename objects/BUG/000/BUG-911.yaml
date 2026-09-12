@@ -16,12 +16,12 @@ description: |
   **Fix sketch.** Tighten `is_claude_process` to the executable token (cmd[0] basename) plus the interpreter-script shape (cmd[1] when cmd[0] is node/bun/deno) — never a token that follows a `-`-prefixed flag. Keep the existing `is_claude_process_falls_back_to_cmd` test green and add a negative case for `aida queue work X --vendor claude …`. With (1) fixed, the creator_pid guard behaves as documented; optionally also skip creator_pid when its comm is `aida`.
 
   **Repro.** Start any `aida queue work <SPEC> --auto-complete --no-human=both` drain, then run `aida session conversations --format json` and compare `pid` for that lease's transcript with `aida ps --format json`.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T08:49:11.349081889Z
-modified_at: 2026-09-12T15:44:25.952620343Z
+modified_at: 2026-09-12T15:44:31.384231627Z
 req_type: Bug
 tags:
 - aida:session:conversations
@@ -36,3 +36,7 @@ relationships:
   target_id: 01a0964a-7485-72b1-a3fa-479b35a29298
   created_at: 2026-09-12T15:44:25.952615964Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T15:44:31.384231627Z
+  implemented_by: joe
