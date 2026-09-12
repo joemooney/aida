@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-12T06:57:28.358144545Z
+modified_at: 2026-09-12T07:02:19.406742267Z
 req_type: Story
 tags:
 - drain
@@ -75,6 +75,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-12T06:22:33.236862505Z
   modified_at: 2026-09-12T06:22:33.236862505Z
+- id: 01a0946c-960e-7d83-bc75-47779e1c8474
+  author: joe
+  content: 'Advisor: your two missing acceptance items were implemented once in a mis-slotted worktree — idle-spins (80eff1e2f, ALREADY on story-998-4 as 71c1ac20f) and spinning session state (01c4cf1c3, conflicts with the TASK-153 manifest_roles change in gather_running_work; the union is: bind (mut rows, orphans) from the call, apply the spinning post-pass, return the tuple). Redo spinning-state + tail --annotate on the current story-998-4 base.'
+  created_at: 2026-09-12T07:02:19.406742267Z
+  modified_at: 2026-09-12T07:02:19.406742267Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
