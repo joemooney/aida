@@ -11,7 +11,7 @@
 //! no behavior change.
 
 use crate::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
 
 // trace:FR-0260 | ai:claude:high
@@ -152,7 +152,8 @@ pub(crate) fn handle_scaffold_command(
             println!();
 
             for artifact in &preview.artifacts {
-                let exists = root.join(&artifact.path).exists();
+                let exists =
+                    aida_core::scaffolding::resolve_artifact_path(&root, &artifact.path).exists();
                 let status = if exists { "exists" } else { "new" };
                 println!(
                     "  {} {} ({})",
@@ -212,7 +213,8 @@ pub(crate) fn handle_scaffold_command(
             let mut would_update = 0usize;
 
             for artifact in &preview.artifacts {
-                let full_path = root.join(&artifact.path);
+                let full_path =
+                    aida_core::scaffolding::resolve_artifact_path(&root, &artifact.path);
 
                 // BUG-718: never write through a symlink — in the AIDA dev repo
                 // the scaffold files are symlinks into aida-core/templates/ and
@@ -276,9 +278,21 @@ pub(crate) fn handle_scaffold_command(
 
                 if !*dry_run {
                     if let Some(parent) = full_path.parent() {
-                        std::fs::create_dir_all(parent)?;
+                        std::fs::create_dir_all(parent).with_context(|| {
+                            format!(
+                                "creating scaffold directory for {} at {}",
+                                artifact.path.display(),
+                                parent.display()
+                            )
+                        })?;
                     }
-                    std::fs::write(&full_path, &artifact.content)?;
+                    std::fs::write(&full_path, &artifact.content).with_context(|| {
+                        format!(
+                            "writing scaffold artifact {} to {}",
+                            artifact.path.display(),
+                            full_path.display()
+                        )
+                    })?;
                 }
 
                 let action = if exists { "updated" } else { "created" };
@@ -744,7 +758,8 @@ fn run_scaffold_upgrade(
         let cat_label = cat.label();
         let stats = by_cat.entry(cat_label).or_default();
 
-        let on_disk_path = project_root.join(&artifact.path);
+        let on_disk_path =
+            aida_core::scaffolding::resolve_artifact_path(project_root, &artifact.path);
 
         // BUG-718: never write *through* a symlink. In the AIDA dev repo the
         // scaffold files under .claude/ are per-file symlinks into
@@ -835,35 +850,83 @@ fn run_scaffold_upgrade(
             UpgradeAction::Create => {
                 if !dry_run {
                     if let Some(parent) = on_disk_path.parent() {
-                        std::fs::create_dir_all(parent)?;
+                        std::fs::create_dir_all(parent).with_context(|| {
+                            format!(
+                                "creating scaffold directory for {} at {}",
+                                artifact.path.display(),
+                                parent.display()
+                            )
+                        })?;
                     }
-                    std::fs::write(&on_disk_path, &artifact.content)?;
+                    std::fs::write(&on_disk_path, &artifact.content).with_context(|| {
+                        format!(
+                            "writing scaffold artifact {} to {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                 }
                 stats.created.push(artifact.path.clone());
             }
             UpgradeAction::Overwrite => {
                 if !dry_run {
                     if let Some(parent) = on_disk_path.parent() {
-                        std::fs::create_dir_all(parent)?;
+                        std::fs::create_dir_all(parent).with_context(|| {
+                            format!(
+                                "creating scaffold directory for {} at {}",
+                                artifact.path.display(),
+                                parent.display()
+                            )
+                        })?;
                     }
-                    std::fs::write(&on_disk_path, &artifact.content)?;
+                    std::fs::write(&on_disk_path, &artifact.content).with_context(|| {
+                        format!(
+                            "writing scaffold artifact {} to {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                 }
                 stats.upgraded.push(artifact.path.clone());
             }
             UpgradeAction::RewriteAidaBlock => {
                 if !dry_run {
-                    let actual = std::fs::read_to_string(&on_disk_path)?;
+                    let actual = std::fs::read_to_string(&on_disk_path).with_context(|| {
+                        format!(
+                            "reading scaffold artifact {} at {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                     let merged = rewrite_aida_block(&actual, &artifact.content);
-                    std::fs::write(&on_disk_path, merged)?;
+                    std::fs::write(&on_disk_path, merged).with_context(|| {
+                        format!(
+                            "writing scaffold artifact {} to {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                 }
                 stats.upgraded.push(artifact.path.clone());
             }
             UpgradeAction::InsertClaudeImport => {
                 // trace:BUG-1-065 | ai:claude
                 if !dry_run {
-                    let actual = std::fs::read_to_string(&on_disk_path)?;
+                    let actual = std::fs::read_to_string(&on_disk_path).with_context(|| {
+                        format!(
+                            "reading scaffold artifact {} at {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                     let updated = aida_core::scaffolding::insert_claude_md_import(&actual);
-                    std::fs::write(&on_disk_path, updated)?;
+                    std::fs::write(&on_disk_path, updated).with_context(|| {
+                        format!(
+                            "writing scaffold artifact {} to {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                 }
                 stats.upgraded.push(artifact.path.clone());
             }
@@ -871,7 +934,13 @@ fn run_scaffold_upgrade(
                 // trace:FR-1-047 | ai:claude
                 if !dry_run {
                     let pretty = serde_json::to_string_pretty(&merged)?;
-                    std::fs::write(&on_disk_path, pretty + "\n")?;
+                    std::fs::write(&on_disk_path, pretty + "\n").with_context(|| {
+                        format!(
+                            "writing scaffold artifact {} to {}",
+                            artifact.path.display(),
+                            on_disk_path.display()
+                        )
+                    })?;
                 }
                 stats.upgraded.push(artifact.path.clone());
                 // Surface the per-slot diff inline since it's the most
@@ -1048,7 +1117,7 @@ fn print_scaffold_diffs(
     let mut any_drift = false;
     let mut printed_count = 0;
     for artifact in artifacts {
-        let full_path = project_root.join(&artifact.path);
+        let full_path = aida_core::scaffolding::resolve_artifact_path(project_root, &artifact.path);
         let actual_result = std::fs::read_to_string(&full_path);
 
         // Resolve drift state via the slice helper so CLAUDE.md (presence-
