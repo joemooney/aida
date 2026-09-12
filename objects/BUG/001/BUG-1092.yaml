@@ -20,12 +20,12 @@ description: |-
 
   ## Related
   The advisor's 2026-09-11 Claude Code feedback (shell test-gate exit status), the 0.15.0 release cut (where this blocked me), STORY-1043/TASK-1211 (ci-red parks — check if same root), the substrate-as-bouncer principle (a bouncer that false-blocks safe ops is worse than none).
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:42:37.594281017Z
-modified_at: 2026-09-12T15:07:57.653618438Z
+modified_at: 2026-09-12T15:08:05.048425738Z
 req_type: Bug
 tags:
 - false-positive
@@ -41,3 +41,7 @@ relationships:
   target_id: 01a09629-20c7-7ff3-9735-04b9b4173aff
   created_at: 2026-09-12T15:07:57.653611231Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T15:08:05.048425738Z
+  implemented_by: joe
