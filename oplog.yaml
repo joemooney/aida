@@ -60806,5 +60806,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4853
+- id: 01a093d4-d0dd-71b3-9cd3-e4999371b30a
+  target_id: 01a093d4-cb55-7182-89fc-f487decaa828
+  author: aida
+  node_id: '1'
+  lamport: 4854
+  timestamp: 2026-09-12T04:16:32.989460984Z
+  kind: !Create
+    title: 'Review PR-1766: [AI:codex] fix(hooks): allow tracked ignored template edits (BUG-1088)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a093d1`) for branch `bug-1088`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1766>
+      - Branch: `bug-1088` → `main`
+
+      ## Covers
+
+      - BUG-1088
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1766` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4854
 node_id: '1'
