@@ -60660,5 +60660,31 @@ operations:
   timestamp: 2026-09-12T03:41:09.209762864Z
   kind: !SetStatus
     status: Completed
-clock: 4843
+- id: 01a093b7-32f4-7781-9a79-4eba02f679ac
+  target_id: 01a093b7-2c9e-7f91-b1e5-e476b6d17e7a
+  author: aida
+  node_id: '1'
+  lamport: 4844
+  timestamp: 2026-09-12T03:44:12.020809043Z
+  kind: !Create
+    title: 'Review PR-1765: [AI:codex] fix(drain): reprobe retry predecessor liveness (BUG-1078)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a093a9`) for branch `bug-1078`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1765>
+      - Branch: `bug-1078` → `main`
+
+      ## Covers
+
+      - BUG-1078
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1765` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4844
 node_id: '1'
