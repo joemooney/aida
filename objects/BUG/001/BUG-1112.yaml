@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T19:42:15.126167719Z
-modified_at: 2026-09-12T20:34:04.882661703Z
+modified_at: 2026-09-12T20:39:24.299607385Z
 req_type: Bug
 tags:
 - drain
@@ -46,6 +46,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-12T20:34:02.642084654Z
   modified_at: 2026-09-12T20:34:02.642084654Z
+- id: 01a09758-a58b-7d22-a406-803e6923a832
+  author: joe
+  content: 'Addressed PR #1783 review finding: added RealPhaseDriver phase-1 reconciliation regression where BUG-1112 was completed via stale PR-1739, reopened, then reconcile_failure returns GenuineFailure instead of crediting the stale merged PR. Commit c9c40e8f8.'
+  created_at: 2026-09-12T20:39:24.299607385Z
+  modified_at: 2026-09-12T20:39:24.299607385Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T20:17:28.401331758Z
