@@ -294,20 +294,43 @@ fn is_codex_process(name: &str, cmd: &[String]) -> bool {
 
 /// Heuristic: does this look like a Claude Code process? `claude` matches by
 /// name on Linux (the binary is literally named `claude`); on macOS the name
-/// can be truncated. Falling back to scanning the command line for a
-/// `claude` token catches edge cases without false-positiving on `clauded`
-/// or `claude-something`.
+/// can be truncated. Fall back only to executable/script positions in the
+/// command line so an orchestrator flag like `--vendor claude` does not turn
+/// the orchestrator itself into a Claude Code process.
+// trace:BUG-911 | ai:codex
 fn is_claude_process(name: &str, cmd: &[String]) -> bool {
-    if name == "claude" || name == "Claude" || name == "Claude Code" {
+    if is_claude_command_name(name) {
         return true;
     }
-    cmd.iter().any(|arg| {
-        let bare = Path::new(arg)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or(arg);
-        bare == "claude" || bare == "Claude" || bare == "Claude Code"
-    })
+    let Some(first) = cmd.first() else {
+        return false;
+    };
+    let first_bare = basename(first);
+    if is_claude_command_name(first_bare) {
+        return true;
+    }
+    if !is_javascript_runtime(first_bare) {
+        return false;
+    }
+    cmd.get(1)
+        .filter(|script| !script.starts_with('-'))
+        .map(|script| is_claude_command_name(basename(script)))
+        .unwrap_or(false)
+}
+
+fn basename(arg: &str) -> &str {
+    Path::new(arg)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(arg)
+}
+
+fn is_claude_command_name(name: &str) -> bool {
+    matches!(name, "claude" | "Claude" | "Claude Code")
+}
+
+fn is_javascript_runtime(name: &str) -> bool {
+    matches!(name, "node" | "bun" | "deno")
 }
 
 /// Linux's procfs reports the cwd of a process whose directory has been
@@ -1044,6 +1067,49 @@ mod tests {
         assert!(!is_claude_process(
             "node",
             &["/usr/local/bin/clauded".to_string()]
+        ));
+    }
+
+    // BUG-911: only executable/script argv positions identify Claude Code.
+    // AIDA orchestrators can legitimately pass `--vendor claude`, but that
+    // flag value must not make the orchestrator win a lease pid join.
+    // trace:BUG-911 | ai:codex
+    #[test]
+    fn is_claude_process_ignores_vendor_flag_argument() {
+        assert!(!is_claude_process(
+            "aida",
+            &[
+                "aida".to_string(),
+                "queue".to_string(),
+                "work".to_string(),
+                "STORY-993".to_string(),
+                "--vendor".to_string(),
+                "claude".to_string(),
+                "--auto-complete".to_string(),
+                "--no-human=both".to_string(),
+            ],
+        ));
+    }
+
+    // BUG-911: keep the packaged JS launcher shape working without scanning
+    // arbitrary argv tokens after flags.
+    // trace:BUG-911 | ai:codex
+    #[test]
+    fn is_claude_process_accepts_runtime_script_position_only() {
+        assert!(is_claude_process(
+            "node",
+            &[
+                "/usr/bin/node".to_string(),
+                "/usr/local/lib/node_modules/@anthropic-ai/claude-code/claude".to_string(),
+            ],
+        ));
+        assert!(!is_claude_process(
+            "node",
+            &[
+                "/usr/bin/node".to_string(),
+                "--inspect".to_string(),
+                "/usr/local/bin/claude".to_string(),
+            ],
         ));
     }
 
