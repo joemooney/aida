@@ -369,6 +369,23 @@ and the header goes to stderr — piping the feed stays clean. Pair it with
 `--backlog` (replay the history first) or `--once` (classify what is already
 there and exit) when you are debugging a drain after the fact.
 
+### Product-role nudge loop
+
+Until the permanent re-drive supervisor lands, a product/advisor session can run
+a cheap saved loop that only nudges stuck work:
+
+```text
+/loop every 30m: aida supervise nudge
+```
+
+`aida supervise nudge` reads `.aida/events.jsonl`, finds transiently parked
+specs, and sends one urgent mailbox request to a live advisor naming each spec
+and its move command (`aida queue work <id> --resume`). It is seat-safe: it does
+not take leases, drive queue work, open PRs, or merge. If no advisor is live, it
+falls back to the operator-notification lane (`aida notify check`, STORY-1029)
+instead of sending mailbox messages into an empty room. Repeated nudges are
+deduped until a stuck spec changes state or the interval elapses.
+
 The token figures are the **cumulative reported tokens** across the drain's
 headless phases (input + output + cache), summed from each phase's
 `stream-json` log under `.aida/headless-logs/` — the same accounting the

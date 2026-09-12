@@ -95,6 +95,10 @@ pub(crate) fn handle_git_backend_command(
             // digest is a later slice. Needs only the project root.
             return mailbox_cmd::handle_mailbox_command(mailbox_cmd, store_path);
         }
+        Command::Supervise(supervise_cmd) => {
+            // trace:STORY-1052 | ai:codex
+            return supervise_cmd::handle_supervise_command(supervise_cmd, &backend, store_path);
+        }
         Command::Node(node_cmd) => {
             return node_cmd::handle_node_command(node_cmd, store_path);
         }

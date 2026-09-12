@@ -66,6 +66,7 @@ mod pr_cmd;
 mod queue_cmd;
 mod solo_cmd;
 mod status_cmd;
+mod supervise_cmd;
 mod zen_cmd;
 use drain_cmd::*;
 use mcp_cmd::*;
@@ -3779,6 +3780,12 @@ fn run() -> Result<()> {
         Command::Mailbox(_) => {
             anyhow::bail!(
                 "aida mailbox commands are only available in git-canonical (distributed) mode. \
+                 Run `aida init` (defaults to distributed) first."
+            );
+        }
+        Command::Supervise(_) => {
+            anyhow::bail!(
+                "aida supervise commands are only available in git-canonical (distributed) mode. \
                  Run `aida init` (defaults to distributed) first."
             );
         }
