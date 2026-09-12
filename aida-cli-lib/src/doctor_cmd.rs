@@ -336,6 +336,71 @@ fn codex_prompts_drift(dir: &std::path::Path) -> Vec<String> {
     drifted
 }
 
+fn parse_codex_semver(raw: &str) -> Option<(u64, u64, u64)> {
+    raw.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .find_map(|token| {
+            let mut parts = token.split('.');
+            let major = parts.next()?.parse().ok()?;
+            let minor = parts.next()?.parse().ok()?;
+            let patch = parts.next()?.parse().ok()?;
+            Some((major, minor, patch))
+        })
+}
+
+fn installed_codex_version() -> Option<(u64, u64, u64)> {
+    let out = std::process::Command::new("codex")
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let banner = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    parse_codex_semver(&banner)
+}
+
+fn codex_prompt_dir_has_aida_prompts(dir: &std::path::Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.filter_map(|entry| entry.ok()).any(|entry| {
+        let path = entry.path();
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|name| name.starts_with("aida-") && name.ends_with(".md"))
+    })
+}
+
+fn codex_ignores_prompt_dir_finding_for_version(
+    dir: &std::path::Path,
+    version: (u64, u64, u64),
+) -> Option<DoctorFinding> {
+    if !codex_prompt_dir_has_aida_prompts(dir) {
+        return None;
+    }
+    if version < (0, 142, 0) {
+        return None;
+    }
+    Some(DoctorFinding {
+        category: "scaffold-drift".to_string(),
+        id: "scaffold-drift/codex-prompts-undiscovered".to_string(),
+        summary: format!(
+            "~/.codex/prompts contains AIDA prompt files, but installed Codex {}.{}.{} does not discover them as `/aida-*` slash commands",
+            version.0, version.1, version.2
+        ),
+        action: "Use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly".to_string(),
+        safe_heal: false,
+    })
+}
+
+fn codex_ignores_prompt_dir_finding(dir: &std::path::Path) -> Option<DoctorFinding> {
+    codex_ignores_prompt_dir_finding_for_version(dir, installed_codex_version()?)
+}
+
 /// TASK-1124: rule-delivery-rot detection. Flags deployed vendor prompts/skills
 /// that have drifted from the binary's embedded source templates, in two
 /// places: (1) the project-local `.claude/`+`.codex/` scaffold (via
@@ -380,6 +445,13 @@ fn scan_scaffold_drift(
 
     // (2) Machine-global ~/.codex/prompts — the TASK-1123 incident case.
     if let Some(dir) = dirs::home_dir().map(|h| h.join(".codex").join("prompts")) {
+        // BUG-1095: Codex CLI 0.142 does not discover this generated directory
+        // as an interactive custom slash-command surface. Flag the overclaimed
+        // installation state separately from stale-content drift.
+        // trace:BUG-1095 | ai:codex
+        if let Some(finding) = codex_ignores_prompt_dir_finding(&dir) {
+            findings.push(finding);
+        }
         let drifted_prompts = codex_prompts_drift(&dir);
         if !drifted_prompts.is_empty() {
             findings.push(DoctorFinding {
@@ -3254,6 +3326,44 @@ mod story_462_doctor_tests {
             1,
             "only the one stale prompt should be flagged (missing = opt-out): {drifted:?}"
         );
+    }
+
+    // trace:BUG-1095 — Codex CLI 0.142 ignores ~/.codex/prompts as a custom
+    // slash-command surface, so doctor must catch generated prompt dirs that
+    // users might reasonably expect to expose /aida-* commands.
+    #[test]
+    fn codex_prompt_dir_warning_is_version_gated() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("aida-capture.md"), "prompt body\n").unwrap();
+
+        assert!(
+            codex_ignores_prompt_dir_finding_for_version(dir.path(), (0, 141, 9)).is_none(),
+            "older Codex versions stay quiet because the field report only verifies 0.142+"
+        );
+        let finding =
+            codex_ignores_prompt_dir_finding_for_version(dir.path(), (0, 142, 0)).unwrap();
+        assert_eq!(finding.id, "scaffold-drift/codex-prompts-undiscovered");
+        assert!(finding.summary.contains("0.142.0"));
+        assert!(finding.summary.contains("does not discover"));
+        assert!(finding.action.contains("$aida-*"));
+        assert!(finding.action.contains("/skills"));
+    }
+
+    #[test]
+    fn codex_prompt_dir_warning_requires_aida_prompt_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.md"), "not an AIDA prompt\n").unwrap();
+        assert!(
+            codex_ignores_prompt_dir_finding_for_version(dir.path(), (0, 142, 0)).is_none(),
+            "non-AIDA markdown in ~/.codex/prompts is not our scaffold state"
+        );
+    }
+
+    #[test]
+    fn parse_codex_semver_accepts_common_banners() {
+        assert_eq!(parse_codex_semver("codex-cli 0.142.0"), Some((0, 142, 0)));
+        assert_eq!(parse_codex_semver("codex 1.2.3-beta"), Some((1, 2, 3)));
+        assert_eq!(parse_codex_semver("no version here"), None);
     }
 
     #[test]

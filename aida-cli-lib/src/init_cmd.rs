@@ -3507,11 +3507,12 @@ pub(crate) fn handle_init_distributed_worktree(
     }
     println!();
 
-    // STORY-763: on a codex-first machine (the uniform `[agents] vendor`
-    // knob resolves to codex), also write the Codex custom-prompt set so
-    // /aida-... works in Codex sessions from the first init. Idempotent and
-    // conservative (skip-existing), best-effort — a failure here must not
-    // fail init.
+    // STORY-763/BUG-1095: on a codex-first machine (the uniform `[agents] vendor`
+    // knob resolves to codex), also write the legacy Codex prompt-body set.
+    // Current Codex interactive sessions use `.codex/skills/` via `/skills`
+    // or `$aida-*`; the prompt-body pack remains useful for direct launches
+    // and refresh/drift checks. Idempotent and conservative (skip-existing),
+    // best-effort — a failure here must not fail init. trace:BUG-1095 | ai:codex
     if footprint == crate::cli::InitFootprint::Full {
         maybe_scaffold_codex_prompts_on_init(std::path::Path::new("."));
     }
@@ -3550,10 +3551,10 @@ fn maybe_scaffold_codex_hooks_on_init(project_root: &std::path::Path, force: boo
     }
 }
 
-/// STORY-763: init-time hook — when the resolved default vendor is codex,
-/// write the Codex custom prompts to ~/.codex/prompts (skip-existing, never
-/// forced). Quiet no-op for claude-default machines. Best-effort: warns
-/// instead of failing init.
+/// STORY-763/BUG-1095: init-time hook — when the resolved default vendor is
+/// codex, write the legacy Codex prompt bodies to ~/.codex/prompts
+/// (skip-existing, never forced). Quiet no-op for claude-default machines.
+/// Best-effort: warns instead of failing init.
 fn maybe_scaffold_codex_prompts_on_init(project_root: &std::path::Path) {
     if aida_core::agents_config::resolve_default_vendor(project_root).as_deref() != Some("codex") {
         return;
@@ -3564,7 +3565,7 @@ fn maybe_scaffold_codex_prompts_on_init(project_root: &std::path::Path) {
     match aida_core::scaffolding::codex_prompts::scaffold_codex_prompts(&dest, false) {
         Ok(outcome) if !outcome.written.is_empty() => {
             println!(
-                "  {} codex-first machine: wrote {} Codex custom prompt(s) to {} (/aida-... now works in Codex sessions)",
+                "  {} codex-first machine: wrote {} Codex prompt body file(s) to {} (interactive Codex uses /skills or $aida-*)",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 outcome.written.len(),
                 dest.display()

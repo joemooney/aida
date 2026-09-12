@@ -436,9 +436,10 @@ pub(crate) fn handle_scaffold_command(
             }
         }
         ScaffoldCommand::CodexPrompts { dest, force } => {
-            // STORY-763: the slash-command parity piece — Codex reads custom
-            // prompts from ~/.codex/prompts; each file becomes an invokable
-            // /aida-... prompt inside a Codex session.
+            // BUG-1095: keep generating the legacy prompt-body pack for
+            // direct launches/refresh drift checks, but do not promise
+            // interactive /aida-* discovery. Codex CLI 0.142 does not discover
+            // ~/.codex/prompts as custom slash commands. trace:BUG-1095 | ai:codex
             let dest_dir = match dest {
                 Some(d) => d.clone(),
                 None => dirs::home_dir()
@@ -449,9 +450,12 @@ pub(crate) fn handle_scaffold_command(
             let outcome =
                 aida_core::scaffolding::codex_prompts::scaffold_codex_prompts(&dest_dir, *force)?;
             println!(
-                "{} Codex custom prompts at {}",
+                "{} Codex prompt bodies at {}",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
                 dest_dir.display()
+            );
+            println!(
+                "  note: current Codex interactive sessions use `.codex/skills/` via `/skills` or `$aida-*`; `~/.codex/prompts` is not advertised as `/aida-*` slash commands"
             );
             println!(
                 "  written: {}   skipped (already present): {}",

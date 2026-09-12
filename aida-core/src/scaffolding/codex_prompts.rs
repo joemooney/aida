@@ -1,13 +1,13 @@
-//! Codex custom prompts (`~/.codex/prompts/*.md`) generated from the same
-//! embedded command masters that back `.claude/commands/` — the slash-command
-//! UX parity piece for codex-first machines (STORY-763).
+//! Codex prompt bodies (`~/.codex/prompts/*.md`) generated from the same
+//! embedded command masters that back `.claude/commands/`.
 //!
 //! `.codex/skills/` (project-local skill bodies) and `.codex/config.toml`
-//! (MCP registration) already ship at init; what they don't give a Codex
-//! session is the `/aida-…` invocation surface. Codex CLI reads custom
-//! prompts from the user-global `~/.codex/prompts/` directory — one markdown
-//! file per prompt, invoked by filename. This module converts each embedded
-//! command template into that shape:
+//! (MCP registration) already ship at init; current Codex interactive sessions
+//! discover those skills through `/skills` or `$aida-*`, not through arbitrary
+//! `/aida-*` slash-command files. This module keeps the legacy prompt-body
+//! pack available for direct launches, refresh/drift validation, and archived
+//! machines that already have it installed. It converts each embedded command
+//! template into that shape:
 //!
 //! - the YAML frontmatter (a Claude Code convention) is stripped;
 //! - `.claude/skills/<name>.md` references are rewritten to the workflow
@@ -85,10 +85,10 @@ fn adapt_claude_only_prompt_language(body: &str) -> String {
     // trace:BUG-731 | ai:codex
     let claude_skill_ref = Regex::new(r"`?\.claude/skills/(aida-[A-Za-z0-9_-]+)(?:/SKILL)?\.md`?")
         .expect("valid Claude skill ref regex");
-    // Codex custom prompts are the runnable surface. Pointing them at "the
-    // AIDA skill" can trigger progressive-disclosure lookup for a skill that
-    // is not installed, even though the command template already carries the
-    // needed workflow below. trace:TASK-150 | ai:codex
+    // The rendered prompt body carries the workflow inline. Pointing it at
+    // "the AIDA skill" can trigger progressive-disclosure lookup for a skill
+    // that is not installed in headless/direct-launch contexts.
+    // trace:TASK-150 | ai:codex
     let mut out = claude_skill_ref
         .replace_all(body, |caps: &regex::Captures<'_>| {
             format!(
@@ -152,11 +152,12 @@ fn contains_codex_argument_placeholder(body: &str) -> bool {
 /// Render one embedded command master as a launch-ready Codex prompt: the
 /// BUG-731 conversion (frontmatter stripped, Claude-only prompt language
 /// adapted) with the invocation arguments substituted for `$ARGUMENTS` — the
-/// same expansion Codex itself performs when the prompt is invoked as
-/// `/<name> <args>` from `~/.codex/prompts/`, but usable as the initial
-/// prompt of a directly-launched session (e.g. the guided-mode dispatch).
+/// direct-launch form used when AIDA starts a Codex session itself (e.g. the
+/// guided-mode dispatch). Do not document this as an interactive `/aida-*`
+/// surface: Codex CLI 0.142 does not discover `~/.codex/prompts/*.md`.
 /// `None` when the command has no embedded master or sits in the
 /// non-portable set.
+// trace:BUG-1095 | ai:codex
 // trace:TASK-1162 | ai:claude
 pub fn render_codex_command_prompt(name: &str, args: &str) -> Option<String> {
     if CODEX_NONPORTABLE_COMMANDS.iter().any(|(n, _)| *n == name) {
@@ -167,7 +168,7 @@ pub fn render_codex_command_prompt(name: &str, args: &str) -> Option<String> {
     Some(convert_command_to_codex_prompt(body).replace("$ARGUMENTS", args))
 }
 
-/// The on-disk form of one Codex custom prompt: the converted body stamped
+/// The on-disk form of one Codex prompt body: the converted body stamped
 /// with the same `AIDA Generated: v… | checksum:…` header every other
 /// scaffolded file carries. The marker is what makes the edit-preserving
 /// `aida init --refresh` / `aida scaffold refresh` pass able to tell a
@@ -219,7 +220,7 @@ pub fn expected_codex_prompts() -> Vec<(String, String)> {
     out
 }
 
-/// Write the Codex custom-prompt set into `dest_dir` (normally
+/// Write the Codex prompt-body set into `dest_dir` (normally
 /// `~/.codex/prompts`). Existing files are skipped unless `force`; the
 /// non-portable set is excluded with reasons. Idempotent.
 pub fn scaffold_codex_prompts(dest_dir: &Path, force: bool) -> Result<CodexPromptsOutcome> {
