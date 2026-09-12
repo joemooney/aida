@@ -14,12 +14,12 @@ description: |
   1. aida defer <ID> removes (or parks) every queue row for the spec and prints what it removed.
   2. queue work --drain member capture excludes deferred specs; a deferred spec reached at pickup is skipped with an explicit 'deferred — skipped' line, not driven.
   3. Regression tests for both layers (defer-with-queued-row; drain-snapshot-with-deferred-spec).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T06:24:10.413442950Z
-modified_at: 2026-09-12T06:24:10.413442950Z
+modified_at: 2026-09-12T08:12:43.938643434Z
 req_type: Bug
 tags:
 - drain
