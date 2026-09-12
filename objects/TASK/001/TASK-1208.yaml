@@ -23,7 +23,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:47:20.184181777Z
-modified_at: 2026-09-12T02:01:53.153176963Z
+modified_at: 2026-09-12T02:14:18.974067563Z
 req_type: Task
 tags:
 - affordance
@@ -34,6 +34,11 @@ tags:
 - risk:low
 - statusline
 - ux
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a09364-d36f-7093-899c-206bd3e22852
+  created_at: 2026-09-12T02:14:18.974063521Z
+  created_by: joe
 comments:
 - id: 01a09160-08ba-7483-b5bd-abe348a7e20b
   author: joe
