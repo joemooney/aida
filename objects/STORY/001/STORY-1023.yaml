@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T03:51:00.272848490Z
-modified_at: 2026-09-12T05:38:22.686329583Z
+modified_at: 2026-09-12T05:41:34.908871911Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -59,6 +59,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-11T12:28:27.123519690Z
   modified_at: 2026-09-11T12:28:27.123519690Z
+- id: 01a09422-aa3c-7b53-bcfd-f0053642c089
+  author: joe
+  content: 'Addressed PR #1729 finding: effective NeedsAttention lens for epics now walks the same oriented subtree used by the store-aware epic rollup, so child-owned stale-base links render Shelved in show/why/list instead of falling back to the epic''s stored reason fields.'
+  created_at: 2026-09-12T05:41:34.908871911Z
+  modified_at: 2026-09-12T05:41:34.908871911Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
