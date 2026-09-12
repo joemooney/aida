@@ -18,6 +18,7 @@
 
 stages:
   - verify
+  - release
 
 variables:
   CARGO_TERM_COLOR: "always"
@@ -71,3 +72,82 @@ bwrap-confinement:
     - sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
     - AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --bin aida
         bwrap_write_confinement_live_or_fail_closed -- --nocapture
+
+# STORY-1048: GitLab release publishing is intentionally triggered by mirrored
+# vN tags. Linux assets are built on GitLab so the GitLab hub is not just a
+# pointer to GitHub; Darwin assets are mirrored from the GitHub release until a
+# macOS GitLab runner exists. That is the current trade-off versus duplicating
+# the full GitHub build matrix on GitLab runners.
+release-linux-assets:
+  stage: release
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'
+  script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends
+        protobuf-compiler gcc-aarch64-linux-gnu curl ca-certificates
+    - rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+    - |
+      for pair in \
+        "x86_64-unknown-linux-gnu aida-linux-x86_64" \
+        "aarch64-unknown-linux-gnu aida-linux-arm64"
+      do
+        set -- $pair
+        target="$1"
+        name="$2"
+        if [ "$target" = "aarch64-unknown-linux-gnu" ]; then
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+        fi
+        cargo build --release --target "$target" -p aida-cli -p aida-server
+        mkdir -p "stage/$name"
+        cp "target/$target/release/aida" "stage/$name/aida"
+        cp "target/$target/release/aida-server" "stage/$name/aida-server"
+        chmod +x "stage/$name/aida" "stage/$name/aida-server"
+        tar czf "$name.tar.gz" -C "stage/$name" aida aida-server
+        curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --upload-file "$name.tar.gz" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aida/$CI_COMMIT_TAG/$name.tar.gz"
+      done
+
+mirror-github-release-assets:
+  stage: release
+  image: curlimages/curl:latest
+  before_script: []
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'
+  script:
+    - |
+      for name in aida-darwin-x86_64 aida-darwin-arm64; do
+        curl --fail --location \
+          "https://github.com/joemooney/aida/releases/download/$CI_COMMIT_TAG/$name.tar.gz" \
+          --output "$name.tar.gz"
+        curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --upload-file "$name.tar.gz" \
+          "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aida/$CI_COMMIT_TAG/$name.tar.gz"
+      done
+
+gitlab-release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  before_script: []
+  needs:
+    - release-linux-assets
+    - mirror-github-release-assets
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'
+  script:
+    - echo "Creating GitLab release $CI_COMMIT_TAG"
+  release:
+    tag_name: '$CI_COMMIT_TAG'
+    name: 'AIDA $CI_COMMIT_TAG'
+    description: 'Mirrored release for $CI_COMMIT_TAG. GitHub remains the source of record until the EPIC-44 cutover.'
+    assets:
+      links:
+        - name: 'aida-linux-x86_64.tar.gz'
+          url: '$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aida/$CI_COMMIT_TAG/aida-linux-x86_64.tar.gz'
+        - name: 'aida-linux-arm64.tar.gz'
+          url: '$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aida/$CI_COMMIT_TAG/aida-linux-arm64.tar.gz'
+        - name: 'aida-darwin-x86_64.tar.gz'
+          url: '$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aida/$CI_COMMIT_TAG/aida-darwin-x86_64.tar.gz'
+        - name: 'aida-darwin-arm64.tar.gz'
+          url: '$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aida/$CI_COMMIT_TAG/aida-darwin-arm64.tar.gz'

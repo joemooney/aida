@@ -14,7 +14,9 @@ accumulates commits the other never sees, with no fan-out and no warning. Reconc
 the fact is `aida remote reconcile` (leg 4 below) — a CRDT union-merge of the diverged tips.
 
 The same happens to **code** whenever a push targets one hub only (`git push origin main`
-without also pushing gitlab).
+without also pushing gitlab). Releases have a third failure mode: the version tag and
+binary assets can exist on GitHub while the GitLab hub has neither a tag-triggered
+pipeline nor a release page.
 
 ## The four legs: detect, fan out, reconcile
 
@@ -31,6 +33,10 @@ aida remote status --json     # machine-readable
 ```
 
 The same check is a health finding: `aida doctor --category remote-drift`.
+
+`remote status` also checks the latest local `vN` tag. The tag must exist on every hub,
+and GitLab remotes are probed for a matching release record so binary-release drift is
+caught with branch drift.
 
 ### 2. Store fan-out — `[store.sync] mirror_remotes`
 
@@ -78,6 +84,22 @@ aida remote status
 
 Once every hub's `aida-store` is reconciled (no BUG-700-style held divergence), add the
 native multi-pushurl (leg 3) so the *code* leg fans out automatically too.
+
+### Release fan-out
+
+`scripts/release.sh` pushes the release commit and tag to `origin`, then mirrors the
+`vN` tag to each remote in `[store.sync] mirror_remotes`. Mirror failures warn and do
+not fail the GitHub release. GitLab receives the mirrored tag and runs its release stage:
+Linux tarballs are built on GitLab runners, Darwin tarballs are copied from the GitHub
+release until a macOS GitLab runner is available, and a GitLab Release links all four
+assets from the GitLab package registry.
+
+GitLab-track installers can opt in without changing the default GitHub path:
+
+```bash
+AIDA_RELEASE_HOST=gitlab ./scripts/install.sh
+./scripts/install.sh --host gitlab --version v0.15.0
+```
 
 ### 4. Reconcile — `aida remote reconcile`
 
