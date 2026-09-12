@@ -1,0 +1,26 @@
+id: 01a09484-8fd2-7990-ae4b-1721cd53287b
+spec_id: STORY-1080
+agreed_id: STORY-1080
+title: 'Review PR-1771: [AI:codex] feat(session): add terminal focus and send adapters (STORY-995)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09477`) for branch `story-995-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1771>
+  - Branch: `story-995-2` → `main`
+
+  ## Covers
+
+  - STORY-995
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1771` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T07:28:30.674235851Z
+modified_at: 2026-09-12T07:28:30.674235851Z
+req_type: Story
