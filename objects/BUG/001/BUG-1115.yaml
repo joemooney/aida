@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T20:43:57.126519566Z
-modified_at: 2026-09-12T20:56:47.355354943Z
+modified_at: 2026-09-12T20:56:48.624014935Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,10 @@ tags:
 - ci
 - failure-2
 - failure-kind:ci-red
+comments:
+- id: 01a09768-94f0-7d70-b6e4-f61077da69ab
+  author: joe
+  content: 'Auto-drafted stub: the BUG-1112 phase-2 CI red was an UNRELATED role_identity_tests flake (not in any file the PR touches; main green on it). CI retriggered on the same commit. Not a real orchestrator bug.'
+  created_at: 2026-09-12T20:56:48.624014935Z
+  modified_at: 2026-09-12T20:56:48.624014935Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
