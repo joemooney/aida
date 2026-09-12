@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-12T02:47:18.212989575Z
+modified_at: 2026-09-12T03:07:06.152014572Z
 req_type: Story
 tags:
 - breaking
@@ -43,6 +43,10 @@ relationships:
 - rel_type: References
   target_id: 01a08ee4-030a-77c0-a47c-fe12e518df10
   created_at: 2026-09-11T05:15:31.010445868Z
+  created_by: joe
+- rel_type: Parent
+  target_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
+  created_at: 2026-09-12T03:07:06.152012139Z
   created_by: joe
 comments:
 - id: 01a08f99-8f97-78f0-983d-87efd137ede6
