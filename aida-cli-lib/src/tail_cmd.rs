@@ -142,7 +142,7 @@ pub enum Resolution {
     /// The selector named a fan-out worker of the drain running right now: an
     /// Agent-tool subagent whose output streams into the drain's context, not
     /// to a file of its own. Not an error and not a dead end — a pointer at the
-    /// stream that does carry it. `drain` is the log `aida tail drain` would
+    /// stream that does carry it. `drain` is the log `aida drain tail` would
     /// pick, or `None` when the live drain is writing no log at all.
     // trace:BUG-782 | ai:claude
     FanoutOfDrain { what: String, drain: Option<String> },
@@ -629,7 +629,7 @@ pub fn handle_tail(
             println!("{info} {what} is a fan-out worker of the drain running here.");
             println!("Its output streams into the drain, not into a log of its own.");
             match drain {
-                Some(id) => println!("{arrow} tail the stream that carries it: `aida tail drain` (currently {id})"),
+                Some(id) => println!("{arrow} tail the stream that carries it: `aida drain tail` (currently {id})"),
                 None => println!(
                     "{arrow} that drain is writing no log — a drain only streams to one when it runs with verbose output, so its live output is in the terminal it was launched from."
                 ),
@@ -810,7 +810,7 @@ fn print_list(index: &TailIndex, color: bool) -> Result<()> {
             let when: chrono::DateTime<chrono::Local> = d.mtime.into();
             println!("  {}  {}", d.id, when.format("%Y-%m-%d %H:%M:%S"));
         }
-        println!("  (tail the newest with `aida tail drain`)");
+        println!("  (tail the newest with `aida drain tail`)");
         println!();
     }
 

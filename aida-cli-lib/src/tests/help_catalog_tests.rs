@@ -27,6 +27,7 @@ fn catalog_is_derived_and_comprehensive() {
         "aida findings list",
         "aida questions answer",
         "aida advisor schedule list",
+        "aida drain tail",
     ] {
         assert!(
             paths.iter().any(|path| path == expected),
@@ -60,6 +61,23 @@ fn catalog_rows_are_full_runnable_paths_depth_first() {
     // not duplicate).
     let deduped: std::collections::HashSet<&String> = paths.iter().collect();
     assert_eq!(paths.len(), deduped.len(), "duplicate catalog rows");
+}
+
+// trace:TASK-1209 | ai:codex
+#[test]
+fn drain_tail_has_its_own_catalog_text() {
+    let rows = catalog_rows(false);
+    let row = rows
+        .iter()
+        .find(|row| row.path.join(" ") == "aida drain tail")
+        .expect("aida drain tail catalog row");
+
+    assert!(row.about.contains("active drain log"), "{}", row.about);
+    assert!(row.flags.iter().any(|flag| flag.name == "json"));
+    assert!(row.flags.iter().any(|flag| flag.name == "lines"));
+    assert!(row.flags.iter().any(|flag| flag.name == "since"));
+    assert!(row.flags.iter().any(|flag| flag.name == "no-follow"));
+    assert!(row.flags.iter().any(|flag| flag.name == "no-timestamp"));
 }
 
 #[test]

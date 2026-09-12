@@ -762,6 +762,52 @@ pub(crate) fn output_format_is_json() -> bool {
     matches!(output_format_override(), Some(OutputFormat::Json))
 }
 
+/// Build and dispatch the shared tail resolver from clap-parsed arguments.
+/// Both `aida tail drain` and `aida drain tail` enter here, then flow through
+/// `tail_cmd::handle_tail`.
+// trace:TASK-1209 | ai:codex
+pub(crate) fn handle_tail_cli(
+    target: Option<String>,
+    list: bool,
+    json: bool,
+    lines: Option<usize>,
+    since: Option<&str>,
+    no_follow: bool,
+    with_tools: bool,
+    no_timestamp: bool,
+) -> Result<()> {
+    let project_root = find_main_worktree_root()
+        .or_else(|_| find_project_root())
+        .or_else(|_| std::env::current_dir())
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let since_duration = match since {
+        Some(s) => Some(headless_tail::parse_since(s)?),
+        None => None,
+    };
+    let sessions: Vec<tail_cmd::SessionRef> = list_leases(&project_root)
+        .into_iter()
+        .map(|l| tail_cmd::SessionRef {
+            id: l.id,
+            scope: l.scope,
+            branch: l.branch,
+            role: l.role,
+        })
+        .collect();
+    let opts = tail_cmd::TailOptions {
+        target,
+        list,
+        json,
+        lines,
+        since: since_duration,
+        no_follow,
+        with_tools,
+        color: std::io::IsTerminal::is_terminal(&std::io::stdout())
+            && std::env::var_os("NO_COLOR").is_none(),
+        no_timestamp,
+    };
+    tail_cmd::handle_tail(&project_root, sessions, &opts)
+}
+
 /// STORY-764: emit the first-pipe format hint at most once. Guarded first by a
 /// process-once `OnceLock`, then by a per-project marker file under `.aida/` so
 /// the nudge shows once and then gets out of the way (the durable reference is
@@ -2524,37 +2570,16 @@ fn run() -> Result<()> {
         no_timestamp,
     } = &cli.command
     {
-        let project_root = find_main_worktree_root()
-            .or_else(|_| find_project_root())
-            .or_else(|_| std::env::current_dir())
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
-        let since_duration = match since {
-            Some(s) => Some(headless_tail::parse_since(s)?),
-            None => None,
-        };
-        let sessions: Vec<tail_cmd::SessionRef> = list_leases(&project_root)
-            .into_iter()
-            .map(|l| tail_cmd::SessionRef {
-                id: l.id,
-                scope: l.scope,
-                branch: l.branch,
-                role: l.role,
-            })
-            .collect();
-        let opts = tail_cmd::TailOptions {
-            target: target.clone(),
-            list: *list,
-            json: *json,
-            lines: *lines,
-            since: since_duration,
-            no_follow: *no_follow,
-            with_tools: *with_tools,
-            color: std::io::IsTerminal::is_terminal(&std::io::stdout())
-                && std::env::var_os("NO_COLOR").is_none(),
-            // trace:TASK-1173 | ai:claude
-            no_timestamp: *no_timestamp,
-        };
-        return tail_cmd::handle_tail(&project_root, sessions, &opts);
+        return handle_tail_cli(
+            target.clone(),
+            *list,
+            *json,
+            *lines,
+            since.as_deref(),
+            *no_follow,
+            *with_tools,
+            *no_timestamp,
+        );
     }
 
     // `aida statusbar` — the ambient, read-only terminal-title meter. Like

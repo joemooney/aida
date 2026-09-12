@@ -105,6 +105,26 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             }
             Ok(())
         }
+        // `aida drain tail` is the discoverable drain-cluster spelling for
+        // the existing `aida tail drain` stream.
+        // trace:TASK-1209 | ai:codex
+        DrainCommand::Tail {
+            json,
+            lines,
+            since,
+            no_follow,
+            with_tools,
+            no_timestamp,
+        } => handle_tail_cli(
+            Some("drain".to_string()),
+            false,
+            *json,
+            *lines,
+            since.as_deref(),
+            *no_follow,
+            *with_tools,
+            *no_timestamp,
+        ),
     }
 }
 
