@@ -7273,6 +7273,18 @@ pub enum AgentNewCommand {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum NotifyCommand {
+    /// Evaluate configured notification rules and send due alerts.
+    Check,
+
+    /// Send a sample notification through the configured command.
+    Test,
+
+    /// Show configured rules and per-rule delivery state.
+    Status,
+}
+
+#[derive(Subcommand, Debug)]
 pub enum Command {
     /// Do one spec: dispatch it to the right harness based on its groomed
     /// execution mode (drain, drive, guided, operator, or decide), printing
@@ -8808,6 +8820,11 @@ pub enum Command {
         #[clap(long)]
         backlog: bool,
     },
+
+    /// Operator alerts for stalled drains and escalations.
+    // trace:STORY-1029 | ai:codex
+    #[clap(subcommand)]
+    Notify(NotifyCommand),
 
     /// List the team: every registered node/clone sharing this store
     /// (`registry/nodes.toml`) — node id, host, email, clone path, when it
