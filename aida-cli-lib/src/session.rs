@@ -4042,7 +4042,10 @@ mod tests {
         let bin = tmp.path().join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let log = tmp.path().join("calls.log");
-        write_executable(&bin.join("claude"), "#!/bin/sh\nexit 0\n");
+        write_executable(
+            &bin.join("claude"),
+            &format!("#!/bin/sh\nprintf 'child-exit\\n' >> '{}'\n", log.display()),
+        );
         write_executable(
             &bin.join("tmux"),
             &format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\n", log.display()),
@@ -4063,7 +4066,7 @@ mod tests {
         run_claude_session(None, None, None, None, false, None, Some(restore)).unwrap();
 
         let calls = std::fs::read_to_string(log).unwrap();
-        assert_eq!(calls.trim(), "rename-window before launch");
+        assert_eq!(calls.trim(), "child-exit\nrename-window before launch");
     }
 
     // TASK-809: the os_wrap launch binds the generated managed-settings doc over
