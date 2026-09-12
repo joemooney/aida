@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:49.397599124Z
-modified_at: 2026-09-10T05:01:01.983946852Z
+modified_at: 2026-09-12T16:50:24.753560430Z
 req_type: Task
 tags:
 - dogfood
@@ -43,5 +43,11 @@ comments:
   content: 'Capture sweep (2026-09-09 22:00): this was the dropped thread — attempt 6 was never run after BUG-901 shipped (Wednesday''s field-report batch took priority). It stays ADVISOR-executed (a main-repo implementer cannot run a nested drain on another repo — the 2026-09-07 park proved it). Trigger: after tonight''s chain-2 drain exits, the advisor resets the three testbed specs and runs attempt 6 on the current binary, which now carries 897/901/BUG-1023-era fixes.'
   created_at: 2026-09-10T05:01:01.983946852Z
   modified_at: 2026-09-10T05:01:01.983946852Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09686-ff71-7d10-84fe-4dd350dba3fb
+  author: joe
+  content: 'Evidence run 1 on the current binary (2026-09-12 09:35, testbed aida-codex-test, codex-pinned): 1 drain launched by a human (the initial launch), 0 specs merged, all three shelved at phase 3 — reviewer child refused by queue role-gating (''isn''t in your queue, but IS queued'' → role enter implementer). Phase 1 was clean for all three (implemented, pushed, PRs 10/11/12) — a real improvement over the 2026-09-06 attempt where phase 1 also failed. ONE distinct cause; filed as BUG-1106 (high, queued). Burndown log: scratchpad drain-1198.log; task stays open for the rerun after 1106 lands.'
+  created_at: 2026-09-12T16:50:24.753560430Z
+  modified_at: 2026-09-12T16:50:24.753560430Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
