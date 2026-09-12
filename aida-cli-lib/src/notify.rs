@@ -486,6 +486,25 @@ fn mark_sent(state: &mut NotifyState, rule: &str, now: DateTime<Utc>) {
     state.rules.entry(rule.to_string()).or_default().last_fire = Some(now);
 }
 
+/// Quote a substitution value for the platform shell. Unix: single-quote
+/// wrapping with `'\''` for embedded quotes. Windows `cmd`: no reliable quote
+/// exists, so strip the cmd metacharacters instead — these are display
+/// strings, not data that must round-trip.
+fn shell_quote(value: &str) -> String {
+    #[cfg(unix)]
+    {
+        format!("'{}'", value.replace('\'', r"'\''"))
+    }
+    #[cfg(windows)]
+    {
+        let cleaned: String = value
+            .chars()
+            .filter(|c| !matches!(c, '&' | '|' | '<' | '>' | '^' | '%' | '"' | '`'))
+            .collect();
+        format!("\"{cleaned}\"")
+    }
+}
+
 fn run_command(
     project_root: &Path,
     config: &NotifyConfig,
@@ -493,10 +512,13 @@ fn run_command(
     title: &str,
     message: &str,
 ) -> Result<()> {
+    // Substituted values are spliced into a shell command line, and spec
+    // titles carry shell-active characters (backticks, quotes, $). Quote them
+    // so title content is data, never code.
     let command = config
         .command
-        .replace("{title}", title)
-        .replace("{rule}", rule);
+        .replace("{title}", &shell_quote(title))
+        .replace("{rule}", &shell_quote(rule));
     #[cfg(unix)]
     let mut child = Command::new("sh")
         .arg("-c")
@@ -686,5 +708,26 @@ mod tests {
             std::fs::read_to_string(capture).unwrap(),
             "hello from stdin\n"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn title_substitution_is_data_not_code() {
+        let dir = tempfile::tempdir().unwrap();
+        let capture = dir.path().join("title.txt");
+        let sentinel = dir.path().join("injected.txt");
+        let cfg = NotifyConfig {
+            command: format!("printf %s {{title}} > {}", capture.display()),
+            min_interval: Duration::from_secs(0),
+            quiet_hours: None,
+            rules: NotifyRules::default(),
+        };
+        let title = format!("spec `touch {}` and 'quotes' $(id)", sentinel.display());
+        run_command(dir.path(), &cfg, "shelve", &title, "msg\n").unwrap();
+        assert!(
+            !sentinel.exists(),
+            "backticks in a title must not execute inside the notify shell"
+        );
+        assert_eq!(std::fs::read_to_string(capture).unwrap(), title);
     }
 }
