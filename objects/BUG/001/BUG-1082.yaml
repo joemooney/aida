@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T23:32:58.158191259Z
-modified_at: 2026-09-12T02:24:54.387651602Z
+modified_at: 2026-09-12T04:20:13.683428439Z
 req_type: Bug
 tags:
 - drain
@@ -36,6 +36,12 @@ comments:
   content: 'Recurrence 2 (17:59): STORY-1048''s drain slot implemented STORY-1051 (PR-1757, branch story-1048, trailer STORY-1051) — the implementer re-polled queue next and got 1051''s rework at the head. Containment until this lands: BUG-1082 moved to queue head so its own slot is self-consistent.'
   created_at: 2026-09-12T01:01:14.660927300Z
   modified_at: 2026-09-12T01:01:14.660927300Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a093d8-2ef3-7e93-bfaf-20e020bfe92d
+  author: joe
+  content: 'Post-fix observation (21:16, session story-998-3-01a093ca): a drain slot dispatched for STORY-998 ran queue next as item_2 and the agent proceeded on STORY-1028 (queue head) — the leased-session pin did not take effect in the codex /bin/bash -lc path. The NEXT slot (BUG-1088, same binary) worked its assigned spec correctly, so the gate is at least intermittently effective. If this recurs, check whether the pin''s lease detection (AIDA_SESSION_ID env?) survives codex''s login-shell subshells — a unit test with env set would not catch that loss. Not reopening on one observation.'
+  created_at: 2026-09-12T04:20:13.683428439Z
+  modified_at: 2026-09-12T04:20:13.683428439Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a0936e-9a6c-7b52-9778-0986dd844799
