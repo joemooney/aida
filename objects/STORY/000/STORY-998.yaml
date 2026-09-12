@@ -27,12 +27,12 @@ description: |-
 
   ## Related
   STORY-974 (typed causes), STORY-993 (liveness), STORY-994/995 (display only), BUG-420, BUG-749, BUG-875. Prototype source: _ignore/terminator (untracked).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-12T04:12:32.390255459Z
+modified_at: 2026-09-12T04:20:14.586481651Z
 req_type: Story
 tags:
 - drain
@@ -60,22 +60,3 @@ relationships:
   created_at: 2026-09-11T17:25:01.371086355Z
   created_by: joe
 execution_mode: drain
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: |-
-    PR-1764 base is 3 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code.
-
-    Overlapping files:
-      CHANGELOG.md
-      aida-cli-lib/src/lib.rs
-
-    Recover with:
-      aida pr rebase 1764              # clean rebase + force-push-with-lease
-      aida pr rebase 1764 --interactive  # if conflicts need manual resolve
-
-    Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-998 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T04:12:32.390255459Z
