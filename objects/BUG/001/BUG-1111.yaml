@@ -13,14 +13,18 @@ description: |
   1. A lease for a headless vendor phase child anchors liveness on the CHILD pid (or records both, with the child authoritative for reclaim); alternatively the reclaim treats a lease created by this same orchestrator run as continuation and reclaims regardless of liveness.
   2. Rerun the TASK-1210 injection (kill codex mid-phase-1 with dirty tree): attempt 2 re-enters the same worktree with the diff intact and the spec ships.
   3. Unit test: lease with live creator pid + dead child pid is reclaimable by the same run's retry.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T19:41:59.963962262Z
-modified_at: 2026-09-12T19:43:11.055798097Z
+modified_at: 2026-09-12T19:47:44.639256507Z
 req_type: Bug
 tags:
 - drain
 - orchestrator
 - reliability
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T19:47:44.639256507Z
+  implemented_by: joe
