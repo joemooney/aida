@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T07:01:52.471360516Z
-modified_at: 2026-09-12T08:45:32.109525658Z
+modified_at: 2026-09-12T08:45:33.282065809Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a09164-0bf5-7e22-b15a-853e942055ce
   created_at: 2026-09-12T07:01:56.710779577Z
   created_by: joe
+comments:
+- id: 01a094cb-18e2-7733-a405-035ecc0a5f1d
+  author: joe
+  content: PR-1742 already merged (TASK-1211 Completed) — review superseded.
+  created_at: 2026-09-12T08:45:33.282065809Z
+  modified_at: 2026-09-12T08:45:33.282065809Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
