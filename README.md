@@ -14,7 +14,7 @@ $ aida why src/auth.py:42
 
 A trace comment links the line to a spec; `aida why` reads the intent back to you, with a citation. **No trace comment? It still answers**: the line's last-touch commit carries a `(SPEC-ID)` trailer under AIDA's commit convention, so `aida why` falls back to `git blame` and tells you it did (`via commit abc1234` — circumstantial provenance, clearly marked, never blended with an intentional annotation). **No database, no server, no account** — it works on a plain folder of markdown + trace comments with **zero setup**: the answer lands whether or not you've run `aida init`.
 
-Karpathy's *LLM Wiki* showed that a folder of markdown you can **ask** beats a heavyweight app. AIDA adds the one thing a notes-wiki can't: your intent is **wired to the code**, so you can also ask *"what breaks if I change this?"* — `aida graph <id> --impact`.
+Karpathy's *LLM Wiki* showed that a folder of markdown you can **ask** beats a heavyweight app. AIDA adds the one thing a notes-wiki can't: your intent is **wired to the code**, so you can also ask *"what breaks if I change this?"* — `aida graph impact <id>`.
 
 ### The whole thing in 60 seconds
 

@@ -109,9 +109,9 @@ not to delegate to a sub-agent (see *Work directly* above).
 
 ```bash
 aida show <SPEC>                  # title, description, ## Acceptance, comments, git linkage
-aida graph <SPEC> --tree          # parent epic + siblings
-aida graph <SPEC> --blocked-by    # what it waits on
-aida graph <SPEC> --impact        # what depends on it (reverse closure — the blast radius)
+aida graph tree <SPEC>          # parent epic + siblings
+aida graph blocked-by <SPEC>    # what it waits on
+aida graph impact <SPEC>        # what depends on it (reverse closure — the blast radius)
 ```
 
 Read **all** of it. Then pull the surrounding decision context so your

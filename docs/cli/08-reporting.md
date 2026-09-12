@@ -95,7 +95,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Reach for it when** — you need to *tell someone* what happened: a customer changelog, a team update, a "what did I get done" self-review, or (`--audience operator`) a power-user "what changed in the CLI surface today."
 
-**Don't reach for it when** — you want the exact machine record for an audit (that's `history --events`), or live orientation (`status`). `digest` is intentionally lossy — it editorializes — so it's the wrong lens when you need every event faithfully.
+**Don't reach for it when** — you want the exact machine record for an audit (that's `history events`), or live orientation (`status`). `digest` is intentionally lossy — it editorializes — so it's the wrong lens when you need every event faithfully.
 
 **Key options (rationale only).**
 - `--audience customer|team|self|operator` — the single most consequential flag: it sets both the framing *and* SPEC-ID visibility. `customer` strips SPEC-IDs (they're internal breadcrumbs, noise to a user); `operator` is the CLI-surface diff for power-users. Pick the reader.
@@ -130,7 +130,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Gotchas.** `--failures`, `--pattern`, and `--health` are no-ops without `--auto-complete` — they qualify the drain-telemetry mode, not the default usage view. Telemetry is opt-out (`AIDA_TELEMETRY=0` or `[telemetry] enabled = false`); if the log is empty, telemetry was disabled — the command isn't broken.
 
-**Chains with** — the inspection half of the telemetry surface; `metrics` is the presentation half. The `/aida-insights` skill synthesizes `usage` + `usage --auto-complete` into the monthly review.
+**Chains with** — the inspection half of the telemetry surface; `metrics` is the presentation half. The `/aida-insights` skill synthesizes `usage` + `usage drains` into the monthly review.
 
 ---
 
@@ -138,18 +138,18 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — agent-lift metrics: the *framed proof* that autonomous drains lift load.
 
-**Mental model.** `metrics` reads the same telemetry substrate as `aida usage --auto-complete`, but its job is **presentation, not inspection**. The one subcommand, `agent-lift`, computes the coordination signals — drain success rate, autonomous runs over distinct specs/builds, stale-base recoveries, and the autonomous-vs-human split — and renders them for an *audience*: a case study, release notes, or "proving coordination value." Where `usage --auto-complete` is the operator's diagnostic dashboard, `metrics agent-lift` is the slide you'd show someone.
+**Mental model.** `metrics` reads the same telemetry substrate as `aida usage drains`, but its job is **presentation, not inspection**. The one subcommand, `agent-lift`, computes the coordination signals — drain success rate, autonomous runs over distinct specs/builds, stale-base recoveries, and the autonomous-vs-human split — and renders them for an *audience*: a case study, release notes, or "proving coordination value." Where `usage drains` is the operator's diagnostic dashboard, `metrics agent-lift` is the slide you'd show someone.
 
 **Reach for it when** — you need to *demonstrate* that the autonomy machinery is working: a case study, a release-notes paragraph, a "look what the drains did this month" writeup.
 
-**Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida usage --auto-complete --pattern`/`--failures`/`--health`, the diagnostic side. `metrics` summarizes the win; `usage` dissects the failure.
+**Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida usage drains --pattern`/`--failures`/`--health`, the diagnostic side. `metrics` summarizes the win; `usage` dissects the failure.
 
 **Key options (rationale only).**
 - `--markdown` — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
 - `--since <window>` — bound the reporting period (the case-study window).
 - `--json` — the computed signals for machine consumers.
 
-**Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands; you want `aida metrics agent-lift`. It and `usage --auto-complete` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*. Pick by whether you're proving or debugging.
+**Gotchas.** `metrics` is a parent command — bare `aida metrics` lists subcommands; you want `aida metrics agent-lift`. It and `usage drains` read the *same* `auto-complete.jsonl`, so they never disagree on the numbers — they disagree on *framing*. Pick by whether you're proving or debugging.
 
 **Chains with** — the case-study/release-notes companion to `digest` (narrative) and `usage` (diagnostic).
 
@@ -170,7 +170,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Gotchas.** `why` only explains *open* specs — it's about what's keeping something from being done, so a closed spec has nothing to explain. It reports the classifier's read, which is a heuristic over store signals; it's a strong first hypothesis, not a guarantee.
 
-**Chains with** — `aida show <ID>` for the full picture, `aida graph <ID> --blocked-by` to trace the blocker chain `why` named, `aida punt`/`aida triage` to act on the reason.
+**Chains with** — `aida show <ID>` for the full picture, `aida graph blocked-by <ID>` to trace the blocker chain `why` named, `aida punt`/`aida triage` to act on the reason.
 
 ---
 
@@ -255,7 +255,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Reach for it when** — you (or a reviewer/auditor) want the *reasoning trail* behind a completed spec — what a drain decided and why — not just the diff. It's the substrate behind the "explain intent, not just surface" goal: a place the *why* lives after the work is done.
 
-**Don't reach for it when** — you want *field-change* history (that's `aida history --events`) or the *commits/files* a spec touched (that's `aida show`'s git linkage). Record is the narrative layer above both.
+**Don't reach for it when** — you want *field-change* history (that's `aida history events`) or the *commits/files* a spec touched (that's `aida show`'s git linkage). Record is the narrative layer above both.
 
 **Gotchas.** `record prune` is **propose-by-default** — it shows what it *would* trim and only writes with `--apply`. So a bare `aida record prune` is safe to run as a preview. Pruning loses the narrative, not the spec or its transition history.
 
@@ -269,4 +269,4 @@ You now have every read-only lens: live orientation (`status`), the audit trail 
 
 - **[Chapter 1 — Getting started](01-getting-started.md)**: `list` / `show` — the graph lenses these reporting views send you to drill into.
 - **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**: the transitions `history` and `digest` are *reporting on* — where Done, Completed, and Released come from.
-- **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: `backlog` / `burndown` — the survey-the-stuck-set counterparts to single-spec `why`, and the drains that `metrics`/`usage --auto-complete` measure.
+- **[Chapter 3 — Work & autonomy](03-work-autonomy.md)**: `backlog` / `burndown` — the survey-the-stuck-set counterparts to single-spec `why`, and the drains that `metrics`/`usage drains` measure.

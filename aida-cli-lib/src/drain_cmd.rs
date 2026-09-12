@@ -19,6 +19,14 @@ use crate::*;
 // LIVE, report the drain from the lock instead. trace:BUG-759 | ai:claude
 pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     match cmd {
+        DrainCommand::Clear => {
+            let project_root = find_main_worktree_root()
+                .or_else(|_| std::env::current_dir())
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let status = drain_state::probe(&project_root);
+            let json_output = output_format_is_json();
+            drain_clear(&project_root, &status, json_output)
+        }
         DrainCommand::Status { json, clear } => {
             // Resolve the shared `.aida/` root from any worktree so a child in
             // a sibling worktree reads the *orchestrator's* drain-state file.
@@ -30,6 +38,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             let status = drain_state::probe(&project_root);
             let json_output = *json || output_format_is_json();
             if *clear {
+                note_hidden_alias(concat!("aida drain status ", "--clear"), "aida drain clear");
                 return drain_clear(&project_root, &status, json_output);
             }
             // BUG-759: corroborate the launcher-held drain lock alongside the
@@ -128,7 +137,7 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     }
 }
 
-/// `aida drain status --clear` — remove a stale drain-state file. Refuses
+/// `aida drain clear` — remove a stale drain-state file. Refuses
 /// while the orchestrator is still live: a live orchestrator removes the file
 /// itself on a clean exit, so clearing it from under a running drain would
 /// only hide work in progress. trace:STORY-301 | ai:claude

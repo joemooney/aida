@@ -73,7 +73,7 @@ fn parent_tag_materializes_bidirectional_edge_and_is_graph_visible() {
     );
     assert!(
         res.nodes.contains(&child_id),
-        "graph --tree from the epic must reach the tag-linked child without a manual rebuild"
+        "graph tree from the epic must reach the tag-linked child without a manual rebuild"
     );
 
     // The tag itself is retained (additive, not a move).

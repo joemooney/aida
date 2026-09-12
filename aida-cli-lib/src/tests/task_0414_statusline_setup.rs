@@ -92,7 +92,7 @@ fn antigravity_fragment_uses_claude_command_and_stacks_by_default() {
     assert_eq!(fragment["statusLine"]["command"], STATUSLINE_SETUP_COMMAND);
     assert_eq!(fragment["statusLine"]["stack_with_default"], true);
     assert_eq!(fragment["title"]["type"], "command");
-    assert_eq!(fragment["title"]["command"], "aida statusline --title");
+    assert_eq!(fragment["title"]["command"], "aida statusline title");
 }
 
 // trace:TASK-1199 | ai:codex
@@ -110,7 +110,7 @@ fn antigravity_fragment_pretty_json_golden() {
     "type": "command"
   },
   "title": {
-    "command": "aida statusline --title",
+    "command": "aida statusline title",
     "type": "command"
   }
 }"#
@@ -161,7 +161,7 @@ fn antigravity_install_merges_preserves_keys_and_writes_backup() {
     assert_eq!(v["mcpServers"]["aida"]["command"], "aida");
     assert_eq!(v["statusLine"]["command"], STATUSLINE_SETUP_COMMAND);
     assert_eq!(v["statusLine"]["stack_with_default"], true);
-    assert_eq!(v["title"]["command"], "aida statusline --title");
+    assert_eq!(v["title"]["command"], "aida statusline title");
 }
 
 // trace:TASK-1199 | ai:codex

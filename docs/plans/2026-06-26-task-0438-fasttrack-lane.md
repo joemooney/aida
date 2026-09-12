@@ -244,7 +244,7 @@ review stays load-bearing for anything the operator wants to eyeball first.
   therefore can't be express-disposed; the three view tiers (active / deferred /
   archived) are orthogonal to the lane.
 - **auditability & revert** — every disposition is a recorded status edit +
-  comment in the orphan-branch git log (`aida history --events`), so a
+  comment in the orphan-branch git log (`aida history events`), so a
   misclassified item is fully traceable; revert is a normal PR revert (the
   reversibility litmus guarantees this is clean), and the spec re-opens via
   `aida edit --status` for re-disposition.

@@ -107,9 +107,9 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 **One line** — traverse the relationship graph from a root spec.
 
-**Mental model.** This is the command that justifies calling AIDA a *graph*. `graph <ID>` starts at one spec and walks edges: the transitive **blocked-by** chain (everything standing in this spec's way), the transitive **blocks** chain (everything it holds up), the parent/child **tree** rollup (epic with a status summary), the reverse **impact** set (what's at risk if this slips), or any custom edge type via `--follow`. These are precisely the questions a flat per-feature spec tool *structurally cannot* answer. Read-only; pick one mode (default `--tree`).
+**Mental model.** This is the command that justifies calling AIDA a *graph*. `graph <ID>` starts at one spec and walks edges: the transitive **blocked-by** chain (everything standing in this spec's way), the transitive **blocks** chain (everything it holds up), the parent/child **tree** rollup (epic with a status summary), the reverse **impact** set (what's at risk if this slips), or any custom edge type via `--follow`. These are precisely the questions a flat per-feature spec tool *structurally cannot* answer. Read-only; pick one mode (default `tree`).
 
-**Reach for it when** — "can I start this yet?" (`--blocked-by`), "what does finishing this unblock?" (`--blocks`), "how is this epic doing?" (`--tree`), "if this slips, what else slips?" (`--impact`). The planning and triage workhorse.
+**Reach for it when** — "can I start this yet?" (`graph blocked-by`), "what does finishing this unblock?" (`graph blocks`), "how is this epic doing?" (`graph tree`), "if this slips, what else slips?" (`graph impact`). The planning and triage workhorse.
 
 **Don't reach for it when** — you want the *edges of one spec* without transitive traversal — that's `aida rel list <ID>` (one hop). Or you want spec *text*, not structure — that's `search` / `grep`.
 
@@ -121,7 +121,7 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 **Gotchas.** Modes are mutually exclusive — pick at most one; passing several is undefined. The default (no mode flag) is `--tree`, so a bare `aida graph <epic-id>` gives you the epic rollup, *not* the blocked-by chain people often expect.
 
-**Chains with** — `graph --blocked-by` before `queue work` (don't pick up something that's blocked); `graph --impact` before `edit --status rejected` (know what you're stranding).
+**Chains with** — `graph blocked-by` before `queue work` (don't pick up something that's blocked); `graph impact` before `edit --status rejected` (know what you're stranding).
 
 ---
 

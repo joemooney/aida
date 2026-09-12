@@ -19,7 +19,7 @@
 //! corroborates the recorded [`DrainState::orchestrator_pid`] against a
 //! liveness probe, and prints the human summary. A file whose PID is dead is a
 //! *stale* drain — the orchestrator crashed or was killed without cleaning up;
-//! `aida drain status --clear` removes it.
+//! `aida drain clear` removes it.
 //!
 //! Every write goes through [`aida_core::write_atomic`] (TASK-331): a phase
 //! transition and a concurrent `aida drain status` read must never see a torn
@@ -295,7 +295,7 @@ impl DrainState {
     }
 
     /// Remove the drain-state file. Idempotent — a missing file is a clean
-    /// success (`aida drain status --clear` on a project with no drain).
+    /// success (`aida drain clear` on a project with no drain).
     pub(crate) fn clear(project_root: &Path) -> std::io::Result<()> {
         match std::fs::remove_file(drain_state_path(project_root)) {
             Ok(()) => Ok(()),
@@ -733,7 +733,7 @@ pub(crate) enum DrainStatus {
     /// The file exists and its `orchestrator_pid` is alive — a live drain.
     Active(DrainState),
     /// The file exists but its `orchestrator_pid` is dead — the orchestrator
-    /// crashed or was killed without cleaning up. `aida drain status --clear`
+    /// crashed or was killed without cleaning up. `aida drain clear`
     /// removes it.
     Stale(DrainState),
 }
@@ -1173,7 +1173,7 @@ fn render_human_inner(
         }
         out.push_str(&format!("  On exit: {}\n", state.on_drain_complete));
     } else {
-        out.push_str("  Run `aida drain status --clear` to remove this stale file.\n");
+        out.push_str("  Run `aida drain clear` to remove this stale file.\n");
     }
     let next = next_hint(state, project_root, now);
     out.push_str(&render_next_human(&next));
@@ -1214,7 +1214,7 @@ pub(crate) fn render_lock_human(lock: &crate::drain_lock::DrainLock, stale_state
     if stale_state {
         out.push_str(&format!(
             "\n  {} a stale drain-state file from an earlier drain also exists — \
-             `aida drain status --clear` removes it.\n",
+             `aida drain clear` removes it.\n",
             glyph(crate::glyphs::Glyph::Warning)
         ));
     }
@@ -1967,7 +1967,7 @@ mod tests {
         let out = render_human(&state, true);
         assert!(out.contains("Stale drain-state file"));
         assert!(out.contains("no longer running"));
-        assert!(out.contains("aida drain status --clear"));
+        assert!(out.contains("aida drain clear"));
     }
 
     // The --json payload carries the corroborated status word.
@@ -2081,7 +2081,7 @@ mod tests {
         let out = render_lock_human(&burndown_lock(), true);
         assert!(out.contains("Active drain: burndown run (status=approved)"));
         assert!(out.contains("stale drain-state file"));
-        assert!(out.contains("aida drain status --clear"));
+        assert!(out.contains("aida drain clear"));
     }
 
     // BUG-759: an empty spec set (a lock written by an older binary, or a

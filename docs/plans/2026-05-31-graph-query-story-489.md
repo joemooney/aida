@@ -13,7 +13,7 @@ Add a centralized, cycle-safe **graph-walk primitive** in `aida-core` (the one t
 - **`--impact`** — reverse closure: every spec that transitively depends on / is blocked by the target (the "what breaks if I touch this" query).
 
 ```
-aida graph STORY-489 --blocked-by        aida-core::graph_walk (NEW)
+aida graph blocked-by STORY-489        aida-core::graph_walk (NEW)
         │                                   ├─ walk(store, root, &[rel_type], dir, depth) -> GraphResult
         ▼                                   │     visited-set BFS (reuse would_create_cycle pattern)
   CLI handler  ──────────────────────────▶ │     atomic step = get_relationships_by_type (EXISTING)
@@ -81,9 +81,9 @@ cargo test -p aida-core graph_walk
 cargo test -p aida-cli graph        # CLI handler tests
 cargo build -p aida-cli && cargo fmt --all -- --check
 # Manual demo (the moat shot): pick an epic with children + a blocked spec
-aida graph <EPIC> --tree            # status rollup across descendants
-aida graph <SPEC> --blocked-by      # full transitive blocking chain
-aida graph <SPEC> --impact --json   # machine-readable reverse closure
+aida graph tree <EPIC>            # status rollup across descendants
+aida graph blocked-by <SPEC>      # full transitive blocking chain
+aida graph impact <SPEC> --json   # machine-readable reverse closure
 ```
 
 ## Followups

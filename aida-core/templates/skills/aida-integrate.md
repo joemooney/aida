@@ -56,7 +56,7 @@ Cross-check dependency order so a dependent never merges before the thing it
 builds on:
 
 ```
-aida graph <SPEC> --blocked-by        # what must land first
+aida graph blocked-by <SPEC>        # what must land first
 gh pr list --state open --json number,headRefName,title   # the open PRs
 ```
 

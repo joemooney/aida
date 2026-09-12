@@ -81,9 +81,9 @@ aida list                       # cache-backed, sub-ms; hides archived by defaul
 aida list --status draft
 aida search "login validation"  # full-text (FTS5)
 aida show STORY-249             # details + git linkage (commits / files / branch / PR)
-aida graph EPIC-30 --blocked-by # transitive: what's blocking this?
-aida graph EPIC-30 --impact     # reverse: what would finishing this unblock?
-aida graph EPIC-30 --tree       # epic rollup
+aida graph blocked-by EPIC-30 # transitive: what's blocking this?
+aida graph impact EPIC-30     # reverse: what would finishing this unblock?
+aida graph tree EPIC-30       # epic rollup
 ```
 
 > The graph queries are the payoff of typed relationships — *"what's blocked by what"* is one command, not a spelunk.
@@ -207,7 +207,7 @@ aida add --title "…" --type task --status approved
 /aida-req                                   # or just describe it
 
 # find
-aida list · aida search "…" · aida show <ID> · aida graph <ID> --blocked-by
+aida list · aida search "…" · aida show <ID> · aida graph blocked-by <ID>
 
 # do
 aida queue work <ID>                        # interactive, isolated worktree

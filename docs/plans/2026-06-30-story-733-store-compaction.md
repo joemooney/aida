@@ -46,7 +46,7 @@ aida store compact --squash --yes
   of the linked-worktree layout (the store worktree shares the common object dir).
 - **Aggressive is pack-count-gated, not time-gated.** A high pack count is the
   direct symptom of an un-compacted store, and aggressive self-resets it.
-- **`aida history --events` after a squash:** the pre-squash horizon is preserved
+- **`aida history events` after a squash:** the pre-squash horizon is preserved
   on the backup branch (`aida-store-pre-squash-<ts>`). `aida history` reads the
   `aida-store` branch, so after a squash it sees only the snapshot; the full
   timeline is recoverable by pointing history tooling at the backup ref. This is
@@ -96,7 +96,7 @@ aida store compact --squash        # plan-only, zero changes
 
 ## Followups
 
-- Consider an `aida history --events --pre-squash` flag that auto-resolves the
+- Consider an `aida history events --pre-squash` flag that auto-resolves the
   newest `aida-store-pre-squash-*` backup ref as the walk root, so the timeline
   stays inspectable after a squash without manual ref juggling.
 - A post-squash `aida store compact --drop-backup <ref>` once the truncation is

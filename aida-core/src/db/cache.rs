@@ -485,7 +485,7 @@ const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 // TASK-1074: bumped to "9" when `hierarchy_edges` switched from the per-endpoint
 // convention-B normalization to the shared rank-oriented rule
 // (`graph_walk::oriented_hierarchy_edges`), so the `descendant_ids` closure that
-// `aida focus` reads agrees with `aida graph --tree`. Existing caches rebuild on
+// `aida focus` reads agrees with `aida graph tree`. Existing caches rebuild on
 // next read to re-orient their edges. trace:TASK-1074 | ai:claude
 // TASK-1065: bumped to "10" when the `has_pending_decision` column was added (a
 // per-row projection of `decision_request.is_pending()`) so `aida status --full`'s
@@ -1121,7 +1121,7 @@ impl Cache {
         // TASK-1074: materialize the ONE shared subtree substrate — every
         // hierarchy edge oriented parent->child by the same rank rule
         // `graph_walk::subtree_ids` walks — so the `descendant_ids` CTE and
-        // `aida graph --tree` agree on membership. Computed once over the whole
+        // `aida graph tree` agree on membership. Computed once over the whole
         // store (both endpoints' types available) rather than per-req, so the
         // orientation is authoritative after a rebuild.
         // BUG-764: each edge is recorded with the AUTHORING requirement's id
@@ -4837,7 +4837,7 @@ mod tests {
     // TASK-955: the child may record the hierarchy edge instead of the parent
     // (a `Child` rel_type on a node points UP at its parent). descendant_ids
     // must reach the child whichever endpoint authored the edge — the same
-    // either-endpoint union `aida graph --tree` walks (BUG-448). trace:TASK-955
+    // either-endpoint union `aida graph tree` walks (BUG-448). trace:TASK-955
     #[test]
     fn descendant_ids_handles_child_authored_edge() {
         let dir = tempdir().unwrap();
@@ -4867,7 +4867,7 @@ mod tests {
     }
 
     // TASK-1074: the EPIC-54 discrepancy — `aida focus`'s `descendant_ids` closure
-    // and `aida graph --tree`'s `graph_walk::subtree_ids` must reach the SAME
+    // and `aida graph tree`'s `graph_walk::subtree_ids` must reach the SAME
     // subtree. The pathology: a story that is a child of the epic AND has a
     // SAME-RANK second parent (another story) OUTSIDE the epic. The old agnostic
     // tree walk leaked the second parent in (44 vs 43); the shared rank-oriented
@@ -4929,7 +4929,7 @@ mod tests {
             desc.into_iter().filter(|id| *id != epic_id).collect();
         assert_eq!(
             desc_no_root, sub,
-            "aida focus and aida graph --tree agree on subtree membership"
+            "aida focus and aida graph tree agree on subtree membership"
         );
     }
 

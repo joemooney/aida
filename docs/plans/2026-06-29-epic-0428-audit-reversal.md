@@ -112,7 +112,7 @@ flag a decision for human review without reverting it yet.
   by <user>` comment + ledger line; `challenge` writes a `needs-human` finding +
   comment without changing spec state.
 
-- **Decision: reuse `aida findings list` grouping + `aida history --events`
+- **Decision: reuse `aida findings list` grouping + `aida history events`
   semantics for the list surface; do not build a third audit viewer.**
   **Rationale**: `findings list` already groups by source/severity and is the
   morning-triage surface; autopilot decisions are a natural `--source autopilot`
@@ -183,7 +183,7 @@ flag a decision for human review without reverting it yet.
 - `findings::FindingSource` + `findings::FROM_ADVISOR_PREFIX` (`aida-cli/src/findings.rs`) — extend with an `Autopilot` variant; reuse the whole `findings list` grouping/severity machinery.
 - `handle_findings_add` (`aida-cli/src/main.rs`) — the file-a-finding path `challenge` reuses.
 - The git-canonical comment path — `aida comment add` → `GitBackend::update_requirement` → `auto_commit_paths` (`aida-core/src/db/git_backend.rs`) — the durable write. Comments already render in `aida show`.
-- `aida history --events` / `resolve_history_id_filter` (`aida-cli/src/main.rs`) — the existing per-spec event timeline; `aida autopilot list` should *complement*, not replace it (history shows the field deltas; autopilot list shows the actor/reason/evidence).
+- `aida history events` / `resolve_history_id_filter` (`aida-cli/src/main.rs`) — the existing per-spec event timeline; `aida autopilot list` should *complement*, not replace it (history shows the field deltas; autopilot list shows the actor/reason/evidence).
 - `current_user_id` (`aida-cli/src/main.rs:119036`) — the reverting/challenging user's identity.
 
 ## Risks + gotchas
@@ -262,7 +262,7 @@ rm -f .aida/autopilot-log.jsonl
 
 ## Related
 
-- TASK-0429 (envelope), `.aida/punts.jsonl` / `PuntRecord`, `aida findings`, `aida history --events`, `docs/aida/discipline/substrate-as-bouncer.md`.
+- TASK-0429 (envelope), `.aida/punts.jsonl` / `PuntRecord`, `aida findings`, `aida history events`, `docs/aida/discipline/substrate-as-bouncer.md`.
 
 ## Recommendation + smallest first slice
 

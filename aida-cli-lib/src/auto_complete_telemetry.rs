@@ -3,7 +3,7 @@
 //! Local-only, append-only JSONL log at `~/.aida/auto-complete.jsonl`. One
 //! line per orchestrator run records the phase outcome — never argument
 //! values or file contents (the same privacy floor as `aida usage`,
-//! STORY-122). The data powers `aida usage --auto-complete`, and on a phase
+//! STORY-122). The data powers `aida usage drains`, and on a phase
 //! failure `handle_auto_complete` also auto-drafts a Draft BUG so the
 //! friction surfaces back to the project instead of dying in scrollback.
 //!
@@ -234,7 +234,7 @@ pub fn failure_detail_first_line(message: Option<&str>) -> String {
 
 /// Count failures per cause, descending by count then cause label. The signal
 /// for "which orchestrator failure causes occur most often" — used by
-/// `aida usage --auto-complete --pattern`.
+/// `aida usage drains --pattern`.
 // trace:STORY-974 | ai:codex
 pub fn failure_histogram(events: &[AutoCompleteEvent]) -> Vec<(String, usize)> {
     let mut counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();

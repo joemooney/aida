@@ -316,7 +316,7 @@ cmd-aida-history: |
 kind-episodic: |
   Memory of specific events tied to time + place. AIDA's episodic
   substrate is the git history of the orphan 'aida-store' branch +
-  'aida history --events' + the punt ledger (STORY-325) + the
+  'aida history events' + the punt ledger (STORY-325) + the
   calibration substrate (STORY-347) + usage telemetry. Each transition,
   decision, or observation is a timestamped record. The substrate
   answers "what did I believe last month?" via git history.

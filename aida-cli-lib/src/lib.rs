@@ -334,13 +334,14 @@ use aida_core::{
 use crate::cli::{
     AdvisorCommand, AgentCommand, AgentNewCommand, BacklogCommand, BlockCommand, BriefCommand,
     CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DepsCommand, DevCommand,
-    DrainCommand, FindingsCommand, GitHubCommand, GitLabCommand, GlyphCommand, HeadlessCommand,
-    IdentityCommand, JiraCommand, LoadCommand, McpCommand, MemoriesCommand, NodeCommand,
-    OrchestratorCommand, OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
-    QueueCommand, RelationshipCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand, SkillCommand,
-    SoloAction, SpecCommand, StackCommand, TeamCommand, TraceCommand, WorkerCommand,
-    WorktreeCommand, WorktreePoolCommand, ZenCommand,
+    DrainCommand, FindingsCommand, FocusCommand, GitHubCommand, GitLabCommand, GlyphCommand,
+    GraphCommand, HeadlessCommand, HistoryCommand, IdentityCommand, JiraCommand, LoadCommand,
+    McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand, OutputFormat, PlanCommand,
+    PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelationshipCommand, ReleaseCommand,
+    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
+    SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
+    TeamCommand, TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand,
+    WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -657,6 +658,285 @@ const AGENT_LIST_DEFAULT_LIMIT: usize = 30;
 // TASK-970: number of queued items the content-first bare `aida` (agent mode)
 // lists beneath the status snapshot. trace:TASK-970
 const AGENT_BARE_QUEUE_TOPN: usize = 5;
+
+// trace:STORY-1028 | ai:codex
+fn note_hidden_alias(old: &str, new: &str) {
+    eprintln!("note: {old} is now {new}");
+}
+
+// trace:STORY-1028 | ai:codex
+fn normalize_release_mode(
+    patch: bool,
+    minor: bool,
+    major: bool,
+    check: bool,
+    cmd: Option<&ReleaseCommand>,
+) -> (bool, bool, bool, bool) {
+    match cmd {
+        Some(ReleaseCommand::Patch) => (true, false, false, false),
+        Some(ReleaseCommand::Minor) => (false, true, false, false),
+        Some(ReleaseCommand::Major) => (false, false, true, false),
+        Some(ReleaseCommand::Check) => (false, false, false, true),
+        None => {
+            if patch {
+                note_hidden_alias(concat!("aida release ", "--patch"), "aida release patch");
+            }
+            if minor {
+                note_hidden_alias(concat!("aida release ", "--minor"), "aida release minor");
+            }
+            if major {
+                note_hidden_alias(concat!("aida release ", "--major"), "aida release major");
+            }
+            if check {
+                note_hidden_alias(concat!("aida release ", "--check"), "aida release check");
+            }
+            (patch, minor, major, check)
+        }
+    }
+}
+
+// trace:STORY-1028 | ai:codex
+fn normalize_upgrade_mode(check: bool, diff: bool, cmd: Option<&UpgradeCommand>) -> (bool, bool) {
+    match cmd {
+        Some(UpgradeCommand::Check) => (true, false),
+        Some(UpgradeCommand::Diff) => (false, true),
+        None => {
+            if check {
+                note_hidden_alias(concat!("aida upgrade ", "--check"), "aida upgrade check");
+            }
+            if diff {
+                note_hidden_alias(concat!("aida upgrade ", "--diff"), "aida upgrade diff");
+            }
+            (check, diff)
+        }
+    }
+}
+
+// trace:STORY-1028 | ai:codex
+fn normalize_usage_mode<'a>(
+    unused: Option<&'a str>,
+    errors: bool,
+    auto_complete: bool,
+    failures: bool,
+    pattern: bool,
+    health: bool,
+    slowest: bool,
+    events: bool,
+    action: Option<&'a UsageCommand>,
+) -> (Option<&'a str>, bool, bool, bool, bool, bool, bool, bool) {
+    match action {
+        Some(UsageCommand::Slowest) => (None, false, false, false, false, false, true, false),
+        Some(UsageCommand::Unused { duration }) => (
+            Some(duration.as_str()),
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        ),
+        Some(UsageCommand::Errors) => (None, true, false, false, false, false, false, false),
+        Some(UsageCommand::Events) => (None, false, false, false, false, false, false, true),
+        Some(UsageCommand::Drains { failures, pattern }) => {
+            (None, false, true, *failures, *pattern, false, false, false)
+        }
+        Some(UsageCommand::Health) => (None, false, false, false, false, true, false, false),
+        None => {
+            if slowest {
+                note_hidden_alias(concat!("aida usage ", "--slowest"), "aida usage slowest");
+            }
+            if unused.is_some() {
+                note_hidden_alias(concat!("aida usage ", "--unused"), "aida usage unused");
+            }
+            if errors {
+                note_hidden_alias(concat!("aida usage ", "--errors"), "aida usage errors");
+            }
+            if events {
+                note_hidden_alias(concat!("aida usage ", "--events"), "aida usage events");
+            }
+            if auto_complete {
+                note_hidden_alias(
+                    concat!("aida usage ", "--auto-complete"),
+                    "aida usage drains",
+                );
+            }
+            if health {
+                note_hidden_alias(concat!("aida usage ", "--health"), "aida usage health");
+            }
+            (
+                unused,
+                errors,
+                auto_complete,
+                failures,
+                pattern,
+                health,
+                slowest,
+                events,
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod story_1028_mode_alias_tests {
+    use super::*;
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn release_hidden_flags_normalize_like_subcommands() {
+        assert_eq!(
+            normalize_release_mode(true, false, false, false, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Patch))
+        );
+        assert_eq!(
+            normalize_release_mode(false, true, false, false, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Minor))
+        );
+        assert_eq!(
+            normalize_release_mode(false, false, true, false, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Major))
+        );
+        assert_eq!(
+            normalize_release_mode(false, false, false, true, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Check))
+        );
+    }
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn upgrade_hidden_flags_normalize_like_subcommands() {
+        assert_eq!(
+            normalize_upgrade_mode(true, false, None),
+            normalize_upgrade_mode(false, false, Some(&UpgradeCommand::Check))
+        );
+        assert_eq!(
+            normalize_upgrade_mode(false, true, None),
+            normalize_upgrade_mode(false, false, Some(&UpgradeCommand::Diff))
+        );
+    }
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn usage_hidden_flags_normalize_like_subcommands() {
+        assert_eq!(
+            normalize_usage_mode(None, false, false, false, false, false, true, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Slowest)
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(
+                Some("30d"),
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                None
+            ),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Unused {
+                    duration: "30d".to_string()
+                })
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, true, false, false, false, false, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Errors)
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, false, false, false, false, false, true, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Events)
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, true, true, false, false, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Drains {
+                    failures: true,
+                    pattern: false
+                })
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, true, false, true, false, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Drains {
+                    failures: false,
+                    pattern: true
+                })
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, false, false, false, true, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Health)
+            )
+        );
+    }
+}
 
 /// TASK-970: the agent-ergonomics output gate. Two AIDA surfaces lean toward
 /// agent-friendly output when the caller is a non-interactive agent rather than
@@ -2321,14 +2601,16 @@ fn run() -> Result<()> {
         yes,
         target,
         diff,
+        cmd,
     } = &cli.command
     {
+        let (check, diff) = normalize_upgrade_mode(*check, *diff, cmd.as_ref());
         return upgrade_cmd::handle_upgrade_command(
-            *check,
+            check,
             version.as_deref(),
             *yes,
             target.as_deref(),
-            *diff,
+            diff,
         );
     }
 
@@ -2451,9 +2733,12 @@ fn run() -> Result<()> {
         check,
         after_pr,
         skip_xplat_check,
+        cmd,
     } = &cli.command
     {
-        return handle_release(*patch, *minor, *major, *check, *after_pr, *skip_xplat_check);
+        let (patch, minor, major, check) =
+            normalize_release_mode(*patch, *minor, *major, *check, cmd.as_ref());
+        return handle_release(patch, minor, major, check, *after_pr, *skip_xplat_check);
     }
 
     // STORY-527: `aida burndown` reads the requirement graph (like `graph` /
@@ -3097,8 +3382,19 @@ fn run() -> Result<()> {
         // title bar (the in-agent parity surface for clients without a
         // command-backed footer, e.g. Codex CLI).
         match action {
+            Some(cli::StatuslineAction::Title) => {
+                return statusline_cmd::handle_statusline_command(color, true);
+            }
             Some(act) => return statusline_cmd::handle_statusline_setup_command(act),
-            None => return statusline_cmd::handle_statusline_command(color, *title),
+            None => {
+                if *title {
+                    note_hidden_alias(
+                        concat!("aida statusline ", "--title"),
+                        "aida statusline title",
+                    );
+                }
+                return statusline_cmd::handle_statusline_command(color, *title);
+            }
         }
     }
     // STORY-79: hidden background-fetch worker spawned by statusline.
@@ -3662,7 +3958,7 @@ fn run() -> Result<()> {
             show_requirement(&storage, id)?;
         }
         Command::Graph {
-            id,
+            id: graph_id,
             blocked_by,
             blocks,
             tree,
@@ -3670,18 +3966,49 @@ fn run() -> Result<()> {
             follow,
             depth,
             json,
+            cmd,
         } => {
             let store = storage.load()?;
+            let (id, blocked_by, blocks, tree, impact) = match cmd {
+                Some(GraphCommand::BlockedBy { id }) => (id.as_str(), true, false, false, false),
+                Some(GraphCommand::Blocks { id }) => (id.as_str(), false, true, false, false),
+                Some(GraphCommand::Tree { id }) => (id.as_str(), false, false, true, false),
+                Some(GraphCommand::Impact { id }) => (id.as_str(), false, false, false, true),
+                None => {
+                    let id = graph_id.as_deref().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
+                        )
+                    })?;
+                    if *blocked_by {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--blocked-by"),
+                            "aida graph blocked-by <id>",
+                        );
+                    }
+                    if *blocks {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--blocks"),
+                            "aida graph blocks <id>",
+                        );
+                    }
+                    if *tree {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--tree"),
+                            "aida graph tree <id>",
+                        );
+                    }
+                    if *impact {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--impact"),
+                            "aida graph impact <id>",
+                        );
+                    }
+                    (id, *blocked_by, *blocks, *tree, *impact)
+                }
+            };
             graph_cmd::handle_graph_command(
-                &store,
-                id,
-                *blocked_by,
-                *blocks,
-                *tree,
-                *impact,
-                follow,
-                *depth,
-                *json,
+                &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
         Command::Brief {
@@ -3883,29 +4210,42 @@ fn run() -> Result<()> {
             events,
             cmd,
             slower_than,
+            action,
         } => {
             // TASK-266: only the `--auto-complete` view needs the store
             // (to resolve drafted-BUG statuses) — keep plain `aida usage`
             // store-load-free. STORY-530: the `--health` catalog also needs
             // the store for draft-inbox depth + burn-down velocity.
-            let store = if *auto_complete || *health {
+            let (unused, errors, auto_complete, failures, pattern, health, slowest, events) =
+                normalize_usage_mode(
+                    unused.as_deref(),
+                    *errors,
+                    *auto_complete,
+                    *failures,
+                    *pattern,
+                    *health,
+                    *slowest,
+                    *events,
+                    action.as_ref(),
+                );
+            let store = if auto_complete || health {
                 storage.load().ok()
             } else {
                 None
             };
             usage_cmd::handle_usage_command(
                 since,
-                unused.as_deref(),
-                *errors,
+                unused,
+                errors,
                 *json,
                 *limit,
-                *auto_complete,
-                *failures,
-                *pattern,
-                *health,
+                auto_complete,
+                failures,
+                pattern,
+                health,
                 *read_write,
-                *slowest,
-                *events,
+                slowest,
+                events,
                 cmd.as_deref(),
                 *slower_than,
                 store.as_ref(),
@@ -6825,7 +7165,7 @@ Goal: make exactly one under-specified requirement drive-ready by adding a minim
 Rules:
 - Do not ask the human questions and do not use AskUserQuestion.
 - Read the requirement first: `aida show {spec}`.
-- Read nearby context if needed: `aida graph {spec} --tree` and `aida graph {spec} --blocked-by`.
+- Read nearby context if needed: `aida graph tree {spec}` and `aida graph blocked-by {spec}`.
 - If the current description, title, comments, or graph context are enough, replace the spec description with the same prose plus a `## Acceptance` section containing crisp observable bullets.
 - Preserve all existing description content and existing headings. Do not change status, priority, type, relationships, queue state, code, or unrelated specs.
 - Bind the edit with `aida edit {spec} --description "<full updated description>"`. For multi-line text, use a temp file and shell substitution.
@@ -8296,7 +8636,7 @@ fn handle_punt_command(
         let blockers = suggestion.blockers.join(", ");
         println!(
             "{} Looks blocked on {blockers} — record it in the graph so \
-             `aida graph {display_id} --blocked-by` sees the dependency:",
+             `aida graph blocked-by {display_id}` sees the dependency:",
             crate::glyph(crate::glyphs::Glyph::Info).cyan()
         );
         println!("  {}", suggestion.suggested_command().cyan());
@@ -15216,7 +15556,7 @@ fn queue_add_hidden_view_reason(req: &aida_core::Requirement) -> Option<&'static
 /// The epic + its TRANSITIVE descendant UUIDs (children + grandchildren + …),
 /// for `aida queue list --epic <ID>`.
 ///
-/// Reuses the one shared subtree closure `aida graph <ID> --tree` and
+/// Reuses the one shared subtree closure `aida graph tree <ID>` and
 /// `aida focus` use (`graph_walk::subtree_ids`, TASK-1074): every hierarchy edge
 /// is oriented parent->child by type rank (rel_type breaking same-rank ties),
 /// then walked downward — so the tree is traversed whichever side recorded the
@@ -46491,7 +46831,7 @@ fn collect_open_facts(
             .filter_map(|c| burndown::parse_why_open_comment(&c.content))
             .collect();
         // BUG-543: for an epic, compute its child rollup (the same walk + tally
-        // `aida graph --tree` prints) so `explain_open` can surface a fully-
+        // `aida graph tree` prints) so `explain_open` can surface a fully-
         // delivered epic ("N/N children Completed") as ready-to-close rather
         // than the generic umbrella. `None` for non-epics and childless epics.
         // TASK-884: also note whether any child is actually in motion
@@ -49836,7 +50176,7 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
                 match &it.markdown {
                     Some(p) => println!("    {} {}", "spec:".dimmed(), p.display()),
                     None => println!(
-                        "    {} aida show {id}  |  aida graph {id} --impact",
+                        "    {} aida show {id}  |  aida graph impact {id}",
                         "more:".dimmed()
                     ),
                 }
@@ -64130,7 +64470,7 @@ fn relationship_terminal_ambiguity_warning(
 // materialize the REAL bidirectional parent/child edge, not just sit on the
 // spec as an opaque string. The canonical `--parent` flag already writes the
 // edge; a spec filed with only `--tags "parent:EPIC"` used to be orphaned
-// from the graph — the exact trap behind SPIKE-71 (`aida graph --tree` and the
+// from the graph — the exact trap behind SPIKE-71 (`aida graph tree` and the
 // TUI focus-lens never saw it). This closes that gap for `aida add` and the
 // tag-changing `aida edit` path. (Plain `//`, not `///`: keeps the SPEC-ID
 // breadcrumb out of any --help surface — substrate-as-bouncer pre-commit gate.)
@@ -64484,7 +64824,7 @@ fn handle_rel_list_modern(
     // BUG-573: `aida rel list` is a READ-ONLY query. When the named source /
     // target spec doesn't resolve there are simply no edges to list — that's
     // an empty result, not a failure. Emitting a non-zero exit here was the
-    // single biggest distortion in `aida usage --errors` (loops/agents query
+    // single biggest distortion in `aida usage errors` (loops/agents query
     // relationships for specs that may be archived/removed) and papercut every
     // hook that called it. Surface the "not found" message to stderr (still
     // visible) and exit 0 — consistent with the existing empty-result branch
@@ -74921,7 +75261,7 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
     if req.req_type == aida_core::RequirementType::Epic {
         anyhow::bail!(
             "{display} is an epic — a read-only rollup of its children, not a unit of work. \
-             Dispatch one of its bounded children instead (aida graph {display} --tree)."
+             Dispatch one of its bounded children instead (aida graph tree {display})."
         );
     }
 

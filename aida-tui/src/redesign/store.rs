@@ -381,7 +381,7 @@ impl SpecStore {
     /// (which carry the same display id).
     ///
     /// Direction-robust (TASK-929): the closure is computed with the SAME union
-    /// walk `aida graph --tree` and `aida queue list --epic` use —
+    /// walk `aida graph tree` and `aida queue list --epic` use —
     /// [`aida_core::graph_walk::walk_union`] over OUTGOING `Child` + `Parent`
     /// edges — so a one-directional epic→child edge (recorded as only `Child`
     /// OR only `Parent`, with no inverse) is still traversed. The previous
@@ -695,7 +695,7 @@ fn is_section_heading(line: &str) -> bool {
 }
 
 /// Compute the transitive descendant display-id closure of `root` over `store`,
-/// using the SAME direction-robust union walk `aida graph --tree` (and
+/// using the SAME direction-robust union walk `aida graph tree` (and
 /// `aida queue list --epic`) use: [`aida_core::graph_walk::walk_union`] over
 /// OUTGOING `Child` + `Parent` edges. Unioning both relationship types in the
 /// outgoing direction traverses the hierarchy whichever side recorded the edge,
@@ -709,7 +709,7 @@ fn is_section_heading(line: &str) -> bool {
 /// A pure function of `(store, root)` — no IO — so the closure logic (one-
 /// directional Parent-only / Child-only edges found, unrelated excluded, root
 /// included, cycle safety via `walk_union`'s visited set) is unit-testable.
-/// The result equals the node set `aida graph <root> --tree` walks.
+/// The result equals the node set `aida graph tree <root>` walks.
 /// trace:STORY-695 trace:TASK-929 | ai:claude
 pub fn descendant_closure(store: &RequirementsStore, root: uuid::Uuid) -> HashSet<String> {
     use aida_core::graph_walk::{walk_union, Direction};

@@ -223,6 +223,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      - name: Removed mode-flag spelling guard
+        run: bash scripts/check-removed-flags.sh
+
       - name: Run clippy
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
         # lints are denied so a real logic bug can't merge (BUG-473 slipped past

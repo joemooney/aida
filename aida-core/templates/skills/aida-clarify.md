@@ -72,8 +72,8 @@ and the git-linkage block. Then pull the surrounding graph so your questions
 are grounded, not generic:
 
 ```bash
-aida graph <SPEC> --tree          # parent epic + siblings
-aida graph <SPEC> --blocked-by    # what it waits on
+aida graph tree <SPEC>          # parent epic + siblings
+aida graph blocked-by <SPEC>    # what it waits on
 ```
 
 Also note **why the sweep flagged it** — the spec carries a

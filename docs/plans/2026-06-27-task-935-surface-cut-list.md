@@ -36,8 +36,8 @@ do not change the top-level count but do reduce the per-parent surface.
 
 ## The telemetry (last 30 days, `~/.aida/usage.jsonl`)
 
-Pulled with `aida usage`, `aida usage --unused 30d`, `aida usage --errors`,
-`aida usage --slowest`. Counts are local to this operator's machine.
+Pulled with `aida usage`, `aida usage unused 30d`, `aida usage errors`,
+`aida usage slowest`. Counts are local to this operator's machine.
 
 **Most-used (contrast — these are the load-bearing surface, KEEP all):**
 `statusline` 49658 · `rel list` 8111 · `show` 5860 · `add` 2518 · `edit` 1632 ·
@@ -168,9 +168,9 @@ trio).
 aida --help | sed -n '/Commands:/,/Options:/p' | grep -E '^  [a-z]' | wc -l
 
 # The three telemetry lenses this cut-list is grounded in:
-aida usage --unused 30d --limit 200
-aida usage --errors --limit 200
-aida usage --slowest
+aida usage unused 30d --limit 200
+aida usage errors --limit 200
+aida usage slowest
 
 # After the A1–A6 HIDE follow-ups land, re-run the count → expect 78.
 ```

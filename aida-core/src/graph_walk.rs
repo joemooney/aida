@@ -134,7 +134,7 @@ pub fn walk_union(
 // ---------------------------------------------------------- subtree membership
 //
 // TASK-1074: `descendant_ids` (the cache CTE behind `aida focus`) and
-// `aida graph --tree` used to compute epic-subtree membership two different
+// `aida graph tree` used to compute epic-subtree membership two different
 // ways and disagreed (e.g. EPIC-54: 43 vs 44). The graph walk was a
 // direction-AGNOSTIC `walk_union([Child, Parent])` connected-component walk, so
 // from a subtree node it climbed the reciprocal edge UP to that node's OTHER
@@ -219,7 +219,7 @@ pub fn oriented_hierarchy_edges(store: &RequirementsStore) -> Vec<(Uuid, Uuid)> 
 }
 
 /// The transitive downward subtree of `root` — the single shared
-/// subtree-membership computation behind `aida graph --tree` (via
+/// subtree-membership computation behind `aida graph tree` (via
 /// [`hierarchy_tree`]), `aida focus`'s rollup (via the cache's `descendant_ids`
 /// CTE, which walks the identical [`oriented_hierarchy_edges`]),
 /// `queue list --epic`, and the epic-close rollup ([`child_status_rollup`]).
@@ -279,11 +279,11 @@ fn downward_closure(
     result
 }
 
-/// The full hierarchy TREE that contains `start`, for `aida graph --tree`.
+/// The full hierarchy TREE that contains `start`, for `aida graph tree`.
 /// Climbs to the structural root(s) — the topmost ancestors via the oriented
 /// parent edges — then takes the downward [`subtree_ids`] closure from each. For
 /// a query ON an epic (which has no parent) this collapses to the plain downward
-/// subtree, so `aida graph <epic> --tree` and `aida focus <epic>` report the
+/// subtree, so `aida graph tree <epic>` and `aida focus <epic>` report the
 /// SAME membership (TASK-1074); for a query on a descendant it still surfaces the
 /// whole epic tree — the queried node's ancestors AND its siblings (BUG-534).
 /// Roots and every descendant are included; `start` is excluded from `nodes`
@@ -438,9 +438,9 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
 }
 
 /// BUG-543: the status rollup over a spec's child subtree — the SAME membership
-/// `aida graph --tree` prints, exposed as a reusable primitive. Routes through
+/// `aida graph tree` prints, exposed as a reusable primitive. Routes through
 /// the one shared [`subtree_ids`] downward closure (TASK-1074), so this detector
-/// AGREES with the rollup numbers an operator sees in `aida graph --tree <epic>`
+/// AGREES with the rollup numbers an operator sees in `aida graph tree <epic>`
 /// (the contract BUG-543 references, "Rollup: 4 total · 4 completed") AND with
 /// the `aida focus` subtree count — the three used to drift when the tree walk
 /// was a direction-agnostic union that leaked a descendant's same-rank second
@@ -455,7 +455,7 @@ pub fn child_status_rollup(store: &RequirementsStore, root: Uuid) -> StatusRollu
     status_rollup(store, &result.nodes)
 }
 
-/// Lay the walked graph out as a depth-annotated hierarchy for the `--tree`
+/// Lay the walked graph out as a depth-annotated hierarchy for the `tree`
 /// render, so parents, children, and siblings are visually distinct instead of
 /// a flat list (BUG-534).
 ///
@@ -1087,9 +1087,9 @@ mod tests {
         assert_eq!(nodes, HashSet::from([sid, tid]));
     }
 
-    // TASK-1074: `hierarchy_tree` (the `aida graph --tree` membership) rooted at
+    // TASK-1074: `hierarchy_tree` (the `aida graph tree` membership) rooted at
     // an EPIC equals the plain `subtree_ids` closure — this is what makes
-    // `aida graph <epic> --tree` and `aida focus <epic>` agree — while a query on
+    // `aida graph tree <epic>` and `aida focus <epic>` agree — while a query on
     // a child still climbs to the epic and back down (BUG-534 preserved).
     #[test]
     fn hierarchy_tree_epic_query_equals_subtree_ids() {

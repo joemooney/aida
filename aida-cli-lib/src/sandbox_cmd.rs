@@ -184,7 +184,7 @@ fn sandbox_path(store: std::path::PathBuf, export: bool) -> Result<()> {
 }
 
 /// Seed a small, deterministic set of curated scenario specs into the sandbox:
-/// a short lifecycle walk plus a blocked-by chain (so `aida graph --blocked-by`
+/// a short lifecycle walk plus a blocked-by chain (so `aida graph blocked-by`
 /// and a drain have something to chew on). Deterministic + offline by design —
 /// AI-generated scenarios are a deferred nicety.
 // trace:SPIKE-48 | ai:claude
@@ -207,7 +207,7 @@ fn sandbox_seed(store: &std::path::Path) -> Result<()> {
 
     let mut blocker = Requirement::new(
         "Sandbox: the blocker".to_string(),
-        "This task blocks the dependent below. Try `aida graph <dependent-id> --blocked-by`."
+        "This task blocks the dependent below. Try `aida graph blocked-by <dependent-id>`."
             .to_string(),
     );
     blocker.req_type = RequirementType::Task;

@@ -402,7 +402,7 @@ pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> 
     if title {
         // trace:TASK-896 — emit the (plain) one-liner as an OSC 2 set-window-title
         // escape. No trailing newline / body text: a prompt that runs
-        // `aida statusline --title` updates only the terminal title bar / tmux
+        // `aida statusline title` updates only the terminal title bar / tmux
         // window name, giving a Codex (or any non-command-footer) session the same
         // AIDA role/queue/inbox context Claude Code shows in its statusLine footer.
         print!("{}", osc_terminal_title(&line));
@@ -468,7 +468,7 @@ pub(crate) fn antigravity_statusline_fragment(stack_with_default: bool) -> serde
         },
         "title": {
             "type": "command",
-            "command": "aida statusline --title",
+            "command": "aida statusline title",
         },
     })
 }
@@ -736,7 +736,10 @@ pub(crate) fn handle_statusline_setup_command(action: &cli::StatuslineAction) ->
         install,
         settings_path,
         replace_default,
-    } = action;
+    } = action
+    else {
+        anyhow::bail!("statusline setup handler received a non-setup action");
+    };
 
     let project_root = statusline_project_root();
     let claude_settings_path = project_root.join(".claude").join("settings.json");

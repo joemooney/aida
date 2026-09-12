@@ -524,7 +524,7 @@ near-term watch item — so for now `aida statusline` cannot drive the Codex
 footer the way it drives Claude's `statusLine.command`.
 
 Codex also writes its own terminal title via `[tui] terminal_title`, so AIDA's
-old `aida statusline --title` prompt-hook fallback is not reliable in current
+old `aida statusline title` prompt-hook fallback is not reliable in current
 Codex sessions. Set `terminal_title = null` if you need external title/status
 ownership, and prefer tmux `status-right` for the full AIDA role/queue/inbox
 segment.

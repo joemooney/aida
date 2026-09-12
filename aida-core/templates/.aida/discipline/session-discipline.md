@@ -141,7 +141,7 @@ discipline is sufficient.
 ## Session history lives in the substrate
 
 AIDA projects do not keep a per-session append-only log file. The durable
-record is the AIDA substrate: use `aida history --events` for the time
+record is the AIDA substrate: use `aida history events` for the time
 series, `aida digest` for narrative summaries, and specs, comments, PRs,
 and commits for the why. Do not create or maintain an equivalent session-log
 file in an AIDA-scaffolded project.

@@ -1,5 +1,5 @@
 // ----------------------------------------------------------------------------
-// `aida usage --health` — the Tier-1 deterministic health-metrics catalog.
+// `aida usage health` — the Tier-1 deterministic health-metrics catalog.
 // STORY-530 / EPIC-36. Six pure metrics over the orchestrator telemetry log
 // (`~/.aida/auto-complete.jsonl`), the headless session logs
 // (`<root>/.aida/headless-logs/`), and the spec graph. Each metric is computed

@@ -283,8 +283,22 @@ pub(crate) fn handle_git_backend_command(
             target,
             clear,
             show,
+            cmd,
         } => {
-            return focus_cmd::handle_focus_command(target.as_deref(), *clear, *show, &backend);
+            let (clear, show) = match cmd {
+                Some(FocusCommand::Clear) => (true, false),
+                Some(FocusCommand::Show) => (false, true),
+                None => {
+                    if *clear {
+                        note_hidden_alias(concat!("aida focus ", "--clear"), "aida focus clear");
+                    }
+                    if *show {
+                        note_hidden_alias(concat!("aida focus ", "--show"), "aida focus show");
+                    }
+                    (*clear, *show)
+                }
+            };
+            return focus_cmd::handle_focus_command(target.as_deref(), clear, show, &backend);
         }
         Command::Team { json, cmd } => {
             // trace:STORY-640 | ai:claude
@@ -325,28 +339,41 @@ pub(crate) fn handle_git_backend_command(
             events,
             cmd,
             slower_than,
+            action,
         } => {
             // TASK-266: load the store only for the `--auto-complete` view,
             // which resolves drafted-BUG statuses; plain usage stays cheap.
             // STORY-530: the `--health` catalog also needs the store.
-            let store = if *auto_complete || *health {
+            let (unused, errors, auto_complete, failures, pattern, health, slowest, events) =
+                normalize_usage_mode(
+                    unused.as_deref(),
+                    *errors,
+                    *auto_complete,
+                    *failures,
+                    *pattern,
+                    *health,
+                    *slowest,
+                    *events,
+                    action.as_ref(),
+                );
+            let store = if auto_complete || health {
                 backend.load().ok()
             } else {
                 None
             };
             return usage_cmd::handle_usage_command(
                 since,
-                unused.as_deref(),
-                *errors,
+                unused,
+                errors,
                 *json,
                 *limit,
-                *auto_complete,
-                *failures,
-                *pattern,
-                *health,
+                auto_complete,
+                failures,
+                pattern,
+                health,
                 *read_write,
-                *slowest,
-                *events,
+                slowest,
+                events,
                 cmd.as_deref(),
                 *slower_than,
                 store.as_ref(),
@@ -973,7 +1000,7 @@ pub(crate) fn handle_git_backend_command(
                             // silently hide everything — warn and widen.
                             eprintln!(
                                 "{} focus `{}` no longer resolves to a spec; showing all. \
-                                 Run `aida focus --clear` or re-set it.",
+                                 Run `aida focus clear` or re-set it.",
                                 "Note:".yellow(),
                                 focus_ref,
                             );
@@ -2552,7 +2579,7 @@ pub(crate) fn handle_git_backend_command(
                 // TASK-928 (SPIKE-71): when no explicit `--parent` was given,
                 // a `parent:<SPEC-ID>` tag must still materialize the real
                 // bidirectional edge, or the spec is orphaned from the graph
-                // (`aida graph --tree` / TUI focus-lens blind). Additive +
+                // (`aida graph tree` / TUI focus-lens blind). Additive +
                 // lenient: the tag stays, an unresolvable target is a no-op.
                 // trace:TASK-928 | ai:claude
                 if parent.is_none() {
@@ -2715,7 +2742,7 @@ pub(crate) fn handle_git_backend_command(
             }
         }
         Command::Graph {
-            id,
+            id: graph_id,
             blocked_by,
             blocks,
             tree,
@@ -2723,18 +2750,49 @@ pub(crate) fn handle_git_backend_command(
             follow,
             depth,
             json,
+            cmd,
         } => {
             let store = backend.load()?;
+            let (id, blocked_by, blocks, tree, impact) = match cmd {
+                Some(GraphCommand::BlockedBy { id }) => (id.as_str(), true, false, false, false),
+                Some(GraphCommand::Blocks { id }) => (id.as_str(), false, true, false, false),
+                Some(GraphCommand::Tree { id }) => (id.as_str(), false, false, true, false),
+                Some(GraphCommand::Impact { id }) => (id.as_str(), false, false, false, true),
+                None => {
+                    let id = graph_id.as_deref().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
+                        )
+                    })?;
+                    if *blocked_by {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--blocked-by"),
+                            "aida graph blocked-by <id>",
+                        );
+                    }
+                    if *blocks {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--blocks"),
+                            "aida graph blocks <id>",
+                        );
+                    }
+                    if *tree {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--tree"),
+                            "aida graph tree <id>",
+                        );
+                    }
+                    if *impact {
+                        note_hidden_alias(
+                            concat!("aida graph <id> ", "--impact"),
+                            "aida graph impact <id>",
+                        );
+                    }
+                    (id, *blocked_by, *blocks, *tree, *impact)
+                }
+            };
             graph_cmd::handle_graph_command(
-                &store,
-                id,
-                *blocked_by,
-                *blocks,
-                *tree,
-                *impact,
-                follow,
-                *depth,
-                *json,
+                &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
         Command::Show {
@@ -2847,7 +2905,7 @@ pub(crate) fn handle_git_backend_command(
                     // children, not the stored field. Derive it from the full
                     // store (a one-shot load on a single-spec view — not a hot
                     // loop) so `aida show <epic>` agrees with `aida list` and
-                    // `aida graph --tree`. Non-epics keep `effective_status()`.
+                    // `aida graph tree`. Non-epics keep `effective_status()`.
                     // trace:BUG-626 | ai:claude
                     let effective_status_str: String = if req.req_type == RequirementType::Epic {
                         backend
@@ -3931,7 +3989,7 @@ pub(crate) fn handle_git_backend_command(
                         "an epic's status is a read-only rollup of its children, not set by \
                          hand — it moves to In Progress when a child starts, to Done/Completed \
                          when all children finish, and back to Draft when it has no active \
-                         children. Change the children's statuses instead (`aida graph {} --tree` \
+                         children. Change the children's statuses instead (`aida graph tree {}` \
                          shows the rollup). Use --force only for recovery.",
                         req.agreed_id
                             .clone()
@@ -5017,8 +5075,8 @@ pub(crate) fn handle_git_backend_command(
             };
 
             // TASK-887: a `--type` that isn't a standard relationship type lands
-            // as a `Custom` edge, which the graph traversals (--blocked-by,
-            // --blocks, --tree, --impact) silently won't follow. Don't hard-
+            // as a `Custom` edge, which the graph traversals (blocked-by,
+            // blocks, tree, impact) silently won't follow. Don't hard-
             // reject (custom types can be intentional), but surface a note —
             // with a did-you-mean when it looks like a typo of a standard type —
             // so a fat-fingered `blockedby`/`depends` doesn't create an
@@ -5695,12 +5753,25 @@ pub(crate) fn handle_git_backend_command(
             archived,
             deferred,
             include_meta,
+            cmd,
         } => {
+            let events = match cmd {
+                Some(HistoryCommand::Events) => true,
+                None => {
+                    if *events {
+                        note_hidden_alias(
+                            concat!("aida history ", "--events"),
+                            "aida history events",
+                        );
+                    }
+                    *events
+                }
+            };
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
             // touches each commit once (cheap, scan deeper), events shells
             // to git per file per commit (expensive, scan shallow).
-            let default_max = if *events { (*limit * 5).max(50) } else { 250 };
+            let default_max = if events { (*limit * 5).max(50) } else { 250 };
             let max = max_commits.unwrap_or(default_max);
             // STORY-441: archive axis replaces TASK-64's terminal-status
             // hide. Default surfaces non-archived rows; `--all` widens to
@@ -5798,7 +5869,7 @@ pub(crate) fn handle_git_backend_command(
                 limit: *limit,
                 max_commits: max.max(*limit),
                 // TASK-507: --shipped is an events-mode filter; imply it.
-                events_mode: *events || *shipped,
+                events_mode: events || *shipped,
                 id_filter,
                 type_filter: r#type.clone(),
                 author_filter: author.clone(),

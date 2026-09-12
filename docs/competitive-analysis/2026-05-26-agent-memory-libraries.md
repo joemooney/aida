@@ -126,7 +126,7 @@ AIDA isn't on either list of "memory libraries" because AIDA isn't framed as a m
 |---|---|---|
 | **Semantic-project** | The spec graph — YAML files under orphan `aida-store` branch + SQLite cache + FTS5 index. | `aida add`, `aida edit`, `aida list`, `aida search`, `aida show`. Stable SPEC-IDs. |
 | **Procedural** | Discipline pack (`docs/aida/discipline/*.md`) + CLAUDE.md + AGENTS.md + skills (`.claude/skills/`) + hooks (`.claude/hooks/`). | Context injection at session-start, not retrieval-as-fact. Same mechanism as LangMem's prompt-optimizer — *behavioral disposition encoded in instructions* — but scaffolded into every project. |
-| **Episodic** | Git history of `aida-store` branch + `aida history --events` ledger + punt ledger (STORY-325) + calibration substrate (STORY-347) + usage telemetry (`~/.aida/usage.jsonl`). | Each transition / decision / observation is a timestamped record. Git is the time-travel substrate. |
+| **Episodic** | Git history of `aida-store` branch + `aida history events` ledger + punt ledger (STORY-325) + calibration substrate (STORY-347) + usage telemetry (`~/.aida/usage.jsonl`). | Each transition / decision / observation is a timestamped record. Git is the time-travel substrate. |
 | **Prospective** | Briefs (`aida brief <agent> <spec>`) + queue + lease + auto-filed followups at Done (TASK-96) + punt→advisor→resume handshake (STORY-306). | *"When agent X next picks up condition Y, here's what to know."* The article's specific gap. |
 | **Autobiographical-user** | `~/.claude/projects/<slug>/memory/` — `feedback_*.md`, `user_*.md`, `project_*.md`, `reference_*.md` files with frontmatter. | What the article describes — facts about the user held on their behalf. |
 

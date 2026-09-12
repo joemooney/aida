@@ -16,7 +16,7 @@
 //!     the sentinel after finishing its work (success). Mid-work-kill, error
 //!     subtypes, and truncated/absent result events are failures.
 //!   - `drain_success_rate` — already computed by the existing
-//!     `aida usage --auto-complete` path over `~/.aida/auto-complete.jsonl`;
+//!     `aida usage drains` path over `~/.aida/auto-complete.jsonl`;
 //!     this module takes it as an input rather than re-deriving it.
 //!
 //! GAP = session_success_rate − drain_success_rate. A positive gap is the

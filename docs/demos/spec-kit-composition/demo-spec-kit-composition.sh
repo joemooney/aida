@@ -77,7 +77,7 @@ cmd "grep -A3 '## Dependencies' specs/003-password-reset/spec.md"
 grep -A3 '## Dependencies' specs/003-password-reset/spec.md || true
 echo
 note "You can grep the word 'block', but you get TEXT, not a queryable relationship."
-note "'aida graph --blocked-by' has no equivalent here — the dependency is not a record."
+note "'aida graph blocked-by' has no equivalent here — the dependency is not a record."
 pause
 
 # ---------------------------------------------------------------------------
@@ -143,16 +143,16 @@ pause
 say "AFTER — the cross-feature questions AIDA can now answer (Spec Kit can't)"
 # ---------------------------------------------------------------------------
 say "Q1: 'What is 003-password-reset blocked by?'  (unanswerable from the Spec Kit dir)"
-cmd "aida graph $S3 --blocked-by"
-aida graph "$S3" --blocked-by 2>/dev/null || note "(graph output)"
+cmd "aida graph blocked-by $S3"
+aida graph blocked-by "$S3" 2>/dev/null || note "(graph output)"
 echo
 say "Q2: 'What is at risk across the whole epic if 001 slips?'  (reverse impact)"
-cmd "aida graph $S1 --impact"
-aida graph "$S1" --impact 2>/dev/null || note "(graph output)"
+cmd "aida graph impact $S1"
+aida graph impact "$S1" 2>/dev/null || note "(graph output)"
 echo
 say "Q3: 'What's the status of every feature in this epic?'  (lifecycle rollup)"
-cmd "aida graph $EPIC --tree"
-aida graph "$EPIC" --tree 2>/dev/null || note "(graph output)"
+cmd "aida graph tree $EPIC"
+aida graph tree "$EPIC" 2>/dev/null || note "(graph output)"
 echo
 say "Q4: 'Is the code still traced to its spec?'"
 cmd "aida show $S1   # git linkage section now lists the commit + trace"

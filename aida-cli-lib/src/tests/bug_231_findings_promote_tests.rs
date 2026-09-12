@@ -862,7 +862,7 @@ fn seed_spec_with_dangling_rel(root: &std::path::Path, spec_id: &str) {
 /// `Ok`) whenever it COMPLETES — even when it surfaces dangling-relationship
 /// warnings or when the named spec doesn't resolve. Reserving a non-zero
 /// exit for warnings/empty-results was the single biggest distortion in
-/// `aida usage --errors` (~50% phantom failures across 8k calls) and
+/// `aida usage errors` (~50% phantom failures across 8k calls) and
 /// papercut every hook/loop that called it. Genuine bad-arguments still
 // bail non-zero. trace:BUG-573 | ai:claude
 #[test]

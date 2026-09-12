@@ -727,7 +727,7 @@ step_pause "Press Enter — see the substrate surfaces you can now query"
 
 note_box --title "Substrate surfaces you can now query" \
   "  aida show $HELLO_SPEC            # spec body + git linkage" \
-  "  aida history --events            # chronological substrate ledger" \
+  "  aida history events            # chronological substrate ledger" \
   "  aida list                        # backlog view" \
   "  aida search 'Hello'              # full-text spec search" \
   "  aida doctor                      # multi-agent state drift detect + heal"
@@ -745,7 +745,7 @@ while true; do
     echo
     note_box --title "Pick a surface to demonstrate" \
       "  [1] Anatomy of 'aida queue work' — dissect what it does internally" \
-      "  [2] aida history --events       — the substrate event ledger" \
+      "  [2] aida history events       — the substrate event ledger" \
       "  [3] aida doctor                 — multi-agent state drift detect + heal" \
       "  [4] aida search                 — full-text query across specs" \
       "  [5] aida findings add           — advisor observation capture" \
@@ -901,9 +901,9 @@ When done, print the single line: DONE — committed $GOODBYE_SPEC"
               "claude implements → commit with trailer → pull auto-bumps."
             ;;
         2)
-            heading "aida history --events — the substrate ledger"
+            heading "aida history events — the substrate ledger"
             note "Every status transition, comment, tag edit shows up as an event:"
-            show_cmd "demo$" aida history --events --limit 10
+            show_cmd "demo$" aida history events --limit 10
             ;;
         3)
             box_title "aida doctor — multi-agent state drift detect + heal" \
