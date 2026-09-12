@@ -1303,6 +1303,14 @@ pub(crate) fn handle_git_backend_command(
                     title: &'a str,
                     req_type: &'a str,
                     status: &'a str,
+                    // STORY-1023: richer display label for stored
+                    // NeedsAttention rows, e.g. "Shelved (ci-red)" or
+                    // "Needs Decision (design-fork)". `status` stays the
+                    // cache/status token for existing machine consumers.
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    status_label: Option<String>,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    status_lens: Option<&'static str>,
                     tags: &'a [String],
                     queued: bool,
                     in_flight: bool,
@@ -1322,6 +1330,15 @@ pub(crate) fn handle_git_backend_command(
                     .iter()
                     .map(|r| {
                         let (in_flight, blocked, queued) = row_routing(r);
+                        let parked_lens = if r.status.eq_ignore_ascii_case("NeedsAttention") {
+                            backend
+                                .get_requirement(&r.id)
+                                .ok()
+                                .flatten()
+                                .and_then(|req| status_display::needs_attention_lens(&req))
+                        } else {
+                            None
+                        };
                         ListJsonRow {
                             spec_id: r
                                 .agreed_id
@@ -1331,6 +1348,8 @@ pub(crate) fn handle_git_backend_command(
                             title: r.title.as_str(),
                             req_type: r.req_type.as_str(),
                             status: r.status.as_str(),
+                            status_label: parked_lens.as_ref().map(|lens| lens.label()),
+                            status_lens: parked_lens.as_ref().map(|lens| lens.palette_key()),
                             tags: &r.tags,
                             queued,
                             in_flight,

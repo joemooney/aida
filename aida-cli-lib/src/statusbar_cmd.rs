@@ -370,6 +370,7 @@ mod tests {
                 path: std::path::PathBuf::from("/b/1"),
             }],
             findings_total: 2,
+            shelved_total: 0,
             mail: MailChannel {
                 unread: 3,
                 urgent: 1,

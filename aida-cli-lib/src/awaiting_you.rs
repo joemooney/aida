@@ -44,6 +44,10 @@ pub(crate) struct AwaitingReport {
     /// Specs parked in `NeedsAttention` — the implementer-→-advisor-→-
     /// human escalation cascade landed here.
     pub escalations: Vec<EscalationItem>,
+    /// Specs parked mechanically with a structured FailureReason. These still
+    /// need rework/retry, but they are not human-decision escalations.
+    // trace:STORY-1023 | ai:codex
+    pub shelved_total: usize,
     /// Unread inter-agent mail for the OPERATOR's own handle, plus a separate
     /// count for the shared role / agent-type inboxes (BUG-767). Folded in from
     /// the mailbox core so the coordination inbox is ONE surface, not split
@@ -196,6 +200,7 @@ impl AwaitingReport {
                 0
             })
             + self.reviewer_queue_items.len()
+            + (if self.shelved_total > 0 { 1 } else { 0 })
             + self.escalations.len()
     }
 
@@ -356,6 +361,21 @@ impl AwaitingReport {
             writeln!(w, "  👀 verdict needed: {} — {}", q.spec_id.bold(), q.title,)?;
             budget -= 1;
         }
+        if self.shelved_total > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                writeln!(
+                    w,
+                    "  {} {} shelved item{} in rework — `{}`",
+                    crate::glyph(crate::glyphs::Glyph::Pause).blue(),
+                    self.shelved_total,
+                    if self.shelved_total == 1 { "" } else { "s" },
+                    "aida findings list".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
         for e in &self.escalations {
             if budget == 0 {
                 overflow += 1;
@@ -411,6 +431,7 @@ impl AwaitingReport {
                 "spec_id": q.spec_id,
                 "title": q.title,
             })).collect::<Vec<_>>(),
+            "shelved_total": self.shelved_total,
             "escalations": self.escalations.iter().map(|e| serde_json::json!({
                 "spec_id": e.spec_id,
                 "title": e.title,
@@ -472,6 +493,9 @@ impl AwaitingReport {
                 "verdict",
                 "verdicts",
             ));
+        }
+        if self.shelved_total > 0 {
+            parts.push(format!("{} in rework", self.shelved_total));
         }
         if !self.escalations.is_empty() {
             parts.push(pluralize(

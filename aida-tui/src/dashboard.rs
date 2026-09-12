@@ -307,6 +307,7 @@ impl DashboardModel {
                 reason: crate::board::Reason::AwaitingReview,
                 advisor_backlog: false,
                 intake_proposal: false,
+                status_label: None,
                 // Awaiting-review work is handed off, not parked → no park reason.
                 // trace:STORY-703
                 park_reason: None,
@@ -681,6 +682,12 @@ pub struct ListJsonRow {
     #[serde(default)]
     pub req_type: String,
     pub status: String,
+    // STORY-1023: human display label for stored NeedsAttention rows, emitted
+    // by `aida list --json` while `status` remains the stable machine token.
+    #[serde(default)]
+    pub status_label: Option<String>,
+    #[serde(default)]
+    pub status_lens: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
@@ -1518,6 +1525,7 @@ mod tests {
             reason: crate::board::Reason::NeedsApproval,
             advisor_backlog: false,
             intake_proposal: false,
+            status_label: None,
             park_reason: None,
         }];
         m.board_loaded = true;

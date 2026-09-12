@@ -184,20 +184,23 @@ idle Claude Code process. The sentinel is the explicit "I'm done" signal.
 
 ### NeedsAttention
 
-An off-mainline spec status (distinct from the seven primary lifecycle
+An off-mainline stored spec status (distinct from the primary lifecycle
 states: Draft → Approved → Planned → InProgress → Done → Completed /
-Rejected). A spec moves to NeedsAttention when a phase failure isn't
-shelvable (the implementer punted on a design-fork it couldn't resolve;
-the headless advisor escalated; CI red persists past retry budget; a
-session left dangling state nobody owns). The drain *continues* past it
-(the dependent specs skip via the pickability gate); the parked spec
-waits for human-or-advisor triage.
+Rejected). The display layer splits this status by its recorded reason:
 
-Distinguishes "I'm working on this" (InProgress) from "this work
-needs a decision before it can move" (NeedsAttention). Triage:
+- **Shelved** — mechanically parked with a `FailureReason` such as stale
+  base, CI red, reviewer tool exit, or merge/pull failure. The retry or
+  rework path is recorded; no decision is implied.
+- **Needs Decision** — parked with an `AttentionReason` from a punt,
+  advisor escalation, or other design/human fork. A person or advisor must
+  decide before it moves.
 
-- `aida findings list` surfaces the parked punt + the reason (when
-  the orchestrator recorded one).
+This keeps the storage value stable (`NeedsAttention`) while making lists,
+cards, `why`, and awaiting surfaces distinguish "known recovery path" from
+"human decision needed". Triage:
+
+- `aida findings list` surfaces parked punts and shelved failures with their
+  recorded reason.
 - `aida queue work <SPEC> --resume` retries from where the prior
   phase failed.
 - `aida edit <SPEC> --status approved` resets to Approved (clears

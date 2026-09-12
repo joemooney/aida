@@ -14495,12 +14495,12 @@ fn list_requirements(
 ) -> Result<()> {
     // Load requirements
     let store = storage.load()?;
-    let mut requirements = store.requirements;
+    let mut requirements = store.requirements.clone();
 
     // Apply filters if provided
     if let Some(status_str) = status {
-        let status_filter = parse_status(status_str)?;
-        requirements.retain(|r| r.status == status_filter);
+        let status_filter = parse_list_status_filter(status_str)?;
+        requirements.retain(|r| requirement_matches_status_filter(&store, r, &status_filter));
     }
 
     if let Some(priority_str) = priority {
@@ -14528,27 +14528,17 @@ fn list_requirements(
         return Ok(());
     }
 
+    const STATUS_COLUMN_WIDTH: usize = 22;
     println!(
-        "{:<10} | {:<36} | {:<30} | {:<10} | {:<10} | {:<15}",
+        "{:<10} | {:<36} | {:<30} | {:<STATUS_COLUMN_WIDTH$} | {:<10} | {:<15}",
         "SPEC-ID", "UUID", "Title", "Status", "Priority", "Feature"
     );
-    println!("{}", "-".repeat(120));
+    println!("{}", "-".repeat(132));
 
     for req in requirements {
-        let status_str = match req.status {
-            RequirementStatus::Draft => "Draft".yellow(),
-            RequirementStatus::Approved => "Approved".blue(),
-            RequirementStatus::Planned => "Planned".cyan(),
-            RequirementStatus::InProgress => "In Progress".magenta(),
-            RequirementStatus::Done => "Done".bright_green().bold(),
-            RequirementStatus::Completed => "Completed".green(),
-            RequirementStatus::Rejected => "Rejected".red(),
-            // trace:TASK-1176 | ai:claude — closed-green family (adopted),
-            // dimmed (history) — never the red a DECLINED spec wears.
-            RequirementStatus::Superseded => "Superseded".green().dimmed(),
-            RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
-        };
-
+        let display_status = effective_display_status(&store, &req);
+        let status_str =
+            list_requirement_status_cell(&store, &req, &display_status, STATUS_COLUMN_WIDTH);
         let priority_str = match req.priority {
             RequirementPriority::High => "High".red(),
             RequirementPriority::Medium => "Medium".yellow(),
@@ -14558,7 +14548,7 @@ fn list_requirements(
         let spec_id_display = req.spec_id.as_deref().unwrap_or("-");
 
         println!(
-            "{:<10} | {:<36} | {:<30} | {:<10} | {:<10} | {:<15}",
+            "{:<10} | {:<36} | {:<30} | {} | {:<10} | {:<15}",
             spec_id_display,
             req.id.to_string(),
             req.title,
@@ -14569,6 +14559,271 @@ fn list_requirements(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ListStatusFilter {
+    Stored(RequirementStatus),
+    Shelved,
+    NeedsDecision,
+}
+
+fn parse_list_status_filter(status_str: &str) -> Result<ListStatusFilter> {
+    let normalized: String = status_str
+        .trim()
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-' && *c != '_')
+        .flat_map(char::to_lowercase)
+        .collect();
+    match normalized.as_str() {
+        // trace:STORY-1023 | ai:codex
+        "shelved" => Ok(ListStatusFilter::Shelved),
+        "needsdecision" => Ok(ListStatusFilter::NeedsDecision),
+        _ => parse_status(status_str).map(ListStatusFilter::Stored),
+    }
+}
+
+fn requirement_matches_status_filter(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::models::Requirement,
+    status_filter: &ListStatusFilter,
+) -> bool {
+    // trace:STORY-1023 | ai:codex
+    let display_status = effective_display_status(store, req);
+    match status_filter {
+        ListStatusFilter::Stored(status) => display_status == *status,
+        ListStatusFilter::Shelved => matches!(
+            effective_needs_attention_lens(store, req, &display_status),
+            Some(status_display::NeedsAttentionLens::Shelved { .. })
+        ),
+        ListStatusFilter::NeedsDecision => matches!(
+            effective_needs_attention_lens(store, req, &display_status),
+            Some(status_display::NeedsAttentionLens::NeedsDecision { .. })
+        ),
+    }
+}
+
+fn list_requirement_status_cell(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::models::Requirement,
+    display_status: &RequirementStatus,
+    width: usize,
+) -> String {
+    // trace:STORY-1023 | ai:codex
+    let (label, palette_key) = if matches!(display_status, RequirementStatus::NeedsAttention) {
+        effective_needs_attention_lens(store, req, display_status)
+            .map(|lens| {
+                let label = lens.label();
+                let key = lens.palette_key();
+                (label, key)
+            })
+            .unwrap_or_else(|| ("Needs Decision".to_string(), "NeedsDecision"))
+    } else {
+        let label = match display_status {
+            RequirementStatus::Draft => "Draft",
+            RequirementStatus::Approved => "Approved",
+            RequirementStatus::Planned => "Planned",
+            RequirementStatus::InProgress => "In Progress",
+            RequirementStatus::Done => "Done",
+            RequirementStatus::Completed => "Completed",
+            RequirementStatus::Rejected => "Rejected",
+            RequirementStatus::Superseded => "Superseded",
+            RequirementStatus::NeedsAttention => unreachable!("handled above"),
+        };
+        (label.to_string(), label)
+    };
+    let padded = format!("{label:<width$}");
+    status_display::paint_status(&padded, palette_key).to_string()
+}
+
+fn needs_attention_badge_for_lens(lens: &status_display::NeedsAttentionLens) -> String {
+    let label = lens.label();
+    let key = lens.palette_key();
+    format!(
+        "{} {}",
+        status_display::status_glyph(key),
+        status_display::paint_status(&label, key)
+    )
+}
+
+fn effective_needs_attention_lens(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::models::Requirement,
+    display_status: &RequirementStatus,
+) -> Option<status_display::NeedsAttentionLens> {
+    effective_needs_attention_lens_with_source(store, req, display_status).map(|(_, lens)| lens)
+}
+
+fn effective_needs_attention_lens_with_source<'a>(
+    store: &'a aida_core::RequirementsStore,
+    req: &'a aida_core::models::Requirement,
+    display_status: &RequirementStatus,
+) -> Option<(
+    &'a aida_core::models::Requirement,
+    status_display::NeedsAttentionLens,
+)> {
+    if !matches!(display_status, RequirementStatus::NeedsAttention) {
+        return None;
+    }
+    if let Some(lens) = status_display::needs_attention_lens(req) {
+        return Some((req, lens));
+    }
+    if req.req_type == RequirementType::Epic {
+        let mut decision_lens = None;
+        // trace:STORY-1023 | ai:codex
+        for child_id in aida_core::graph_walk::subtree_ids(store, req.id, None).nodes {
+            let Some(child) = store.get_requirement_by_id(&child_id) else {
+                continue;
+            };
+            let child_display_status = effective_display_status(store, child);
+            match effective_needs_attention_lens_with_source(store, child, &child_display_status) {
+                Some((source, status_display::NeedsAttentionLens::Shelved { cause })) => {
+                    return Some((
+                        source,
+                        status_display::NeedsAttentionLens::Shelved { cause },
+                    ));
+                }
+                Some((source, status_display::NeedsAttentionLens::NeedsDecision { reason })) => {
+                    decision_lens.get_or_insert((
+                        source,
+                        status_display::NeedsAttentionLens::NeedsDecision { reason },
+                    ));
+                }
+                None => {}
+            }
+        }
+        if decision_lens.is_some() {
+            return decision_lens;
+        }
+    }
+    Some((
+        req,
+        status_display::NeedsAttentionLens::NeedsDecision { reason: None },
+    ))
+}
+
+#[cfg(test)]
+mod story_1023_list_render_tests {
+    use super::*;
+
+    #[test]
+    fn list_status_cell_splits_shelved_from_needs_decision() {
+        let mut shelved =
+            aida_core::models::Requirement::new("stale base".to_string(), String::new());
+        shelved.status = RequirementStatus::NeedsAttention;
+        shelved.failure_reason = Some(aida_core::FailureReason {
+            phase: "review".to_string(),
+            phase_index: 3,
+            kind: "stale-base".to_string(),
+            detail: "base moved under the branch".to_string(),
+            recovery_hint: Some("rebase and retry".to_string()),
+            shelved_by: Some("codex".to_string()),
+            shelved_at: chrono::Utc::now(),
+        });
+
+        let mut decision =
+            aida_core::models::Requirement::new("design fork".to_string(), String::new());
+        decision.status = RequirementStatus::NeedsAttention;
+        decision.attention_reason = Some(aida_core::AttentionReason {
+            category: aida_core::PuntCategory::DesignFork,
+            detail: "choose the public API shape".to_string(),
+            lean: None,
+            raised_by: Some("codex".to_string()),
+            raised_at: chrono::Utc::now(),
+        });
+
+        let store = aida_core::RequirementsStore::new();
+        colored::control::set_override(false);
+        let shelved_cell = list_requirement_status_cell(&store, &shelved, &shelved.status, 22);
+        let decision_cell = list_requirement_status_cell(&store, &decision, &decision.status, 22);
+        colored::control::unset_override();
+
+        assert!(
+            shelved_cell.contains("Shelved (stale-base)"),
+            "cell: {shelved_cell:?}"
+        );
+        assert!(
+            !shelved_cell.contains("Needs Attention"),
+            "cell: {shelved_cell:?}"
+        );
+        assert!(
+            decision_cell.contains("Needs Decision (design-fork)"),
+            "cell: {decision_cell:?}"
+        );
+    }
+
+    #[test]
+    fn status_filter_uses_effective_display_status_and_parked_lens() {
+        let mut store = aida_core::RequirementsStore::new();
+
+        let mut epic = aida_core::models::Requirement::new("Epic".to_string(), String::new());
+        epic.req_type = RequirementType::Epic;
+        epic.status = RequirementStatus::Approved;
+        let mut child =
+            aida_core::models::Requirement::new("stale child".to_string(), String::new());
+        child.status = RequirementStatus::NeedsAttention;
+        child.failure_reason = Some(aida_core::FailureReason {
+            phase: "review".to_string(),
+            phase_index: 3,
+            kind: "stale-base".to_string(),
+            detail: "base moved under the branch".to_string(),
+            recovery_hint: Some("rebase and retry".to_string()),
+            shelved_by: Some("codex".to_string()),
+            shelved_at: chrono::Utc::now(),
+        });
+        child.relationships.push(aida_core::models::Relationship {
+            rel_type: aida_core::models::RelationshipType::Parent,
+            target_id: epic.id,
+            created_at: None,
+            created_by: None,
+        });
+
+        let epic_id = epic.id;
+        let child_id = child.id;
+        store.requirements.push(epic);
+        store.requirements.push(child);
+
+        let epic = store.get_requirement_by_id(&epic_id).unwrap();
+        assert_eq!(
+            effective_display_status(&store, epic),
+            RequirementStatus::NeedsAttention
+        );
+        assert_ne!(epic.status, RequirementStatus::NeedsAttention);
+
+        colored::control::set_override(false);
+        let epic_cell =
+            list_requirement_status_cell(&store, epic, &RequirementStatus::NeedsAttention, 22);
+        colored::control::unset_override();
+        assert!(
+            epic_cell.contains("Shelved (stale-base)"),
+            "cell: {epic_cell:?}"
+        );
+
+        assert!(requirement_matches_status_filter(
+            &store,
+            epic,
+            &ListStatusFilter::Stored(RequirementStatus::NeedsAttention)
+        ));
+        assert!(requirement_matches_status_filter(
+            &store,
+            epic,
+            &ListStatusFilter::Shelved
+        ));
+        assert!(!requirement_matches_status_filter(
+            &store,
+            epic,
+            &ListStatusFilter::NeedsDecision
+        ));
+
+        let (source, lens) = effective_needs_attention_lens_with_source(
+            &store,
+            epic,
+            &RequirementStatus::NeedsAttention,
+        )
+        .expect("effective lens");
+        assert_eq!(source.id, child_id);
+        assert_eq!(lens.label(), "Shelved (stale-base)");
+    }
 }
 
 /// Read the `[external_refs]` provider → base-URL map from `.aida/config.toml`.
@@ -14667,17 +14922,23 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // BUG-626: an epic's displayed status is the read-only rollup of its
     // children, not the stored field. trace:BUG-626 | ai:claude
     let display_status = effective_display_status(&store, req);
-    let status_str = match display_status {
-        RequirementStatus::Draft => "Draft".yellow(),
-        RequirementStatus::Approved => "Approved".blue(),
-        RequirementStatus::Planned => "Planned".cyan(),
-        RequirementStatus::InProgress => "In Progress".magenta(),
-        RequirementStatus::Done => "Done".bright_green().bold(),
-        RequirementStatus::Completed => "Completed".green(),
-        RequirementStatus::Rejected => "Rejected".red(),
-        // trace:TASK-1176 | ai:claude
-        RequirementStatus::Superseded => "Superseded".green().dimmed(),
-        RequirementStatus::NeedsAttention => "Needs Attention".magenta().bold(),
+    let status_str = if matches!(display_status, RequirementStatus::NeedsAttention) {
+        effective_needs_attention_lens(&store, req, &display_status)
+            .map(|lens| needs_attention_badge_for_lens(&lens))
+            .unwrap_or_else(|| status_display::parked_status_badge(req))
+    } else {
+        match display_status {
+            RequirementStatus::Draft => "Draft".yellow().to_string(),
+            RequirementStatus::Approved => "Approved".blue().to_string(),
+            RequirementStatus::Planned => "Planned".cyan().to_string(),
+            RequirementStatus::InProgress => "In Progress".magenta().to_string(),
+            RequirementStatus::Done => "Done".bright_green().bold().to_string(),
+            RequirementStatus::Completed => "Completed".green().to_string(),
+            RequirementStatus::Rejected => "Rejected".red().to_string(),
+            // trace:TASK-1176 | ai:claude
+            RequirementStatus::Superseded => "Superseded".green().dimmed().to_string(),
+            RequirementStatus::NeedsAttention => unreachable!("handled above"),
+        }
     };
     println!("{}: {}", "Status".blue(), status_str);
 
@@ -50302,6 +50563,88 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         return Ok(());
     }
 
+    // trace:STORY-1023 | ai:codex
+    if matches!(eff_status, aida_core::RequirementStatus::NeedsAttention) {
+        let (reason_req, lens) =
+            effective_needs_attention_lens_with_source(&store, req, &eff_status).unwrap_or((
+                req,
+                status_display::NeedsAttentionLens::NeedsDecision { reason: None },
+            ));
+        if let status_display::NeedsAttentionLens::Shelved { .. } = lens {
+            let Some(fr) = reason_req.failure_reason.as_ref() else {
+                anyhow::bail!(
+                    "{} has an effective shelved lens but no failure reason source",
+                    disp
+                );
+            };
+            let cause = auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
+            let detail = auto_complete_telemetry::failure_detail_first_line(Some(&fr.detail));
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "spec": disp,
+                        "bucket": "shelved",
+                        "reason": format!("Shelved ({cause}) — {detail}"),
+                        "needs_human": false,
+                        "failure_reason": {
+                            "phase": fr.phase,
+                            "kind": fr.kind,
+                            "detail": fr.detail,
+                            "hint": fr.recovery_hint,
+                        },
+                    }))?
+                );
+            } else {
+                println!("{}{}", why_headline_prefix(), disp.cyan().bold());
+                println!(
+                    "  {} {} — {}",
+                    crate::glyph(crate::glyphs::Glyph::Pause).blue(),
+                    format!("Shelved ({cause})").bold(),
+                    detail
+                );
+                if let Some(hint) = fr.recovery_hint.as_deref() {
+                    println!(
+                        "    {} hint: {}",
+                        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                        hint.dimmed()
+                    );
+                }
+            }
+            return Ok(());
+        }
+        let reason = reason_req
+            .attention_reason
+            .as_ref()
+            .map(|a| a.category.to_string())
+            .unwrap_or_else(|| "no recorded reason".to_string());
+        let detail = reason_req
+            .attention_reason
+            .as_ref()
+            .map(|a| a.detail.as_str())
+            .unwrap_or("parked for a human decision");
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "bucket": "needs-decision",
+                    "reason": format!("Needs Decision ({reason}) — {detail}"),
+                    "needs_human": true,
+                }))?
+            );
+        } else {
+            println!("{}{}", why_headline_prefix(), disp.cyan().bold());
+            println!(
+                "  {} {} — {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                format!("Needs Decision ({reason})").bold(),
+                detail
+            );
+        }
+        return Ok(());
+    }
+
     // BUG-623 (subsumed by STORY-694): a spec with a spec-scoped lease whose
     // holder process is NOT live (pid dead, or idle past threshold) is in-flight
     // but STALLED — a hung/abandoned session reads as active otherwise. The Live
@@ -62250,18 +62593,28 @@ fn collect_awaiting_report(
             &findings::FindingsFilter::default(),
         ))
     };
-    let escalations: Vec<_> = summaries
+    // trace:STORY-1023 | ai:codex
+    let mut shelved_total = 0usize;
+    let mut escalations: Vec<awaiting_you::EscalationItem> = Vec::new();
+    for s in summaries
         .iter()
         .filter(|s| s.status.eq_ignore_ascii_case("NeedsAttention"))
-        .map(|s| awaiting_you::EscalationItem {
-            spec_id: s
-                .agreed_id
-                .clone()
-                .or_else(|| s.spec_id.clone())
-                .unwrap_or_else(|| "?".to_string()),
-            title: s.title.clone(),
-        })
-        .collect();
+    {
+        let spec_id = s
+            .agreed_id
+            .clone()
+            .or_else(|| s.spec_id.clone())
+            .unwrap_or_else(|| "?".to_string());
+        match backend.get_requirement_by_spec_id(&spec_id) {
+            Ok(Some(req)) if req.failure_reason.is_some() => {
+                shelved_total += 1;
+            }
+            _ => escalations.push(awaiting_you::EscalationItem {
+                spec_id,
+                title: s.title.clone(),
+            }),
+        }
+    }
 
     // Reviewer-queue items — surface queue entries where the verdict is
     // the operator's only when the active role IS reviewer. Otherwise
@@ -62303,10 +62656,16 @@ fn collect_awaiting_report(
         let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
         let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
         let operator = current_user_id(None);
-        let shared: Vec<String> = inbox_identities()
-            .into_iter()
-            .filter(|i| i != &operator)
-            .collect();
+        let mut shared: Vec<String> = Vec::new();
+        if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
+            let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
+            if role != operator {
+                shared.push(role);
+            }
+        }
         awaiting_you::split_mail_scopes(&operator, &shared, &merged, &watermarks)
     };
 
@@ -62332,6 +62691,7 @@ fn collect_awaiting_report(
         escalations,
         mail,
         worker_directives,
+        shelved_total,
     }
 }
 
@@ -65677,7 +66037,6 @@ fn render_spec_card(
     let id = req.display_id();
     let req_type = req.req_type.to_string();
     let priority = req.effective_priority();
-    let status = req.effective_status();
 
     // Brief: a single line, no box — for autonomous / scripted flows.
     // TASK-269: badge the status (glyph + colour) here too. trace:TASK-269
@@ -65687,7 +66046,7 @@ fn render_spec_card(
             id,
             req_type,
             priority,
-            status_display::status_badge(&status),
+            status_display::parked_status_badge(req),
             req.title
         );
         return;
@@ -65728,7 +66087,7 @@ fn render_spec_card(
         id.bold(),
         req_type,
         priority,
-        status_display::status_badge(&status),
+        status_display::parked_status_badge(req),
         human_only_chip,
     );
     println!();
