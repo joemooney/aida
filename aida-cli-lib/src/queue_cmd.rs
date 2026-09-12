@@ -3710,114 +3710,130 @@ pub(crate) fn handle_queue_command(
             // head looks like "queue is empty"). trace:STORY-333 | ai:claude
             let mut skipped_unpickable: Vec<(String, String)> = Vec::new();
 
-            let next_entry = raw_entries
-                .iter()
-                .filter(|e| {
-                    entry_matches_role_filter(
-                        e.for_role.as_deref(),
-                        role_filter.as_deref(),
-                        only_unrouted,
-                    )
-                })
-                .filter(|e| {
-                    // STORY-57: scope/session routing — only show items
-                    // targeted at this session (or unrouted on that axis).
-                    // --all bypasses; consistent with queue list.
-                    entry_scope_session_match(e, self_lease.as_ref(), *all)
-                })
-                .filter(|e| {
-                    // TASK-46: never surface terminal-status entries
-                    // as "next" — they aren't actionable. Unlike
-                    // `queue list` we don't offer an --include-terminal
-                    // override here because the whole point of `next`
-                    // is "what should I pick up", and the answer is
-                    // never "this Completed thing". trace:TASK-46 | ai:claude
-                    //
-                    // NeedsAttention is gated by `pickability` below (one
-                    // step down in this chain) so it surfaces as a
-                    // skipped-with-reason entry rather than disappearing
-                    // silently. trace:STORY-332 trace:TASK-131
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return true;
-                    };
-                    !is_terminal_status(&req.status)
-                })
-                .filter(|e| {
-                    // STORY-333: pre-pickup gate. A spec that is blocked-by
-                    // an unsatisfied blocker, or marked human-only, is never
-                    // the right "next" to pick up. Record the skip so the
-                    // user sees why instead of an empty-queue silence.
-                    // trace:STORY-333 | ai:claude
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return true;
-                    };
-                    match queue_fresh_pickup_policy(req, &store, false) {
-                        QueueFreshPickup::Pickable => true,
-                        other => {
-                            let display = req
-                                .agreed_id
-                                .clone()
-                                .or_else(|| req.spec_id.clone())
-                                .unwrap_or_else(|| "?".to_string());
-                            let reason = queue_fresh_pickup_reason_label(&other)
-                                .unwrap_or_else(|| "not pickable".to_string());
-                            skipped_unpickable.push((display, reason));
-                            false
+            // BUG-1082: once an implementer session is inside a leased worktree,
+            // the lease scope is the assignment. A later queue mutation must not
+            // let a headless worker re-poll the queue and drift to a different
+            // spec. Pin `queue next` to the leased spec before consulting the
+            // ambient queue head.
+            // trace:BUG-1082 | ai:codex
+            let leased_head =
+                leased_implementer_queue_head(&raw_entries, &store, &user_id, self_lease.as_ref());
+
+            let next_entry = leased_head.or_else(|| {
+                raw_entries
+                    .iter()
+                    .filter(|e| {
+                        entry_matches_role_filter(
+                            e.for_role.as_deref(),
+                            role_filter.as_deref(),
+                            only_unrouted,
+                        )
+                    })
+                    .filter(|e| {
+                        // STORY-57: scope/session routing — only show items
+                        // targeted at this session (or unrouted on that axis).
+                        // --all bypasses; consistent with queue list.
+                        entry_scope_session_match(e, self_lease.as_ref(), *all)
+                    })
+                    .filter(|e| {
+                        // TASK-46: never surface terminal-status entries
+                        // as "next" — they aren't actionable. Unlike
+                        // `queue list` we don't offer an --include-terminal
+                        // override here because the whole point of `next`
+                        // is "what should I pick up", and the answer is
+                        // never "this Completed thing". trace:TASK-46 | ai:claude
+                        //
+                        // NeedsAttention is gated by `pickability` below (one
+                        // step down in this chain) so it surfaces as a
+                        // skipped-with-reason entry rather than disappearing
+                        // silently. trace:STORY-332 trace:TASK-131
+                        let Some(req) =
+                            store.requirements.iter().find(|r| r.id == e.requirement_id)
+                        else {
+                            return true;
+                        };
+                        !is_terminal_status(&req.status)
+                    })
+                    .filter(|e| {
+                        // STORY-333: pre-pickup gate. A spec that is blocked-by
+                        // an unsatisfied blocker, or marked human-only, is never
+                        // the right "next" to pick up. Record the skip so the
+                        // user sees why instead of an empty-queue silence.
+                        // trace:STORY-333 | ai:claude
+                        let Some(req) =
+                            store.requirements.iter().find(|r| r.id == e.requirement_id)
+                        else {
+                            return true;
+                        };
+                        match queue_fresh_pickup_policy(req, &store, false) {
+                            QueueFreshPickup::Pickable => true,
+                            other => {
+                                let display = req
+                                    .agreed_id
+                                    .clone()
+                                    .or_else(|| req.spec_id.clone())
+                                    .unwrap_or_else(|| "?".to_string());
+                                let reason = queue_fresh_pickup_reason_label(&other)
+                                    .unwrap_or_else(|| "not pickable".to_string());
+                                skipped_unpickable.push((display, reason));
+                                false
+                            }
                         }
-                    }
-                })
-                .filter(|e| {
-                    if !lease_filter_active {
-                        return true;
-                    }
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return true;
-                    };
-                    let owner = lease_owning_spec(
-                        &leases,
-                        self_lease.as_ref(),
-                        req.id,
-                        req.spec_id.as_deref(),
-                        &store,
-                        lease_is_live(&lease_live_sessions, lease_live_now),
-                    );
-                    match owner {
-                        None => true,
-                        Some(o) => {
-                            skipped_for_lease.push((
-                                req.spec_id.clone().unwrap_or_else(|| "?".into()),
-                                o.scope.clone(),
-                            ));
-                            false
+                    })
+                    .filter(|e| {
+                        if !lease_filter_active {
+                            return true;
                         }
-                    }
-                })
-                .filter(|e| {
-                    let Some((scope_tags, scope_status)) = &scope else {
-                        return true;
-                    };
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
-                    else {
-                        return true;
-                    };
-                    if let Some(want) = scope_status {
-                        if !format!("{}", req.status).eq_ignore_ascii_case(want)
-                            && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
-                        {
-                            return false;
+                        let Some(req) =
+                            store.requirements.iter().find(|r| r.id == e.requirement_id)
+                        else {
+                            return true;
+                        };
+                        let owner = lease_owning_spec(
+                            &leases,
+                            self_lease.as_ref(),
+                            req.id,
+                            req.spec_id.as_deref(),
+                            &store,
+                            lease_is_live(&lease_live_sessions, lease_live_now),
+                        );
+                        match owner {
+                            None => true,
+                            Some(o) => {
+                                skipped_for_lease.push((
+                                    req.spec_id.clone().unwrap_or_else(|| "?".into()),
+                                    o.scope.clone(),
+                                ));
+                                false
+                            }
                         }
-                    }
-                    for tag in scope_tags {
-                        if !req.tags.iter().any(|t| t == tag) {
-                            return false;
+                    })
+                    .filter(|e| {
+                        let Some((scope_tags, scope_status)) = &scope else {
+                            return true;
+                        };
+                        let Some(req) =
+                            store.requirements.iter().find(|r| r.id == e.requirement_id)
+                        else {
+                            return true;
+                        };
+                        if let Some(want) = scope_status {
+                            if !format!("{}", req.status).eq_ignore_ascii_case(want)
+                                && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
+                            {
+                                return false;
+                            }
                         }
-                    }
-                    true
-                })
-                .min_by_key(|e| e.position);
+                        for tag in scope_tags {
+                            if !req.tags.iter().any(|t| t == tag) {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .min_by_key(|e| e.position)
+                    .cloned()
+            });
 
             // Local wins on tiebreak — the FR specifies that local-context
             // work takes precedence. Only fall through to global when local
@@ -6482,6 +6498,46 @@ pub(crate) enum QueueWorkMode {
     Cluster,
 }
 
+// BUG-1082: a live implementer lease means the worker is already assigned.
+// Queue consumers inside that worktree must surface the lease scope instead
+// of rediscovering whatever currently sits at the queue head.
+// trace:BUG-1082 | ai:codex
+pub(crate) fn leased_implementer_queue_head(
+    entries: &[aida_core::QueueEntry],
+    store: &aida_core::RequirementsStore,
+    user_id: &str,
+    active_lease: Option<&SessionLease>,
+) -> Option<aida_core::QueueEntry> {
+    let lease = active_lease?;
+    if !lease
+        .role
+        .as_deref()
+        .map(|r| r.eq_ignore_ascii_case("implementer"))
+        .unwrap_or(false)
+    {
+        return None;
+    }
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, &lease.scope))?;
+    if let Some(entry) = entries.iter().find(|e| e.requirement_id == req.id) {
+        return Some(entry.clone());
+    }
+    Some(aida_core::QueueEntry {
+        user_id: user_id.to_string(),
+        requirement_id: req.id,
+        position: i64::MIN,
+        added_by: user_id.to_string(),
+        note: Some(format!("pinned by active implementer lease {}", lease.id)),
+        added_at: chrono::Utc::now(),
+        for_role: Some("implementer".to_string()),
+        for_scope: None,
+        for_session: Some(lease.id.clone()),
+        added_by_machine: None,
+    })
+}
+
 /// STORY-42: resolve the user's queue-work argument into a concrete plan.
 ///
 ///   - `arg = None`            → head-pickup mode: top item from the
@@ -6608,12 +6664,24 @@ pub(crate) fn resolve_queue_work_plan(
         let role_filter: Option<String> = std::env::var("AIDA_SESSION_ROLE")
             .ok()
             .filter(|s| !s.is_empty());
+        let active_lease_for_head = find_project_root().ok().and_then(|root| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|cwd| active_lease_for_cwd(&root, &cwd))
+        });
         // STORY-333: collect un-pickable specs (blocked-by / human-only)
         // skipped during head resolution so the kickoff banner can name
         // them. Silent skipping looks like "queue is empty" — we surface
         // the reason instead. trace:STORY-333 | ai:claude
         let mut skipped_unpickable: Vec<(String, String)> = Vec::new();
-        let head = entries
+        let head = leased_implementer_queue_head(
+            &entries,
+            &store,
+            user_id,
+            active_lease_for_head.as_ref(),
+        )
+        .or_else(|| {
+            entries
             .iter()
             .filter(|e| match &role_filter {
                 Some(r) => e.for_role.as_deref() == Some(r.as_str()),
@@ -6646,6 +6714,7 @@ pub(crate) fn resolve_queue_work_plan(
             })
             .min_by_key(|e| e.position)
             .cloned()
+        })
             .ok_or_else(|| {
                 let suffix = if skipped_unpickable.is_empty() {
                     String::new()
