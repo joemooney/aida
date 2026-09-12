@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:14:58.955676870Z
-modified_at: 2026-09-12T16:03:08.084739985Z
+modified_at: 2026-09-12T16:03:09.468228952Z
 req_type: Story
 tags:
 - from-product
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-09-09T07:02:53.052391751Z
   modified_at: 2026-09-09T07:02:53.052391751Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0965b-bc1c-7eb0-b6dc-21adca8201a1
+  author: joe
+  content: 'Advisor: feature merged to main days ago as d6cdad05c (#1706); the spec stayed Done because it re-entered In Progress after the referencing commit was already on main (reconcile-status window miss). Manually promoted with the merge as evidence.'
+  created_at: 2026-09-12T16:03:09.468228952Z
+  modified_at: 2026-09-12T16:03:09.468228952Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a0855d-4ee4-7e61-8a8a-93b515f227ca
   author: aida-auto-bump
