@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:46.943966857Z
-modified_at: 2026-09-12T00:09:36.722540204Z
+modified_at: 2026-09-12T00:12:16.639125185Z
 req_type: Story
 tags:
 - drain
@@ -43,6 +43,13 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-11T17:24:49.904265068Z
+comments:
+- id: 01a092f5-2d7f-7f22-b38a-9b28b5de86eb
+  author: joe
+  content: 'Advisor steering on the ci-red (PR-1755, Windows-only): bounded_polling_tool_events_feed_three_minute_watchdog fails at iteration 5 because ActivitySnapshot::signature() is source:mtime_nanos:alive — mtime ONLY (vendor_activity.rs:51). Windows filesystem timestamp granularity makes two rapid fs::write appends yield identical signatures, so real log growth reads as no-activity and the watchdog fires. This is a production defect on Windows, not test flake: include the byte length of the newest activity file in the signature (source:mtime:len:alive) so any append changes it regardless of timestamp granularity. Keep the existing mtime component (a rewrite-in-place with same length still registers).'
+  created_at: 2026-09-12T00:12:16.639125185Z
+  modified_at: 2026-09-12T00:12:16.639125185Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 failure_reason:
   phase: ci
