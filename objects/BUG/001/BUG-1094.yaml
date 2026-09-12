@@ -28,12 +28,12 @@ description: |-
   6. Regression coverage for a linked worktree AND a submodule-style .git pointer.
 
   Workaround: use `aida scaffold refresh` (non-hook path).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:47:30.011093382Z
-modified_at: 2026-09-12T15:33:36.167488252Z
+modified_at: 2026-09-12T15:40:40.082499534Z
 req_type: Bug
 tags:
 - codex
@@ -54,7 +54,23 @@ relationships:
   target_id: 01a09640-8083-7de2-8616-87e44060459d
   created_at: 2026-09-12T15:33:36.167484663Z
   created_by: joe
+history:
+- id: 01a09647-250b-7242-85c7-be310487c04f
+  author: aida-auto-bump
+  timestamp: 2026-09-12T15:40:40.075442281Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09647-2512-7872-9680-47ba8cf30dfc
+  timestamp: 2026-09-12T15:40:40.082498040Z
+  agent: aida
+  commit_sha: 2f261ee3539b7c04ecbd8f6072edf1a5c0610ec2
+  summary: Completed via merge 2f261ee3
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T14:48:33.234239017Z
   implemented_by: joe
+  completed_at: 2026-09-12T15:40:40.075308669Z
+  completion_sha: 2f261ee3539b7c04ecbd8f6072edf1a5c0610ec2
