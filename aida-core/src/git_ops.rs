@@ -4565,18 +4565,22 @@ mod tests {
         std::fs::create_dir_all(repo.join("docker")).unwrap();
         std::fs::write(repo.join("Dockerfile"), "FROM scratch\n").unwrap();
         std::fs::create_dir_all(&worktree).unwrap();
-        std::fs::write(
-            worktree.join(".git"),
-            "gitdir: /host/repo/.git/worktrees/repo-bug915\n",
-        )
-        .unwrap();
+        // An absolute gitdir must be preserved verbatim. `/host/...` is not
+        // absolute on Windows (no drive prefix), so build the fixture path in
+        // the platform's own absolute form.
+        let gitdir = if cfg!(windows) {
+            "C:/host/repo/.git/worktrees/repo-bug915"
+        } else {
+            "/host/repo/.git/worktrees/repo-bug915"
+        };
+        std::fs::write(worktree.join(".git"), format!("gitdir: {gitdir}\n")).unwrap();
 
         let markers = container_tooling_markers(&repo);
         assert!(markers.contains(&"Dockerfile".to_string()));
         assert!(markers.contains(&"docker".to_string()));
         assert_eq!(
             worktree_gitdir_path(&worktree).unwrap(),
-            PathBuf::from("/host/repo/.git/worktrees/repo-bug915")
+            PathBuf::from(gitdir)
         );
     }
 
