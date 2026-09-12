@@ -461,7 +461,7 @@ blocks:
   type_prefix: BUG
   range_start: 1017
   range_end: 1116
-  next: 1112
+  next: 1113
   allocated_at: 2026-09-08T02:48:22.373918177Z
 - node_id: '1'
   owner: redacted@node.invalid

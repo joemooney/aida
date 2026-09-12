@@ -62988,5 +62988,26 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4993
+- id: 01a09724-566c-7380-a049-0bd4c1446b30
+  target_id: 01a09724-5256-7242-a9ec-c327964cdc8f
+  author: aida
+  node_id: '1'
+  lamport: 4994
+  timestamp: 2026-09-12T19:42:16.172752093Z
+  kind: !Create
+    title: phase-1 reconcile-against-reality phantom-ships a REOPENED spec off its previously-merged PR
+    description: |
+      ## Observed (2026-09-12 12:31)
+      BUG-908 was REOPENED (approved --force, evidence comment) for a follow-on defect, queued, and driven. Phase 1 'ended without its usual artifact' and the orchestrator reconciled against reality: 'PR-1739 is already merged' → 'BUG-908 shipped (3m 24s, reconciled)'. PR-1739 is the ORIGINAL fix merged days earlier; the reopened scope got zero new code yet the spec auto-completed.
+
+      ## Why it matters
+      Reconcile-against-reality makes reopening a spec impossible to drive headless: any previously-merged PR for the id short-circuits the run as shipped. Silent false completion is the worst failure mode (closed-looking open work).
+
+      ## Acceptance
+      1. The phase-1 reconciler only credits a merged PR whose merge is NEWER than the spec's latest reopen transition (status left a terminal state after the PR merged -> the PR cannot satisfy the reopen).
+      2. Regression test: spec completed via PR N, reopened, driven -> reconciler does NOT credit PR N; a fresh implementation happens (or the run shelves with 'reopened scope needs new work').
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 4994
 node_id: '1'
