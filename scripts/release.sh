@@ -438,6 +438,36 @@ git tag -a "v$new" -F "$notes_file"
 git push origin HEAD
 git push origin "v$new"
 
+# STORY-1048: the GitHub release remains the source of record, but release tags
+# must be visible on every configured hub so GitLab-triggered release jobs can
+# publish their own assets. Mirror legs are best-effort: warn, never fail.
+mirror_remotes=""
+if [ -f .aida/config.toml ]; then
+    mirror_remotes=$(
+        awk '
+            /^\[.*\]/ { in_store_sync = ($0 ~ /^\[store\.sync\]/) }
+            in_store_sync && /^[[:space:]]*mirror_remotes[[:space:]]*=/ {
+                sub(/[[:space:]]+#.*/, "")
+                sub(/^[^=]*=/, "")
+                gsub(/[\[\]",]/, " ")
+                for (i = 1; i <= NF; i++) print $i
+            }
+        ' .aida/config.toml
+    )
+fi
+for mirror in $mirror_remotes; do
+    [ "$mirror" = "origin" ] && continue
+    if ! git remote get-url "$mirror" >/dev/null 2>&1; then
+        echo "  ⚠ release mirror remote '$mirror' not configured — skipping" >&2
+        continue
+    fi
+    if git push "$mirror" "v$new"; then
+        echo "  mirrored tag v$new → $mirror"
+    else
+        echo "  ⚠ release mirror '$mirror' tag push failed — skipped; check drift with 'aida remote status'" >&2
+    fi
+done
+
 # Tag now lives in the repo; safe to clean the temp file.
 rm -f "$notes_file"
 

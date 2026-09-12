@@ -548,6 +548,14 @@ struct RemoteBehindHint {
     source_remote: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RemoteReleaseStanding {
+    pub(crate) remote: String,
+    pub(crate) tag_head: Option<String>,
+    pub(crate) gitlab_release_url: Option<String>,
+    pub(crate) gitlab_release_exists: Option<bool>,
+}
+
 fn classify_remote_branch_drift(standings: &[RemoteBranchStanding]) -> RemoteBranchDrift {
     let present: Vec<&RemoteBranchStanding> =
         standings.iter().filter(|s| s.head.is_some()).collect();
@@ -625,6 +633,8 @@ fn remote_branch_verdict(drift: &RemoteBranchDrift) -> String {
 
 fn remote_status_guidance_lines(
     branch_reports: &[(String, Vec<RemoteBranchStanding>, RemoteBranchDrift)],
+    release_tag: Option<&str>,
+    release_standings: &[RemoteReleaseStanding],
 ) -> Vec<String> {
     let any_diverged = branch_reports
         .iter()
@@ -664,10 +674,144 @@ fn remote_status_guidance_lines(
         return lines;
     }
 
+    if let Some(tag) = release_tag {
+        let missing_tags: Vec<&RemoteReleaseStanding> = release_standings
+            .iter()
+            .filter(|s| s.tag_head.is_none())
+            .collect();
+        let missing_releases: Vec<&RemoteReleaseStanding> = release_standings
+            .iter()
+            .filter(|s| matches!(s.gitlab_release_exists, Some(false)))
+            .collect();
+        if !missing_tags.is_empty() || !missing_releases.is_empty() {
+            let mut lines = vec![format!(
+                "{} release drift detected for {tag}.",
+                crate::glyph(crate::glyphs::Glyph::Warning)
+            )];
+            for s in missing_tags {
+                lines.push(format!("  git push {} {tag}", s.remote));
+            }
+            for s in missing_releases {
+                lines.push(format!(
+                    "  GitLab release missing on {} — rerun the mirrored tag pipeline",
+                    s.remote
+                ));
+            }
+            return lines;
+        }
+    }
+
     vec![format!(
-        "{} all remotes agree on every shared branch.",
+        "{} all remotes agree on every shared branch and release tag.",
         crate::glyph(crate::glyphs::Glyph::Check)
     )]
+}
+
+pub(crate) fn latest_local_release_tag(project_root: &Path) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["tag", "--list", "v[0-9]*", "--sort=-v:refname"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+pub(crate) fn remote_tag_head(project_root: &Path, remote: &str, tag: &str) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-remote", "--refs", remote, &format!("refs/tags/{tag}")])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .next()
+        .map(str::to_string)
+}
+
+pub(crate) fn gitlab_release_api_url(remote_url: &str, tag: &str) -> Option<String> {
+    let trimmed = remote_url
+        .trim()
+        .trim_end_matches('/')
+        .trim_end_matches(".git");
+    let (host, path, strip_ssh_port) = if let Some(rest) = trimmed.strip_prefix("git@") {
+        let (host, path) = rest.split_once(':')?;
+        (host, path, false)
+    } else {
+        let strip_ssh_port = trimmed.starts_with("ssh://");
+        let after_scheme = trimmed.split_once("://").map(|(_, r)| r).unwrap_or(trimmed);
+        let after_user = after_scheme
+            .split_once('@')
+            .map(|(_, r)| r)
+            .unwrap_or(after_scheme);
+        let (host, path) = after_user.split_once('/')?;
+        (host, path, strip_ssh_port)
+    };
+    let host = if strip_ssh_port {
+        host.split_once(':').map(|(h, _)| h).unwrap_or(host)
+    } else {
+        host
+    };
+    if !host.to_ascii_lowercase().contains("gitlab") {
+        return None;
+    }
+    let encoded_path = path.trim_start_matches('/').replace('/', "%2F");
+    Some(format!(
+        "https://{host}/api/v4/projects/{encoded_path}/releases/{tag}"
+    ))
+}
+
+fn gitlab_release_exists(api_url: &str) -> Option<bool> {
+    let mut cmd = Command::new("curl");
+    cmd.args(["--silent", "--show-error", "--fail", "--max-time", "10"]);
+    if let Ok(token) = std::env::var("GITLAB_TOKEN") {
+        if !token.trim().is_empty() {
+            cmd.args(["--header", &format!("PRIVATE-TOKEN: {token}")]);
+        }
+    }
+    let out = cmd
+        .arg("--output")
+        .arg("/dev/null")
+        .arg(api_url)
+        .output()
+        .ok()?;
+    Some(out.status.success())
+}
+
+pub(crate) fn collect_release_standings(
+    project_root: &Path,
+    remotes: &[String],
+    tag: &str,
+) -> Vec<RemoteReleaseStanding> {
+    remotes
+        .iter()
+        .map(|remote| {
+            let tag_head = remote_tag_head(project_root, remote, tag);
+            let gitlab_release_url = aida_core::git_ops::remote_url(project_root, remote)
+                .and_then(|url| gitlab_release_api_url(&url, tag));
+            let gitlab_release_exists = gitlab_release_url
+                .as_deref()
+                .and_then(gitlab_release_exists);
+            RemoteReleaseStanding {
+                remote: remote.clone(),
+                tag_head,
+                gitlab_release_url,
+                gitlab_release_exists,
+            }
+        })
+        .collect()
 }
 
 /// `aida remote status` — read-only drift readout across all configured
@@ -751,6 +895,18 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
         }
         branch_reports.push((b.to_string(), standings, drift));
     }
+    // trace:STORY-1048 | ai:codex
+    let release_tag = latest_local_release_tag(project_root);
+    let release_standings = release_tag
+        .as_deref()
+        .map(|tag| collect_release_standings(project_root, &remotes, tag))
+        .unwrap_or_default();
+    let release_tag_missing = release_tag
+        .as_ref()
+        .is_some_and(|_| release_standings.iter().any(|s| s.tag_head.is_none()));
+    let gitlab_release_missing = release_standings
+        .iter()
+        .any(|s| matches!(s.gitlab_release_exists, Some(false)));
 
     if json {
         let branches: Vec<serde_json::Value> = branch_reports
@@ -793,9 +949,35 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                 })
             })
             .collect();
+        let release = release_tag.as_ref().map(|tag| {
+            let remotes: Vec<serde_json::Value> = release_standings
+                .iter()
+                .map(|s| {
+                    serde_json::json!({
+                        "remote": s.remote,
+                        "tag_head": s.tag_head,
+                        "gitlab_release_url": s.gitlab_release_url,
+                        "gitlab_release_exists": s.gitlab_release_exists,
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "tag": tag,
+                "missing_tag": release_tag_missing,
+                "missing_gitlab_release": gitlab_release_missing,
+                "remotes": remotes
+            })
+        });
         println!(
             "{}",
-            serde_json::json!({ "remotes": remotes, "branches": branches, "diverged": any_diverged, "behind": any_behind })
+            serde_json::json!({
+                "remotes": remotes,
+                "branches": branches,
+                "release": release,
+                "diverged": any_diverged,
+                "behind": any_behind,
+                "release_drift": release_tag_missing || gitlab_release_missing
+            })
         );
     } else {
         println!("Remote sync status  ({})", remotes.join(", "));
@@ -818,13 +1000,40 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                 println!("  {:<12} {:<10} {}", s.remote, ab, head);
             }
         }
+        if let Some(tag) = release_tag.as_deref() {
+            println!();
+            let release_verdict = if release_tag_missing || gitlab_release_missing {
+                format!("{} drift", crate::glyph(crate::glyphs::Glyph::Warning))
+            } else {
+                format!("{} in sync", crate::glyph(crate::glyphs::Glyph::Check))
+            };
+            println!("{:<16} {release_verdict}", format!("release {tag}"));
+            for s in &release_standings {
+                let head = s
+                    .tag_head
+                    .as_deref()
+                    .map(|h| h.chars().take(12).collect::<String>())
+                    .unwrap_or_else(|| "absent".to_string());
+                let release = match s.gitlab_release_exists {
+                    Some(true) => "release ok",
+                    Some(false) => "release missing",
+                    None if s.gitlab_release_url.is_some() => "release unknown",
+                    None => "",
+                };
+                println!("  {:<12} {:<12} {}", s.remote, head, release);
+            }
+        }
         println!();
-        for line in remote_status_guidance_lines(&branch_reports) {
+        for line in remote_status_guidance_lines(
+            &branch_reports,
+            release_tag.as_deref(),
+            &release_standings,
+        ) {
             println!("{line}");
         }
     }
 
-    if any_diverged {
+    if any_diverged || release_tag_missing || gitlab_release_missing {
         // Non-zero so a pre-push hook / CI step can gate on this.
         std::process::exit(2);
     }
@@ -1758,7 +1967,8 @@ mod tests {
         }]);
         let verdict = remote_branch_verdict(&drift);
         let guidance =
-            remote_status_guidance_lines(&[("main".to_string(), Vec::new(), drift)]).join("\n");
+            remote_status_guidance_lines(&[("main".to_string(), Vec::new(), drift)], None, &[])
+                .join("\n");
 
         assert!(verdict.contains("BEHIND (164 commits)"), "{verdict}");
         assert!(
@@ -1785,15 +1995,62 @@ mod tests {
 
     #[test]
     fn remote_branch_diverged_keeps_reconcile_guidance() {
-        let guidance = remote_status_guidance_lines(&[(
-            "main".to_string(),
-            Vec::new(),
-            RemoteBranchDrift::Diverged,
-        )])
+        let guidance = remote_status_guidance_lines(
+            &[("main".to_string(), Vec::new(), RemoteBranchDrift::Diverged)],
+            None,
+            &[],
+        )
         .join("\n");
 
         assert!(guidance.contains("remote reconcile"), "{guidance}");
         assert!(guidance.contains("merge the divergent tips"), "{guidance}");
+    }
+
+    #[test]
+    fn gitlab_release_api_url_handles_ssh_and_https_remotes() {
+        assert_eq!(
+            gitlab_release_api_url("git@gitlab.joemooney.com:joemooney/aida.git", "v1.2.3")
+                .as_deref(),
+            Some("https://gitlab.joemooney.com/api/v4/projects/joemooney%2Faida/releases/v1.2.3")
+        );
+        assert_eq!(
+            gitlab_release_api_url("https://gitlab.joemooney.com/joemooney/aida.git", "v1.2.3")
+                .as_deref(),
+            Some("https://gitlab.joemooney.com/api/v4/projects/joemooney%2Faida/releases/v1.2.3")
+        );
+        assert_eq!(
+            gitlab_release_api_url("ssh://git@gitlab.joemooney.com:2222/ai/aida.git", "v1.2.3")
+                .as_deref(),
+            Some("https://gitlab.joemooney.com/api/v4/projects/ai%2Faida/releases/v1.2.3")
+        );
+        assert!(gitlab_release_api_url("git@github.com:joemooney/aida.git", "v1.2.3").is_none());
+    }
+
+    #[test]
+    fn release_drift_guidance_mentions_missing_tags_and_gitlab_release() {
+        let standings = vec![
+            RemoteReleaseStanding {
+                remote: "origin".to_string(),
+                tag_head: Some(SHA_A.to_string()),
+                gitlab_release_url: None,
+                gitlab_release_exists: None,
+            },
+            RemoteReleaseStanding {
+                remote: "gitlab".to_string(),
+                tag_head: None,
+                gitlab_release_url: Some(
+                    "https://gitlab.example.com/api/v4/projects/o%2Fr/releases/v1.2.3".to_string(),
+                ),
+                gitlab_release_exists: Some(false),
+            },
+        ];
+        let guidance = remote_status_guidance_lines(&[], Some("v1.2.3"), &standings).join("\n");
+
+        assert!(guidance.contains("git push gitlab v1.2.3"), "{guidance}");
+        assert!(
+            guidance.contains("GitLab release missing on gitlab"),
+            "{guidance}"
+        );
     }
 
     #[test]

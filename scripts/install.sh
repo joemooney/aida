@@ -10,6 +10,7 @@
 #   curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --version v0.4.0
 #   ./scripts/install.sh                          # latest release, install to ~/.local/bin
 #   ./scripts/install.sh --version v0.4.0         # pin a specific release
+#   ./scripts/install.sh --host gitlab            # fetch from gitlab.joemooney.com
 #   ./scripts/install.sh --prefix /usr/local/bin  # install to a different directory (may need sudo)
 #
 # Auto-detects platform via `uname -sm`. Supported targets:
@@ -25,6 +26,9 @@ set -euo pipefail
 VERSION="latest"
 PREFIX="$HOME/.local/bin"
 REPO="joemooney/aida"
+HOST="${AIDA_RELEASE_HOST:-github}"
+GITLAB_PROJECT_ID="${AIDA_GITLAB_PROJECT_ID:-joemooney%2Faida}"
+GITLAB_BASE_URL="${AIDA_GITLAB_BASE_URL:-https://gitlab.joemooney.com}"
 
 # ---- Arg parsing -----------------------------------------------------------
 
@@ -45,6 +49,12 @@ while [ $# -gt 0 ]; do
             shift
             [ $# -gt 0 ] || { echo "error: --prefix requires a directory" >&2; exit 1; }
             PREFIX=$1
+            shift
+            ;;
+        --host)
+            shift
+            [ $# -gt 0 ] || { echo "error: --host requires github or gitlab" >&2; exit 1; }
+            HOST=$1
             shift
             ;;
         -h|--help) usage 0 ;;
@@ -73,12 +83,36 @@ target="${os}-${arch}"
 
 # ---- URL resolution --------------------------------------------------------
 
+case "$HOST" in
+    github|GitHub)
+        host=github
+        ;;
+    gitlab|GitLab|gitlab.joemooney.com)
+        host=gitlab
+        ;;
+    *)
+        echo "error: unsupported release host: $HOST (expected github or gitlab)" >&2
+        exit 1
+        ;;
+esac
+
 if [ "$VERSION" = "latest" ]; then
-    asset_url="https://github.com/${REPO}/releases/latest/download/aida-${target}.tar.gz"
+    if [ "$host" = "github" ]; then
+        asset_url="https://github.com/${REPO}/releases/latest/download/aida-${target}.tar.gz"
+    else
+        latest_json=$(curl -fsSL "${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/releases/permalink/latest")
+        tag=$(printf '%s\n' "$latest_json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+        [ -n "$tag" ] || { echo "error: could not resolve latest GitLab release tag" >&2; exit 1; }
+        asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.tar.gz"
+    fi
 else
     # Strip any leading "v" the user might have already included to avoid v vv.
     tag="v${VERSION#v}"
-    asset_url="https://github.com/${REPO}/releases/download/${tag}/aida-${target}.tar.gz"
+    if [ "$host" = "github" ]; then
+        asset_url="https://github.com/${REPO}/releases/download/${tag}/aida-${target}.tar.gz"
+    else
+        asset_url="${GITLAB_BASE_URL}/api/v4/projects/${GITLAB_PROJECT_ID}/packages/generic/aida/${tag}/aida-${target}.tar.gz"
+    fi
 fi
 
 # ---- Download + extract ---------------------------------------------------

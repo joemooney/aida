@@ -876,6 +876,53 @@ fn scan_remote_drift(project_root: &std::path::Path) -> Vec<DoctorFinding> {
             });
         }
     }
+    // trace:STORY-1048 | ai:codex
+    if let Some(tag) = crate::remote_create::latest_local_release_tag(project_root) {
+        let standings =
+            crate::remote_create::collect_release_standings(project_root, &remotes, &tag);
+        let missing_tags: Vec<String> = standings
+            .iter()
+            .filter(|s| s.tag_head.is_none())
+            .map(|s| s.remote.clone())
+            .collect();
+        if !missing_tags.is_empty() {
+            findings.push(DoctorFinding {
+                category: "remote-drift".to_string(),
+                id: format!("remote-drift-release-tag-{tag}"),
+                summary: format!(
+                    "release tag `{tag}` is missing on remote(s): {}",
+                    missing_tags.join(", ")
+                ),
+                action: format!(
+                    "push the release tag to every hub: {}",
+                    missing_tags
+                        .iter()
+                        .map(|r| format!("`git push {r} {tag}`"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                safe_heal: false,
+            });
+        }
+
+        let missing_releases: Vec<String> = standings
+            .iter()
+            .filter(|s| matches!(s.gitlab_release_exists, Some(false)))
+            .map(|s| s.remote.clone())
+            .collect();
+        if !missing_releases.is_empty() {
+            findings.push(DoctorFinding {
+                category: "remote-drift".to_string(),
+                id: format!("remote-drift-gitlab-release-{tag}"),
+                summary: format!(
+                    "GitLab release `{tag}` is missing on remote(s): {}",
+                    missing_releases.join(", ")
+                ),
+                action: "rerun the mirrored tag pipeline or create the GitLab release with the four uploaded assets".to_string(),
+                safe_heal: false,
+            });
+        }
+    }
     findings
 }
 
