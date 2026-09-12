@@ -397,8 +397,15 @@ fn implementer_retry_live_predecessor_is_typed_lease_conflict() {
     lease.role = Some("implementer".to_string());
     write_lease(project.path(), &lease);
 
-    let err = reclaim_implementer_retry_predecessor(project.path(), "STORY-993")
-        .expect_err("live predecessor must not be reclaimed");
+    let err = reclaim_implementer_retry_predecessor_with(
+        project.path(),
+        "STORY-993",
+        0,
+        std::time::Duration::ZERO,
+        |lease| stale_lease_recovery_for_lease(lease),
+        |_| {},
+    )
+    .expect_err("live predecessor must not be reclaimed");
 
     assert_eq!(err.kind, auto_complete::FailureKind::LeaseConflict);
     assert!(err.reason.contains(&lease.id[..8]), "{}", err.reason);
@@ -407,6 +414,92 @@ fn implementer_retry_live_predecessor_is_typed_lease_conflict() {
             .contains(worktree.path().to_string_lossy().as_ref()),
         "{}",
         err.reason
+    );
+    assert!(
+        lease_path(project.path(), &lease.id).exists(),
+        "live lease must remain in place"
+    );
+}
+
+#[test]
+fn implementer_retry_reprobes_live_predecessor_then_reclaims_after_death() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "story-993-racy-death");
+    let mut lease = lease_at(worktree.path(), 5, Some(std::process::id()), None);
+    lease.id = "019f908race".to_string();
+    lease.scope = "STORY-993".to_string();
+    lease.slug = "story-993".to_string();
+    lease.branch = "story-993-racy-death".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let mut verdicts = vec![
+        StaleLeaseRecovery::ReclaimableClean {
+            worktree_missing: false,
+        },
+        StaleLeaseRecovery::Live,
+    ];
+    let mut sleeps = Vec::new();
+    let target = reclaim_implementer_retry_predecessor_with(
+        project.path(),
+        "STORY-993",
+        3,
+        std::time::Duration::from_millis(7),
+        |_| StaleLeaseRecoveryReport {
+            verdict: verdicts.pop().expect("expected a scripted verdict"),
+            dirty: Vec::new(),
+            worktree_exists: true,
+        },
+        |delay| sleeps.push(delay),
+    )
+    .expect("retry should reclaim after the predecessor dies inside the grace window")
+    .expect("retry should return the predecessor branch/worktree");
+
+    assert_eq!(target.0, "story-993-racy-death");
+    assert_eq!(target.1, worktree.path());
+    assert_eq!(target.2, lease.id);
+    assert_eq!(sleeps, vec![std::time::Duration::from_millis(7)]);
+    assert!(
+        !lease_path(project.path(), &lease.id).exists(),
+        "old lease should be removed after the later dead-owner verdict"
+    );
+}
+
+#[test]
+fn implementer_retry_refuses_when_predecessor_stays_live_after_reprobes() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "story-993-still-live");
+    let mut lease = lease_at(worktree.path(), 5, Some(std::process::id()), None);
+    lease.id = "019f908still".to_string();
+    lease.scope = "STORY-993".to_string();
+    lease.slug = "story-993".to_string();
+    lease.branch = "story-993-still-live".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let mut sleeps = Vec::new();
+    let err = reclaim_implementer_retry_predecessor_with(
+        project.path(),
+        "STORY-993",
+        2,
+        std::time::Duration::from_millis(11),
+        |_| StaleLeaseRecoveryReport {
+            verdict: StaleLeaseRecovery::Live,
+            dirty: Vec::new(),
+            worktree_exists: true,
+        },
+        |delay| sleeps.push(delay),
+    )
+    .expect_err("a genuinely live predecessor must still block the retry");
+
+    assert_eq!(err.kind, auto_complete::FailureKind::LeaseConflict);
+    assert!(err.reason.contains("2 liveness re-probe"), "{}", err.reason);
+    assert_eq!(
+        sleeps,
+        vec![
+            std::time::Duration::from_millis(11),
+            std::time::Duration::from_millis(11)
+        ]
     );
     assert!(
         lease_path(project.path(), &lease.id).exists(),
