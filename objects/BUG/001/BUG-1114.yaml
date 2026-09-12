@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T20:29:07.139078689Z
-modified_at: 2026-09-12T20:56:49.994499607Z
+modified_at: 2026-09-12T20:56:51.337384053Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,10 @@ tags:
 - failure-3
 - failure-kind:verdict:request-changes
 - reviewer
+comments:
+- id: 01a09768-9f89-7f71-a2cb-3b5a3a6bc33e
+  author: joe
+  content: 'Auto-drafted stub: the BUG-1112 phase-3 RequestChanges was legit (missing reconciler regression test) and was addressed — the implementer added test(orchestrator): cover reopened stale PR reconcile (c9c40e8f8). Tracked on BUG-1112 itself.'
+  created_at: 2026-09-12T20:56:51.337384053Z
+  modified_at: 2026-09-12T20:56:51.337384053Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
