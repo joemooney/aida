@@ -335,6 +335,43 @@ fn queued_status_fixture(statuses: &[(&str, RequirementStatus)]) -> (tempfile::T
     (dir, storage)
 }
 
+fn queued_status_fixture_for_user(
+    statuses: &[(&str, RequirementStatus)],
+    queue_user: &str,
+    for_role: &str,
+) -> (tempfile::TempDir, Storage) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let backend = aida_core::GitBackend::new(&root).unwrap();
+    let storage = Storage::new(&root);
+    let mut store = aida_core::RequirementsStore::default();
+
+    for (idx, (spec, status)) in statuses.iter().enumerate() {
+        let mut r = aida_core::Requirement::new(format!("title for {spec}"), String::new());
+        r.spec_id = Some((*spec).to_string());
+        r.agreed_id = Some((*spec).to_string());
+        r.status = status.clone();
+        let req_id = r.id;
+        store.requirements.push(r);
+        storage
+            .queue_add(aida_core::QueueEntry {
+                user_id: queue_user.into(),
+                requirement_id: req_id,
+                position: ((idx + 1) * 1000) as i64,
+                added_by: queue_user.into(),
+                note: None,
+                added_at: chrono::Utc::now(),
+                for_role: Some(for_role.into()),
+                for_scope: None,
+                for_session: None,
+                added_by_machine: None,
+            })
+            .unwrap();
+    }
+    backend.save(&store).unwrap();
+    (dir, storage)
+}
+
 fn implementer_lease(scope: &str) -> SessionLease {
     SessionLease {
         id: "lease-1082".to_string(),
@@ -533,6 +570,39 @@ fn queue_work_explicit_needs_attention_requires_force() {
     let plan = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, false, true)
         .expect("force should allow a deliberate NeedsAttention claim");
     assert_eq!(plan.anchor_display, "BUG-1017");
+}
+
+#[test]
+fn orchestrated_reviewer_can_pick_current_implementer_routed_spec() {
+    let token = uuid::Uuid::now_v7().to_string();
+    let (dir, storage) = queued_status_fixture_for_user(
+        &[("BUG-1106", RequirementStatus::InProgress)],
+        "role:implementer",
+        "implementer",
+    );
+    crate::drain_state::DrainState::new_single("BUG-1106", &token, false)
+        .write(dir.path())
+        .unwrap();
+    let store = storage.load().unwrap();
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| r.display_id() == "BUG-1106")
+        .unwrap();
+    let mut visible_entries = storage.queue_list("reviewer-user", false).unwrap();
+
+    assert!(orchestrator_authorizes_explicit_queue_pickup_with_token(
+        &storage, "BUG-1106", req, &token
+    ));
+    merge_current_spec_queue_entries(&storage, &mut visible_entries, req.id);
+
+    // trace:BUG-1106 | ai:codex
+    let entry = visible_entries
+        .iter()
+        .find(|entry| entry.requirement_id == req.id)
+        .expect("orchestrator-authorized merge should surface the queued row");
+    assert_eq!(entry.user_id, "role:implementer");
+    assert_eq!(entry.for_role.as_deref(), Some("implementer"));
 }
 
 /// Reviewer role + PR scope → `/aida-review --pr N`.
