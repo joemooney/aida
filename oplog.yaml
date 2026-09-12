@@ -62213,5 +62213,50 @@ operations:
   timestamp: 2026-09-12T09:25:00.239440016Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4941
+- id: 01a094ef-4427-70b3-8f83-632fba47f939
+  target_id: 01a094ef-3e5d-7c30-9723-dc7f29f9858d
+  author: aida
+  node_id: '1'
+  lamport: 4942
+  timestamp: 2026-09-12T09:25:03.655697037Z
+  kind: !Create
+    title: 'auto-complete failure: phase 2 (ci) on STORY-998'
+    description: |
+      Auto-drafted by `aida queue work STORY-998 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      implementer worktree `/home/joe/ai/aida-story-998` is on `story-998-pr1768` but phase 2 is driving `story-998-4` — refusing to push or tear down (attempt 2/2)
+
+      Failure kind: `tool-exit`
+
+      ## Recovery hint shown to the user
+
+      The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a094e5dafd --skip-ci`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-12T09:25:01.384187321+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 622164 ms
+        - phase 2 (ci): 11 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-998","started_at":"2026-09-12T09:14:37.071604828+00:00","completed_at":"2026-09-12T09:25:01.384187321+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"tool-exit","failure_message":"implementer worktree `/home/joe/ai/aida-story-998` is on `story-998-pr1768` but phase 2 is driving `story-998-4` — refusing to push or tear down (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":622164},{"phase":2,"slug":"ci","elapsed_ms":11}],"total_ms":622975,"binary_sha":"7b200a73a"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4942
 node_id: '1'
