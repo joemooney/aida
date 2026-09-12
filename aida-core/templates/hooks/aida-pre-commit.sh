@@ -193,6 +193,14 @@ STAGED_FILES=$(git status --porcelain 2>/dev/null | grep -E '^[AMRC]' | awk '{pr
 
 IGNORED_STAGED_FILES=()
 for file in $STAGED_FILES; do
+    # Tracked, edited source files can match deny-by-default ignore patterns
+    # (for example template masters under aida-core/templates/.aida/). Only
+    # newly added ignored paths are intermediate artifacts. trace:BUG-1088 | ai:codex
+    if git ls-files --error-unmatch -- "$file" >/dev/null 2>&1 \
+        && git diff --cached --quiet --diff-filter=A -- "$file" 2>/dev/null; then
+        continue
+    fi
+
     if git check-ignore --no-index -q "$file" 2>/dev/null; then
         IGNORED_STAGED_FILES+=("$file")
     fi
