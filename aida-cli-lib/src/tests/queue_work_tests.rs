@@ -308,6 +308,90 @@ fn queued_status_fixture(statuses: &[(&str, RequirementStatus)]) -> (tempfile::T
     (dir, storage)
 }
 
+fn implementer_lease(scope: &str) -> SessionLease {
+    SessionLease {
+        id: "lease-1082".to_string(),
+        scope: scope.to_string(),
+        slug: scope.to_ascii_lowercase(),
+        owner: "codex@example.test".to_string(),
+        worktree_path: std::path::PathBuf::from("/tmp/aida-bug-1082"),
+        branch: scope.to_ascii_lowercase(),
+        started_at: chrono::Utc::now(),
+        hostname: "testhost".to_string(),
+        role: Some("implementer".to_string()),
+        creator_pid: None,
+        active_pid: None,
+        cargo_target_dir: None,
+        parent_project_root: None,
+        pr_head_sha: None,
+        pr_base_sha: None,
+        pr_base_ref: None,
+        zen_intent_token: None,
+        escalated_to_human: None,
+        parent_branch: None,
+        parent_branch_sha: None,
+        review_verb: false,
+        claim_verb: false,
+        manual_enter_at: None,
+    }
+}
+
+#[test]
+fn leased_implementer_head_pins_assigned_spec_over_queue_head() {
+    let (_dir, storage) = queued_status_fixture(&[
+        ("STORY-1054", RequirementStatus::Approved),
+        ("STORY-1051", RequirementStatus::InProgress),
+    ]);
+    let store = storage.load().unwrap();
+    let entries = storage.queue_list("u", false).unwrap();
+    let lease = implementer_lease("STORY-1051");
+
+    let head = leased_implementer_queue_head(&entries, &store, "u", Some(&lease))
+        .expect("implementer lease should pin the assigned spec");
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| r.id == head.requirement_id)
+        .unwrap();
+
+    // trace:BUG-1082 | ai:codex
+    assert_eq!(req.display_id(), "STORY-1051");
+}
+
+#[test]
+fn leased_implementer_head_synthesizes_assignment_when_queue_shifted() {
+    let (_dir, storage) = queued_status_fixture(&[
+        ("STORY-1054", RequirementStatus::Approved),
+        ("STORY-1051", RequirementStatus::InProgress),
+    ]);
+    let store = storage.load().unwrap();
+    let queued: Vec<aida_core::QueueEntry> = storage
+        .queue_list("u", false)
+        .unwrap()
+        .into_iter()
+        .filter(|entry| {
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.id == entry.requirement_id)
+                .unwrap();
+            req.display_id() != "STORY-1051"
+        })
+        .collect();
+    let lease = implementer_lease("STORY-1051");
+
+    let head = leased_implementer_queue_head(&queued, &store, "u", Some(&lease))
+        .expect("assignment should survive a shifted/dequeued queue entry");
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| r.id == head.requirement_id)
+        .unwrap();
+
+    assert_eq!(req.display_id(), "STORY-1051");
+    assert_eq!(head.for_session.as_deref(), Some("lease-1082"));
+}
+
 #[test]
 fn fresh_pickup_policy_status_table_is_shared_by_surfaces() {
     use RequirementStatus::*;
