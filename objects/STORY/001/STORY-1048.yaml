@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   EPIC-44 (canonical hub), TASK-826 (the origin/provider cutover — depends on this so gitlab can serve releases before the flip), TASK-825 (.gitlab-ci.yml gates), docs/multi-hub-sync.md (the mirror contract this extends), TASK-1212 (Windows target — the GitLab release stage should build/publish it too).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:13:37.074808526Z
-modified_at: 2026-09-12T07:02:17.921848066Z
+modified_at: 2026-09-12T07:02:39.773878230Z
 req_type: Story
 tags:
 - from-product
