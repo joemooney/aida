@@ -2149,6 +2149,8 @@ mod tests {
         assert_eq!(native_restore_title_command(&tmux, &None), None);
     }
 
+    // `cmdline_matches_agent` reads /proc-style cmdlines and is unix-gated.
+    #[cfg(unix)]
     #[test]
     fn session_start_cmdline_match_detects_agent_binary() {
         assert!(cmdline_matches_agent(
