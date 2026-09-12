@@ -61245,5 +61245,42 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 4883
+- id: 01a09428-1a15-7b80-93ed-b1f32fff3acb
+  target_id: 01a09428-155b-7623-b243-a51e1bd7b0f5
+  author: aida
+  node_id: '1'
+  lamport: 4884
+  timestamp: 2026-09-12T05:47:31.221138031Z
+  kind: !Create
+    title: 'aida scaffold upgrade fails in submodules/linked worktrees: treats .git as a directory, writes .git/hooks → ''Not a directory (os error 20)'''
+    description: |-
+      ## Field report (2026-09-11, work machine, rex_mission_gen submodule)
+      `aida scaffold upgrade` assumes project-root `.git` is a DIRECTORY. In a submodule or linked worktree `.git` is a regular FILE pointing at the real git dir, so writing `.git/hooks/*` fails with `Not a directory (os error 20)` — with NO path context.
+
+      Env: AIDA 0.14.0 (b4f163adb+dirty). `.git` = file `gitdir: ../.git/modules/rex_mission_gen`; `git rev-parse --git-path hooks` = /…/rex/.git/modules/rex_mission_gen/hooks.
+      Repro: cd submodule; `aida scaffold upgrade` → `Error: Not a directory (os error 20)`. --dry-run shows it intends to create .git/hooks/{commit-msg,pre-commit,post-commit,prepare-commit-msg}.
+      Expected: succeed in a regular repo, linked worktree, AND submodule; install hooks in the GIT-RESOLVED hook dir, not <project>/.git/hooks.
+
+      ## Probable cause
+      aida-core/src/scaffolding/mod.rs adds .git/hooks to the preview when <project>/.git merely EXISTS; apply_with_options + scaffold_cmd.rs::run_scaffold_upgrade then create+write that project-relative path. Invalid when .git is a file.
+
+      ## Proposed fix
+      1. Resolve the hook dir via `git rev-parse --git-path hooks` (respect core.hooksPath if the contract intends it) — don't concatenate .git/hooks.
+      2. Keep the preview LABEL stable if desired, but use the resolved filesystem location for create/write/chmod/status/upgrade-check.
+      3. Wrap FS failures with the affected artifact + resolved destination (no bare OS error).
+      4. No partial scaffold mutation if resolving a required hook dest fails before the write phase.
+
+      ## Acceptance
+      1. Regular repo: upgrade installs all hooks (unchanged).
+      2. `git worktree add` checkout: succeeds; hooks land at `git rev-parse --git-path hooks`.
+      3. Submodule: succeeds; does not traverse the .git pointer file.
+      4. --dry-run and the real command report consistent artifacts.
+      5. A hook-write failure names the artifact + destination.
+      6. Regression coverage for a linked worktree AND a submodule-style .git pointer.
+
+      Workaround: use `aida scaffold refresh` (non-hook path).
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 4884
 node_id: '1'
