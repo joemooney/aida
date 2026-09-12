@@ -42,167 +42,19 @@ impl Scaffolder {
     }
 
     /// Generate Claude Code validate-commit hook content
+    // trace:BUG-1092 | ai:codex
     pub(super) fn generate_validate_commit_hook(&self) -> String {
-        r#"#!/bin/bash
-# AIDA Claude Code Hook: Validate commits reference requirements
-# PreToolUse hook for Bash commands
-#
-# This hook intercepts git commit commands and validates that:
-# 1. Commit message includes a requirement ID (REQ-ID) for feat/fix commits
-# 2. The referenced requirement exists in the database
-#
-# Exit codes:
-#   0 - Allow the command
-#   2 - Block the command (show stderr to Claude)
-
-set -euo pipefail
-
-# Read JSON input from stdin
-input=$(cat)
-
-# Extract the command being executed
-command=$(echo "$input" | jq -r '.tool_input.command // ""')
-
-# Only validate git commit commands
-if ! echo "$command" | grep -qE '^git commit'; then
-    exit 0  # Not a commit, allow
-fi
-
-# Skip if it's an amend or merge commit
-if echo "$command" | grep -qE '(--amend|--no-edit|Merge)'; then
-    exit 0
-fi
-
-# Extract commit message from -m flag
-# Handle both single and double quotes
-if echo "$command" | grep -qE '\-m "'; then
-    msg=$(echo "$command" | sed -n 's/.*-m "\([^"]*\)".*/\1/p')
-elif echo "$command" | grep -qE "\-m '"; then
-    msg=$(echo "$command" | sed -n "s/.*-m '\\([^']*\\)'.*/\\1/p")
-else
-    # No inline message, might be using editor - allow
-    exit 0
-fi
-
-# Check commit type - only require REQ-ID for feat/fix
-commit_type=$(echo "$msg" | grep -oE '^(\[AI:[^\]]+\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)' | tail -1 || true)
-
-case "$commit_type" in
-    *feat*|*fix*)
-        # Require requirement ID for features and fixes
-        if ! echo "$msg" | grep -qE '\([A-Z]+(-[0-9]+){1,2}\)'; then
-            cat >&2 <<EOF
-Commit blocked: Missing requirement ID
-
-Your feat/fix commit must reference a requirement:
-  Format: type(scope): description (REQ-ID)
-  Example: feat(auth): add login validation (FR-0042)
-
-Run 'aida list --status approved' to find requirement IDs.
-To skip validation, use 'chore' or 'docs' type instead.
-EOF
-            exit 2  # Block the commit
-        fi
-        ;;
-    *)
-        # Other types (docs, chore, etc.) don't require REQ-ID
-        exit 0
-        ;;
-esac
-
-# Validate that the requirement exists
-req_id=$(echo "$msg" | grep -oE '\([A-Z]+(-[0-9]+){1,2}\)' | head -1 | tr -d '()')
-
-if [ -n "$req_id" ]; then
-    if command -v aida &> /dev/null; then
-        if ! aida show "$req_id" &> /dev/null 2>&1; then
-            echo "Warning: Requirement $req_id not found in database" >&2
-            # Non-blocking warning - exit 0 to allow, exit 2 to block
-            exit 0
-        fi
-    fi
-fi
-
-exit 0  # Allow commit
-"#
-        .to_string()
+        include_str!("../../templates/hooks/aida-validate-commit.sh")
+            .trim_end()
+            .to_string()
     }
 
     /// Generate Claude Code track-commits hook content
+    // trace:BUG-1092 | ai:codex
     pub(super) fn generate_track_commits_hook(&self) -> String {
-        r#"#!/bin/bash
-# AIDA Claude Code Hook: Track commits and update requirement status
-# PostToolUse hook for Bash commands
-#
-# This hook runs after successful git commit commands and:
-# 1. Extracts requirement IDs from the commit message
-# 2. Updates those requirements to "in-progress" status
-# 3. Adds a comment noting the commit
-#
-# Exit codes:
-#   0 - Success (always, this is informational only)
-
-set -euo pipefail
-
-# Read JSON input from stdin
-input=$(cat)
-
-# Extract command and response
-command=$(echo "$input" | jq -r '.tool_input.command // ""')
-tool_response=$(echo "$input" | jq -r '.tool_response // ""')
-
-# Only process git commit commands
-if ! echo "$command" | grep -qE '^git commit'; then
-    exit 0
-fi
-
-# Check if commit was successful (look for success indicators in response)
-if echo "$tool_response" | grep -qiE '(error|failed|abort)'; then
-    exit 0  # Commit failed, don't update
-fi
-
-# Extract requirement IDs from commit message
-req_ids=$(echo "$command" | grep -oE '\([A-Z]+(-[0-9]+){1,2}\)' | tr -d '()' | sort -u || true)
-
-if [ -z "$req_ids" ]; then
-    exit 0  # No requirements referenced
-fi
-
-# Check if aida CLI is available
-if ! command -v aida &> /dev/null; then
-    exit 0
-fi
-
-# Get the commit hash (if available)
-commit_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-
-# Update each requirement
-for req_id in $req_ids; do
-    # Check current status
-    current_status=$(aida show "$req_id" 2>/dev/null | grep -oE 'Status:\s*\w+' | awk '{print $2}' || true)
-
-    case "$current_status" in
-        Draft|Approved|Planned)
-            # Transition to InProgress
-            aida edit "$req_id" --status in-progress 2>/dev/null || true
-            echo "Updated $req_id status to in-progress"
-            ;;
-        InProgress)
-            # Already in progress, just add comment
-            ;;
-        Completed)
-            # Already completed, skip
-            continue
-            ;;
-    esac
-
-    # Add commit reference as comment
-    aida comment add "$req_id" "Commit $commit_hash references this requirement" 2>/dev/null || true
-done
-
-exit 0
-"#
-        .to_string()
+        include_str!("../../templates/hooks/aida-track-commits.sh")
+            .trim_end()
+            .to_string()
     }
 
     /// Generate the SessionStart role-context hook content. Sourced from
@@ -289,6 +141,14 @@ mod tests {
             (
                 "hooks/aida-post-commit.sh",
                 scaffolder.generate_post_commit_hook(),
+            ),
+            (
+                "hooks/aida-validate-commit.sh",
+                scaffolder.generate_validate_commit_hook(),
+            ),
+            (
+                "hooks/aida-track-commits.sh",
+                scaffolder.generate_track_commits_hook(),
             ),
         ];
 
