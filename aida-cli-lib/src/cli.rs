@@ -2126,11 +2126,11 @@ pub enum SuperviseCommand {
     /// Nudge a live advisor about transiently parked work, or fall back to
     /// operator notification when no advisor is live.
     Nudge,
-    /// STORY-1051: re-drive TRANSIENT-parked specs (typed causes) on a capped,
-    /// backed-off loop; leave genuine needs-human parks for escalation. The
-    /// EPIC-62 keystone that lets an unattended drain self-recover. Reads parks
-    /// from the store and its attempt history from the event log, so it recovers
-    /// a park regardless of which drain parked it or whether that drain crashed.
+    /// Re-drive transiently-parked specs (typed tooling causes) on a capped,
+    /// backed-off loop; leave genuine needs-human parks for escalation. Lets an
+    /// unattended drain self-recover. Reads parks from the store and its attempt
+    /// history from the event log, so it recovers a park regardless of which
+    /// drain parked it or whether that drain crashed.
     // trace:STORY-1051 | ai:claude
     Redrive {
         /// Actually re-drive (default is a dry-run report of what it WOULD do).
