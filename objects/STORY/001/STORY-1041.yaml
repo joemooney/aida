@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:33:36.779816829Z
-modified_at: 2026-09-12T21:17:54.029667145Z
+modified_at: 2026-09-12T22:32:09.009591534Z
 req_type: Story
 tags:
 - drain
@@ -48,6 +48,9 @@ relationships:
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-11T12:34:01.290041085Z
   created_by: joe
+- rel_type: Parent
+  target_id: 01a097bf-d52e-7522-9ad7-88d1e5dec468
+  created_at: 2026-09-12T22:32:09.009591534Z
 comments:
 - id: 01a091f3-1fa2-7fb0-8d75-2e6128163a81
   author: joe
