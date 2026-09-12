@@ -27,12 +27,12 @@ description: |-
   4. A version-gated validation catches a generated prompt dir the installed Codex ignores.
 
   Ties to the user-facing-text / don't-overclaim discipline. Workaround: `$aida-capture` or `/skills` → aida-capture.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:47:35.805584203Z
-modified_at: 2026-09-12T15:19:43.194206760Z
+modified_at: 2026-09-12T15:26:06.338840884Z
 req_type: Bug
 tags:
 - codex
@@ -44,3 +44,7 @@ tags:
 - risk:low
 - scaffold
 - user-facing-text
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T15:26:06.338840884Z
+  implemented_by: joe
