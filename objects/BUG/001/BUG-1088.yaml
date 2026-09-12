@@ -12,14 +12,18 @@ description: |
   ## Acceptance
   1. The hook's intermediate-check exempts files that are TRACKED in git (git ls-files) — a tracked file is source, not a build product, regardless of check-ignore.
   2. Regression: editing aida-core/templates/.aida/discipline/* commits cleanly without --allow-intermediate/--no-verify; editing a genuinely gitignored runtime file still refuses.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T03:34:46.746545347Z
-modified_at: 2026-09-12T04:13:21.450335088Z
+modified_at: 2026-09-12T04:16:14.613585669Z
 req_type: Bug
 tags:
 - hooks
 - papercut
 - scaffolding
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T04:16:14.613585669Z
+  implemented_by: joe
