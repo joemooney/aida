@@ -224,11 +224,13 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             id: "STORY-943".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("reviewer".to_string()),
+            deferred: false,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-944".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
+            deferred: false,
         },
     ];
 
@@ -240,6 +242,31 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
         vec![("STORY-943".to_string(), "reviewer".to_string())]
     );
     assert!(pick.status_skipped.is_empty());
+}
+
+#[test]
+fn auto_complete_head_skips_deferred_candidates() {
+    let candidates = vec![
+        AutoCompleteHeadCandidate {
+            id: "TASK-1205".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: true,
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-1208".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+        },
+    ];
+
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .expect("drain should skip deferred rows and pick the next drivable item");
+    assert_eq!(pick.spec, "TASK-1208");
+    assert_eq!(pick.deferred_skipped, vec!["TASK-1205".to_string()]);
+    assert!(pick.status_skipped.is_empty());
+    assert!(pick.role_skipped.is_empty());
 }
 
 /// BUG-862 (reviewer finding, round 2): a drain launched from a DISPATCH
@@ -827,6 +854,22 @@ fn queue_add_hidden_view_reason_rejects_parked_specs() {
 
     let active = req("TASK-1137", None, RequirementType::Task);
     assert_eq!(queue_add_hidden_view_reason(&active), None);
+}
+
+#[test]
+fn fresh_pickup_policy_skips_deferred_specs() {
+    let mut deferred = req("TASK-1205", None, RequirementType::Task);
+    deferred.status = RequirementStatus::Approved;
+    deferred.deferred = true;
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(deferred.clone());
+
+    let policy = queue_fresh_pickup_policy(&deferred, &store, false);
+    assert_eq!(policy, QueueFreshPickup::Deferred);
+    assert_eq!(
+        queue_fresh_pickup_reason_label(&policy).as_deref(),
+        Some("deferred — skipped")
+    );
 }
 
 /// spec_matches walks uuid, spec_id (case-insensitive), and

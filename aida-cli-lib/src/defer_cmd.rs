@@ -56,8 +56,31 @@ pub(crate) fn defer_single(
     backend.update_requirement(&req)?;
     record_role_activity(&display_id, "defer");
 
+    // A deferred spec is parked outside executable work. Queue rows may live
+    // under personal identities or shared role identities, so sweep every
+    // persisted queue user instead of only the identity that ran `aida defer`.
+    // trace:BUG-1099 | ai:codex
+    let queue_storage = crate::Storage::new(store_path.to_path_buf());
+    let removed = remove_deferred_queue_rows(&queue_storage, &req.id)?;
+
     let verb = if already { "Re-deferred:" } else { "Deferred:" };
     println!("{} {display_id}", verb.cyan().bold());
+    if removed.is_empty() {
+        println!(
+            "  {} no queued rows found for {display_id}",
+            "Dequeued:".dimmed()
+        );
+    } else {
+        println!(
+            "  {} removed {} queued row{} for {display_id}:",
+            "Dequeued:".cyan(),
+            removed.len(),
+            if removed.len() == 1 { "" } else { "s" }
+        );
+        for row in &removed {
+            println!("    - {}", row);
+        }
+    }
     match req.deferred_until.as_deref() {
         Some(cond) => println!("  {} {cond}", "Revisit when:".dimmed()),
         None => println!(
@@ -66,6 +89,42 @@ pub(crate) fn defer_single(
         ),
     }
     Ok(())
+}
+
+fn remove_deferred_queue_rows(
+    storage: &aida_core::Storage,
+    req_id: &uuid::Uuid,
+) -> Result<Vec<String>> {
+    let mut users = storage.queue_users().unwrap_or_default();
+    users.push(crate::current_user_id(None));
+    users.sort();
+    users.dedup();
+
+    let mut removed = Vec::new();
+    for user in users {
+        let entries = match storage.queue_list(&user, /* include_completed */ true) {
+            Ok(entries) => entries,
+            Err(e) => {
+                eprintln!(
+                    "{} could not inspect queue `{user}` while deferring ({e})",
+                    "Warning:".yellow()
+                );
+                continue;
+            }
+        };
+        let Some(entry) = entries.iter().find(|e| e.requirement_id == *req_id) else {
+            continue;
+        };
+        let role = entry.for_role.as_deref().unwrap_or("unrouted").to_string();
+        match storage.queue_remove(&user, req_id) {
+            Ok(()) => removed.push(format!("queue `{user}` ({role})")),
+            Err(e) => eprintln!(
+                "{} could not remove deferred spec from queue `{user}` ({e}); row may remain.",
+                "Warning:".yellow()
+            ),
+        }
+    }
+    Ok(removed)
 }
 
 /// Inverse of `aida defer` — clears the deferred flag + revisit trigger so the
