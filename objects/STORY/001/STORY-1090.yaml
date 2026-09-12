@@ -1,0 +1,26 @@
+id: 01a0974b-7a8b-7342-af19-fb8bede6ff33
+spec_id: STORY-1090
+agreed_id: STORY-1090
+title: 'Review PR-1783: [AI:codex] fix(orchestrator): ignore stale merged PRs after reopen (BUG-1112)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0973e`) for branch `bug-1112`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1783>
+  - Branch: `bug-1112` → `main`
+
+  ## Covers
+
+  - BUG-1112
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1783` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T20:25:01.323231727Z
+modified_at: 2026-09-12T20:25:01.323231727Z
+req_type: Story
