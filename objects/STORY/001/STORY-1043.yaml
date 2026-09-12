@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:49.938635015Z
-modified_at: 2026-09-12T07:48:21.914210339Z
+modified_at: 2026-09-12T07:50:38.242600829Z
 req_type: Story
 tags:
 - awaiting
@@ -58,3 +58,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-11T19:55:14.127925952Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida awaiting — lists unshipped work and cross-platform nightly-red status
+  - aida awaiting --notice — includes unshipped:N in the per-turn hook line
+  - aida doctor --category ci — reports cross-platform nightly red status
+  - aida session reap — reports unshipped work and avoids removing those worktrees
+  other:
+  - UnshippedWorkDetected event records first-seen unshipped branches for notification/history
