@@ -953,6 +953,31 @@ pub enum SessionCommand {
         limit: usize,
     },
 
+    /// Focus the terminal pane/window for a live registered AIDA session.
+    // trace:STORY-995 | ai:codex
+    Focus {
+        /// Session id/prefix, native session id/prefix, agent name, or SPEC-ID.
+        target: String,
+    },
+
+    /// Send text to a live registered AIDA session through its terminal adapter.
+    // trace:STORY-995 | ai:codex
+    Send {
+        /// Session id/prefix, native session id/prefix, agent name, or SPEC-ID.
+        target: String,
+
+        /// Text to inject through a supported terminal adapter.
+        text: String,
+
+        /// Send Enter after the text.
+        #[clap(long)]
+        enter: bool,
+
+        /// Send a mailbox notice, then nudge the session with one Enter when possible.
+        #[clap(long)]
+        mail: bool,
+    },
+
     /// Launch a new Claude Code session, recording the active role + a
     /// user-chosen title so `aida session list` can show them
     /// reliably (instead of greping the auto-generated subject). Execs
@@ -1457,6 +1482,17 @@ pub enum SessionCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+    },
+}
+
+/// Terminal integrations that install user-local helper files.
+// trace:STORY-995 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum TerminalCommand {
+    /// Install the AIDA Terminator plugin.
+    Install {
+        /// Helper to install. Currently only `terminator` is supported.
+        target: String,
     },
 }
 
@@ -9735,6 +9771,11 @@ pub enum Command {
     // trace:FR-1-043 | ai:claude
     #[clap(subcommand)]
     Session(SessionCommand),
+
+    /// Install or inspect terminal integration helpers.
+    // trace:STORY-995 | ai:codex
+    #[clap(subcommand)]
+    Terminal(TerminalCommand),
 
     /// Advisor-directed worktree lock — a MANUAL bouncer:
     /// `acquire` stamps `authorized_by` on the session lease covering a

@@ -67,6 +67,7 @@ mod queue_cmd;
 mod solo_cmd;
 mod status_cmd;
 mod supervise_cmd;
+mod terminal_cmd;
 mod zen_cmd;
 use drain_cmd::*;
 use mcp_cmd::*;
@@ -341,8 +342,8 @@ use crate::cli::{
     PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelationshipCommand, ReleaseCommand,
     ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
     SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
-    TeamCommand, TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand,
-    WorktreePoolCommand, ZenCommand,
+    TeamCommand, TerminalCommand, TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand,
+    WorktreeCommand, WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3455,6 +3456,11 @@ fn run() -> Result<()> {
     if let Command::Session(session_cmd) = &cli.command {
         return handle_session_command(session_cmd);
     }
+    // trace:STORY-995 | ai:codex — terminal helper installation is user-local
+    // and store-independent, so it belongs in the early command tier.
+    if let Command::Terminal(terminal_cmd) = &cli.command {
+        return handle_terminal_command(terminal_cmd);
+    }
     // TASK-661 (ADR-3): disposition/triage lease. Dispatched before storage
     // init — it reads + writes only `.aida/triage-leases/` files and probes
     // PIDs; no requirement-store handle needed. trace:TASK-661 | ai:claude
@@ -4043,6 +4049,9 @@ fn run() -> Result<()> {
         }
         Command::Agent(agent_cmd) => {
             handle_agent_command(agent_cmd)?;
+        }
+        Command::Terminal(cmd) => {
+            handle_terminal_command(cmd)?;
         }
         Command::Edit {
             id,
@@ -20634,6 +20643,13 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             session::list(*limit, *no_color, *all)
         }
         SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
+        SessionCommand::Focus { target } => terminal_cmd::focus_session(target),
+        SessionCommand::Send {
+            target,
+            text,
+            enter,
+            mail,
+        } => terminal_cmd::send_session(target, text, *enter, *mail),
         SessionCommand::New {
             title,
             permission_mode,
@@ -20772,6 +20788,13 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             })
         }
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
+    }
+}
+
+// trace:STORY-995 | ai:codex
+fn handle_terminal_command(cmd: &TerminalCommand) -> Result<()> {
+    match cmd {
+        TerminalCommand::Install { target } => terminal_cmd::install_terminal(target),
     }
 }
 

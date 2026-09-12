@@ -178,6 +178,50 @@ There's no separate status overlay — the cockpit *is* the status surface:
 - **`why`** explains why a spec is still open; **`r`** re-reads the store so
   state another agent changed shows up without relaunch.
 
+## Finding And Reaching A Live Session
+
+`aida session conversations` and `aida ps` show the recorded terminal identity
+for launched sessions. When the session was started inside tmux, WezTerm, or
+Terminator with the AIDA Terminator plugin enabled, AIDA can use that identity
+to focus the pane or send a bounded nudge:
+
+```bash
+aida session focus <session|agent-name|SPEC>
+aida session send <session|agent-name|SPEC> "aida mailbox inbox" --enter
+aida session send <session|agent-name|SPEC> "Please read the mailbox" --mail
+```
+
+`focus` is best-effort and never fails just because the terminal cannot be
+activated; it prints a locate hint such as the tty and expected tab title.
+`send` never writes to the tty device. It only uses terminal APIs:
+
+| Terminal | Focus | Send |
+|----------|-------|------|
+| tmux | `tmux select-pane -t <TMUX_PANE>` | `tmux send-keys -t <TMUX_PANE> -l <text>` |
+| WezTerm | `wezterm cli activate-pane --pane-id <WEZTERM_PANE>` | `wezterm cli send-text --pane-id <WEZTERM_PANE> --no-paste <text>` |
+| Terminator | DBus `Focus(uuid)` on `net.aida.Terminator` | DBus `Send(uuid, text)` on `net.aida.Terminator` |
+
+The recommended cross-vendor path is `--mail`: AIDA writes the message through
+the mailbox, then sends a single Enter through the terminal adapter when one is
+available so an idle interactive session can take its next turn and notice the
+mail. Raw `send` is the escape hatch for cases where keystroke injection is
+explicitly desired.
+
+Install the Terminator bridge with:
+
+```bash
+aida terminal install terminator
+```
+
+Then enable `AidaTerminator` in Terminator Preferences > Plugins and restart
+Terminator. The plugin listens only on the current user's DBus session bus.
+Its `Send` method injects keystrokes into a shell at the same trust level as
+Terminator's Custom Commands plugin; enable it only where local AIDA session
+control is expected. For extra hardening, set `[terminal] send_token = "..."`
+in `.aida/config.toml` and write the same value to
+`~/.config/terminator/aida-token`; when configured, AIDA calls the plugin's
+`SendToken` DBus method instead of plain `Send`.
+
 ## Epic focus lens
 
 `F` opens a fuzzy picker of open epics; choosing one narrows **every** scope to
