@@ -25,6 +25,9 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             name: aida-darwin-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: aida-windows-x86_64
 
     runs-on: ${{ matrix.os }}
 
@@ -50,14 +53,21 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install protobuf
 
+      - name: Install protobuf compiler (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc -y
+
       - name: Build
+        shell: bash
         run: |
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
           fi
           cargo build --release --target ${{ matrix.target }} -p aida-cli -p aida-server
 
-      - name: Package
+      - name: Package Unix release tarball
+        if: runner.os != 'Windows'
+        shell: bash
         run: |
           # Stage both binaries under a per-target dir so the tarball
           # contains aida + aida-server at the top level (not renamed).
@@ -68,11 +78,36 @@ jobs:
           chmod +x stage/${{ matrix.name }}/aida stage/${{ matrix.name }}/aida-server
           tar czf ${{ matrix.name }}.tar.gz -C stage/${{ matrix.name }} aida aida-server
 
-      - name: Upload artifact
+      - name: Package Windows release zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # trace:TASK-1212 | ai:codex
+          New-Item -ItemType Directory -Force -Path stage/${{ matrix.name }}
+          Copy-Item target/${{ matrix.target }}/release/aida.exe stage/${{ matrix.name }}/aida.exe
+          Copy-Item target/${{ matrix.target }}/release/aida-server.exe stage/${{ matrix.name }}/aida-server.exe
+          Compress-Archive -Path stage/${{ matrix.name }}/aida.exe,stage/${{ matrix.name }}/aida-server.exe -DestinationPath ${{ matrix.name }}.zip
+
+      - name: Verify Windows CLI binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Expand-Archive -Path ${{ matrix.name }}.zip -DestinationPath verify/${{ matrix.name }}
+          verify/${{ matrix.name }}/aida.exe --version
+
+      - name: Upload Unix artifact
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}.tar.gz
+
+      - name: Upload Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}.zip
 
   release:
     needs: build
@@ -102,3 +137,4 @@ jobs:
             artifacts/aida-linux-arm64/aida-linux-arm64.tar.gz
             artifacts/aida-darwin-x86_64/aida-darwin-x86_64.tar.gz
             artifacts/aida-darwin-arm64/aida-darwin-arm64.tar.gz
+            artifacts/aida-windows-x86_64/aida-windows-x86_64.zip

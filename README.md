@@ -189,7 +189,7 @@ Two paths: a **prebuilt binary** (the primary alpha path — no Rust toolchain n
 
 #### Prebuilt binary
 
-The install script auto-detects your platform, downloads the matching release tarball, and drops `aida` into `~/.local/bin/`:
+The install script auto-detects your platform, downloads the matching release asset, and drops `aida` into `~/.local/bin/`:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
@@ -202,7 +202,7 @@ curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.
 curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --prefix /usr/local/bin
 ```
 
-Prefer to do it by hand? Download the tarball for your platform straight from the [releases page](https://github.com/joemooney/aida/releases). Each tarball unpacks to `aida` and `aida-server` in the current directory.
+Prefer to do it by hand? Download the asset for your platform straight from the [releases page](https://github.com/joemooney/aida/releases). Linux and macOS tarballs unpack to `aida` and `aida-server`; the Windows zip unpacks to `aida.exe` and `aida-server.exe`.
 
 **Linux** (Tier 1 — primary alpha target):
 
@@ -224,7 +224,15 @@ mv aida ~/.local/bin/
 
 On Intel Macs, swap `aida-darwin-arm64` → `aida-darwin-x86_64`.
 
-**Windows** (Tier 2): no prebuilt tarball ships yet — [build from source](#build-from-source) below.
+**Windows** (Tier 2 — nightly-validated):
+
+Download `aida-windows-x86_64.zip` from the [latest release](https://github.com/joemooney/aida/releases/latest), unzip it, then run:
+
+```powershell
+.\aida.exe --version
+```
+
+From Git Bash or MSYS/Cygwin, `scripts/install.sh` can also install the Windows zip automatically. On WSL, use the Linux install path above.
 
 Tier 1 vs Tier 2 is the [platform support](#platform-support) story: Linux is exercised on every PR, macOS and Windows by a nightly cross-platform CI run. After install, `aida upgrade` is the one-command path to future versions. Make sure your chosen install prefix (e.g. `~/.local/bin`) is on your `PATH`.
 
@@ -485,7 +493,7 @@ Git is the canonical store: one YAML file per requirement on the orphan `aida-st
 
 ## Platform support
 
-Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Linux-only for a fast ~3-5 min cycle. macOS and Windows are **Tier 2**: supported, but validated by a nightly [cross-platform CI run](https://github.com/joemooney/aida/actions/workflows/cross-platform.yml) rather than on every change, so cross-platform regressions surface within ~24h. Pre-built macOS tarballs ship with each [release](https://github.com/joemooney/aida/releases); Windows builds from source (`cargo install --git https://github.com/joemooney/aida.git aida-cli`). Releases are gated on a green cross-platform run.
+Linux is the **primary platform during the alpha** ("Tier 1") — PR CI runs Linux-only for a fast ~3-5 min cycle. macOS and Windows are **Tier 2**: supported, but validated by a nightly [cross-platform CI run](https://github.com/joemooney/aida/actions/workflows/cross-platform.yml) rather than on every change, so cross-platform regressions surface within ~24h. Pre-built Linux/macOS tarballs and a Windows x86_64 zip ship with each [release](https://github.com/joemooney/aida/releases). Releases are gated on a green cross-platform run.
 
 ## Documentation
 
