@@ -12,15 +12,19 @@ description: |
   ## Acceptance
   1. The phase-1 reconciler only credits a merged PR whose merge is NEWER than the spec's latest reopen transition (status left a terminal state after the PR merged -> the PR cannot satisfy the reopen).
   2. Regression test: spec completed via PR N, reopened, driven -> reconciler does NOT credit PR N; a fresh implementation happens (or the run shelves with 'reopened scope needs new work').
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T19:42:15.126167719Z
-modified_at: 2026-09-12T20:10:32.789939301Z
+modified_at: 2026-09-12T20:17:28.401331758Z
 req_type: Bug
 tags:
 - drain
 - lifecycle
 - orchestrator
 - reliability
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T20:17:28.401331758Z
+  implemented_by: joe
