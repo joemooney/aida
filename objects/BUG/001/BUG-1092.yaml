@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:42:37.594281017Z
-modified_at: 2026-09-12T15:18:52.377391323Z
+modified_at: 2026-09-12T15:19:27.835377278Z
 req_type: Bug
 tags:
 - false-positive
@@ -41,6 +41,13 @@ relationships:
   target_id: 01a09629-20c7-7ff3-9735-04b9b4173aff
   created_at: 2026-09-12T15:07:57.653611231Z
   created_by: joe
+comments:
+- id: 01a09633-bb5b-7411-acf7-44fe035f178c
+  author: joe
+  content: 'Advisor steering on the RequestChanges (PR-1777): generate_validate_commit_hook() and generate_track_commits_hook() in aida-core/src/scaffolding/hooks.rs return INLINE pre-fix script bodies — a second copy of what the templates already fixed. Prefer de-duplication over parallel maintenance: make those generators emit the embedded template content (include_str! the master hook files) so the fix ships everywhere and this class of drift can''t recur; only fall back to hand-updating the inline strings if the generators genuinely diverge from the templates.'
+  created_at: 2026-09-12T15:19:27.835377278Z
+  modified_at: 2026-09-12T15:19:27.835377278Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T15:08:05.048425738Z
