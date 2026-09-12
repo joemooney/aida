@@ -270,6 +270,7 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
         intent: Intent::Request,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     crate::mailbox_store::write_message(project_root, &msg)?;
     Ok(())
