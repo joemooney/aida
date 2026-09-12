@@ -1,0 +1,25 @@
+id: 01a093ae-92da-7b51-ae4f-ae6dc8391eed
+spec_id: BUG-1088
+agreed_id: BUG-1088
+title: commit hook misclassifies tracked template masters under templates/.aida/ as gitignored intermediates
+description: |
+  ## Observed
+  2026-09-11 20:35: committing a legitimate edit to the discipline-pack MASTER templates (aida-core/templates/.aida/discipline/session-discipline.md, machinery-glossary.md, glossary.yaml) was refused by the commit hook: 'Refusing commit: ... is gitignored. Editing intermediate build products produces non-reproducible fixes.'
+
+  ## Root cause hypothesis
+  The scaffolded deny-by-default gitignore pattern for runtime state (.aida/*) matches ANY path segment named .aida, including the tracked template masters under aida-core/templates/.aida/. git check-ignore returns true for them, so the hook misclassifies source-of-truth files as intermediates. --no-verify was needed for a correct fix.
+
+  ## Acceptance
+  1. The hook's intermediate-check exempts files that are TRACKED in git (git ls-files) — a tracked file is source, not a build product, regardless of check-ignore.
+  2. Regression: editing aida-core/templates/.aida/discipline/* commits cleanly without --allow-intermediate/--no-verify; editing a genuinely gitignored runtime file still refuses.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T03:34:46.746545347Z
+modified_at: 2026-09-12T03:34:46.746545347Z
+req_type: Bug
+tags:
+- hooks
+- papercut
+- scaffolding
