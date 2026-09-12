@@ -18,12 +18,12 @@ description: |-
 
   ## Related
   aida tail (TASK-1167/1173, the drill-down target), aida status next[] convention (STORY-707), STORY-1023 (shelved-vs-needs-decision rendering the triage hint should match).
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:47:20.184181777Z
-modified_at: 2026-09-12T02:14:18.974067563Z
+modified_at: 2026-09-12T02:14:24.214467339Z
 req_type: Task
 tags:
 - affordance
@@ -47,3 +47,7 @@ comments:
   modified_at: 2026-09-11T16:49:45.146878502Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T02:14:24.214467339Z
+  implemented_by: joe
