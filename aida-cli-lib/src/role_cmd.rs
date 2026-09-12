@@ -22,7 +22,8 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             name,
             cd,
             no_resume,
-        } => handle_role_enter(&project_root, name.as_deref(), *cd, *no_resume),
+            no_title,
+        } => handle_role_enter(&project_root, name.as_deref(), *cd, *no_resume, *no_title),
         RoleCommand::Add {
             name,
             purpose,
@@ -172,6 +173,7 @@ fn handle_role_enter(
     name: Option<&str>,
     cd: bool,
     no_resume: bool,
+    no_title: bool,
 ) -> Result<()> {
     // TASK-644: resolve the role name. When the name is omitted, or names a
     // role that doesn't exist, fall back to an interactive picker — but ONLY
@@ -219,6 +221,14 @@ fn handle_role_enter(
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
+    let registry_entry = crate::agent_registry::register_role_enter_agent(
+        project_root,
+        &state.name,
+        state
+            .working_directory
+            .clone()
+            .unwrap_or_else(|| project_root.to_path_buf()),
+    )?;
     // STORY-768: entering the advisor seat under tmux registers this pane so
     // `aida human audit --inject` can send-keys the reconcile pass here even
     // when the advisor is idle. Idempotent; a no-op (and never an error) when
@@ -234,6 +244,8 @@ fn handle_role_enter(
         cd,
         /* was_existing */ true,
         resume,
+        no_title,
+        Some(&registry_entry),
     );
     Ok(())
 }
@@ -373,6 +385,8 @@ fn handle_role_add(
         /* cd */ false,
         /* was_existing */ false,
         None,
+        /* no_title */ false,
+        None,
     );
     Ok(())
 }
@@ -442,6 +456,8 @@ fn emit_role_enter_eval(
     cd: bool,
     was_existing: bool,
     resume_session_id: Option<String>,
+    no_title: bool,
+    registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
 ) {
     // Emit shell code for eval. The `aida()` shell wrapper installed by
     // `aida dev shell-init --install` automatically eval's our stdout for
@@ -486,6 +502,9 @@ fn emit_role_enter_eval(
         println!("unset AIDA_SESSION_PURPOSE");
     }
     println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    if let Some(title) = role_enter_launch_title(project_root, state, no_title, registry_entry) {
+        println!("printf '\\033]2;%s\\007' '{}'", sh_single_quote(&title));
+    }
     println!("if [ -n \"${{PS1+x}}\" ]; then");
     println!("    export PS1=\"(role:{}) $PS1\"", state.name);
     println!("fi");
@@ -615,6 +634,26 @@ fn emit_role_enter_eval(
     if let Some(id) = resume_session_id {
         println!("claude --resume '{}'", sh_single_quote(&id));
     }
+}
+
+// trace:STORY-994 | ai:codex
+fn role_enter_launch_title(
+    project_root: &std::path::Path,
+    state: &RoleState,
+    no_title: bool,
+    registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
+) -> Option<String> {
+    if no_title || !crate::agent_registry::terminal_title_enabled(project_root) {
+        return None;
+    }
+    let session_id = registry_entry
+        .map(|entry| entry.id.as_str())
+        .unwrap_or(state.name.as_str());
+    Some(crate::agent_registry::launch_title(
+        &state.name,
+        registry_entry.and_then(|entry| entry.current_spec.as_deref()),
+        session_id,
+    ))
 }
 
 /// `aida role active` — one-line stub that prints just the active role
@@ -983,6 +1022,7 @@ fn handle_role_scaffold() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
 
     fn role_cache_fixture() -> (tempfile::TempDir, uuid::Uuid) {
         let dir = tempfile::tempdir().unwrap();
@@ -1006,6 +1046,122 @@ mod tests {
         .unwrap();
         drop(conn);
         (dir, id)
+    }
+
+    fn role_state_fixture(name: &str) -> RoleState {
+        RoleState {
+            name: name.to_string(),
+            purpose: None,
+            created_at: chrono::Utc::now(),
+            last_active_at: chrono::Utc::now(),
+            working_directory: None,
+            notes: None,
+            global: false,
+            activity: Vec::new(),
+            scope_tags: Vec::new(),
+            scope_status: None,
+            system_prompt: None,
+        }
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn parses_role_enter_no_title_flag() {
+        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--no-title"])
+            .expect("parse role enter");
+        let Command::Role(RoleCommand::Enter {
+            name,
+            cd: false,
+            no_resume: false,
+            no_title,
+        }) = cli.command
+        else {
+            panic!("expected role enter command");
+        };
+
+        assert_eq!(name.as_deref(), Some("advisor"));
+        assert!(no_title);
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_launch_title_honors_per_invocation_opt_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = role_state_fixture("advisor");
+
+        assert!(role_enter_launch_title(dir.path(), &state, false, None).is_some());
+        assert!(role_enter_launch_title(dir.path(), &state, true, None).is_none());
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_launch_title_honors_terminal_config_opt_out() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "[terminal]\ntitle = false\n",
+        )
+        .unwrap();
+        let state = role_state_fixture("advisor");
+
+        assert!(role_enter_launch_title(dir.path(), &state, false, None).is_none());
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_launch_title_uses_registry_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = role_state_fixture("advisor");
+        let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_SESSION_SCOPE", "STORY-994")]);
+
+        let entry = crate::agent_registry::register_role_enter_agent(
+            dir.path(),
+            "advisor",
+            dir.path().into(),
+        )
+        .expect("role enter registry entry");
+        let title =
+            role_enter_launch_title(dir.path(), &state, false, Some(&entry)).expect("title");
+
+        assert!(title.starts_with("aida · advisor · STORY-994 · shell-"));
+    }
+
+    // trace:STORY-994 | ai:codex
+    #[test]
+    fn role_enter_handler_persists_terminal_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = role_state_fixture("advisor");
+        let save_path = role_save_path(dir.path(), &state).expect("role path");
+        save_role_at(&state, &save_path).expect("save role");
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_SCOPE", "STORY-994"),
+            ("TERMINATOR_UUID", "role-handler-term-994"),
+        ]);
+
+        handle_role_enter(
+            dir.path(),
+            Some("advisor"),
+            /* cd */ false,
+            /* no_resume */ true,
+            /* no_title */ true,
+        )
+        .expect("role enter");
+
+        let agents_dir = dir.path().join(".aida").join("agents");
+        let mut entries = std::fs::read_dir(&agents_dir)
+            .expect("agents dir")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("agent entries");
+        entries.sort_by_key(|entry| entry.path());
+        assert_eq!(entries.len(), 1);
+        let persisted = std::fs::read_to_string(entries[0].path()).expect("registry entry");
+
+        assert!(persisted.contains("source = \"role-enter\""));
+        assert!(persisted.contains("role = \"advisor\""));
+        assert!(persisted.contains("[terminal]"));
+        assert!(persisted.contains("emulator = \"terminator\""));
+        assert!(persisted.contains("terminator_uuid = \"role-handler-term-994\""));
     }
 
     // trace:BUG-840 | ai:codex

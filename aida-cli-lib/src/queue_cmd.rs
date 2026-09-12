@@ -8878,6 +8878,7 @@ pub(crate) fn handle_queue_work(
         /* branch_style */ "auto",
         /* launch */ false,
         /* launch_title */ None,
+        /* launch_set_title */ false,
         /* launch_name */ None,
         // STORY-495: inert here (launch=false); the real launch below threads
         // the resolved `permission_mode` into the exec call directly.

@@ -17,6 +17,7 @@ fn ended_entry(
         name: Some(name.to_string()),
         description: None,
         tty: None,
+        terminal: None,
         started_at: Utc::now() - Duration::hours(2),
         last_active_at: Utc::now() - ended_ago,
         role: Some("implementer".into()),

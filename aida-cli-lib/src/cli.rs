@@ -991,6 +991,10 @@ pub enum SessionCommand {
         /// $AIDA_SESSION_ROLE).
         #[clap(long)]
         role: Option<String>,
+
+        /// Do not set the terminal/tab title for this launch.
+        #[clap(long)]
+        no_title: bool,
     },
 
     /// Start a scoped session: create a sibling git worktree on a fresh
@@ -1066,6 +1070,10 @@ pub enum SessionCommand {
         // trace:STORY-54 | ai:claude
         #[clap(long, short = 't')]
         title: Option<String>,
+
+        /// Do not set the terminal/tab title for this launch.
+        #[clap(long)]
+        no_title: bool,
 
         /// Display name passed to Claude Code via `--name`. Shown in
         /// claude's prompt box, /resume picker, and terminal title.
@@ -1721,6 +1729,11 @@ pub enum RoleCommand {
         // trace:STORY-821 | ai:codex
         #[clap(long)]
         no_resume: bool,
+
+        /// Do not set the terminal/tab title for this role enter.
+        // trace:STORY-994 | ai:codex
+        #[clap(long)]
+        no_title: bool,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
@@ -7180,6 +7193,10 @@ pub enum AgentNewCommand {
         #[clap(long)]
         no_context: bool,
 
+        /// Do not set the terminal/tab title for this launch.
+        #[clap(long)]
+        no_title: bool,
+
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
@@ -7275,6 +7292,10 @@ pub enum AgentNewCommand {
         #[clap(long)]
         no_context: bool,
 
+        /// Do not set the terminal/tab title for this launch.
+        #[clap(long)]
+        no_title: bool,
+
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
@@ -7353,6 +7374,10 @@ pub enum AgentNewCommand {
         /// Do not write/inject the AIDA launch-context snapshot.
         #[clap(long)]
         no_context: bool,
+
+        /// Do not set the terminal/tab title for this launch.
+        #[clap(long)]
+        no_title: bool,
 
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]

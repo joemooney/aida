@@ -73,6 +73,7 @@ fn status_agents_registry_entry_wins_over_matching_lease() {
         name: None,
         description: None,
         tty: None,
+        terminal: None,
         started_at: lease.started_at,
         last_active_at: lease.started_at,
         role: Some("implementer".to_string()),

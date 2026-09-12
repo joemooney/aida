@@ -41,7 +41,7 @@ const START_AFTER_LAST_START_SLACK_SECS: i64 = 60;
 
 /// Three-state liveness for a conversation row.
 // trace:STORY-993 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub enum Liveness {
     /// A process was resolved for this transcript and is alive.
     Alive,
@@ -65,7 +65,7 @@ impl Liveness {
 
 /// How the pid (if any) was found.
 // trace:STORY-993 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub enum Resolution {
     /// A session lease covering this transcript recorded the pid.
     Lease,
@@ -88,7 +88,7 @@ impl Resolution {
 
 /// The resolved process facts for one conversation row.
 // trace:STORY-993 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize)]
 pub struct ProcessFacts {
     /// The single resolved pid. `None` when unresolved OR ambiguous — check
     /// [`ProcessFacts::is_ambiguous`] / `candidates` to tell the two apart.
