@@ -19,13 +19,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T06:24:10.413442950Z
-modified_at: 2026-09-12T08:21:29.494791376Z
+modified_at: 2026-09-12T08:29:22.332815026Z
 req_type: Bug
 tags:
 - drain
 - queue
 - reliability
 - substrate-as-bouncer
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a094bc-34d4-7152-81cb-2b8985b56ab9
+  created_at: 2026-09-12T08:29:22.332810868Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T08:21:29.494791376Z
