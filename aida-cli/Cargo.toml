@@ -19,7 +19,7 @@ path = "src/main.rs"
 # `cargo build -p aida-cli --features remote` keeps working unchanged.
 # trace:STORY-772 trace:ADR-16 | ai:claude
 [dependencies]
-aida-cli-lib = { version = "0.14", path = "../aida-cli-lib", default-features = false }
+aida-cli-lib = { version = "0.15", path = "../aida-cli-lib", default-features = false }
 
 [features]
 default = ["tui"]

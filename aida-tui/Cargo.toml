@@ -32,7 +32,7 @@ clap = { workspace = true }
 # rusqlite + fs2 + dirs); the read path needs neither `postgres` nor the forge
 # features (github/gitlab/jira). Already in the workspace lockfile via aida-cli.
 # trace:STORY-693
-aida-core = { version = "0.14", path = "../aida-core" }
+aida-core = { version = "0.15", path = "../aida-core" }
 
 # Markdown rendering of the show-modal body. Parsed into styled ratatui
 # Lines/Spans ourselves (no tui-markdown — workspace ratatui is 0.30, which
