@@ -23,12 +23,12 @@ description: |-
 
   ## Related
   Parent EPIC (unattended reliability), STORY-974 (typed causes — the classifier input), STORY-975 (in-phase retry — this is the ABOVE-phase loop), BUG-908/909/1063 (the false-park fixes this loop assumes), STORY-1047 (schedule tick — a run trigger), STORY-1043 (surface the needs-human residue), STORY-1029 (notify).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:46.943966857Z
-modified_at: 2026-09-12T20:25:13.768997668Z
+modified_at: 2026-09-12T21:06:22.546715680Z
 req_type: Story
 tags:
 - drain
@@ -66,16 +66,27 @@ comments:
   created_at: 2026-09-12T05:25:01.467355417Z
   modified_at: 2026-09-12T05:25:01.467355417Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09771-56cb-7810-a982-f8a05497e889
+  author: aida-auto-bump
+  timestamp: 2026-09-12T21:06:22.539387495Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09771-56d2-7fe3-82a5-2b6580b25c23
+  timestamp: 2026-09-12T21:06:22.546714610Z
+  agent: implementer
+  commit_sha: b1bafe366cb45f5780b08fde221916782e16729b
+  summary: Completed via merge b1bafe36
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
+  - 'punted: CI is red on PR-1755: Build (windows-latest)'
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T00:46:42.464425175Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1755: Build (windows-latest)'
-  recovery_hint: 'CI failed on run 34659798482 — view it: `gh run view 34659798482`. Push fixups to the same branch: `aida queue work STORY-1051 --branch story-1051-2 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T00:09:36.722540204Z
+  completed_at: 2026-09-12T21:06:22.539184397Z
+  completion_sha: b1bafe366cb45f5780b08fde221916782e16729b
