@@ -407,8 +407,8 @@ reaction_definitions:
   description: Please Note
   built_in: false
 meta_counters:
-  $TEAM: 4
   $USER: 7
+  $TEAM: 4
 type_definitions:
 - name: Functional
   display_name: Functional
