@@ -362,6 +362,23 @@ pub(crate) fn finish_remote(plan: &BootstrapPlan) -> Result<()> {
         return Ok(());
     }
 
+    // Bootstrap runs the standard `aida init` before a hosted remote may exist,
+    // so the scaffolded config can briefly say pure-git. Once `origin` is real,
+    // refresh the provider from the remote host before drains/reviewers see it.
+    // trace:BUG-1109 | ai:codex
+    if let Some(detected) = crate::forge::origin_url(&dir)
+        .map(|u| crate::forge::detect_forge_kind(&u))
+        .filter(|kind| *kind != crate::forge::ForgeKind::None)
+    {
+        if crate::forge::write_forge_config_provider(&dir, detected).unwrap_or(false) {
+            println!(
+                "  {} refreshed forge provider to {}",
+                "+".green(),
+                detected.config_token()
+            );
+        }
+    }
+
     // The store leg, always last and never skipped when a remote exists.
     run_in(&dir, "git", &["push", "-u", "origin", "aida-store"])?;
     println!(

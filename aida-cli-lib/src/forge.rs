@@ -793,6 +793,45 @@ pub fn read_forge_config(project_dir: &Path) -> Option<ForgeKind> {
     None
 }
 
+/// Rewrite the existing `[forge] provider` line in `.aida/config.toml`.
+/// Returns false when the config does not exist or has no provider line.
+// trace:BUG-1109 | ai:codex
+pub fn write_forge_config_provider(project_dir: &Path, kind: ForgeKind) -> Result<bool> {
+    let config_path = project_dir.join(".aida").join("config.toml");
+    let content = match std::fs::read_to_string(&config_path) {
+        Ok(content) => content,
+        Err(_) => return Ok(false),
+    };
+    let mut in_forge = false;
+    let mut changed = false;
+    let mut lines = Vec::new();
+    for raw in content.lines() {
+        let line = raw.split('#').next().unwrap_or("").trim();
+        if let Some(rest) = line.strip_prefix('[') {
+            in_forge = rest.trim_start_matches('[').starts_with("forge");
+        }
+        if in_forge {
+            if let Some((key, _val)) = line.split_once('=') {
+                if key.trim() == "provider" {
+                    lines.push(format!("provider = \"{}\"", kind.config_token()));
+                    changed = true;
+                    continue;
+                }
+            }
+        }
+        lines.push(raw.to_string());
+    }
+    if changed {
+        let trailing_newline = if content.ends_with('\n') { "\n" } else { "" };
+        std::fs::write(
+            &config_path,
+            format!("{}{}", lines.join("\n"), trailing_newline),
+        )
+        .with_context(|| format!("could not update {}", config_path.display()))?;
+    }
+    Ok(changed)
+}
+
 /// Is `name` an executable on `PATH`? A small, dependency-free `which` —
 /// scans the `PATH` dirs for a file named `name`. Used by [`ForgeKind::cli_on_path`]
 /// to detect the forge CLI (`gh` / `glab`). trace:TASK-860 | ai:claude
@@ -859,11 +898,36 @@ pub fn origin_url(project_root: &Path) -> Option<String> {
     }
 }
 
-/// Resolve the forge a project uses: explicit `[forge] provider` config wins;
-/// otherwise auto-detect from `origin`'s host; otherwise pure-git.
+/// Resolve the forge a project uses: explicit `[forge] provider` config wins,
+/// except stale pure-git configs are repaired when `origin` now identifies a
+/// supported forge; otherwise auto-detect from `origin`'s host; otherwise
+/// pure-git.
 /// trace:EPIC-35 | ai:claude
+// trace:BUG-1109 | ai:codex
 pub fn resolve_forge_kind(project_root: &Path) -> ForgeKind {
     if let Some(k) = read_forge_config(project_root) {
+        if k == ForgeKind::None {
+            if let Some(detected) = origin_url(project_root)
+                .map(|u| detect_forge_kind(&u))
+                .filter(|detected| *detected != ForgeKind::None)
+            {
+                match write_forge_config_provider(project_root, detected) {
+                    Ok(true) => eprintln!(
+                        "notice: updated stale `[forge] provider = \"pure-git\"` to `{}` based on origin",
+                        detected.config_token()
+                    ),
+                    Ok(false) => eprintln!(
+                        "warning: `[forge] provider` says pure-git but origin resolves to {}; review automation will use the origin forge",
+                        detected.config_token()
+                    ),
+                    Err(e) => eprintln!(
+                        "warning: `[forge] provider` says pure-git but origin resolves to {}; could not update config: {e}",
+                        detected.config_token()
+                    ),
+                }
+                return detected;
+            }
+        }
         return k;
     }
     origin_url(project_root)
@@ -2980,7 +3044,7 @@ mod tests {
 
     #[test]
     fn config_overrides_detection() {
-        // A github.com origin but an explicit pure-git config → config wins.
+        // No recognized origin: an explicit pure-git config still wins.
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
         std::fs::write(
@@ -2989,6 +3053,73 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resolve_forge_kind(tmp.path()), ForgeKind::None);
+    }
+
+    #[test]
+    fn init_then_add_github_remote_repairs_stale_pure_git_config() {
+        // trace:BUG-1109 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        Command::new("git")
+            .current_dir(root)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+
+        assert_eq!(resolve_forge_kind(root), ForgeKind::None);
+
+        Command::new("git")
+            .current_dir(root)
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/repo.git",
+            ])
+            .status()
+            .unwrap();
+
+        assert_eq!(resolve_forge_kind(root), ForgeKind::GitHub);
+        let config = std::fs::read_to_string(root.join(".aida").join("config.toml")).unwrap();
+        assert!(config.contains("provider = \"github\""), "{config}");
+    }
+
+    #[test]
+    fn init_then_add_gitlab_remote_repairs_stale_pure_git_config() {
+        // trace:BUG-1109 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        Command::new("git")
+            .current_dir(root)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        Command::new("git")
+            .current_dir(root)
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "git@gitlab.example.test:acme/repo.git",
+            ])
+            .status()
+            .unwrap();
+
+        assert_eq!(resolve_forge_kind(root), ForgeKind::GitLab);
+        let config = std::fs::read_to_string(root.join(".aida").join("config.toml")).unwrap();
+        assert!(config.contains("provider = \"gitlab\""), "{config}");
     }
 
     #[test]
@@ -3018,7 +3149,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(resolve_forge_kind(root), ForgeKind::None);
+        assert_eq!(resolve_forge_kind(root), ForgeKind::GitHub);
         assert_eq!(resolve_open_change_forge_kind(root), ForgeKind::GitHub);
         assert_eq!(forge_for_open_change(root).kind(), ForgeKind::GitHub);
     }
