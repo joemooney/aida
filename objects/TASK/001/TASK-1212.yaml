@@ -15,12 +15,12 @@ description: |-
 
   ## Related
   BUG-1021 (made Windows green), TASK-1205 (PR-time cross-target check — the compile-time half), release.sh / release.yml.
-status: Done
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:09:06.269326411Z
-modified_at: 2026-09-12T04:52:03.381583707Z
+modified_at: 2026-09-12T05:08:14.074674500Z
 req_type: Task
 tags:
 - ci
