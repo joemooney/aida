@@ -12,7 +12,7 @@ fn read_drain_config_parses_drain_section() {
         tmp.path().join(".aida/config.toml"),
         "[node]\nid = \"x\"\n\n[drain]\ngh_verify_retries = 2  # transient blips\n\
              no_progress_minutes = 3\nphase_ceiling_minutes = 20\nci_auto_fix = 2\n\
-             retry_transient = 3\n",
+             retry_transient = 3\npipeline_depth = 3\n",
     )
     .unwrap();
     let cfg = read_drain_config(tmp.path());
@@ -23,6 +23,8 @@ fn read_drain_config_parses_drain_section() {
     assert_eq!(cfg.ci_auto_fix, Some(2));
     // trace:STORY-975 | ai:codex
     assert_eq!(cfg.retry_transient, Some(3));
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    assert_eq!(cfg.pipeline_depth, Some(3));
 }
 
 #[test]
@@ -38,6 +40,8 @@ fn read_drain_config_absent_section_is_all_none() {
     assert_eq!(cfg.ci_auto_fix, None);
     // trace:STORY-975 | ai:codex
     assert_eq!(cfg.retry_transient, None);
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    assert_eq!(cfg.pipeline_depth, None);
 }
 
 /// TASK-975: the CI-fix prompt's contract lines — spec context, the failing
