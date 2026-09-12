@@ -28,8 +28,9 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 .or_else(|_| std::env::current_dir())
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
             let status = drain_state::probe(&project_root);
+            let json_output = *json || output_format_is_json();
             if *clear {
-                return drain_clear(&project_root, &status, *json);
+                return drain_clear(&project_root, &status, json_output);
             }
             // BUG-759: corroborate the launcher-held drain lock alongside the
             // orchestrator drain-state file. A live lock is authoritative when
@@ -45,8 +46,10 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             ) = (&status, &live_lock)
             {
                 let stale_state = matches!(status, drain_state::DrainStatus::Stale(_));
-                if *json {
+                if json_output {
                     println!("{}", drain_state::render_lock_json(lock, stale_state));
+                } else if agent_output_mode() {
+                    println!("{}", drain_state::render_lock_toon(lock, stale_state));
                 } else {
                     print!("{}", drain_state::render_lock_human(lock, stale_state));
                     // TASK-294 parity with the state-backed report: surface any
@@ -60,10 +63,17 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
                 }
                 return Ok(());
             }
-            if *json {
+            if json_output {
                 println!(
                     "{}",
                     drain_state::render_json_with_context(&status, &project_root)
+                );
+                return Ok(());
+            }
+            if agent_output_mode() {
+                println!(
+                    "{}",
+                    drain_state::render_toon_with_context(&status, &project_root)
                 );
                 return Ok(());
             }

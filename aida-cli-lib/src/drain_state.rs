@@ -738,6 +738,22 @@ pub(crate) enum DrainStatus {
     Stale(DrainState),
 }
 
+/// Context-aware next command for `aida drain status`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DrainNext {
+    pub(crate) cmd: String,
+    pub(crate) why: String,
+}
+
+impl DrainNext {
+    fn new(cmd: impl Into<String>, why: impl Into<String>) -> Self {
+        Self {
+            cmd: cmd.into(),
+            why: why.into(),
+        }
+    }
+}
+
 /// Read the drain-state file and corroborate it against a liveness probe of
 /// the recorded orchestrator PID.
 pub(crate) fn probe(project_root: &Path) -> DrainStatus {
@@ -974,6 +990,55 @@ fn member_line_with_pacing(
     line
 }
 
+// TASK-1208: choose the drain-status next command from the same member state
+// and quietness facts the table renders. Most actionable wins.
+// trace:TASK-1208 | ai:codex
+pub(crate) fn next_hint(
+    state: &DrainState,
+    project_root: Option<&Path>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> DrainNext {
+    if let Some(member) = state.members.iter().find(|m| m.state == STATE_FAILED) {
+        return DrainNext::new(
+            format!("aida why {} · aida findings list", member.spec),
+            "triage",
+        );
+    }
+
+    if let Some(spec) = state.current.as_deref() {
+        if let Some(member) = state
+            .members
+            .iter()
+            .find(|m| m.spec == spec && m.is_running())
+        {
+            let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
+            let _quiet = last_activity_time(project_root, state, &member.spec)
+                .and_then(|(last_at, _)| duration_between(&last_at, now))
+                .map(|age| {
+                    quiet_warn_minutes > 0
+                        && age >= Duration::from_secs(quiet_warn_minutes.saturating_mul(60))
+                })
+                .unwrap_or(false);
+            return DrainNext::new("aida tail drain", "watch live");
+        }
+    }
+
+    DrainNext::new("aida awaiting", "")
+}
+
+fn render_next_human(next: &DrainNext) -> String {
+    if next.why.is_empty() {
+        format!("  {} {}\n", glyph(crate::glyphs::Glyph::Arrow), next.cmd)
+    } else {
+        format!(
+            "  {} {} {}\n",
+            next.why,
+            glyph(crate::glyphs::Glyph::Arrow),
+            next.cmd
+        )
+    }
+}
+
 // trace:STORY-975 | ai:codex
 fn latest_phase_retry_for_member<'a>(state: &'a DrainState, spec: &str) -> Option<&'a DrainRetry> {
     let phase = state.current_phase.as_deref()?;
@@ -1110,6 +1175,8 @@ fn render_human_inner(
     } else {
         out.push_str("  Run `aida drain status --clear` to remove this stale file.\n");
     }
+    let next = next_hint(state, project_root, now);
+    out.push_str(&render_next_human(&next));
     out
 }
 
@@ -1168,8 +1235,109 @@ pub(crate) fn render_lock_json(lock: &crate::drain_lock::DrainLock, stale_state:
         "host": lock.host,
         "specs": lock.specs,
         "stale_drain_state": stale_state,
+        "next": {
+            "cmd": "aida tail drain",
+            "why": "watch live",
+        },
     });
     serde_json::to_string_pretty(&value).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// Render the agent-mode TOON payload for a launcher-held drain.
+// trace:TASK-1208 | ai:codex
+pub(crate) fn render_lock_toon(lock: &crate::drain_lock::DrainLock, stale_state: bool) -> String {
+    let mut out = crate::toon::scalar("status", "active");
+    out.push('\n');
+    out.push_str(&crate::toon::scalar("source", "drain-lock"));
+    out.push('\n');
+    out.push_str(&crate::toon::scalar("command", &lock.command));
+    out.push('\n');
+    out.push_str(&crate::toon::scalar("pid", &lock.pid.to_string()));
+    out.push('\n');
+    out.push_str(&crate::toon::scalar(
+        "stale_drain_state",
+        if stale_state { "true" } else { "false" },
+    ));
+    out.push('\n');
+    out.push_str(&crate::toon::table_raw(
+        "specs",
+        &["spec"],
+        &lock
+            .specs
+            .iter()
+            .map(|spec| vec![spec.clone()])
+            .collect::<Vec<_>>(),
+    ));
+    out.push('\n');
+    out.push_str(&crate::toon::table_raw(
+        "next",
+        &["cmd", "to"],
+        &[vec![
+            "aida tail drain".to_string(),
+            "watch live".to_string(),
+        ]],
+    ));
+    out
+}
+
+/// Render the agent-mode TOON payload for `aida drain status`.
+// trace:TASK-1208 | ai:codex
+pub(crate) fn render_toon_with_context(status: &DrainStatus, project_root: &Path) -> String {
+    render_toon_inner(status, Some(project_root), chrono::Utc::now())
+}
+
+#[cfg(test)]
+fn render_toon(status: &DrainStatus) -> String {
+    render_toon_inner(status, None, chrono::Utc::now())
+}
+
+fn render_toon_inner(
+    status: &DrainStatus,
+    project_root: Option<&Path>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> String {
+    match status {
+        DrainStatus::None => crate::toon::scalar("status", "none"),
+        DrainStatus::Active(state) | DrainStatus::Stale(state) => {
+            let status_word = if matches!(status, DrainStatus::Active(_)) {
+                "active"
+            } else {
+                "stale"
+            };
+            let mut out = crate::toon::scalar("status", status_word);
+            out.push('\n');
+            out.push_str(&crate::toon::scalar("command", &state.command));
+            out.push('\n');
+            out.push_str(&crate::toon::scalar(
+                "current",
+                state.current.as_deref().unwrap_or(""),
+            ));
+            out.push('\n');
+            out.push_str(&crate::toon::table_raw(
+                "members",
+                &["spec", "state", "pr"],
+                &state
+                    .members
+                    .iter()
+                    .map(|m| {
+                        vec![
+                            m.spec.clone(),
+                            m.state.clone(),
+                            m.pr.map(|n| format!("PR-{n}")).unwrap_or_default(),
+                        ]
+                    })
+                    .collect::<Vec<_>>(),
+            ));
+            let next = next_hint(state, project_root, now);
+            out.push('\n');
+            out.push_str(&crate::toon::table_raw(
+                "next",
+                &["cmd", "to"],
+                &[vec![next.cmd, next.why]],
+            ));
+            out
+        }
+    }
 }
 
 /// Render the `--json` payload for `aida drain status`.
@@ -1201,6 +1369,11 @@ fn render_json_inner(
                 };
                 map.insert("status".to_string(), serde_json::json!(word));
                 map.insert("pacing".to_string(), pacing_json(state, project_root, now));
+                let next = next_hint(state, project_root, now);
+                map.insert(
+                    "next".to_string(),
+                    serde_json::json!({ "cmd": next.cmd, "why": next.why }),
+                );
             }
             obj
         }
@@ -1683,6 +1856,65 @@ mod tests {
         assert!(out.contains("quiet 2m"));
     }
 
+    // TASK-1208: a quiet active phase points the operator at the live drain log.
+    #[test]
+    fn next_hint_quiet_active_phase_points_at_tail_drain() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "[drain]\nquiet_warn_minutes = 1\n",
+        )
+        .unwrap();
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("3 (reviewer)".to_string());
+        state.phase_started_at = Some("2026-05-18T23:40:00+00:00".to_string());
+        state.members[1].state = "in-phase-3".to_string();
+        state.members[1].started_at = Some("2026-05-18T23:30:00+00:00".to_string());
+        let now = parse_rfc3339_utc("2026-05-18T23:42:00+00:00").unwrap();
+
+        let next = next_hint(&state, Some(dir.path()), now);
+
+        assert_eq!(next.cmd, "aida tail drain");
+        assert_eq!(next.why, "watch live");
+        let out = render_human_inner(&state, false, Some(dir.path()), now);
+        assert!(out.contains("watch live"));
+        assert!(out.contains("aida tail drain"));
+    }
+
+    // TASK-1208: a shelved/failed member is more actionable than watching the
+    // active row, so it wins the next-command hint.
+    #[test]
+    fn next_hint_failed_member_points_at_why_and_findings() {
+        let mut state = batch_state();
+        state.members[0].state = STATE_FAILED.to_string();
+        state.members[1].state = "in-phase-3".to_string();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("3 (reviewer)".to_string());
+        let now = parse_rfc3339_utc("2026-05-18T23:42:00+00:00").unwrap();
+
+        let next = next_hint(&state, None, now);
+
+        assert_eq!(next.cmd, "aida why STORY-301 · aida findings list");
+        assert_eq!(next.why, "triage");
+    }
+
+    // TASK-1208: when the drain has no running or shelved member left to drive,
+    // route to awaiting rather than inventing a member-specific command.
+    #[test]
+    fn next_hint_exiting_points_at_awaiting() {
+        let mut state = batch_state();
+        state.current = None;
+        state.current_phase = None;
+        let now = parse_rfc3339_utc("2026-05-18T23:42:00+00:00").unwrap();
+
+        let next = next_hint(&state, None, now);
+
+        assert_eq!(next.cmd, "aida awaiting");
+        assert_eq!(next.why, "");
+    }
+
     #[test]
     fn current_row_ignores_old_attempt_log_for_different_session() {
         let dir = tempfile::tempdir().unwrap();
@@ -1785,6 +2017,37 @@ mod tests {
         assert_eq!(value["pacing"]["last_ship"]["spec"], "STORY-301");
     }
 
+    // TASK-1208: JSON supervisors get the same next command as the human line.
+    #[test]
+    fn render_json_carries_next_hint() {
+        let mut state = batch_state();
+        state.members[0].state = STATE_FAILED.to_string();
+
+        let out = render_json_inner(&DrainStatus::Active(state), None, chrono::Utc::now());
+        let value: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+        assert_eq!(
+            value["next"]["cmd"],
+            "aida why STORY-301 · aida findings list"
+        );
+        assert_eq!(value["next"]["why"], "triage");
+    }
+
+    // TASK-1208: TOON mirrors the established next[] table shape, while the no
+    // active drain path stays a single compact status line.
+    #[test]
+    fn render_toon_carries_next_table_but_none_is_single_line() {
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.members[1].state = "in-phase-1".to_string();
+
+        let out = render_toon(&DrainStatus::Active(state));
+
+        assert!(out.contains("next[1]{cmd,to}:"));
+        assert!(out.contains("aida tail drain,watch live"));
+        assert_eq!(render_toon(&DrainStatus::None), "status: none");
+    }
+
     // ── BUG-759: lock-backed report when the launcher holds the drain ──
 
     fn burndown_lock() -> crate::drain_lock::DrainLock {
@@ -1842,6 +2105,8 @@ mod tests {
         assert!(out.contains("\"pid\": 3822683"));
         assert!(out.contains("BUG-101"));
         assert!(out.contains("\"stale_drain_state\": false"));
+        assert!(out.contains("\"next\""));
+        assert!(out.contains("aida tail drain"));
     }
 
     // AC6: on_drain_complete predicts which queue items will / won't be
