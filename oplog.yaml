@@ -63449,5 +63449,30 @@ operations:
   timestamp: 2026-09-12T22:35:07.912994634Z
   kind: !SetStatus
     status: Approved
-clock: 5021
+- id: 01a097ef-7f52-7e91-aa34-12e49357670e
+  target_id: 01a097ef-7974-7aa3-9d90-1681fdd5ef67
+  author: aida
+  node_id: '1'
+  lamport: 5022
+  timestamp: 2026-09-12T23:24:10.450073577Z
+  kind: !Create
+    title: roleless-recovery picks the wrong last-used role under mtime/dir-order tie — flaky test blocks unrelated PR merges
+    description: |
+      ## Observed (recurs across unrelated PRs, 2026-09-12)
+      role_identity_tests::roleless_recovery_uses_last_used_role_and_copyable_command fails intermittently in CI as the SOLE failure, on PRs that touch none of its files:
+      - PR-1783 (BUG-1112, reconcile code) — failed, retriggered, passed.
+      - PR-1785 (STORY-1041, drain-state code) — failed.
+      main is green on this test. The test sets role `implementer` last_active 2h ago and `advisor` last_active now, then asserts the roleless-recovery line names `advisor`; CI instead reports 'Last-used role: implementer' (the OLDER role).
+
+      ## Root cause hypothesis
+      The 'last-used role' selection does not reliably order by last_active_at — likely a directory-iteration/mtime tie-break: in fast CI both role .toml files can land with indistinguishable mtimes (or the resolver reads dir order), so it picks the wrong (older) role. This is a real product defect (the recovery hint can name the wrong role), surfaced as a flaky test.
+
+      ## Acceptance
+      1. The roleless-recovery 'last-used role' is selected by the stored last_active_at field (not file mtime / dir order); ties broken deterministically (e.g. by name) so the result is stable.
+      2. The test is deterministic across runs and run-order (seed distinct last_active_at, assert the newer wins every time).
+      3. Regression: 100x loop of the test is green; two roles with equal last_active_at pick a defined winner.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5022
 node_id: '1'
