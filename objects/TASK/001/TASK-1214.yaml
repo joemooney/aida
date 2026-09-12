@@ -8,9 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T03:06:57.441067647Z
-modified_at: 2026-09-12T03:06:57.441067647Z
+modified_at: 2026-09-12T03:07:05.518729951Z
 req_type: Task
 tags:
 - cli
 - release
 - story-1028-followup
+relationships:
+- rel_type: Child
+  target_id: 01a08ee4-4fed-7631-bd6e-fcefb80d0c17
+  created_at: 2026-09-12T03:07:05.518724917Z
+  created_by: joe
