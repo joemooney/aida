@@ -2982,6 +2982,44 @@ pub fn role_from_jsonl(path: &Path, agent: &'static str) -> Result<Option<String
     Ok(parse_session_meta_for_agent(path, mtime, SystemTime::now(), agent)?.role)
 }
 
+/// Resolve a Claude Code transcript role by its native session UUID.
+///
+/// `aida ps` uses this through the lease-manifest `claude_session_id` join when
+/// a long-lived/resumed transcript is no longer attached to the live-process
+/// JSONL probe. Exact filename lookup keeps the scan cheap and avoids guessing.
+// trace:TASK-153 | ai:codex
+pub fn role_from_claude_session_id(session_id: &str) -> Option<String> {
+    let path = claude_session_jsonl_path_by_id(session_id)?;
+    role_from_jsonl(&path, "claude").ok().flatten()
+}
+
+// trace:TASK-153 | ai:codex
+fn claude_session_jsonl_path_by_id(session_id: &str) -> Option<PathBuf> {
+    if session_id.trim().is_empty() || session_id.contains(['/', '\\']) {
+        return None;
+    }
+    #[cfg(test)]
+    let home = std::env::var_os("AIDA_TEST_HOME")
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)?;
+    #[cfg(not(test))]
+    let home = dirs::home_dir()?;
+    let projects = home.join(".claude").join("projects");
+    let dirs = std::fs::read_dir(projects).ok()?;
+    let filename = format!("{session_id}.jsonl");
+    for dir in dirs.flatten() {
+        let project_dir = dir.path();
+        if !project_dir.is_dir() {
+            continue;
+        }
+        let candidate = project_dir.join(&filename);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result<SessionMeta> {
     parse_session_meta_for_agent(path, mtime, now, "claude")
