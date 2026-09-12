@@ -61382,5 +61382,56 @@ operations:
   timestamp: 2026-09-12T05:57:17.225540461Z
   kind: !SetStatus
     status: Needs Attention
-clock: 4887
+- id: 01a09431-17da-7d82-8f3f-9bf90ba5eb36
+  target_id: 01a09431-11b7-7481-9845-1e1c7f4432aa
+  author: aida
+  node_id: '1'
+  lamport: 4888
+  timestamp: 2026-09-12T05:57:20.474979347Z
+  kind: !Create
+    title: 'auto-complete failure: phase 2 (ci) on STORY-994'
+    description: |
+      Auto-drafted by `aida queue work STORY-994 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      could not push implementer branch `story-994` from `/home/joe/ai/aida-story-994` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git
+       ! [rejected]            HEAD -> story-994 (non-fast-forward)
+      error: failed to push some refs to 'https://github.com/joemooney/aida.git'
+      hint: Updates were rejected because the tip of your current branch is behind
+      hint: its remote counterpart. If you want to integrate the remote changes,
+      hint: use 'git pull' before pushing again.
+      hint: See the 'Note about fast-forwards' in 'git push --help' for details. (attempt 2/2)
+
+      Failure kind: `tool-exit`
+
+      ## Recovery hint shown to the user
+
+      The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0942cfb05 --skip-ci`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-12T05:57:18.085088881+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 271352 ms
+        - phase 2 (ci): 1747 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-994","started_at":"2026-09-12T05:52:43.308618050+00:00","completed_at":"2026-09-12T05:57:18.085088881+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"tool-exit","failure_message":"could not push implementer branch `story-994` from `/home/joe/ai/aida-story-994` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git\n ! [rejected]            HEAD -> story-994 (non-fast-forward)\nerror: failed to push some refs to 'https://github.com/joemooney/aida.git'\nhint: Updates were rejected because the tip of your current branch is behind\nhint: its remote counterpart. If you want to integrate the remote changes,\nhint: use 'git pull' before pushing again.\nhint: See the 'Note about fast-forwards' in 'git push --help' for details. (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":271352},{"phase":2,"slug":"ci","elapsed_ms":1747}],"total_ms":273650,"binary_sha":"88a8e873b"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4888
 node_id: '1'
