@@ -1,0 +1,15 @@
+{
+  "id": "3f5aa291-4559-47f1-8adb-818f7135bb48",
+  "thread_id": "3f5aa291-4559-47f1-8adb-818f7135bb48",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789207052839,
+  "body": "NIGHTLY ROLL-UP 03:00: drainable implementer backlog is EMPTY. Shipped since your defer directive: BUG-1093 (submodule launch), TASK-1211 (mailbox archive), STORY-1048 (GitLab mirror — salvaged), STORY-995 (session focus/send), STORY-1043 (awaiting unshipped+nightly), BUG-1097 (cache drift heal-first), BUG-1099 (defer-skip gate), TASK-1212 (Windows release binary), STORY-1033 (seat model tuning — PR-1734 merged, PR-1744 closed superseded), STORY-998 (idlewatch complete after rework). Also merged earlier: 1023, 994. Open PRs now: only 1746/1749 (guided-deferred specs). Remaining for humans: guided trio (1051/1205/1207), STORY-1049 decision, TASK-1210 (needs one controlled injected-failure specimen — daylight), TASK-1198 (testbed). Open count 67, mostly draft/non-drainable. Loop continues on mail-watch.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
