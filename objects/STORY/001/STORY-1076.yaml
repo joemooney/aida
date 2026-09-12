@@ -1,0 +1,26 @@
+id: 01a09415-b1b8-7ec0-987f-5ebc06637492
+spec_id: STORY-1076
+agreed_id: STORY-1076
+title: 'Review PR-1767: [AI:codex] feat(schedule): add native maintenance scheduler (STORY-1047)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09400`) for branch `story-1047`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1767>
+  - Branch: `story-1047` → `main`
+
+  ## Covers
+
+  - STORY-1047
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1767` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T05:27:24.856187501Z
+modified_at: 2026-09-12T05:27:24.856187501Z
+req_type: Story
