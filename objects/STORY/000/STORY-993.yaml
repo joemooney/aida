@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:14:58.955676870Z
-modified_at: 2026-09-12T15:57:45.571647781Z
+modified_at: 2026-09-12T15:58:29.628014489Z
 req_type: Story
 tags:
 - from-product
@@ -70,6 +70,14 @@ implementation_info:
   implemented_by: joe
   completed_at: 2026-09-09T08:51:19.908804163Z
   completion_sha: d6cdad05cfc6b9f74d2d4bde2c75160681f34593
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: lease-conflict
+  detail: 'phase 1 retry cannot reclaim predecessor lease 01a09654 on `STORY-993` after 3 liveness re-probe(s); worktree: /home/joe/ai/aida-story-993'
+  recovery_hint: 'Continue the implementer session: `aida queue work STORY-993 --resume 01a096548a4d`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T15:58:29.628014489Z
 interface_changes:
   cli:
   - aida session conversations — PID and TTY columns per row; three-state liveness glyph (● alive / ◐ file-touched / blank); AGE = process elapsed for ● rows
