@@ -28,7 +28,9 @@ pub(crate) fn handle_mailbox_command(
     cmd: &MailboxCommand,
     store_path: &std::path::Path,
 ) -> Result<()> {
-    use aida_core::mailbox::{inbox_for, merge_dedup, thread as thread_view, Message, Recipient};
+    use aida_core::mailbox::{
+        default_inbox_view, inbox_for, merge_dedup, thread as thread_view, Message, Recipient,
+    };
     // store_path is the orphan-store worktree root (the canonical layer lives at
     // <store_root>/mailbox); its parent is the project root (the local layer at
     // <project_root>/.aida/mailbox).
@@ -118,6 +120,7 @@ pub(crate) fn handle_mailbox_command(
                 intent: parsed_intent,
                 retracted: false,
                 deleted: false,
+                archived: false,
             };
             mailbox_store::write_message(project_root, &msg)?;
             let mut flag = String::new();
@@ -144,8 +147,10 @@ pub(crate) fn handle_mailbox_command(
         MailboxCommand::Inbox {
             agent,
             all,
+            archived,
             peek,
             unread,
+            recent_read_tail,
         } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -190,23 +195,43 @@ pub(crate) fn handle_mailbox_command(
             let mut inbox: Vec<&Message> = Vec::new();
             for who in &who_list {
                 let wm = mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
-                for m in inbox_for(who, &merged) {
+                let visible = if *archived {
+                    let mut rows: Vec<&Message> = inbox_for(who, &merged)
+                        .into_iter()
+                        .filter(|m| m.archived)
+                        .collect();
+                    rows.sort_by(|a, b| {
+                        b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id))
+                    });
+                    rows
+                } else if *unread {
+                    inbox_for(who, &merged)
+                        .into_iter()
+                        .filter(|m| !m.archived && m.timestamp > wm)
+                        .collect()
+                } else {
+                    default_inbox_view(inbox_for(who, &merged), Some(wm), *recent_read_tail)
+                };
+                for m in visible {
                     // `--unread` filters to messages past THIS identity's
                     // watermark; the seen-mark below still advances to each
                     // identity's full-inbox newest (a filtered read must not
                     // under-advance + resurrect older-but-unread items).
-                    if *unread && m.timestamp <= wm {
-                        continue;
-                    }
                     if seen_ids.insert(m.id.clone()) {
                         inbox.push(m);
                     }
                 }
             }
-            inbox.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+            if *unread {
+                inbox.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+            } else {
+                inbox.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
+            }
             let who_label = who_list.join(" + ");
             if inbox.is_empty() {
-                let label = if *unread {
+                let label = if *archived {
+                    "no archived mail for"
+                } else if *unread {
                     "no unread mail for"
                 } else {
                     "inbox empty for"
@@ -219,7 +244,13 @@ pub(crate) fn handle_mailbox_command(
                 );
                 return Ok(());
             }
-            let header = if *unread { "Unread for" } else { "Inbox for" };
+            let header = if *archived {
+                "Archived for"
+            } else if *unread {
+                "Unread for"
+            } else {
+                "Inbox for"
+            };
             println!(
                 "{} {}",
                 format!("{header} {who_label}").bold(),
@@ -233,7 +264,9 @@ pub(crate) fn handle_mailbox_command(
             // `--peek`, which surfaces without consuming (STORY-585 #1/#4). Each
             // mark advances to that identity's FULL inbox newest, not the
             // filtered view's. trace:BUG-555 | ai:claude
-            if *peek {
+            if *archived {
+                // Read-only audit view.
+            } else if *peek {
                 println!(
                     "{}",
                     "  (peek — not marked seen; `aida mailbox inbox` to read + ack)".dimmed()
@@ -423,6 +456,69 @@ pub(crate) fn handle_mailbox_command(
             );
             Ok(())
         }
+        MailboxCommand::Archive {
+            message_id,
+            older_than,
+            read_only,
+            agent,
+        } => {
+            if older_than.is_some() && !*read_only {
+                anyhow::bail!("mailbox archive --older-than requires --read-only");
+            }
+            match (message_id.as_deref(), older_than.as_deref()) {
+                (Some(id), None) => {
+                    let local = mailbox_store::read_local_messages(project_root)?;
+                    let canonical = mailbox_store::read_canonical_messages(store_root)?;
+                    let merged = merge_dedup(&local, &canonical);
+                    let msg = resolve_mailbox_message(&merged, id)?;
+                    if msg.deleted {
+                        anyhow::bail!("message {id} is deleted");
+                    }
+                    if msg.archived {
+                        println!(
+                            "{} message {} is already archived",
+                            crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
+                            msg.id.cyan()
+                        );
+                        return Ok(());
+                    }
+                    let who_list: Vec<String> = match agent {
+                        Some(a) => vec![a.clone()],
+                        None => inbox_identities(),
+                    };
+                    if !message_read_by_all_selected_visible_identities(
+                        msg,
+                        &merged,
+                        project_root,
+                        &who_list,
+                    ) {
+                        anyhow::bail!(
+                            "message {id} is unread or not visible to the selected inbox; read it before archiving"
+                        );
+                    }
+                    let marker = Message {
+                        archived: true,
+                        ..msg.clone()
+                    };
+                    mailbox_store::write_message_marker(project_root, &marker)?;
+                    println!(
+                        "{} archived {}",
+                        crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+                        msg.id.cyan()
+                    );
+                    Ok(())
+                }
+                (None, Some(duration)) => {
+                    archive_mailbox_older_than(project_root, store_root, agent.as_deref(), duration)
+                }
+                _ => anyhow::bail!(
+                    "pass a message id or --older-than <duration> (for example: aida mailbox archive <id>)"
+                ),
+            }
+        }
+        MailboxCommand::Gc { older_than, agent } => {
+            archive_mailbox_older_than(project_root, store_root, agent.as_deref(), older_than)
+        }
         MailboxCommand::Thread { thread_id } => {
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
@@ -471,4 +567,86 @@ pub(crate) fn handle_mailbox_command(
             Ok(())
         }
     }
+}
+
+// trace:TASK-1211 | ai:codex
+fn archive_mailbox_older_than(
+    project_root: &std::path::Path,
+    store_root: &std::path::Path,
+    agent: Option<&str>,
+    duration: &str,
+) -> Result<()> {
+    use aida_core::mailbox::{archive_candidates, inbox_for, merge_dedup, Message};
+
+    let age = parse_days_arg(duration)
+        .map_err(|e| anyhow::anyhow!("invalid --older-than `{duration}`: {e}"))?;
+    let cutoff = (chrono::Utc::now() - age).timestamp_millis();
+    let local = mailbox_store::read_local_messages(project_root)?;
+    let canonical = mailbox_store::read_canonical_messages(store_root)?;
+    let merged = merge_dedup(&local, &canonical);
+    let who_list: Vec<String> = match agent {
+        Some(a) => vec![a.to_string()],
+        None => inbox_identities(),
+    };
+
+    let mut by_id: std::collections::BTreeMap<String, Message> = std::collections::BTreeMap::new();
+    for who in &who_list {
+        let wm = mailbox_store::read_watermark(project_root, who);
+        for m in archive_candidates(inbox_for(who, &merged), wm, cutoff) {
+            if !message_read_by_all_selected_visible_identities(m, &merged, project_root, &who_list)
+            {
+                continue;
+            }
+            by_id.entry(m.id.clone()).or_insert_with(|| m.clone());
+        }
+    }
+
+    if by_id.is_empty() {
+        println!(
+            "{} no read mailbox messages older than {} to archive",
+            crate::glyph(crate::glyphs::Glyph::Mailbox).dimmed(),
+            duration
+        );
+        return Ok(());
+    }
+
+    let count = by_id.len();
+    for msg in by_id.into_values() {
+        let marker = Message {
+            archived: true,
+            ..msg
+        };
+        mailbox_store::write_message_marker(project_root, &marker)?;
+    }
+    println!(
+        "{} archived {} read mailbox message(s) older than {}",
+        crate::glyph(crate::glyphs::Glyph::Mailbox).green(),
+        count.to_string().cyan(),
+        duration
+    );
+    Ok(())
+}
+
+// trace:TASK-1211 | ai:codex
+fn message_read_by_all_selected_visible_identities(
+    msg: &aida_core::mailbox::Message,
+    messages: &[aida_core::mailbox::Message],
+    project_root: &std::path::Path,
+    identities: &[String],
+) -> bool {
+    let mut visible_to_any = false;
+    for who in identities {
+        if !aida_core::mailbox::inbox_for(who, messages)
+            .iter()
+            .any(|m| m.id == msg.id)
+        {
+            continue;
+        }
+        visible_to_any = true;
+        let wm = mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
+        if msg.timestamp > wm {
+            return false;
+        }
+    }
+    visible_to_any
 }

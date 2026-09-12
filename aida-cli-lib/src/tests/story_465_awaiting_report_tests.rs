@@ -61,6 +61,7 @@ fn awaiting_report_folds_in_unread_mail_without_a_network_call() {
         intent: aida_core::mailbox::Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
 
@@ -110,6 +111,7 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
             intent: aida_core::mailbox::Intent::Fyi,
             retracted: false,
             deleted: false,
+            archived: false,
         };
         crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
     }

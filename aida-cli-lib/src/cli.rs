@@ -2678,6 +2678,11 @@ pub enum MailboxCommand {
         #[clap(long, conflicts_with = "agent")]
         all: bool,
 
+        /// Show only archived messages. Read-only — does not mark anything seen.
+        // trace:TASK-1211 | ai:codex
+        #[clap(long, conflicts_with_all = ["all", "unread"])]
+        archived: bool,
+
         /// Show the inbox WITHOUT marking it seen (does not advance the
         /// read-watermark). Lets a hook or a glance surface mail without
         /// consuming the unread flag — reading/acking stays an explicit act
@@ -2690,6 +2695,12 @@ pub enum MailboxCommand {
         // trace:STORY-585
         #[clap(long)]
         unread: bool,
+
+        /// Number of already-read messages to keep in the default newest-first
+        /// inbox tail. Use 0 for unread-only default behavior.
+        // trace:TASK-1211 | ai:codex
+        #[clap(long, default_value_t = 5)]
+        recent_read_tail: usize,
     },
 
     // trace:STORY-585
@@ -2731,6 +2742,37 @@ pub enum MailboxCommand {
     Delete {
         /// Message id to delete.
         message_id: String,
+    },
+
+    /// Archive read mailbox messages from the default inbox while preserving them for audit.
+    // trace:TASK-1211 | ai:codex
+    Archive {
+        /// Message id to archive. Must already be read by the target inbox.
+        message_id: Option<String>,
+
+        /// Sweep read mail older than the given duration (e.g. 30d, 12h).
+        #[clap(long, conflicts_with = "message_id")]
+        older_than: Option<String>,
+
+        /// Required with --older-than; documents that unread mail is never touched.
+        #[clap(long, requires = "older_than")]
+        read_only: bool,
+
+        /// Whose read-watermark gates archive safety (default: current inbox identities).
+        #[clap(long)]
+        agent: Option<String>,
+    },
+
+    /// Maintenance alias for `archive --older-than ... --read-only`.
+    // trace:TASK-1211 | ai:codex
+    Gc {
+        /// Sweep read mail older than the given duration (default: 30d).
+        #[clap(long, default_value = "30d")]
+        older_than: String,
+
+        /// Whose read-watermark gates archive safety (default: current inbox identities).
+        #[clap(long)]
+        agent: Option<String>,
     },
 
     /// Show a full conversation thread, oldest-first.

@@ -19,6 +19,7 @@ fn msg(id: &str) -> Message {
         intent: aida_core::mailbox::Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     }
 }
 

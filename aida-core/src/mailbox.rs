@@ -176,6 +176,11 @@ pub struct Message {
     // trace:STORY-583 | ai:codex
     #[serde(default)]
     pub deleted: bool,
+    /// Reader/operator archive marker: hide read/stale messages from the
+    /// default inbox while preserving them for `--all` / `--archived` audit.
+    // trace:TASK-1211 | ai:codex
+    #[serde(default)]
+    pub archived: bool,
 }
 
 impl Message {
@@ -256,12 +261,61 @@ pub fn merge_dedup(local: &[Message], canonical: &[Message]) -> Vec<Message> {
 // trace:STORY-583 | ai:codex
 pub fn message_state_rank(m: &Message) -> u8 {
     if m.deleted {
+        3
+    } else if m.archived {
         2
     } else if m.retracted {
         1
     } else {
         0
     }
+}
+
+/// Messages shown by the default `aida mailbox inbox`: unread messages plus a
+/// small newest-first tail of already-read, non-archived messages.
+// trace:TASK-1211 | ai:codex
+pub fn default_inbox_view<'a>(
+    inbox: Vec<&'a Message>,
+    read_watermark: Option<i64>,
+    recent_read_tail: usize,
+) -> Vec<&'a Message> {
+    let mark = read_watermark.unwrap_or(i64::MIN);
+    let mut unread = Vec::new();
+    let mut read = Vec::new();
+    for m in inbox {
+        if m.archived {
+            continue;
+        }
+        if m.timestamp > mark {
+            unread.push(m);
+        } else {
+            read.push(m);
+        }
+    }
+    unread.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
+    read.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
+    read.truncate(recent_read_tail);
+    unread.extend(read);
+    unread
+}
+
+/// Archive candidates for a stale-read sweep. Unread, deleted, and already
+/// archived messages are never selected.
+// trace:TASK-1211 | ai:codex
+pub fn archive_candidates<'a>(
+    inbox: Vec<&'a Message>,
+    read_watermark: Option<i64>,
+    older_than_timestamp: i64,
+) -> Vec<&'a Message> {
+    let mark = read_watermark.unwrap_or(i64::MIN);
+    let mut out: Vec<&Message> = inbox
+        .into_iter()
+        .filter(|m| {
+            !m.archived && !m.deleted && m.timestamp <= mark && m.timestamp < older_than_timestamp
+        })
+        .collect();
+    out.sort_by(|a, b| a.timestamp.cmp(&b.timestamp).then_with(|| a.id.cmp(&b.id)));
+    out
 }
 
 /// One row of the operator overview (`aida mailbox list`): an agent that has
@@ -732,6 +786,7 @@ mod tests {
             intent: Intent::Fyi,
             retracted: false,
             deleted: false,
+            archived: false,
         }
     }
 
@@ -913,6 +968,7 @@ mod tests {
         assert!(!m.urgent, "absent urgent field defaults to false");
         assert!(!m.retracted, "absent retracted field defaults to false");
         assert!(!m.deleted, "absent deleted field defaults to false");
+        assert!(!m.archived, "absent archived field defaults to false");
         assert_eq!(m.intent, Intent::Fyi, "absent intent field defaults to fyi");
     }
 
@@ -988,6 +1044,11 @@ mod tests {
             body: String::new(),
             ..original.clone()
         };
+        let archived = Message {
+            archived: true,
+            body: String::new(),
+            ..original.clone()
+        };
 
         let merged = merge_dedup(
             std::slice::from_ref(&retracted),
@@ -998,11 +1059,76 @@ mod tests {
 
         let merged = merge_dedup(
             std::slice::from_ref(&original),
+            std::slice::from_ref(&archived),
+        );
+        assert!(merged[0].archived);
+
+        let merged = merge_dedup(
+            std::slice::from_ref(&original),
             std::slice::from_ref(&deleted),
         );
         assert!(merged[0].deleted);
         assert!(inbox_for("claude", &merged).is_empty());
         assert!(thread("t", &merged).is_empty());
+    }
+
+    // trace:TASK-1211 | ai:codex
+    #[test]
+    fn default_inbox_view_shows_unread_plus_recent_read_tail_newest_first() {
+        let mut msgs = vec![
+            msg("r1", "t", "codex", Recipient::Agent("claude".into()), 10),
+            msg("r2", "t", "codex", Recipient::Agent("claude".into()), 20),
+            msg("r3", "t", "codex", Recipient::Agent("claude".into()), 30),
+            msg("u1", "t", "codex", Recipient::Agent("claude".into()), 40),
+            msg("u2", "t", "codex", Recipient::Agent("claude".into()), 50),
+        ];
+        msgs[1].archived = true;
+
+        let shown = default_inbox_view(inbox_for("claude", &msgs), Some(30), 2);
+        let ids: Vec<&str> = shown.iter().map(|m| m.id.as_str()).collect();
+
+        assert_eq!(ids, vec!["u2", "u1", "r3", "r1"]);
+    }
+
+    // trace:TASK-1211 | ai:codex
+    #[test]
+    fn archive_candidates_include_only_old_read_live_messages() {
+        let mut msgs = vec![
+            msg(
+                "old-read",
+                "t",
+                "codex",
+                Recipient::Agent("claude".into()),
+                10,
+            ),
+            msg(
+                "recent-read",
+                "t",
+                "codex",
+                Recipient::Agent("claude".into()),
+                25,
+            ),
+            msg(
+                "unread",
+                "t",
+                "codex",
+                Recipient::Agent("claude".into()),
+                40,
+            ),
+            msg(
+                "archived",
+                "t",
+                "codex",
+                Recipient::Agent("claude".into()),
+                5,
+            ),
+        ];
+        msgs[3].archived = true;
+
+        let candidates = archive_candidates(inbox_for("claude", &msgs), Some(30), 20);
+        let ids: Vec<&str> = candidates.iter().map(|m| m.id.as_str()).collect();
+
+        assert_eq!(ids, vec!["old-read"]);
     }
 
     #[test]
