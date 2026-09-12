@@ -1,7 +1,7 @@
 //! Epic status as a read-only rollup of its children.
 //!
 //! An EPIC's status is NOT a manually-set field — it is a projection of the
-//! statuses of its children (the same child subtree `aida graph --tree` rolls
+//! statuses of its children (the same child subtree `aida graph tree` rolls
 //! up). Manual epic status edits drift from reality in both directions: a
 //! childless epic can read In Progress (false "active"), and an epic whose
 //! children are shipping can read Draft (false "not started"). This module is

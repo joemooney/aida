@@ -25,7 +25,7 @@ child statuses -- derive_epic_status() --> epic's effective status
 ### Derivation rule (`aida_core::rollup::derive_epic_status`)
 
 Given an epic and the rollup of its child subtree (the SAME walk
-`aida graph --tree` prints via `graph_walk::child_status_rollup`):
+`aida graph tree` prints via `graph_walk::child_status_rollup`):
 
 1. **No children** (`total == 0`)        -> `Draft` (nothing started; "decompose me").
 2. **All children Completed**            -> `Completed`.

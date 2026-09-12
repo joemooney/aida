@@ -69,7 +69,7 @@ $ grep -A2 '## Dependencies' specs/003-password-reset/spec.md
 ```
 
 You get **text, not a queryable relationship.** There is no
-`aida graph --blocked-by` equivalent — the dependency is not a record. Rename a
+`aida graph blocked-by` equivalent — the dependency is not a record. Rename a
 feature, and every cross-reference is a string match you have to chase by hand.
 
 ---
@@ -112,7 +112,7 @@ git commit -m "implement accounts (STORY-2)"   # (SPEC-ID) trailer = lifecycle l
 **Q1 — "What is `003-password-reset` blocked by?"** *(unanswerable from the Spec Kit dir)*
 
 ```text
-$ aida graph STORY-4 --blocked-by
+$ aida graph blocked-by STORY-4
 Graph (blocked-by) STORY-4 — Password reset (speckit 003)
   STORY-2  User accounts (speckit 001)
   STORY-3  Session tokens (speckit 002)
@@ -121,7 +121,7 @@ Graph (blocked-by) STORY-4 — Password reset (speckit 003)
 **Q2 — "What is at risk across the epic if 001 slips?"** *(reverse impact)*
 
 ```text
-$ aida graph STORY-2 --impact
+$ aida graph impact STORY-2
 Graph (impact) STORY-2 — User accounts (speckit 001)
   STORY-3  Session tokens (speckit 002)
   STORY-4  Password reset (speckit 003)
@@ -130,7 +130,7 @@ Graph (impact) STORY-2 — User accounts (speckit 001)
 **Q3 — "What's the status of every feature in this epic?"** *(lifecycle rollup)*
 
 ```text
-$ aida graph EPIC-1 --tree
+$ aida graph tree EPIC-1
 Graph (tree) EPIC-1 — Auth service
 STORY-2  User accounts (speckit 001)
 STORY-3  Session tokens (speckit 002)

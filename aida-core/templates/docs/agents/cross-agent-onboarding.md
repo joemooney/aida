@@ -45,7 +45,7 @@ AIDA's MCP server exposes **58 tools** in six clusters:
 - `send_message({body, to?, broadcast?, thread?, in_reply_to?, from?})` → send an inter-agent peer message, equivalent to `aida mailbox send`. Address one agent via `to` or set `broadcast: true`. Distinct from briefs (operator→agent work) and directives (top-down control): agent↔agent conversation.
 - `read_inbox({agent?})` → an agent's inbox (messages to it + broadcasts, excluding own-sent, oldest-first), equivalent to `aida mailbox inbox`. Returns JSON `{agent, count, messages}`.
 - `list_features()` → list project features
-- `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history --events`
+- `history({spec_id?, since?})` → structured event ledger, equivalent to `aida history events`
 
 These mirror the `aida list / show / add / edit / search / comment / history` CLI verbs. **Use them for any spec-graph interaction.** Don't shell out to `aida` for these. *(STORY-82 and EPIC-27 will modernize the older spec-graph tools to match the coordination tools' vocabulary and capability — until then, expect a thinner surface than the coordination cluster.)*
 
@@ -128,7 +128,7 @@ The remaining `aida` CLI long tail. Seven are read-only library mirrors — they
 - `ultraplan_assemble({spec, no_comments?, ...})` → assemble the rich `/ultraplan` prompt for a spec (description + acceptance + graph context + helpers). **Read mirror** of `aida ultraplan --stdout` — clipboard / deep-link stays CLI-only (required: `spec`).
 - `goal_derive({batch?, epic?, spec?, pr?, queue_empty?, ...})` → derive a machine-checkable `/goal` condition (clauses AND-compose, each inlining its verification command). At least one axis is required. Copy / invoke stays CLI-only.
 - `status_unified({user?, ...})` → a lightweight in-process status snapshot (requirement counts by status, active session leases, queue depth). The CI-bearing surface of `aida status` (PR/CI rollup, awaiting-you gates) shells out to `gh` and stays CLI-only — also see `aida://project/summary` / `aida://session/leases`.
-- `usage_query({since?, unused?, errors?, limit?, ...})` → query the local usage telemetry log (top commands, error-rate ranking, or deprecation candidates). **Read mirror** of `aida usage` / `--errors` / `--unused` — the `--auto-complete` / `--health` orchestrator views stay CLI-only.
+- `usage_query({since?, unused?, errors?, limit?, ...})` → query the local usage telemetry log (top commands, error-rate ranking, or deprecation candidates). **Read mirror** of `aida usage` / `aida usage errors` / `aida usage unused <window>` — the `aida usage drains` / `aida usage health` orchestrator views stay CLI-only.
 - `db_sync({pull?, push?, ...})` → **peek**, not actor (read-only): returns the `aida db sync` command to run (git network I/O against the orphan store branch).
 - `fetch({code_only?, store_only?, quiet?, ...})` → **peek**, not actor (read-only): returns the `aida fetch` command to run (refreshes remote refs via git network I/O).
 - `pull({code_only?, store_only?, ...})` → **peek**, not actor (read-only): returns the `aida pull` command to run (mutates the working tree + local store, auto-bumps merged specs).

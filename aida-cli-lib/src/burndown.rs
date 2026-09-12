@@ -661,7 +661,7 @@ pub(crate) struct OpenFacts {
     /// state is NEVER written here (staleness trap).
     pub residual_notes: Vec<String>,
     /// BUG-543: for an EPIC, its child rollup as `(completed, total)` over the
-    /// hierarchy subtree (the same numbers `aida graph --tree` prints). `None`
+    /// hierarchy subtree (the same numbers `aida graph tree` prints). `None`
     /// for non-epics and for epics with no children (`total == 0`). When
     /// `total > 0 && completed == total` the epic is fully delivered and
     /// surfaces as `ReadyToClose` rather than the generic umbrella reason. The
@@ -864,7 +864,7 @@ pub(crate) fn explain_open(f: &OpenFacts) -> (OpenBucket, String) {
             ),
             Some((_, total)) if total > 0 => (
                 OpenBucket::Umbrella,
-                "an epic whose children are all still un-started — drive them forward or refine the breakdown (`aida graph --tree <id>`, then groom/queue the children)".to_string(),
+                "an epic whose children are all still un-started — drive them forward or refine the breakdown (`aida graph tree <id>`, then groom/queue the children)".to_string(),
             ),
             _ => (
                 OpenBucket::Umbrella,
@@ -1797,7 +1797,7 @@ fn blocked_action_sentence(outlook: &BlockerOutlook, id: &str) -> String {
     match outlook.kind {
         BlockerOutlookKind::DeadEnd => format!(
             "its blocker {list} will never ship — unblock or re-scope it \
-             (`aida graph {id} --blocked-by`)"
+             (`aida graph blocked-by {id}`)"
         ),
         BlockerOutlookKind::PredecessorParked => {
             // `aida why` takes ONE spec — point at the first blocker, not the

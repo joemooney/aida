@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_cache_blocked ON requirements_cache(blocked);
 -- transitive subtree with one WITH RECURSIVE query instead of a backend.load().
 -- The hierarchy edge can live on EITHER endpoint (a parent carries Child->child,
 -- a child carries Parent->parent), so both are normalized to parent->child here
--- — the same union `aida graph --tree` walks (BUG-448). Rebuildable projection,
+-- — the same union `aida graph tree` walks (BUG-448). Rebuildable projection,
 -- NEVER stored in canonical YAML; authoritative after a full cache rebuild.
 -- BUG-764: `author_id` records WHICH requirement's record carries the edge
 -- (either endpoint can, and reciprocal writes mean both may). Single-row

@@ -119,7 +119,7 @@ aida-core/src/hlc.rs (HlcTimestamp), node.rs (validate_node_id), dispenser.rs (C
 ## The graph: typed relationships + per-spec history
 
 - **Typed relationships** (parent/child, blocks/blocked-by, verifies, references, duplicate…) — stored by **UUID**, so renaming IDs never breaks links.
-- **Transitive queries**: `aida graph <ID> --blocked-by`, `--impact`, `--tree`.
+- **Transitive queries**: `aida graph blocked-by <ID>`, `aida graph impact <ID>`, `aida graph tree <ID>`.
 - **Per-spec history array** lives *inside* each YAML:
 
 ```yaml

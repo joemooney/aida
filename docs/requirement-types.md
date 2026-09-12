@@ -91,7 +91,7 @@ the day-to-day currency of a drain.
 stories and tasks rolls up under.
 **Write it well:** keep the epic *thin* — a title, the outcome, and links to its
 children via `--parent`. The detail lives in the children. An epic is a handle
-for rollup (`aida graph EPIC-… --tree`), not a place to hide a spec.
+for rollup (`aida graph tree EPIC-…`), not a place to hide a spec.
 
 ### Story — `STORY`
 **For:** a vertical slice of user-visible value — small enough to ship in one

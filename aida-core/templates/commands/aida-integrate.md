@@ -14,7 +14,7 @@ Follow the workflow in `.claude/skills/aida-integrate.md`:
 
 1. Resolve the integration set + conflict forecast first:
    `aida queue integrate --dry-run`. Cross-check dependency order with
-   `aida graph <SPEC> --blocked-by` and `gh pr list --state open`; land
+   `aida graph blocked-by <SPEC>` and `gh pr list --state open`; land
    independent PRs before their dependents.
 2. Per PR, in order: read state (`gh pr view <n>`) → gate on the reviewer
    verdict → gate on CI (re-trigger flaky, brief the implementer on a real

@@ -14,7 +14,7 @@ Arguments: `$ARGUMENTS`
 
 - If `$ARGUMENTS` contains `--health` or `--deep`, run the **Health
   fact-finding mode** from `.claude/skills/aida-insights.md` (steps H1–H5):
-  pull `aida usage --health --json` + `aida usage --auto-complete --json`,
+  pull `aida usage --json health` + `aida usage --json drains`,
   flag the loudest anomaly, root-cause it, bucket the free-text failure
   reasons, and synthesise a short health narrative + recommended fixes.
   Read-only; never auto-file, never set an automatic threshold.
@@ -24,7 +24,7 @@ Arguments: `$ARGUMENTS`
 
 !`aida usage --limit 10 2>/dev/null || echo "(no usage data — telemetry may be disabled)"`
 
-!`aida usage --auto-complete 2>/dev/null || echo "(no auto-complete telemetry)"`
+!`aida usage drains 2>/dev/null || echo "(no auto-complete telemetry)"`
 
 !`aida findings calibration --stats 2>/dev/null || echo "(no calibration data)"`
 
@@ -35,9 +35,9 @@ Follow the workflow in `.claude/skills/aida-insights.md`:
 1. Read the three signals from the snapshot above — top 3 non-statusline
    commands, drain success rate (`N% success`), calibration agreement
    (`agreed N/M`). Lead with the headline numbers, don't recite tables.
-2. Surface deprecation candidates (`aida usage --unused 30d`), UX-gap
-   candidates (`aida usage --errors`), orchestrator-fix candidates
-   (`aida usage --auto-complete --pattern`), and substrate-gap candidates
+2. Surface deprecation candidates (`aida usage unused 30d`), UX-gap
+   candidates (`aida usage errors`), orchestrator-fix candidates
+   (`aida usage drains --pattern`), and substrate-gap candidates
    (`aida findings calibration --disagreement`) as discrete follow-ups.
 3. Offer the obvious next moves: drill into one signal, file the loudest
    finding as a TASK/BUG, or stop.

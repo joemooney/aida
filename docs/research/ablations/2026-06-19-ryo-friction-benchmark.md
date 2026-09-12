@@ -21,7 +21,7 @@ Five tasks per arm, graded deterministically — **three where the graph should 
 
 | Task | Question | RYO method | AIDA method | Graded on |
 |---|---|---|---|---|
-| T1 relational | "what's blocked across this epic?" | grep `Parent:`+`BlockedBy:` across all files, filter | `aida graph --tree` / `--impact` (cache-backed) | latency + correct closure |
+| T1 relational | "what's blocked across this epic?" | grep `Parent:`+`BlockedBy:` across all files, filter | `aida graph tree` / `aida graph impact` (cache-backed) | latency + correct closure |
 | T2 rename | rename/renumber a referenced spec | string-replace across files | id-stable: one edit | #edits + #missed refs (rot) |
 | T3 trace-rot | "any dangling code traces?" | grep markers + hand-rolled resolve loop | `aida trace check` | detection (found the 1 dangling?) |
 | **T4 fulltext** | "every spec mentioning 'cache'" | `grep -rl cache` | `aida search cache` | latency + correct |

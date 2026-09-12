@@ -243,7 +243,7 @@ pub fn backlog_vitals(specs: &[OpenSpec], net_per_day: Option<f64>, t: &Threshol
         grade: grade_count(blocked, t.blocked_watch, t.blocked_critical),
         value: format!("{blocked} blocked"),
         detail: "Specs waiting on an incomplete blocker".to_string(),
-        remedy: (blocked >= t.blocked_watch).then_some("aida graph <ID> --blocked-by"),
+        remedy: (blocked >= t.blocked_watch).then_some("aida graph blocked-by <ID>"),
     });
 
     vitals.push(Vital {
@@ -272,7 +272,7 @@ pub fn backlog_vitals(specs: &[OpenSpec], net_per_day: Option<f64>, t: &Threshol
         value: vel_value,
         detail: "Net completed minus added per day (recent window)".to_string(),
         remedy: (vel_grade != Grade::Healthy)
-            .then_some("aida usage --auto-complete   # is the drain shipping?"),
+            .then_some("aida usage drains   # is the drain shipping?"),
     });
 
     vitals

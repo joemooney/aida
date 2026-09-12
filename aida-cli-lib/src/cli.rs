@@ -3444,7 +3444,7 @@ pub enum StoreCommand {
     Compact {
         /// DESTRUCTIVE opt-in: rewrite the orphan-store history to a single
         /// snapshot commit. Rewrites the branch (breaks the full `aida
-        /// history --events` timeline — preserved only via the backup ref) and
+        /// history events` timeline — preserved only via the backup ref) and
         /// needs a coordinated force-push every clone must re-sync. Never runs
         /// automatically. Without `--yes` it only PRINTS the plan.
         #[clap(long)]
@@ -6789,9 +6789,13 @@ pub enum DrainCommand {
         /// Remove a stale drain-state file (one whose orchestrator process is
         /// no longer running). Refuses while the drain is still live — a live
         /// orchestrator removes the file itself on exit.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         clear: bool,
     },
+
+    /// Remove a stale drain-state file.
+    // trace:STORY-1028 | ai:codex
+    Clear,
 
     /// Stream the active drain log, using the same resolver and renderer as
     /// `aida tail drain`.
@@ -6816,6 +6820,97 @@ pub enum DrainCommand {
         #[clap(long)]
         no_timestamp: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum UsageCommand {
+    /// Rank command shapes by latency, slowest first.
+    // trace:STORY-1028 | ai:codex
+    Slowest,
+    /// Show commands not used in the last duration.
+    // trace:STORY-1028 | ai:codex
+    Unused {
+        #[clap(value_name = "DURATION")]
+        duration: String,
+    },
+    /// Show commands with the highest error rate.
+    // trace:STORY-1028 | ai:codex
+    Errors,
+    /// Show the raw recent usage event stream.
+    // trace:STORY-1028 | ai:codex
+    Events,
+    /// Show autonomous drain telemetry.
+    // trace:STORY-1028 | ai:codex
+    Drains {
+        /// List every recent orchestrator failure in full.
+        #[clap(long)]
+        failures: bool,
+        /// Show which phases fail most often.
+        #[clap(long, conflicts_with = "failures")]
+        pattern: bool,
+    },
+    /// Show the deterministic project-health telemetry catalog.
+    // trace:STORY-1028 | ai:codex
+    Health,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum GraphCommand {
+    /// Transitive BlockedBy chain for a spec.
+    // trace:STORY-1028 | ai:codex
+    BlockedBy { id: String },
+    /// Transitive Blocks chain for a spec.
+    // trace:STORY-1028 | ai:codex
+    Blocks { id: String },
+    /// Parent/Child descendants with a status rollup.
+    // trace:STORY-1028 | ai:codex
+    Tree { id: String },
+    /// Reverse impact for a spec.
+    // trace:STORY-1028 | ai:codex
+    Impact { id: String },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ReleaseCommand {
+    /// Bump the patch version.
+    // trace:STORY-1028 | ai:codex
+    Patch,
+    /// Bump the minor version.
+    // trace:STORY-1028 | ai:codex
+    Minor,
+    /// Bump the major version.
+    // trace:STORY-1028 | ai:codex
+    Major,
+    /// Preview the planned release without acting.
+    // trace:STORY-1028 | ai:codex
+    Check,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum FocusCommand {
+    /// Clear the current focus.
+    // trace:STORY-1028 | ai:codex
+    Clear,
+    /// Show the current focus.
+    // trace:STORY-1028 | ai:codex
+    Show,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum UpgradeCommand {
+    /// Compare current/sibling versions to latest release.
+    // trace:STORY-1028 | ai:codex
+    Check,
+    /// Print unreleased commit diff from a developer build.
+    // trace:STORY-1028 | ai:codex
+    Diff,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum HistoryCommand {
+    /// Switch to per-event chronological mode.
+    // trace:STORY-1028 | ai:codex
+    Events,
 }
 
 // trace:STORY-248 | ai:claude
@@ -7902,7 +7997,7 @@ pub enum Command {
     },
 
     /// Query the cross-spec relationship graph from a root spec. The default
-    /// mode is the epic-rollup tree (`--tree`); other modes answer the
+    /// mode is the epic-rollup tree; other modes answer the
     /// transitive blocked-by / blocks and reverse-impact questions a flat
     /// per-feature spec tool structurally can't. Read-only. Pick at most one
     /// mode.
@@ -7910,26 +8005,26 @@ pub enum Command {
     // trace:TASK-778
     Graph {
         /// The root spec (SPEC-ID or UUID) to query from.
-        id: String,
+        id: Option<String>,
 
         /// Transitive BlockedBy chain: every spec the root is directly or
         /// indirectly blocked by.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         blocked_by: bool,
 
         /// Transitive Blocks chain: every spec the root directly or
         /// indirectly blocks.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         blocks: bool,
 
         /// Parent/Child descendants of the root with a status rollup — the
         /// epic-rollup view. The default when no mode flag is given.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         tree: bool,
 
         /// Reverse impact: every spec that is (transitively) blocked by the
         /// root — what is at risk if the root slips.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         impact: bool,
 
         /// Follow a custom (or built-in) relationship type by name, outgoing —
@@ -7946,6 +8041,11 @@ pub enum Command {
         /// Emit the result as JSON for agents / scripts.
         #[clap(long)]
         json: bool,
+
+        /// Graph query mode. Bare `aida graph <id>` still renders the tree.
+        // trace:STORY-1028 | ai:codex
+        #[clap(subcommand)]
+        cmd: Option<GraphCommand>,
     },
 
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
@@ -8903,12 +9003,12 @@ pub enum Command {
         /// Show commands NOT used in the last N days (deprecation
         /// candidates). Mutually exclusive with --errors.
         // trace:STORY-122 | ai:claude
-        #[clap(long, value_name = "Nd", conflicts_with = "errors")]
+        #[clap(long, value_name = "Nd", conflicts_with = "errors", hide = true)]
         unused: Option<String>,
         /// Show commands with the highest error rate (`exit_code != 0`
         /// over total invocations). UX-gap candidates.
         // trace:STORY-122 | ai:claude
-        #[clap(long)]
+        #[clap(long, hide = true)]
         errors: bool,
         /// JSON output (commands as an array of {cmd, count, errors,
         /// avg_ms} objects).
@@ -8925,17 +9025,22 @@ pub enum Command {
         /// failures and the Draft BUGs auto-filed for them.
         // trace:TASK-266 | ai:claude — plain `//` so the SPEC-ID stays out
         // of `--help` output (TASK-268).
-        #[clap(long = "auto-complete", conflicts_with_all = ["unused", "errors"])]
+        #[clap(long = "auto-complete", conflicts_with_all = ["unused", "errors"], hide = true)]
         auto_complete: bool,
         /// With `--auto-complete`: list every recent orchestrator failure
         /// in full (date, spec, failed phase, drafted BUG + its status).
         // trace:TASK-266 | ai:claude
-        #[clap(long, requires = "auto_complete")]
+        #[clap(long, requires = "auto_complete", hide = true)]
         failures: bool,
         /// With `--auto-complete`: show which phases fail most often — the
         /// signal for where to invest orchestrator fixes.
         // trace:TASK-266 | ai:claude
-        #[clap(long, requires = "auto_complete", conflicts_with = "failures")]
+        #[clap(
+            long,
+            requires = "auto_complete",
+            conflicts_with = "failures",
+            hide = true
+        )]
         pattern: bool,
         /// Show the deterministic project-health catalog: phase-failure
         /// distribution, reap-vs-kill breakdown, drain halt-rate, recovery
@@ -8943,7 +9048,7 @@ pub enum Command {
         /// orchestrator telemetry log + headless session logs + the spec graph.
         // trace:STORY-530 | ai:claude — plain `//` so the SPEC-ID stays out of
         // `--help` output (TASK-268).
-        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern"])]
+        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern"], hide = true)]
         health: bool,
         /// Trace-read-rate audit: classify logged commands into graph READS
         /// (list/show/search/graph/why/history/queue list/…) vs graph WRITES
@@ -8960,25 +9065,30 @@ pub enum Command {
         /// latency fix landed. Honors --since/--limit/--json.
         // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
         // `--help` output (TASK-268).
-        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write"])]
+        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write"], hide = true)]
         slowest: bool,
         /// Raw recent event stream: each invocation's ts, cmd, duration_ms,
         /// and exit_code, newest-first. Filter with --cmd / --slower-than;
         /// cap with --limit (default 25). Honors --since/--json.
         // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
         // `--help` output (TASK-268).
-        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write", "slowest"])]
+        #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write", "slowest"], hide = true)]
         events: bool,
-        /// With --events: keep only events for this exact command shape
+        /// With `events`: keep only events for this exact command shape
         /// (e.g. `queue list`).
         // trace:STORY-709 | ai:claude
-        #[clap(long, value_name = "shape", requires = "events")]
+        #[clap(long, value_name = "shape")]
         cmd: Option<String>,
-        /// With --events: keep only events whose `duration_ms` is at or
+        /// With `events`: keep only events whose `duration_ms` is at or
         /// above this threshold.
         // trace:STORY-709 | ai:claude
-        #[clap(long, value_name = "Nms", requires = "events", value_parser = parse_duration_ms)]
+        #[clap(long, value_name = "Nms", value_parser = parse_duration_ms)]
         slower_than: Option<u64>,
+
+        /// Usage view.
+        // trace:STORY-1028 | ai:codex
+        #[clap(subcommand)]
+        action: Option<UsageCommand>,
     },
 
     /// Dogfood agent-lift metrics over the recorded telemetry substrate.
@@ -9277,21 +9387,21 @@ pub enum Command {
     // trace:STORY-472 | ai:claude
     /// One-verb release: sync the store, run the version bump + tag + push,
     /// wait for the published tarballs, and upgrade sibling installs. Wraps the
-    /// whole sequence so you don't have to remember it. Use --check first to
+    /// whole sequence so you don't have to remember it. Use `release check` first to
     /// preview without acting.
     Release {
         /// Bump the patch version (default if no level is given).
-        #[clap(long)]
+        #[clap(long, hide = true)]
         patch: bool,
         /// Bump the minor version.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         minor: bool,
         /// Bump the major version.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         major: bool,
         /// Preview the planned release (current → target version + the step
         /// sequence + repo/branch/tree state) without acting.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         check: bool,
         /// Land an in-flight PR first: wait for PR-<N>'s checks, merge it
         /// (--squash --delete-branch), and sync local main before releasing.
@@ -9302,6 +9412,11 @@ pub enum Command {
         /// published release).
         #[clap(long)]
         skip_xplat_check: bool,
+
+        /// Release action. With no action, patch is the default.
+        // trace:STORY-1028 | ai:codex
+        #[clap(subcommand)]
+        cmd: Option<ReleaseCommand>,
     },
 
     // trace:STORY-527 | ai:claude
@@ -9414,7 +9529,7 @@ pub enum Command {
     ///
     ///   aida focus EPIC-55     set the focus to EPIC-55 (+ its subtree)
     ///   aida focus             show the current focus + a progress rollup
-    ///   aida focus --clear     drop the focus
+    ///   aida focus clear     drop the focus
     ///
     /// With a focus set, `aida list`, `aida status`, and `aida queue list`
     /// scope to the focused subtree and print a loud header naming it; pass
@@ -9429,11 +9544,16 @@ pub enum Command {
         #[clap(value_name = "SPEC", conflicts_with = "clear")]
         target: Option<String>,
         /// Clear the current focus (remove `.aida/focus`).
-        #[clap(long)]
+        #[clap(long, hide = true)]
         clear: bool,
         /// Show the current focus (the default when no SPEC is given).
-        #[clap(long)]
+        #[clap(long, hide = true)]
         show: bool,
+
+        /// Focus action.
+        // trace:STORY-1028 | ai:codex
+        #[clap(subcommand)]
+        cmd: Option<FocusCommand>,
     },
 
     // trace:STORY-656 | ai:claude
@@ -9995,13 +10115,13 @@ pub enum Command {
         /// title bar / tmux window name. This is the in-agent parity surface
         /// for clients (e.g. Codex CLI) whose built-in footer is a fixed
         /// field set and cannot run `aida statusline` as a command: wire
-        /// `aida statusline --title` into the shell prompt
+        /// `aida statusline title` into the shell prompt
         /// (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the
         /// terminal title during the agent session. Forces color off (an
         /// OSC title string carries no ANSI). Mutually exclusive with the
         /// `setup` subcommand.
         // trace:TASK-896
-        #[clap(long)]
+        #[clap(long, hide = true)]
         title: bool,
 
         /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
@@ -10149,8 +10269,13 @@ pub enum Command {
         /// When the dev build is ahead of the latest release tag, print a
         /// `git log --stat` of the unreleased commits so you can vet what
         /// `aida dev patch` would ship.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         diff: bool,
+
+        /// Upgrade action.
+        // trace:STORY-1028 | ai:codex
+        #[clap(subcommand)]
+        cmd: Option<UpgradeCommand>,
     },
 
     /// Relationship management commands
@@ -10830,20 +10955,20 @@ pub enum Command {
 
     /// Project activity — what's been touched and how it stands now.
     /// Default mode is a per-requirement digest sorted by last-touch
-    /// time, intended for "what was I up to last session?" Pass
-    /// `--events` to switch to a chronological per-event feed (slower;
+    /// time, intended for "what was I up to last session?" Use
+    /// `events` to switch to a chronological per-event feed (slower;
     /// decodes each commit's YAML diff into status changes, comments
     /// added, etc.).
     // trace:FR-1-037 | ai:claude
     History {
         /// Number of items to show. In digest mode (default) this caps
-        /// the number of distinct requirements; in --events mode it
+        /// the number of distinct requirements; in events mode it
         /// caps the number of decoded events.
         #[clap(long, short = 'n', default_value = "20")]
         limit: usize,
 
         /// Walk at most N commits on the orphan branch. Default 250 in
-        /// digest mode (cheap to scan) and 5x --limit in --events mode.
+        /// digest mode (cheap to scan) and 5x --limit in events mode.
         #[clap(long)]
         max_commits: Option<usize>,
 
@@ -10853,7 +10978,7 @@ pub enum Command {
         /// digest because it shells out to `git show` per file per
         /// commit; useful for inspecting one requirement closely with
         /// --id, less useful as a general overview.
-        #[clap(long)]
+        #[clap(long, hide = true)]
         events: bool,
 
         /// Only show entries for this requirement (SPEC-ID match).
@@ -10879,23 +11004,23 @@ pub enum Command {
         #[clap(long)]
         until: Option<String>,
 
-        /// (--events only) filter to status transitions.
+        /// (events only) filter to status transitions.
         #[clap(long)]
         status_changes: bool,
 
         /// Only recent Done→Completed ship transitions — the "did my ship
         /// register?" view. Unlike `--all` (a recency-blind dump of every
         /// terminal-status spec), this shows just what merged-to-default,
-        /// newest first. Implies --events; composes with --since/--until/--limit.
+        /// newest first. Implies events mode; composes with --since/--until/--limit.
         // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         shipped: bool,
 
-        /// (--events only) filter to comment events.
+        /// (events only) filter to comment events.
         #[clap(long)]
         comments: bool,
 
-        /// (--events only) terse one-line-per-event format.
+        /// (events only) terse one-line-per-event format.
         #[clap(long)]
         oneline: bool,
 
@@ -10927,6 +11052,11 @@ pub enum Command {
         // trace:STORY-737 | ai:claude
         #[clap(long)]
         include_meta: bool,
+
+        /// History view.
+        // trace:STORY-1028 | ai:codex
+        #[clap(subcommand)]
+        cmd: Option<HistoryCommand>,
     },
 
     /// Opt-in EARS-style quality lint for requirement text. AIDA stays a
@@ -11429,6 +11559,10 @@ pub enum HumanCommand {
 // trace:TASK-0414
 #[derive(Subcommand, Debug)]
 pub enum StatuslineAction {
+    /// Emit the one-liner as an OSC terminal-title escape sequence.
+    // trace:STORY-1028 | ai:codex
+    Title,
+
     /// Print (or install) client-appropriate statusline configuration so a
     /// user can enable the AIDA-aware statusline segment. Prints by default;
     /// pass `--install` to write the supported client's `settings.json` entry.
@@ -12022,10 +12156,10 @@ mod tests {
     }
 
     /// TASK-1055: the parser is actually wired onto the clap flag, so
-    /// `usage --events --slower-than 500ms` parses to 500 (not a parse error).
+    /// `usage --slower-than 500ms events` parses to 500 (not a parse error).
     #[test]
     fn slower_than_flag_accepts_ms_suffix() {
-        let cli = Cli::try_parse_from(["aida", "usage", "--events", "--slower-than", "500ms"])
+        let cli = Cli::try_parse_from(["aida", "usage", "--slower-than", "500ms", "events"])
             .expect("`--slower-than 500ms` must parse");
         match cli.command {
             Command::Usage { slower_than, .. } => {
@@ -12702,5 +12836,122 @@ mod tests {
     #[test]
     fn sequential_pins_concurrency_to_one() {
         assert_eq!(crate::SEQUENTIAL_DRAIN_CONCURRENCY, 1);
+    }
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn mode_flag_subcommands_parse_next_to_hidden_aliases() {
+        let cli = Cli::try_parse_from(["aida", "usage", "slowest"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Usage {
+                action: Some(UsageCommand::Slowest),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "usage", "--slowest"]).unwrap();
+        assert!(matches!(cli.command, Command::Usage { slowest: true, .. }));
+
+        let cli = Cli::try_parse_from(["aida", "usage", "drains", "--pattern"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Usage {
+                action: Some(UsageCommand::Drains { pattern: true, .. }),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "usage", "--auto-complete", "--pattern"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Usage {
+                auto_complete: true,
+                pattern: true,
+                ..
+            }
+        ));
+
+        let cli = Cli::try_parse_from(["aida", "graph", "blocked-by", "STORY-1"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Graph {
+                cmd: Some(GraphCommand::BlockedBy { .. }),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "graph", "STORY-1", "--blocked-by"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Graph {
+                id: Some(_),
+                blocked_by: true,
+                ..
+            }
+        ));
+
+        let cli = Cli::try_parse_from(["aida", "release", "minor"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Release {
+                cmd: Some(ReleaseCommand::Minor),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "release", "--minor"]).unwrap();
+        assert!(matches!(cli.command, Command::Release { minor: true, .. }));
+
+        let cli = Cli::try_parse_from(["aida", "focus", "clear"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Focus {
+                cmd: Some(FocusCommand::Clear),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "focus", "--clear"]).unwrap();
+        assert!(matches!(cli.command, Command::Focus { clear: true, .. }));
+
+        let cli = Cli::try_parse_from(["aida", "drain", "clear"]).unwrap();
+        assert!(matches!(cli.command, Command::Drain(DrainCommand::Clear)));
+        let cli = Cli::try_parse_from(["aida", "drain", "status", "--clear"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Drain(DrainCommand::Status { clear: true, .. })
+        ));
+
+        let cli = Cli::try_parse_from(["aida", "upgrade", "diff"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Upgrade {
+                cmd: Some(UpgradeCommand::Diff),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "upgrade", "--diff"]).unwrap();
+        assert!(matches!(cli.command, Command::Upgrade { diff: true, .. }));
+
+        let cli = Cli::try_parse_from(["aida", "statusline", "title"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline {
+                action: Some(StatuslineAction::Title),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "statusline", "--title"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Statusline { title: true, .. }
+        ));
+
+        let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::History {
+                cmd: Some(HistoryCommand::Events),
+                ..
+            }
+        ));
+        let cli = Cli::try_parse_from(["aida", "history", "--events"]).unwrap();
+        assert!(matches!(cli.command, Command::History { events: true, .. }));
     }
 }

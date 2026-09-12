@@ -17,7 +17,7 @@ The worry that prompts this doc is the sharpest one yet. Earlier Claude Code pri
 | **Where the state lives** | Local JSON, scoped to the running session | Git-canonical: orphan `aida-store` branch, YAML per spec, history, traces in source |
 | **Lifetime** | **Session-ephemeral** — the mailbox, the task-list, the claims, the locks all die when the session ends; there is no session resumption | **Cross-session** — the spec, queue entry, lease, status, and trace comments survive every session ending |
 | **Mutual exclusion** | **File-locking** between teammates inside the session | **Leases** on specs/worktrees that survive the process and are queryable by the next session |
-| **Dependencies** | **Auto-unblocking** within the task-list — a finished task releases its dependents | **Typed `blocked-by` / `blocks` relations** in the graph, queryable transitively (`aida graph --blocked-by`), durable across sessions |
+| **Dependencies** | **Auto-unblocking** within the task-list — a finished task releases its dependents | **Typed `blocked-by` / `blocks` relations** in the graph, queryable transitively (`aida graph blocked-by`), durable across sessions |
 | **Approval** | A **plan-approval gate** before the team executes | An implementer → advisor → human **escalation ladder**; reviewer verdicts; punt handshake |
 | **Quality gates** | **Hooks** that fire on team events | Commit-time trace enforcement, CI phase, reviewer phase (with a structural self-merge guard the implementer can't bypass), auto-bump-on-merge |
 | **Identity** | None — agents share a task-list, not a requirement graph | Stable **SPEC-IDs** that survive renames, merges, and vendor switches |
@@ -81,7 +81,7 @@ The complementary picture, and it runs both ways: **AIDA seeds an Agent Team, an
 AIDA's graph is the natural *input* to a team. Before launching a team, ask AIDA (over MCP or CLI) what's ready and how it's related:
 
 - `aida queue list` → the ready specs become the team's task-list.
-- `aida graph <ID> --blocked-by` → the typed dependency edges seed the team's auto-unblocking order, so the team's within-session dependency graph is grounded in the durable one rather than re-derived from prose.
+- `aida graph blocked-by <ID>` → the typed dependency edges seed the team's auto-unblocking order, so the team's within-session dependency graph is grounded in the durable one rather than re-derived from prose.
 - `show_requirement <ID>` (MCP) → each task carries its spec's acceptance criteria into the team, so teammates work against what the spec actually requires, not a generic restatement.
 
 The team then coordinates *this run's* execution — claims, locks, mailbox — against a task-list that AIDA populated with real, related, acceptance-bearing specs.

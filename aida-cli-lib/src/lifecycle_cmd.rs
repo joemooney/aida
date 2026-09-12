@@ -120,7 +120,7 @@ pub(crate) fn handle_lifecycle_command(
 /// store's `history:` arrays and either print it (`--empirical`) or diff it
 /// against the declared model (`--diff`, which implies `--empirical`).
 ///
-/// Reads the same per-spec `history:` arrays that `aida history --events`
+/// Reads the same per-spec `history:` arrays that `aida history events`
 /// walks: each spec's `HistoryEntry` carries a `changes:` list, and we keep the
 /// `{field_name == "status"}` triples as observed `old_value → new_value`
 /// flips. Exits non-zero from `--diff` when any undocumented flip is found, so

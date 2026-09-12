@@ -23,7 +23,7 @@ When a convention evolves — a glyph swap, a vocabulary update, a palette unifi
 | Spec comments | **NO** — chronological record |
 | Git commit messages | **NO** — immutable record |
 
-The discriminator: *is the filename dated, or does the artifact's value depend on being a point-in-time record?* If yes, freeze it. If it is living guidance someone reads to learn current truth, update it. In AIDA projects, session history belongs in the substrate (`aida history --events`, `aida digest`, specs, comments, PRs, and commits), not in a mutable session-log file.
+The discriminator: *is the filename dated, or does the artifact's value depend on being a point-in-time record?* If yes, freeze it. If it is living guidance someone reads to learn current truth, update it. In AIDA projects, session history belongs in the substrate (`aida history events`, `aida digest`, specs, comments, PRs, and commits), not in a mutable session-log file.
 
 **Concrete instance (2026-05-17 BUG-116):** BUG-116 propagated the `▶ ⏵ 🚪` → `▶ ⇒ ⏸` glyph swap across skill templates. The implementer correctly left `docs/spikes/2026-05-16-claude-headless.md:87` untouched, noting: *"dated historical observation record, not living guidance."* That phrase is the convention worth codifying — and is the origin of this memory.
 

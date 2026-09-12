@@ -260,23 +260,23 @@ run_scale() {
         [ "$p" = "EPIC-1" ] && [ -n "$b" ] && echo x
     done | wc -l | tr -d ' ')
 
-    # AIDA: graph --impact from the epic's first blocker chain. The faithful query
+    # AIDA: graph impact from the epic's first blocker chain. The faithful query
     # for "blocked across the epic" given AIDA materializes Blocks (not BlockedBy):
-    # walk the epic tree, then for each member ask --impact (what it blocks). We
+    # walk the epic tree, then for each member ask impact (what it blocks). We
     # use the simpler, equivalent closure: count tree members reachable as blocked.
     # Practically: the impact closure from the epic's root chain head.
     local epic1; epic1=$( cd "$aida" && "$AIDA_BIN" list --all 2>/dev/null | grep -oE 'EPIC-[0-9]+' | head -1 )
-    t1_aida=$(timeit bash -c "cd $aida && $AIDA_BIN graph $epic1 --tree --json")
+    t1_aida=$(timeit bash -c "cd $aida && $AIDA_BIN graph tree $epic1 --json")
     # correctness: the typed-graph tree returns the exact epic membership; blocked
-    # closure derived from --impact over members. We grade against expected.
-    t1_aida_got=$( cd "$aida" && "$AIDA_BIN" graph "$epic1" --tree --json 2>/dev/null \
+    # closure derived from impact over members. We grade against expected.
+    t1_aida_got=$( cd "$aida" && "$AIDA_BIN" graph tree "$epic1" --json 2>/dev/null \
         | grep -c '"resolved": true' || true )
     # blocked subset via impact from chain head (first task under epic1):
-    local head1; head1=$( cd "$aida" && "$AIDA_BIN" graph "$epic1" --tree --json 2>/dev/null \
+    local head1; head1=$( cd "$aida" && "$AIDA_BIN" graph tree "$epic1" --json 2>/dev/null \
         | grep -oE 'TASK-[0-9]+' | head -1 )
     local t1_aida_blocked=0
     if [ -n "$head1" ]; then
-        t1_aida_blocked=$( cd "$aida" && "$AIDA_BIN" graph "$head1" --impact --json 2>/dev/null \
+        t1_aida_blocked=$( cd "$aida" && "$AIDA_BIN" graph impact "$head1" --json 2>/dev/null \
             | grep -c '"resolved": true' || true )
     fi
 

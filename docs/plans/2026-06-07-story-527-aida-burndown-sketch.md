@@ -134,7 +134,7 @@ applied per candidate, which has no single existing home:
 - **ready** — status is Approved (or in the role's queue), not Draft, not
   already In-Progress/Done/Completed/Rejected. Reuse the status field from the
   cache-backed listing.
-- **unblocked** — no open `BlockedBy` edge. Reuse `aida graph <id> --blocked-by
+- **unblocked** — no open `BlockedBy` edge. Reuse `aida graph blocked-by <id>
   --json` (the verb behind `aida graph`); a candidate with any non-terminal
   blocked-by spec is parked, not dispatched. This is the cross-spec query a flat
   tool can't do — exactly what the graph verb exists for.
@@ -287,7 +287,7 @@ skill text + the already-shipped companion doc must say so without ambiguity:
 
 - `aida list` candidate resolution (`--status`/`--tags`/`--parent`/role scope/
   `--json`) — do not write a parallel lister.
-- `aida graph <id> --blocked-by --json` — the transitive blocked-by traversal for
+- `aida graph blocked-by <id> --json` — the transitive blocked-by traversal for
   the *unblocked* check. Don't hand-roll edge-walking.
 - `aida queue list --json` machinery for the `--queue` selector axis.
 - `aida goal --batch/--epic` — machine-checkable stop condition for scheduled runs.

@@ -1479,7 +1479,7 @@ pub(crate) fn handle_queue_command(
             // descendant tree (epic + children + grandchildren). Resolve the
             // id to its UUID, compute the closure once via the shared
             // hierarchy walk (`epic_descendant_uuid_set`, the same one
-            // `aida graph --tree` uses), then run the pure
+            // `aida graph tree` uses), then run the pure
             // `filter_entries_by_descendant_set` over the already-filtered
             // (role / scope / tag) entries — so the epic filter ANDs with
             // them. `epic_label` (resolved display id) drives the focused

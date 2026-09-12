@@ -53,7 +53,7 @@ pub(crate) fn handle_focus_command(
         print_focus_rollup(backend, &req)?;
         println!(
             "Read commands (list / status / queue list) now scope to this subtree. \
-             `aida focus --clear` to drop it; `--all` / `--no-focus` per-command to widen."
+             `aida focus clear` to drop it; `--all` / `--no-focus` per-command to widen."
         );
         return Ok(());
     }
@@ -83,7 +83,7 @@ pub(crate) fn handle_focus_command(
             None => {
                 println!(
                     "{} focus `{}` no longer resolves to a spec. \
-                     Run `aida focus --clear` or re-set it.",
+                     Run `aida focus clear` or re-set it.",
                     "Note:".yellow(),
                     focus_ref,
                 );

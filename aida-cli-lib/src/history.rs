@@ -214,7 +214,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 }
 
 /// Collect structured event records using the same filters as
-/// `aida history --events`. Intended for MCP and other non-TTY consumers.
+/// `aida history events`. Intended for MCP and other non-TTY consumers.
 /// trace:TASK-538 | ai:codex
 pub fn collect_event_records(
     store_path: &Path,
@@ -591,7 +591,7 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     // Agent mode: token-efficient TOON, mirroring `aida ps` / `aida integrate`
     // so `aida history` (the default digest) gives agents flat scalars + a
     // uniform table instead of the human ID/TYPE/STATUS/WHEN column table.
-    // `aida history --events --json` remains the structured event-stream path.
+    // `aida history events --json` remains the structured event-stream path.
     // trace:STORY-753 | ai:claude
     if crate::agent_output_mode() {
         println!("view: history");

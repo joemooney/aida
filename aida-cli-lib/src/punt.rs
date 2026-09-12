@@ -793,7 +793,7 @@ pub fn dismiss_punt_core(
 // A `blocked-dependency` punt is the honest "I can't proceed — this depends on
 // work that isn't done" signal (see `PuntCategory::BlockedDependency`). The
 // dependency it names belongs in the requirement graph as a `blocked-by` edge
-// so the next `aida graph … --blocked-by` query (and the scheduler) can see it
+// so the next `aida graph blocked-by …` query (and the scheduler) can see it
 // — but the punt flow only records prose. This turns the blocker spec id(s)
 // named in the punt text into a concrete `aida edit <blocked> --blocked-by
 // <blocker>` nudge the operator can run.

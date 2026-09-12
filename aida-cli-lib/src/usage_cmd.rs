@@ -19,7 +19,7 @@ use crate::{
 };
 
 // ----------------------------------------------------------------------------
-// `aida usage --slowest` + `aida usage --events` — the performance lens
+// `aida usage slowest` + `aida usage events` — the performance lens
 // (STORY-709). Both read the SAME `~/.aida/usage.jsonl` log via
 // `usage::read_events()` and the same `UsageEvent` struct (cmd + duration_ms +
 // exit_code + ts) — no new capture, no new file. `--slowest` aggregates
@@ -139,7 +139,7 @@ fn filter_events<'a>(
     matched
 }
 
-/// `aida usage --slowest`: rank command shapes by latency, slowest-first.
+/// `aida usage slowest`: rank command shapes by latency, slowest-first.
 // trace:STORY-709 | ai:claude
 fn handle_usage_slowest(since_raw: &str, json_out: bool, limit: usize) -> Result<()> {
     let now = chrono::Utc::now();
@@ -202,7 +202,7 @@ fn handle_usage_slowest(since_raw: &str, json_out: bool, limit: usize) -> Result
     Ok(())
 }
 
-/// `aida usage --events`: stream raw recent events, newest-first, filterable.
+/// `aida usage events`: stream raw recent events, newest-first, filterable.
 // trace:STORY-709 | ai:claude
 fn handle_usage_events(
     since_raw: &str,
@@ -834,12 +834,12 @@ fn handle_usage_read_write(since_raw: &str, json_out: bool, limit: usize) -> Res
 }
 
 // ----------------------------------------------------------------------------
-// `aida usage --auto-complete` — orchestrator telemetry views (TASK-266).
+// `aida usage drains` — orchestrator telemetry views (TASK-266).
 // Reads `~/.aida/auto-complete.jsonl` (written one line per `--auto-complete`
 // run by `record_auto_complete_run`).
 // ----------------------------------------------------------------------------
 
-/// TASK-266: the `aida usage --auto-complete` view family. Bare
+/// TASK-266: the `aida usage drains` view family. Bare
 /// `--auto-complete` prints a success/failure summary plus the most recent
 /// failures; `--failures` expands the full failure list; `--pattern` shows
 /// the per-phase failure histogram.
@@ -1107,7 +1107,7 @@ fn render_auto_complete_failures(
         let more = failures.len() - cap;
         if overview {
             println!(
-                "    {} {} more — `aida usage --auto-complete --failures`",
+                "    {} {} more — `aida usage drains --failures`",
                 "…".dimmed(),
                 more
             );
@@ -1124,7 +1124,7 @@ fn render_auto_complete_failures(
         println!();
         println!(
             "  {}",
-            "`aida usage --auto-complete --pattern` — which causes fail most often".dimmed()
+            "`aida usage drains --pattern` — which causes fail most often".dimmed()
         );
     }
     Ok(())

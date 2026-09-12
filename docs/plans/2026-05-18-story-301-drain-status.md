@@ -129,7 +129,7 @@ aida drain status            # expect: No drain in progress.  (exit 0)
 aida drain status --json     # expect: {"status":"none"}
 # write a fixture drain-state.json with a dead PID:
 aida drain status            # expect: ⚠ Stale drain-state file ... --clear
-aida drain status --clear    # expect: ✓ removed the stale drain-state file
+aida drain clear    # expect: ✓ removed the stale drain-state file
 ```
 
 ## Followups

@@ -67,7 +67,7 @@ pub(crate) fn handle_graph_command(
         + usize::from(!follow.is_empty());
     if mode_count > 1 {
         anyhow::bail!(
-            "choose at most one graph mode: --blocked-by, --blocks, --tree, --impact, or --follow"
+            "choose at most one graph mode: blocked-by, blocks, tree, impact, or --follow"
         );
     }
 

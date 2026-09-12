@@ -1891,7 +1891,7 @@ pub fn gc_auto(repo: &Path) -> bool {
 /// it only fires when the pack count crosses a high threshold — and because
 /// aggressive collapses many packs into one, it self-throttles: it won't re-fire
 /// until packs climb again. Non-destructive: no history is rewritten, so
-/// `aida history --events` is unaffected. Threshold via
+/// `aida history events` is unaffected. Threshold via
 /// `AIDA_STORE_GC_AGGRESSIVE_PACKS` (default [`STORE_GC_AGGRESSIVE_PACKS_DEFAULT`];
 /// `off`/`0` disables).
 // trace:STORY-733 | ai:claude
@@ -2017,7 +2017,7 @@ pub struct SquashOutcome {
 /// The snapshot commit carries the current tree verbatim (no working-tree
 /// change), so the cache and every YAML are byte-identical after the squash;
 /// only the commit *history* collapses. The pre-squash history stays reachable
-/// via `backup_ref`, which is the preserved horizon for `aida history --events`
+/// via `backup_ref`, which is the preserved horizon for `aida history events`
 /// and the recovery point if the force-push needs to be undone.
 // trace:STORY-733 | ai:claude
 pub fn squash_orphan_to_snapshot(

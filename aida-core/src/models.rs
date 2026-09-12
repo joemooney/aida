@@ -817,7 +817,7 @@ impl RequirementType {
     /// edge from the lower-rank (parent) endpoint to the higher-rank (child)
     /// endpoint; only same-rank pairs (e.g. Story↔Story) fall back to the edge's
     /// `rel_type`. This lets `aida focus` (via the cache's `descendant_ids`
-    /// closure) and `aida graph --tree` agree on membership regardless of which
+    /// closure) and `aida graph tree` agree on membership regardless of which
     /// endpoint recorded the edge or which of the two historical orientations it
     /// used, while still refusing to climb from a child UP to a same-rank second
     /// parent (the STORY-698 / EPIC-54 leak).

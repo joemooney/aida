@@ -2202,7 +2202,10 @@ impl<'a> McpServer<'a> {
     /// MCP client converges on the same typed graph the CLI walks. Built on the
     /// shared cycle-safe graph_walk primitive; read-only. The agent-facing half
     /// of the moat: the query a flat per-feature spec store can't answer.
+    /// STORY-1028 moved CLI graph modes to subcommands; MCP keeps the existing
+    /// `mode` enum argument for schema stability.
     // trace:STORY-489 | ai:claude
+    // trace:STORY-1028 | ai:codex
     fn tool_query_graph(&self, args: &Value) -> Result<String, String> {
         use aida_core::graph_walk::{status_rollup, walk_union, Direction};
 
@@ -2278,7 +2281,7 @@ impl<'a> McpServer<'a> {
         };
 
         // TASK-1074: `tree` mode routes through the one shared rank-oriented
-        // subtree closure `aida graph --tree` and `aida focus` use, so the MCP
+        // subtree closure `aida graph tree` and `aida focus` use, so the MCP
         // and CLI surfaces agree on membership; other modes keep their walk_union
         // legs.
         let result = if canonical_mode == "tree" {
@@ -2318,7 +2321,10 @@ impl<'a> McpServer<'a> {
         .map_err(|e| e.to_string())
     }
 
-    // TASK-538: MCP parity with `aida history --events`.
+    // TASK-538: MCP parity with `aida history events`.
+    // STORY-1028 moved the CLI event view to a subcommand; MCP keeps the
+    // `events` boolean so existing agent callers do not change shape.
+    // trace:STORY-1028 | ai:codex
     fn tool_history(&self, args: &Value) -> Result<String, String> {
         let spec_id = args
             .get("spec_id")
@@ -6785,7 +6791,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "history",
-            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history --events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
+            "description": "Read AIDA's orphan-branch event ledger, mirroring `aida history events` for MCP consumers. Returns pretty-printed JSON with structured event records. Mirrors the CLI's filter surface (type/author/since/until/limit/shipped/status-changes/comments). The MCP ledger never hides archived/deferred rows, so it is already equivalent to `aida history --all` — no `all` toggle is needed.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -6796,7 +6802,7 @@ pub fn tool_descriptors() -> Value {
                     },
                     "events": {
                         "type": "boolean",
-                        "description": "Per-event chronological mode (mirrors `aida history --events`). The MCP tool defaults to true (the structured event ledger).",
+                        "description": "Per-event chronological mode (mirrors `aida history events`). The MCP tool defaults to true (the structured event ledger).",
                         "default": true,
                         "example": true
                     },
@@ -7743,7 +7749,7 @@ fn workflow_tool_descriptors() -> Value {
         },
         {
             "name": "usage_query",
-            "description": "Query the local command-usage telemetry log (`~/.aida/usage.jsonl`). Mirrors `aida usage` (top commands by count), `aida usage --errors` (high error-rate commands), and `aida usage --unused <window>` (deprecation candidates). Read-only aggregation over the local log; the orchestrator-telemetry views (`--auto-complete`, `--health`) stay CLI-only.",
+            "description": "Query the local command-usage telemetry log (`~/.aida/usage.jsonl`). Mirrors `aida usage` (top commands by count), `aida usage errors` (high error-rate commands), and `aida usage unused <window>` (deprecation candidates). STORY-1028 moved CLI mode selectors to subcommands; MCP keeps the existing booleans/strings for schema stability. Read-only aggregation over the local log; the orchestrator-telemetry views (`usage drains`, `usage health`) stay CLI-only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

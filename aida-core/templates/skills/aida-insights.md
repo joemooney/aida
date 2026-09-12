@@ -14,7 +14,7 @@ into concrete next moves:
 
 1. **Per-command usage** (`aida usage`) — which `aida` subcommands the
    operator actually runs, which never fire, which fail most often.
-2. **Drain reliability** (`aida usage --auto-complete`) — the orchestrator's
+2. **Drain reliability** (`aida usage drains`) — the orchestrator's
    success rate over the last 30d and which phase tends to break.
 3. **Advisor calibration** (`aida findings calibration --stats`) — the
    rolling agreement rate between cold-boot and fork-from-live advisor
@@ -47,7 +47,7 @@ fact-finding mode" below.
 ## Skip if
 
 - The operator wants a single number — point them at the underlying command
-  (`aida usage`, `aida usage --auto-complete`, `aida findings calibration
+  (`aida usage`, `aida usage drains`, `aida findings calibration
   --stats`) directly. This skill is the synthesis layer.
 - Telemetry is disabled (`AIDA_TELEMETRY=0` or `[telemetry] enabled =
   false`) — there is nothing to read. Surface that as the finding.
@@ -59,7 +59,7 @@ fact-finding mode" below.
 
 !`aida usage --limit 10 2>/dev/null || echo "(no usage data — telemetry may be disabled)"`
 
-!`aida usage --auto-complete 2>/dev/null || echo "(no auto-complete telemetry)"`
+!`aida usage drains 2>/dev/null || echo "(no auto-complete telemetry)"`
 
 !`aida findings calibration --stats 2>/dev/null || echo "(no calibration data)"`
 
@@ -74,7 +74,7 @@ from each — don't recite the full tables.
   else (it usually does), name the top 3 *non-statusline* commands — that
   is where the operator is actually spending intent.
 - **Drain success rate**: the `(N% success)` figure from
-  `aida usage --auto-complete`. <50% means the orchestrator is the
+  `aida usage drains`. <50% means the orchestrator is the
   bottleneck; >80% means it's reliable infrastructure.
 - **Calibration agreement %**: the `agreed N/M` figure from `--stats`.
   Low agreement names substrate gaps; `paired: 0` means calibration mode
@@ -88,8 +88,8 @@ Each signal points at one kind of follow-up:
 - **Deprecation candidates** — commands not used in 30/60/90 days:
 
   ```bash
-  aida usage --unused 30d
-  aida usage --unused 90d
+  aida usage unused 30d
+  aida usage unused 90d
   ```
 
   Long-unused subcommands are de-facto dead surface. Worth filing a TASK
@@ -99,7 +99,7 @@ Each signal points at one kind of follow-up:
 - **UX-gap candidates** — high error rate over total invocations:
 
   ```bash
-  aida usage --errors
+  aida usage errors
   ```
 
   A subcommand with >20% error rate is either confusingly designed or has
@@ -109,8 +109,8 @@ Each signal points at one kind of follow-up:
 - **Orchestrator-fix candidates** — which phase fails most:
 
   ```bash
-  aida usage --auto-complete --pattern
-  aida usage --auto-complete --failures
+  aida usage drains --pattern
+  aida usage drains --failures
   ```
 
   The `--pattern` view names the phase to invest in; `--failures` lists
@@ -136,9 +136,9 @@ threads as discrete follow-ups, not a forced sequence:
 
 | Path | What it answers | Command |
 |------|-----------------|---------|
-| ▶ Drill into deprecation | "Which commands earn their place?" | `aida usage --unused 60d` |
-| ▶ Drill into UX gaps | "Which commands confuse the operator most?" | `aida usage --errors` |
-| ▶ Drill into orchestrator | "Which drain phase is the bottleneck?" | `aida usage --auto-complete --pattern` |
+| ▶ Drill into deprecation | "Which commands earn their place?" | `aida usage unused 60d` |
+| ▶ Drill into UX gaps | "Which commands confuse the operator most?" | `aida usage errors` |
+| ▶ Drill into orchestrator | "Which drain phase is the bottleneck?" | `aida usage drains --pattern` |
 | ▶ Drill into substrate | "Where is the advisor's context not yet written?" | `aida findings calibration --disagreement` |
 | ⇒ File the findings | Capture the loudest signal as a TASK / BUG | `aida add --title "..." --type task` |
 | ⏸ Stop | The snapshot landed in scrollback; nothing else required | — |
@@ -165,8 +165,8 @@ and cost controls are intentionally out of scope — a future iteration.)
 ### Step H1: Pull the deterministic catalog as JSON
 
 ```bash
-aida usage --health --json
-aida usage --auto-complete --json
+aida usage --json health
+aida usage --json drains
 ```
 
 The first is the Tier-1 catalog; the second carries the session-vs-drain
@@ -224,7 +224,7 @@ For the anomaly you picked, go past the number to the mechanism:
   treating an advisory comment as a block"). Pull the evidence:
 
   ```bash
-  aida usage --auto-complete --failures
+  aida usage drains --failures
   ```
 
   Each row carries the failed phase, the `failure_kind`, and the free-text
@@ -245,7 +245,7 @@ handful of named categories so the long tail becomes a short list. Read
 them with:
 
 ```bash
-aida usage --auto-complete --failures
+aida usage drains --failures
 ```
 
 Then bucket by *cause*, not by wording — e.g. **CI-flake** (transient test /

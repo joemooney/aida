@@ -179,7 +179,7 @@ fn store_compact_squash(store_path: &std::path::Path, yes: bool) -> Result<()> {
     println!("{}", "Consequences:".bold());
     println!(
         "  {bullet} {} loses its full timeline — the pre-squash horizon survives ONLY",
-        "aida history --events".yellow()
+        "aida history events".yellow()
     );
     println!("    at the backup branch; point history tooling there to inspect old events.");
     println!(

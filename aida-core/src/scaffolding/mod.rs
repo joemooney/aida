@@ -3079,7 +3079,7 @@ mod tests {
     #[test]
     fn aida_scaffold_does_not_recreate_prompt_history_discipline() {
         // trace:TASK-1202 | ai:codex
-        // AIDA's session record is the substrate (`aida history --events`,
+        // AIDA's session record is the substrate (`aida history events`,
         // `aida digest`, specs, PRs, and commits), not a per-session log file.
         use crate::templates::EMBEDDED_TEMPLATES;
 
@@ -3104,7 +3104,7 @@ mod tests {
             "session discipline should name the substrate as the session record"
         );
         assert!(
-            discipline.contains("aida history --events") && discipline.contains("aida digest"),
+            discipline.contains("aida history events") && discipline.contains("aida digest"),
             "session discipline should point agents at substrate history and digest"
         );
 

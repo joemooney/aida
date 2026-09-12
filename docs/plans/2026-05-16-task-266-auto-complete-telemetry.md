@@ -27,9 +27,9 @@ on itself.
   auto-complete.jsonl         identical recent failure already has one
       │
       ▼
-   aida usage --auto-complete            → overview: success rate + recent fails
-   aida usage --auto-complete --failures → full failure list + drafted-BUG status
-   aida usage --auto-complete --pattern  → per-phase failure histogram
+   aida usage drains            → overview: success rate + recent fails
+   aida usage drains --failures → full failure list + drafted-BUG status
+   aida usage drains --pattern  → per-phase failure histogram
 ```
 
 `auto_complete.rs` stays pure (trait-driven, mock-tested): `orchestrate` only
@@ -119,10 +119,10 @@ cargo build -p aida-cli
 cargo test -p aida-cli auto_complete
 cargo test -p aida-cli task_266
 cargo fmt --all -- --check
-aida usage --auto-complete --help | grep -c trace   # → 0 (no SPEC-ID leak)
-aida usage --auto-complete                          # overview view
-aida usage --auto-complete --failures               # full failure list
-aida usage --auto-complete --pattern                # per-phase histogram
+aida usage drains --help | grep -c trace   # → 0 (no SPEC-ID leak)
+aida usage drains                          # overview view
+aida usage drains --failures               # full failure list
+aida usage drains --pattern                # per-phase histogram
 ```
 
 ## Followups
@@ -132,7 +132,7 @@ aida usage --auto-complete --pattern                # per-phase histogram
   cleanup left out of this diff to keep it scoped to TASK-266.
 - Auto-fixup loop: on a recurring drafted BUG, offer to run
   `aida queue work <BUG> --auto-complete` directly (the recurse-fix loop).
-- `aida usage --auto-complete` could show median phase duration to flag slow
+- `aida usage drains` could show median phase duration to flag slow
   phases, not just failing ones.
 
 ## Related

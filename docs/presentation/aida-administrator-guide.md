@@ -212,8 +212,8 @@ Every `aida` invocation appends one JSONL line to `~/.aida/usage.jsonl`:
 
 ```bash
 aida usage                 # top-20 commands, last 30d
-aida usage --unused 30d    # deprecation candidates
-aida usage --errors        # high error-rate commands
+aida usage unused 30d    # deprecation candidates
+aida usage errors        # high error-rate commands
 AIDA_TELEMETRY=0           # opt out (or [telemetry] enabled = false)
 ```
 

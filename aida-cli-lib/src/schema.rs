@@ -193,7 +193,7 @@ const CATALOG: &[CatalogEntry] = &[
              automatically on every field change (status flip, priority/tag/owner edit, …) by the \
              write path — never written by hand. Immutable once written: each row carries an id \
              (UUID), author, timestamp, and a `changes:` list of {field, old, new} triples. This \
-             is the source-of-truth spec-state time series — read back by `aida history --events` \
+             is the source-of-truth spec-state time series — read back by `aida history events` \
              / `--id <id>`; burn-down/status-flow analyses walk these arrays directly. Never \
              deleted (it is the audit trail).",
     },
