@@ -1,0 +1,27 @@
+id: 01a094a3-b71f-7b13-b46f-c7ce41911c48
+spec_id: STORY-1082
+agreed_id: STORY-1082
+title: 'Review PR-1745: [AI:codex] feat(awaiting): surface unshipped work and nightly red (STORY-1043)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09493`) for branch `story-1043`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1745>
+  - Branch: `story-1043` → `main`
+
+  ## Covers
+
+  - STORY-1048
+  - STORY-1043
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1745` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T08:02:32.351489284Z
+modified_at: 2026-09-12T08:02:32.351489284Z
+req_type: Story
