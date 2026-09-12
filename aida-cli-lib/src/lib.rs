@@ -778,6 +778,166 @@ fn normalize_usage_mode<'a>(
     }
 }
 
+#[cfg(test)]
+mod story_1028_mode_alias_tests {
+    use super::*;
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn release_hidden_flags_normalize_like_subcommands() {
+        assert_eq!(
+            normalize_release_mode(true, false, false, false, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Patch))
+        );
+        assert_eq!(
+            normalize_release_mode(false, true, false, false, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Minor))
+        );
+        assert_eq!(
+            normalize_release_mode(false, false, true, false, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Major))
+        );
+        assert_eq!(
+            normalize_release_mode(false, false, false, true, None),
+            normalize_release_mode(false, false, false, false, Some(&ReleaseCommand::Check))
+        );
+    }
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn upgrade_hidden_flags_normalize_like_subcommands() {
+        assert_eq!(
+            normalize_upgrade_mode(true, false, None),
+            normalize_upgrade_mode(false, false, Some(&UpgradeCommand::Check))
+        );
+        assert_eq!(
+            normalize_upgrade_mode(false, true, None),
+            normalize_upgrade_mode(false, false, Some(&UpgradeCommand::Diff))
+        );
+    }
+
+    // trace:STORY-1028 | ai:codex
+    #[test]
+    fn usage_hidden_flags_normalize_like_subcommands() {
+        assert_eq!(
+            normalize_usage_mode(None, false, false, false, false, false, true, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Slowest)
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(
+                Some("30d"),
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                None
+            ),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Unused {
+                    duration: "30d".to_string()
+                })
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, true, false, false, false, false, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Errors)
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, false, false, false, false, false, true, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Events)
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, true, true, false, false, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Drains {
+                    failures: true,
+                    pattern: false
+                })
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, true, false, true, false, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Drains {
+                    failures: false,
+                    pattern: true
+                })
+            )
+        );
+        assert_eq!(
+            normalize_usage_mode(None, false, false, false, false, true, false, false, None),
+            normalize_usage_mode(
+                None,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                Some(&UsageCommand::Health)
+            )
+        );
+    }
+}
+
 /// TASK-970: the agent-ergonomics output gate. Two AIDA surfaces lean toward
 /// agent-friendly output when the caller is a non-interactive agent rather than
 /// a human at a TTY: bare `aida` routes to the status snapshot (not the
