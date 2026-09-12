@@ -17,18 +17,36 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 1729` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T06:05:50.223258767Z
-modified_at: 2026-09-11T06:05:54.747766630Z
+modified_at: 2026-09-12T05:59:43.895317750Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a08e97-11b0-7cb1-bb30-91069b0d320a
   created_at: 2026-09-11T06:05:54.747761356Z
   created_by: joe
+comments:
+- id: 01a09433-4817-73b2-ab28-eb48673ff00e
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #1729 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-09-12T05:59:43.895316390Z
+  modified_at: 2026-09-12T05:59:43.895316390Z
+history:
+- id: 01a09433-4817-73b2-ab28-eb3840d483f8
+  author: aida-auto-bump
+  timestamp: 2026-09-12T05:59:43.895304454Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-12T05:59:41.457852647Z
+  completion_sha: 1f26aefa825cf077c12821d67a32021c9e99dc2c
 intent:
   layman: 'STORY-1031 exists to make sure PR-1729 really fixes the confusion around AIDA''s old NeedsAttention display. The underlying work, STORY-1023, is about separating parked work that needs a human decision from parked work that has a known mechanical recovery path, and also recognizing finished work that is simply waiting in the merge queue. The review matters because the old single warning label created too many false alarms: stale-base and CI retry cases looked as urgent as real punts, training the operator to ignore the signal. This review story is the checkpoint that verifies the PR follows that intent across the actual user surfaces, not just one code path: list/show/why/TUI rendering, awaiting escalation counts, docs, and tests. Its comments show why the review kept requesting changes: initial fixes missed list rendering, then TUI rendering and CI, then effective rollup behavior for epics. In plain terms, this story is the guardrail that keeps AIDA''s attention signal trustworthy.'
   llm: 'Spec role: review/control story for PR-1729, branch story-1023 -> main, covering STORY-1023. Immediate relationship: STORY-1031 implements/reviews STORY-1023; STORY-1023 is the substantive product change. Core why: validate a display/lens split over the existing stored NeedsAttention status, preserving compatibility while making operator-facing attention semantics accurate. STORY-1023 distinguishes AttentionReason/human-required parks as ''Needs Decision'', FailureReason/machine-recoverable parks as ''Shelved (<cause>)'', and, per operator amendment, Done-with-PR items as ''In merge queue''. This is rooted in EPIC-28''s resilient-drain shelving vocabulary and STORY-332''s original NeedsAttention/punt mechanism, but narrows scope to presentation and escalation accounting rather than a lifecycle/state-machine rename. Acceptance context: stale-base should render Shelved with cause; punts should render Needs Decision; awaiting should count only human-required items as escalations; docs and mapping tests must be updated; TUI/list/show/why surfaces must all honor the reason-aware lens. Key review comments on STORY-1023 show the PR was not yet acceptable until it covered store-aware list rendering/filtering, TUI board rows, red CI in story_465_awaiting_report_tests, and epic effective NeedsAttention rollups via effective_needs_attention_lens. Synthesis: STORY-1031 exists so PR-1729 is judged against the full user-facing signal contract, reducing false alarm density and preventing mechanically recoverable work from polluting the human-decision queue.'
