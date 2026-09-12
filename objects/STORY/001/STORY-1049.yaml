@@ -29,7 +29,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:19:07.876021726Z
-modified_at: 2026-09-12T21:09:41.705863936Z
+modified_at: 2026-09-12T21:09:42.492333686Z
 req_type: Story
 tags:
 - ci
@@ -59,6 +59,12 @@ comments:
   content: 'Held for operator (advisor): self-hosted runner = your hardware, cost and security posture — needs your call on where it runs and what secrets it can see. Recommend yes-in-principle with the GitHub-hosted clean-room kept as the required gate exactly as spec''d.'
   created_at: 2026-09-11T17:56:52.073879241Z
   modified_at: 2026-09-11T17:56:52.073879241Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09774-63dc-79c0-82a9-42982d5f15a5
+  author: joe
+  content: 'Advisor-deferred (operator-approved 2026-09-12): at current repo size the ~10.7min clean-room CI is not the bottleneck — drains were gated by design forks and flakes, not CI wall-clock — and a self-hosted runner adds standing maintenance. Revisit on the --until trigger.'
+  created_at: 2026-09-12T21:09:42.492333686Z
+  modified_at: 2026-09-12T21:09:42.492333686Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 deferred: true
 deferred_at: 2026-09-12T21:09:41.705863936Z
