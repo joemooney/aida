@@ -27,12 +27,12 @@ description: |-
 
   ## Related
   STORY-974 (typed causes), STORY-993 (liveness), STORY-994/995 (display only), BUG-420, BUG-749, BUG-875. Prototype source: _ignore/terminator (untracked).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-12T09:14:31.983448061Z
+modified_at: 2026-09-12T09:25:00.125243625Z
 req_type: Story
 tags:
 - drain
@@ -87,10 +87,10 @@ implementation_info:
   implemented_at: 2026-09-12T06:08:24.117347158Z
   implemented_by: joe
 failure_reason:
-  phase: implementer
-  phase_index: 1
+  phase: ci
+  phase_index: 2
   kind: tool-exit
-  detail: the implementer session exited 1 — it was aborted or errored (attempt 2/2)
-  recovery_hint: 'Continue the implementer session: `aida queue work STORY-998 --resume`'
+  detail: implementer worktree `/home/joe/ai/aida-story-998` is on `story-998-pr1768` but phase 2 is driving `story-998-4` — refusing to push or tear down (attempt 2/2)
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a094e5dafd --skip-ci`'
   shelved_by: advisor
-  shelved_at: 2026-09-12T09:13:38.505056931Z
+  shelved_at: 2026-09-12T09:25:00.125243625Z
