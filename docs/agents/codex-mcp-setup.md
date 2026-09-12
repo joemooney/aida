@@ -287,13 +287,22 @@ Use `aida pr ship` as the finish line for bounded direct-publish work. Current w
 
 Before relying on the wrapper in a new environment, read the five-bug arc that hardened it: SPEC-410, BUG-339, BUG-344, BUG-345, plus TASK-458 for the original wrapper.
 
-## Keeping the Codex Prompt Pack Current
+## Keeping the Codex Skill And Prompt Packs Current
 
-`~/.codex/prompts/` is written once by `aida scaffold codex-prompts` (or, on a
-codex-first machine, by the first `aida init`) and is then **skip-existing** —
-so a later fix to a command template never reaches a machine that already has
-the prompt installed. That is a delivery problem, not a content problem: a
-prompt authored months ago keeps driving Codex sessions.
+For interactive Codex sessions, AIDA workflows live in the scaffolded
+`.codex/skills/` pack: choose them from `/skills`, invoke them as `$aida-*`
+when the skill is installed, or run the matching `aida ...` CLI verb directly.
+For example, use `$aida-capture` or `/skills` -> `aida-capture`; do not expect
+`/aida-capture` or `/prompts:aida-capture` to appear in Codex CLI's slash menu.
+
+`~/.codex/prompts/` is a legacy/direct-launch prompt-body pack written by
+`aida scaffold codex-prompts` (or, on a codex-first machine, by the first
+`aida init`) and is then **skip-existing** — so a later fix to a command
+template never reaches a machine that already has the prompt installed. That is
+a delivery problem, not a content problem: a prompt authored months ago keeps
+driving Codex launches that AIDA starts directly. Current Codex CLI releases do
+not discover this directory as an interactive `/aida-*` custom slash-command
+surface. <!-- trace:BUG-1095 | ai:codex -->
 
 The delivery path is an **edit-preserving refresh**, the same contract the
 starter memory pack has always had:

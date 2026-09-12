@@ -556,12 +556,16 @@ pub enum ScaffoldCommand {
         force: bool,
     },
 
-    /// Write the AIDA command set as Codex CLI custom prompts so `/aida-...`
-    /// works in a Codex session — the slash-command parity piece for
-    /// codex-first machines. Generated from the same embedded masters that
-    /// back `.claude/commands/`; commands that depend on Claude-only
-    /// mechanics are excluded with a stated reason. Existing prompt files
-    /// are never overwritten without --force.
+    /// Write legacy Codex prompt bodies to ~/.codex/prompts.
+    ///
+    /// Current Codex CLI releases do not discover these files as `/aida-*`
+    /// slash commands. For interactive Codex sessions, use scaffolded
+    /// `.codex/skills/` via `/skills` or `$aida-*`, or run the matching
+    /// `aida ...` CLI verb directly. Generated from the same embedded masters
+    /// that back `.claude/commands/`; commands that depend on Claude-only
+    /// mechanics are excluded with a stated reason. Existing prompt files are
+    /// never overwritten without --force.
+    // trace:BUG-1095 | ai:codex
     CodexPrompts {
         /// Destination directory (defaults to ~/.codex/prompts)
         #[clap(long)]

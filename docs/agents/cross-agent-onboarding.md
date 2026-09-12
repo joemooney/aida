@@ -219,7 +219,7 @@ Different agent types have different conventions for invoking AIDA workflows (th
 
 | Workflow | Claude Code (slash) | Codex CLI | Antigravity CLI / MCP agents | What it does |
 |---|---|---|---|---|
-| **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `.codex/skills/aida-pickup` when scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
+| **aida-pickup** | `/aida-pickup [SPEC]` | `aida queue work [SPEC]` (or `$aida-pickup` / `/skills` when `.codex/skills/` is scaffolded) | `aida queue work [SPEC]` | Read spec + transition to in-progress + drive implementation |
 | **aida-pr / pr ship** | `/aida-pr` | `aida pr ship` | `aida pr ship` | Commit + push + open PR + auto-queue reviewer story |
 | **aida-req** | `/aida-req` | `aida add --type <T> --title <S>` | `aida add ...` (or MCP `add_requirement`) | File a new spec |
 | **aida-commit** | `/aida-commit` | `git commit` with trailer | `git commit` with trailer | Enforce `[AI:tool] type(scope): subject (SPEC-ID)` format |
@@ -228,9 +228,10 @@ Different agent types have different conventions for invoking AIDA workflows (th
 | **aida-search** | `/aida-search <q>` | `aida search <q>` (or MCP `search_requirements`) | `aida search <q>` (or MCP) | FTS5 search across specs |
 | **aida-plan** | `/aida-plan [SPEC]` | `aida plan verify` / `aida ultraplan` | same | Plan an implementation; verify against template |
 | **aida-findings** | (slash variants) | `aida findings add/list/promote/dismiss` (or MCP `file_finding`) | `aida findings ...` (or MCP) | Advisor observation entry + triage flow |
+| **aida-capture** | `/aida-capture` | `$aida-capture` / `/skills` when `.codex/skills/` is scaffolded; otherwise run the underlying `aida ...` verbs from the generated checklist | same CLI verbs | End-of-session safety net for un-traced work |
 | **aida-onboard** | `/aida-onboard` | read AGENTS.md + this doc | read AGENTS.md + this doc | First-session orientation |
 
-**Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. If you don't know the slash/skill name for your agent type, run the CLI verb directly. It works for every agent type.
+**Foundational rule**: `aida` CLI verbs are the substrate — Claude Code's slash commands and Codex's skill descriptors wrap them. Codex CLI does not discover AIDA workflows as custom `/aida-*` slash commands from `~/.codex/prompts`; use `$aida-*`, `/skills`, or the CLI verb directly. It works for every agent type. <!-- trace:BUG-1095 | ai:codex -->
 
 **MCP path (always available)**: regardless of agent type, the `aida mcp-serve` MCP tools (the 58 documented above) are the canonical machine-to-machine surface. Use MCP for spec-graph and queue operations; use CLI for orchestration verbs that manage live process state (`aida session start`, `aida pr ship`, and the actual launch behind `aida queue work`, etc.) since those manage substrate state that doesn't fit a stateless MCP call.
 
