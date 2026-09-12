@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-12T03:24:56.649162596Z
+modified_at: 2026-09-12T03:29:14.661009245Z
 req_type: Story
 tags:
 - breaking
@@ -82,3 +82,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-12T03:24:56.649162596Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1764: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34670290436 — view it: `gh run view 34670290436`. Push fixups to the same branch: `aida queue work STORY-1028 --branch story-1028-2 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T03:29:14.661009245Z
