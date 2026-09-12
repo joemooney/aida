@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:57:56.070370960Z
-modified_at: 2026-09-12T06:22:32.041984904Z
+modified_at: 2026-09-12T06:22:33.468213976Z
 req_type: Story
 tags:
 - drain
@@ -63,6 +63,18 @@ relationships:
   target_id: 01a09442-d561-7221-96d7-a08c574b4d0b
   created_at: 2026-09-12T06:16:48.105960145Z
   created_by: joe
+comments:
+- id: 01a09448-2d14-7643-84a6-47e6423abb0f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1768):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. STORY-998 acceptance #3 missing: session liveness remains Alive/FileTouched/None with no spinning state or distinct glyph for live low-information transcripts.
+    2. STORY-998 acceptance #4 missing: the top-level aida tail command has no --annotate flag and no transition annotation rendering for spinning state.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-12T06:22:33.236862505Z
+  modified_at: 2026-09-12T06:22:33.236862505Z
 execution_mode: drain
 implementation_info:
   implemented: true
