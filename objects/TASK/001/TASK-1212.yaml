@@ -15,12 +15,12 @@ description: |-
 
   ## Related
   BUG-1021 (made Windows green), TASK-1205 (PR-time cross-target check — the compile-time half), release.sh / release.yml.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:09:06.269326411Z
-modified_at: 2026-09-12T05:08:14.074674500Z
+modified_at: 2026-09-12T08:54:32.457246955Z
 req_type: Task
 tags:
 - ci
@@ -39,16 +39,27 @@ relationships:
   target_id: 01a09355-0d7a-7662-a674-41f208fb9c97
   created_at: 2026-09-12T01:57:07.721780837Z
   created_by: joe
+history:
+- id: 01a094d3-5302-7741-8307-3b28948e253d
+  author: aida-auto-bump
+  timestamp: 2026-09-12T08:54:32.450115757Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a094d3-5309-73d3-a7c4-8f847ae52222
+  timestamp: 2026-09-12T08:54:32.457245647Z
+  agent: aida
+  commit_sha: 4d94726b572c36de8d6cf697963845b80cf083e8
+  summary: Completed via merge 4d94726b
+  punted:
+  - 'punted: CI is red on PR-1760: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1760: Build (ubuntu-latest)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T01:57:15.678054942Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1760: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34666291370 — view it: `gh run view 34666291370`. Push fixups to the same branch: `aida queue work TASK-1212 --branch task-1212 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T04:52:03.381583707Z
+  completed_at: 2026-09-12T08:54:32.449976792Z
+  completion_sha: 4d94726b572c36de8d6cf697963845b80cf083e8
