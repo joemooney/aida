@@ -126,9 +126,12 @@ fn driver_resolves_lifecycle_forge_once_from_target_origin() {
 
     let driver = driver(root, "BUG-1037");
 
+    // BUG-1109: a stored pure-git provider that contradicts a known-host
+    // origin is auto-repaired at resolution, so even the plain resolver
+    // reports the corrected kind (the resolve-once property below still holds).
     assert_eq!(
         crate::forge::resolve_forge_kind(root),
-        crate::forge::ForgeKind::None
+        crate::forge::ForgeKind::GitHub
     );
     assert_eq!(
         crate::forge::resolve_open_change_forge_kind(root),
