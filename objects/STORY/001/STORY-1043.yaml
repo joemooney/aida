@@ -17,12 +17,12 @@ description: |-
 
   ## Related
   BUG-908 (root cause of the lost fix), BUG-1021, STORY-1029 (notify), FR-284 (reap notifies live-but-finished sessions), STORY-741 (awaiting).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:49.938635015Z
-modified_at: 2026-09-12T07:02:00.103678680Z
+modified_at: 2026-09-12T07:14:14.776098060Z
 req_type: Story
 tags:
 - awaiting
@@ -61,8 +61,15 @@ implementation_info:
 failure_reason:
   phase: ci
   phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1745: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34641408384 — view it: `gh run view 34641408384`. Push fixups to the same branch: `aida queue work STORY-1043 --branch story-1043 --steal`'
+  kind: tool-exit
+  detail: |-
+    could not push implementer branch `story-1043` from `/home/joe/ai/aida-story-1043` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git
+     ! [rejected]            HEAD -> story-1043 (non-fast-forward)
+    error: failed to push some refs to 'https://github.com/joemooney/aida.git'
+    hint: Updates were rejected because the tip of your current branch is behind
+    hint: its remote counterpart. If you want to integrate the remote changes,
+    hint: use 'git pull' before pushing again.
+    hint: See the 'Note about fast-forwards' in 'git push --help' for details. (attempt 2/2)
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0946c7779 --skip-ci`'
   shelved_by: advisor
-  shelved_at: 2026-09-11T19:59:52.813206506Z
+  shelved_at: 2026-09-12T07:14:14.776098060Z
