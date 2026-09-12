@@ -14,12 +14,12 @@ description: |
   ## Acceptance
   1. On 'no such column'/'has no column' from any cache read OR write, the command drops+rebuilds the cache and retries the operation once, in-process — first invocation succeeds (BUG-627 semantics extended to all tables incl. hierarchy_edges and write paths).
   2. Regression: open a cache built without a column (e.g. hierarchy_edges.author_id), run a command that touches it — command exits 0 with correct output.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T06:09:03.537342507Z
-modified_at: 2026-09-12T07:58:24.883527881Z
+modified_at: 2026-09-12T07:58:30.271132967Z
 req_type: Bug
 tags:
 - cache
@@ -30,3 +30,7 @@ relationships:
   target_id: 01a0949f-de64-73e2-bc05-93ae7ad60616
   created_at: 2026-09-12T07:58:24.883521440Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T07:58:30.271132967Z
+  implemented_by: joe
