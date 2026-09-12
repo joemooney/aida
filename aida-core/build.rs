@@ -82,6 +82,13 @@ fn main() {
     // trace:STORY-255
     embed_directory(&mut code, "templates/memories", "memories");
 
+    // User-local terminal helpers. trace:STORY-995 | ai:codex
+    embed_file(
+        &mut code,
+        "templates/terminal/terminator/aida_terminator.py",
+        "terminal/terminator/aida_terminator.py",
+    );
+
     code.push_str("    m\n");
     code.push_str("});\n");
 
@@ -107,6 +114,7 @@ fn main() {
         "    (\"docs/competitive-analysis/ecosystem-watch.md\", \"Starter ecosystem-watch log read by scripts/release.sh\"),\n",
     );
     code.push_str("    (\"memories\", \"Starter memory pack - generic discipline for `aida init --with-memories`\"),\n");
+    code.push_str("    (\"terminal/terminator/aida_terminator.py\", \"Terminator DBus plugin for `aida session focus/send`\"),\n");
     code.push_str("];\n");
 
     fs::write(&dest_path, code).unwrap();
