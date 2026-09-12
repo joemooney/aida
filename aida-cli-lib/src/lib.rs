@@ -14670,12 +14670,9 @@ fn effective_needs_attention_lens_with_source<'a>(
     }
     if req.req_type == RequirementType::Epic {
         let mut decision_lens = None;
-        for rel in req
-            .relationships
-            .iter()
-            .filter(|r| r.rel_type == aida_core::models::RelationshipType::Parent)
-        {
-            let Some(child) = store.get_requirement_by_id(&rel.target_id) else {
+        // trace:STORY-1023 | ai:codex
+        for child_id in aida_core::graph_walk::subtree_ids(store, req.id, None).nodes {
+            let Some(child) = store.get_requirement_by_id(&child_id) else {
                 continue;
             };
             let child_display_status = effective_display_status(store, child);
@@ -14774,9 +14771,9 @@ mod story_1023_list_render_tests {
             shelved_by: Some("codex".to_string()),
             shelved_at: chrono::Utc::now(),
         });
-        epic.relationships.push(aida_core::models::Relationship {
+        child.relationships.push(aida_core::models::Relationship {
             rel_type: aida_core::models::RelationshipType::Parent,
-            target_id: child.id,
+            target_id: epic.id,
             created_at: None,
             created_by: None,
         });
