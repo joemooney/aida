@@ -572,6 +572,7 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         intent: aida_core::mailbox::Intent::Fyi,
         retracted: false,
         deleted: false,
+        archived: false,
     };
     crate::mailbox_store::write_message(project_root, &msg)
 }
