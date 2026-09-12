@@ -33770,6 +33770,15 @@ fn read_headless_log_for_session(
     project_root: &std::path::Path,
     session_uuid: &str,
 ) -> Option<String> {
+    let path = headless_log_path_for_session(project_root, session_uuid)?;
+    std::fs::read_to_string(&path).ok()
+}
+
+// trace:STORY-998 | ai:codex
+fn headless_log_path_for_session(
+    project_root: &std::path::Path,
+    session_uuid: &str,
+) -> Option<std::path::PathBuf> {
     let dir = project_root.join(".aida").join("headless-logs");
     let suffix = format!("-{session_uuid}.jsonl");
     let entries = std::fs::read_dir(&dir).ok()?;
@@ -33781,7 +33790,7 @@ fn read_headless_log_for_session(
             .map(|n| n.ends_with(&suffix))
             .unwrap_or(false)
         {
-            return std::fs::read_to_string(&path).ok();
+            return Some(path);
         }
     }
     None
@@ -78211,6 +78220,15 @@ struct DrainTuning {
     /// BUG-420: hard wall-clock ceiling per headless phase, a backstop in case
     /// progress-detection misses. Default 45m; `0` disables.
     ceiling: std::time::Duration,
+    /// STORY-998: low-information output must repeat for this long before the
+    /// drain shelves it as a spinning session. Default 90s; `0` disables.
+    spinning_after: std::time::Duration,
+    /// STORY-998: high line rate trips runaway before the window is pruned.
+    runaway_rate: f64,
+    /// STORY-998: maximum Shannon entropy for the repeated-template window.
+    low_entropy_bits: f64,
+    /// STORY-998: no information-bearing line for this long is Quiet.
+    progress_activity: std::time::Duration,
     /// TASK-975: CI auto-fix budget — how many in-drain headless fix cycles
     /// phase 2 may attempt on a red CI run before the failure proceeds to
     /// shelve. Also arms the phase-4 merge-conflict rebase when > 0.
@@ -78237,6 +78255,8 @@ impl DrainTuning {
         };
         let env_u64 =
             |k: &str| -> Option<u64> { std::env::var(k).ok().and_then(|s| s.trim().parse().ok()) };
+        let env_f64 =
+            |k: &str| -> Option<f64> { std::env::var(k).ok().and_then(|s| s.trim().parse().ok()) };
         let gh_verify_retries = env_usize("AIDA_GH_VERIFY_RETRIES")
             .or(cfg.gh_verify_retries)
             .unwrap_or(3);
@@ -78246,6 +78266,19 @@ impl DrainTuning {
         let ceiling_min = env_u64("AIDA_PHASE_CEILING_MINUTES")
             .or(cfg.phase_ceiling_minutes)
             .unwrap_or(45);
+        let idle_defaults = aida_core::idle::IdleConfig::default();
+        let spinning_after_secs = env_u64("AIDA_SPINNING_AFTER_SECS")
+            .or(cfg.spinning_after)
+            .unwrap_or(idle_defaults.spinning_after.as_secs());
+        let runaway_rate = env_f64("AIDA_RUNAWAY_RATE")
+            .or(cfg.runaway_rate)
+            .unwrap_or(idle_defaults.runaway_rate);
+        let low_entropy_bits = env_f64("AIDA_LOW_ENTROPY_BITS")
+            .or(cfg.low_entropy_bits)
+            .unwrap_or(idle_defaults.low_entropy_bits);
+        let progress_activity_secs = env_u64("AIDA_PROGRESS_ACTIVITY_SECS")
+            .or(cfg.progress_activity)
+            .unwrap_or(idle_defaults.progress_activity.as_secs());
         // trace:TASK-975 | ai:claude
         let ci_auto_fix = env_usize("AIDA_CI_AUTO_FIX")
             .or(cfg.ci_auto_fix)
@@ -78264,9 +78297,24 @@ impl DrainTuning {
             gh_verify_retries,
             no_progress: std::time::Duration::from_secs(no_progress_min.saturating_mul(60)),
             ceiling: std::time::Duration::from_secs(ceiling_min.saturating_mul(60)),
+            spinning_after: std::time::Duration::from_secs(spinning_after_secs),
+            runaway_rate,
+            low_entropy_bits,
+            progress_activity: std::time::Duration::from_secs(progress_activity_secs),
             ci_auto_fix,
             retry_transient,
             retry_escalate_model,
+        }
+    }
+
+    // trace:STORY-998 | ai:codex
+    fn idle_config(&self) -> aida_core::idle::IdleConfig {
+        aida_core::idle::IdleConfig {
+            spinning_after: self.spinning_after,
+            runaway_rate: self.runaway_rate,
+            low_entropy_bits: self.low_entropy_bits,
+            progress_activity: self.progress_activity,
+            ..aida_core::idle::IdleConfig::default()
         }
     }
 }
@@ -78339,6 +78387,8 @@ struct PhaseWatchdog {
     worktree: Option<std::path::PathBuf>,
     pr_ship_wait_seen: bool,
     progress_signal: WatchdogProgressSignal,
+    idle_detector: aida_core::idle::IdleDetector,
+    idle_log_pos: u64,
     /// STORY-726: when `Some((actor, spec))`, the watchdog also emits a
     /// liveness heartbeat to stderr on each poll tick where it does NOT trip —
     /// reassurance that an otherwise-silent headless phase is alive. Set only
@@ -78362,6 +78412,7 @@ impl PhaseWatchdog {
         ceiling: std::time::Duration,
     ) -> Self {
         let now = std::time::Instant::now();
+        let idle_defaults = aida_core::idle::IdleConfig::default();
         Self {
             project_root,
             session_id,
@@ -78377,8 +78428,16 @@ impl PhaseWatchdog {
             worktree: None,
             pr_ship_wait_seen: false,
             progress_signal: WatchdogProgressSignal::WorktreeAndOutput,
+            idle_detector: aida_core::idle::IdleDetector::new(idle_defaults),
+            idle_log_pos: 0,
             heartbeat: None,
         }
+    }
+
+    // trace:STORY-998 | ai:codex
+    fn with_idle_config(mut self, cfg: aida_core::idle::IdleConfig) -> Self {
+        self.idle_detector = aida_core::idle::IdleDetector::new(cfg);
+        self
     }
 
     // trace:BUG-875 | ai:codex
@@ -78388,10 +78447,12 @@ impl PhaseWatchdog {
         vendor: session::HeadlessVendor,
         no_progress: std::time::Duration,
         ceiling: std::time::Duration,
+        idle_config: aida_core::idle::IdleConfig,
         phase: auto_complete::Phase,
     ) -> Self {
         Self::new(project_root, session_id, vendor, no_progress, ceiling)
             .with_progress_signal(watchdog_progress_signal_for_phase(phase))
+            .with_idle_config(idle_config)
     }
 
     // trace:BUG-875 | ai:codex
@@ -78489,6 +78550,44 @@ impl PhaseWatchdog {
         Self::select_progress_signature(self.progress_signal, worktree_sig, output_sig)
     }
 
+    // trace:STORY-998 | ai:codex
+    fn idle_verdict_from_log(&mut self, now: std::time::Instant) -> aida_core::idle::IdleVerdict {
+        let Some(path) = headless_log_path_for_session(&self.project_root, &self.session_id) else {
+            return self.idle_detector.verdict(now);
+        };
+        let Ok(meta) = std::fs::metadata(&path) else {
+            return self.idle_detector.verdict(now);
+        };
+        let len = meta.len();
+        if len < self.idle_log_pos {
+            self.idle_log_pos = 0;
+        }
+        if len > self.idle_log_pos {
+            if let Ok(mut file) = std::fs::File::open(&path) {
+                use std::io::{BufRead, Seek};
+                let _ = file.seek(std::io::SeekFrom::Start(self.idle_log_pos));
+                let mut reader = std::io::BufReader::new(file);
+                let mut line = Vec::new();
+                loop {
+                    line.clear();
+                    let Ok(n) = reader.read_until(b'\n', &mut line) else {
+                        break;
+                    };
+                    if n == 0 {
+                        break;
+                    }
+                    self.idle_detector.feed_bytes(&line, now);
+                }
+                if let Ok(pos) = reader.stream_position() {
+                    self.idle_log_pos = pos;
+                } else {
+                    self.idle_log_pos = len;
+                }
+            }
+        }
+        self.idle_detector.verdict(now)
+    }
+
     /// Probe (rate-limited) and return `Some(reason)` if the watchdog should
     /// trip — the caller then reaps the child. trace:BUG-420 | ai:claude
     fn check(&mut self) -> Option<String> {
@@ -78550,6 +78649,19 @@ impl PhaseWatchdog {
             self.last_progress = now;
         }
 
+        // STORY-998: a session can produce output forever without adding
+        // information (e.g. status/redraw loops). Classify the stream itself,
+        // but preserve the BUG-749 CI wait exemption.
+        if !pr_ship_waiting {
+            if let aida_core::idle::IdleVerdict::Spinning { template, count } =
+                self.idle_verdict_from_log(now)
+            {
+                return Some(
+                    self.trip_reason(auto_complete::WatchdogTrip::Spinning { template, count }),
+                );
+            }
+        }
+
         // TASK-298: a `--no-human` headless run that hit a permission gate (or
         // reported an `is_error` envelope) is silently stuck — `claude -p`
         // exits 0 even when it bailed (SPIKE-7), so neither the natural-exit
@@ -78604,6 +78716,9 @@ impl PhaseWatchdog {
                     self.ceiling.as_secs() / 60
                 )
             }
+            auto_complete::WatchdogTrip::Spinning { template, count } => format!(
+                "watchdog:spinning — low-information session output repeated `{template}` x{count}"
+            ),
         }
     }
 }
@@ -78682,6 +78797,10 @@ struct DrainConfigToml {
     gh_verify_retries: Option<usize>,
     no_progress_minutes: Option<u64>,
     phase_ceiling_minutes: Option<u64>,
+    spinning_after: Option<u64>,
+    runaway_rate: Option<f64>,
+    low_entropy_bits: Option<f64>,
+    progress_activity: Option<u64>,
     /// TASK-975: `[drain] ci_auto_fix = N` — how many in-drain CI-fix cycles
     /// phase 2 may attempt on a red CI run before shelving. Also arms the
     /// phase-4 merge-conflict rebase when > 0. Absent/0 = off.
@@ -78724,6 +78843,10 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 "gh_verify_retries" => out.gh_verify_retries = val.parse().ok(),
                 "no_progress_minutes" => out.no_progress_minutes = val.parse().ok(),
                 "phase_ceiling_minutes" => out.phase_ceiling_minutes = val.parse().ok(),
+                "spinning_after" => out.spinning_after = parse_duration_seconds(val),
+                "runaway_rate" => out.runaway_rate = val.parse().ok(),
+                "low_entropy_bits" => out.low_entropy_bits = val.parse().ok(),
+                "progress_activity" => out.progress_activity = parse_duration_seconds(val),
                 // trace:TASK-975 | ai:claude
                 "ci_auto_fix" => out.ci_auto_fix = val.parse().ok(),
                 "retry_transient" => out.retry_transient = val.parse().ok(),
@@ -78742,6 +78865,21 @@ fn parse_boolish(raw: &str) -> Option<bool> {
         "false" | "no" | "off" | "0" => Some(false),
         _ => None,
     }
+
+// trace:STORY-998 | ai:codex
+fn parse_duration_seconds(raw: &str) -> Option<u64> {
+    let trimmed = raw.trim().trim_matches('"');
+    if let Some(secs) = trimmed.strip_suffix('s') {
+        return secs.trim().parse().ok();
+    }
+    if let Some(mins) = trimmed.strip_suffix('m') {
+        return mins
+            .trim()
+            .parse::<u64>()
+            .ok()
+            .map(|m| m.saturating_mul(60));
+    }
+    trimmed.parse().ok()
 }
 
 struct RealPhaseDriver {
@@ -80177,6 +80315,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 headless_vendor,
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
+                self.drain_tuning.idle_config(),
                 auto_complete::Phase::Implementer,
             );
             // STORY-726: a headless implementer with teeing off (`--no-tee-headless`
@@ -81140,6 +81279,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 headless_vendor,
                 self.drain_tuning.no_progress,
                 self.drain_tuning.ceiling,
+                self.drain_tuning.idle_config(),
                 auto_complete::Phase::Reviewer,
             )
         });

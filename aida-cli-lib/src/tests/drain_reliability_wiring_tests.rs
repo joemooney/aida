@@ -94,6 +94,53 @@ fn watchdog_trip_reason_names_the_threshold_minutes() {
     assert!(wd
         .trip_reason(auto_complete::WatchdogTrip::Ceiling)
         .contains("45m"));
+    assert!(wd
+        .trip_reason(auto_complete::WatchdogTrip::Spinning {
+            template: "poll: no work §N jobs".into(),
+            count: 41,
+        })
+        .contains("watchdog:spinning"));
+}
+
+// trace:STORY-998 | ai:codex
+#[test]
+fn watchdog_trips_on_spinning_output_template() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let worktree = root.join("spin-wt");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let session_id = "spin-session";
+    let idle_cfg = aida_core::idle::IdleConfig {
+        spinning_after: std::time::Duration::from_secs(60),
+        runaway_rate: 10_000.0,
+        low_entropy_bits: 1.5,
+        progress_activity: std::time::Duration::from_secs(300),
+        max_window_lines: 128,
+    };
+    let mut watchdog = PhaseWatchdog::new_for_phase(
+        root.to_path_buf(),
+        session_id.to_string(),
+        session::HeadlessVendor::Claude,
+        std::time::Duration::from_secs(60 * 60),
+        std::time::Duration::from_secs(60 * 60),
+        idle_cfg,
+        auto_complete::Phase::Reviewer,
+    );
+    watchdog.worktree = Some(worktree);
+    watchdog.last_poll = std::time::Instant::now() - std::time::Duration::from_secs(31);
+    let start = std::time::Instant::now() - std::time::Duration::from_secs(70);
+    for i in 0..70 {
+        watchdog.idle_detector.feed_line(
+            "poll: no work 0 jobs",
+            start + std::time::Duration::from_secs(i),
+        );
+    }
+
+    let reason = watchdog
+        .check()
+        .expect("low-information repeated output should trip spinning watchdog");
+    assert!(reason.contains("watchdog:spinning"), "{reason}");
+    assert!(reason.contains("poll: no work"), "{reason}");
 }
 
 // trace:BUG-875 | ai:codex
@@ -151,6 +198,7 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
         session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
+        aida_core::idle::IdleConfig::default(),
         auto_complete::Phase::Reviewer,
     );
     streaming.worktree = Some(worktree.clone());
@@ -176,6 +224,7 @@ fn reviewer_watchdog_streaming_output_survives_but_silence_trips() {
         session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
+        aida_core::idle::IdleConfig::default(),
         auto_complete::Phase::Reviewer,
     );
     silent.worktree = Some(worktree);
@@ -211,6 +260,7 @@ fn codex_watchdog_counts_streaming_headless_log_activity_as_progress() {
         session::HeadlessVendor::Codex,
         std::time::Duration::from_secs(10 * 60),
         std::time::Duration::from_secs(45 * 60),
+        aida_core::idle::IdleConfig::default(),
         auto_complete::Phase::Implementer,
     );
     watchdog.worktree = Some(worktree);
@@ -264,6 +314,7 @@ fn bounded_polling_tool_events_feed_three_minute_watchdog() {
         session::HeadlessVendor::Claude,
         std::time::Duration::from_secs(3 * 60),
         std::time::Duration::from_secs(45 * 60),
+        aida_core::idle::IdleConfig::default(),
         auto_complete::Phase::Reviewer,
     );
     watchdog.worktree = Some(worktree);

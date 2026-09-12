@@ -760,10 +760,16 @@ pub(crate) enum ImplementerOutcome {
 /// precise catch for the echo/sleep filler-spin; the wall-clock ceiling is a
 /// hard backstop. trace:BUG-420 | ai:claude
 #[allow(dead_code)] // decision core; wired into the phase spawn-wait by slice 2
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WatchdogTrip {
     NoProgress,
     Ceiling,
+    /// STORY-998: the session is alive and emitting bytes, but the bytes are a
+    /// low-information repeated template.
+    Spinning {
+        template: String,
+        count: usize,
+    },
 }
 
 /// Pure decision core for the BUG-420 phase watchdog. `since_progress` is the
