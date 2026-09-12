@@ -1,0 +1,26 @@
+id: 01a0969e-51c7-74f3-8349-f8ff594ae23e
+spec_id: STORY-1088
+agreed_id: STORY-1088
+title: 'Review PR-1780: [AI:codex] fix(queue): authorize orchestrated phase pickup (BUG-1106)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09687`) for branch `bug-1106`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1780>
+  - Branch: `bug-1106` → `main`
+
+  ## Covers
+
+  - BUG-1106
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1780` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T17:15:53.159957753Z
+modified_at: 2026-09-12T17:15:53.159957753Z
+req_type: Story
