@@ -23,12 +23,12 @@ description: |-
 
   ## Related
   Parent EPIC (unattended reliability), STORY-974 (typed causes — the classifier input), STORY-975 (in-phase retry — this is the ABOVE-phase loop), BUG-908/909/1063 (the false-park fixes this loop assumes), STORY-1047 (schedule tick — a run trigger), STORY-1043 (surface the needs-human residue), STORY-1029 (notify).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:24:46.943966857Z
-modified_at: 2026-09-11T23:51:16.047518970Z
+modified_at: 2026-09-12T00:09:36.722540204Z
 req_type: Story
 tags:
 - drain
@@ -44,3 +44,11 @@ relationships:
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-11T17:24:49.904265068Z
 execution_mode: drain
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1755: Build (windows-latest)'
+  recovery_hint: 'CI failed on run 34659798482 — view it: `gh run view 34659798482`. Push fixups to the same branch: `aida queue work STORY-1051 --branch story-1051-2 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T00:09:36.722540204Z

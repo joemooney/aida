@@ -60048,5 +60048,13 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4810
+- id: 01a092f2-bd21-7af3-9f40-67b9ba62f082
+  target_id: 01a09180-1adf-7ae1-9cd5-d158da41e7a6
+  author: aida
+  node_id: '1'
+  lamport: 4811
+  timestamp: 2026-09-12T00:09:36.801221663Z
+  kind: !SetStatus
+    status: Needs Attention
+clock: 4811
 node_id: '1'
