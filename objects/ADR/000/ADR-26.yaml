@@ -1,0 +1,42 @@
+id: 01a0973b-6780-72f2-98e0-0079a282614f
+spec_id: ADR-26
+agreed_id: ADR-26
+title: 'Re-drive supervisor design: substrate-reading command, event-log attempt state, off-by-default'
+description: |-
+  ## Context
+  STORY-1051 (EPIC-62 keystone): the re-drive supervisor that auto-retries TRANSIENT-parked specs so a stuck spec doesn't sit for days. Three load-bearing forks were decided in a guided session with the operator (2026-09-12).
+
+  ## Decisions
+
+  ### 1. Execution model — a substrate-reading command (`aida supervise`)
+  The supervisor is a standalone command that reads NeedsAttention parks from the git-canonical substrate on each run, NOT a post-drain-only step and NOT a persistent daemon.
+  - Rejected "post-drain step only": a park from a CRASHED drain (non-clean exit) would never be revisited, and a park from an earlier drain is invisible.
+  - Rejected "daemon": reliability would then depend on the daemon staying alive — the exact fragility EPIC-62 exists to remove.
+  - Chosen because it recovers a park regardless of what parked it or whether that drain crashed, and needs no process kept alive (the "act on the substrate, never rely on an agent being awake" principle).
+  - TRIGGERS are configurable: `[drain] supervise_after_exit` (run when a drain exits) and `[schedule] supervise = "30m"` (STORY-1047 tick). The command itself is architecture, not a knob.
+
+  ### 2. Attempt state — the event log (events.jsonl)
+  Per-spec re-drive count + last-attempt time (for the 3-attempt cap and 2m/8m/30m backoff) are derived from SpecReDriven events in events.jsonl, NOT a separate state file and NOT a counter mutated onto the spec.
+  - Rejected a `.aida/supervisor-state.json` file: a second source of truth that can drift and needs its own cleanup.
+  - Rejected a spec-field counter (the failed PR-1757 approach): re-commits the spec on every retry (store churn).
+  - Chosen because it is append-only, never drifts, survives a crash, and shows the recovery trail in `aida history` for free. Not a config knob (internal choice).
+
+  ### 3. Default posture — OFF for this release, flip later
+  Ships `[drain] supervise = false`. The operator enables it after watching it correctly retry transient parks and correctly SKIP needs-human parks on real work; a follow-up flips the default to true once proven.
+  - Rejected on-by-default: a brand-new loop acting unattended from day one, before the classifier is proven on real parks.
+  - Chosen as the report-only-first pattern for a new autonomous loop; blast radius while off is zero. `[drain] supervise` is a config knob regardless; only its DEFAULT is decided here (false this release).
+
+  ## Consequences
+  Build `aida supervise` reading the substrate; classify via STORY-974 typed causes (transient vs needs-human); re-drive transient via the normal --from-pr/--force-claim path; cap at 3 with 2/8/30m backoff derived from events; reclassify to needs-human + escalate after the cap; never touch a red-CI or design-fork park. Default off. Human-reviewed PR, no auto-merge (keystone).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T20:07:27.872186948Z
+modified_at: 2026-09-12T20:07:27.872186948Z
+req_type: Decision
+tags:
+- from-product
+- parent:EPIC-62
+- reliability
+- supervisor
