@@ -60395,5 +60395,50 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 4828
+- id: 01a09359-77b5-7333-bcb7-3e95e4569304
+  target_id: 01a09359-71c9-7241-b341-fe40231167c3
+  author: aida
+  node_id: '1'
+  lamport: 4829
+  timestamp: 2026-09-12T02:01:49.237596708Z
+  kind: !Create
+    title: 'auto-complete failure: phase 2 (ci) on TASK-1212'
+    description: |
+      Auto-drafted by `aida queue work TASK-1212 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      CI is red on PR-1760: Build (ubuntu-latest)
+
+      Failure kind: `ci-red`
+
+      ## Recovery hint shown to the user
+
+      CI failed on run 34666291370 — view it: `gh run view 34666291370`. Push fixups to the same branch: `aida queue work TASK-1212 --branch task-1212 --steal`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-12T02:01:46.953126037+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 332250 ms
+        - phase 2 (ci): 232502 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-1212","started_at":"2026-09-12T01:52:17.660468873+00:00","completed_at":"2026-09-12T02:01:46.953126037+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-1760: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":332250},{"phase":2,"slug":"ci","elapsed_ms":232502}],"total_ms":565310,"binary_sha":"d7bfa480c"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4829
 node_id: '1'
