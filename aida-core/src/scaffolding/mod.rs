@@ -4115,6 +4115,114 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_pre_commit_intermediate_gate_allows_tracked_ignored_template_masters() {
+        use std::process::Command;
+        let temp_dir = TempDir::new().unwrap();
+
+        let run_git = |args: &[&str]| {
+            let mut cmd = Command::new("git");
+            cmd.args(args);
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            cmd.env_remove("AIDA_ALLOW_INTERMEDIATE");
+            let status = cmd.status().unwrap();
+            assert!(status.success(), "git command {:?} failed", args);
+        };
+
+        run_git(&["init"]);
+        run_git(&["config", "user.email", "test@aida.dev"]);
+        run_git(&["config", "user.name", "AIDA Test"]);
+
+        let hook_body = crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-pre-commit.sh")
+            .copied()
+            .expect("embedded pre-commit template");
+        let hook_path = temp_dir.path().join(".git/hooks/pre-commit");
+        std::fs::create_dir_all(hook_path.parent().unwrap()).unwrap();
+        std::fs::write(&hook_path, hook_body).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&hook_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let run_hook = || -> std::process::Output {
+            let mut cmd = if cfg!(windows) {
+                let mut cmd = Command::new("sh");
+                cmd.arg(&hook_path);
+                cmd
+            } else {
+                Command::new(&hook_path)
+            };
+            cmd.current_dir(temp_dir.path());
+            for (key, _) in std::env::vars() {
+                if key.starts_with("GIT_") {
+                    cmd.env_remove(&key);
+                }
+            }
+            cmd.env_remove("AIDA_ALLOW_INTERMEDIATE");
+            cmd.output().unwrap()
+        };
+
+        std::fs::write(
+            temp_dir.path().join(".gitignore"),
+            "target/\naida-core/templates/.aida/discipline/*\n",
+        )
+        .unwrap();
+        let template_dir = temp_dir.path().join("aida-core/templates/.aida/discipline");
+        std::fs::create_dir_all(&template_dir).unwrap();
+        let template_file = template_dir.join("substrate-as-bouncer.md");
+        std::fs::write(&template_file, "tracked template master\n").unwrap();
+
+        // Seed the template master as already tracked source. New ignored paths
+        // still need the bouncer below. trace:BUG-1088 | ai:codex
+        run_git(&["add", ".gitignore"]);
+        run_git(&[
+            "add",
+            "-f",
+            "aida-core/templates/.aida/discipline/substrate-as-bouncer.md",
+        ]);
+        run_git(&[
+            "commit",
+            "--no-verify",
+            "-m",
+            "chore: seed tracked ignored template master",
+        ]);
+
+        std::fs::write(&template_file, "edited tracked template master\n").unwrap();
+        run_git(&[
+            "add",
+            "aida-core/templates/.aida/discipline/substrate-as-bouncer.md",
+        ]);
+        let output = run_hook();
+        assert!(
+            output.status.success(),
+            "tracked ignored template master edit must pass: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let ignored_dir = temp_dir.path().join("target");
+        std::fs::create_dir_all(&ignored_dir).unwrap();
+        std::fs::write(ignored_dir.join("debug.log"), "runtime output\n").unwrap();
+        run_git(&["add", "-f", "target/debug.log"]);
+
+        let output = run_hook();
+        assert!(
+            !output.status.success(),
+            "newly staged ignored runtime output must still be refused"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("target/debug.log is gitignored"),
+            "refusal should name the ignored runtime file; got: {stderr}"
+        );
+    }
+
     // trace:BUG-766 | ai:claude
     // Store bulk-write version floor. A stale installed aida binary (whose
     // `git_ops` predates the guard and therefore commits WITHOUT the
