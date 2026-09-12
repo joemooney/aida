@@ -61623,5 +61623,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 4901
+- id: 01a09456-aed8-7e51-b0dc-16c5e62d55f2
+  target_id: 01a09456-aae5-7531-afaf-be4ad0f11308
+  author: aida
+  node_id: '1'
+  lamport: 4902
+  timestamp: 2026-09-12T06:38:23.960670263Z
+  kind: !Create
+    title: 'Review PR-1769: [AI:codex] fix(agent): keep submodule launch roots out of git metadata (BUG-1093)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09448`) for branch `bug-1093`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1769>
+      - Branch: `bug-1093` → `main`
+
+      ## Covers
+
+      - BUG-1093
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1769` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4902
 node_id: '1'
