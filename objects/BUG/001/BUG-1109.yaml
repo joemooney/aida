@@ -13,12 +13,12 @@ description: |
   1. Forge resolution re-checks the origin host when the stored provider is pure-git but origin points at github.com/gitlab.*: either auto-correct the config (with a printed notice) or hard-warn at drain launch ("config says pure-git but origin is github — review phase will have no PR; fix with aida config forge github").
   2. aida init --github / --remote writes the provider AFTER the remote is attached, not from the pre-remote state.
   3. Regression: init-then-add-remote flow ends with provider matching the origin host.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T17:44:10.569889743Z
-modified_at: 2026-09-12T18:45:12.199238042Z
+modified_at: 2026-09-12T18:45:14.276348599Z
 req_type: Bug
 tags:
 - drain
