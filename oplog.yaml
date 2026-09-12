@@ -61954,5 +61954,31 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 4920
+- id: 01a0949f-e283-7711-879b-095c1379e3d1
+  target_id: 01a0949f-de64-73e2-bc05-93ae7ad60616
+  author: aida
+  node_id: '1'
+  lamport: 4921
+  timestamp: 2026-09-12T07:58:21.315827872Z
+  kind: !Create
+    title: 'Review PR-1772: [AI:codex] fix(cache): retry schema drift after rebuild (BUG-1097)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0949a`) for branch `bug-1097`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1772>
+      - Branch: `bug-1097` → `main`
+
+      ## Covers
+
+      - BUG-1097
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1772` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4921
 node_id: '1'

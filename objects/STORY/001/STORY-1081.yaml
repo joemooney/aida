@@ -1,0 +1,26 @@
+id: 01a0949f-de64-73e2-bc05-93ae7ad60616
+spec_id: STORY-1081
+agreed_id: STORY-1081
+title: 'Review PR-1772: [AI:codex] fix(cache): retry schema drift after rebuild (BUG-1097)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0949a`) for branch `bug-1097`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1772>
+  - Branch: `bug-1097` → `main`
+
+  ## Covers
+
+  - BUG-1097
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1772` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T07:58:20.260379250Z
+modified_at: 2026-09-12T07:58:20.260379250Z
+req_type: Story
