@@ -60189,5 +60189,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4816
+- id: 01a09314-7661-74d3-8710-e0794337ed65
+  target_id: 01a09314-7285-7583-a891-c543c9622260
+  author: aida
+  node_id: '1'
+  lamport: 4817
+  timestamp: 2026-09-12T00:46:26.913839375Z
+  kind: !Create
+    title: 'Review PR-1757: [AI:codex] feat(supervisor): re-drive transient parked specs (STORY-1051)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09307`) for branch `story-1048`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1757>
+      - Branch: `story-1048` → `main`
+
+      ## Covers
+
+      - STORY-1051
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1757` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4817
 node_id: '1'
