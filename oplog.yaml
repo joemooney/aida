@@ -60440,5 +60440,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4829
+- id: 01a09364-d778-7a42-8b42-18a59e97fd3e
+  target_id: 01a09364-d36f-7093-899c-206bd3e22852
+  author: aida
+  node_id: '1'
+  lamport: 4830
+  timestamp: 2026-09-12T02:14:14.648025887Z
+  kind: !Create
+    title: 'Review PR-1762: [AI:codex] feat(drain): add status next hint (TASK-1208)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09359`) for branch `task-1208`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1762>
+      - Branch: `task-1208` → `main`
+
+      ## Covers
+
+      - TASK-1208
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1762` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4830
 node_id: '1'

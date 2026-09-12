@@ -1,0 +1,26 @@
+id: 01a09364-d36f-7093-899c-206bd3e22852
+spec_id: STORY-1071
+agreed_id: STORY-1071
+title: 'Review PR-1762: [AI:codex] feat(drain): add status next hint (TASK-1208)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09359`) for branch `task-1208`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1762>
+  - Branch: `task-1208` → `main`
+
+  ## Covers
+
+  - TASK-1208
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1762` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T02:14:13.615057970Z
+modified_at: 2026-09-12T02:14:13.615057970Z
+req_type: Story
