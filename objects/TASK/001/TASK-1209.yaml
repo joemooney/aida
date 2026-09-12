@@ -16,12 +16,12 @@ description: |-
 
   ## Related
   aida tail (TASK-1167/1173), STORY-1028 (aida drain clear — same namespace), TASK-1208 (uses this spelling in the hint), STORY-1027 (catalog).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:49:38.464587991Z
-modified_at: 2026-09-12T02:36:43.761816968Z
+modified_at: 2026-09-12T02:44:53.068653261Z
 req_type: Task
 tags:
 - cli
@@ -41,8 +41,24 @@ relationships:
   target_id: 01a09379-2ff6-7d83-8ed0-71d9afcee855
   created_at: 2026-09-12T02:36:35.263936397Z
   created_by: joe
+history:
+- id: 01a09380-e4c3-7931-890c-6344cc054de5
+  author: aida-auto-bump
+  timestamp: 2026-09-12T02:44:53.059659818Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09380-e4cc-7703-aed1-edc8e7bea131
+  timestamp: 2026-09-12T02:44:53.068651327Z
+  agent: aida
+  commit_sha: 88a8e873b211bc806f976d9148cda1755e9e2e9c
+  summary: Completed via merge 88a8e873
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T02:36:43.761816968Z
   implemented_by: joe
+  completed_at: 2026-09-12T02:44:53.059524821Z
+  completion_sha: 88a8e873b211bc806f976d9148cda1755e9e2e9c
