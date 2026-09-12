@@ -62856,5 +62856,50 @@ operations:
   timestamp: 2026-09-12T17:44:24.102704597Z
   kind: !SetStatus
     status: Rejected
-clock: 4987
+- id: 01a096ed-0fa3-7ec1-bc1d-54816f71881e
+  target_id: 01a096ed-09a9-7fa3-8122-6b4216c19767
+  author: aida
+  node_id: '1'
+  lamport: 4988
+  timestamp: 2026-09-12T18:41:53.572003577Z
+  kind: !Create
+    title: 'auto-complete failure: phase 2 (ci) on BUG-1109'
+    description: |
+      Auto-drafted by `aida queue work BUG-1109 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      CI is red on PR-1781: Build (ubuntu-latest)
+
+      Failure kind: `ci-red`
+
+      ## Recovery hint shown to the user
+
+      CI failed on run 34711744223 — view it: `gh run view 34711744223`. Push fixups to the same branch: `aida queue work BUG-1109 --branch bug-1109 --steal`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-12T18:41:51.289913069+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 436235 ms
+        - phase 2 (ci): 252280 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"BUG-1109","started_at":"2026-09-12T18:30:21.198408279+00:00","completed_at":"2026-09-12T18:41:51.289913069+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-1781: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":436235},{"phase":2,"slug":"ci","elapsed_ms":252280}],"total_ms":689064,"binary_sha":"f134e5e0a"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 4988
 node_id: '1'
