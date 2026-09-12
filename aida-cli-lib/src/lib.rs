@@ -14636,16 +14636,37 @@ fn list_requirement_status_cell(
     status_display::paint_status(&padded, palette_key).to_string()
 }
 
+fn needs_attention_badge_for_lens(lens: &status_display::NeedsAttentionLens) -> String {
+    let label = lens.label();
+    let key = lens.palette_key();
+    format!(
+        "{} {}",
+        status_display::status_glyph(key),
+        status_display::paint_status(&label, key)
+    )
+}
+
 fn effective_needs_attention_lens(
     store: &aida_core::RequirementsStore,
     req: &aida_core::models::Requirement,
     display_status: &RequirementStatus,
 ) -> Option<status_display::NeedsAttentionLens> {
+    effective_needs_attention_lens_with_source(store, req, display_status).map(|(_, lens)| lens)
+}
+
+fn effective_needs_attention_lens_with_source<'a>(
+    store: &'a aida_core::RequirementsStore,
+    req: &'a aida_core::models::Requirement,
+    display_status: &RequirementStatus,
+) -> Option<(
+    &'a aida_core::models::Requirement,
+    status_display::NeedsAttentionLens,
+)> {
     if !matches!(display_status, RequirementStatus::NeedsAttention) {
         return None;
     }
     if let Some(lens) = status_display::needs_attention_lens(req) {
-        return Some(lens);
+        return Some((req, lens));
     }
     if req.req_type == RequirementType::Epic {
         let mut decision_lens = None;
@@ -14658,14 +14679,18 @@ fn effective_needs_attention_lens(
                 continue;
             };
             let child_display_status = effective_display_status(store, child);
-            match effective_needs_attention_lens(store, child, &child_display_status) {
-                Some(status_display::NeedsAttentionLens::Shelved { cause }) => {
-                    return Some(status_display::NeedsAttentionLens::Shelved { cause });
+            match effective_needs_attention_lens_with_source(store, child, &child_display_status) {
+                Some((source, status_display::NeedsAttentionLens::Shelved { cause })) => {
+                    return Some((
+                        source,
+                        status_display::NeedsAttentionLens::Shelved { cause },
+                    ));
                 }
-                Some(status_display::NeedsAttentionLens::NeedsDecision { reason }) => {
-                    decision_lens.get_or_insert(
+                Some((source, status_display::NeedsAttentionLens::NeedsDecision { reason })) => {
+                    decision_lens.get_or_insert((
+                        source,
                         status_display::NeedsAttentionLens::NeedsDecision { reason },
-                    );
+                    ));
                 }
                 None => {}
             }
@@ -14674,7 +14699,10 @@ fn effective_needs_attention_lens(
             return decision_lens;
         }
     }
-    Some(status_display::NeedsAttentionLens::NeedsDecision { reason: None })
+    Some((
+        req,
+        status_display::NeedsAttentionLens::NeedsDecision { reason: None },
+    ))
 }
 
 #[cfg(test)]
@@ -14754,6 +14782,7 @@ mod story_1023_list_render_tests {
         });
 
         let epic_id = epic.id;
+        let child_id = child.id;
         store.requirements.push(epic);
         store.requirements.push(child);
 
@@ -14788,6 +14817,15 @@ mod story_1023_list_render_tests {
             epic,
             &ListStatusFilter::NeedsDecision
         ));
+
+        let (source, lens) = effective_needs_attention_lens_with_source(
+            &store,
+            epic,
+            &RequirementStatus::NeedsAttention,
+        )
+        .expect("effective lens");
+        assert_eq!(source.id, child_id);
+        assert_eq!(lens.label(), "Shelved (stale-base)");
     }
 }
 
@@ -14888,7 +14926,9 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     // children, not the stored field. trace:BUG-626 | ai:claude
     let display_status = effective_display_status(&store, req);
     let status_str = if matches!(display_status, RequirementStatus::NeedsAttention) {
-        status_display::parked_status_badge(req)
+        effective_needs_attention_lens(&store, req, &display_status)
+            .map(|lens| needs_attention_badge_for_lens(&lens))
+            .unwrap_or_else(|| status_display::parked_status_badge(req))
     } else {
         match display_status {
             RequirementStatus::Draft => "Draft".yellow().to_string(),
@@ -50528,7 +50568,18 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
 
     // trace:STORY-1023 | ai:codex
     if matches!(eff_status, aida_core::RequirementStatus::NeedsAttention) {
-        if let Some(fr) = req.failure_reason.as_ref() {
+        let (reason_req, lens) =
+            effective_needs_attention_lens_with_source(&store, req, &eff_status).unwrap_or((
+                req,
+                status_display::NeedsAttentionLens::NeedsDecision { reason: None },
+            ));
+        if let status_display::NeedsAttentionLens::Shelved { .. } = lens {
+            let Some(fr) = reason_req.failure_reason.as_ref() else {
+                anyhow::bail!(
+                    "{} has an effective shelved lens but no failure reason source",
+                    disp
+                );
+            };
             let cause = auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
             let detail = auto_complete_telemetry::failure_detail_first_line(Some(&fr.detail));
             if json {
@@ -50565,12 +50616,12 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
             }
             return Ok(());
         }
-        let reason = req
+        let reason = reason_req
             .attention_reason
             .as_ref()
             .map(|a| a.category.to_string())
             .unwrap_or_else(|| "no recorded reason".to_string());
-        let detail = req
+        let detail = reason_req
             .attention_reason
             .as_ref()
             .map(|a| a.detail.as_str())
