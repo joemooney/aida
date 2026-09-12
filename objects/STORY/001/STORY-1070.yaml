@@ -1,0 +1,26 @@
+id: 01a09355-0d7a-7662-a674-41f208fb9c97
+spec_id: STORY-1070
+agreed_id: STORY-1070
+title: 'Review PR-1760: [AI:codex] feat(release): add windows binary asset (TASK-1212)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09351`) for branch `task-1212`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1760>
+  - Branch: `task-1212` → `main`
+
+  ## Covers
+
+  - TASK-1212
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1760` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T01:56:59.898744217Z
+modified_at: 2026-09-12T01:56:59.898744217Z
+req_type: Story
