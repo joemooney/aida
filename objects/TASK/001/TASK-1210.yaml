@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:51:52.902310808Z
-modified_at: 2026-09-11T17:56:49.916299004Z
+modified_at: 2026-09-12T09:57:31.660097127Z
 req_type: Task
 tags:
 - dogfood
@@ -44,4 +44,10 @@ comments:
   content: Approved, ADVISOR-executed (a verification drain run, not implementer code) — runs after 908/909 merge and the next real drain provides the evidence.
   created_at: 2026-09-11T17:56:49.916299004Z
   modified_at: 2026-09-11T17:56:49.916299004Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0950c-fd8c-7943-a85c-dbd4825e4bf5
+  author: joe
+  content: 'Advisor evidence ledger (overnight 2026-09-11→12, 98 retry events across the day''s drains): (1) The one NATURAL phase-1 (implementer) reclaim attempt — TASK-1206, 14:31, lease 01a0925b — FAILED: reclaim_implementer_retry_predecessor refused on a Live/Unknown verdict during predecessor teardown. Per acceptance #3 semantics that evidence was filed (as BUG-1078 rather than reopening BUG-908 — 908''s release path worked; the refusal was the liveness probe''s race) and BUG-1078''s reprobe fix MERGED (PR-1765, commit 3506e1188). (2) All other SpecRetried events tonight were phase-2/3 (ci/reviewer) retries — none exercise worktree re-entry. (3) A SUCCESSFUL same-worktree re-entry with attempt-1''s diff intact remains UNOBSERVED; acceptance #1''s controlled injected-failure drain still needs a daylight run on a throwaway spec (never a real one — parks NeedsAttention). Keeping this task open for that one specimen.'
+  created_at: 2026-09-12T09:57:31.660097127Z
+  modified_at: 2026-09-12T09:57:31.660097127Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
