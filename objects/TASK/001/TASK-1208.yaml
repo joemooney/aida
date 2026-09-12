@@ -18,12 +18,12 @@ description: |-
 
   ## Related
   aida tail (TASK-1167/1173, the drill-down target), aida status next[] convention (STORY-707), STORY-1023 (shelved-vs-needs-decision rendering the triage hint should match).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:47:20.184181777Z
-modified_at: 2026-09-12T02:14:24.214467339Z
+modified_at: 2026-09-12T02:22:13.387324578Z
 req_type: Task
 tags:
 - affordance
@@ -46,8 +46,24 @@ comments:
   created_at: 2026-09-11T16:49:45.146878502Z
   modified_at: 2026-09-11T16:49:45.146878502Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0936c-2583-7602-b889-e20b4f0cf84d
+  author: aida-auto-bump
+  timestamp: 2026-09-12T02:22:13.379946630Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0936c-258b-7e80-b227-b252b92cc5a9
+  timestamp: 2026-09-12T02:22:13.387323483Z
+  agent: aida
+  commit_sha: e7afbfbd232f117aa7a6d2bec350089fd57150d7
+  summary: Completed via merge e7afbfbd
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T02:14:24.214467339Z
   implemented_by: joe
+  completed_at: 2026-09-12T02:22:13.379799061Z
+  completion_sha: e7afbfbd232f117aa7a6d2bec350089fd57150d7
