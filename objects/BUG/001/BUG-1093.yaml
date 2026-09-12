@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:47:24.970776476Z
-modified_at: 2026-09-12T05:47:24.970776476Z
+modified_at: 2026-09-12T05:47:41.301040510Z
 req_type: Bug
 tags:
 - agent-launcher
@@ -19,3 +19,8 @@ tags:
 - risk:medium
 - submodule
 - worktree
+relationships:
+- rel_type: !Custom relates-to
+  target_id: 01a09428-155b-7623-b243-a51e1bd7b0f5
+  created_at: 2026-09-12T05:47:41.301035158Z
+  created_by: joe
