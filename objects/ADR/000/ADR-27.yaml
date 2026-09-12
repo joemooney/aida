@@ -24,9 +24,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T21:12:04.987183577Z
-modified_at: 2026-09-12T21:12:04.987183577Z
+modified_at: 2026-09-12T21:12:19.454449655Z
 req_type: Decision
 tags:
 - adr
 - from-guided-implement:STORY-1041
 - keystone
+relationships:
+- rel_type: References
+  target_id: 01a09075-880b-78d2-8212-ccdcd835a588
+  created_at: 2026-09-12T21:12:19.454444401Z
+  created_by: joe
