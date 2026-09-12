@@ -63474,5 +63474,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 5022
+- id: 01a097f6-ed64-7d70-894c-50bdde3d8226
+  target_id: 01a097f6-e959-7fa1-a897-107fe82b2341
+  author: aida
+  node_id: '1'
+  lamport: 5023
+  timestamp: 2026-09-12T23:32:17.380065696Z
+  kind: !Create
+    title: 'Review PR-1786: [AI:codex] fix(role): stabilize roleless recovery recency (BUG-1116)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a097f1`) for branch `bug-1116`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1786>
+      - Branch: `bug-1116` → `main`
+
+      ## Covers
+
+      - BUG-1116
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1786` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5023
 node_id: '1'
