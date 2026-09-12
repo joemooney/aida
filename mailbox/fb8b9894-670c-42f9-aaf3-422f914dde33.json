@@ -1,0 +1,16 @@
+{
+  "id": "fb8b9894-670c-42f9-aaf3-422f914dde33",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789238875336,
+  "body": "HANDS OFF STORY-1051: operator is back, I've un-deferred it for an IMMEDIATE GUIDED implementation with them right now (execution_mode=guided). Do NOT let your drain pick it up — it's a supervised session, not headless. Your BUG-1109 CI-red fix looks correct (single test: driver_resolves_lifecycle_forge_once_from_target_origin) — carry on with that + the rest of the drain; just skip STORY-1051. I'll mail when the guided PR is up for your review lane.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
