@@ -16,12 +16,12 @@ description: |
   1. The roleless-recovery 'last-used role' is selected by the stored last_active_at field (not file mtime / dir order); ties broken deterministically (e.g. by name) so the result is stable.
   2. The test is deterministic across runs and run-order (seed distinct last_active_at, assert the newer wins every time).
   3. Regression: 100x loop of the test is green; two roles with equal last_active_at pick a defined winner.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T23:24:08.948284140Z
-modified_at: 2026-09-12T23:32:25.900681100Z
+modified_at: 2026-09-12T23:53:42.603657306Z
 req_type: Bug
 tags:
 - ci
@@ -33,7 +33,23 @@ relationships:
   target_id: 01a097f6-e959-7fa1-a897-107fe82b2341
   created_at: 2026-09-12T23:32:21.001485026Z
   created_by: joe
+history:
+- id: 01a0980a-89b4-7430-a5c2-de79d6edee60
+  author: aida-auto-bump
+  timestamp: 2026-09-12T23:53:42.580662811Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0980a-89cb-7233-b926-3e2270adfcc6
+  timestamp: 2026-09-12T23:53:42.603655785Z
+  agent: aida
+  commit_sha: 292653b93720fa6907e0a40cb7762dae43263db7
+  summary: Completed via merge 292653b9
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T23:32:25.900681100Z
   implemented_by: joe
+  completed_at: 2026-09-12T23:53:42.580546534Z
+  completion_sha: 292653b93720fa6907e0a40cb7762dae43263db7
