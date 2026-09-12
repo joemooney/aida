@@ -446,6 +446,10 @@ impl ReviewDecision {
 pub struct ChangeMetadata {
     pub state: ChangeState,
     pub title: String,
+    /// When the change merged, if the forge exposes it. Used by drain
+    /// reconciliation to avoid crediting pre-reopen PRs.
+    // trace:BUG-1112 | ai:codex
+    pub merged_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Declared base branch (gh `baseRefName` / GitLab `target_branch`).
     pub base_ref: String,
     /// Head branch on the change's repo of origin (gh `headRefName` /
@@ -1190,7 +1194,7 @@ impl Forge for GitHubForge {
                 "view",
                 &id_str,
                 "--json",
-                "state,title,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+                "state,title,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
             ]);
             c
         })
@@ -2298,6 +2302,11 @@ fn parse_gh_change_metadata(json: &serde_json::Value) -> ChangeMetadata {
     ChangeMetadata {
         state,
         title: s("title"),
+        merged_at: json
+            .get("mergedAt")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
         base_ref: s("baseRefName"),
         head_ref: s("headRefName"),
         head_sha: s("headRefOid"),
@@ -2374,6 +2383,11 @@ fn parse_glab_mr_metadata(body: &str) -> Result<ChangeMetadata> {
     Ok(ChangeMetadata {
         state,
         title: s("title"),
+        merged_at: v
+            .get("merged_at")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
         base_ref: s("target_branch"),
         head_ref: s("source_branch"),
         head_sha,
@@ -3777,6 +3791,7 @@ mod tests {
             r#"{
               "state": "MERGED",
               "title": "[AI:claude] fix(x): y (TASK-1)",
+              "mergedAt": "2026-09-12T18:00:00Z",
               "baseRefName": "main",
               "headRefName": "task-1-fix",
               "headRefOid": "abc123",
@@ -3789,6 +3804,10 @@ mod tests {
         let m = parse_gh_change_metadata(&json);
         assert_eq!(m.state, ChangeState::Merged);
         assert_eq!(m.title, "[AI:claude] fix(x): y (TASK-1)");
+        assert_eq!(
+            m.merged_at.map(|dt| dt.to_rfc3339()).as_deref(),
+            Some("2026-09-12T18:00:00+00:00")
+        );
         assert_eq!(m.base_ref, "main");
         assert_eq!(m.head_ref, "task-1-fix");
         assert_eq!(m.head_sha, "abc123");
@@ -3872,6 +3891,7 @@ mod tests {
         let m = parse_glab_mr_metadata(
             r#"{
               "state": "merged",
+              "merged_at": "2026-09-12T18:00:00Z",
               "target_branch": "main",
               "source_branch": "b",
               "work_in_progress": true,
@@ -3882,6 +3902,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.state, ChangeState::Merged);
+        assert_eq!(
+            m.merged_at.map(|dt| dt.to_rfc3339()).as_deref(),
+            Some("2026-09-12T18:00:00+00:00")
+        );
         assert!(m.is_draft, "legacy work_in_progress maps to draft");
         assert!(!m.is_cross_repository);
         assert_eq!(m.head_sha, "789abc", "falls back to diff_refs.head_sha");
