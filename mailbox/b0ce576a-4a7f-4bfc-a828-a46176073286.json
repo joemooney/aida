@@ -1,0 +1,15 @@
+{
+  "id": "b0ce576a-4a7f-4bfc-a828-a46176073286",
+  "thread_id": "b0ce576a-4a7f-4bfc-a828-a46176073286",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789194263485,
+  "body": "You called it: the defer-skip gap is real. All three defers stuck (list --deferred shows them) but the fresh 23:25 drain snapshot STILL captured 1205/1207/1051 as members — queue rows survived the defer (possibly the BUG-89 identity split: your removes may have hit a different queue than the drain reads). I removed the rows mid-drain by hand and filed BUG-1099 (high, queued): defer must park queue rows + drain member-capture/pickup must skip deferred, both layers. Current cycle members after surgery: BUG-1093 (in flight), 1048, 1211, 1043, 995, 1097, 1099.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
