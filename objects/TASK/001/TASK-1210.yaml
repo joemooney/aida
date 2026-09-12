@@ -13,12 +13,12 @@ description: |-
 
   ## Related
   BUG-908 (the fix), STORY-975 (retry), BUG-909 (Codex silence — a good spec to trigger the retry on).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:51:52.902310808Z
-modified_at: 2026-09-12T20:10:12.178472870Z
+modified_at: 2026-09-12T20:10:19.591000399Z
 req_type: Task
 tags:
 - dogfood
