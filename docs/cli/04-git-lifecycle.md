@@ -78,7 +78,7 @@ Keep this table in your head and every command below is obvious.
 
 **Reach for it when** — a spec is Done and you (a human, or the reviewer seat) want to actually look at the code before it merges. This is the review *gate* of the lifecycle.
 
-**Don't reach for it when** — you only want the diff pointer without the agent analysis (`--no-agent` just locates the surface and the recommended next command); or the orchestrator is already driving review for this spec under `--auto-complete` (don't double-drive it — check `aida session leases` first).
+**Don't reach for it when** — you only want the diff pointer without the agent analysis (`--no-agent` just locates the surface and the recommended next command); or the orchestrator is already driving review for this spec under `aida queue work --auto-complete` (don't double-drive it — check `aida session leases` first).
 
 **Key options (rationale only).**
 - `--no-agent` — skip the reviewer-agent analysis, just report *where* the review surface is and the next command. For non-interactive contexts or when you only want the diff pointer.

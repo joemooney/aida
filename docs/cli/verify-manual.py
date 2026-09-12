@@ -29,16 +29,19 @@ can backlink to its shaping spec(s) without the breadcrumb leaking into visible 
 Usage: python3 docs/cli/verify-manual.py            # all chapters
        python3 docs/cli/verify-manual.py 04-git*.md # one chapter
 """
+import functools
 import glob
 import importlib.util
 import os
 import re
+import shlex
 import subprocess
 import sys
 
 CLI_DIR = os.path.dirname(os.path.abspath(__file__))
 ENTRY_RE = re.compile(r"^### `aida ([a-z][a-z0-9-]*)")  # ### `aida <cmd> ...`
 FLAG_RE = re.compile(r"`(--[a-z][a-z0-9-]*)`")
+AIDA_CMD_RE = re.compile(r"\baida\b[^\n`]*")
 
 # Reuse the part-1 (STORY-603) store resolver + interface_changes block parsing
 # VERBATIM — the drift-guard's reflection check (3) resolves each spec's
@@ -59,12 +62,18 @@ STORE_BRANCH = _vic.STORE_BRANCH
 
 
 def help_text(cmd):
+    args = cmd.split() if isinstance(cmd, str) else list(cmd)
     try:
         return subprocess.run(
-            ["aida", cmd, "--help"], capture_output=True, text=True, timeout=20
+            ["aida", *args, "--help"], capture_output=True, text=True, timeout=20
         ).stdout
     except Exception:
         return ""
+
+
+@functools.lru_cache(maxsize=None)
+def help_flags(cmd_path):
+    return set(re.findall(r"--[a-z][a-z0-9-]*", help_text(cmd_path)))
 
 
 def help_all_commands():
@@ -79,13 +88,66 @@ def help_all_commands():
     return sorted(set(cmds) - skip)
 
 
+def help_command_paths():
+    """Return full command paths from `aida help commands`.
+
+    This is the live clap-derived tree available today. Once STORY-1027's
+    `aida commands --json --flags` lands, this can become one structured call.
+    """
+    out = subprocess.run(
+        ["aida", "help", "commands"], capture_output=True, text=True
+    ).stdout
+    paths = set()
+    for line in out.splitlines():
+        m = re.match(r"^\s+aida\s+([a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*)*)\s{2,}", line)
+        if m:
+            paths.add(tuple(m.group(1).split()))
+    return paths
+
+
+def command_path_from_snippet(snippet, command_paths):
+    try:
+        tokens = shlex.split(snippet)
+    except ValueError:
+        tokens = snippet.split()
+    if "aida" not in tokens:
+        return None
+    tokens = tokens[tokens.index("aida") + 1 :]
+    words = []
+    for tok in tokens:
+        if tok.startswith("-") or tok.startswith("<") or tok.startswith("["):
+            break
+        clean = tok.strip(",.;:()")
+        if not re.match(r"^[a-z][a-z0-9-]*$", clean):
+            break
+        words.append(clean)
+    for n in range(len(words), 0, -1):
+        cand = tuple(words[:n])
+        if cand in command_paths:
+            return " ".join(cand)
+    return None
+
+
+def subtree_flags(top, command_paths):
+    flags = set()
+    for path in command_paths:
+        if path and path[0] == top:
+            flags.update(help_flags(" ".join(path)))
+    return flags
+
+
 def parse_chapters(files):
-    """Return {cmd: [flags cited in its section]} and the set of documented cmds."""
+    """Return {cmd: [flag citations in its section]} keyed by top-level command.
+
+    Each citation records the flag and, when the prose includes a concrete
+    `aida a b c --flag` command, the full command path it names.
+    """
     documented = {}
+    command_paths = help_command_paths()
     for f in files:
         with open(f) as fh:
             cur = None
-            for line in fh:
+            for line_no, line in enumerate(fh, 1):
                 m = ENTRY_RE.match(line)
                 if m:
                     cur = m.group(1)
@@ -95,9 +157,38 @@ def parse_chapters(files):
                 # so cross-cutting prose isn't misattributed to the command above it
                 if line.startswith("## ") or line.startswith("---"):
                     cur = None
-                if cur:
-                    for fm in FLAG_RE.finditer(line):
-                        documented[cur].append(fm.group(1))
+                if not cur:
+                    continue
+                consumed = set()
+                for cm in AIDA_CMD_RE.finditer(line):
+                    snippet = cm.group(0)
+                    path = command_path_from_snippet(snippet, command_paths)
+                    if not path:
+                        continue
+                    for fm in re.finditer(r"--[a-z][a-z0-9-]*", snippet):
+                        documented[cur].append(
+                            {
+                                "flag": fm.group(0),
+                                "path": path,
+                                "parent": cur,
+                                "file": f,
+                                "line": line_no,
+                            }
+                        )
+                        consumed.add((cm.start() + fm.start(), fm.group(0)))
+                for fm in FLAG_RE.finditer(line):
+                    flag = fm.group(1)
+                    if (fm.start(), flag) in consumed:
+                        continue
+                    documented[cur].append(
+                        {
+                            "flag": flag,
+                            "path": None,
+                            "parent": cur,
+                            "file": f,
+                            "line": line_no,
+                        }
+                    )
     return documented
 
 
@@ -283,19 +374,41 @@ def main():
                 n = len(spec_deltas)
                 print(f"OK reflection — all {n} surface-changing spec(s)' interface_changes reflected in the manual")
 
-    # 2. flag accuracy (advisory)
-    warns = 0
-    for cmd, flags in sorted(documented.items()):
-        if not flags:
+    # 2. flag accuracy
+    # trace:TASK-1207 | ai:codex
+    hard_flag_misses = []
+    command_paths = help_command_paths()
+    subtree_cache = {}
+    for cmd, citations in sorted(documented.items()):
+        if not citations:
             continue
-        ht = help_text(cmd)
-        if not ht:
-            continue
-        for fl in sorted(set(flags)):
-            if fl not in ht:  # may be a legit cross-ref to another command's flag
-                warns += 1
-                print(f"WARN  `{fl}` cited under `aida {cmd}` not in its --help (cross-ref or drift?)")
-    if warns == 0:
+        subtree_cache.setdefault(cmd, subtree_flags(cmd, command_paths))
+        seen = set()
+        for cite in citations:
+            fl = cite["flag"]
+            path = cite["path"] or cmd
+            key = (fl, path, cite["file"], cite["line"])
+            if key in seen:
+                continue
+            seen.add(key)
+            if cite["path"] and fl in help_flags(path):
+                continue
+            if fl in subtree_cache[cmd]:
+                continue
+            hard_flag_misses.append(cite)
+    if hard_flag_misses:
+        hard_fail = True
+        print(
+            f"FAIL flags — {len(hard_flag_misses)} cited --flag token(s) do not resolve "
+            "to the cited command or its parent command subtree:"
+        )
+        for cite in hard_flag_misses[:80]:
+            loc = f"{os.path.basename(cite['file'])}:{cite['line']}"
+            where = f"aida {cite['path']}" if cite["path"] else f"aida {cite['parent']}"
+            print(f"    {loc} `{cite['flag']}` cited under `{where}`")
+        if len(hard_flag_misses) > 80:
+            print(f"    ... {len(hard_flag_misses) - 80} more")
+    else:
         print("OK flags — every cited --flag found in its command's --help")
 
     sys.exit(1 if hard_fail else 0)

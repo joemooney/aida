@@ -55,7 +55,7 @@ Three cross-cutting truths the tree assumes:
 - `queue advance` — walk the whole queue and push each item to its *next* step: autonomous items drain, human-required ones (review / `--zen` / decision) get dispatched interactively. Where `queue work` picks up *one* head, `advance` processes the queue to a resolution and never silently hides work it can't auto-handle.
 - `queue done` — mark work finished on a branch (→ **Done**). The precise verb the lifecycle wants (vs the newcomer `aida done`).
 - `queue rework` — send a spec back (also reachable as the top-level `aida rework`, see [Ch4](04-git-lifecycle.md#aida-rework)).
-- `integrate` / `integrate --run` — the *consumer* half of a producer/consumer split: parallel implementers finish work, flip a spec Done, and leave an open PR but never merge; bare `aida integrate` shows the merge queue as `In merge queue (position N)`, and `aida integrate --run` is the single serial authority that rebases each Done-with-PR branch onto current main and drives the remaining phases (reviewer → CI → merge → pull → build) one spec at a time. The handoff is the substrate itself — it polls for that state, no message bus. `queue integrate` remains the lower-level compatibility spelling.
+- `integrate` — the read-side of the producer/consumer split: parallel implementers finish work, flip a spec Done, and leave an open PR but never merge; bare `aida integrate` shows the focus-scoped queue, live throughput, and active fan-out so an integrator can see whether main is moving. The handoff is the substrate itself — no message bus.
 - `queue recover` — an interactive wizard for a spec stuck after a **failed phase-1 implementer session** (a provider 529, commit-and-exit without a PR, an external crash, partial work). It inspects the spec's git/lease/PR state, recommends a recovery path, and steps through it — a front-end over the same lease/PR probes the orchestrator uses, not new mechanism.
 
 **Gotchas.** The queue's identity is your **shell user** (`$USER` / `$AIDA_USER`), *not* your AIDA node or role. If `queue list` is unexpectedly empty, check `echo $USER` and `echo $AIDA_USER` first — the queue is keyed off whichever the shell sees.
@@ -248,15 +248,15 @@ These three support the autonomy machinery rather than driving work directly.
 
 **`aida autonomy`** — calibration + maturity views. `autonomy calibration mismatches` surfaces where the complexity-calibration predicted wrong; `autonomy report` is the human-intervention maturity report (how often drains had to stop and ask). **Reach for it when** you want to *measure* how autonomous the drains actually are, and where they keep needing you. Not part of the daily loop — a periodic health lens.
 
-**`aida sandbox`** — a throwaway, discardable git-canonical store under a temp dir (`sandbox create` prints an `AIDA_STORE=...` export to point `aida` at it). **Reach for it when** you want to drain-test or scenario-play *without touching your real store* — the safe place to try an `--auto-complete` run or seed test specs. `reset` re-seeds, `destroy` removes it. Don't reach for it for real work — by definition it's discardable.
+**Sandboxed trial runs** — use a throwaway, discardable git-canonical store under a temp dir when you want to drain-test or scenario-play *without touching your real store* — the safe place to try `aida queue work --auto-complete` or seed test specs. Don't use a disposable store for real work — by definition it's discardable.
 
-**`aida goal`** — derive a *machine-checkable* completion condition from spec metadata, ready to paste into `/goal` or `/schedule`. Each flag is one clause (`--batch`, `--epic`, `--queue-empty`, …); flags compose with AND; every clause carries an explicit verification command. **Reach for it when** you want a loop/drain to stop on a *deterministic* condition rather than a vague "make it pass." **Don't** pick a clause whose mechanism your drain bypasses (e.g. a `--queue-empty` condition met trivially because autonomous-merge skipped that queue) — the clause must match how the work actually routes.
+**`aida goal`** — derive a *machine-checkable* completion condition from spec metadata, ready to paste into `/goal` or `/schedule`. Each flag is one clause (`aida goal --batch`, `aida goal --epic`, `aida goal --queue-empty`, …); flags compose with AND; every clause carries an explicit verification command. **Reach for it when** you want a loop/drain to stop on a *deterministic* condition rather than a vague "make it pass." **Don't** pick a clause whose mechanism your drain bypasses (e.g. an `aida goal --queue-empty` condition met trivially because autonomous-merge skipped that queue) — the clause must match how the work actually routes.
 
 ### The OS sandbox — `[contained] os_wrap`
 
 <!-- trace:TASK-867 -->
 
-`os_wrap` is the master switch for AIDA's **own** OS-level agent sandbox, built on [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`). It is distinct from `[contained] enable` (Claude Code's *native* `--settings` sandbox): `os_wrap` is an OS boundary AIDA itself wraps around the agent process.
+`os_wrap` is the master switch for AIDA's **own** OS-level agent sandbox, built on [bubblewrap](https://github.com/containers/bubblewrap) (`bwrap`). It is distinct from `[contained] enable` (Claude Code's native settings sandbox): `os_wrap` is an OS boundary AIDA itself wraps around the agent process.
 
 ```toml
 # .aida/config.toml
@@ -266,9 +266,9 @@ os_wrap = true
 
 When `os_wrap = true`, a headless `claude` launch is spawned as `bwrap <confinement-flags> claude …` with:
 
-- `--ro-bind / /` — the whole host filesystem mounted **read-only**, so the agent can read but never write outside its allowed set;
+- ro-bind `/ /` — the whole host filesystem mounted **read-only**, so the agent can read but never write outside its allowed set;
 - read-**write** binds for only the code worktree, its sibling `.aida-store`, and the build/auth caches the toolchain needs (`$CARGO_HOME`/`~/.cargo`, `~/.npm`, `~/.claude`, `~/.claude.json`);
-- a fresh `/dev`, `/proc`, and a `tmpfs` `/tmp`; `--die-with-parent` so a killed drain leaves nothing behind;
+- a fresh `/dev`, `/proc`, and a `tmpfs` `/tmp`; die-with-parent semantics so a killed drain leaves nothing behind;
 - **shared network** — `os_wrap` is a *write*-confinement boundary, not a network jail (egress is governed separately by `allowed_hosts` / `managed_domains_only`).
 
 It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not on `PATH`, or it is installed but the host blocks unprivileged user namespaces, the launch **errors with remediation** rather than silently running the agent unconfined.
@@ -281,7 +281,7 @@ The full mechanism, the bind list, and the host setup are documented in [`../age
 
 ### Contained-mode network egress — `[contained] allowed_hosts`
 
-When the **contained** posture is on (`--contained` / `[agents] contained`), an agent's Bash runs inside Claude Code's sandbox (bubblewrap on Linux). By default that sandbox prompts the first time a command reaches a new network domain. To pre-restrict egress to a known allowlist, set a project config:
+When the **contained** posture is on (`[agents] contained`), an agent's Bash runs inside Claude Code's sandbox (bubblewrap on Linux). By default that sandbox prompts the first time a command reaches a new network domain. To pre-restrict egress to a known allowlist, set a project config:
 
 ```toml
 # .aida/config.toml
@@ -289,7 +289,7 @@ When the **contained** posture is on (`--contained` / `[agents] contained`), an 
 allowed_hosts = ["github.com", "api.anthropic.com", "static.crates.io", "registry.npmjs.org"]
 ```
 
-This injects `sandbox.network.allowedDomains` into the contained `--settings` (the proxy default-denies egress except to these hosts; wildcards like `*.crates.io` work). **It is strictly opt-in:** with `allowed_hosts` unset, the contained settings are byte-unchanged — no network restriction is applied. **Reach for it when** you run unattended drains and want to bound where they can reach.
+This injects `sandbox.network.allowedDomains` into the contained settings (the proxy default-denies egress except to these hosts; wildcards like `*.crates.io` work). **It is strictly opt-in:** with `allowed_hosts` unset, the contained settings are byte-unchanged — no network restriction is applied. **Reach for it when** you run unattended drains and want to bound where they can reach.
 
 > **`allowed_hosts = []` (or omitted) means *no restriction*, not "deny all".** An empty list reads like a lockdown but is the unrestricted default — full egress, current behavior. You only restrict egress when the list is **non-empty**, in which case **only** those hosts are allowed.
 
@@ -297,7 +297,7 @@ This injects `sandbox.network.allowedDomains` into the contained `--settings` (t
 
 ### Headless hard default-deny egress — `[contained] managed_domains_only`
 
-`allowed_hosts` alone only *prompts* on a non-allowlisted domain, which a headless `--no-human` drain can't answer. To get a **hard** default-deny (block without prompt) on the headless path, opt in:
+`allowed_hosts` alone only *prompts* on a non-allowlisted domain, which a headless `aida queue work --no-human` drain can't answer. To get a **hard** default-deny (block without prompt) on the headless path, opt in:
 
 ```toml
 # .aida/config.toml
@@ -307,7 +307,7 @@ managed_domains_only = true
 allowed_hosts = ["github.com", "api.anthropic.com", "static.crates.io", "registry.npmjs.org"]
 ```
 
-Claude Code only enforces `sandbox.network.allowManagedDomainsOnly` (deny-without-prompt) when it arrives via the **managed-settings** tier, not the project `--settings`. When `managed_domains_only` is on, the os_wrap launcher generates that managed-settings document (mirroring your `allowed_hosts` into the managed `allowedDomains`, since managed-only honors *only* the managed allowlist) and bind-mounts it read-only over the wrapped process's `/etc/claude-code/managed-settings.json` **inside the bwrap namespace** — so the host `/etc` is never touched and the policy can't be overridden from inside the sandbox. It is **strictly opt-in** and **fail-closed**: with the flag unset the launch is byte-unchanged; with it set, if the bind can't be established the launch errors rather than running egress un-hard-blocked. Requires `os_wrap = true` (it's delivered through the bwrap wrapper).
+Claude Code only enforces `sandbox.network.allowManagedDomainsOnly` (deny-without-prompt) when it arrives via the **managed-settings** tier, not the project settings file. When `managed_domains_only` is on, the os_wrap launcher generates that managed-settings document (mirroring your `allowed_hosts` into the managed `allowedDomains`, since managed-only honors *only* the managed allowlist) and bind-mounts it read-only over the wrapped process's `/etc/claude-code/managed-settings.json` **inside the bwrap namespace** — so the host `/etc` is never touched and the policy can't be overridden from inside the sandbox. It is **strictly opt-in** and **fail-closed**: with the flag unset the launch is byte-unchanged; with it set, if the bind can't be established the launch errors rather than running egress un-hard-blocked. Requires `os_wrap = true` (it's delivered through the bwrap wrapper).
 
 ### Strict read-confinement — `[contained] read_allowlist`
 
