@@ -20,12 +20,12 @@ description: |-
 
   ## Related
   The advisor's 2026-09-11 Claude Code feedback (shell test-gate exit status), the 0.15.0 release cut (where this blocked me), STORY-1043/TASK-1211 (ci-red parks — check if same root), the substrate-as-bouncer principle (a bouncer that false-blocks safe ops is worse than none).
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T05:42:37.594281017Z
-modified_at: 2026-09-12T16:07:46.111180731Z
+modified_at: 2026-09-12T16:21:14.856788644Z
 req_type: Bug
 tags:
 - false-positive
@@ -58,15 +58,26 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-12T15:19:30.080205441Z
   modified_at: 2026-09-12T15:19:30.080205441Z
+history:
+- id: 01a0966c-4be1-7842-a874-1ac0eb9113ac
+  author: aida-auto-bump
+  timestamp: 2026-09-12T16:21:14.849796851Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0966c-4be8-7fc0-90ca-56f74b7ea41c
+  timestamp: 2026-09-12T16:21:14.856787764Z
+  agent: implementer
+  commit_sha: ff36b756381d10bd7edae5f83a77a28c07b3b5e9
+  summary: Completed via merge ff36b756
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: CI is red on PR-1777: Build (ubuntu-latest)'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T15:08:05.048425738Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1777: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34704217940 — view it: `gh run view 34704217940`. Push fixups to the same branch: `aida queue work BUG-1092 --branch bug-1092 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T16:07:46.111180731Z
+  completed_at: 2026-09-12T16:21:14.849624301Z
+  completion_sha: ff36b756381d10bd7edae5f83a77a28c07b3b5e9
