@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   1. The phase-1 reconciler only credits a merged PR whose merge is NEWER than the spec's latest reopen transition (status left a terminal state after the PR merged -> the PR cannot satisfy the reopen).
   2. Regression test: spec completed via PR N, reopened, driven -> reconciler does NOT credit PR N; a fresh implementation happens (or the run shelves with 'reopened scope needs new work').
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T19:42:15.126167719Z
-modified_at: 2026-09-12T20:43:55.411032428Z
+modified_at: 2026-09-12T21:02:40.748654401Z
 req_type: Bug
 tags:
 - drain
@@ -52,15 +52,26 @@ comments:
   created_at: 2026-09-12T20:39:24.299607385Z
   modified_at: 2026-09-12T20:39:24.299607385Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0976d-f465-7442-ab2c-f26852aabbe2
+  author: aida-auto-bump
+  timestamp: 2026-09-12T21:02:40.741314843Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a0976d-f46c-7123-8e1e-4678041e9f40
+  timestamp: 2026-09-12T21:02:40.748653542Z
+  agent: implementer
+  commit_sha: 69e622e939e15b23dc81ea98b1ac4fa329b69900
+  summary: Completed via merge 69e622e9
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: CI is red on PR-1783: Build (ubuntu-latest)'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T20:17:28.401331758Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1783: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34717710169 — view it: `gh run view 34717710169`. Push fixups to the same branch: `aida queue work BUG-1112 --branch bug-1112 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T20:43:55.411032428Z
+  completed_at: 2026-09-12T21:02:40.741142914Z
+  completion_sha: 69e622e939e15b23dc81ea98b1ac4fa329b69900
