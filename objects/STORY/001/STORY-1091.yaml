@@ -19,10 +19,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T22:32:06.702001920Z
-modified_at: 2026-09-12T22:32:06.702001920Z
+modified_at: 2026-09-12T22:32:09.009591534Z
 req_type: Story
 tags:
 - drain
 - keystone
 - orchestrator
 - parent:STORY-1041
+relationships:
+- rel_type: Child
+  target_id: 01a09075-880b-78d2-8212-ccdcd835a588
+  created_at: 2026-09-12T22:32:09.009591534Z
