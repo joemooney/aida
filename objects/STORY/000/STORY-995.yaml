@@ -19,12 +19,12 @@ description: |-
 
   ## Related
   Blocked by STORY-994 (needs the [terminal] block). References STORY-993, STORY-991, TASK-1120.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:57.637633008Z
-modified_at: 2026-09-12T07:28:35.525200624Z
+modified_at: 2026-09-12T07:28:42.995002280Z
 req_type: Story
 tags:
 - from-product
@@ -62,6 +62,10 @@ comments:
   modified_at: 2026-09-10T05:22:28.195807889Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T07:28:42.995002280Z
+  implemented_by: joe
 failure_reason:
   phase: implementer
   phase_index: 1
