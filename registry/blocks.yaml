@@ -469,7 +469,7 @@ blocks:
   type_prefix: STORY
   range_start: 1041
   range_end: 1140
-  next: 1083
+  next: 1084
   allocated_at: 2026-09-11T03:31:25.111377900Z
 - node_id: '1'
   owner: joe

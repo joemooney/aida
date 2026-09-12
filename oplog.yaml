@@ -62039,5 +62039,31 @@ operations:
   timestamp: 2026-09-12T08:16:48.355117643Z
   kind: !SetStatus
     status: Rejected
-clock: 4926
+- id: 01a094bc-389d-78e3-8704-cfe7fc72539c
+  target_id: 01a094bc-34d4-7152-81cb-2b8985b56ab9
+  author: aida
+  node_id: '1'
+  lamport: 4927
+  timestamp: 2026-09-12T08:29:18.365269571Z
+  kind: !Create
+    title: 'Review PR-1773: [AI:codex] fix(queue): skip deferred drain entries (BUG-1099)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a094ad`) for branch `bug-1099`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1773>
+      - Branch: `bug-1099` → `main`
+
+      ## Covers
+
+      - BUG-1099
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1773` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4927
 node_id: '1'
