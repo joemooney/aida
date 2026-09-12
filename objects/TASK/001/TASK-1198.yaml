@@ -16,7 +16,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T06:31:49.397599124Z
-modified_at: 2026-09-12T21:06:38.312024951Z
+modified_at: 2026-09-12T21:06:40.778333054Z
 req_type: Task
 tags:
 - dogfood
@@ -55,5 +55,11 @@ comments:
   content: 'Evidence run 3 + rework (2026-09-12 10:40-11:25, testbed aida-codex-test, codex-pinned, binary at main f134e5e+): RESULT — TASK-7, TASK-8, TASK-9 ALL MERGED (PRs 16/17/18-series). Run 3 proper: 2 merges + 1 shelve in 16m45s; the shelve was a LEGITIMATE reviewer RequestChanges on TASK-9 (flag-like tokens in value position exited 0 — real edge case, low-complexity finding), fixed by one rework re-drive that shipped in 7m26s. Human relaunches: 1 (the quality-loop rework), infrastructure relaunches: 0 — both prior infrastructure causes were found and FIXED by this task''s runs (BUG-1106 phase-3 role-gating, merged; BUG-1109 frozen pure-git forge config, queued + testbed config corrected). Median first-touch-to-merge ~8m/spec. Logs: scratchpad drain-1198{,b,c}.log + rework-t9b.log. PASS-CONDITION CALL for the operator: strictly the condition says zero human relaunches; the one relaunch was the DESIGNED RequestChanges→rework loop (which STORY-1051''s re-drive supervisor will automate). Advisor recommendation: accept as passed — requiring literal zero would demand rubber-stamp reviews or 1051 first. Alternatively rerun 3 fresh specs for a literal single-run 3/3.'
   created_at: 2026-09-12T18:25:43.504866273Z
   modified_at: 2026-09-12T18:25:43.504866273Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09771-9e0a-71e1-a61c-6b83064384a9
+  author: joe
+  content: ACCEPTED as passed (operator-delegated, 2026-09-12). Evidence run 3 on aida-codex-test achieved 3/3 merges end-to-end headless; the single relaunch was the DESIGNED RequestChanges->rework quality loop, not an infrastructure relaunch. The two infrastructure blockers the runs surfaced (BUG-1106 phase-3 role-gating, BUG-1109 frozen pure-git forge) were both found, fixed, and merged. 'Usable on other projects' is now evidenced. STORY-1051's re-drive supervisor (just merged) automates the one remaining manual relaunch class.
+  created_at: 2026-09-12T21:06:40.778333054Z
+  modified_at: 2026-09-12T21:06:40.778333054Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
