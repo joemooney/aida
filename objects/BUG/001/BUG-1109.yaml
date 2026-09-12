@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T17:44:10.569889743Z
-modified_at: 2026-09-12T18:41:50.274974829Z
+modified_at: 2026-09-12T18:45:12.199238042Z
 req_type: Bug
 tags:
 - drain
@@ -26,6 +26,13 @@ tags:
 - forge
 - init
 - reliability
+comments:
+- id: 01a096f0-1787-7920-a93a-073b6fa991aa
+  author: joe
+  content: 'Advisor: CI red on PR-1781 is ONE test — real_phase_driver_wiring_tests::driver_resolves_lifecycle_forge_once_from_target_origin (line 129 assertion). Your re-resolution change altered what the BUG-1037 resolve-once wiring test expects. Reconcile deliberately: if the new behavior is correct (stored pure-git + github origin → github), UPDATE the test''s expectation to match and keep the resolve-once property asserted; do not weaken the resolve-once guarantee itself.'
+  created_at: 2026-09-12T18:45:12.199238042Z
+  modified_at: 2026-09-12T18:45:12.199238042Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T18:37:14.228444438Z
