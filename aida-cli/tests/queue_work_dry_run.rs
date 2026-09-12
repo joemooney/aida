@@ -106,6 +106,67 @@ fn init_codex_only_project(base_dir: &Path) -> (std::path::PathBuf, std::path::P
 }
 
 #[test]
+fn defer_removes_queued_rows_across_queue_identities() {
+    let base = tempfile::tempdir().expect("tempdir");
+    let base_dir = base.path().canonicalize().expect("canonicalize tempdir");
+    let (repo, home, spec) = init_codex_only_project(&base_dir);
+
+    let queue_add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args([
+            "queue",
+            "add",
+            &spec,
+            "--user",
+            "worker",
+            "--for",
+            "implementer",
+        ])
+        .output()
+        .expect("run aida queue add --user worker");
+    assert!(
+        queue_add.status.success(),
+        "aida queue add failed: {}",
+        String::from_utf8_lossy(&queue_add.stderr)
+    );
+
+    let before = aida(&repo, &home)
+        .args(["queue", "list", "--user", "worker", "--all"])
+        .output()
+        .expect("run aida queue list before defer");
+    let before_out = String::from_utf8_lossy(&before.stdout);
+    assert!(
+        before_out.contains(&spec),
+        "worker queue should contain {spec} before defer:\n{before_out}"
+    );
+
+    let defer = aida(&repo, &home)
+        .args(["defer", &spec, "--until", "operator revisits"])
+        .output()
+        .expect("run aida defer");
+    let defer_out = format!(
+        "{}{}",
+        String::from_utf8_lossy(&defer.stdout),
+        String::from_utf8_lossy(&defer.stderr)
+    );
+    assert!(defer.status.success(), "aida defer failed:\n{defer_out}");
+    assert!(
+        defer_out.contains("Dequeued:") && defer_out.contains("worker"),
+        "defer should report the removed worker queue row:\n{defer_out}"
+    );
+
+    let after = aida(&repo, &home)
+        .args(["queue", "list", "--user", "worker", "--all"])
+        .output()
+        .expect("run aida queue list after defer");
+    let after_out = String::from_utf8_lossy(&after.stdout);
+    assert!(
+        !after_out.contains(&spec),
+        "worker queue should not contain deferred {spec}:\n{after_out}"
+    );
+}
+
+#[test]
 fn single_spec_dry_run_previews_plan_with_no_side_effects() {
     let base = tempfile::tempdir().expect("tempdir");
     // BUG-671: on macOS the tempdir resolves under /var/folders/… which is a

@@ -980,6 +980,8 @@ pub(crate) fn opportunistic_queue_gc(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QueueFreshPickup {
     Pickable,
+    Archived,
+    Deferred,
     AwaitingMerge,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
@@ -995,6 +997,13 @@ pub(crate) fn queue_fresh_pickup_policy(
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
 ) -> QueueFreshPickup {
+    // trace:BUG-1099 | ai:codex
+    if req.deferred {
+        return QueueFreshPickup::Deferred;
+    }
+    if req.archived {
+        return QueueFreshPickup::Archived;
+    }
     if matches!(req.status, RequirementStatus::Done) {
         return QueueFreshPickup::AwaitingMerge;
     }
@@ -1013,6 +1022,8 @@ pub(crate) fn queue_fresh_pickup_policy(
 pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Option<String> {
     match policy {
         QueueFreshPickup::Pickable => None,
+        QueueFreshPickup::Archived => Some("archived — skipped".to_string()),
+        QueueFreshPickup::Deferred => Some("deferred — skipped".to_string()),
         QueueFreshPickup::AwaitingMerge => Some(
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
                 .to_string(),
@@ -1546,7 +1557,10 @@ pub(crate) fn handle_queue_command(
                     };
                     match queue_fresh_pickup_policy(req, &store, false) {
                         QueueFreshPickup::Pickable => true,
-                        QueueFreshPickup::AwaitingMerge | QueueFreshPickup::Terminal(_) => false,
+                        QueueFreshPickup::Archived
+                        | QueueFreshPickup::Deferred
+                        | QueueFreshPickup::AwaitingMerge
+                        | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
                             blocked_entries.push(BlockedEntry { req, reason });
                             false
@@ -9619,6 +9633,7 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) id: String,
     pub(crate) status: RequirementStatus,
     pub(crate) for_role: Option<String>,
+    pub(crate) deferred: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9626,6 +9641,7 @@ pub(crate) struct AutoCompleteHeadPick {
     pub(crate) spec: String,
     pub(crate) status_skipped: Vec<(String, RequirementStatus)>,
     pub(crate) role_skipped: Vec<(String, String)>,
+    pub(crate) deferred_skipped: Vec<String>,
 }
 
 /// The auto-complete engine always starts with a phase-1 implementer unless
@@ -9670,6 +9686,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
     let effective_role = canonical_role_name(effective_role);
     let mut status_skipped = Vec::new();
     let mut role_skipped = Vec::new();
+    let mut deferred_skipped = Vec::new();
     for candidate in candidates {
         if let Some(for_role) = candidate.for_role.as_deref() {
             let routed = canonical_role_name(for_role);
@@ -9678,11 +9695,16 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 continue;
             }
         }
+        if candidate.deferred {
+            deferred_skipped.push(candidate.id.clone());
+            continue;
+        }
         if auto_complete_head_drivable(&candidate.status) {
             return Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
                 role_skipped,
+                deferred_skipped,
             });
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
@@ -9716,6 +9738,7 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     id: r.display_id(),
                     status: r.status.clone(),
                     for_role: e.for_role.clone(),
+                    deferred: r.deferred,
                 })
         })
         .collect())
@@ -9767,6 +9790,9 @@ pub(crate) fn resolve_auto_complete_head(
             for (id, routed) in &pick.role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");
             }
+            for id in &pick.deferred_skipped {
+                eprintln!("skipped {id} — deferred — skipped");
+            }
             // Acceptance criterion: name each item skipped to reach the
             // drivable head so the pickup is never silently surprising.
             for (id, status) in &pick.status_skipped {
@@ -9796,6 +9822,18 @@ pub(crate) fn resolve_auto_complete_head(
                 })
                 .map(|candidate| (candidate.id.clone(), candidate.status.clone()))
                 .collect();
+            let deferred_skipped: Vec<String> = candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate
+                        .for_role
+                        .as_deref()
+                        .map(|r| canonical_role_name(r) == role_label)
+                        .unwrap_or(true)
+                })
+                .filter(|candidate| candidate.deferred)
+                .map(|candidate| candidate.id.clone())
+                .collect();
             let role_skipped: Vec<(String, String)> = candidates
                 .iter()
                 .filter_map(|candidate| {
@@ -9805,6 +9843,9 @@ pub(crate) fn resolve_auto_complete_head(
                 .collect();
             for (id, routed) in &role_skipped {
                 eprintln!("skipped {id} — routed for {routed}");
+            }
+            for id in &deferred_skipped {
+                eprintln!("skipped {id} — deferred — skipped");
             }
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
