@@ -6868,6 +6868,10 @@ pub enum DrainCommand {
         /// Drop the leading `[HH:MM:SS]` event time from each line.
         #[clap(long)]
         no_timestamp: bool,
+        /// Annotate idlewatch transitions such as low-information spinning.
+        // trace:STORY-998 | ai:codex
+        #[clap(long)]
+        annotate: bool,
     },
 }
 
@@ -8919,6 +8923,10 @@ pub enum Command {
         // trace:TASK-1173 | ai:claude
         #[clap(long)]
         no_timestamp: bool,
+        /// Annotate idlewatch transitions such as low-information spinning.
+        // trace:STORY-998 | ai:codex
+        #[clap(long)]
+        annotate: bool,
     },
 
     /// The integrator seat: bare shows the merge queue; --run drains it.
@@ -12285,6 +12293,7 @@ mod tests {
             "--no-follow",
             "--with-tools",
             "--no-timestamp",
+            "--annotate",
         ])
         .expect("`aida tail drain` should parse");
         let drain_tail = Cli::try_parse_from([
@@ -12299,6 +12308,7 @@ mod tests {
             "--no-follow",
             "--with-tools",
             "--no-timestamp",
+            "--annotate",
         ])
         .expect("`aida drain tail` should parse");
 
@@ -12311,6 +12321,7 @@ mod tests {
             no_follow,
             with_tools,
             no_timestamp,
+            annotate,
         } = tail.command
         else {
             panic!("expected Tail command");
@@ -12325,6 +12336,7 @@ mod tests {
             no_follow: drain_no_follow,
             with_tools: drain_with_tools,
             no_timestamp: drain_no_timestamp,
+            annotate: drain_annotate,
         }) = drain_tail.command
         else {
             panic!("expected Drain::Tail command");
@@ -12336,6 +12348,8 @@ mod tests {
         assert_eq!(no_follow, drain_no_follow);
         assert_eq!(with_tools, drain_with_tools);
         assert_eq!(no_timestamp, drain_no_timestamp);
+        assert!(annotate);
+        assert_eq!(annotate, drain_annotate);
     }
 
     // trace:TASK-1155 trace:ADR-11 | ai:codex

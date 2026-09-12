@@ -21,7 +21,10 @@
 //!
 //! trace:STORY-993 | ai:claude
 
+use std::collections::VecDeque;
+use std::io::BufRead;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 
@@ -39,12 +42,16 @@ const START_BEFORE_FIRST_EVENT_SLACK_SECS: i64 = 120;
 /// `SessionStart` hook event and still be its owner (clock skew, slow hooks).
 const START_AFTER_LAST_START_SLACK_SECS: i64 = 60;
 
-/// Three-state liveness for a conversation row.
+/// Liveness for a conversation row.
 // trace:STORY-993 | ai:claude
+// trace:STORY-998 | ai:codex
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub enum Liveness {
     /// A process was resolved for this transcript and is alive.
     Alive,
+    /// A process is alive, but the transcript tail is low-information repeated
+    /// output long enough to meet the idlewatch spinning threshold.
+    Spinning,
     /// The transcript was written in the last five minutes but no process
     /// could be resolved — the old `●`, now unverified.
     FileTouched,
@@ -57,6 +64,7 @@ impl Liveness {
     pub fn label(self) -> &'static str {
         match self {
             Liveness::Alive => "alive",
+            Liveness::Spinning => "spinning",
             Liveness::FileTouched => "file-touched",
             Liveness::None => "none",
         }
@@ -102,11 +110,22 @@ pub struct ProcessFacts {
     /// time is known.
     pub elapsed_secs: Option<u64>,
     pub liveness: Liveness,
+    /// Dominant repeated template and count when [`Liveness::Spinning`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spinning: Option<SpinningFacts>,
     pub resolution: Resolution,
     /// The covering lease's role, when a lease covers this transcript —
     /// provenance for the JSON `lease_role` field (TASK-152 parity with
     /// `aida ps`).
     pub lease_role: Option<String>,
+}
+
+/// Low-information transcript details behind a `spinning` row.
+// trace:STORY-998 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SpinningFacts {
+    pub template: String,
+    pub count: usize,
 }
 
 impl ProcessFacts {
@@ -136,6 +155,22 @@ impl ProcessFacts {
             .as_deref()
             .map(short_tty)
             .unwrap_or_else(|| "-".to_string())
+    }
+}
+
+impl ProcessFacts {
+    /// Upgrade a live row to `spinning` when the transcript tail is a repeated,
+    /// low-information stream. Unresolved/fresh rows keep their weaker
+    /// FileTouched/None verdicts.
+    // trace:STORY-998 | ai:codex
+    pub fn with_spinning(mut self, spinning: Option<SpinningFacts>) -> Self {
+        if self.liveness == Liveness::Alive {
+            if let Some(spinning) = spinning {
+                self.liveness = Liveness::Spinning;
+                self.spinning = Some(spinning);
+            }
+        }
+        self
     }
 }
 
@@ -210,6 +245,7 @@ pub fn resolve(
             liveness: Liveness::Alive,
             resolution: Resolution::Lease,
             lease_role,
+            ..ProcessFacts::default()
         };
     }
 
@@ -260,6 +296,7 @@ pub fn resolve(
             liveness: Liveness::Alive,
             resolution: Resolution::ProcScan,
             lease_role,
+            ..ProcessFacts::default()
         },
         many => ProcessFacts {
             pid: None,
@@ -270,6 +307,7 @@ pub fn resolve(
             liveness: file_liveness,
             resolution: Resolution::ProcScan,
             lease_role,
+            ..ProcessFacts::default()
         },
     }
 }
@@ -399,9 +437,107 @@ fn rfind(hay: &[u8], needle: &[u8]) -> Option<usize> {
         .find(|&i| &hay[i..i + needle.len()] == needle)
 }
 
+/// Classify the recent transcript tail for STORY-998 session liveness.
+///
+/// This reads only the tail of the JSONL-ish transcript, extracts the payload a
+/// human would recognize as repeated work/status text, and feeds it through the
+/// shared idle detector. Unique JSON envelope fields such as timestamps and IDs
+/// are deliberately excluded so they cannot mask a real spinner.
+// trace:STORY-998 | ai:codex
+pub fn transcript_spinning(path: &Path, now: DateTime<Utc>) -> Option<SpinningFacts> {
+    transcript_spinning_with_config(path, now, aida_core::idle::IdleConfig::default())
+}
+
+// trace:STORY-998 | ai:codex
+pub fn transcript_spinning_with_config(
+    path: &Path,
+    now: DateTime<Utc>,
+    cfg: aida_core::idle::IdleConfig,
+) -> Option<SpinningFacts> {
+    let lines = read_tail_lines(path, cfg.max_window_lines.max(32)).ok()?;
+    let mut detector = aida_core::idle::IdleDetector::new(cfg);
+    let instant_now = Instant::now();
+    for line in lines {
+        let payload = transcript_payload(&line);
+        if payload.trim().is_empty() {
+            continue;
+        }
+        let at = timestamp_on_line(&line)
+            .map(|ts| {
+                let age = now
+                    .signed_duration_since(ts)
+                    .to_std()
+                    .unwrap_or(Duration::ZERO);
+                instant_now.checked_sub(age).unwrap_or(instant_now)
+            })
+            .unwrap_or(instant_now);
+        detector.feed_line(&payload, at);
+    }
+    match detector.verdict(instant_now) {
+        aida_core::idle::IdleVerdict::Spinning { template, count } => {
+            Some(SpinningFacts { template, count })
+        }
+        _ => None,
+    }
+}
+
+fn read_tail_lines(path: &Path, keep: usize) -> std::io::Result<Vec<String>> {
+    let file = std::fs::File::open(path)?;
+    let mut out = VecDeque::new();
+    for line in std::io::BufReader::new(file).lines() {
+        out.push_back(line?);
+        while out.len() > keep {
+            out.pop_front();
+        }
+    }
+    Ok(out.into_iter().collect())
+}
+
+fn transcript_payload(line: &str) -> String {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) else {
+        return line.to_string();
+    };
+    let mut parts = Vec::new();
+    if let Some(hook) = v.get("hookName").and_then(|v| v.as_str()) {
+        parts.push(hook.to_string());
+    }
+    if let Some(typ) = v.get("type").and_then(|v| v.as_str()) {
+        parts.push(typ.to_string());
+    }
+    let content = v
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .or_else(|| v.get("content"));
+    if let Some(blocks) = content.and_then(|c| c.as_array()) {
+        for block in blocks {
+            match block.get("type").and_then(|v| v.as_str()) {
+                Some("text") => {
+                    if let Some(text) = block.get("text").and_then(|v| v.as_str()) {
+                        parts.push(text.to_string());
+                    }
+                }
+                Some("tool_use") => {
+                    let name = block.get("name").and_then(|v| v.as_str()).unwrap_or("tool");
+                    parts.push(format!("tool:{name}"));
+                }
+                Some(other) => parts.push(other.to_string()),
+                None => {}
+            }
+        }
+    } else if let Some(text) = content.and_then(|c| c.as_str()) {
+        parts.push(text.to_string());
+    }
+    if parts.is_empty() {
+        line.to_string()
+    } else {
+        parts.join(" ")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
     use std::path::PathBuf;
 
     fn proc(
@@ -584,6 +720,54 @@ mod tests {
             now,
         );
         assert_eq!(facts.liveness, Liveness::None);
+    }
+
+    // trace:STORY-998 | ai:codex
+    #[test]
+    fn live_process_can_upgrade_to_spinning_liveness() {
+        let facts = ProcessFacts {
+            liveness: Liveness::Alive,
+            ..ProcessFacts::default()
+        }
+        .with_spinning(Some(SpinningFacts {
+            template: "poll: no work §N jobs".to_string(),
+            count: 41,
+        }));
+        assert_eq!(facts.liveness, Liveness::Spinning);
+        assert_eq!(facts.spinning.as_ref().map(|s| s.count), Some(41));
+
+        let unresolved = ProcessFacts {
+            liveness: Liveness::FileTouched,
+            ..ProcessFacts::default()
+        }
+        .with_spinning(Some(SpinningFacts {
+            template: "poll".to_string(),
+            count: 41,
+        }));
+        assert_eq!(unresolved.liveness, Liveness::FileTouched);
+        assert!(unresolved.spinning.is_none());
+    }
+
+    // trace:STORY-998 | ai:codex
+    #[test]
+    fn transcript_tail_detects_spinning_without_json_envelope_churn() {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let now = ts("2026-09-08T12:02:00Z");
+        for i in 0..100 {
+            let ts = (now - chrono::Duration::seconds(100 - i)).to_rfc3339();
+            writeln!(
+                tmp.as_file(),
+                r#"{{"timestamp":"{}","type":"assistant","message":{{"content":[{{"type":"text","text":"poll: no work 0 jobs"}}]}}}}"#,
+                ts
+            )
+            .unwrap();
+        }
+        let mut cfg = aida_core::idle::IdleConfig::default();
+        cfg.spinning_after = Duration::from_secs(60);
+        let spin = transcript_spinning_with_config(tmp.path(), now, cfg)
+            .expect("repeated transcript tail should be spinning");
+        assert!(spin.template.contains("poll: no work"), "{spin:?}");
+        assert!(spin.count >= 60, "{spin:?}");
     }
 
     /// The start-time window disambiguates the common two-tabs-same-dir case:
