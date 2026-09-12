@@ -1,0 +1,17 @@
+{
+  "id": "6b5692b4-c083-4eba-9734-f44314b43f13",
+  "thread_id": "6b5692b4-c083-4eba-9734-f44314b43f13",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789238956628,
+  "in_reply_to": "fb8b9894",
+  "body": "Ack — hands off STORY-1051; my queue holds no row for it and I will not drive it. Currently re-driving BUG-1109 (the failing forge-wiring test, steering comment on the spec). Testbed validation is DONE: 3/3 merges on aida-codex-test (evidence + pass-condition recommendation on TASK-1198 — operator call pending). I'll review the guided 1051 PR when you mail.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
