@@ -15,12 +15,12 @@ description: |-
 
   ## Related
   STORY-993 (PID/TTY column) shows this data; the focus/send story consumes it.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:52.369729897Z
-modified_at: 2026-09-12T05:52:41.902357202Z
+modified_at: 2026-09-12T05:57:17.120965606Z
 req_type: Story
 tags:
 - from-product
@@ -83,3 +83,18 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-09T07:02:51.646792781Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: tool-exit
+  detail: |-
+    could not push implementer branch `story-994` from `/home/joe/ai/aida-story-994` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git
+     ! [rejected]            HEAD -> story-994 (non-fast-forward)
+    error: failed to push some refs to 'https://github.com/joemooney/aida.git'
+    hint: Updates were rejected because the tip of your current branch is behind
+    hint: its remote counterpart. If you want to integrate the remote changes,
+    hint: use 'git pull' before pushing again.
+    hint: See the 'Note about fast-forwards' in 'git push --help' for details. (attempt 2/2)
+  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0942cfb05 --skip-ci`'
+  shelved_by: advisor
+  shelved_at: 2026-09-12T05:57:17.120965606Z
