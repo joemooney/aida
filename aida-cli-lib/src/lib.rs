@@ -73669,7 +73669,10 @@ fn handle_auto_complete_batch(
     if let Some(root) = &drain_root {
         if let Ok(members) = resolve_batch_members(storage, user_id, batch_name, role) {
             let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
-            let _ = drain_state::DrainState::new_batch(batch_name, &specs).write(root);
+            let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
+            let _ = drain_state::DrainState::new_batch(batch_name, &specs)
+                .with_pipeline_depth(pipeline_depth)
+                .write(root);
         }
     }
 
@@ -74313,7 +74316,10 @@ fn handle_auto_complete_batches(
             if let Some(root) = &drain_root {
                 if let Ok(members) = members_for_state {
                     let specs: Vec<String> = members.into_iter().map(|m| m.1).collect();
-                    let _ = drain_state::DrainState::new_batch(batch_name, &specs).write(root);
+                    let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
+                    let _ = drain_state::DrainState::new_batch(batch_name, &specs)
+                        .with_pipeline_depth(pipeline_depth)
+                        .write(root);
                 }
             }
             Box::new(RealBatchDriver {
@@ -75487,7 +75493,10 @@ fn handle_auto_complete_next_n(
                 .take(n)
                 .map(|(id, _)| id)
                 .collect();
-            let _ = drain_state::DrainState::new_next_n(n, &specs).write(root);
+            let pipeline_depth = DrainTuning::resolve(root).pipeline_depth();
+            let _ = drain_state::DrainState::new_next_n(n, &specs)
+                .with_pipeline_depth(pipeline_depth)
+                .write(root);
         }
     }
 
@@ -78297,6 +78306,9 @@ struct DrainTuning {
     /// STORY-1033: retry attempt 2 may move to the next configured model tier.
     /// Defaults true; `[drain] retry_escalate_model = false` disables it.
     retry_escalate_model: bool,
+    /// STORY-1041: in-flight member window for pipelined drains. Clamped 1..3.
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    pipeline_depth: usize,
 }
 
 impl DrainTuning {
@@ -78348,6 +78360,11 @@ impl DrainTuning {
             .and_then(|s| parse_boolish(&s))
             .or(cfg.retry_escalate_model)
             .unwrap_or(true);
+        let pipeline_depth = drain_state::clamp_pipeline_depth(
+            env_usize("AIDA_DRAIN_PIPELINE_DEPTH")
+                .or(cfg.pipeline_depth)
+                .unwrap_or_else(drain_state::default_pipeline_depth),
+        );
         Self {
             gh_verify_retries,
             no_progress: std::time::Duration::from_secs(no_progress_min.saturating_mul(60)),
@@ -78359,6 +78376,7 @@ impl DrainTuning {
             ci_auto_fix,
             retry_transient,
             retry_escalate_model,
+            pipeline_depth,
         }
     }
 
@@ -78371,6 +78389,11 @@ impl DrainTuning {
             progress_activity: self.progress_activity,
             ..aida_core::idle::IdleConfig::default()
         }
+    }
+
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    fn pipeline_depth(&self) -> usize {
+        self.pipeline_depth
     }
 }
 
@@ -78866,6 +78889,9 @@ struct DrainConfigToml {
     retry_transient: Option<usize>,
     /// STORY-1033: `[drain] retry_escalate_model = true|false`.
     retry_escalate_model: Option<bool>,
+    /// STORY-1041: `[drain] pipeline_depth = 1..3`.
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    pipeline_depth: Option<usize>,
 }
 
 /// Hand-rolled `[drain]`-section scanner for `.aida/config.toml`, mirroring the
@@ -78906,6 +78932,7 @@ fn read_drain_config(project_dir: &std::path::Path) -> DrainConfigToml {
                 "ci_auto_fix" => out.ci_auto_fix = val.parse().ok(),
                 "retry_transient" => out.retry_transient = val.parse().ok(),
                 "retry_escalate_model" => out.retry_escalate_model = parse_boolish(val),
+                "pipeline_depth" => out.pipeline_depth = val.parse().ok(),
                 _ => {}
             }
         }

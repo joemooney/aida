@@ -100,6 +100,13 @@ pub(crate) struct DrainState {
     pub(crate) batch: Option<String>,
     /// Every spec the drain will run, in drain order.
     pub(crate) members: Vec<DrainMember>,
+    /// Maximum number of members the orchestrator may keep active at once.
+    /// `1` is the historical strictly sequential drain; `2` is the pipelined
+    /// default once the scheduler can overlap a later implementer with an
+    /// earlier CI/review/merge wait.
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    #[serde(default = "default_pipeline_depth")]
+    pub(crate) pipeline_depth: usize,
     /// The spec currently in its pipeline; `None` before the first member
     /// starts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -209,6 +216,7 @@ impl DrainState {
             mode: "single".to_string(),
             batch: None,
             members: vec![DrainMember::queued(spec)],
+            pipeline_depth: 1,
             current: Some(spec.to_string()),
             current_phase: None,
             phase_started_at: None,
@@ -233,6 +241,7 @@ impl DrainState {
             mode: "batch".to_string(),
             batch: Some(batch_name.to_string()),
             members: members.iter().map(DrainMember::queued).collect(),
+            pipeline_depth: default_pipeline_depth(),
             current: None,
             current_phase: None,
             phase_started_at: None,
@@ -256,6 +265,7 @@ impl DrainState {
             mode: "next-n".to_string(),
             batch: None,
             members: members.iter().map(DrainMember::queued).collect(),
+            pipeline_depth: default_pipeline_depth(),
             current: None,
             current_phase: None,
             phase_started_at: None,
@@ -312,6 +322,24 @@ impl DrainState {
             .position(|m| m.spec == spec)
             .map(|i| i + 1)
     }
+
+    /// Clamp and record the configured in-flight window. Best-effort callers
+    /// may set this after constructing the state, before writing it.
+    // trace:STORY-1041 trace:ADR-27 | ai:codex
+    pub(crate) fn with_pipeline_depth(mut self, depth: usize) -> Self {
+        self.pipeline_depth = clamp_pipeline_depth(depth);
+        self
+    }
+}
+
+// trace:STORY-1041 trace:ADR-27 | ai:codex
+pub(crate) fn default_pipeline_depth() -> usize {
+    2
+}
+
+// trace:STORY-1041 trace:ADR-27 | ai:codex
+pub(crate) fn clamp_pipeline_depth(depth: usize) -> usize {
+    depth.clamp(1, 3)
 }
 
 /// Short live-drain segment for glance surfaces (`statusline`, `statusbar`).
@@ -604,7 +632,7 @@ fn set_phase_inner(
         phase_index,
         phase_slug,
         session_id,
-        None,
+        vendor,
         None,
         None,
         None,
@@ -1184,9 +1212,22 @@ fn render_human_inner(
         out.push('\n');
     }
 
-    // A "spec N of M" line answers the user's "how far through am I?" — the
-    // current member is the spec the orchestrator-child session is running.
-    if let Some(cur) = &state.current {
+    // STORY-1041: a pipelined drain can have more than one active member, so
+    // the progress line reports merged + active counts instead of pretending
+    // there is only one "spec N of M". trace:STORY-1041 trace:ADR-27 | ai:codex
+    let merged = state
+        .members
+        .iter()
+        .filter(|m| m.state == STATE_COMPLETED)
+        .count();
+    let in_flight: Vec<&DrainMember> = state.members.iter().filter(|m| m.is_running()).collect();
+    if state.pipeline_depth > 1 && state.members.len() > 1 {
+        out.push_str(&format!(
+            "\n  {merged} merged, {} in flight (pipeline depth {}).\n",
+            in_flight.len(),
+            state.pipeline_depth
+        ));
+    } else if let Some(cur) = &state.current {
         if let Some(pos) = state.position_of(cur) {
             if state.members.len() > 1 {
                 out.push_str(&format!(
@@ -1523,6 +1564,7 @@ mod tests {
             mode: "single".to_string(),
             batch: None,
             members: vec![DrainMember::queued("STORY-301")],
+            pipeline_depth: 1,
             current: Some("STORY-301".to_string()),
             current_phase: None,
             phase_started_at: None,
@@ -1861,8 +1903,9 @@ mod tests {
         assert!(out.contains(&format!("{active} STORY-285")));
         assert!(out.contains("phase 3 (reviewer)"));
         assert!(out.contains("○ STORY-276"));
-        // The "how far through" line names the current member's position.
-        assert!(out.contains("STORY-285 is spec 2 of 3 in this drain."));
+        // STORY-1041: pipelined drains report merged + active counts, not a
+        // single current-position line.
+        assert!(out.contains("1 merged, 1 in flight (pipeline depth 2)."));
     }
 
     // STORY-948: terminal rows show finish clock + per-spec duration; the

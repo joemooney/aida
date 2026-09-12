@@ -92,6 +92,28 @@ state. `aida drain status` shows the current retry as `attempt 2/2`, and the
 drain appends a `SpecRetried` event to `.aida/events.jsonl`.
 trace:STORY-975
 
+### Pipelining
+
+Batch and `nextN` drains have a small in-flight window:
+
+```toml
+[drain]
+pipeline_depth = 2
+```
+
+Depth `1` keeps the historical strictly sequential behavior. Depth `2` is the
+default: once spec A has opened a PR and moved into CI/review/merge, the drain
+may start spec B's implementer in a separate worktree instead of idling through
+A's remote waits. Values above `3` are clamped to `3`; wider fan-out remains
+the job of burndown-style concurrency, not the single-drain loop.
+
+The merge side stays serial and ordered. Even when two specs are in flight,
+phase 4-6 for the later spec waits behind any earlier spec's merge/pull/build
+window, so main receives one PR at a time and the Done → Completed auto-bump
+observes one landed change at a time. `aida drain status` reports this as
+`N merged, K in flight` instead of the older single `spec N of M` line.
+trace:STORY-1041
+
 ### Tuning model per seat
 
 Headless launches resolve model and reasoning effort from the vendor plus the
