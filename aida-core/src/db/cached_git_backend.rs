@@ -12,7 +12,9 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use super::cache::{ArchiveFilter, Cache, DeferFilter, ListFilter, RequirementSummary};
+use super::cache::{
+    is_cache_schema_drift_error, ArchiveFilter, Cache, DeferFilter, ListFilter, RequirementSummary,
+};
 use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
@@ -43,7 +45,7 @@ impl CachedGitBackend {
         // rebuilding the cache, instead of contending for the write lock through
         // the ~25s retry ladder. Writers re-check freshness strictly on their own
         // write paths, and the SHA-based stale detection is unchanged.
-        backend.ensure_cache_fresh_for_read()?;
+        backend.ensure_cache_fresh_for_read_with_schema_retry()?;
         Ok(backend)
     }
 
@@ -88,8 +90,10 @@ impl CachedGitBackend {
     /// `(spec_id, uuid, title)` for every claimant of a collided spec_id.
     // trace:BUG-701 | ai:claude
     pub fn spec_id_collisions(&self) -> Result<Vec<(String, Uuid, String)>> {
-        self.ensure_cache_fresh()?;
-        self.cache.spec_id_collisions()
+        self.with_cache_schema_retry("scan spec-id collisions", || {
+            self.ensure_cache_fresh()?;
+            self.cache.spec_id_collisions()
+        })
     }
 
     /// Read the current git HEAD on the store branch. Empty string if not in a
@@ -204,6 +208,66 @@ impl CachedGitBackend {
         Ok(())
     }
 
+    /// Drop/recreate the cache projection and rebuild it from the authoritative
+    /// git store after a cache operation discovers schema drift.
+    // trace:BUG-1097 | ai:codex
+    fn rebuild_after_cache_schema_drift(&self) -> Result<()> {
+        let head = self.current_head_sha();
+        let store = self
+            .inner
+            .load()
+            .context("Failed to load git store for cache schema-drift rebuild")?;
+        self.cache
+            .rebuild_from_store_after_schema_drift(&store, &head)?;
+        Ok(())
+    }
+
+    /// Run one cache operation; if it fails with a missing-column/table schema
+    /// drift error, rebuild the projection once in-process and retry.
+    // trace:BUG-1097 | ai:codex
+    fn with_cache_schema_retry<T, F>(&self, action: &str, mut f: F) -> Result<T>
+    where
+        F: FnMut() -> Result<T>,
+    {
+        match f() {
+            Ok(value) => Ok(value),
+            Err(err) if is_cache_schema_drift_error(&err) => {
+                eprintln!(
+                    "warning: cache schema drift while trying to {action}; rebuilding cache and retrying once: {err}"
+                );
+                self.rebuild_after_cache_schema_drift()?;
+                f()
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    // trace:BUG-1097 | ai:codex
+    fn ensure_cache_fresh_with_schema_retry(&self) -> Result<()> {
+        self.with_cache_schema_retry("freshen cache", || self.ensure_cache_fresh())
+    }
+
+    // trace:BUG-1097 | ai:codex
+    fn ensure_cache_fresh_for_read_with_schema_retry(&self) -> Result<()> {
+        self.with_cache_schema_retry("freshen cache for read", || {
+            self.ensure_cache_fresh_for_read()
+        })
+    }
+
+    // trace:BUG-1097 | ai:codex
+    fn upsert_requirement_with_schema_retry(&self, req: &Requirement) -> Result<()> {
+        self.with_cache_schema_retry("upsert cached requirement", || {
+            self.cache.upsert_requirement(req)
+        })
+    }
+
+    // trace:BUG-1097 | ai:codex
+    fn delete_requirement_with_schema_retry(&self, id: &Uuid) -> Result<()> {
+        self.with_cache_schema_retry("delete cached requirement", || {
+            self.cache.delete_requirement(id)
+        })
+    }
+
     /// Refresh only the cache rows for the object files that changed between the
     /// recorded cache HEAD (`from`, a proven ancestor of `to`) and the new HEAD
     /// (`to`). Returns `Ok(true)` when the incremental update fully applied (cache
@@ -277,8 +341,10 @@ impl CachedGitBackend {
     /// `get_requirement` call. Triggers a stale-check first so callers
     /// always see fresh data.
     pub fn list_summaries(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
-        self.ensure_cache_fresh_for_read()?;
-        self.cache.list_summaries(filter)
+        self.with_cache_schema_retry("list cached summaries", || {
+            self.ensure_cache_fresh_for_read()?;
+            self.cache.list_summaries(filter)
+        })
     }
 
     /// TASK-1065: count non-archived specs with a still-pending DecisionRequest,
@@ -288,8 +354,10 @@ impl CachedGitBackend {
     /// latest committed store.
     // trace:TASK-1065 | ai:claude
     pub fn pending_decision_count(&self) -> Result<usize> {
-        self.ensure_cache_fresh_for_read()?;
-        self.cache.pending_decision_count()
+        self.with_cache_schema_retry("count pending decisions", || {
+            self.ensure_cache_fresh_for_read()?;
+            self.cache.pending_decision_count()
+        })
     }
 
     /// TASK-1065: load ONLY the store metadata (name/title/description/features/
@@ -309,8 +377,10 @@ impl CachedGitBackend {
     /// HEAD change since the last rebuild forces a fresh full recompute).
     /// trace:STORY-632 | ai:claude
     pub fn degrees(&self, id: &Uuid) -> Result<crate::db::Degrees> {
-        self.ensure_cache_fresh_for_read()?;
-        self.cache.degrees_for_id(id)
+        self.with_cache_schema_retry("read cached degrees", || {
+            self.ensure_cache_fresh_for_read()?;
+            self.cache.degrees_for_id(id)
+        })
     }
 
     /// The transitive descendant id-set of `root` (root + all parent->child
@@ -320,8 +390,10 @@ impl CachedGitBackend {
     /// `aida list --parent <id> --recursive`.
     // trace:TASK-955 | ai:claude
     pub fn descendant_ids(&self, root: &Uuid) -> Result<std::collections::HashSet<Uuid>> {
-        self.ensure_cache_fresh_for_read()?;
-        self.cache.descendant_ids(root)
+        self.with_cache_schema_retry("read cached descendants", || {
+            self.ensure_cache_fresh_for_read()?;
+            self.cache.descendant_ids(root)
+        })
     }
 
     /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
@@ -334,8 +406,10 @@ impl CachedGitBackend {
         archive: ArchiveFilter,
         defer: DeferFilter,
     ) -> Result<Vec<RequirementSummary>> {
-        self.ensure_cache_fresh_for_read()?;
-        self.cache.search(query, limit, archive, defer)
+        self.with_cache_schema_retry("search cache", || {
+            self.ensure_cache_fresh_for_read()?;
+            self.cache.search(query, limit, archive, defer)
+        })
     }
 
     /// Force a full cache rebuild, regardless of staleness. Used by the
@@ -451,7 +525,7 @@ impl CachedGitBackend {
         let n = self.inner.bulk_update(requirements, commit_subject)?;
         let mut cache_ok = true;
         for req in requirements {
-            if let Err(e) = self.cache.upsert_requirement(req) {
+            if let Err(e) = self.upsert_requirement_with_schema_retry(req) {
                 eprintln!(
                     "warning: cache upsert failed during bulk_update, cache marked stale: {}",
                     e
@@ -487,7 +561,7 @@ impl DatabaseBackend for CachedGitBackend {
     fn load(&self) -> Result<RequirementsStore> {
         // Phase 1: reads delegate to git. Phase 2 will switch list/search
         // to the cache.
-        self.ensure_cache_fresh()?;
+        self.ensure_cache_fresh_with_schema_retry()?;
         self.inner.load()
     }
 
@@ -497,7 +571,9 @@ impl DatabaseBackend for CachedGitBackend {
         // captured). Cheap enough for current scale.
         self.inner.save(store)?;
         let head = self.current_head_sha();
-        self.cache.rebuild_from_store(store, &head)?;
+        self.with_cache_schema_retry("rebuild cache after save", || {
+            self.cache.rebuild_from_store(store, &head)
+        })?;
         Ok(())
     }
 
@@ -516,7 +592,7 @@ impl DatabaseBackend for CachedGitBackend {
     }
 
     fn list_requirements(&self, include_archived: bool) -> Result<Vec<Requirement>> {
-        self.ensure_cache_fresh()?;
+        self.ensure_cache_fresh_with_schema_retry()?;
         self.inner.list_requirements(include_archived)
     }
 
@@ -524,7 +600,7 @@ impl DatabaseBackend for CachedGitBackend {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
         let pre_write_head = self.current_head_sha();
         let added = self.inner.add_requirement(requirement)?;
-        if let Err(e) = self.cache.upsert_requirement(&added) {
+        if let Err(e) = self.upsert_requirement_with_schema_retry(&added) {
             // Cache write failure is non-fatal — mark stale by clearing the
             // recorded SHA so the next read triggers a rebuild.
             let _ = self.cache.set_source_head_sha("");
@@ -541,7 +617,7 @@ impl DatabaseBackend for CachedGitBackend {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
         let pre_write_head = self.current_head_sha();
         self.inner.update_requirement(requirement)?;
-        if let Err(e) = self.cache.upsert_requirement(requirement) {
+        if let Err(e) = self.upsert_requirement_with_schema_retry(requirement) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
         } else {
@@ -558,7 +634,7 @@ impl DatabaseBackend for CachedGitBackend {
         let pre_write_head = self.current_head_sha();
         let result = self.inner.update_requirement_versioned(requirement)?;
         if matches!(result, UpdateResult::Success) {
-            if let Err(e) = self.cache.upsert_requirement(requirement) {
+            if let Err(e) = self.upsert_requirement_with_schema_retry(requirement) {
                 let _ = self.cache.set_source_head_sha("");
                 eprintln!("warning: cache upsert failed, cache marked stale: {}", e);
             } else {
@@ -574,7 +650,7 @@ impl DatabaseBackend for CachedGitBackend {
         // trace:TASK-712 — capture HEAD before the write (see restamp_head).
         let pre_write_head = self.current_head_sha();
         self.inner.delete_requirement(id)?;
-        if let Err(e) = self.cache.delete_requirement(id) {
+        if let Err(e) = self.delete_requirement_with_schema_retry(id) {
             let _ = self.cache.set_source_head_sha("");
             eprintln!("warning: cache delete failed, cache marked stale: {}", e);
         } else {
@@ -689,6 +765,72 @@ mod tests {
         // Delete → cache row gone.
         backend.delete_requirement(&req_id).unwrap();
         assert_eq!(backend.cache().requirement_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn write_path_rebuilds_and_retries_after_open_cache_schema_drift() {
+        use crate::models::{Relationship, RelationshipType, RequirementType};
+        use rusqlite::Connection;
+
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        let cache_path = dir.path().join(".aida").join("cache.db");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
+
+        let mut epic = sample_req("EPIC-1097", "epic");
+        epic.req_type = RequirementType::Epic;
+        let epic_id = epic.id;
+        backend.add_requirement(epic).unwrap();
+
+        let mut child = sample_req("BUG-1097", "child");
+        child.relationships.push(Relationship {
+            rel_type: RelationshipType::Parent,
+            target_id: epic_id,
+            created_at: None,
+            created_by: None,
+        });
+        let child_id = child.id;
+        backend.add_requirement(child).unwrap();
+
+        {
+            let conn = Connection::open(&cache_path).unwrap();
+            conn.execute_batch(
+                "DROP TABLE hierarchy_edges;
+                 CREATE TABLE hierarchy_edges (
+                     parent_id TEXT NOT NULL,
+                     child_id TEXT NOT NULL,
+                     PRIMARY KEY (parent_id, child_id)
+                 );",
+            )
+            .unwrap();
+        }
+
+        let mut edited = backend.get_requirement(&child_id).unwrap().unwrap();
+        edited.title = "child edited through drifted cache".into();
+
+        // The old hierarchy_edges table is missing author_id, so the first
+        // cache upsert fails inside delete_one_uncommitted. The backend must
+        // drop+rebuild the projection and retry in-process; the authoritative
+        // git write must not surface as a raw sqlite error.
+        // trace:BUG-1097 | ai:codex
+        backend.update_requirement(&edited).unwrap();
+
+        let descendants = backend.descendant_ids(&epic_id).unwrap();
+        assert!(descendants.contains(&child_id));
+
+        let conn = Connection::open(&cache_path).unwrap();
+        let cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(hierarchy_edges)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert!(
+            cols.iter().any(|col| col == "author_id"),
+            "schema-drift retry must restore hierarchy_edges.author_id"
+        );
     }
 
     /// BUG-425: CachedGitBackend::bulk_update must write through to the cache

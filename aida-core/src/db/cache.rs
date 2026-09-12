@@ -813,6 +813,18 @@ fn is_sqlite_lock_error(err: &anyhow::Error) -> bool {
     })
 }
 
+/// True when a cache operation hit SQLite schema drift that can be healed by
+/// dropping and rebuilding the rebuildable projection from the git store.
+// trace:BUG-1097 | ai:codex
+pub fn is_cache_schema_drift_error(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        let msg = cause.to_string().to_lowercase();
+        msg.contains("no such column")
+            || msg.contains("has no column named")
+            || msg.contains("no such table")
+    })
+}
+
 fn enrich_cache_lock_error(cache_path: &Path, action: &str, err: anyhow::Error) -> anyhow::Error {
     match read_cache_lock_info(cache_path) {
         Ok(Some(info)) if info.pid != std::process::id() => anyhow::anyhow!(
@@ -1186,6 +1198,38 @@ impl Cache {
         self.set_source_head_sha(source_head_sha)?;
         self.set_meta(META_KEY_BUILT_AT, &chrono::Utc::now().to_rfc3339())?;
         Ok(count)
+    }
+
+    /// Force a schema reset before rebuilding from the authoritative store.
+    ///
+    /// `rebuild_from_store` normally re-applies the schema idempotently and then
+    /// truncates rows. That is enough for missing tables, but not for a table
+    /// that exists in an older shape: `CREATE TABLE IF NOT EXISTS` will not add
+    /// columns, so the later insert/delete can still fail with `no such column`
+    /// or `has no column named`. This recovery path is for an already-open cache
+    /// that discovers schema drift during a read or write; it drops the
+    /// rebuildable projection tables first, then delegates to the normal rebuild.
+    // trace:BUG-1097 | ai:codex
+    pub fn rebuild_from_store_after_schema_drift(
+        &self,
+        store: &RequirementsStore,
+        source_head_sha: &str,
+    ) -> Result<usize> {
+        {
+            let conn = self.conn.lock().unwrap();
+            with_cache_write(&self.path, "reset cache schema after drift", || {
+                conn.execute_batch(
+                    "DROP TABLE IF EXISTS requirements_cache;
+                     DROP TABLE IF EXISTS requirements_fts;
+                     DROP TABLE IF EXISTS hierarchy_edges;",
+                )
+                .context("Failed to reset cache schema after drift")?;
+                conn.execute_batch(SCHEMA_SQL)
+                    .context("Failed to reapply cache schema after drift")?;
+                Ok(())
+            })?;
+        }
+        self.rebuild_from_store(store, source_head_sha)
     }
 
     /// Single-row upsert called after a write-through git mutation succeeds.
