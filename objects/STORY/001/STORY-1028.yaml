@@ -25,12 +25,12 @@ description: |-
   4. The scaffold pack refresh (aida scaffold refresh) delivers the updated skills to Claude/Codex/Antigravity packs; verify on aida-hub.
   5. CHANGELOG entry under "Changed" listing the eight families and stating the aliases are removed in the next minor release; file a follow-up TASK "remove STORY-1028 hidden aliases" tagged for that release at sign-off.
   6. aida commands --json (STORY-1027) before/after diff is attached to the PR as the inventory of what moved.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T05:15:22.477889680Z
-modified_at: 2026-09-12T03:24:50.918468447Z
+modified_at: 2026-09-12T03:24:56.649162596Z
 req_type: Story
 tags:
 - breaking
@@ -78,3 +78,7 @@ comments:
   modified_at: 2026-09-12T03:23:37.080235443Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-12T03:24:56.649162596Z
+  implemented_by: joe
