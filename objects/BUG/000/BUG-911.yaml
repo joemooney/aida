@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T08:49:11.349081889Z
-modified_at: 2026-09-12T15:41:05.381027646Z
+modified_at: 2026-09-12T15:44:25.952620343Z
 req_type: Bug
 tags:
 - aida:session:conversations
@@ -31,4 +31,8 @@ relationships:
 - rel_type: References
   target_id: 01a08497-3c0b-7a10-84d4-24e573f46ec4
   created_at: 2026-09-09T08:50:26.560939413Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a0964a-7485-72b1-a3fa-479b35a29298
+  created_at: 2026-09-12T15:44:25.952615964Z
   created_by: joe
