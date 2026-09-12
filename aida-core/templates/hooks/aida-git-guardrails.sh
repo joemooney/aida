@@ -15,7 +15,19 @@
 # Install: add to .claude/settings.json hooks.PreToolUse
 # The hook reads the tool input from stdin as JSON.
 
-set -euo pipefail
+set -Eeuo pipefail
+
+# Unexpected hook failures must be visible to the agent runtime. Claude/Codex
+# treat a silent non-zero hook as a block with no useful reason, so only the
+# deliberate `exit 2` paths below should ever produce a non-zero status.
+# trace:BUG-1092 | ai:codex
+__aida_hook_unexpected_error() {
+    local status=$?
+    [ "$status" -eq 0 ] && return
+    printf 'AIDA hook internal error: aida-git-guardrails.sh aborted unexpectedly at line %s (exit %s). This is a hook bug, not a policy block.\n' "${BASH_LINENO[0]:-unknown}" "$status" >&2
+    exit "$status"
+}
+trap __aida_hook_unexpected_error ERR
 
 # Read the tool use from stdin
 INPUT=$(cat)
@@ -264,8 +276,10 @@ check_destructive() {
         return 1
     fi
 
-    # git checkout -- . — discards all working tree changes
-    if echo "$cmd" | grep -qE 'git\s+checkout\s+--\s+\.'; then
+    # git checkout -- . — discards all working tree changes. Match the literal
+    # pathspec "." only; dot-prefixed one-file paths like `.claude/x` are safe
+    # targeted restores and must be allowed. trace:BUG-1092 | ai:codex
+    if echo "$cmd" | grep -qE '(^|[;&|])[[:space:]]*git[^&|;]*[[:space:]]checkout[[:space:]][^&|;]*--[[:space:]]+\.[[:space:]]*($|[;&|])'; then
         echo "BLOCKED: 'git checkout -- .' discards all working tree changes."
         echo "Alternative: 'git checkout -- <specific-file>' for targeted restore."
         return 1
