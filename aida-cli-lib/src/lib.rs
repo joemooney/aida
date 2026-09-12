@@ -82907,8 +82907,13 @@ fn auto_release_decision_for_lease(
     // `creator_pid` (pre-STORY-73) defaults to "dead" — those leases also
     // pre-date the orchestrator drain and are the canonical leaked-lease
     // case, so the auto-release path catches them.
+    // BUG-1111: process-backed headless leases use `active_pid` as the
+    // authoritative child liveness signal; `creator_pid` may be the still-live
+    // orchestrator that is trying to reclaim the dead child.
+    // trace:BUG-1111 | ai:codex
     let pid_alive = lease
-        .creator_pid
+        .active_pid
+        .or(lease.creator_pid)
         .map(process_probe::pid_is_alive)
         .unwrap_or(false);
 
@@ -83008,6 +83013,9 @@ impl StaleLeaseRecoveryReport {
 fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLeaseRecoveryReport {
     let live = process_probe::probe_live_claude_sessions();
     let lease_state = lease_state_for(lease, &live, chrono::Utc::now());
+    // BUG-1111: `lease_owner_process_gone` treats an `active_pid` vendor child
+    // as authoritative over the creator/orchestrator pid.
+    // trace:BUG-1111 | ai:codex
     let owner_gone = lease_owner_process_gone(
         lease.active_pid,
         lease.creator_pid,

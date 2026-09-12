@@ -386,6 +386,42 @@ fn implementer_retry_reclaims_dirty_dead_predecessor_and_preserves_worktree() {
 }
 
 #[test]
+fn implementer_retry_reclaims_dead_active_pid_even_when_creator_pid_is_live() {
+    let project = committed_repo();
+    let worktree = add_worktree(project.path(), "story-1111");
+    let wip = worktree.path().join("wip.rs");
+    std::fs::write(&wip, "// attempt 1 WIP\n").unwrap();
+    let mut lease = lease_at(
+        worktree.path(),
+        5,
+        Some(std::process::id()),
+        Some(reaped_pid()),
+    );
+    lease.id = "019f911child".to_string();
+    lease.scope = "BUG-1111".to_string();
+    lease.slug = "bug-1111".to_string();
+    lease.branch = "story-1111".to_string();
+    lease.role = Some("implementer".to_string());
+    write_lease(project.path(), &lease);
+
+    let target = reclaim_implementer_retry_predecessor(project.path(), "BUG-1111")
+        .expect("dead child pid should be reclaimable despite live creator pid")
+        .expect("retry should return the original branch/worktree");
+
+    assert_eq!(target.0, "story-1111");
+    assert_eq!(target.1, worktree.path());
+    assert_eq!(target.2, lease.id);
+    assert!(
+        wip.exists(),
+        "retry reclaim must preserve uncommitted attempt-1 work"
+    );
+    assert!(
+        !lease_path(project.path(), &lease.id).exists(),
+        "old lease should be removed so retry re-enters the same dirty worktree"
+    );
+}
+
+#[test]
 fn implementer_retry_live_predecessor_is_typed_lease_conflict() {
     let project = committed_repo();
     let worktree = add_worktree(project.path(), "story-993-live");
