@@ -1019,7 +1019,7 @@ pub(crate) fn next_hint(
                         && age >= Duration::from_secs(quiet_warn_minutes.saturating_mul(60))
                 })
                 .unwrap_or(false);
-            return DrainNext::new("aida tail drain", "watch live");
+            return DrainNext::new("aida drain tail", "watch live");
         }
     }
 
@@ -1236,7 +1236,7 @@ pub(crate) fn render_lock_json(lock: &crate::drain_lock::DrainLock, stale_state:
         "specs": lock.specs,
         "stale_drain_state": stale_state,
         "next": {
-            "cmd": "aida tail drain",
+            "cmd": "aida drain tail",
             "why": "watch live",
         },
     });
@@ -1273,7 +1273,7 @@ pub(crate) fn render_lock_toon(lock: &crate::drain_lock::DrainLock, stale_state:
         "next",
         &["cmd", "to"],
         &[vec![
-            "aida tail drain".to_string(),
+            "aida drain tail".to_string(),
             "watch live".to_string(),
         ]],
     ));
@@ -1876,11 +1876,11 @@ mod tests {
 
         let next = next_hint(&state, Some(dir.path()), now);
 
-        assert_eq!(next.cmd, "aida tail drain");
+        assert_eq!(next.cmd, "aida drain tail");
         assert_eq!(next.why, "watch live");
         let out = render_human_inner(&state, false, Some(dir.path()), now);
         assert!(out.contains("watch live"));
-        assert!(out.contains("aida tail drain"));
+        assert!(out.contains("aida drain tail"));
     }
 
     // TASK-1208: a shelved/failed member is more actionable than watching the
@@ -2044,7 +2044,7 @@ mod tests {
         let out = render_toon(&DrainStatus::Active(state));
 
         assert!(out.contains("next[1]{cmd,to}:"));
-        assert!(out.contains("aida tail drain,watch live"));
+        assert!(out.contains("aida drain tail,watch live"));
         assert_eq!(render_toon(&DrainStatus::None), "status: none");
     }
 
@@ -2106,7 +2106,7 @@ mod tests {
         assert!(out.contains("BUG-101"));
         assert!(out.contains("\"stale_drain_state\": false"));
         assert!(out.contains("\"next\""));
-        assert!(out.contains("aida tail drain"));
+        assert!(out.contains("aida drain tail"));
     }
 
     // AC6: on_drain_complete predicts which queue items will / won't be

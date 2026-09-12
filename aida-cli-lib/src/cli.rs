@@ -6792,6 +6792,30 @@ pub enum DrainCommand {
         #[clap(long)]
         clear: bool,
     },
+
+    /// Stream the active drain log, using the same resolver and renderer as
+    /// `aida tail drain`.
+    // trace:TASK-1209 | ai:codex
+    Tail {
+        /// Pass the raw stream-json events through instead of rendering them.
+        #[clap(long)]
+        json: bool,
+        /// Start from at most the last N lines of what is already in the log.
+        #[clap(long, short = 'n', value_name = "N")]
+        lines: Option<usize>,
+        /// Skip anything older than this (`30s`, `10m`, `2h`, `1d`).
+        #[clap(long, value_name = "DURATION")]
+        since: Option<String>,
+        /// Print what is already there and exit instead of following.
+        #[clap(long)]
+        no_follow: bool,
+        /// Interleave tool invocations with the assistant text.
+        #[clap(long)]
+        with_tools: bool,
+        /// Drop the leading `[HH:MM:SS]` event time from each line.
+        #[clap(long)]
+        no_timestamp: bool,
+    },
 }
 
 // trace:STORY-248 | ai:claude
@@ -12009,6 +12033,74 @@ mod tests {
             }
             other => panic!("expected Usage command, got {other:?}"),
         }
+    }
+
+    // trace:TASK-1209 | ai:codex
+    #[test]
+    fn drain_tail_parses_same_streaming_flags_as_tail_drain() {
+        let tail = Cli::try_parse_from([
+            "aida",
+            "tail",
+            "drain",
+            "--json",
+            "--lines",
+            "25",
+            "--since",
+            "10m",
+            "--no-follow",
+            "--with-tools",
+            "--no-timestamp",
+        ])
+        .expect("`aida tail drain` should parse");
+        let drain_tail = Cli::try_parse_from([
+            "aida",
+            "drain",
+            "tail",
+            "--json",
+            "--lines",
+            "25",
+            "--since",
+            "10m",
+            "--no-follow",
+            "--with-tools",
+            "--no-timestamp",
+        ])
+        .expect("`aida drain tail` should parse");
+
+        let Command::Tail {
+            target,
+            list,
+            json,
+            lines,
+            since,
+            no_follow,
+            with_tools,
+            no_timestamp,
+        } = tail.command
+        else {
+            panic!("expected Tail command");
+        };
+        assert_eq!(target.as_deref(), Some("drain"));
+        assert!(!list);
+
+        let Command::Drain(DrainCommand::Tail {
+            json: drain_json,
+            lines: drain_lines,
+            since: drain_since,
+            no_follow: drain_no_follow,
+            with_tools: drain_with_tools,
+            no_timestamp: drain_no_timestamp,
+        }) = drain_tail.command
+        else {
+            panic!("expected Drain::Tail command");
+        };
+
+        assert_eq!(json, drain_json);
+        assert_eq!(lines, drain_lines);
+        assert_eq!(since, drain_since);
+        assert_eq!(no_follow, drain_no_follow);
+        assert_eq!(with_tools, drain_with_tools);
+        assert_eq!(no_timestamp, drain_no_timestamp);
     }
 
     // trace:TASK-1155 trace:ADR-11 | ai:codex
