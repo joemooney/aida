@@ -2,7 +2,7 @@ id: 01a096ed-09a9-7fa3-8122-6b4216c19767
 spec_id: BUG-1110
 agreed_id: BUG-1110
 title: 'auto-complete failure: phase 2 (ci) on BUG-1109'
-description: |
+description: |-
   Auto-drafted by `aida queue work BUG-1109 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
 
   ## Failure
@@ -17,8 +17,8 @@ description: |
 
   ## Recurrence
 
-  Attempts: 1
-  Latest recurrence: 2026-09-12T18:41:51.289913069+00:00
+  Attempts: 2
+  Latest recurrence: 2026-09-12T18:48:43.624879133+00:00
 
   ## Phase durations
 
@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T18:41:52.041213731Z
-modified_at: 2026-09-12T18:41:52.041213731Z
+modified_at: 2026-09-12T18:48:43.891301895Z
 req_type: Bug
 tags:
 - auto-complete
