@@ -60540,5 +60540,17 @@ operations:
   timestamp: 2026-09-12T02:44:53.805410442Z
   kind: !SetStatus
     status: Completed
-clock: 4837
+- id: 01a09395-1e32-7133-99f7-d42749e02bdb
+  target_id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
+  author: aida
+  node_id: '1'
+  lamport: 4838
+  timestamp: 2026-09-12T03:06:58.482136465Z
+  kind: !Create
+    title: Remove STORY-1028 hidden CLI aliases
+    description: Remove the one-release hidden compatibility aliases for STORY-1028's mode-selecting flag migrations after the next minor release ships. Delete legacy parser flags, compatibility notes, and alias tests, then tighten the removed-flags guard if needed.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 4838
 node_id: '1'

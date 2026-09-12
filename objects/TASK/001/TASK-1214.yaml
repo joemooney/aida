@@ -1,0 +1,16 @@
+id: 01a09395-1a21-7ca0-b624-e7c61ae1051d
+spec_id: TASK-1214
+agreed_id: TASK-1214
+title: Remove STORY-1028 hidden CLI aliases
+description: Remove the one-release hidden compatibility aliases for STORY-1028's mode-selecting flag migrations after the next minor release ships. Delete legacy parser flags, compatibility notes, and alias tests, then tighten the removed-flags guard if needed.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T03:06:57.441067647Z
+modified_at: 2026-09-12T03:06:57.441067647Z
+req_type: Task
+tags:
+- cli
+- release
+- story-1028-followup
