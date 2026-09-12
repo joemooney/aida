@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T22:32:06.702001920Z
-modified_at: 2026-09-12T22:35:07.834935193Z
+modified_at: 2026-09-12T22:35:11.939252500Z
 req_type: Story
 tags:
 - drain
@@ -30,4 +30,11 @@ relationships:
 - rel_type: Child
   target_id: 01a09075-880b-78d2-8212-ccdcd835a588
   created_at: 2026-09-12T22:32:09.009591534Z
+comments:
+- id: 01a097c2-a8c3-7131-92ad-1f672fabf95e
+  author: joe
+  content: This is the real concurrent scheduler — the remaining STORY-1041 acceptance. Approved + guided (architecture-class, not headless-drainable). Consumes the pipeline_depth contract from STORY-1041's slice + ADR-27.
+  created_at: 2026-09-12T22:35:11.939252500Z
+  modified_at: 2026-09-12T22:35:11.939252500Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: guided
