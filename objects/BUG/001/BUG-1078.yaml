@@ -13,12 +13,12 @@ description: |
   1. On Live/UnknownLiveness, the retry re-probes liveness over a short grace window (e.g. 3 probes across ~15s) before giving up; a predecessor that dies within the window is reclaimed and the retry proceeds.
   2. A genuinely live predecessor still refuses after the window (the 908 safety stands; --steal never involved).
   3. Unit test: verdict transitions Live->dead across probes -> reclaim succeeds; stays Live -> refusal unchanged.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T21:34:00.493790700Z
-modified_at: 2026-09-12T03:44:16.463061670Z
+modified_at: 2026-09-12T03:53:57.552955942Z
 req_type: Bug
 tags:
 - drain
@@ -36,7 +36,23 @@ comments:
   created_at: 2026-09-11T22:59:50.075607364Z
   modified_at: 2026-09-11T22:59:50.075607364Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a093c0-2229-74f2-8ebb-e2631c19aa8a
+  author: aida-auto-bump
+  timestamp: 2026-09-12T03:53:57.545679674Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a093c0-2230-7e52-a0bb-5af25bf24be8
+  timestamp: 2026-09-12T03:53:57.552955215Z
+  agent: aida
+  commit_sha: 3506e118869db5218d7e30d904599ffd52301f6d
+  summary: Completed via merge 3506e118
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T03:35:48.864903086Z
   implemented_by: joe
+  completed_at: 2026-09-12T03:53:57.545554989Z
+  completion_sha: 3506e118869db5218d7e30d904599ffd52301f6d
