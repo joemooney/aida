@@ -15,12 +15,12 @@ description: |-
 
   ## Related
   STORY-993 (PID/TTY column) shows this data; the focus/send story consumes it.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T05:19:52.369729897Z
-modified_at: 2026-09-12T05:57:17.120965606Z
+modified_at: 2026-09-12T06:03:47.156115604Z
 req_type: Story
 tags:
 - from-product
@@ -78,23 +78,41 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-11T04:37:07.290011953Z
   modified_at: 2026-09-11T04:37:07.290011953Z
+history:
+- id: 01a09436-fe4c-7940-bdd3-f113e57fd53c
+  author: aida-auto-bump
+  timestamp: 2026-09-12T06:03:47.148400118Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a09436-fe54-7e92-ac4e-177f3ddf002c
+  timestamp: 2026-09-12T06:03:47.156114421Z
+  agent: aida
+  commit_sha: c91b818a013f14b8189b4843635159f57a009f73
+  summary: Completed via merge c91b818a
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: implementer worktree `/home/joe/ai/aida-story-994` is on `story-994-pr1704` but phase 2 is driving `story-994` — refusing to push or tear down (attempt 2/2)'
+  - 'punted: PR-1704 base is 3 commits behind origin and overlaps 4 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/session.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 11 commits behind origin and overlaps 6 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/session.rs aida-cli-lib/src/tests/agent_launcher_tests.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1704 base is 1 commit behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 2 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 3 commits behind origin and overlaps 3 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/agent_registry.rs aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1704 base is 4 commits behind origin and overlaps 5 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/tests/agent_launcher_tests.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 7 commits behind origin and overlaps 5 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/cli.rs aida-cli-lib/src/tests/agent_launcher_tests.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 8 commits behind origin and overlaps 5 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/tests/agent_launcher_tests.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 8 commits behind origin and overlaps 5 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/tests/agent_launcher_tests.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1704 base is 36 commits behind origin and overlaps 7 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: aida-cli-lib/src/cli.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/session.rs PROMPT_HISTORY.md aida-cli-lib/src/agent_registry.rs aida-cli-lib/src/tests/agent_launcher_tests.rs Recover with: aida pr rebase 1704 # clean rebase + force-push-with-lease aida pr rebase 1704 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: could not push implementer branch `story-994` from `/home/joe/ai/aida-story-994` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git ! [rejected] HEAD -> story-994 (non-fast-forward) error: failed to push some refs to ''https://github.com/joemooney/aida.git'' hint: Updates were rejected because the tip of your current branch is behind hint: its remote counterpart. If you want to integrate the remote changes, hint: use ''git pull'' before pushing again. hint: See the ''Note about fast-forwards'' in ''git push --help'' for details. (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-09T07:02:51.646792781Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: tool-exit
-  detail: |-
-    could not push implementer branch `story-994` from `/home/joe/ai/aida-story-994` before phase-2 CI/teardown: To https://github.com/joemooney/aida.git
-     ! [rejected]            HEAD -> story-994 (non-fast-forward)
-    error: failed to push some refs to 'https://github.com/joemooney/aida.git'
-    hint: Updates were rejected because the tip of your current branch is behind
-    hint: its remote counterpart. If you want to integrate the remote changes,
-    hint: use 'git pull' before pushing again.
-    hint: See the 'Note about fast-forwards' in 'git push --help' for details. (attempt 2/2)
-  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0942cfb05 --skip-ci`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T05:57:17.120965606Z
+  completed_at: 2026-09-12T06:03:47.148157917Z
+  completion_sha: c91b818a013f14b8189b4843635159f57a009f73
