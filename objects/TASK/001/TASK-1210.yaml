@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T16:51:52.902310808Z
-modified_at: 2026-09-12T19:42:31.044995779Z
+modified_at: 2026-09-12T20:10:10.843642051Z
 req_type: Task
 tags:
 - dogfood
@@ -62,4 +62,10 @@ comments:
   content: 'Chain update: reopened-908 drive was phantom-shipped by the reconciler (BUG-1112 filed); the anchor defect is re-filed as BUG-1111 (both high, queued). The rerun-injection pass condition now waits on BUG-1111.'
   created_at: 2026-09-12T19:42:31.044995779Z
   modified_at: 2026-09-12T19:42:31.044995779Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0973d-e41b-7351-9c41-f9839b30e1a3
+  author: joe
+  content: 'PASS — rerun specimen (2026-09-12 13:00-13:05, testbed TASK-28, binary at BUG-1111''s merge cfd412f): Monitor kill-9''d the codex implementer mid-phase-1 with a dirty worktree (src/main.rs +8/-2, same file as the preserved run-1 diff). The transient retry fired (''retrying phase 1 attempt 2/2''), RECLAIMED the lease without any conflict refusal (the run-1 failure mode), re-entered the same pool worktree, and the spec SHIPPED end-to-end: PR-20 merged (ffd40f3, src/main.rs +11/-3 superset of the injected diff), TASK-28 Completed, total 4m31s. Acceptance items 1+2 satisfied: SpecRetried with reused lease/worktree, diff carried, merged PR recorded. Evidence: scratchpad drive-t28{,b}.log, monitor events bvqfyw3hf/bdpfhypz9. BUG-908''s re-entry contract is now PROVEN in the wild on the fixed anchor (BUG-1111). Recommending this task Complete.'
+  created_at: 2026-09-12T20:10:10.843642051Z
+  modified_at: 2026-09-12T20:10:10.843642051Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
