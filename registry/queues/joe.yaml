@@ -39,14 +39,6 @@
   added_at: 2026-05-21T04:48:49.259972178Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a0903f-5bda-7c00-8b79-d64278f00eba
-  position: 11000
-  added_by: joe
-  note: auto-queued by `session end` (01a09030); covers 1 spec
-  added_at: 2026-09-11T11:34:32.538829844Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 019e51f5-b118-7bd3-8e1b-5e3c8cd1f2f3
   position: 12000
   added_by: joe
@@ -421,51 +413,11 @@
   added_at: 2026-06-04T07:03:29.787823869Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a091de-4877-7aa2-8506-da5ae4e9179d
-  position: 358000
-  added_by: joe
-  note: auto-queued by `session end` (01a091d2); covers 1 spec
-  added_at: 2026-09-11T19:07:44.697766230Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0921f-e9ee-7733-9a20-9f4b4e80853b
-  position: 362000
-  added_by: joe
-  note: auto-queued by `session end` (01a0920e); covers 1 spec
-  added_at: 2026-09-11T20:19:26.158311573Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a09314-7285-7583-a891-c543c9622260
-  position: 372000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a09307); covers 1 spec
-  added_at: 2026-09-12T00:46:37.101995350Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a09355-0d7a-7662-a674-41f208fb9c97
-  position: 374000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a09351); covers 1 spec
-  added_at: 2026-09-12T01:57:08.341797301Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a09442-d561-7221-96d7-a08c574b4d0b
   position: 384000
   added_by: joe
   note: auto-queued by `session end` (01a09431); covers 1 spec
   added_at: 2026-09-12T06:16:49.274761970Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0946c-2cd7-76c3-8eac-7d8cc89d7e7d
-  position: 387000
-  added_by: joe
-  note: auto-queued by `session end` (01a09468); covers 1 spec
-  added_at: 2026-09-12T07:01:58.639043118Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
