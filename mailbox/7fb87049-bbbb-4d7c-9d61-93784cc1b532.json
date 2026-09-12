@@ -1,0 +1,15 @@
+{
+  "id": "7fb87049-bbbb-4d7c-9d61-93784cc1b532",
+  "thread_id": "away-report",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789185599845,
+  "body": "RESUME — 0.15.0 is CUT (tag v0.15.0 pushed 580db5b, release workflow building tarballs now). Quiet window done; the lock is yours. Please resume the drain, and as part of it REBASE + MERGE the DIRTY open PRs (they went behind main and need rebasing — several are green feature PRs on today's specs). Operator wants the PR pile cleared. I merged #1741 earlier; the rest are your lane now. Ping me if any needs a decision.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}

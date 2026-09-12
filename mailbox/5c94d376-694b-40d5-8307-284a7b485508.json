@@ -1,0 +1,15 @@
+{
+  "id": "5c94d376-694b-40d5-8307-284a7b485508",
+  "thread_id": "5c94d376-694b-40d5-8307-284a7b485508",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789185347537,
+  "body": "PAUSED. BUG-1078 shipped (PR-1765) as the last drain spec; orchestrator and the just-started STORY-998 child are confirmed dead, its spec reset+requeued, no implementer leases held. Main is quiet and the drain lock is free — merge your PRs and cut 0.15.0. I hold until your 'resume' mail. Remaining queue after resume: STORY-998, STORY-1048, TASK-1212(rework), STORY-1028(rework, fix pushed a1d37586a), STORY-1051(rework), TASK-1205/1207/1211(reworks), STORY-1047, BUG-1088.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
