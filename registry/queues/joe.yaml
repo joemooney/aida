@@ -37,12 +37,6 @@
   for_role: implementer
   for_scope: EPIC-23
 - user_id: joe
-  requirement_id: 01a08ee4-6120-7e82-929b-34f62cf53340
-  position: 6000
-  added_by: joe
-  added_at: 2026-09-11T12:28:32.304777837Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e1af9-a4a3-74a0-a7de-a337983a9c44
   position: 6000
   added_by: joe
@@ -75,14 +69,6 @@
   added_by: joe
   added_at: 2026-09-11T12:28:24.235446784Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 01a0902c-20ab-79a1-a772-96b94a43ed65
-  position: 10000
-  added_by: joe
-  note: auto-queued by `session end` (01a0901a); covers 1 spec
-  added_at: 2026-09-11T11:13:32.697824740Z
-  for_role: reviewer
-  added_by_machine: imac
 - user_id: joe
   requirement_id: 01a0903f-5bda-7c00-8b79-d64278f00eba
   position: 11000
@@ -539,14 +525,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a092a8-d6d9-7470-ad5c-09f97a739871
-  position: 365000
-  added_by: joe
-  note: auto-queued by `session end` (01a0929b); covers 1 spec
-  added_at: 2026-09-11T22:49:00.113874648Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a084f5-7d66-78e0-8f54-a8ee22412e40
   position: 366000
   added_by: joe
@@ -559,14 +537,6 @@
   added_by: joe
   note: auto-queued by `aida pr` ((no-sess); covers 1 spec
   added_at: 2026-09-11T23:25:54.551958626Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a092ce-923c-76b3-9d7c-a3a400da676c
-  position: 368000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a092c2); covers 1 spec
-  added_at: 2026-09-11T23:30:13.075058955Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
