@@ -60552,5 +60552,31 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 4838
+- id: 01a093a5-6bed-70a3-a485-651d0eefaaf3
+  target_id: 01a093a5-680b-7570-85a5-7505dae26e7d
+  author: aida
+  node_id: '1'
+  lamport: 4839
+  timestamp: 2026-09-12T03:24:46.957458772Z
+  kind: !Create
+    title: 'Review PR-1764: [STORY-1028] Promote mode-selecting flags to subcommands'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09383`) for branch `story-1028-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1764>
+      - Branch: `story-1028-2` → `main`
+
+      ## Covers
+
+      - STORY-1028
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1764` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4839
 node_id: '1'
