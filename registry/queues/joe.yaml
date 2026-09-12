@@ -550,3 +550,10 @@
   added_at: 2026-09-12T03:24:51.707474909Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a093ae-92da-7b51-ae4f-ae6dc8391eed
+  position: 376000
+  added_by: joe
+  added_at: 2026-09-12T03:34:55.485295984Z
+  for_role: implementer
+  added_by_machine: imac
