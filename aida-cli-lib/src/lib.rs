@@ -77758,6 +77758,48 @@ fn spec_status(project_root: &std::path::Path, spec: &str) -> Option<Requirement
     Some(req.status)
 }
 
+// trace:BUG-1112 | ai:codex
+fn latest_reopen_transition_at(
+    req: &aida_core::Requirement,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    req.history
+        .iter()
+        .filter(|entry| {
+            entry.changes.iter().any(|change| {
+                change.field_name == "status"
+                    && aida_core::lifecycle::State::from_status_str(&change.old_value)
+                        .is_some_and(|s| s.is_terminal())
+                    && aida_core::lifecycle::State::from_status_str(&change.new_value)
+                        .is_some_and(|s| !s.is_terminal())
+            })
+        })
+        .map(|entry| entry.timestamp)
+        .max()
+}
+
+// trace:BUG-1112 | ai:codex
+fn spec_latest_reopen_transition_at(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    use aida_core::DatabaseBackend;
+    let store_path = project_root.join(".aida-store");
+    let backend = aida_core::GitBackend::new(&store_path).ok()?;
+    let req = backend.get_requirement_by_spec_id(spec).ok()??;
+    latest_reopen_transition_at(&req)
+}
+
+// trace:BUG-1112 | ai:codex
+fn merged_at_satisfies_latest_reopen(
+    merged_at: Option<chrono::DateTime<chrono::Utc>>,
+    latest_reopen_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    match latest_reopen_at {
+        None => true,
+        Some(reopen_at) => merged_at.is_some_and(|merged_at| merged_at > reopen_at),
+    }
+}
+
 /// Pure decision for the BUG-241 reconcile (`RealPhaseDriver::reconcile_failure`):
 /// given the two ground-truth signals — a verified merged PR number, if one
 /// was found, and whether the spec reached Completed — decide whether a phase
@@ -79356,9 +79398,13 @@ impl RealPhaseDriver {
             a: &mut stderr_sink,
             b: &mut state_sink,
         };
+        let latest_reopen_at = spec_latest_reopen_transition_at(&self.project_root, &self.spec);
         if let Some(pr) = self.pr_number {
             // We already know the PR — `gh pr view` is the direct check.
             if pr_is_merged_with_sink(&self.project_root, pr, &mut sink) != Some(true) {
+                return None;
+            }
+            if !self.merged_pr_satisfies_latest_reopen(pr, latest_reopen_at, &mut sink) {
                 return None;
             }
             return matches!(
@@ -79376,19 +79422,47 @@ impl RealPhaseDriver {
             .as_deref()
             .map(|b| detect_merged_pr_for_branch_via_forge(&self.project_root, b))
         {
-            Some(PrLookup::Found(pr)) => matches!(
-                pr_credit_match_with_sink(
-                    &self.project_root,
+            Some(PrLookup::Found(pr)) => {
+                if !self.merged_pr_satisfies_latest_reopen(
                     pr.number as u32,
-                    &self.spec,
-                    Some(&pr.title),
+                    latest_reopen_at,
                     &mut sink,
-                ),
-                PrCreditMatch::Dispatched
-            )
-            .then_some(pr.number as u32),
+                ) {
+                    return None;
+                }
+                matches!(
+                    pr_credit_match_with_sink(
+                        &self.project_root,
+                        pr.number as u32,
+                        &self.spec,
+                        Some(&pr.title),
+                        &mut sink,
+                    ),
+                    PrCreditMatch::Dispatched
+                )
+                .then_some(pr.number as u32)
+            }
             _ => None,
         }
+    }
+
+    // trace:BUG-1112 | ai:codex
+    fn merged_pr_satisfies_latest_reopen(
+        &self,
+        pr: u32,
+        latest_reopen_at: Option<chrono::DateTime<chrono::Utc>>,
+        sink: &mut dyn network_retry::RetrySink,
+    ) -> bool {
+        if latest_reopen_at.is_none() {
+            return true;
+        }
+        let metadata = crate::forge::forge_for(&self.project_root)
+            .change_metadata(pr as u64, sink)
+            .ok();
+        let merged_at = metadata
+            .filter(|m| m.state == crate::forge::ChangeState::Merged)
+            .and_then(|m| m.merged_at);
+        merged_at_satisfies_latest_reopen(merged_at, latest_reopen_at)
     }
 
     /// STORY-301: stamp the drain-state file with the phase about to run, so
