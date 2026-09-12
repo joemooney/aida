@@ -50,6 +50,25 @@ pub(crate) fn handle_supervise_command(
 ) -> Result<()> {
     match cmd {
         SuperviseCommand::Nudge => handle_supervise_nudge(backend, store_path),
+        // trace:STORY-1051 | ai:claude
+        SuperviseCommand::Redrive {
+            execute,
+            max_attempts,
+            max,
+            json,
+        } => {
+            let project_root = store_path
+                .parent()
+                .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+            let opts = crate::supervisor::SuperviseOpts {
+                execute: *execute,
+                max_attempts: max_attempts.unwrap_or(crate::supervisor::DEFAULT_MAX_ATTEMPTS),
+                backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
+                max: *max,
+                json: *json,
+            };
+            crate::supervisor::handle_supervise_command(backend, project_root, opts)
+        }
     }
 }
 

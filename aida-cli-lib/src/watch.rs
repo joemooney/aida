@@ -344,6 +344,26 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 phase, cause, attempt, max
             ),
         ),
+        // trace:STORY-1051 | ai:claude
+        EventKind::SpecReDriven {
+            cause,
+            attempt,
+            max,
+        } => (
+            "spec-re-driven",
+            format!(
+                "supervisor re-drive after {} (attempt {}/{})",
+                cause, attempt, max
+            ),
+        ),
+        // trace:STORY-1051 | ai:claude
+        EventKind::ReclassifiedNeedsHuman { kind, attempts } => (
+            "reclassified-needs-human",
+            format!(
+                "supervisor gave up after {} attempt(s) on {} — needs human",
+                attempts, kind
+            ),
+        ),
         EventKind::PuntFiled { .. } => {
             ("punt-filed", "design-fork at .aida/punts.jsonl".to_string())
         }

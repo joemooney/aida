@@ -114,6 +114,28 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_after: Option<String>,
     },
+    /// STORY-1051: the ABOVE-phase re-drive supervisor re-drove a
+    /// transient-parked spec (distinct from the in-phase `SpecRetried`). The
+    /// event log is the source of truth for the supervisor's attempt count and
+    /// backoff timing (ADR-26 fork B). **Recovery trail.**
+    // trace:STORY-1051 | ai:claude
+    SpecReDriven {
+        /// Typed transient failure cause the supervisor is retrying, e.g. `watchdog`.
+        cause: String,
+        /// 1-based supervised re-drive attempt now being launched.
+        attempt: u32,
+        /// Supervised re-drive cap (default 3).
+        max: u32,
+    },
+    /// STORY-1051: the supervisor gave up on a transient park after the cap and
+    /// reclassified it to needs-human triage. **Actionable.**
+    // trace:STORY-1051 | ai:claude
+    ReclassifiedNeedsHuman {
+        /// The transient failure kind that never cleared.
+        kind: String,
+        /// How many supervised re-drives were spent before giving up.
+        attempts: u32,
+    },
     /// A design-fork punt hit the cascade — the load-bearing case.
     /// **Actionable.**
     PuntFiled {
@@ -194,9 +216,14 @@ impl EventKind {
     pub fn is_actionable(&self) -> bool {
         match self {
             // Benign churn — absorbed by the watcher, never wakes the LLM.
-            EventKind::RunStarted | EventKind::PhaseEntered { .. } => false,
+            // A supervised re-drive is the supervisor's own recovery action, not
+            // a decision point (STORY-1051).
+            EventKind::RunStarted
+            | EventKind::PhaseEntered { .. }
+            | EventKind::SpecReDriven { .. } => false,
             // Real decision points — wake the supervisor.
-            EventKind::CiTerminal { .. }
+            EventKind::ReclassifiedNeedsHuman { .. }
+            | EventKind::CiTerminal { .. }
             | EventKind::PhaseDonePr { .. }
             | EventKind::SpecShelved { .. }
             | EventKind::SpecRetried { .. }
@@ -262,6 +289,39 @@ impl Event {
 /// Path to the event stream for a project, given its root directory.
 pub fn events_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("events.jsonl")
+}
+
+/// STORY-1051: read every event from `.aida/events.jsonl`, oldest first
+/// (best-effort — a malformed or truncated line is skipped, not fatal). The
+/// re-drive supervisor derives its per-spec attempt count and backoff timing
+/// from these, so the append-only log is the single source of truth (ADR-26
+/// fork B — no separate state file, no counter mutated onto the spec).
+// trace:STORY-1051 | ai:claude
+pub fn read_all(project_root: &Path) -> Vec<Event> {
+    let Ok(content) = std::fs::read_to_string(events_path(project_root)) else {
+        return Vec::new();
+    };
+    content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .filter_map(|l| serde_json::from_str::<Event>(l).ok())
+        .collect()
+}
+
+/// STORY-1051: the supervisor's re-drive count for `spec` and the timestamp of
+/// its most recent supervised re-drive, both derived from `SpecReDriven`
+/// events. `(0, None)` when the supervisor has never re-driven this spec.
+// trace:STORY-1051 | ai:claude
+pub fn supervisor_redrive_state(project_root: &Path, spec: &str) -> (u32, Option<DateTime<Utc>>) {
+    let mut count = 0u32;
+    let mut last = None;
+    for ev in read_all(project_root) {
+        if ev.spec.as_deref() == Some(spec) && matches!(ev.kind, EventKind::SpecReDriven { .. }) {
+            count += 1;
+            last = Some(ev.ts);
+        }
+    }
+    (count, last)
 }
 
 /// Path to the single rotated archive of the previous run's events — the file
@@ -605,6 +665,64 @@ mod tests {
         assert!(parsed.is_actionable());
         // And the explicit value classifies the same way.
         assert!(EventKind::Unknown.is_actionable());
+    }
+
+    // STORY-1051: the supervisor's attempt count + backoff come from the event
+    // log (ADR-26 fork B), so prove the derivation reads back correctly.
+    #[test]
+    fn supervisor_redrive_state_counts_and_timestamps_from_the_log() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // Two supervised re-drives of STORY-9, one of a different spec.
+        for attempt in 1..=2 {
+            emit(
+                root,
+                &Event::new(
+                    Some("STORY-9".into()),
+                    "",
+                    EventKind::SpecReDriven {
+                        cause: "watchdog".into(),
+                        attempt,
+                        max: 3,
+                    },
+                ),
+            );
+        }
+        emit(
+            root,
+            &Event::new(
+                Some("STORY-OTHER".into()),
+                "",
+                EventKind::SpecReDriven {
+                    cause: "no-pr".into(),
+                    attempt: 1,
+                    max: 3,
+                },
+            ),
+        );
+        // An in-phase SpecRetried must NOT be counted as a supervised re-drive.
+        emit(
+            root,
+            &Event::new(
+                Some("STORY-9".into()),
+                "",
+                EventKind::SpecRetried {
+                    phase: "reviewer".into(),
+                    cause: "watchdog".into(),
+                    attempt: 2,
+                    max: 2,
+                    model_before: None,
+                    model_after: None,
+                },
+            ),
+        );
+
+        let (count, last) = supervisor_redrive_state(root, "STORY-9");
+        assert_eq!(count, 2, "only SpecReDriven for STORY-9 counts");
+        assert!(last.is_some(), "last re-drive timestamp is recorded");
+        let (none, ts) = supervisor_redrive_state(root, "STORY-NEVER");
+        assert_eq!(none, 0);
+        assert!(ts.is_none());
     }
 
     #[test]
