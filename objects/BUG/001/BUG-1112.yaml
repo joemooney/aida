@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T19:42:15.126167719Z
-modified_at: 2026-09-12T20:29:05.579237401Z
+modified_at: 2026-09-12T20:33:59.858791148Z
 req_type: Bug
 tags:
 - drain
@@ -29,6 +29,13 @@ relationships:
   target_id: 01a0974b-7a8b-7342-af19-fb8bede6ff33
   created_at: 2026-09-12T20:25:06.472877072Z
   created_by: joe
+comments:
+- id: 01a09753-b232-7b33-9976-6311d601bdbb
+  author: joe
+  content: 'Advisor: legitimate RequestChanges (not circular). You have unit tests for latest_reopen_transition_at / merged_at_satisfies_latest_reopen, but acceptance #2 wants the RECONCILER-PATH regression: a spec Completed via PR N → reopened → driven → phase-1 reconciliation must NOT credit PR N. Add that test at the RealPhaseDriver/forge reconcile seam (the level where the 12:31 phantom-ship actually happened), so the integration path is guarded, not just the two helpers. Keep the helpers'' unit tests too.'
+  created_at: 2026-09-12T20:33:59.858791148Z
+  modified_at: 2026-09-12T20:33:59.858791148Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 implementation_info:
   implemented: true
   implemented_at: 2026-09-12T20:17:28.401331758Z
