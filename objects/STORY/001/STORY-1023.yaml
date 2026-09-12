@@ -3,12 +3,12 @@ spec_id: STORY-1023
 agreed_id: STORY-1023
 title: 'split the NeedsAttention rendering: Shelved (typed cause, machine-recoverable) vs Needs Decision (human required)'
 description: 'Operator question (2026-09-10): is NeedsAttention the right name? No — it conflates two opposite states: (a) HUMAN-REQUIRED (punts, escalated forks, decision requests — attention is correct) and (b) MECHANICALLY SHELVED (stale-base, ci-red, reviewer tool-exit — typed cause recorded, retry/rework path known, no human needed). Tonight''s list showed five ⚠ rows of which four were queued mechanical retries — false alarm density that trains the operator to ignore the glyph. Since the typed-cause work the substrate already knows which kind each park is (FailureReason/AttentionReason), so this is a DISPLAY/LENS split, not a state-machine migration: (1) list/show/why/TUI render machine-recoverable parks as calm ''⏸ Shelved (<cause>)'' and human-required as ''⚠ Needs Decision (<reason>)'' — same stored status, presentation split on the recorded reason; (2) aida awaiting counts ONLY the human-required kind in its escalations (shelved-with-known-path items move to a separate ''in rework'' line); (3) the lifecycle docs and machinery glossary get the two terms defined (shelved = parked mechanical, aligned with the existing EPIC-28 shelve vocabulary; needs-decision = parked on a human). Explicitly NOT renaming the stored status value in this slice (compat: cache, MCP schemas, queries); a stored-status rename is a follow-up decision if the display split proves out. Acceptance: a stale-base park renders Shelved with its cause in list/why; a punt renders Needs Decision; awaiting counts only the latter as escalations; docs updated; tests on the reason-to-rendering mapping.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T03:51:00.272848490Z
-modified_at: 2026-09-12T05:59:15.172131334Z
+modified_at: 2026-09-12T05:59:41.468169294Z
 req_type: Story
 relationships:
 - rel_type: !Custom implemented-by
@@ -65,16 +65,33 @@ comments:
   created_at: 2026-09-12T05:41:34.908871911Z
   modified_at: 2026-09-12T05:41:34.908871911Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09433-3e92-7291-b333-7c479336978e
+  author: aida-auto-bump
+  timestamp: 2026-09-12T05:59:41.458170798Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09433-3e9c-7901-86e7-ea6d1211901f
+  timestamp: 2026-09-12T05:59:41.468167883Z
+  agent: aida
+  commit_sha: 1f26aefa825cf077c12821d67a32021c9e99dc2c
+  summary: Completed via merge 1f26aefa
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1729 base is 1 commit behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1729 # clean rebase + force-push-with-lease aida pr rebase 1729 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1729 base is 3 commits behind origin and overlaps 4 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md docs/autonomous-drain.md aida-cli-lib/src/queue_cmd.rs aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1729 # clean rebase + force-push-with-lease aida pr rebase 1729 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: PR-1729 base is 1 commit behind origin and overlaps 3 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: PROMPT_HISTORY.md aida-cli-lib/src/lib.rs aida-cli-lib/src/queue_cmd.rs Recover with: aida pr rebase 1729 # clean rebase + force-push-with-lease aida pr rebase 1729 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1729 base is 22 commits behind origin and overlaps 6 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: aida-cli-lib/src/git_backend_cmd.rs aida-cli-lib/src/lib.rs aida-cli-lib/src/queue_cmd.rs docs/cli/12-glossary.md docs/autonomous-drain.md PROMPT_HISTORY.md Recover with: aida pr rebase 1729 # clean rebase + force-push-with-lease aida pr rebase 1729 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: the reviewer session exited 1 (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-11T05:55:03.816790892Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: the reviewer session exited 1 (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1023 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-12T05:52:39.342894660Z
+  completed_at: 2026-09-12T05:59:41.457852647Z
+  completion_sha: 1f26aefa825cf077c12821d67a32021c9e99dc2c
