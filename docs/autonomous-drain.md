@@ -801,6 +801,47 @@ single line ("calibration: no live advisor registered, skipping fork") and
 proceeds with cold-boot only. The calibration record still gets written so
 the review surface can see "how many punts found no live advisor."
 
+## Recovery: when a drive dies after pushing
+
+Sometimes a headless drive gets the important part done — commits exist on a
+spec branch — but exits before opening or handing off the PR. That state used
+to be easy to miss because there may be no live lease left and no PR for the
+review queue to see.
+
+Run:
+
+```bash
+aida awaiting
+```
+
+Look for **Unshipped work** rows. Each row names the spec, branch, commit count,
+age, and one recovery command. The same detector is included in:
+
+```bash
+aida awaiting --notice
+aida session reap
+```
+
+The notice path is local/cache-only and skips the forge check, so it reports a
+compact `unshipped:N` count when it sees branch-shaped work. The full
+`aida awaiting` path checks for open PRs and suppresses branches that already
+have one. `aida session reap` reports the same set before cleanup and never
+removes a worktree/branch that still carries unshipped work.
+
+Typical recovery:
+
+```bash
+aida pr ship story-1043
+```
+
+If the work is remote-only, first recreate a local branch from the
+remote-tracking ref, then ship it:
+
+```bash
+git switch -c story-1043 origin/story-1043
+aida pr ship story-1043
+```
+
 ## Recovery: merging a drained spec's PR by hand (TASK-406)
 
 When a drain bails before phase 4 (CI hung, the orchestrator was interrupted,

@@ -124,6 +124,18 @@ pub enum EventKind {
     /// The supervisor's mailbox has unread mail — preserves the one
     /// event-driven trigger that exists today (TASK-776). **Actionable.**
     UnreadMail,
+    /// A branch carries spec-linked work ahead of main, has no open PR, and no
+    /// live lease owns it. **Actionable.**
+    // trace:STORY-1043 | ai:codex
+    UnshippedWorkDetected {
+        /// Display id of the spec inferred from the branch name or commit
+        /// trailer.
+        spec: String,
+        /// Local or remote-tracking branch where the work sits.
+        branch: String,
+        /// First-seen timestamp bucket recorded by the detector.
+        first_seen: String,
+    },
     /// A `aida zen <spec> --compete` bake-off reached a verdict: the winning
     /// candidate merged, the loser discarded. This row IS the outcome record
     /// the spec ratified (winner vendor + per-candidate scores + spec-kind) —
@@ -175,6 +187,7 @@ impl EventKind {
             | EventKind::PrMerged { .. }
             | EventKind::QueueDrained { .. }
             | EventKind::UnreadMail
+            | EventKind::UnshippedWorkDetected { .. }
             | EventKind::CompeteOutcome { .. }
             | EventKind::Unknown => true,
         }
