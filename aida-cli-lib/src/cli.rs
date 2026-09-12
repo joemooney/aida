@@ -2066,6 +2066,15 @@ pub enum BurndownCommand {
     },
 }
 
+/// Lightweight supervisor helpers for product/advisor stop-gap loops.
+// trace:STORY-1052 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum SuperviseCommand {
+    /// Nudge a live advisor about transiently parked work, or fall back to
+    /// operator notification when no advisor is live.
+    Nudge,
+}
+
 /// of an in-repo build, running dev servers, installing shell helpers).
 // trace:EPIC-1-001 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -9278,6 +9287,11 @@ pub enum Command {
     /// read-only foundation it drives its worktree fan-out from.
     #[clap(subcommand)]
     Burndown(BurndownCommand),
+
+    /// Product-role supervision helpers for nudging stuck work.
+    // trace:STORY-1052 | ai:codex
+    #[clap(subcommand)]
+    Supervise(SuperviseCommand),
 
     /// Vital-signs read: is this project HEALTHY right now? One screen across
     /// backlog state (ready/stale/blocked/aging work, burn-down direction) and
