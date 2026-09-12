@@ -1893,6 +1893,43 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
     Ok(())
 }
 
+fn init_schedule_config_section() -> &'static str {
+    r#"
+# Native scheduled maintenance. `aida schedule tick` runs due enabled tasks
+# opportunistically from the per-turn hook; `aida schedule emit-cron` prints
+# crontab lines if you prefer real cron. Fresh projects stay silent because
+# every sample task is commented/disabled. trace:STORY-1047
+#
+# [schedule]
+# min_gap = "60s"
+#
+# [[schedule.tasks]]
+# name = "cache-verify"
+# command = "cache verify"
+# interval = "24h"
+# enabled = false
+#
+# [[schedule.tasks]]
+# name = "session-reap"
+# command = "session reap"
+# interval = "24h"
+# enabled = false
+#
+# [[schedule.tasks]]
+# name = "queue-gc"
+# command = "queue gc"
+# interval = "7d"
+# enabled = false
+#
+# [[schedule.tasks]]
+# name = "notify-check"
+# command = "notify check"
+# interval = "1h"
+# enabled = false
+#
+"#
+}
+
 #[cfg(test)]
 mod task_510_init_scaffold_task_tests {
     use super::*;
@@ -3400,6 +3437,9 @@ pub(crate) fn handle_init_distributed_worktree(
     let config_content = config_content + init_worktree_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
+    // STORY-1047: discoverable native maintenance scheduler examples, all
+    // disabled/commented so fresh projects stay silent.
+    let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -3674,6 +3714,9 @@ fn handle_init_post_clone(
     let config_content = config_content + init_worktree_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
+    // STORY-1047: discoverable native maintenance scheduler examples, all
+    // disabled/commented so fresh projects stay silent.
+    let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -4239,6 +4282,9 @@ pub(crate) fn handle_init_distributed_sibling(
     let config_content = config_content + init_worktree_config_section();
     // STORY-714/TASK-985: warm-pool ON by default (escape hatches documented).
     let config_content = config_content + init_worktree_pool_config_section();
+    // STORY-1047: discoverable native maintenance scheduler examples, all
+    // disabled/commented so fresh projects stay silent.
+    let config_content = config_content + init_schedule_config_section();
     // STORY-760: commented [store.sync] mirror_remotes fan-out stub.
     let config_content = config_content + init_store_mirror_config_section();
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;

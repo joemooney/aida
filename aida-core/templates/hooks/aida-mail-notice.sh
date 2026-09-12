@@ -61,6 +61,17 @@ project_root="${AIDA_SESSION_PROJECT:-${CLAUDE_PROJECT_DIR:-${CODEX_PROJECT_DIR:
 cd "$project_root" 2>/dev/null || exit 0
 command -v aida >/dev/null 2>&1 || exit 0
 
+# Opportunistic maintenance heartbeat. It is best-effort and hook-scoped:
+# `--hook` skips tasks registered as network/heavy, and the scheduler's
+# min-gap keeps every-turn calls cheap. trace:STORY-1047 | ai:codex
+if command -v timeout >/dev/null 2>&1; then
+    timeout 4 aida schedule tick --hook >/dev/null 2>&1 || true
+elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout 4 aida schedule tick --hook >/dev/null 2>&1 || true
+else
+    aida schedule tick --hook >/dev/null 2>&1 || true
+fi
+
 # Cross-platform outer bound: prefer GNU `timeout`, then macOS/Homebrew
 # `gtimeout`; if neither exists, run bare (the verb's internal fast-fail already
 # guarantees it returns promptly). 4s stays inside the hook's own timeout.

@@ -148,6 +148,7 @@ mod intent;
 mod internal_cmd;
 mod mailbox_cmd;
 mod mailbox_store;
+mod maintenance_schedule;
 mod manual;
 mod mcp;
 mod mcp_translate;
@@ -3829,6 +3830,9 @@ fn run() -> Result<()> {
         // verdicts and mail are all distributed-mode concepts. trace:STORY-741
         Command::Awaiting { .. } => {
             anyhow::bail!("`aida awaiting` is available in the default (distributed) mode.");
+        }
+        Command::Schedule(_) => {
+            anyhow::bail!("`aida schedule` is available in the default (distributed) mode.");
         }
         // TASK-777: the fasttrack lane is a distributed-mode convention (it
         // queues + batches), so it isn't wired into the deprecated legacy
