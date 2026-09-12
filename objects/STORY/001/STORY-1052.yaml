@@ -23,12 +23,12 @@ description: |-
 
   ## Related
   Parent EPIC-62. STORY-1051 (the auto-recover tier this precedes), STORY-1029 (notify — the no-advisor fallback + dedupe), STORY-1043 (stranded-work detector — the input), STORY-974 (typed causes — transient vs needs-human), STORY-1047 (schedule tick — a run trigger), aida-fleet-watch skill (prior art: read+route, no drive).
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T17:26:17.489929474Z
-modified_at: 2026-09-12T01:06:16.356885493Z
+modified_at: 2026-09-12T01:06:21.294913370Z
 req_type: Story
 tags:
 - from-product
