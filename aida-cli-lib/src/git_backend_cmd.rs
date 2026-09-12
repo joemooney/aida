@@ -90,6 +90,9 @@ pub(crate) fn handle_git_backend_command(
             // STORY-582: inspect / prune the durable processing-record trail.
             return record_cmd::handle_record_command(record_cmd, &backend, store_path);
         }
+        Command::Schedule(schedule_cmd) => {
+            return maintenance_schedule::handle_schedule_command(schedule_cmd, store_path);
+        }
         Command::Mailbox(mailbox_cmd) => {
             // trace:STORY-493 | ai:claude — local layer only; git-canonical
             // digest is a later slice. Needs only the project root.

@@ -7412,6 +7412,36 @@ pub enum NotifyCommand {
     Status,
 }
 
+/// Native no-daemon maintenance scheduler. Reads `.aida/config.toml`
+/// `[schedule]` tasks, records local runtime state in `.aida/schedule-state.json`,
+/// and executes only AIDA's built-in maintenance command allowlist.
+// trace:STORY-1047 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum MaintenanceScheduleCommand {
+    /// Opportunistically run due maintenance tasks.
+    Tick {
+        /// Hook path: skip tasks that need network or heavier external effects.
+        #[clap(long)]
+        hook: bool,
+    },
+
+    /// Force one configured task now, or all configured enabled tasks.
+    Run {
+        /// Configured task name.
+        name: Option<String>,
+    },
+
+    /// List configured tasks, last run, next due, and status.
+    Status {
+        /// Emit JSON instead of a table.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Print crontab lines for enabled tasks.
+    EmitCron,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Do one spec: dispatch it to the right harness based on its groomed
@@ -9660,6 +9690,11 @@ pub enum Command {
     // trace:EPIC-21 | ai:claude
     #[clap(subcommand)]
     Store(StoreCommand),
+
+    /// Run configured no-daemon maintenance tasks.
+    // trace:STORY-1047 | ai:codex
+    #[clap(subcommand)]
+    Schedule(MaintenanceScheduleCommand),
 
     /// Manage personas / hats — persistent named contexts that resume
     /// across shells. `aida role enter <name>` switches; `aida role list`
