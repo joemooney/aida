@@ -1,0 +1,26 @@
+id: 01a0961e-e212-7b61-aff4-d8767bf19caa
+spec_id: STORY-1084
+agreed_id: STORY-1084
+title: 'Review PR-1776: [AI:codex] fix(scaffold): resolve git hook paths for worktrees (BUG-1094)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0960f`) for branch `bug-1094`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1776>
+  - Branch: `bug-1094` → `main`
+
+  ## Covers
+
+  - BUG-1094
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1776` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-12T14:56:41.490308546Z
+modified_at: 2026-09-12T14:56:41.490308546Z
+req_type: Story
