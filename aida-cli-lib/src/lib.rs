@@ -22486,7 +22486,7 @@ fn agent_new_with_config(
         .map(std::path::PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
-    let project_root = main_worktree_root_from(&discovered_root);
+    let project_root = agent_launch_project_root_from(&discovered_root);
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -22648,7 +22648,7 @@ fn agent_new_bg_dispatch(
         .map(std::path::PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     let discovered_root = find_aida_project_root_from(&base)?;
-    let project_root = main_worktree_root_from(&discovered_root);
+    let project_root = agent_launch_project_root_from(&discovered_root);
     enforce_agent_type_enabled(&project_root, config.agent_type)?;
     let binary = find_executable_on_path(config.binary).ok_or_else(|| {
         anyhow::anyhow!(
@@ -23790,6 +23790,7 @@ fn prepare_agent_launch(
                 custom_name.as_deref(),
             )?;
             let lease_id = Some(lease.id.clone());
+            ensure_agent_launch_cwd_not_git_metadata(&lease.worktree_path)?;
             Ok(AgentLaunchPlan {
                 project_root: project_root.to_path_buf(),
                 launch_cwd: lease.worktree_path,
@@ -23809,6 +23810,7 @@ fn prepare_agent_launch(
                 plan_role.as_deref(),
                 custom_name.as_deref(),
             )?;
+            ensure_agent_launch_cwd_not_git_metadata(project_root)?;
             Ok(AgentLaunchPlan {
                 project_root: project_root.to_path_buf(),
                 launch_cwd: project_root.to_path_buf(),
@@ -24133,6 +24135,7 @@ fn prepare_agent_launch_dry(
         plan_role.as_deref(),
         custom_name.as_deref(),
     )?;
+    ensure_agent_launch_cwd_not_git_metadata(project_root)?;
     Ok(AgentLaunchPlan {
         project_root: project_root.to_path_buf(),
         launch_cwd: project_root.to_path_buf(),
@@ -25129,6 +25132,33 @@ fn find_aida_project_root_from(start: &std::path::Path) -> Result<std::path::Pat
             }
         }
     }
+}
+
+// trace:BUG-1093 | ai:codex
+fn agent_launch_project_root_from(discovered_root: &std::path::Path) -> std::path::PathBuf {
+    let main_root = main_worktree_root_from(discovered_root);
+    if is_git_metadata_path(&main_root) || !main_root.join(".aida").join("config.toml").exists() {
+        return discovered_root.to_path_buf();
+    }
+    main_root
+}
+
+// trace:BUG-1093 | ai:codex
+fn ensure_agent_launch_cwd_not_git_metadata(path: &std::path::Path) -> Result<()> {
+    if is_git_metadata_path(path) {
+        anyhow::bail!(
+            "refusing to launch agent from Git metadata directory {}; \
+             run `aida agent new` from the repository working tree instead",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+// trace:BUG-1093 | ai:codex
+fn is_git_metadata_path(path: &std::path::Path) -> bool {
+    path.components()
+        .any(|component| component.as_os_str() == std::ffi::OsStr::new(".git"))
 }
 
 fn find_executable_on_path(name: &str) -> Option<std::path::PathBuf> {
