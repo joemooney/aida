@@ -61732,5 +61732,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 4907
+- id: 01a0946c-30b0-7562-8115-effa2c814dfc
+  target_id: 01a0946c-2cd7-76c3-8eac-7d8cc89d7e7d
+  author: aida
+  node_id: '1'
+  lamport: 4908
+  timestamp: 2026-09-12T07:01:53.456770077Z
+  kind: !Create
+    title: 'Review PR-1742: [AI:codex] feat(mailbox): archive stale read messages (TASK-1211)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09468`) for branch `task-1211`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1742>
+      - Branch: `task-1211` → `main`
+
+      ## Covers
+
+      - TASK-1211
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1742` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 4908
 node_id: '1'
