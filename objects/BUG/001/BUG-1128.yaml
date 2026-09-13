@@ -3,12 +3,12 @@ spec_id: BUG-1128
 agreed_id: BUG-1128
 title: Epic rollup treats a DEFERRED child as unfinished, so an epic whose only open child is parked never reads ready-to-close
 description: EPIC-62's 10 non-deferred children are all terminal (completed/done/accepted); its only remaining child STORY-1096 is deferred on the primed shelf. The rollup still reports the epic in-progress and 'aida why' says 'nothing for you until they all finish' — but all NON-deferred children have finished. A deferred child should be treated as resolved for rollup purposes (like rejected/superseded already are), so the epic reads ready-to-close while the parked child stays on the deferred shelf. trace:BUG-626
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:47:38.074311938Z
-modified_at: 2026-09-13T18:58:05.561570425Z
+modified_at: 2026-09-13T19:08:38.591397424Z
 req_type: Bug
 comments:
 - id: 01a09c22-4079-7192-a957-a699ee6c660d
@@ -17,3 +17,21 @@ comments:
   created_at: 2026-09-13T18:58:05.561570425Z
   modified_at: 2026-09-13T18:58:05.561570425Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09c2b-e937-77b1-9115-d05d378cebc2
+  author: aida-auto-bump
+  timestamp: 2026-09-13T19:08:38.583890719Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09c2b-e93f-7240-adae-1dd537857e0a
+  timestamp: 2026-09-13T19:08:38.591395681Z
+  agent: aida
+  commit_sha: 8d2ca08a364bd75ce5545c0f67b3d65432f57de1
+  summary: Completed via merge 8d2ca08a
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-13T19:08:38.583784224Z
+  completion_sha: 8d2ca08a364bd75ce5545c0f67b3d65432f57de1
