@@ -3,12 +3,12 @@ spec_id: BUG-1129
 agreed_id: BUG-1129
 title: aida why <epic> suggests 'aida queue done EPIC-N' but epic status is a read-only rollup — the hint is not actionable
 description: 'aida why EPIC-62 prints Next: ''aida queue done EPIC-62 — mark it done (finished on a branch)''. But an epic''s status is a read-only rollup of its children (BUG-626: aida edit <epic> --status is rejected). The why next-step for an epic should not offer queue done; it should point at the unfinished children (or say the epic auto-closes when they finish). trace:BUG-626'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:47:44.013481780Z
-modified_at: 2026-09-13T20:10:50.110569404Z
+modified_at: 2026-09-13T20:12:25.355843362Z
 req_type: Bug
 tags:
 - batch:oversight-cleanup
@@ -17,15 +17,25 @@ relationships:
   target_id: 01a09c64-8fd1-7770-8f39-e6cff785400a
   created_at: 2026-09-13T20:10:37.000633715Z
   created_by: joe
+history:
+- id: 01a09c66-4d84-7d53-959b-7a9921469828
+  author: aida-auto-bump
+  timestamp: 2026-09-13T20:12:25.348536890Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09c66-4d8b-7f33-928b-5c8cc9b56a49
+  timestamp: 2026-09-13T20:12:25.355842149Z
+  agent: aida
+  commit_sha: 63ba1045dfd256784429098c534083a848b64676
+  summary: Completed via merge 63ba1045
+  punted:
+  - 'punted: the reviewer session exited 1 (attempt 2/2)'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-13T20:03:13.826534327Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: the reviewer session exited 1 (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1129 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-13T20:10:50.110569404Z
+  completed_at: 2026-09-13T20:12:25.348409358Z
+  completion_sha: 63ba1045dfd256784429098c534083a848b64676
