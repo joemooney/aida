@@ -65415,5 +65415,31 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 5154
+- id: 01a09cbf-7829-77e0-9967-115e2401dfb1
+  target_id: 01a09cbf-6e91-7b12-a116-7ee60cb88c70
+  author: aida
+  node_id: '1'
+  lamport: 5155
+  timestamp: 2026-09-13T21:49:48.969938299Z
+  kind: !Create
+    title: 'Least-privilege guest/user role: read surfaces + Draft-only intake, gated out of the build loop'
+    description: |-
+      Slice 1 of the guest/user stakeholder persona (parent EPIC). Add two role identifiers and a least-privilege permission gate.
+
+      - guest: read-only. Allowed: why, list, status, graph tree, digest, search. Denied: any write / status transition / queue op / merge.
+      - user: guest + a single write verb — add, constrained to types change-request / bug / user, forced to status Draft, tagged intake:user. Denied: approve, planned, queue add/work, edit --status, merge, done.
+
+      Requests filed by a user land as Draft in the advisor groom pass (aida groom / intake), so the existing triage loop absorbs them. Reuse the role plumbing that advisor/implementer/oversight use (AIDA_SESSION_ROLE, role files, queue routing) but with a read+intake capability profile rather than a work profile.
+
+      Acceptance:
+      - AIDA_SESSION_ROLE=guest can run the read surfaces and is REFUSED every write (add/edit/queue/merge) with a one-line hint.
+      - AIDA_SESSION_ROLE=user can add a change-request/bug/user spec (lands Draft, tagged intake:user) and is REFUSED approve/queue/edit-status/merge.
+      - guest/user are NOT offered as build-loop seats (not routable queue targets); many may exist concurrently (no singleton lock).
+      - Tests cover: guest write-refusal, user add-allowed-as-Draft, user non-add-write-refusal.
+
+      Out of scope (deferred to the epic followups): curated /aida-intro surface, per-user identity, hosted request front door.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5155
 node_id: '1'
