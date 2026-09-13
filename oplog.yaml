@@ -64374,5 +64374,31 @@ operations:
   timestamp: 2026-09-13T04:11:47.962171020Z
   kind: !SetStatus
     status: Approved
-clock: 5077
+- id: 01a098fd-fb25-7d30-97c4-e054391bda0e
+  target_id: 01a098fd-f70a-7150-a88a-81d05a590b2a
+  author: aida
+  node_id: '1'
+  lamport: 5078
+  timestamp: 2026-09-13T04:19:36.869367288Z
+  kind: !Create
+    title: 'Review PR-1793: [AI:codex] feat(memory): surface freshness in reflex queries (TASK-1215)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a098f7`) for branch `task-1215`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1793>
+      - Branch: `task-1215` → `main`
+
+      ## Covers
+
+      - TASK-1215
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1793` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5078
 node_id: '1'
