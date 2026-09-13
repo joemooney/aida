@@ -402,6 +402,14 @@ pub struct StatusRollup {
     /// it from the open denominator.
     // trace:TASK-1176 | ai:claude
     pub superseded: usize,
+    /// Deferred — parked on the primed shelf (the `deferred` view-flag, or a
+    /// legacy `deferred:*` tag) awaiting a revisit trigger. Counted as RESOLVED
+    /// for rollup purposes: an epic whose only unfinished child is deferred is
+    /// not "in progress" — the operator has explicitly set that child aside, so
+    /// it must not pin the epic open (it stays on the deferred shelf, undeferred
+    /// when the trigger fires, re-entering the open denominator then).
+    // trace:BUG-1128 | ai:claude
+    pub deferred: usize,
 }
 
 /// Tally the statuses of `ids` against the live store. trace:STORY-489
@@ -412,6 +420,20 @@ pub fn status_rollup(store: &RequirementsStore, ids: &[Uuid]) -> StatusRollup {
             continue;
         };
         r.total += 1;
+        // A deferred child (view-flag or a legacy `deferred:*` tag) is parked,
+        // not open — count it as resolved and skip the status buckets so it is
+        // excluded from the finished-vs-open denominator, exactly like Rejected
+        // / Superseded. Mirrors the `aida list` deferred view (flag OR tag).
+        // trace:BUG-1128 | ai:claude
+        let is_deferred = req.deferred
+            || req
+                .tags
+                .iter()
+                .any(|t| t.trim().to_ascii_lowercase().starts_with("deferred:"));
+        if is_deferred {
+            r.deferred += 1;
+            continue;
+        }
         // trace:BUG-810 | ai:codex
         let accepted_decision = crate::lifecycle::is_accepted_decision(
             &req.req_type.to_string(),

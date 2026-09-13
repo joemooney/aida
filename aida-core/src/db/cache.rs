@@ -2051,7 +2051,7 @@ fn epic_rollup_from_hierarchy(
                FROM hierarchy_edges e
                JOIN subtree s ON e.parent_id = s.id
          )
-         SELECT rc.status, rc.req_type
+         SELECT rc.status, rc.req_type, rc.deferred, rc.tags_json
            FROM requirements_cache rc
            JOIN subtree s ON rc.id = s.id
           WHERE rc.id <> ?1",
@@ -2059,11 +2059,27 @@ fn epic_rollup_from_hierarchy(
         return rollup;
     };
     let Ok(rows) = stmt.query_map(params![epic_id.to_string()], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, i64>(2).unwrap_or(0),
+            row.get::<_, String>(3).unwrap_or_default(),
+        ))
     }) else {
         return rollup;
     };
-    for (status, req_type) in rows.flatten() {
+    for (status, req_type, deferred, tags_json) in rows.flatten() {
+        // BUG-1128: a deferred descendant (flag set, or a legacy `deferred:*`
+        // parking tag in tags_json) is resolved for rollup purposes — mirror
+        // the store-path `graph_walk::status_rollup` so the cached epic status
+        // and the store derivation agree. tags_json is the JSON array text, so
+        // a parking tag shows up as the `"deferred:` substring.
+        // trace:BUG-1128 | ai:claude
+        if deferred != 0 || tags_json.contains("\"deferred:") {
+            rollup.total += 1;
+            rollup.deferred += 1;
+            continue;
+        }
         tally_status_str(&mut rollup, &status, &req_type);
     }
     rollup
