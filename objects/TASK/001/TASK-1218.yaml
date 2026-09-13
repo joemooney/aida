@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T06:35:16.165523134Z
-modified_at: 2026-09-13T06:35:16.165523134Z
+modified_at: 2026-09-13T06:37:01.091310705Z
 req_type: Task
 tags:
 - adoption
@@ -19,3 +19,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
   created_at: 2026-09-13T06:35:22.099233303Z
+comments:
+- id: 01a0997b-c723-7e21-97d9-9602b344a3a2
+  author: joe
+  content: Commit 88b6c6d1f references this requirement
+  created_at: 2026-09-13T06:37:01.091310705Z
+  modified_at: 2026-09-13T06:37:01.091310705Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
