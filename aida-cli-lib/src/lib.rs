@@ -73401,27 +73401,56 @@ fn run_auto_complete(
     if let Some((display_id, prior)) = &phase1_bump {
         let lease_acquired = driver.implementer_lease.is_some();
         if auto_complete::should_compensate_phase1_bump(true, lease_acquired, result.failed_phase) {
-            match restore_phase1_status_on_lease_failure(&project_root, spec, prior) {
-                Ok(()) => {
-                    if !json {
+            // BUG-1134: a lease-less phase-1 failure usually means no work happened —
+            // but it can be a worktree-reuse collision AFTER a prior attempt already
+            // opened a PR. Restoring to un-started would orphan that PR and mislead
+            // with "no work was stranded". Detect a definitive open PR first; an
+            // absent/flaky forge falls back to the safe restore. trace:BUG-1134
+            let pr_lookup = crate::forge::forge_for(&project_root)
+                .change_for_spec(spec)
+                .unwrap_or(crate::forge::ChangeLookup::NoChange);
+            match auto_complete::classify_phase1_failure_recovery(&pr_lookup) {
+                auto_complete::Phase1FailureRecovery::PreserveOpenPr => {
+                    if let crate::forge::ChangeLookup::Found(pr) = &pr_lookup {
                         eprintln!(
-                            "  {} phase-1 startup failed before acquiring a lease — \
-                             status restored to {:?} (re-queueable); no work was stranded",
-                            "↩".cyan(),
-                            prior
+                            "  {} phase-1 failed, but {} ALREADY HAS AN OPEN PR (#{}) — the \
+                             work shipped (a worktree-reuse collision, not lost work). Not \
+                             restoring to un-started; resume with `aida queue work {} --resume` \
+                             or review it: {}",
+                            "⚠".yellow(),
+                            display_id,
+                            pr.id,
+                            display_id,
+                            pr.url
                         );
                     }
+                    // Leave the status as phase-1 left it — the open PR is real work;
+                    // restoring to a clean un-started status would orphan it.
                 }
-                Err(e) => {
-                    eprintln!(
-                        "  {} could not restore {}'s status after a lease-less phase-1 \
-                         failure: {} — reset it manually with `aida edit {} --status {}`",
-                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                        display_id,
-                        e,
-                        display_id,
-                        format!("{prior:?}").to_lowercase(),
-                    );
+                auto_complete::Phase1FailureRecovery::RestoreUnstarted => {
+                    match restore_phase1_status_on_lease_failure(&project_root, spec, prior) {
+                        Ok(()) => {
+                            if !json {
+                                eprintln!(
+                                    "  {} phase-1 startup failed before acquiring a lease — \
+                                     status restored to {:?} (re-queueable); no work was stranded",
+                                    "↩".cyan(),
+                                    prior
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "  {} could not restore {}'s status after a lease-less phase-1 \
+                                 failure: {} — reset it manually with `aida edit {} --status {}`",
+                                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                                display_id,
+                                e,
+                                display_id,
+                                format!("{prior:?}").to_lowercase(),
+                            );
+                        }
+                    }
                 }
             }
         }
