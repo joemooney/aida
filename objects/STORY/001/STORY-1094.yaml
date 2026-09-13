@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:57.398184899Z
-modified_at: 2026-09-13T06:56:41.493698052Z
+modified_at: 2026-09-13T06:57:24.414332933Z
 req_type: Story
 tags:
 - entry-lane
@@ -31,6 +31,11 @@ comments:
   content: Implemented marker-guarded memory reflex scaffolding for CLAUDE.md/AGENTS.md, added slim aida-memory-query and aida-memory-capture skills using CLI/TOON, and covered edit-preserving merge behavior with scaffolding tests.
   created_at: 2026-09-13T06:54:42.865358847Z
   modified_at: 2026-09-13T06:54:42.865358847Z
+- id: 01a0998e-71be-7aa2-a7fe-3cb724b7f2b6
+  author: joe
+  content: Opened PR https://github.com/joemooney/aida/pull/1799 for guided human review after implementing the memory reflex scaffolding.
+  created_at: 2026-09-13T06:57:24.414332933Z
+  modified_at: 2026-09-13T06:57:24.414332933Z
 execution_mode: guided
 implementation_info:
   implemented: true
