@@ -332,9 +332,13 @@ impl DrainState {
     }
 }
 
-// trace:STORY-1041 trace:ADR-27 | ai:codex
+// Default 1 = serial (the proven path). Concurrency is opt-in per project via
+// [drain] pipeline_depth until the pipelined scheduler has earned wild mileage.
+// ADR-27 originally set 2 while depth was inert; STORY-1091 makes depth live, so
+// the default drops to 1 (amended in ADR-27).
+// trace:STORY-1041 trace:STORY-1091 trace:ADR-27 | ai:claude
 pub(crate) fn default_pipeline_depth() -> usize {
-    2
+    1
 }
 
 // trace:STORY-1041 trace:ADR-27 | ai:codex
@@ -1889,6 +1893,8 @@ mod tests {
     #[test]
     fn render_human_batch_shows_member_progress() {
         let mut state = batch_state();
+        // Exercise the depth>1 rendering explicitly; the default is now serial (1).
+        state.pipeline_depth = 2;
         state.members[0].state = "completed".to_string();
         state.members[0].pr = Some(80);
         state.members[1].state = "in-phase-3".to_string();
