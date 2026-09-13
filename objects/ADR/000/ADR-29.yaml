@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:55:54.615729149Z
-modified_at: 2026-09-13T18:56:18.621594766Z
+modified_at: 2026-09-13T19:13:46.877972647Z
 req_type: Decision
 tags:
 - adr oversight architecture parent:EPIC-62
@@ -34,3 +34,10 @@ relationships:
   target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
   created_at: 2026-09-13T18:56:18.621589042Z
   created_by: joe
+comments:
+- id: 01a09c30-9d7d-7770-a0e5-6f457f92ceac
+  author: joe
+  content: Commit 8d2ca08a3 references this requirement
+  created_at: 2026-09-13T19:13:46.877972647Z
+  modified_at: 2026-09-13T19:13:46.877972647Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
