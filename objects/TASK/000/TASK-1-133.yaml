@@ -3,12 +3,12 @@ spec_id: TASK-1-133
 agreed_id: TASK-157
 title: Post-push hook calls unavailable aida remote mirror-push
 description: 'During STORY-1095, git push succeeded, but a post-push hook printed: error: unrecognized subcommand ''mirror-push'' under ''aida remote''. The branch still pushed and upstream was set, so this is a hook/tooling drift signal rather than an implementation blocker.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-13T03:52:21.597333706Z
-modified_at: 2026-09-13T05:34:36.145064632Z
+modified_at: 2026-09-13T05:47:22.114410397Z
 req_type: Task
 tags:
 - from-advisor:STORY-1095
@@ -22,7 +22,23 @@ relationships:
   target_id: 01a09942-7d75-7231-9550-5fb9a4158b15
   created_at: 2026-09-13T05:34:31.070165937Z
   created_by: joe
+history:
+- id: 01a0994e-526d-72a3-9291-74ab37eb83df
+  author: aida-auto-bump
+  timestamp: 2026-09-13T05:47:22.093341358Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0994e-5282-79e1-ae93-40082bd51b46
+  timestamp: 2026-09-13T05:47:22.114408761Z
+  agent: aida
+  commit_sha: 0e9eaa85276b7dd149e4dbdd7ea1527f7ba2f2d2
+  summary: Completed via merge 0e9eaa85
 implementation_info:
   implemented: true
   implemented_at: 2026-09-13T05:34:36.145064632Z
   implemented_by: joe
+  completed_at: 2026-09-13T05:47:22.069946293Z
+  completion_sha: 0e9eaa85276b7dd149e4dbdd7ea1527f7ba2f2d2
