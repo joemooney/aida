@@ -64484,5 +64484,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5084
+- id: 01a09938-5505-7793-ad84-0d11b7c6ddc8
+  target_id: 01a09938-511c-77d0-bae9-9145fbd4d88c
+  author: aida
+  node_id: '1'
+  lamport: 5085
+  timestamp: 2026-09-13T05:23:20.965955699Z
+  kind: !Create
+    title: 'Review PR-1796: [AI:codex] fix(queue): skip guided specs in headless drains (BUG-1120)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09929`) for branch `bug-1120`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1796>
+      - Branch: `bug-1120` → `main`
+
+      ## Covers
+
+      - BUG-1120
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1796` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5085
 node_id: '1'
