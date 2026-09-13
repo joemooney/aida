@@ -543,8 +543,8 @@ fn compute_drift(
     drift
 }
 
-/// Best-effort set of spec ids currently in a queue (uppercased). Scans
-/// `aida queue list --json` for spec-id-shaped strings; an empty set on any
+/// Best-effort set of spec ids currently in a queue (uppercased). Reads only
+/// per-entry identity fields from `aida queue list --json`; an empty set on any
 /// failure just means the --execute path relies on queue-add dupe tolerance.
 fn queued_spec_ids() -> std::collections::HashSet<String> {
     let mut set = std::collections::HashSet::new();
@@ -561,29 +561,32 @@ fn queued_spec_ids() -> std::collections::HashSet<String> {
         return set;
     }
     if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
-        collect_spec_ids(&value, &mut set);
+        collect_queue_identity_spec_ids(&value, &mut set);
     }
     set
 }
 
-fn collect_spec_ids(value: &serde_json::Value, set: &mut std::collections::HashSet<String>) {
-    match value {
-        serde_json::Value::String(s) => {
+// trace:TASK-1219 | ai:codex
+fn collect_queue_identity_spec_ids(
+    value: &serde_json::Value,
+    set: &mut std::collections::HashSet<String>,
+) {
+    let Some(entries) = value.as_array() else {
+        return;
+    };
+    for entry in entries {
+        let Some(map) = entry.as_object() else {
+            continue;
+        };
+        for key in ["spec_id", "agreed_id", "requirement_id", "id"] {
+            let Some(s) = map.get(key).and_then(|v| v.as_str()) else {
+                continue;
+            };
             if is_spec_id(s) {
                 set.insert(s.to_ascii_uppercase());
+                break;
             }
         }
-        serde_json::Value::Array(items) => {
-            for item in items {
-                collect_spec_ids(item, set);
-            }
-        }
-        serde_json::Value::Object(map) => {
-            for v in map.values() {
-                collect_spec_ids(v, set);
-            }
-        }
-        _ => {}
     }
 }
 
