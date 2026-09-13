@@ -63758,5 +63758,17 @@ operations:
   timestamp: 2026-09-13T02:46:03.399024542Z
   kind: !SetStatus
     status: In Progress
-clock: 5041
+- id: 01a098a9-9c2e-7440-9608-27efcc9102ef
+  target_id: 01a098a9-9660-7d62-b820-d0418840c6c6
+  author: aida
+  node_id: '1'
+  lamport: 5042
+  timestamp: 2026-09-13T02:47:27.534156030Z
+  kind: !Create
+    title: headless drain picks up execution_mode=guided (and operator/decide) specs and drives them headless — must skip them like deferred
+    description: ''
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5042
 node_id: '1'
