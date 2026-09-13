@@ -65393,5 +65393,27 @@ operations:
   timestamp: 2026-09-13T21:44:43.311925794Z
   kind: !SetStatus
     status: In Progress
-clock: 5153
+- id: 01a09cbf-1da7-7ac1-a87c-bdc40db98735
+  target_id: 01a09cbf-1760-7bd0-9168-85a143ff19cc
+  author: aida
+  node_id: '1'
+  lamport: 5154
+  timestamp: 2026-09-13T21:49:25.799532319Z
+  kind: !Create
+    title: 'Guest/User stakeholder persona: external read + intake roles outside the build loop'
+    description: |-
+      A NEW axis in the role model. Today's roles (advisor, implementer, oversight, product) are all INTERNAL build-loop seats that drive work and are effectively singletons. This epic adds an EXTERNAL stakeholder/consumer persona: someone outside the build loop who wants to UNDERSTAND the project and FEED it, not drive it. Unlike the work seats there can be MANY, and their authority is least-privilege (read + at most one write verb: file a request).
+
+      Two tiers on a spectrum:
+      - guest: read-only comprehension (why / list / status / graph tree / digest / search). No writes.
+      - user: guest + open a request via add, constrained to change-request / bug / user types, landing as Draft, tagged intake:user, into the advisor groom queue. Cannot approve, queue, edit status, or merge.
+
+      Why now: PRIN-3 names exactly this persona (the interested human browsing the capability map); it is the consumer end of the memory-lane on-ramp (EPIC-63) and the mail-intake bug-report flow; and least-privilege read+intake is a clean security posture (ties to STORY-495 permission work). Does NOT collide with the one-advisor/one-product lockdown (guest/user are not build seats).
+
+      Slice 1 (the STORY): role identifiers + least-privilege permission gate + Draft-only intake tagging.
+      Deferred followups (revisit after slice 1 proves out): a curated /aida-intro read surface; per-user identity in the intake tag; a hosted 'file a request' front door.
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 5154
 node_id: '1'
