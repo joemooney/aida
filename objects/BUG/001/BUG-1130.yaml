@@ -11,12 +11,12 @@ description: |-
   - compute_drift skips children whose req_type is non-implementable (decision, epic, folder, meta, principle, vision, constraint, term, doc).
   - An accepted ADR under an objective is NOT reported as drift and is NOT queued under --execute.
   - Regression test: an objective with an accepted ADR child + a real Approved story child reports only the story as drift.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:54:06.092219170Z
-modified_at: 2026-09-13T19:54:06.092219170Z
+modified_at: 2026-09-13T20:15:23.978980752Z
 req_type: Bug
 tags:
 - followup oversight supervise-watch parent:EPIC-62
