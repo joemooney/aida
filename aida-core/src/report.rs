@@ -991,13 +991,29 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
 }
 
 fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
-    use crate::scaffolding::{claude_md_has_import, extract_aida_block};
+    use crate::scaffolding::{
+        claude_md_has_import, extract_aida_block, extract_memory_reflex_block,
+    };
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
     match name {
-        // CLAUDE.md is mostly user-owned, but AIDA does manage the
-        // `@.claude/AIDA.md` import line. Drift only when that's missing.
+        // CLAUDE.md is mostly user-owned, but AIDA manages the import line
+        // plus the marker-guarded memory reflex block when present.
         // trace:BUG-1-065 | ai:claude
-        "CLAUDE.md" => claude_md_has_import(actual),
+        // trace:STORY-1094 | ai:codex
+        "CLAUDE.md" => {
+            if !claude_md_has_import(actual) {
+                return false;
+            }
+            match (
+                extract_memory_reflex_block(actual),
+                extract_memory_reflex_block(expected),
+            ) {
+                (Some(actual_block), Some(expected_block)) => {
+                    actual_block.trim() == expected_block.trim()
+                }
+                _ => true,
+            }
+        }
         "AGENTS.md" => {
             // If the user kept the AIDA-AUTOGEN markers, AIDA owns the
             // block content and compares it. If markers are absent, the
