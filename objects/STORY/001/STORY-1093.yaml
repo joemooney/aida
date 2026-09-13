@@ -8,10 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:49.178715232Z
-modified_at: 2026-09-13T01:41:49.178715232Z
+modified_at: 2026-09-13T01:41:51.605152796Z
 req_type: Story
 tags:
 - entry-lane
 - init
 - parent:EPIC-63
 - scaffolding
+relationships:
+- rel_type: Child
+  target_id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
+  created_at: 2026-09-13T01:41:51.605152796Z
