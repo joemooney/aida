@@ -561,11 +561,10 @@ pub enum ScaffoldCommand {
     /// Current Codex CLI releases do not discover these files as `/aida-*`
     /// slash commands. For interactive Codex sessions, use scaffolded
     /// `.codex/skills/` via `/skills` or `$aida-*`, or run the matching
-    /// `aida ...` CLI verb directly. Generated from the same embedded masters
-    /// that back `.claude/commands/`; commands that depend on Claude-only
-    /// mechanics are excluded with a stated reason. Existing prompt files are
-    /// never overwritten without --force.
+    /// `aida ...` CLI verb directly. On Codex >=0.142 this command prints that
+    /// warning and skips writing the dead prompt surface.
     // trace:BUG-1095 | ai:codex
+    // trace:BUG-1118 | ai:codex
     CodexPrompts {
         /// Destination directory (defaults to ~/.codex/prompts)
         #[clap(long)]
@@ -591,12 +590,13 @@ pub enum ScaffoldCommand {
     /// Bring every installed agent pack level with this binary's templates,
     /// preserving your edits.
     ///
-    /// Covers Claude skills and commands, Codex skills, Antigravity skills,
-    /// and the machine-global Codex custom prompts in `~/.codex/prompts`.
+    /// Covers Claude skills and commands, Codex skills, and Antigravity skills.
     /// A pack file whose body still matches the scaffold checksum it was
     /// written with is overlaid with the current template; one you have
     /// edited, one with no scaffold marker, and one that is a symlink are
     /// left exactly as they are. Packs you never installed are not created.
+    /// If a legacy `~/.codex/prompts` pack exists, refresh reports it with a
+    /// prune hint and leaves it untouched.
     ///
     /// This is the no-`--force` delivery path for a template fix — the same
     /// contract `aida init --with-memories --refresh` has for memories.
@@ -606,8 +606,8 @@ pub enum ScaffoldCommand {
         #[clap(long)]
         project_root: Option<PathBuf>,
 
-        /// Codex custom-prompt directory to refresh (defaults to
-        /// ~/.codex/prompts). Matches `scaffold codex-prompts --dest`.
+        /// Codex custom-prompt directory to check for a deprecation notice
+        /// (defaults to ~/.codex/prompts). Matches `scaffold codex-prompts --dest`.
         #[clap(long)]
         dest: Option<PathBuf>,
     },
