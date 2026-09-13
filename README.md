@@ -32,6 +32,21 @@ Everything else in AIDA — the typed spec graph, stable IDs that never rot, an 
 <!-- trace:TASK-1187 | ai:codex -->
 > **Status — honest about it:** AIDA is alpha software with real dogfood evidence and still-rough edges. Its product bet is precise: a git-native agent-collaboration layer where stable spec IDs, typed relationships, code-to-spec traces, and MCP access keep project intent portable across Claude Code, Codex CLI, and other agents. The open slice is maturity, not identity: unattended reliability, onboarding, and broader-project validation are still being hardened, as detailed in [Where this is and isn't proven](#where-this-is-and-isnt-proven) below.
 
+## Start here: the memory lane
+
+<!-- trace:TASK-1218 | ai:claude -->
+
+The gentlest way to adopt AIDA: let your project **remember things across ordinary agent chats** — no queue, no drain, no roles, no orchestrator. Before any of that machinery, AIDA is just a **durable, git-native place your project's decisions and *why*-notes live** — one that any agent (Claude, Codex, whatever you use) can read before it answers and update when a chat produces a fact worth keeping.
+
+You've had this conversation before: you explain to an agent *why* the retry logic is the way it is, it fixes the bug, and next week a fresh chat has no idea. The memory lane is where that explanation goes so it outlives the chat.
+
+- **Capture, don't re-explain** — decisions, requirements, reminders, and "why is this like this?" notes become stable specs instead of scrollback that evaporates.
+- **Shared across agents** — one CLI-readable record every agent can query; nobody has to learn the autonomous workflow first.
+- **Quiet by design** — a memory-lane repo is boring in `git status`: a tracked `.aida/config.toml` + `.aida/project.toml`, deny-by-default `.gitignore`, and the store kept on an orphan branch. Discoverable when someone looks; invisible during normal work.
+- **Grows only when it earns it** — add the queue, review lifecycle, and roles the day work needs coordinating, not before.
+
+Full framing: **[The Memory Lane](docs/positioning/memory-lane.md)**.
+
 ## What makes AIDA distinct
 
 <!-- trace:TASK-289 | ai:claude -->
