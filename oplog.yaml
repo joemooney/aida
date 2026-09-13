@@ -64646,5 +64646,17 @@ operations:
     req_type: Task
     status: Draft
     priority: Medium
-clock: 5097
+- id: 01a0997c-e2b8-7801-b751-2c1b8a49c7a6
+  target_id: 01a0997c-d4bb-78a1-925c-c408a1c4f07a
+  author: aida
+  node_id: '1'
+  lamport: 5098
+  timestamp: 2026-09-13T06:38:13.688360271Z
+  kind: !Create
+    title: 'queue work --guided --force-claim on a spec routed to another role: blocked on role-routing AND spews every archived cluster member (60+ lines)'
+    description: 'Operator ran: aida queue work STORY-1094 --guided --force-claim, active role=product. STORY-1094 is queued for role=implementer. Two problems: (1) --force-claim overrode the shelved/needs-attention state but NOT the role-routing gate, so the command still failed with ''isn''t routed to you'' — confusing after an explicit --force. The error''s own fix (role enter implementer) is correct, but a forced guided pickup could offer to enter the routed role, or the docs/help should note --force-claim does not cross role routing. (2) Before the error, the cluster expansion printed ~63 lines of ''cluster STORY-1094 - skipping un-pickable <ID> (archived - skipped)''. Archived cluster members should be summarized (e.g. ''skipped 63 archived cluster members'') not enumerated. Acceptance: forced guided pickup either auto-enters the routed role (with a clear notice) or fails with a one-line role hint and NO per-member archived spew; archived cluster members are summarized as a count.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 5098
 node_id: '1'
