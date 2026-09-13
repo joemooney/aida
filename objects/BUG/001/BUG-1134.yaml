@@ -17,12 +17,12 @@ description: |-
   - Regression: simulate a worktree-reuse collision after a PR is opened; the drain resumes to merge rather than parking the spec as un-started.
 
   Caught by the oversight layer (STORY-1096 dogfooding) — the triage that noticed the 'parked' spec had actually shipped.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:30:53.626739432Z
-modified_at: 2026-09-13T21:29:11.352438675Z
+modified_at: 2026-09-13T21:41:49.302898677Z
 req_type: Bug
 tags:
 - orchestrator drain-reliability parent:EPIC-62 oversight-caught
