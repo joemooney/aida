@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:30:53.626739432Z
-modified_at: 2026-09-13T21:28:30.257816603Z
+modified_at: 2026-09-13T21:29:11.352438675Z
 req_type: Bug
 tags:
 - orchestrator drain-reliability parent:EPIC-62 oversight-caught
@@ -42,4 +42,10 @@ comments:
   content: Commit 60d64a75e references this requirement
   created_at: 2026-09-13T21:28:30.257816603Z
   modified_at: 2026-09-13T21:28:30.257816603Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a09cac-95b8-7c31-95d4-e6849ddfc8b1
+  author: joe
+  content: Commit 60d64a75e references this requirement
+  created_at: 2026-09-13T21:29:11.352438675Z
+  modified_at: 2026-09-13T21:29:11.352438675Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
