@@ -3,12 +3,12 @@ spec_id: TASK-1215
 agreed_id: TASK-1215
 title: 'Memory-lane hygiene floor: capture-as-you-go plus a light staleness signal so authored memory does not silently rot'
 description: 'Because lane memory is authored (not derived like codegraph, which cannot rot), ship a light hygiene floor: the capture habit plus a staleness signal (e.g. surface last-touched age in the reflex query) so stale specs do not mislead the agent. Full codegraph auto-population is deferred. Acceptance: the reflex query exposes a freshness/age signal; capture guidance is present. trace:EPIC-63'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:42:14.402311783Z
-modified_at: 2026-09-13T04:09:27.600855492Z
+modified_at: 2026-09-13T04:09:50.090749991Z
 req_type: Task
 tags:
 - entry-lane
@@ -20,3 +20,11 @@ relationships:
   target_id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
   created_at: 2026-09-13T01:42:17.797120459Z
 execution_mode: drain
+failure_reason:
+  phase: implementer
+  phase_index: 1
+  kind: tool-exit
+  detail: the implementer session exited 1 — it was aborted or errored (attempt 2/2)
+  recovery_hint: 'Continue the implementer session: `aida queue work TASK-1215 --resume`'
+  shelved_by: advisor
+  shelved_at: 2026-09-13T04:09:50.090749991Z
