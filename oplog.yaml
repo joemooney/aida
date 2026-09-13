@@ -65713,5 +65713,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5174
+- id: 01a09cf4-c05c-7ee3-9f5c-502fbd2bb4c7
+  target_id: 01a09cf4-ba32-7040-bf40-96875de40857
+  author: aida
+  node_id: '1'
+  lamport: 5175
+  timestamp: 2026-09-13T22:48:00.860188130Z
+  kind: !Create
+    title: 'Review PR-1811: [AI:codex] fix(remote): recognize GitLab release objects (BUG-1137)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09cf0`) for branch `bug-1137`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1811>
+      - Branch: `bug-1137` → `main`
+
+      ## Covers
+
+      - BUG-1137
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1811` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5175
 node_id: '1'
