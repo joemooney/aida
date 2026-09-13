@@ -1,0 +1,14 @@
+id: 01a09c3a-f252-7cb3-886d-0f6b5e0665d6
+spec_id: TASK-1220
+agreed_id: TASK-1220
+title: Slice 2 = STORY-1107 (promote to first-class `oversight` role)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T19:25:03.954541022Z
+modified_at: 2026-09-13T19:25:03.954541022Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
