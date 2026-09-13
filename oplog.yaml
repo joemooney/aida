@@ -65783,5 +65783,30 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5176
+- id: 01a09cf7-7835-7fe1-9177-1f1230227d77
+  target_id: 01a09cf7-7036-74e1-9865-e87c623cc720
+  author: aida
+  node_id: '1'
+  lamport: 5177
+  timestamp: 2026-09-13T22:50:58.997030765Z
+  kind: !Create
+    title: Codex implementer exits 1 after a successful commit+push — drain shelves every codex spec as 'tool-exit' though it's Done-on-a-branch (needs manual --resume to land)
+    description: |-
+      Observed 2026-09-13 in a --batch doctor-fixes --auto-complete --no-human=both drain (vendor: codex), caught by the oversight layer (STORY-1096 trial). BOTH members hit the identical pattern, both attempts (4 tool-exits total):
+
+      - BUG-1136: implementer wrote a real 107-line doctor_cmd.rs fix (commit 1a2053f6d), pushed to origin+gitlab, spec advanced to Done.
+      - BUG-1137: implementer wrote a real 85-line remote_create.rs fix (commit 5c9e148fb), pushed, spec advanced to Done.
+      - In BOTH cases the drain then reported 'tool-exit at implementer — the implementer session exited 1 (attempt 2/2)' and marked the member FAILED.
+
+      Net: the codex implementer PRODUCES the work (commit + push + Done) yet its session exits 1, so the drain shelves the spec as failed and never proceeds to open a PR / CI / review / merge. Every codex-drained spec ends 'Done on a branch, no PR' and needs a manual `aida queue work <spec> --resume` (or a hand-opened PR + merge) to land. A fully unattended codex drain therefore self-completes NOTHING even though the implementations are correct.
+
+      Distinct from BUG-909 (watchdog killing a silent codex — completed) and BUG-1063 (headless-wait — completed): here the session is NOT watchdog-killed and DOES finish the work; it exits with code 1 despite success.
+
+      Impact: this is the current ceiling on unattended codex-drain reliability (EPIC-62). The reviewer-gate (BUG-1106) and worktree-collision (BUG-1134) fixes held — this is the next seam.
+
+      Next (needs the drain's stdout/exit logs to confirm root cause): determine WHY codex exec exits 1 after a successful turn (turn-limit? a post-commit step? codex exec exit-code semantics?), and either fix the exit condition or teach the orchestrator to treat 'work committed + pushed + spec Done' as success regardless of the session's exit code (verify-by-substrate, not by exit code).
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 5177
 node_id: '1'
