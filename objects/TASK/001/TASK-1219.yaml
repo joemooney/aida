@@ -13,12 +13,12 @@ description: |-
   - queued_spec_ids (or its replacement) collects ids ONLY from the per-entry identity field, not arbitrary string values.
   - A spec-id appearing in a non-identity field (for_scope/note) does NOT suppress that spec as drift.
   - Existing drift/idempotency tests still pass; add a regression test with a spec-id embedded in a note field.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:23:15.413537404Z
-modified_at: 2026-09-13T19:44:50.890446170Z
+modified_at: 2026-09-13T19:48:25.315022632Z
 req_type: Task
 tags:
 - batch:oversight-cleanup
@@ -26,3 +26,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
   created_at: 2026-09-13T19:23:19.922317032Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-13T19:48:25.315022632Z
+  implemented_by: joe
