@@ -8,10 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:42:06.499121358Z
-modified_at: 2026-09-13T01:42:06.499121358Z
+modified_at: 2026-09-13T01:42:08.768038361Z
 req_type: Story
 tags:
 - agent-surface
 - entry-lane
 - parent:EPIC-63
 - tokens
+relationships:
+- rel_type: Child
+  target_id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
+  created_at: 2026-09-13T01:42:08.768038361Z
