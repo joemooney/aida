@@ -11,12 +11,12 @@ description: |-
   - compute_drift skips children whose req_type is non-implementable (decision, epic, folder, meta, principle, vision, constraint, term, doc).
   - An accepted ADR under an objective is NOT reported as drift and is NOT queued under --execute.
   - Regression test: an objective with an accepted ADR child + a real Approved story child reports only the story as drift.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:54:06.092219170Z
-modified_at: 2026-09-13T20:25:29.975922666Z
+modified_at: 2026-09-13T20:30:04.352848770Z
 req_type: Bug
 tags:
 - followup oversight supervise-watch parent:EPIC-62 batch:oversight-cleanup
@@ -31,3 +31,23 @@ comments:
   created_at: 2026-09-13T20:19:53.898570322Z
   modified_at: 2026-09-13T20:19:53.898570322Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09c76-762a-7393-b0e8-0f78ed701887
+  author: aida-auto-bump
+  timestamp: 2026-09-13T20:30:04.330795265Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09c76-7640-7cc2-9b5a-daf63101f27b
+  timestamp: 2026-09-13T20:30:04.352847438Z
+  agent: aida
+  commit_sha: 3ee80044f9b88929ca1cfef1a82ff075d25a6607
+  summary: Completed via merge 3ee80044
+  punted:
+  - 'punted: the implementer session exited 1 — it was aborted or errored (attempt 2/2)'
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-13T20:30:04.330671697Z
+  completion_sha: 3ee80044f9b88929ca1cfef1a82ff075d25a6607
