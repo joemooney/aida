@@ -3,15 +3,19 @@ spec_id: BUG-1118
 agreed_id: BUG-1118
 title: Stop populating the dead ~/.codex/prompts surface (46 undiscoverable prompts + 46 .aida-bak cruft) on modern codex
 description: 'Observed 2026-09-12: ~/.codex/prompts/ holds 46 aida-*.md prompts codex 0.154 cannot discover as slash commands, PLUS 46 .aida-bak backup files (one per prompt) left by refresh. AIDA keeps scaffolding + backing up a surface that does not function. Acceptance: (1) aida scaffold codex-prompts / refresh gate on codex version and either skip or emit a clear ''not discoverable on codex >=0.142, use .codex/skills'' warning rather than silently writing dead files; (2) refresh does not accumulate .aida-bak files (clean up or stop creating the 1:1 backup pile); (3) an existing dead ~/.codex/prompts install is reported by doctor with a prune hint.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:05:17.801570281Z
-modified_at: 2026-09-13T02:46:03.316728287Z
+modified_at: 2026-09-13T02:57:24.633436793Z
 req_type: Bug
 tags:
 - codex
 - cruft
 - hygiene
 - scaffolding
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-13T02:57:24.633436793Z
+  implemented_by: joe
