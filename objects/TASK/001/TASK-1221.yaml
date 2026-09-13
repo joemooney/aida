@@ -12,3 +12,7 @@ modified_at: 2026-09-13T19:25:12.058187387Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
+relationships:
+- rel_type: Child
+  target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
+  created_at: 2026-09-13T19:25:14.305366102Z
