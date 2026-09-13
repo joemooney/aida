@@ -63612,5 +63612,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 5032
+- id: 01a0986e-11b8-7e12-953d-d61d52683800
+  target_id: 01a0986e-0be7-7571-a638-0887f1d72488
+  author: aida
+  node_id: '1'
+  lamport: 5033
+  timestamp: 2026-09-13T01:42:25.464913633Z
+  kind: !Create
+    title: 'Memory-lane positioning + discoverable-but-quiet footprint: one doc naming the entry lane; .aida footprint findable without being noisy'
+    description: A positioning doc naming the memory lane as AIDA's entry adoption lane (the on-ramp before any machinery), and ensure the .aida/ footprint is discoverable when the user looks (git hygiene, 'what is this dir') without being intrusive day-to-day. trace:EPIC-63
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 5033
 node_id: '1'
