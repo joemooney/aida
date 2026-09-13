@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:55:58.952357043Z
-modified_at: 2026-09-13T19:52:29.739985598Z
+modified_at: 2026-09-13T19:52:32.154142408Z
 req_type: Story
 tags:
 - oversight role slice-2 parent:STORY-1096 depends-on:slice-1
@@ -20,3 +20,6 @@ relationships:
   target_id: 01a09c3b-11fa-79e1-b2f2-ba95d48ddf18
   created_at: 2026-09-13T19:52:29.739979737Z
   created_by: joe
+deferred: true
+deferred_at: 2026-09-13T19:52:32.154142408Z
+deferred_until: TASK-1221 (/aida-oversee skill) has driven at least one real drain toward a named objective and the loop's realign/nudge/escalate behavior is validated in a PR
