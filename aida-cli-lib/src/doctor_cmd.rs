@@ -1966,7 +1966,9 @@ fn heal_doctor_findings(
             .or_default()
             .push(finding);
     }
-    for (category, items) in by_category {
+    let mut categories: Vec<_> = by_category.into_iter().collect();
+    categories.sort_by_key(|(category, _)| doctor_heal_category_order(category));
+    for (category, items) in categories {
         let safe = items.iter().all(|item| item.safe_heal);
         match doctor_heal_disposition(safe, opts.force, opts.yes, autonomous) {
             HealDisposition::Proceed => {}
@@ -2034,6 +2036,18 @@ fn heal_doctor_findings(
         }
     }
     Ok(out)
+}
+
+fn doctor_heal_category_order(category: &str) -> u8 {
+    match category {
+        // trace:BUG-1136 | ai:codex
+        // Lease reaping has to precede status derivation in an all-category
+        // heal. Otherwise an Approved spec with only a stale lease can be
+        // bumped to In Progress, then lose the lease later in the same pass.
+        "stale-leases" | "abandoned-leases" | "stale-reviewer-leases" => 0,
+        "spec-status-drift" => 1,
+        _ => 2,
+    }
 }
 
 fn confirm_doctor_category(category: &str, count: usize) -> Result<bool> {
@@ -2311,6 +2325,9 @@ fn heal_doctor_spec_status(
 ) -> Result<DoctorHealResult> {
     let storage = Storage::new(project_root.join(".aida-store"));
     let mut store = storage.load()?;
+    let current_scope_lease = list_leases(project_root)
+        .iter()
+        .any(|lease| lease.scope.eq_ignore_ascii_case(&finding.id));
     let mut action = None;
     for req in &mut store.requirements {
         if req.spec_id.as_deref() != Some(finding.id.as_str()) {
@@ -2319,12 +2336,22 @@ fn heal_doctor_spec_status(
         if matches!(req.status, RequirementStatus::Approved)
             && finding.action.starts_with("bump spec to In Progress")
         {
+            // trace:BUG-1136 | ai:codex
+            // Re-read leases at heal time. The status finding was collected
+            // before earlier heal categories may have reaped stale leases, so
+            // the original action can be obsolete within this same command.
+            if !current_scope_lease {
+                continue;
+            }
             req.status = RequirementStatus::InProgress;
             req.modified_at = chrono::Utc::now();
             action = Some("bumped Approved spec to In Progress".to_string());
         } else if matches!(req.status, RequirementStatus::InProgress)
             && finding.action.contains("no active lease")
         {
+            if current_scope_lease {
+                continue;
+            }
             req.status = RequirementStatus::Approved;
             req.modified_at = chrono::Utc::now();
             action = Some(format!(
@@ -3267,6 +3294,85 @@ mod story_462_doctor_tests {
             .as_deref()
             .unwrap_or_default()
             .contains("already ended"));
+    }
+
+    #[test]
+    fn doctor_heal_reaps_stale_lease_before_spec_status_bump() {
+        // BUG-1136: a single all-category heal must converge. The original
+        // findings can contain both "Approved + lease => bump" and
+        // "stale lease => reap"; after reaping, the stale status action is no
+        // longer valid and must not leave the spec In Progress with no lease.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let project = tmp.path();
+        std::fs::create_dir_all(project.join(".aida").join("sessions")).unwrap();
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+
+        let storage = Storage::new(project.join(".aida-store"));
+        let mut req = Requirement::new("lease/status drift".into(), String::new());
+        req.spec_id = Some("TASK-1207".into());
+        req.status = RequirementStatus::Approved;
+        let mut store = aida_core::models::RequirementsStore::new();
+        store.requirements = vec![req];
+        storage.save(&store).unwrap();
+
+        std::fs::write(
+            project
+                .join(".aida")
+                .join("sessions")
+                .join("deadbeef0000.toml"),
+            r#"
+id = "deadbeef0000"
+scope = "TASK-1207"
+slug = "task-1207"
+owner = "tester"
+worktree_path = ""
+branch = "bug-1136"
+started_at = "2026-09-13T00:00:00Z"
+hostname = "localhost"
+"#,
+        )
+        .unwrap();
+
+        let stale_lease = DoctorFinding {
+            category: "stale-leases".to_string(),
+            id: "deadbeef0000".to_string(),
+            summary: "deadbeef0000 owns TASK-1207".to_string(),
+            action: "save patch if dirty, then end lease deadbeef0000".to_string(),
+            safe_heal: true,
+        };
+        let stale_status_bump = DoctorFinding {
+            category: "spec-status-drift".to_string(),
+            id: "TASK-1207".to_string(),
+            summary: "TASK-1207 is Approved but lease deadbeef0000 is active".to_string(),
+            action: "bump spec to In Progress".to_string(),
+            safe_heal: true,
+        };
+
+        let results = heal_doctor_findings(
+            project,
+            &[stale_status_bump, stale_lease],
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: None,
+                json: false,
+                force: false,
+                all: false,
+                since: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(results[0].category, "stale-leases");
+        assert_eq!(results[1].category, "spec-status-drift");
+        assert_eq!(results[1].status, "skipped");
+        assert!(!project
+            .join(".aida")
+            .join("sessions")
+            .join("deadbeef0000.toml")
+            .exists());
+        let reloaded = storage.load().unwrap();
+        assert_eq!(reloaded.requirements[0].status, RequirementStatus::Approved);
     }
 
     #[test]
