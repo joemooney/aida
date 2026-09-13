@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:25:12.058187387Z
-modified_at: 2026-09-13T19:52:30.825514070Z
+modified_at: 2026-09-13T20:35:35.244165463Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
@@ -30,3 +30,10 @@ relationships:
   target_id: 01a09c20-51e8-7f01-b1d9-290cd5635a7a
   created_at: 2026-09-13T19:52:30.825511430Z
   created_by: joe
+comments:
+- id: 01a09c7b-82cc-7193-b0d2-0e6ff76610b5
+  author: joe
+  content: Commit 3ee80044f references this requirement
+  created_at: 2026-09-13T20:35:35.244165463Z
+  modified_at: 2026-09-13T20:35:35.244165463Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
