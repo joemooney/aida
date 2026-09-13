@@ -419,17 +419,43 @@ fn scan_scaffold_drift(
     let config = ScaffoldConfig::default();
     let db_path = project_root.join(".aida/cache.db");
     let status = check_scaffold_status(store, project_root, &config, &db_path);
+    let is_vendor_prompt_or_skill = |p: &std::path::Path| {
+        let s = p.to_string_lossy();
+        s.starts_with(".claude/commands/")
+            || s.starts_with(".claude/skills/")
+            || s.starts_with(".codex/skills/")
+    };
     let drifted: Vec<String> = status
         .modified
         .iter()
-        .filter_map(|(p, _)| {
-            let s = p.to_string_lossy();
-            let is_vendor = s.starts_with(".claude/commands/")
-                || s.starts_with(".claude/skills/")
-                || s.starts_with(".codex/skills/");
-            is_vendor.then(|| s.into_owned())
-        })
+        .filter_map(|(p, _)| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
         .collect();
+    // trace:BUG-1117 | ai:codex
+    // Missing `.codex/skills/*` is scaffold drift too: Codex >=0.142 does not
+    // discover the old ~/.codex/prompts pack as `$aida-*`, so absence of the
+    // project-local skill surface leaves a codex-vendor project with no working
+    // skill entry point.
+    let missing_vendor_files: Vec<String> = status
+        .missing
+        .iter()
+        .filter_map(|p| is_vendor_prompt_or_skill(p).then(|| p.to_string_lossy().into_owned()))
+        .collect();
+    let missing_codex_skill_files: Vec<&String> = missing_vendor_files
+        .iter()
+        .filter(|p| p.starts_with(".codex/skills/"))
+        .collect();
+    if !missing_codex_skill_files.is_empty() {
+        findings.push(DoctorFinding {
+            category: "scaffold-drift".to_string(),
+            id: "scaffold-drift/codex-skills-missing".to_string(),
+            summary: format!(
+                ".codex/skills is missing AIDA skill files ({} missing); Codex uses this project-local surface for `$aida-*`",
+                missing_codex_skill_files.len()
+            ),
+            action: "Run `aida scaffold upgrade` to create `.codex/skills/aida-*/SKILL.md`; then reopen Codex or run `/skills` and use `$aida-capture`.".to_string(),
+            safe_heal: false,
+        });
+    }
     if !drifted.is_empty() {
         findings.push(DoctorFinding {
             category: "scaffold-drift".to_string(),
@@ -3357,6 +3383,24 @@ mod story_462_doctor_tests {
             codex_ignores_prompt_dir_finding_for_version(dir.path(), (0, 142, 0)).is_none(),
             "non-AIDA markdown in ~/.codex/prompts is not our scaffold state"
         );
+    }
+
+    #[test]
+    fn scaffold_drift_flags_missing_codex_skills_with_exact_fix() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = aida_core::RequirementsStore::new();
+
+        let findings = scan_scaffold_drift(dir.path(), &store);
+        let finding = findings
+            .iter()
+            .find(|f| f.id == "scaffold-drift/codex-skills-missing")
+            .expect("missing .codex/skills should be flagged as scaffold drift");
+
+        assert!(finding.summary.contains(".codex/skills"));
+        assert!(finding.summary.contains("$aida-*"));
+        assert!(finding.action.contains("aida scaffold upgrade"));
+        assert!(finding.action.contains(".codex/skills/aida-*/SKILL.md"));
+        assert!(finding.action.contains("$aida-capture"));
     }
 
     #[test]
