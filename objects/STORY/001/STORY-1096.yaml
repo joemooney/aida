@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:31:54.693955308Z
-modified_at: 2026-09-13T06:14:26.571355259Z
+modified_at: 2026-09-13T06:14:27.751213905Z
 req_type: Story
 tags:
 - from-product
@@ -52,4 +52,7 @@ relationships:
   target_id: 01a09181-7c91-7131-a401-1b4524ac6c08
   created_at: 2026-09-13T02:32:09.929152344Z
   created_by: joe
+deferred: true
+deferred_at: 2026-09-13T06:14:27.751213905Z
+deferred_until: operator wants to design the meta-supervisor/oversight seat (architecture-class, needs a guided session)
 execution_mode: guided
