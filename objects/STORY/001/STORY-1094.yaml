@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:57.398184899Z
-modified_at: 2026-09-13T02:45:08.633568242Z
+modified_at: 2026-09-13T02:47:58.320441264Z
 req_type: Story
 tags:
 - entry-lane
@@ -19,4 +19,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
   created_at: 2026-09-13T01:41:59.718359066Z
+comments:
+- id: 01a098aa-1470-73d2-8f75-7b35167d73fd
+  author: joe
+  content: A running headless drain re-polled and began driving this guided spec (filed as BUG-1120). Removed from the queue to stop re-pickup. Any PR this headless leg produces is a DISCARDABLE DRAFT at most — STORY-1094 is the make-or-break reflex scaffolding and requires the guided decision dialog + a cold-agent-on-fresh-repo validation, neither of which a headless self-drive on this repo can do. Its merge will be held (guided execution_mode escalates the merge); I will NOT accept the headless output and will run this as a proper guided session.
+  created_at: 2026-09-13T02:47:58.320441264Z
+  modified_at: 2026-09-13T02:47:58.320441264Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: guided
