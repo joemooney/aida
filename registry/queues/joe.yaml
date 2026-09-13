@@ -454,11 +454,3 @@
   added_at: 2026-09-13T02:26:00.032243673Z
   for_role: implementer
   added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0989f-f79c-7403-9500-cc4f72bac60e
-  position: 354000
-  added_by: joe
-  note: auto-queued by `session end` (01a0988f); covers 1 spec
-  added_at: 2026-09-13T02:37:02.095019306Z
-  for_role: reviewer
-  added_by_machine: imac
