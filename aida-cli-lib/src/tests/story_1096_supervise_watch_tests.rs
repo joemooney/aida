@@ -1,7 +1,7 @@
 //! STORY-1096 slice 1 — `aida supervise watch` unit tests.
 //!
 //! Covers the pure seams of the oversight watch pass: objective-drift
-//! detection, spec-id scanning of queue JSON, and objective resolution
+//! detection, identity parsing of queue JSON, and objective resolution
 //! (flag → `[oversight] objective` config → error).
 // trace:STORY-1096 | ai:claude
 
@@ -86,19 +86,42 @@ fn is_spec_id_recognizes_shapes() {
 }
 
 #[test]
-fn collect_spec_ids_walks_nested_json() {
+fn collect_queue_identity_spec_ids_reads_only_entry_identity_fields() {
     let value = serde_json::json!({
         "items": [
-            {"spec": "STORY-1", "role": "implementer"},
-            {"spec": "bug-2", "note": "lowercase still matches, uppercased"},
+            {"spec_id": "STORY-1", "role": "implementer"},
+            {"agreed_id": "bug-2", "note": "lowercase still matches, uppercased"},
         ],
         "other": "not-an-id",
     });
     let mut set = std::collections::HashSet::new();
-    collect_spec_ids(&value, &mut set);
+    collect_queue_identity_spec_ids(&value["items"], &mut set);
     assert!(set.contains("STORY-1"));
     assert!(set.contains("BUG-2"));
     assert!(!set.contains("NOT-AN-ID"));
+}
+
+#[test]
+fn collect_queue_identity_spec_ids_ignores_note_and_scope_spec_ids() {
+    // trace:TASK-1219 | ai:codex
+    let value = serde_json::json!([
+        {
+            "spec_id": "STORY-30",
+            "title": "real queued child",
+            "for_scope": "STORY-31",
+            "note": "mentions TASK-999 but that task is not queued"
+        },
+        {
+            "title": "malformed row has no identity field",
+            "note": "STORY-32"
+        }
+    ]);
+    let mut set = std::collections::HashSet::new();
+    collect_queue_identity_spec_ids(&value, &mut set);
+    assert!(set.contains("STORY-30"));
+    assert!(!set.contains("STORY-31"));
+    assert!(!set.contains("TASK-999"));
+    assert!(!set.contains("STORY-32"));
 }
 
 #[test]
