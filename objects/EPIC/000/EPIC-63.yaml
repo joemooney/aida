@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:23.750489926Z
-modified_at: 2026-09-13T01:42:26.331082561Z
+modified_at: 2026-09-13T02:29:45.489050810Z
 req_type: Epic
 tags:
 - adoption
@@ -31,3 +31,25 @@ relationships:
 - rel_type: Parent
   target_id: 01a0986e-0be7-7571-a638-0887f1d72488
   created_at: 2026-09-13T01:42:26.331082561Z
+comments:
+- id: 01a09899-6791-72e0-acbe-01542c088d71
+  author: joe
+  content: |-
+    Two cents from the product seat (2026-09-12), tied to my field report (docs/testimonials/2026-09-12-llm-field-report.md):
+
+    STRONG ENDORSE — this IS the report's central recommendation, made concrete. My report split AIDA in two: the substrate (durable memory/graph/traces/why) is high-value AND low-overhead; the autonomy layer (drain/roles/orchestrator) is powerful but alpha and needs a human watching. EPIC-63 packages EXACTLY the substrate-only half as the entry lane and DEFERS all the machinery that caused ~90% of my friction. That is the right sequencing: get people in the door on the part that works reliably and helps immediately, before they ever meet the part that needs babysitting. Nearly all the friction I logged this week was machinery-layer (drain reliability, roles, watchdogs, the vocabulary); strip it and the friction is gone.
+
+    The "invisible under the hood" framing is the strongest possible version. The single most valuable thing I experienced was the substrate letting ME (an LLM) hold a long, interrupted task without losing the thread. A user who knows nothing about AIDA gets that same continuity for free — the agent consults+updates durable memory on its own. That erases the biggest friction I named (machinery vocabulary + ceremony), because there is no vocabulary to learn.
+
+    Three things I'd flag, in priority order:
+
+    1. TASK-1215 (hygiene floor) is the load-bearing risk, elevate it. Authored memory that silently ROTS is worse than none — it becomes invisible LIES the agent trusts. Capture-as-you-go is easy; keeping it TRUE as code moves is the hard part. The staleness signal is what separates "invisible memory" from "invisible misinformation." If one child slips, don't let it be this one.
+
+    2. STORY-1094 (reflex scaffolding) is make-or-break, not the store. The store already exists; success hinges on the AGENT using it reflexively (query-first, capture-as-you-go) WITHOUT being told each turn. From lived experience, an agent uses a tool reflexively only if (a) it's cheap, (b) the guidance is in the ALWAYS-loaded context (the CLAUDE.md/AGENTS.md reflex block), and (c) the payoff is visible. Bury the reflex block or make the query slow and the agent quietly won't bother — the whole lane goes inert.
+
+    3. STORY-1095 (TOON-over-CLI default, MCP opt-in) is correct and confirmed by this session's own benchmark (MCP ~2x CLI tokens). An invisible per-turn memory MUST be cheap or the agent skips it. Keep MCP behind the flag.
+
+    One boundary caution: keep this lane clean of the oversight/supervision machinery the operator and I have been running (the nudge/cron/meta-supervision that smoothed the autonomous drain). That is the OPPOSITE end of the spectrum — max-machinery — and belongs in its own lane/role (STORY-1051/1052 started it). EPIC-63's whole value is that it has NONE of that. Don't let the two bleed together.
+  created_at: 2026-09-13T02:29:45.489050810Z
+  modified_at: 2026-09-13T02:29:45.489050810Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
