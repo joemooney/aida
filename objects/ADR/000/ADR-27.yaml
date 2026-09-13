@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T21:12:04.987183577Z
-modified_at: 2026-09-12T21:12:19.454449655Z
+modified_at: 2026-09-13T02:01:23.345577235Z
 req_type: Decision
 tags:
 - adr
@@ -35,3 +35,10 @@ relationships:
   target_id: 01a09075-880b-78d2-8212-ccdcd835a588
   created_at: 2026-09-12T21:12:19.454444401Z
   created_by: joe
+comments:
+- id: 01a0987f-6e91-7fe3-b8f0-bafd6b7c3b01
+  author: joe
+  content: 'Amendment (2026-09-12, STORY-1091): the default pipeline_depth is dropped from 2 to 1. ADR-27 chose 2 while depth was inert (the 1041 slice only stored/rendered it). STORY-1091 makes depth LIVE — it now drives the concurrent child-process scheduler — so with concurrency real and not yet exercised in the wild, the default becomes 1 (serial, the proven path) and 2-wide pipelining is opt-in per project via [drain] pipeline_depth until it earns mileage. Same default-off posture as the STORY-1051 re-drive supervisor (ADR-26).'
+  created_at: 2026-09-13T02:01:23.345577235Z
+  modified_at: 2026-09-13T02:01:23.345577235Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
