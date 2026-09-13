@@ -982,6 +982,7 @@ pub(crate) enum QueueFreshPickup {
     Pickable,
     Archived,
     Deferred,
+    NeedsGuidedOrOperatorSession(aida_core::ExecutionMode),
     AwaitingMerge,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
@@ -1024,6 +1025,9 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
         QueueFreshPickup::Pickable => None,
         QueueFreshPickup::Archived => Some("archived — skipped".to_string()),
         QueueFreshPickup::Deferred => Some("deferred — skipped".to_string()),
+        QueueFreshPickup::NeedsGuidedOrOperatorSession(mode) => Some(format!(
+            "skipped — needs guided/operator session ({mode}); use `aida queue work --guided` or `aida do`"
+        )),
         QueueFreshPickup::AwaitingMerge => Some(
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
                 .to_string(),
@@ -1033,6 +1037,25 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
             Some(aida_core::pickability::pickability_reason_label(reason))
         }
     }
+}
+
+pub(crate) fn queue_drain_pickup_policy(
+    req: &aida_core::Requirement,
+    store: &aida_core::RequirementsStore,
+    force_needs_attention: bool,
+) -> QueueFreshPickup {
+    // trace:BUG-1120 | ai:codex
+    if matches!(
+        req.execution_mode,
+        Some(aida_core::ExecutionMode::Guided)
+            | Some(aida_core::ExecutionMode::Operator)
+            | Some(aida_core::ExecutionMode::Decide)
+    ) {
+        return QueueFreshPickup::NeedsGuidedOrOperatorSession(
+            req.execution_mode.expect("matched Some execution_mode"),
+        );
+    }
+    queue_fresh_pickup_policy(req, store, force_needs_attention)
 }
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
@@ -1559,6 +1582,7 @@ pub(crate) fn handle_queue_command(
                         QueueFreshPickup::Pickable => true,
                         QueueFreshPickup::Archived
                         | QueueFreshPickup::Deferred
+                        | QueueFreshPickup::NeedsGuidedOrOperatorSession(_)
                         | QueueFreshPickup::AwaitingMerge
                         | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
@@ -9742,6 +9766,7 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) status: RequirementStatus,
     pub(crate) for_role: Option<String>,
     pub(crate) deferred: bool,
+    pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9750,6 +9775,7 @@ pub(crate) struct AutoCompleteHeadPick {
     pub(crate) status_skipped: Vec<(String, RequirementStatus)>,
     pub(crate) role_skipped: Vec<(String, String)>,
     pub(crate) deferred_skipped: Vec<String>,
+    pub(crate) guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)>,
 }
 
 /// The auto-complete engine always starts with a phase-1 implementer unless
@@ -9795,6 +9821,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
     let mut status_skipped = Vec::new();
     let mut role_skipped = Vec::new();
     let mut deferred_skipped = Vec::new();
+    let mut guided_or_operator_skipped = Vec::new();
     for candidate in candidates {
         if let Some(for_role) = candidate.for_role.as_deref() {
             let routed = canonical_role_name(for_role);
@@ -9807,12 +9834,23 @@ pub(crate) fn pick_auto_complete_head_for_role(
             deferred_skipped.push(candidate.id.clone());
             continue;
         }
+        // trace:BUG-1120 | ai:codex
+        if let Some(
+            mode @ (aida_core::ExecutionMode::Guided
+            | aida_core::ExecutionMode::Operator
+            | aida_core::ExecutionMode::Decide),
+        ) = candidate.execution_mode
+        {
+            guided_or_operator_skipped.push((candidate.id.clone(), mode));
+            continue;
+        }
         if auto_complete_head_drivable(&candidate.status) {
             return Some(AutoCompleteHeadPick {
                 spec: candidate.id.clone(),
                 status_skipped,
                 role_skipped,
                 deferred_skipped,
+                guided_or_operator_skipped,
             });
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
@@ -9847,6 +9885,7 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     status: r.status.clone(),
                     for_role: e.for_role.clone(),
                     deferred: r.deferred,
+                    execution_mode: r.execution_mode,
                 })
         })
         .collect())
@@ -9866,6 +9905,16 @@ pub(crate) fn auto_complete_head_candidates(
     Ok(
         auto_complete_head_candidates_with_roles(storage, user_id, Some(&effective_role))?
             .into_iter()
+            .filter(|candidate| {
+                !matches!(
+                    candidate.execution_mode,
+                    Some(
+                        aida_core::ExecutionMode::Guided
+                            | aida_core::ExecutionMode::Operator
+                            | aida_core::ExecutionMode::Decide
+                    )
+                )
+            })
             .filter(|candidate| {
                 candidate
                     .for_role
@@ -9901,6 +9950,11 @@ pub(crate) fn resolve_auto_complete_head(
             for id in &pick.deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
             }
+            for (id, mode) in &pick.guided_or_operator_skipped {
+                eprintln!(
+                    "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided` or `aida do {id}`"
+                );
+            }
             // Acceptance criterion: name each item skipped to reach the
             // drivable head so the pickup is never silently surprising.
             for (id, status) in &pick.status_skipped {
@@ -9927,6 +9981,17 @@ pub(crate) fn resolve_auto_complete_head(
                         .as_deref()
                         .map(|r| canonical_role_name(r) == role_label)
                         .unwrap_or(true)
+                })
+                .filter(|candidate| !candidate.deferred)
+                .filter(|candidate| {
+                    !matches!(
+                        candidate.execution_mode,
+                        Some(
+                            aida_core::ExecutionMode::Guided
+                                | aida_core::ExecutionMode::Operator
+                                | aida_core::ExecutionMode::Decide
+                        )
+                    )
                 })
                 .map(|candidate| (candidate.id.clone(), candidate.status.clone()))
                 .collect();
@@ -9955,6 +10020,31 @@ pub(crate) fn resolve_auto_complete_head(
             for id in &deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
             }
+            let guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)> = candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate
+                        .for_role
+                        .as_deref()
+                        .map(|r| canonical_role_name(r) == role_label)
+                        .unwrap_or(true)
+                })
+                .filter_map(|candidate| {
+                    let mode = candidate.execution_mode?;
+                    matches!(
+                        mode,
+                        aida_core::ExecutionMode::Guided
+                            | aida_core::ExecutionMode::Operator
+                            | aida_core::ExecutionMode::Decide
+                    )
+                    .then(|| (candidate.id.clone(), mode))
+                })
+                .collect();
+            for (id, mode) in &guided_or_operator_skipped {
+                eprintln!(
+                    "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided` or `aida do {id}`"
+                );
+            }
             // The queue has items, but every one is in-flight or terminal —
             // name the first few so it's clear *why* there's nothing to
             // drive, without dumping a long stale list.
@@ -9972,8 +10062,14 @@ pub(crate) fn resolve_auto_complete_head(
                 String::new()
             };
             if skipped.is_empty() {
+                let empty_reason =
+                    if deferred_skipped.is_empty() && guided_or_operator_skipped.is_empty() {
+                        format!("queue is empty for {role_label}")
+                    } else {
+                        format!("no drivable item in the queue for {role_label}")
+                    };
                 anyhow::bail!(
-                    "queue is empty for {role_label}; nothing to drive{}",
+                    "{empty_reason}; nothing to drive{}",
                     auto_complete_sibling_role_hint(storage, user_id, &role_label)
                         .unwrap_or_default()
                 )

@@ -72989,6 +72989,33 @@ fn handle_auto_complete(
     std::process::exit(result.process_exit_code());
 }
 
+// trace:BUG-1120 | ai:codex
+fn guarded_execution_mode_for_drain(
+    storage: &Storage,
+    spec: &str,
+) -> Option<aida_core::ExecutionMode> {
+    storage
+        .load()
+        .ok()
+        .and_then(|store| store.get_requirement_by_spec_id(spec).cloned())
+        .and_then(|req| req.execution_mode)
+        .filter(|mode| {
+            matches!(
+                mode,
+                aida_core::ExecutionMode::Guided
+                    | aida_core::ExecutionMode::Operator
+                    | aida_core::ExecutionMode::Decide
+            )
+        })
+}
+
+// trace:BUG-1120 | ai:codex
+fn guarded_execution_mode_drain_message(spec: &str, mode: aida_core::ExecutionMode) -> String {
+    format!(
+        "skipped {spec} — needs guided/operator session ({mode}); use `aida queue work {spec} --guided` or `aida do {spec}`"
+    )
+}
+
 /// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
 /// the plan phase that runs before the auto-complete drain's phase 1. Reuses
 /// slice 2's `aida queue work <spec> --plan-only` planning session (headless
@@ -73116,6 +73143,10 @@ fn run_auto_complete(
     // testing; this earlier check is what keeps the queue side-effect-free.
     // trace:BUG-657 | ai:claude
     if resume.is_none() {
+        if let Some(mode) = guarded_execution_mode_for_drain(storage, spec) {
+            eprintln!("{}", guarded_execution_mode_drain_message(spec, mode));
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
         if let Ok(root) = find_main_worktree_root() {
             let terminal = match spec_status(&root, spec) {
                 Some(RequirementStatus::Completed) => Some("Completed"),
@@ -73628,9 +73659,11 @@ fn resolve_batch_members(
         }
         // BUG-1017: batch pickup shares the same fresh-pickup policy as
         // queue next, list, and explicit dry-runs. Done remains visible as
-        // awaiting-merge work but is not re-drained from scratch.
+        // awaiting-merge work but is not re-drained from scratch. BUG-1120:
+        // headless drains also skip guided/operator/decide members; those
+        // modes require the keyboard path.
         if let Some(reason_label) = queue_cmd::queue_fresh_pickup_reason_label(
-            &queue_cmd::queue_fresh_pickup_policy(req, &store, false),
+            &queue_cmd::queue_drain_pickup_policy(req, &store, false),
         ) {
             eprintln!(
                 "  {} batch:{} — skipping un-pickable member {} ({})",

@@ -225,12 +225,14 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             status: RequirementStatus::Approved,
             for_role: Some("reviewer".to_string()),
             deferred: false,
+            execution_mode: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-944".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
             deferred: false,
+            execution_mode: None,
         },
     ];
 
@@ -252,12 +254,14 @@ fn auto_complete_head_skips_deferred_candidates() {
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
             deferred: true,
+            execution_mode: None,
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1208".to_string(),
             status: RequirementStatus::Approved,
             for_role: Some("implementer".to_string()),
             deferred: false,
+            execution_mode: None,
         },
     ];
 
@@ -267,6 +271,57 @@ fn auto_complete_head_skips_deferred_candidates() {
     assert_eq!(pick.deferred_skipped, vec!["TASK-1205".to_string()]);
     assert!(pick.status_skipped.is_empty());
     assert!(pick.role_skipped.is_empty());
+}
+
+// trace:BUG-1120 | ai:codex
+#[test]
+fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
+    let candidates = vec![
+        AutoCompleteHeadCandidate {
+            id: "STORY-1120".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+            execution_mode: Some(aida_core::ExecutionMode::Guided),
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-1121".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+            execution_mode: Some(aida_core::ExecutionMode::Operator),
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-1122".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+            execution_mode: Some(aida_core::ExecutionMode::Decide),
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-1123".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+            execution_mode: Some(aida_core::ExecutionMode::Drain),
+        },
+    ];
+
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .expect("drain should skip interactive/blocking modes and pick drainable work");
+
+    assert_eq!(pick.spec, "TASK-1123");
+    assert_eq!(
+        pick.guided_or_operator_skipped,
+        vec![
+            ("STORY-1120".to_string(), aida_core::ExecutionMode::Guided),
+            ("TASK-1121".to_string(), aida_core::ExecutionMode::Operator),
+            ("TASK-1122".to_string(), aida_core::ExecutionMode::Decide),
+        ]
+    );
+    assert!(pick.status_skipped.is_empty());
+    assert!(pick.role_skipped.is_empty());
+    assert!(pick.deferred_skipped.is_empty());
 }
 
 /// BUG-862 (reviewer finding, round 2): a drain launched from a DISPATCH
@@ -940,6 +995,42 @@ fn fresh_pickup_policy_skips_deferred_specs() {
         queue_fresh_pickup_reason_label(&policy).as_deref(),
         Some("deferred — skipped")
     );
+}
+
+// trace:BUG-1120 | ai:codex
+#[test]
+fn drain_pickup_policy_skips_guided_operator_and_decide_specs() {
+    let mut store = aida_core::RequirementsStore::default();
+    for mode in [
+        aida_core::ExecutionMode::Guided,
+        aida_core::ExecutionMode::Operator,
+        aida_core::ExecutionMode::Decide,
+    ] {
+        let mut r = req(&format!("TASK-{mode:?}"), None, RequirementType::Task);
+        r.status = RequirementStatus::Approved;
+        r.execution_mode = Some(mode);
+        store.requirements = vec![r.clone()];
+
+        let policy = queue_drain_pickup_policy(&r, &store, false);
+        assert_eq!(policy, QueueFreshPickup::NeedsGuidedOrOperatorSession(mode));
+        assert!(queue_fresh_pickup_reason_label(&policy)
+            .expect("mode skip has a label")
+            .contains("needs guided/operator session"));
+        assert_eq!(
+            queue_fresh_pickup_policy(&r, &store, false),
+            QueueFreshPickup::Pickable
+        );
+    }
+}
+
+// trace:BUG-1120 | ai:codex
+#[test]
+fn explicit_auto_complete_guard_names_guided_path() {
+    let msg = guarded_execution_mode_drain_message("BUG-1120", aida_core::ExecutionMode::Guided);
+    assert!(msg.contains("skipped BUG-1120"));
+    assert!(msg.contains("needs guided/operator session"));
+    assert!(msg.contains("aida queue work BUG-1120 --guided"));
+    assert!(msg.contains("aida do BUG-1120"));
 }
 
 /// spec_matches walks uuid, spec_id (case-insensitive), and
