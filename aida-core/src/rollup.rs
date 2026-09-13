@@ -42,10 +42,11 @@ use uuid::Uuid;
 ///    `Blocked` status variant; `NeedsAttention` is its closest analogue.)
 /// 6. **Only remaining (Draft/Approved/Planned) children, none in progress** ->
 ///    `Draft` — queued but not started.
-/// 7. **Only resolved-but-unshipped children** — Rejected and/or Superseded,
-///    every other bucket empty -> `None`: we do not auto-reject an epic. The
-///    caller keeps the epic's stored status so a human can make that call (and
-///    `--force` recovery still works).
+/// 7. **Only resolved-but-unshipped children** — Rejected, Superseded and/or
+///    Deferred, every other bucket empty -> `None`: we do not auto-close an
+///    epic that never shipped anything. The caller keeps the epic's stored
+///    status so a human can make that call (and `--force` recovery still
+///    works).
 //     trace:TASK-1176 | ai:claude
 ///
 /// Returns `None` only in case (7); every other case yields a derived status.
@@ -67,7 +68,13 @@ pub fn derive_epic_status_from_rollup(r: &StatusRollup) -> Option<RequirementSta
     // transition again. Excluding it keeps a superseded child from pinning its
     // epic in a perpetual In Progress the same way a rejected one used to.
     // trace:TASK-1176 | ai:claude
-    let unrejected = r.total - r.rejected - r.superseded;
+    //
+    // BUG-1128: a DEFERRED child is parked on the primed shelf awaiting a
+    // revisit trigger — the operator has explicitly set it aside. It must not
+    // pin the epic open either: an epic whose every non-deferred child has
+    // finished reads ready-to-close, and the deferred child re-enters the
+    // denominator when it is undeferred. trace:BUG-1128 | ai:claude
+    let unrejected = r.total - r.rejected - r.superseded - r.deferred;
 
     // (2) Every non-rejected child Completed.
     if unrejected > 0 && r.completed == unrejected {
@@ -192,6 +199,8 @@ mod tests {
             // trace:TASK-1176 | ai:claude — the superseded bucket has its own
             // helper below so every pre-existing case reads unchanged.
             superseded: 0,
+            // trace:BUG-1128 | ai:claude — likewise for the deferred bucket.
+            deferred: 0,
         }
     }
 
@@ -218,6 +227,34 @@ mod tests {
             shelved,
             rejected,
             superseded,
+            deferred: 0,
+        }
+    }
+
+    /// BUG-1128: a rollup that also carries deferred children — the bucket the
+    /// other helpers pin to zero.
+    // trace:BUG-1128 | ai:claude
+    #[allow(clippy::too_many_arguments)]
+    fn rollup_with_deferred(
+        total: usize,
+        completed: usize,
+        done: usize,
+        in_progress: usize,
+        remaining: usize,
+        shelved: usize,
+        rejected: usize,
+        deferred: usize,
+    ) -> StatusRollup {
+        StatusRollup {
+            total,
+            completed,
+            done,
+            in_progress,
+            remaining,
+            shelved,
+            rejected,
+            superseded: 0,
+            deferred,
         }
     }
 
@@ -407,6 +444,48 @@ mod tests {
         assert_eq!(
             derive_epic_status_from_rollup(&rollup_with_superseded(4, 2, 0, 0, 0, 0, 1, 1)),
             Some(RequirementStatus::Completed)
+        );
+    }
+
+    // BUG-1128: a DEFERRED child is resolved for rollup purposes — an epic
+    // whose only unfinished child is parked reads ready-to-close.
+    // trace:BUG-1128 | ai:claude
+    #[test]
+    fn deferred_child_is_resolved_in_the_epic_rollup() {
+        // total=3, completed=2, deferred=1 — zero open children => Completed.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_deferred(3, 2, 0, 0, 0, 0, 0, 1)),
+            Some(RequirementStatus::Completed)
+        );
+        // EPIC-62's exact shape: 11 children — 9 completed (incl. an accepted
+        // decision), 1 done (unmerged), 1 deferred => Done, not InProgress.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_deferred(11, 9, 1, 0, 0, 0, 0, 1)),
+            Some(RequirementStatus::Done)
+        );
+    }
+
+    // BUG-1128 guard: excluding deferred children must NOT close an epic that
+    // still carries genuinely open work — a deferred sibling alongside a queued
+    // child is still InProgress/Draft, never falsely finished.
+    // trace:BUG-1128 | ai:claude
+    #[test]
+    fn deferred_child_does_not_mask_open_work() {
+        // completed + deferred + one still-queued child => InProgress.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_deferred(3, 1, 0, 0, 1, 0, 0, 1)),
+            Some(RequirementStatus::InProgress)
+        );
+        // deferred + queued only (nothing finished, nothing moving) => Draft.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_deferred(2, 0, 0, 0, 1, 0, 0, 1)),
+            Some(RequirementStatus::Draft)
+        );
+        // Only deferred children (nothing else) => None: don't auto-close an
+        // epic that never shipped anything, just parked its work.
+        assert_eq!(
+            derive_epic_status_from_rollup(&rollup_with_deferred(1, 0, 0, 0, 0, 0, 0, 1)),
+            None
         );
     }
 
