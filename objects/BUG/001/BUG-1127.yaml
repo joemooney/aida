@@ -3,10 +3,10 @@ spec_id: BUG-1127
 agreed_id: BUG-1127
 title: 'Cross-platform nightly red on main: three Windows-only test failures (gitdir drive-prefix, mtime-only activity signature, bash fake-gh harness)'
 description: 'The Cross-platform (nightly) workflow on main failed with three Windows-specific test failures, all portability issues not logic defects: (1) worktree_gitdir_path mis-joins a POSIX-absolute container gitdir with the drive letter on Windows; (2) the vendor_activity progress signature keys on log mtime alone, which repeats under coarse NTFS timestamp resolution; (3) the unshipped-work detector test stubs gh with a bash shebang script Windows cannot execute. Fixed on fix/xplat-nightly.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T17:39:25.675720856Z
-modified_at: 2026-09-13T17:39:25.675720856Z
+modified_at: 2026-09-13T18:00:39.969894102Z
 req_type: Bug
