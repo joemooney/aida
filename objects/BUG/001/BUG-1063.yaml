@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:21:21.779925377Z
-modified_at: 2026-09-11T21:19:31.954178542Z
+modified_at: 2026-09-13T17:38:37.099978110Z
 req_type: Bug
 tags:
 - drain
@@ -60,6 +60,13 @@ relationships:
   target_id: 01a0924b-2f4d-7b90-84a7-d2fdbb8c7fa1
   created_at: 2026-09-11T21:06:47.026660516Z
   created_by: joe
+comments:
+- id: 01a09bd9-7dab-76c1-aef9-c2435581aeb4
+  author: joe
+  content: Commit 88b6c6d1f references this requirement
+  created_at: 2026-09-13T17:38:37.099978110Z
+  modified_at: 2026-09-13T17:38:37.099978110Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a09257-066a-7cc1-9d6e-520ffd104d13
   author: aida-auto-bump
