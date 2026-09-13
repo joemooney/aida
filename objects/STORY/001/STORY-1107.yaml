@@ -12,3 +12,7 @@ modified_at: 2026-09-13T18:55:58.952357043Z
 req_type: Story
 tags:
 - oversight role slice-2 parent:STORY-1096 depends-on:slice-1
+relationships:
+- rel_type: Child
+  target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
+  created_at: 2026-09-13T18:56:01.188611549Z
