@@ -138,6 +138,24 @@ pub fn spec_next(status: &str, id: &str) -> Vec<NextStep> {
     ranked.into_iter().map(|(_, s)| s).collect()
 }
 
+/// Lifecycle-aware next steps for the `aida why <spec>` surface.
+///
+/// `spec_next` is intentionally status-only, but epics are rollups: an
+/// in-progress epic is driven by child specs and must not be nudged through the
+/// direct `queue done EPIC-N` lifecycle command.
+// trace:BUG-1129 | ai:codex
+pub fn why_spec_next(status: &str, id: &str, req_type: &str) -> Vec<NextStep> {
+    let is_epic = req_type.trim().eq_ignore_ascii_case("epic");
+    let is_in_progress = State::from_status_str(status).is_some_and(|s| s == State::InProgress);
+    if is_epic && is_in_progress {
+        return vec![
+            NextStep::new(format!("aida graph tree {id}"), "children"),
+            NextStep::new(format!("aida show {id}"), "detail"),
+        ];
+    }
+    spec_next(status, id)
+}
+
 /// Active filter context carried forward into the `list` surface's suggestions.
 /// The status filter is the load-bearing one: `aida list --status draft` should
 /// suggest the draft state's next transition (`edit --status approved`), so the
@@ -332,6 +350,7 @@ fn human_hint(to: &str) -> &'static str {
         "create" => "file your first spec",
         "triage" => "triage the draft inbox",
         "fill-queue" => "fill the queue from the approved backlog",
+        "children" => "inspect the unfinished children; the epic closes when they finish",
         _ => "",
     }
 }
@@ -567,6 +586,26 @@ mod tests {
         let human = render_human(&steps).expect("non-empty");
         assert!(human.contains("Next:"));
         assert!(human.contains("aida queue done TASK-7"));
+    }
+
+    // BUG-1129: an in-progress epic is a read-only child rollup. `aida why`
+    // must not suggest `aida queue done EPIC-N`, which would be rejected or
+    // misleading; point at the children that drive the rollup instead.
+    #[test]
+    fn why_spec_next_for_inprogress_epic_points_at_children_not_queue_done() {
+        let steps = why_spec_next("InProgress", "EPIC-62", "epic");
+        assert_eq!(steps[0].cmd, "aida graph tree EPIC-62");
+        assert_eq!(steps[0].to, "children");
+        assert!(!cmds(&steps).iter().any(|cmd| cmd.contains("queue done")));
+
+        let human = render_human(&steps).expect("non-empty");
+        assert!(human.contains("unfinished children"), "{human}");
+
+        let task_steps = why_spec_next("InProgress", "TASK-7", "task");
+        assert!(
+            cmds(&task_steps).contains(&"aida queue done TASK-7".to_string()),
+            "normal in-progress work still gets the direct done hint"
+        );
     }
 
     // The rendered block is a valid, round-trippable TOON table; empty -> None.

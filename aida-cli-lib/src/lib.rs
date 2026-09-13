@@ -50958,7 +50958,7 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         bucket,
         burndown::OpenBucket::Actionable | burndown::OpenBucket::InProgress
     ) {
-        let next = crate::help_next::spec_next(&eff_status.to_string(), &f.id);
+        let next = crate::help_next::why_spec_next(&eff_status.to_string(), &f.id, &f.req_type);
         if let Some(block) = crate::help_next::render_human(&next) {
             println!("{block}");
         }
