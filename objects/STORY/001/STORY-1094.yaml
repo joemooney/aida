@@ -3,12 +3,12 @@ spec_id: STORY-1094
 agreed_id: STORY-1094
 title: 'Memory-lane reflex scaffolding: query-first + capture-as-you-go agent guidance (CLI/TOON surface, zero machinery vocabulary)'
 description: 'The core of the lane. A CLAUDE.md/AGENTS.md reflex section plus a slim query-first + capture-as-you-go skill pair, reusing aida-req/aida-search/aida-capture stripped to the lane vocabulary. Points the agent at the token-cheap CLI/TOON surface; never mentions queue/drain/roles. Injected marker-guarded into an existing CLAUDE.md/AGENTS.md, edit-preserving. This is the guided/keystone piece: the whole lane succeeds or fails on whether a cold agent reflexively consults+updates AIDA. trace:EPIC-63'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:57.398184899Z
-modified_at: 2026-09-13T01:42:05.276888579Z
+modified_at: 2026-09-13T02:45:08.633568242Z
 req_type: Story
 tags:
 - entry-lane
