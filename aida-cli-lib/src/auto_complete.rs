@@ -3758,13 +3758,11 @@ pub(crate) fn orchestrate_with_resume(
 
 // --- Batch drain (TASK-285) -------------------------------------------------
 //
-// `aida queue work --batch NAME --auto-complete` chains one `orchestrate` run
-// per batch member: resolve the batch head, run its full lifecycle, advance to
-// the new head, repeat. The *sequencing* lives here behind a [`BatchDriver`]
-// trait — the same shape as [`PhaseDriver`] — so the loop (head advance, the
-// `--max` cap, the failure-stops-the-drain rule, the non-advancing-queue
-// guard) is unit-tested with a mock instead of spawning real orchestrations.
-// trace:TASK-285 | ai:claude
+// `aida queue work --batch NAME --auto-complete` drives batch members through
+// the same per-spec phase engine. Depth 1 keeps the historical one-full-
+// lifecycle-at-a-time loop; depth >1 starts later implementer/CI children while
+// the parent serializes review/merge/pull/build for ready PRs.
+// trace:TASK-285 STORY-1091 | ai:claude
 
 /// Why a [`drain_batch`] run stopped. trace:TASK-285 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3913,10 +3911,11 @@ fn forget_batch_disposition(
     skipped.retain(|(s, _)| s != spec);
 }
 
-/// Drives a batch drain: yields the current batch head and runs one spec's
-/// full `--auto-complete` orchestration. The real implementation re-resolves
-/// the `batch:NAME` tag against the queue and calls `run_auto_complete`; the
-/// mock stands in for both so the loop is testable. trace:TASK-285 | ai:claude
+/// Drives a sequential batch drain: yields the current batch head and runs one
+/// spec's full `--auto-complete` orchestration. The pipelined scheduler layers
+/// a child-process implementer/CI leg on top of this trait via
+/// [`PipelinedBatchDriver`].
+// trace:TASK-285 STORY-1091 | ai:claude
 pub(crate) trait BatchDriver {
     /// The current batch head spec-id, or `None` when the batch is drained.
     /// Re-resolved each call — a completed spec leaves the queue, so the head
@@ -3933,6 +3932,276 @@ pub(crate) trait BatchDriver {
     // trace:TASK-966 | ai:claude
     fn cumulative_tokens(&mut self) -> u64 {
         0
+    }
+}
+
+/// Handle for one pipelined implementer/CI child.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PipelinedHandle(pub(crate) usize);
+
+/// Batch driver extension for the bounded child-process scheduler.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+pub(crate) trait PipelinedBatchDriver: BatchDriver {
+    /// Maximum number of implementer/CI children that may be in flight.
+    fn pipeline_depth(&self) -> usize {
+        1
+    }
+
+    /// Start one member's implementer + CI leg. Implementations may run this
+    /// asynchronously.
+    fn start_spec_through_ci(&mut self, spec: &str) -> PipelinedHandle;
+
+    /// Wait for the implementer/CI leg.
+    fn wait_spec_through_ci(&mut self, handle: PipelinedHandle) -> OrchestrationResult;
+
+    /// Run the remaining serial phases for a member whose PR is ready. The
+    /// parent scheduler calls this one member at a time.
+    fn finish_spec_after_ci(&mut self, spec: &str) -> OrchestrationResult;
+}
+
+#[derive(Debug, Clone)]
+struct InFlightMember {
+    spec: String,
+    handle: PipelinedHandle,
+}
+
+fn apply_batch_result(
+    head: String,
+    result: OrchestrationResult,
+    shipped: &mut Vec<String>,
+    punted: &mut Vec<String>,
+    escalated: &mut Vec<String>,
+    shelved: &mut Vec<String>,
+    skipped: &mut Vec<(String, String)>,
+    max_failures: Option<usize>,
+) -> Option<BatchDrainResult> {
+    if result.exit_code != 0 {
+        let phase = result.failed_phase.unwrap_or(Phase::Implementer);
+        let over_failure_budget = max_failures
+            .map(|cap| shelved.len() + 1 > cap)
+            .unwrap_or(false);
+        if result.shelved_reason.is_some() && !over_failure_budget {
+            forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
+            shelved.push(head);
+            return None;
+        }
+        return Some(BatchDrainResult {
+            shipped: shipped.clone(),
+            punted: punted.clone(),
+            escalated: escalated.clone(),
+            shelved: shelved.clone(),
+            skipped: skipped.clone(),
+            stopped_at: Some(head),
+            outcome: BatchDrainOutcome::Failed(phase),
+            exit_code: DRIVE_EXIT_HARD_FAIL,
+        });
+    }
+    if result.inconclusive_reason.is_some() {
+        return Some(BatchDrainResult {
+            shipped: shipped.clone(),
+            punted: punted.clone(),
+            escalated: escalated.clone(),
+            shelved: shelved.clone(),
+            skipped: skipped.clone(),
+            stopped_at: Some(head),
+            outcome: BatchDrainOutcome::Inconclusive,
+            exit_code: 0,
+        });
+    }
+    if result.held_reason.is_some() {
+        return Some(BatchDrainResult {
+            shipped: shipped.clone(),
+            punted: punted.clone(),
+            escalated: escalated.clone(),
+            shelved: shelved.clone(),
+            skipped: skipped.clone(),
+            stopped_at: Some(head),
+            outcome: BatchDrainOutcome::Held,
+            exit_code: 0,
+        });
+    }
+    if let Some(actual) = result.shipped_spec_id.clone() {
+        forget_batch_disposition(&actual, shipped, punted, escalated, shelved, skipped);
+        shipped.push(actual.clone());
+        return Some(BatchDrainResult {
+            shipped: shipped.clone(),
+            punted: punted.clone(),
+            escalated: escalated.clone(),
+            shelved: shelved.clone(),
+            skipped: skipped.clone(),
+            stopped_at: Some(head.clone()),
+            outcome: BatchDrainOutcome::Mismatched {
+                dispatched: head,
+                shipped: actual,
+            },
+            exit_code: 0,
+        });
+    }
+    if result.punt_reason.is_some() {
+        forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
+        punted.push(head);
+    } else if result.escalation.is_some() {
+        forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
+        escalated.push(head);
+    } else {
+        forget_batch_disposition(&head, shipped, punted, escalated, shelved, skipped);
+        shipped.push(head);
+    }
+    None
+}
+
+/// Bounded pipeline scheduler: start later implementer/CI children while the
+/// parent serializes each ready member's review/merge/pull/build leg.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+pub(crate) fn drain_batch_pipelined_with_caps(
+    driver: &mut dyn PipelinedBatchDriver,
+    max: Option<usize>,
+    max_failures: Option<usize>,
+    caps: &crate::drain_caps::DrainCaps,
+    start: std::time::Instant,
+    cap_stop_out: &mut Option<crate::drain_caps::CapStop>,
+) -> BatchDrainResult {
+    let depth = driver.pipeline_depth().clamp(1, 3);
+    if depth <= 1 {
+        return drain_batch_with_caps(driver, max, max_failures, caps, start, cap_stop_out);
+    }
+
+    let mut shipped = Vec::new();
+    let mut punted = Vec::new();
+    let mut escalated = Vec::new();
+    let mut shelved = Vec::new();
+    let mut skipped = Vec::new();
+    let mut in_flight: std::collections::VecDeque<InFlightMember> =
+        std::collections::VecDeque::new();
+    let mut launched = 0usize;
+    let mut no_more_heads = false;
+
+    loop {
+        while !no_more_heads && in_flight.len() < depth {
+            if let Some(limit) = max {
+                if launched >= limit {
+                    break;
+                }
+            }
+            if caps.is_active() {
+                let counters = crate::drain_caps::DrainCounters {
+                    tokens: caps
+                        .max_tokens
+                        .map(|_| driver.cumulative_tokens())
+                        .unwrap_or(0),
+                    iterations: launched as u64,
+                    elapsed: start.elapsed(),
+                };
+                let stop = caps
+                    .check_before_iteration(&counters)
+                    .or_else(|| caps.check_tokens(&counters));
+                if let Some(stop) = stop {
+                    *cap_stop_out = Some(stop);
+                    break;
+                }
+            }
+            let Some(head) = driver.next_head() else {
+                no_more_heads = true;
+                break;
+            };
+            if in_flight.iter().any(|m| m.spec == head) {
+                no_more_heads = true;
+                break;
+            }
+            if shipped.iter().any(|s| s == &head) {
+                shipped.retain(|s| s != &head);
+                return BatchDrainResult {
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_at: Some(head),
+                    outcome: BatchDrainOutcome::Stalled,
+                    exit_code: 1,
+                };
+            }
+            let handle = driver.start_spec_through_ci(&head);
+            launched += 1;
+            in_flight.push_back(InFlightMember { spec: head, handle });
+        }
+
+        let Some(member) = in_flight.pop_front() else {
+            if cap_stop_out.is_some()
+                || (max.is_some()
+                    && launched >= max.unwrap()
+                    && !no_more_heads
+                    && driver.next_head().is_some())
+            {
+                return BatchDrainResult {
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_at: None,
+                    outcome: BatchDrainOutcome::MaxReached,
+                    exit_code: DRIVE_EXIT_CLEAN,
+                };
+            }
+            let outcome = if shelved.is_empty() && skipped.is_empty() {
+                BatchDrainOutcome::Drained
+            } else {
+                BatchDrainOutcome::DrainedWithShelved
+            };
+            let exit_code = if matches!(outcome, BatchDrainOutcome::DrainedWithShelved) {
+                DRIVE_EXIT_SHELVED
+            } else {
+                DRIVE_EXIT_CLEAN
+            };
+            return BatchDrainResult {
+                shipped,
+                punted,
+                escalated,
+                shelved,
+                skipped,
+                stopped_at: None,
+                outcome,
+                exit_code,
+            };
+        };
+
+        let through_ci = driver.wait_spec_through_ci(member.handle);
+        let should_finish_serial = through_ci.exit_code == 0
+            && through_ci.inconclusive_reason.is_none()
+            && through_ci.held_reason.is_none()
+            && through_ci.shipped_spec_id.is_none()
+            && through_ci.punt_reason.is_none()
+            && through_ci.escalation.is_none();
+        if !should_finish_serial {
+            if let Some(done) = apply_batch_result(
+                member.spec,
+                through_ci,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+                max_failures,
+            ) {
+                return done;
+            }
+            continue;
+        }
+        let final_result = driver.finish_spec_after_ci(&member.spec);
+        if let Some(done) = apply_batch_result(
+            member.spec,
+            final_result,
+            &mut shipped,
+            &mut punted,
+            &mut escalated,
+            &mut shelved,
+            &mut skipped,
+            max_failures,
+        ) {
+            return done;
+        }
     }
 }
 
@@ -8629,6 +8898,159 @@ mod tests {
         fn cumulative_tokens(&mut self) -> u64 {
             self.tokens_each * self.runs.len() as u64
         }
+    }
+
+    struct MockPipelinedBatchDriver {
+        heads: Vec<String>,
+        depth: usize,
+        next_handle: usize,
+        through_ci_results: std::collections::HashMap<usize, OrchestrationResult>,
+        through_ci_by_spec: std::collections::HashMap<String, OrchestrationResult>,
+        finish_by_spec: std::collections::HashMap<String, OrchestrationResult>,
+        events: Vec<String>,
+    }
+
+    impl MockPipelinedBatchDriver {
+        fn new(heads: &[&str], depth: usize) -> Self {
+            Self {
+                heads: heads.iter().map(|s| s.to_string()).collect(),
+                depth,
+                next_handle: 1,
+                through_ci_results: std::collections::HashMap::new(),
+                through_ci_by_spec: std::collections::HashMap::new(),
+                finish_by_spec: std::collections::HashMap::new(),
+                events: Vec::new(),
+            }
+        }
+
+        fn shelving_through_ci(mut self, spec: &str, phase: Phase) -> Self {
+            self.through_ci_by_spec
+                .insert(spec.to_string(), shelve_result(phase));
+            self
+        }
+
+        fn failing_finish(mut self, spec: &str, phase: Phase) -> Self {
+            self.finish_by_spec
+                .insert(spec.to_string(), fail_result(phase));
+            self
+        }
+    }
+
+    impl BatchDriver for MockPipelinedBatchDriver {
+        fn next_head(&mut self) -> Option<String> {
+            self.heads.first().cloned()
+        }
+
+        fn run_spec(&mut self, spec: &str) -> OrchestrationResult {
+            self.events.push(format!("run:{spec}"));
+            self.heads.retain(|h| h != spec);
+            ok_result()
+        }
+    }
+
+    impl PipelinedBatchDriver for MockPipelinedBatchDriver {
+        fn pipeline_depth(&self) -> usize {
+            self.depth
+        }
+
+        fn start_spec_through_ci(&mut self, spec: &str) -> PipelinedHandle {
+            self.events.push(format!("start:{spec}"));
+            self.heads.retain(|h| h != spec);
+            let handle = PipelinedHandle(self.next_handle);
+            self.next_handle += 1;
+            let result = self
+                .through_ci_by_spec
+                .remove(spec)
+                .unwrap_or_else(ok_result);
+            self.through_ci_results.insert(handle.0, result);
+            handle
+        }
+
+        fn wait_spec_through_ci(&mut self, handle: PipelinedHandle) -> OrchestrationResult {
+            self.events.push(format!("wait:{}", handle.0));
+            self.through_ci_results
+                .remove(&handle.0)
+                .unwrap_or_else(|| OrchestrationResult::failed(Phase::Ci))
+        }
+
+        fn finish_spec_after_ci(&mut self, spec: &str) -> OrchestrationResult {
+            self.events.push(format!("finish:{spec}"));
+            self.finish_by_spec.remove(spec).unwrap_or_else(ok_result)
+        }
+    }
+
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    #[test]
+    fn drain_batch_pipelined_starts_next_implementer_before_prior_finish() {
+        let mut driver = MockPipelinedBatchDriver::new(&["TASK-A", "TASK-B", "TASK-C"], 2);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+
+        assert_eq!(result.outcome, BatchDrainOutcome::Drained);
+        assert_eq!(result.shipped, vec!["TASK-A", "TASK-B", "TASK-C"]);
+        assert_eq!(
+            driver.events,
+            vec![
+                "start:TASK-A",
+                "start:TASK-B",
+                "wait:1",
+                "finish:TASK-A",
+                "start:TASK-C",
+                "wait:2",
+                "finish:TASK-B",
+                "wait:3",
+                "finish:TASK-C",
+            ]
+        );
+    }
+
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    #[test]
+    fn drain_batch_pipelined_shelves_one_member_and_continues_others() {
+        let mut driver = MockPipelinedBatchDriver::new(&["TASK-A", "TASK-B", "TASK-C"], 2)
+            .shelving_through_ci("TASK-B", Phase::Ci);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            Some(5),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+
+        assert_eq!(result.outcome, BatchDrainOutcome::DrainedWithShelved);
+        assert_eq!(result.exit_code, DRIVE_EXIT_SHELVED);
+        assert_eq!(result.shipped, vec!["TASK-A", "TASK-C"]);
+        assert_eq!(result.shelved, vec!["TASK-B"]);
+        assert!(driver.events.iter().any(|e| e == "finish:TASK-C"));
+    }
+
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    #[test]
+    fn drain_batch_pipelined_serial_failure_does_not_count_member_shipped() {
+        let mut driver = MockPipelinedBatchDriver::new(&["TASK-A", "TASK-B"], 2)
+            .failing_finish("TASK-A", Phase::Reviewer);
+        let mut cap_stop = None;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut cap_stop,
+        );
+
+        assert_eq!(result.outcome, BatchDrainOutcome::Failed(Phase::Reviewer));
+        assert!(result.shipped.is_empty());
+        assert_eq!(result.stopped_at.as_deref(), Some("TASK-A"));
     }
 
     /// Acceptance: a 3-item batch with every phase green ships all three via
