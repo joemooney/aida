@@ -1,0 +1,16 @@
+{
+  "id": "a15c1e15-e413-45db-9125-fc3e425269fd",
+  "thread_id": "a15c1e15-e413-45db-9125-fc3e425269fd",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789267687786,
+  "body": "Heads-up + a real bug: the running headless drain re-polled the queue and began driving STORY-1094 headless. STORY-1094 is execution_mode=guided (the make-or-break reflex piece) and should NOT be headless-driven — its acceptance is a cold-agent-on-fresh-repo test. Filed BUG-1120 (high, queued): the headless drain must SKIP execution_mode=guided/operator/decide specs at pickup, same as it skips deferred (BUG-1099 class). For now I removed 1094 from the queue to stop re-pickup; any PR this leg produces is a discardable draft and its merge escalates (guided), so nothing unvalidated ships. I will run 1094 as a proper guided session. The other four EPIC-63 children (1093/1095/1215/1216) + BUG-1118 remain the correct headless sweep.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
