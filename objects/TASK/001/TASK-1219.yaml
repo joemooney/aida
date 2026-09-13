@@ -1,0 +1,24 @@
+id: 01a09c39-4a55-7750-b6e5-eada3062b308
+spec_id: TASK-1219
+agreed_id: TASK-1219
+title: 'Tighten queued_spec_ids(): parse the queue entry''s identity field, not a heuristic spec-id-shaped scan of all JSON strings'
+description: |-
+  Slice-1 followup (non-blocking; PR #1803 review). supervise_cmd::queued_spec_ids() recursively scans EVERY string value in `queue list --json` for a spec-id-shaped token (LETTERS-DIGITS). If a spec-id appears in a NON-identity field (e.g. for_scope, a note/body), that token is treated as 'already queued', so a legitimate drift item could be skipped in the dry-run report.
+
+  Failure mode is BENIGN and one-directional: under-realign (a ready child is missed this pass), never over-realign. The --execute path's queue-add dupe tolerance covers the reverse direction, so nothing double-queues. Acceptable to ship as-is (it did).
+
+  Fix: parse the queue entry's ACTUAL identity field (the requirement_id / spec_id / agreed_id the queue JSON carries per entry) instead of the whole-object string scan. Iterate the queue entries and read the id field directly.
+
+  Acceptance:
+  - queued_spec_ids (or its replacement) collects ids ONLY from the per-entry identity field, not arbitrary string values.
+  - A spec-id appearing in a non-identity field (for_scope/note) does NOT suppress that spec as drift.
+  - Existing drift/idempotency tests still pass; add a regression test with a spec-id embedded in a note field.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T19:23:15.413537404Z
+modified_at: 2026-09-13T19:23:15.413537404Z
+req_type: Task
+tags:
+- followup oversight supervise-watch parent:STORY-1096 papercut
