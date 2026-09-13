@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:31:54.693955308Z
-modified_at: 2026-09-13T06:14:27.751213905Z
+modified_at: 2026-09-13T18:56:21.129299831Z
 req_type: Story
 tags:
 - from-product
@@ -55,6 +55,13 @@ relationships:
 - rel_type: Parent
   target_id: 01a09c20-51e8-7f01-b1d9-290cd5635a7a
   created_at: 2026-09-13T18:56:01.188611549Z
+comments:
+- id: 01a09c20-a889-72d0-916c-9c04b4e800f9
+  author: joe
+  content: 'Operator accepted the combined design 2026-09-13: slice 1 = substrate-first ''aida supervise watch --objective'' loop composing the shipped redrive+nudge reflexes + objective-drift realign + aida awaiting escalation (never drives/merges); slice 2 = promote to a first-class ''oversight'' role (STORY-1107, sequenced after). Architecture recorded in ADR-29. Building slice 1 via the guided flow now.'
+  created_at: 2026-09-13T18:56:21.129299831Z
+  modified_at: 2026-09-13T18:56:21.129299831Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 deferred: true
 deferred_at: 2026-09-13T06:14:27.751213905Z
 deferred_until: operator wants to design the meta-supervisor/oversight seat (architecture-class, needs a guided session)
