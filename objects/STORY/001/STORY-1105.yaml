@@ -1,0 +1,26 @@
+id: 01a09942-7d75-7231-9550-5fb9a4158b15
+spec_id: STORY-1105
+agreed_id: STORY-1105
+title: 'Review PR-1797: [AI:codex] test(remote): lock mirror-push hook parser (TASK-157)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0993d`) for branch `task-1-133`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1797>
+  - Branch: `task-1-133` → `main`
+
+  ## Covers
+
+  - TASK-157
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1797` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T05:34:26.677029386Z
+modified_at: 2026-09-13T05:34:26.677029386Z
+req_type: Story
