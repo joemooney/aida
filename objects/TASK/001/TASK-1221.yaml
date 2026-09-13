@@ -2,13 +2,23 @@ id: 01a09c3b-11fa-79e1-b2f2-ba95d48ddf18
 spec_id: TASK-1221
 agreed_id: TASK-1221
 title: '`/aida-oversee` skill (judgment layer) — after the loop is dogfooded'
-description: ''
+description: |-
+  The /aida-oversee skill: the judgment layer that turns the shipped 'aida supervise watch' loop into a watchable supervisor an operator runs in a SEPARATE TERMINAL, largely without intervention. An agent runs the loop, interprets ambiguous drift, distinguishes benign parks from genuine human-decisions, salvages/triages, and coordinates with the advisor through the SUBSTRATE (mailbox), not by relaying through the operator.
+
+  This is the near-term enabler of the operator goal (2026-09-13): reduce the drudgery of babysitting the automation so operator+product time focuses on how the product behaves. Running it against a real drain IS the dogfooding that satisfies STORY-1107's revisit trigger, so it is sequenced BEFORE STORY-1107 (the role formalization). Authority per ADR-29: coordinate + realign-queue + fire reflexes + escalate; never drive/merge.
+
+  Acceptance (operator-contract focused):
+  1. A skill (/aida-oversee <objective>) an agent runs that loops 'aida supervise watch --objective <EPIC> --interval N', adding judgment: it decides which drift/parks are benign vs genuine human-decisions rather than acting mechanically.
+  2. The operator-facing contract is explicit and honest: a crisp 'what needs YOU' summary (seeded by aida awaiting) at a defined cadence AND on genuine escalations, quiet otherwise. 'Largely absent' must never become 'silently drifting'.
+  3. Coordinates with a live advisor through the substrate (mailbox/queue), not through the operator.
+  4. Never drives or merges; escalates those.
+  5. Dogfood: run it against one real drain toward a named objective; cite the administrative view + the escalations it surfaced in the PR. That run satisfies STORY-1107's revisit trigger.
 status: Approved
-priority: Low
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:25:12.058187387Z
-modified_at: 2026-09-13T19:25:12.058187387Z
+modified_at: 2026-09-13T19:52:27.761181191Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
