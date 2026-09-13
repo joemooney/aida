@@ -1,0 +1,26 @@
+id: 01a09972-ff67-7522-a09a-cccc3953d49a
+spec_id: STORY-1106
+agreed_id: STORY-1106
+title: 'Review PR-1798: [AI:codex] fix(session): reap dormant null-pid completed leases (BUG-1121)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09967`) for branch `bug-1121`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1798>
+  - Branch: `bug-1121` → `main`
+
+  ## Covers
+
+  - BUG-1121
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1798` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T06:27:25.671850077Z
+modified_at: 2026-09-13T06:27:25.671850077Z
+req_type: Story
