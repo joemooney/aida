@@ -65627,5 +65627,21 @@ operations:
   timestamp: 2026-09-13T22:35:47.022206843Z
   kind: !SetStatus
     status: Approved
-clock: 5170
+- id: 01a09ce9-93fa-76f2-b463-c2f616f535f5
+  target_id: 01a09ce6-3671-7c51-80ee-2ef322636e41
+  author: aida
+  node_id: '1'
+  lamport: 5171
+  timestamp: 2026-09-13T22:35:48.602175999Z
+  kind: !AddTag
+    tag: batch:doctor-fixes
+- id: 01a09ce9-947d-7401-b14a-7890ee265b6d
+  target_id: 01a09ce6-3671-7c51-80ee-2ef322636e41
+  author: aida
+  node_id: '1'
+  lamport: 5172
+  timestamp: 2026-09-13T22:35:48.733215684Z
+  kind: !RemoveTag
+    tag: remote-drift doctor gitlab papercut
+clock: 5172
 node_id: '1'
