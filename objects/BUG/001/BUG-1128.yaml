@@ -8,5 +8,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:47:38.074311938Z
-modified_at: 2026-09-13T18:47:38.074311938Z
+modified_at: 2026-09-13T18:58:05.561570425Z
 req_type: Bug
+comments:
+- id: 01a09c22-4079-7192-a957-a699ee6c660d
+  author: joe
+  content: Commit d2bb2de67 references this requirement
+  created_at: 2026-09-13T18:58:05.561570425Z
+  modified_at: 2026-09-13T18:58:05.561570425Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
