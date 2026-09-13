@@ -148,9 +148,18 @@ fn exited_requires_proof_of_death() {
 }
 
 #[test]
-fn unknown_liveness_is_never_treated_as_exited() {
-    // A lease that recorded no pid at all cannot PROVE death — absence of
-    // evidence is not evidence of death, so the pass refuses.
+fn dormant_null_pid_session_is_exited_when_no_process_is_in_the_worktree() {
+    // BUG-1121: a dormant normal worktree lease with no recorded pid has no
+    // process to force-close. This matches `aida status <spec>`: no live
+    // process backs the finished lease, so reap may proceed if the merge and
+    // worktree gates are also clean.
+    assert!(session_process_exited(LeaseState::Dormant, None, false));
+}
+
+#[test]
+fn stale_unknown_liveness_is_not_treated_as_exited() {
+    // A stale lease that recorded no pid at all still cannot PROVE death —
+    // absence of evidence is not evidence of death in the generic case.
     assert!(!session_process_exited(LeaseState::Stale, None, false));
 }
 
