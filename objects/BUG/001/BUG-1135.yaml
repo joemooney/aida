@@ -1,0 +1,30 @@
+id: 01a09c83-2731-7731-bd2d-ce4035eab027
+spec_id: BUG-1135
+agreed_id: BUG-1135
+title: 'Antigravity 1.2.2 surfaces AIDA slash commands twice: clean /aida-* from .claude/skills AND ugly /source-command-aida-* from .claude/commands'
+description: |-
+  Dogfooding AGY 1.2.2 in ~/ai/mind: the slash-command menu shows each AIDA command TWICE — a clean /aida-<name> and an ugly /source-command-aida-<name> with different descriptions.
+
+  VERIFIED (from files + the completion menu):
+  - The clean /aida-pr carries the longer 'Wrap up... Walks `git log`...' description, which exists ONLY in .claude/skills/aida-pr/SKILL.md → AGY surfaces .claude/skills/*/SKILL.md as clean /<name>.
+  - /source-command-aida-pr carries the shorter description from .claude/commands/aida-pr.md → AGY imports .claude/commands/*.md and prefixes them 'source-command-'.
+  - aida-pr has NO .antigravity/skills/ entry yet still appears clean → the clean entry comes from .claude/skills, not our .antigravity scaffold.
+  - Because AIDA scaffolds BOTH a skill and a command per daily driver (required for Claude Code skill<->command parity), AGY shows every driver twice.
+
+  INFERRED (needs a spike to confirm): our .antigravity/skills/ scaffold (32 dirs) may be UNREAD by AGY 1.2.2 (it reads .claude/ directly). If AGY also reads .antigravity/skills, those would duplicate the .claude/skills clean entries too.
+
+  Impact: cluttered, confusing slash menu; the 'source-command-' prefix reads as noise. Operator explicitly disliked /source-command-aida-req.
+
+  Spike questions:
+  - Does AGY 1.2.2 read .antigravity/skills at all, or only .claude/{skills,commands}? (put a .antigravity-only skill with no .claude twin and see if it appears)
+  - Is AGY's .claude/commands import (the source-command- prefix) suppressible via AGY config?
+  - Fix direction: either (a) stop shipping a redundant AGY surface and rely on .claude/skills for AGY, (b) gate .claude/commands out of AGY's import, or (c) if .antigravity/skills IS the intended clean AGY surface, ensure it has the full set and document that AGY should not also import .claude/commands.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T20:43:56.081792661Z
+modified_at: 2026-09-13T20:43:56.081792661Z
+req_type: Bug
+tags:
+- antigravity vendor-parity ux papercut
