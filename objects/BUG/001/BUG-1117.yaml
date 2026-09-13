@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:05:11.532178192Z
-modified_at: 2026-09-13T02:05:11.532178192Z
+modified_at: 2026-09-13T02:19:04.418239900Z
 req_type: Bug
 tags:
 - codex
@@ -16,3 +16,10 @@ tags:
 - init
 - parity
 - scaffolding
+comments:
+- id: 01a0988f-9f62-7fa0-a84f-4c9c0f680c7d
+  author: joe
+  content: 'Additional evidence (2026-09-12): there is no SCOPED way to install .codex/skills into an existing repo. aida scaffold apply is all-or-nothing — a dry-run in this repo shows it would overwrite the hand-maintained CLAUDE.md, README.md, and AGENTS.md with templates (shown as ''updated''), while correctly skipping .claude symlinks. So a codex user who discovers their skills are missing has no safe install path short of re-init. The fix should add a scoped install (e.g. ''aida scaffold apply --only codex-skills'' or a dedicated ''aida scaffold codex-skills'') that creates .codex/skills/ WITHOUT touching CLAUDE.md/README.md/AGENTS.md — and init should do it by default for codex-vendor projects.'
+  created_at: 2026-09-13T02:19:04.418239900Z
+  modified_at: 2026-09-13T02:19:04.418239900Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
