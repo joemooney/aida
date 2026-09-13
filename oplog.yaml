@@ -65603,5 +65603,21 @@ operations:
   timestamp: 2026-09-13T22:35:43.247114196Z
   kind: !SetStatus
     status: Approved
-clock: 5167
+- id: 01a09ce9-84f8-7d41-a83b-7cd7a4ae9c63
+  target_id: 01a09cd7-c1d0-72c3-a6f6-6102abb45a6a
+  author: aida
+  node_id: '1'
+  lamport: 5168
+  timestamp: 2026-09-13T22:35:44.760251702Z
+  kind: !AddTag
+    tag: batch:doctor-fixes
+- id: 01a09ce9-857a-7fd2-b2ad-25dfa3166a20
+  target_id: 01a09cd7-c1d0-72c3-a6f6-6102abb45a6a
+  author: aida
+  node_id: '1'
+  lamport: 5169
+  timestamp: 2026-09-13T22:35:44.890530888Z
+  kind: !RemoveTag
+    tag: doctor heal papercut
+clock: 5169
 node_id: '1'
