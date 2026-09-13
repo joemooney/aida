@@ -7031,57 +7031,76 @@ pub(crate) fn resolve_queue_work_plan(
         .unwrap_or_default();
     let type_filter_lower = type_filter.map(|s| s.to_ascii_lowercase());
 
-    let cluster: Vec<aida_core::QueueEntry> = entries
-        .iter()
-        .filter(|e| {
-            let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
-                return false;
-            };
-            // STORY-333: cluster drains must skip un-pickable members so
-            // the orchestrator never spawns phase 1 on a blocked-by /
-            // human-only spec. Same gate as head pickup + batch drain.
-            // trace:STORY-333 | ai:claude
-            match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
-                QueueFreshPickup::Pickable => {}
-                other => {
-                    let reason = queue_fresh_pickup_reason_label(&other)
-                        .unwrap_or_else(|| "not pickable".to_string());
-                    eprintln!(
-                        "  {} cluster {} — skipping un-pickable {} ({})",
-                        crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
-                        anchor_id_upper,
-                        req.display_id(),
-                        reason,
-                    );
-                    return false;
-                }
+    // BUG-1126: an anchor with a large archived cluster (e.g. a long-lived
+    // EPIC whose shipped children were archived) previously printed one
+    // "skipping un-pickable … (archived — skipped)" line per member — dozens
+    // of lines of noise before the real result. Archived skips carry no
+    // action, so tally them and print a single summary; keep the other
+    // un-pickable reasons (blocked-by, human-only, …) enumerated since those
+    // are rare and tell the user why a member was held back.
+    // trace:BUG-1126 | ai:claude
+    let mut archived_skipped: usize = 0;
+    let mut cluster: Vec<aida_core::QueueEntry> = Vec::new();
+    for e in entries.iter() {
+        let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+            continue;
+        };
+        // STORY-333: cluster drains must skip un-pickable members so
+        // the orchestrator never spawns phase 1 on a blocked-by /
+        // human-only spec. Same gate as head pickup + batch drain.
+        // trace:STORY-333 | ai:claude
+        match queue_fresh_pickup_policy(req, &store, force_needs_attention) {
+            QueueFreshPickup::Pickable => {}
+            QueueFreshPickup::Archived => {
+                archived_skipped += 1;
+                continue;
             }
-            // Match by explicit for_scope.
-            let scope_match = e
-                .for_scope
-                .as_deref()
-                .map(|s| s.eq_ignore_ascii_case(&anchor_id_upper))
-                .unwrap_or(false);
-            // Match by derived parent EPIC (when anchor is itself an
-            // EPIC; otherwise the function returns None so this branch
-            // is harmless).
-            let parent_match = derive_parent_epic_label(req, &store)
-                .map(|p| p.eq_ignore_ascii_case(&anchor_id_upper))
-                .unwrap_or(false);
-            if !(scope_match || parent_match) {
-                return false;
+            other => {
+                let reason = queue_fresh_pickup_reason_label(&other)
+                    .unwrap_or_else(|| "not pickable".to_string());
+                eprintln!(
+                    "  {} cluster {} — skipping un-pickable {} ({})",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    anchor_id_upper,
+                    req.display_id(),
+                    reason,
+                );
+                continue;
             }
-            // Type filter (cluster only).
-            if let Some(want) = &type_filter_lower {
-                let actual = format!("{:?}", req.req_type).to_ascii_lowercase();
-                if actual != *want {
-                    return false;
-                }
+        }
+        // Match by explicit for_scope.
+        let scope_match = e
+            .for_scope
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case(&anchor_id_upper))
+            .unwrap_or(false);
+        // Match by derived parent EPIC (when anchor is itself an
+        // EPIC; otherwise the function returns None so this branch
+        // is harmless).
+        let parent_match = derive_parent_epic_label(req, &store)
+            .map(|p| p.eq_ignore_ascii_case(&anchor_id_upper))
+            .unwrap_or(false);
+        if !(scope_match || parent_match) {
+            continue;
+        }
+        // Type filter (cluster only).
+        if let Some(want) = &type_filter_lower {
+            let actual = format!("{:?}", req.req_type).to_ascii_lowercase();
+            if actual != *want {
+                continue;
             }
-            true
-        })
-        .cloned()
-        .collect();
+        }
+        cluster.push(e.clone());
+    }
+    if archived_skipped > 0 {
+        eprintln!(
+            "  {} cluster {} — skipped {} archived member{}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            anchor_id_upper,
+            archived_skipped,
+            if archived_skipped == 1 { "" } else { "s" },
+        );
+    }
 
     if cluster.is_empty() {
         // TASK-217: status-aware recovery hint. The user typed an id that
@@ -7106,6 +7125,13 @@ pub(crate) fn resolve_queue_work_plan(
         let elsewhere =
             queue_role_fallback::queued_by_other_users(storage, user_id, &anchor_req.id);
         if !elsewhere.is_empty() {
+            // BUG-1126: this already fails with a one-line role hint
+            // ("aida role enter <role>"), which is the resolution the bug's
+            // acceptance calls for. (A "--force-claim does not cross role
+            // routing" clarification belongs in the flag's help text, not
+            // here — the CLI error renderer only surfaces the first line plus
+            // help lines, so an extra note appended to the message is
+            // dropped.) trace:BUG-1126 | ai:claude
             anyhow::bail!(queue_role_fallback::format_queued_by_other_user_error(
                 display_id,
                 &elsewhere,
