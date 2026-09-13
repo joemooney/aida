@@ -63624,5 +63624,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 5033
+- id: 01a09882-f220-73e3-b24e-01cedf5f7781
+  target_id: 01a09882-e9ec-7ec2-9d10-0c79a0c4731f
+  author: aida
+  node_id: '1'
+  lamport: 5034
+  timestamp: 2026-09-13T02:05:13.632982580Z
+  kind: !Create
+    title: codex-vendor init does not scaffold .codex/skills/ — a codex project has NO working skill surface ($aida-* finds nothing; ~/.codex/prompts is undiscoverable on codex >=0.142)
+    description: 'Observed 2026-09-12: this repo is [agents] vendor=codex, codex-cli 0.154.0. `$aida-capture` (and all $aida-*) find nothing in codex. aida scaffold preview shows .codex/skills/aida-*/SKILL.md as MISSING — the codex skills pack was never installed at init. The only codex surface that WAS populated, ~/.codex/prompts/*.md, is not discovered by codex >=0.142 (confirmed by aida doctor --category scaffold-drift). Net: a codex-vendor project ends up with zero working AIDA skill surface — a first-user trap directly against the codex-parity goal. Acceptance: (1) aida init on a codex-vendor project scaffolds .codex/skills/ by default (the discoverable surface), not just ~/.codex/prompts; (2) doctor scaffold-drift flags a codex project missing .codex/skills/ with the exact fix; (3) fresh codex-vendor init → $aida-capture resolves.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5034
 node_id: '1'
