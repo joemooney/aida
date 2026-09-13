@@ -436,10 +436,32 @@ pub(crate) fn handle_scaffold_command(
             }
         }
         ScaffoldCommand::CodexPrompts { dest, force } => {
-            // BUG-1095: keep generating the legacy prompt-body pack for
-            // direct launches/refresh drift checks, but do not promise
-            // interactive /aida-* discovery. Codex CLI 0.142 does not discover
-            // ~/.codex/prompts as custom slash commands. trace:BUG-1095 | ai:codex
+            // BUG-1095/BUG-1118: Codex CLI 0.142+ does not discover
+            // ~/.codex/prompts as custom slash commands. Do not keep
+            // populating a dead global surface on modern Codex; direct AIDA
+            // launches use render_codex_command_prompt instead.
+            // trace:BUG-1095 | ai:codex
+            // trace:BUG-1118 | ai:codex
+            if let Some(version) = crate::doctor_cmd::installed_codex_version() {
+                if aida_core::scaffolding::codex_prompts::codex_prompt_dir_is_undiscoverable(
+                    version,
+                ) {
+                    println!(
+                        "{} Codex {}.{}.{} does not discover ~/.codex/prompts as `/aida-*` slash commands; skipping legacy prompt scaffold.",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        version.0,
+                        version.1,
+                        version.2,
+                    );
+                    println!(
+                        "  use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly"
+                    );
+                    println!(
+                        "  prune any old install with `rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files"
+                    );
+                    return Ok(());
+                }
+            }
             let dest_dir = match dest {
                 Some(d) => d.clone(),
                 None => dirs::home_dir()

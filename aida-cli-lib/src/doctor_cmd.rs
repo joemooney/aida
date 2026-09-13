@@ -347,7 +347,7 @@ fn parse_codex_semver(raw: &str) -> Option<(u64, u64, u64)> {
         })
 }
 
-fn installed_codex_version() -> Option<(u64, u64, u64)> {
+pub(crate) fn installed_codex_version() -> Option<(u64, u64, u64)> {
     let out = std::process::Command::new("codex")
         .arg("--version")
         .output()
@@ -363,7 +363,7 @@ fn installed_codex_version() -> Option<(u64, u64, u64)> {
     parse_codex_semver(&banner)
 }
 
-fn codex_prompt_dir_has_aida_prompts(dir: &std::path::Path) -> bool {
+fn codex_prompt_dir_has_aida_prompt_cruft(dir: &std::path::Path) -> bool {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;
     };
@@ -371,7 +371,9 @@ fn codex_prompt_dir_has_aida_prompts(dir: &std::path::Path) -> bool {
         let path = entry.path();
         path.file_name()
             .and_then(|n| n.to_str())
-            .is_some_and(|name| name.starts_with("aida-") && name.ends_with(".md"))
+            .is_some_and(|name| {
+                name.starts_with("aida-") && (name.ends_with(".md") || name.ends_with(".aida-bak"))
+            })
     })
 }
 
@@ -379,10 +381,10 @@ fn codex_ignores_prompt_dir_finding_for_version(
     dir: &std::path::Path,
     version: (u64, u64, u64),
 ) -> Option<DoctorFinding> {
-    if !codex_prompt_dir_has_aida_prompts(dir) {
+    if !codex_prompt_dir_has_aida_prompt_cruft(dir) {
         return None;
     }
-    if version < (0, 142, 0) {
+    if !aida_core::scaffolding::codex_prompts::codex_prompt_dir_is_undiscoverable(version) {
         return None;
     }
     Some(DoctorFinding {
@@ -392,7 +394,7 @@ fn codex_ignores_prompt_dir_finding_for_version(
             "~/.codex/prompts contains AIDA prompt files, but installed Codex {}.{}.{} does not discover them as `/aida-*` slash commands",
             version.0, version.1, version.2
         ),
-        action: "Use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly".to_string(),
+        action: "Prune the dead prompt pack (`rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files); use scaffolded `.codex/skills/` via `/skills` or `$aida-*`, or run the matching `aida ...` CLI verb directly".to_string(),
         safe_heal: false,
     })
 }
@@ -3371,6 +3373,8 @@ mod story_462_doctor_tests {
         assert_eq!(finding.id, "scaffold-drift/codex-prompts-undiscovered");
         assert!(finding.summary.contains("0.142.0"));
         assert!(finding.summary.contains("does not discover"));
+        assert!(finding.action.contains("Prune"));
+        assert!(finding.action.contains(".aida-bak"));
         assert!(finding.action.contains("$aida-*"));
         assert!(finding.action.contains("/skills"));
     }
@@ -3401,6 +3405,16 @@ mod story_462_doctor_tests {
         assert!(finding.action.contains("aida scaffold upgrade"));
         assert!(finding.action.contains(".codex/skills/aida-*/SKILL.md"));
         assert!(finding.action.contains("$aida-capture"));
+    }
+
+    #[test]
+    fn codex_prompt_dir_warning_detects_backup_cruft() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("aida-capture.md.aida-bak"), "old prompt\n").unwrap();
+        let finding =
+            codex_ignores_prompt_dir_finding_for_version(dir.path(), (0, 154, 0)).unwrap();
+        assert_eq!(finding.id, "scaffold-drift/codex-prompts-undiscovered");
+        assert!(finding.action.contains(".aida-bak"));
     }
 
     #[test]

@@ -20,6 +20,7 @@
 //! Writes are conservative: an existing prompt file is never overwritten
 //! unless `force` — the user may have edited it.
 // trace:STORY-763 | ai:claude
+// trace:BUG-1118 | ai:codex
 
 use anyhow::{Context, Result};
 use regex::Regex;
@@ -55,6 +56,16 @@ pub struct CodexPromptsOutcome {
     pub written: Vec<String>,
     pub skipped_existing: Vec<String>,
     pub excluded: Vec<(String, String)>,
+}
+
+/// First Codex release family verified to ignore `~/.codex/prompts/*.md` as
+/// interactive custom slash commands.
+pub const CODEX_PROMPTS_UNDISCOVERABLE_SINCE: (u64, u64, u64) = (0, 142, 0);
+
+/// `true` when the installed Codex version is new enough that writing
+/// `~/.codex/prompts` only creates an undiscoverable legacy pack.
+pub fn codex_prompt_dir_is_undiscoverable(version: (u64, u64, u64)) -> bool {
+    version >= CODEX_PROMPTS_UNDISCOVERABLE_SINCE
 }
 
 /// Strip a leading YAML frontmatter block (`---\n…\n---\n`) if present.
@@ -547,5 +558,12 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "user edited");
         scaffold_codex_prompts(tmp.path(), true).unwrap();
         assert_ne!(std::fs::read_to_string(&target).unwrap(), "user edited");
+    }
+
+    #[test]
+    fn codex_prompt_dir_undiscoverable_gate_starts_at_0_142() {
+        assert!(!codex_prompt_dir_is_undiscoverable((0, 141, 9)));
+        assert!(codex_prompt_dir_is_undiscoverable((0, 142, 0)));
+        assert!(codex_prompt_dir_is_undiscoverable((0, 154, 0)));
     }
 }

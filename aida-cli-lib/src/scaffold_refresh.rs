@@ -8,9 +8,9 @@
 //!
 //! This is the same contract the starter memory pack has had since STORY-255,
 //! generalized so a template fix reaches Claude skills/commands, Codex skills,
-//! Antigravity skills and the machine-global Codex custom prompts through one
-//! mechanism instead of one per vendor.
+//! and Antigravity skills through one mechanism instead of one per vendor.
 // trace:TASK-1170 | ai:claude
+// trace:BUG-1118 | ai:codex
 
 use std::path::{Path, PathBuf};
 
@@ -35,13 +35,12 @@ const PROJECT_PACKS: &[(&str, &str)] = &[
     (".antigravity/skills/", "Antigravity skills"),
 ];
 
-/// Refresh every installed agent pack under `project_root`, plus the
-/// machine-global Codex custom prompts. Only files that already exist are
+/// Refresh every installed agent pack under `project_root`. Only files that already exist are
 /// touched — installing a pack the project opted out of stays `aida init`'s
 /// job, so a Claude-only project never grows a `.codex/` tree from a refresh.
 ///
 /// `codex_prompts_dest` overrides the machine-global `~/.codex/prompts`
-/// location (mirrors `scaffold codex-prompts --dest`).
+/// location for the deprecation notice (mirrors `scaffold codex-prompts --dest`).
 pub(crate) fn refresh_agent_packs(
     project_root: &Path,
     codex_prompts_dest: Option<&Path>,
@@ -202,12 +201,12 @@ fn agents_md_block_refresh(
     })
 }
 
-/// Refresh `~/.codex/prompts` when the machine actually has it installed.
+/// Report an installed `~/.codex/prompts` pack without writing to it.
 ///
-/// These files shipped before they carried a scaffold marker, so an unmarked
-/// prompt here is adopted into edit-tracking rather than skipped — the previous
-/// content is saved to a `.aida-bak` sibling first, so nothing is lost, and
-/// every later refresh follows the strict marked/edited contract.
+/// Codex >=0.142 does not discover this directory as a slash-command surface,
+/// so refresh no longer adopts unmarked prompt files into edit-tracking. That
+/// old adoption path produced one `.aida-bak` file per prompt while keeping a
+/// dead global pack alive.
 fn codex_prompts_refresh(dest: Option<&Path>) -> Option<PackRefresh> {
     let dir = match dest {
         Some(d) => d.to_path_buf(),
@@ -217,21 +216,25 @@ fn codex_prompts_refresh(dest: Option<&Path>) -> Option<PackRefresh> {
         return None;
     }
     let mut report = RefreshReport::default();
-    for (name, expected) in aida_core::scaffolding::codex_prompts::expected_codex_prompts() {
+    for (name, _) in aida_core::scaffolding::codex_prompts::expected_codex_prompts() {
         let file = format!("{name}.md");
         let dest = dir.join(&file);
-        match refresh_file(&dest, &expected, true) {
-            Ok(outcome) => report.record(&PathBuf::from(&file), outcome),
-            Err(e) => eprintln!(
-                "  {} could not refresh {}: {}",
-                "Warning:".yellow(),
-                file,
-                e
-            ),
+        if dest.exists() {
+            report.kept_unmarked.push(PathBuf::from(&file));
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.filter_map(|entry| entry.ok()) {
+            let Some(name) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if name.starts_with("aida-") && name.ends_with(".aida-bak") {
+                report.kept_unmarked.push(PathBuf::from(name));
+            }
         }
     }
     Some(PackRefresh {
-        label: "Codex prompts".to_string(),
+        label: "Codex prompts (deprecated)".to_string(),
         location: dir.display().to_string(),
         report,
     })
@@ -269,6 +272,15 @@ pub(crate) fn print_refresh_summary(packs: &[PackRefresh]) {
         println!(
             "    {} file(s) that predate edit-tracking were brought current; the previous copies are saved alongside as .aida-bak",
             total.adopted.len()
+        );
+    }
+    if packs
+        .iter()
+        .any(|p| p.label == "Codex prompts (deprecated)")
+    {
+        println!(
+            "    {} ~/.codex/prompts is not discoverable on Codex >=0.142; refresh left it untouched. Prune it with `rm -rf ~/.codex/prompts` or delete its `aida-*.md` and `*.aida-bak` files.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
         );
     }
     if !total.skipped_symlink.is_empty() {
@@ -371,49 +383,35 @@ mod tests {
         );
     }
 
-    /// The delivery gap this closes: a `~/.codex/prompts` deployed by an older
-    /// binary carries no marker and is stale (no `$ARGUMENTS`, Claude-only
-    /// language). One refresh brings it level with the embedded template,
-    /// keeps the old copy alongside, and leaves it precisely tracked after.
+    /// BUG-1118: `~/.codex/prompts` is not a discoverable custom-command
+    /// surface on modern Codex, so refresh reports an installed pack without
+    /// rewriting it or creating `.aida-bak` siblings.
     #[test]
-    fn stale_codex_prompt_is_brought_level_with_the_embedded_template() {
+    fn stale_codex_prompt_is_reported_but_not_rewritten_or_backed_up() {
         let tmp = tempfile::tempdir().unwrap();
         let dest = tmp.path().join("aida-guided-implement.md");
-        std::fs::write(
-            &dest,
-            "# Guided implement\n\nAsk via `AskUserQuestion`. No arguments placeholder here.\n",
-        )
-        .unwrap();
+        let stale =
+            "# Guided implement\n\nAsk via `AskUserQuestion`. No arguments placeholder here.\n";
+        std::fs::write(&dest, stale).unwrap();
 
-        let expected = aida_core::scaffolding::codex_prompts::expected_codex_prompts()
-            .into_iter()
-            .find(|(n, _)| n == "aida-guided-implement")
-            .map(|(_, body)| body)
-            .expect("guided-implement ships as a Codex prompt");
-
-        refresh_file(&dest, &expected, true).unwrap();
-
-        let now = std::fs::read_to_string(&dest).unwrap();
-        assert_eq!(now, expected);
-        assert!(now.contains("$ARGUMENTS"), "{now}");
-        assert!(!now.contains("AskUserQuestion"), "{now}");
-        assert!(tmp
-            .path()
-            .join("aida-guided-implement.md.aida-bak")
-            .exists());
-
-        // Now tracked: a second refresh is a no-op, and a user edit sticks.
+        let packs = refresh_agent_packs(tmp.path(), Some(tmp.path()));
+        let prompts = packs
+            .iter()
+            .find(|p| p.label == "Codex prompts (deprecated)")
+            .expect("legacy prompt pack is reported");
         assert_eq!(
-            refresh_file(&dest, &expected, true).unwrap(),
-            aida_core::scaffolding::refresh::RefreshOutcome::Unchanged
+            prompts.report.kept_unmarked.len(),
+            1,
+            "{:?}",
+            prompts.report
         );
-        let mine = expected.replace("$ARGUMENTS", "$ARGUMENTS # mine");
-        std::fs::write(&dest, &mine).unwrap();
-        assert_eq!(
-            refresh_file(&dest, &expected, true).unwrap(),
-            aida_core::scaffolding::refresh::RefreshOutcome::KeptEdited
+        assert_eq!(std::fs::read_to_string(&dest).unwrap(), stale);
+        assert!(
+            !tmp.path()
+                .join("aida-guided-implement.md.aida-bak")
+                .exists(),
+            "refresh must not accumulate backup files for the dead prompt surface"
         );
-        assert_eq!(std::fs::read_to_string(&dest).unwrap(), mine);
     }
 
     /// BUG-718: a symlinked pack file (the AIDA dev-repo layout) is skipped,
