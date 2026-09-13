@@ -65263,5 +65263,31 @@ operations:
   timestamp: 2026-09-13T20:30:05.359886397Z
   kind: !SetStatus
     status: Rejected
-clock: 5145
+- id: 01a09c77-3d96-7390-875e-28a950c95df8
+  target_id: 01a09c77-36ba-7711-aa1f-325a777f8c0a
+  author: aida
+  node_id: '1'
+  lamport: 5146
+  timestamp: 2026-09-13T20:30:55.382903753Z
+  kind: !Create
+    title: Orchestrator parks a spec as 'phase-1 failed' AFTER it already opened the PR — worktree-reuse collision orphans a successful PR + worktree
+    description: |-
+      Observed 2026-09-13 draining BUG-1130 (single-spec, --auto-complete --no-human=both). The headless implementer SUCCEEDED: it created the fix/bug-1130 worktree, implemented the fix, committed (1b94bf4a4), pushed to origin+gitlab, and OPENED PR #1806 (mergeable, correct, 10/10 tests). But the orchestrator then logged 'git worktree add (reuse existing branch fix/bug-1130) failed — the branch may already be checked out in another worktree' on attempts 1 AND 2, declared 'phase 1 (implementer session) failed', and PARKED BUG-1130 (status restored to Approved) — orphaning both the open PR and the fix/bug-1130 worktree.
+
+      Net failure: the drain silently SUCCEEDED-but-REPORTED-FAILURE. A human/oversight had to notice PR #1806 existed, free the worktree, verify CI, and merge by hand. Under a fully unattended drain the correct work would have sat as an orphaned open PR while the spec read Approved (looks un-started).
+
+      Two defects:
+      1. Worktree lifecycle: a phase-1 (re)start reuses branch fix/bug-<n> but the prior attempt's worktree was not torn down, so the reuse collides — and the retry hits the same collision.
+      2. Failure classification: the orchestrator parks the spec as phase-1-failed WITHOUT checking whether the branch/PR for it already exists. The work may have shipped.
+
+      Acceptance:
+      - Before parking a spec as phase-1-failed, the orchestrator checks for an existing branch/PR for that spec; if a mergeable PR exists, it resumes the lifecycle (CI/review/merge) instead of parking as failed.
+      - A failed/aborted phase-1 attempt tears down its worktree so a retry (or re-drive) does not collide on branch reuse.
+      - Regression: simulate a worktree-reuse collision after a PR is opened; the drain resumes to merge rather than parking the spec as un-started.
+
+      Caught by the oversight layer (STORY-1096 dogfooding) — the triage that noticed the 'parked' spec had actually shipped.
+    req_type: Bug
+    status: Draft
+    priority: High
+clock: 5146
 node_id: '1'
