@@ -65449,5 +65449,30 @@ operations:
   timestamp: 2026-09-13T21:57:34.142600910Z
   kind: !SetTitle
     title: 'Guest/Requester stakeholder persona: external read + intake roles outside the build loop'
-clock: 5156
+- id: 01a09cc6-a4c8-7e42-b7cc-3fb5cac66868
+  target_id: 01a09cbf-1760-7bd0-9168-85a143ff19cc
+  author: aida
+  node_id: '1'
+  lamport: 5157
+  timestamp: 2026-09-13T21:57:39.144258806Z
+  kind: !SetDescription
+    description: |-
+      A NEW axis in the role model. Today's roles (advisor, implementer, oversight, product) are all INTERNAL build-loop seats that drive work and are effectively singletons. This epic adds an EXTERNAL stakeholder/consumer persona: someone outside the build loop who wants to UNDERSTAND the project and FEED it, not drive it. Unlike the work seats there can be MANY, and their authority is least-privilege (read + at most one write verb: file a request).
+
+      Two tiers:
+      - guest: read-only comprehension (why / list / status / graph tree / digest / search). No writes.
+      - requester: guest + open a request via add, constrained to change-request / bug / user TYPES, landing as Draft, tagged intake:requester, into the advisor groom queue. Cannot approve, queue, edit status, or merge.
+
+      NAMING (decided): the write tier is "requester", NOT "user" — "user" already means three things in AIDA (the queue user_id, AIDA_USER/--user, and the `user` requirement type), so a "user" role filing "user"-type specs collides badly. "guest" is clean.
+
+      Design pillars (from oversight review):
+      1. Least-privilege must be a PROGRAMMATIC GATE, not a convention — reuse the existing approve/queue/merge gates so a guest/requester is MECHANICALLY unable to escalate. That is the security core and what makes it safe to hand to many people.
+      2. The requester tier SUBSUMES the mail-intake bug-report flow — the email front door is the ad-hoc version of this; unify them into ONE intake pipeline (the aida groom queue).
+      3. Cardinality is the new axis: first many-vs-singleton persona.
+
+      Why now: PRIN-3 names exactly this persona (the interested human browsing the capability map); consumer end of the memory-lane on-ramp (EPIC-63) and the mail-intake flow; ties to STORY-495 permission work. Does NOT collide with the one-advisor/one-product lockdown.
+
+      Slice 1 (the STORY): role identifiers + least-privilege permission gate + Draft-only intake tagging.
+      Deferred followups: a curated /aida-intro read surface; per-user identity in the intake tag (revisit trigger: when we need to ATTRIBUTE or RATE-LIMIT external filings — spam is the forcing function); a hosted 'file a request' front door.
+clock: 5157
 node_id: '1'
