@@ -1,0 +1,26 @@
+id: 01a098e4-747a-78d1-8849-4fdd240183ea
+spec_id: STORY-1100
+agreed_id: STORY-1100
+title: 'Review PR-1792: [AI:codex] docs(codex): default memory lane to CLI TOON (STORY-1095)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a098de`) for branch `story-1095`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1792>
+  - Branch: `story-1095` → `main`
+
+  ## Covers
+
+  - STORY-1095
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1792` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T03:51:43.994099094Z
+modified_at: 2026-09-13T03:51:43.994099094Z
+req_type: Story
