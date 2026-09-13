@@ -3,12 +3,12 @@ spec_id: TASK-1218
 agreed_id: TASK-1218
 title: 'README: surface the memory lane as the primary adoption on-ramp (section under the aida-why hero)'
 description: 'Add a ''Start here: the memory lane'' section to README.md immediately after the ''The whole thing in 60 seconds'' block and before ''What makes AIDA distinct''. Frame it as the gentlest adoption path: AIDA as an invisible project memory for ordinary Claude/Codex chats — repo remembers decisions/requirements/why-notes across chats, no queue/drain/roles/orchestrator required. Point to docs/positioning/memory-lane.md (TASK-1216). Keep the aida-why code-to-decision hero as the top hero (northstar). Operator directive 2026-09-12: make memory lane prominent as how people first adopt AIDA.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T06:35:16.165523134Z
-modified_at: 2026-09-13T06:38:56.723800496Z
+modified_at: 2026-09-13T18:07:59.384346576Z
 req_type: Task
 tags:
 - adoption
