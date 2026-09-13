@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:25:03.954541022Z
-modified_at: 2026-09-13T19:25:03.954541022Z
+modified_at: 2026-09-13T19:43:15.391308524Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
@@ -16,3 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
   created_at: 2026-09-13T19:25:06.568588638Z
+comments:
+- id: 01a09c4b-99bf-7db3-9a03-c2e21d988698
+  author: joe
+  content: Duplicate of STORY-1107. This task is an auto-filed '## Followups' artifact from docs/plans/2026-09-13-story-1096-oversight-watch-loop.md — the plan's bullet pointing at STORY-1107 ('Slice 2 = promote to first-class oversight role') got filed as its own task, so it duplicates the spec it names. STORY-1107 is the real slice-2 story (carries the design + revisit trigger). Rejecting as duplicate per operator; STORY-1107 is the surviving item. trace:STORY-1107
+  created_at: 2026-09-13T19:43:15.391308524Z
+  modified_at: 2026-09-13T19:43:15.391308524Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
