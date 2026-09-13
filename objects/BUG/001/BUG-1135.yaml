@@ -19,12 +19,12 @@ description: |-
   - Does AGY 1.2.2 read .antigravity/skills at all, or only .claude/{skills,commands}? (put a .antigravity-only skill with no .claude twin and see if it appears)
   - Is AGY's .claude/commands import (the source-command- prefix) suppressible via AGY config?
   - Fix direction: either (a) stop shipping a redundant AGY surface and rely on .claude/skills for AGY, (b) gate .claude/commands out of AGY's import, or (c) if .antigravity/skills IS the intended clean AGY surface, ensure it has the full set and document that AGY should not also import .claude/commands.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:43:56.081792661Z
-modified_at: 2026-09-13T21:59:45.719805245Z
+modified_at: 2026-09-13T22:08:35.761889525Z
 req_type: Bug
 tags:
 - antigravity vendor-parity ux papercut
@@ -65,3 +65,21 @@ comments:
   created_at: 2026-09-13T21:59:45.719805245Z
   modified_at: 2026-09-13T21:59:45.719805245Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09cd0-a99a-7682-8649-a3bf1ded107f
+  author: aida-auto-bump
+  timestamp: 2026-09-13T22:08:35.738659588Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a09cd0-a9b1-78a3-830c-86371a8a219f
+  timestamp: 2026-09-13T22:08:35.761888205Z
+  agent: aida
+  commit_sha: e49850f81d7eb4d93d738c8253a44eb457a4c764
+  summary: Completed via merge e49850f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-13T22:08:35.738496838Z
+  completion_sha: e49850f81d7eb4d93d738c8253a44eb457a4c764
