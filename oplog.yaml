@@ -64742,5 +64742,34 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 5107
+- id: 01a09c20-44be-75d0-baf9-1944d705c28d
+  target_id: 01a09c20-40f7-7163-8176-77d2879b6368
+  author: aida
+  node_id: '1'
+  lamport: 5108
+  timestamp: 2026-09-13T18:55:55.582709549Z
+  kind: !Create
+    title: 'Oversight layer: a substrate-first watch loop that graduates to a first-class role'
+    description: |-
+      ## Decision (operator-accepted 2026-09-13)
+      Formalize the oversight/meta-supervisor layer in TWO SEQUENCED SLICES, not as a single build:
+
+      - SLICE 1 (mechanism): `aida supervise watch --objective <EPIC>` — a substrate-first loop (one-shot --once or continuous) that reads events.jsonl + mailbox + drain/queue status and, for a named objective: detects drift (objective children approved-but-unqueued, or drain working specs unrelated to the objective) and realigns the queue toward it; fires `supervise redrive` on transient parks; fires `supervise nudge` on advisor stalls; surfaces human-decision items via `aida awaiting`. NEVER drives or merges — escalates those. Headless-safe (works with no agent awake). `/aida-oversee` skill is the thin judgment layer an agent runs on top.
+      - SLICE 2 (identity): promote the proven loop to a first-class `oversight` role — routing (escalations/nudges addressable to @oversight so advisor↔oversight coordinate through substrate, not the operator), statusline, role-context snapshot. When the seat is empty the headless loop still runs the mechanical reflexes.
+
+      ## Rationale
+      Slice 1 carries the load-bearing value and is the smallest shippable unit; slice 2 is the formalization it earns. Building the role first adds a concept before the mechanism proves itself and cuts against 'one master advisor until subsystems'. Substrate-first is the core: the 'magic' must live in the substrate, not in a live agent session (the field report's 'operator became a message-router' cost).
+
+      ## Sub-decisions
+      - Objective input: `--objective <EPIC>` flag + `[oversight] objective = ...` config default.
+      - Authority: coordinate + realign-queue + fire reflexes (redrive/nudge) + escalate. NEVER drive/merge autonomously.
+      - Event surface: actionable events.jsonl set + mailbox + drain/queue status.
+      - Operator contract: continuous `aida awaiting` one-liner + a batch report when a drain goes idle.
+
+      ## Reuses (already shipped)
+      STORY-1051 `aida supervise redrive`, STORY-1052 `aida supervise nudge`, `aida awaiting`. Slice 1 composes these; it does not reinvent them.
+    req_type: Decision
+    status: Draft
+    priority: High
+clock: 5108
 node_id: '1'
