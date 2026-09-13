@@ -63,6 +63,11 @@ manifest existed. **If you create the file by hand in an older project, check
 the allow-line is there** — without it git ignores the manifest and it never
 reaches anyone.
 
+In AIDA's [memory lane](positioning/memory-lane.md), this is the intentionally
+visible part of the footprint: `.aida/config.toml` explains where the store is,
+`.aida/project.toml` explains what the project is, and the rest of `.aida/`
+stays quiet as ignored per-clone runtime state. <!-- trace:TASK-1216 | ai:codex -->
+
 ---
 
 ## Schema

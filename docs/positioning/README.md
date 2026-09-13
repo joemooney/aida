@@ -43,9 +43,11 @@ The short reading path:
    CLI vs a vendor-neutral substrate.
 2. [when-not-to-use-aida.md](when-not-to-use-aida.md) for the cases where AIDA's
    graph is overhead.
-3. [composition.md](composition.md) for how AIDA layers with Spec Kit, Agent
+3. [memory-lane.md](memory-lane.md) for AIDA's quiet entry adoption lane: project
+   memory before queues, drains, roles, hooks, or orchestrators. <!-- trace:TASK-1216 | ai:codex -->
+4. [composition.md](composition.md) for how AIDA layers with Spec Kit, Agent
    Teams, MCP editors, GitHub Issues, and plain markdown.
-4. [../aida/discipline/agent-agnostic-vs-claude-specific.md](../aida/discipline/agent-agnostic-vs-claude-specific.md)
+5. [../aida/discipline/agent-agnostic-vs-claude-specific.md](../aida/discipline/agent-agnostic-vs-claude-specific.md)
    for the universal-discipline vs per-agent-convenience split.
 
 ---
@@ -88,6 +90,7 @@ Not one-neighbor-at-a-time comparisons, but the questions that span all of them:
 | File | The question it answers |
 |---|---|
 | [when-not-to-use-aida.md](when-not-to-use-aida.md) | The honest scope limits — six cases where a neighbor tool alone is the right call, and AIDA's overhead wouldn't earn its keep. Read this *first* if you're deciding whether to adopt at all. |
+| [memory-lane.md](memory-lane.md) | AIDA's entry adoption lane: quiet project memory and a discoverable `.aida/` footprint before queue/drain/orchestrator/team machinery. |
 | [agent-decision-matrix.md](agent-decision-matrix.md) | The build-vs-buy-vs-wait aid for *"which agent runtime, and how much workflow do I push into vendor-neutral infrastructure?"* — Claude Code vs Codex CLI vs an AIDA-style substrate, axis by axis. Includes the honest "do **not** adopt a substrate when…" rows. Grounded in the Claude→Codex migration docs under `docs/agents/`. |
 | [composition.md](composition.md) | The recipe book for *"use AIDA **with** X"* — Spec Kit, Agent Teams, MCP editors, `/workflow`, GitHub Issues, Karpathy markdown. Names the seam (and where a bridge is still manual today) for each. |
 

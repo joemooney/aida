@@ -7,6 +7,7 @@
 - [Why AIDA?](WHY-AIDA.md)
 - [Getting started](getting-started.md)
 - [Your first project](first-project.md)
+- [The memory lane](positioning/memory-lane.md)
 - [Using AIDA with Claude Code](using-aida-with-claude-code.md)
 
 # Core concepts
