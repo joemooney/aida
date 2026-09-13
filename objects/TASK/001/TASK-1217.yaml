@@ -18,12 +18,12 @@ description: |-
 
   ## Related
   TASK-257 (CI split), the release docs-gate, the trace-gate/glyph-lint/CLI-drift gates (decide whether those cheap checks should still run on docs — probably yes, they're seconds).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:23:15.756417243Z
-modified_at: 2026-09-13T02:23:15.756417243Z
+modified_at: 2026-09-13T04:54:45.757735501Z
 req_type: Task
 tags:
 - ci
