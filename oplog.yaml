@@ -63588,5 +63588,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5030
+- id: 01a0986d-cd6f-7d82-b006-87796f1ae31c
+  target_id: 01a0986d-c7a3-74b2-a5df-fba3e7fdb29b
+  author: aida
+  node_id: '1'
+  lamport: 5031
+  timestamp: 2026-09-13T01:42:07.983894170Z
+  kind: !Create
+    title: 'Memory-lane cheap default query path: reflex uses AIDA_AGENT_OUTPUT=toon over the CLI; MCP opt-in behind a flag'
+    description: 'Ensure the invisible-memory reflex queries via the token-cheap CLI/TOON path by default (MCP is ~2x tokens for equal work). MCP stays optional behind a flag. Acceptance: the scaffolded reflex guidance and any lane defaults select the CLI/TOON surface; MCP is not required for the lane to function. trace:EPIC-63'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5031
 node_id: '1'
