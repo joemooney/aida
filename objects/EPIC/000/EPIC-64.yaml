@@ -18,5 +18,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:24.192961100Z
-modified_at: 2026-09-13T21:49:24.192961100Z
+modified_at: 2026-09-13T21:54:21.965152427Z
 req_type: Epic
+comments:
+- id: 01a09cc3-a28d-76e1-9fa8-32a9f3a64b65
+  author: joe
+  content: |-
+    Insights (product seat, 2026-09-13):
+
+    1. NAMING — 'user' is overloaded here. AIDA already uses 'user' for: the queue user_id (BUG-89, the shell identity), AIDA_USER/--user, AND the `user` requirement TYPE. A ROLE named 'user' collides with all three — and the tier's own intake is constrained to the `user` type, so 'the user role files a user-type spec' is a genuine tongue-twister. Consider 'requester' / 'reporter' / 'stakeholder' for the write tier. 'guest' is clean, keep it.
+
+    2. LEAST-PRIVILEGE MUST BE A PROGRAMMATIC GATE, not a convention (substrate-as-bouncer). guest/user must be MECHANICALLY unable to approve / queue / edit-status / merge — reuse the existing role gates (the approve gate, the queue-add gate) rather than documenting 'please don't'. This is the security-critical core of slice 1 and what makes the persona safe to hand to MANY external people.
+
+    3. THE WRITE TIER SUBSUMES THE MAIL-INTAKE FLOW. The email bug-report intake (subject 'aida', high-water mark) is an ad-hoc external 'file a request' front door that already exists. EPIC-64's write tier is its CLI-native formalization — worth explicitly unifying so we don't maintain two intake pipelines. The intake:user Draft into the advisor groom queue is the right landing; make sure it is the SAME queue `aida groom` already processes.
+
+    4. CARDINALITY IS THE GENUINELY NEW AXIS. Every existing role is a singleton build seat; guest/user are the first MANY-cardinality personas. Slice 1's single intake tag (no per-user identity) is the right start — but the deferred per-user-identity followup's revisit trigger should be concrete: 'when we need to attribute or rate-limit external filings' (spam/abuse from an open front door is the failure mode that forces identity).
+
+    5. SLICING is well-judged — role ids + gate + Draft-only intake is the smallest valuable slice; the curated read surface + hosted front door are correctly deferred. Ties cleanly to PRIN-3 (this IS that persona) and EPIC-63 (the consumer end of the memory-lane on-ramp).
+
+    6. GOOD /aida-oversee DOGFOOD CANDIDATE: EPIC-64 is a fresh, self-contained epic — once slice-1's children are queued, `/aida-oversee EPIC-64` can be the first real supervisor trial.
+  created_at: 2026-09-13T21:54:21.965152427Z
+  modified_at: 2026-09-13T21:54:21.965152427Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
