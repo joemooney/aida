@@ -63552,5 +63552,17 @@ operations:
     req_type: Decision
     status: Approved
     priority: Medium
-clock: 5027
+- id: 01a0986d-2672-7810-9754-57a7e2ddebda
+  target_id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
+  author: aida
+  node_id: '1'
+  lamport: 5028
+  timestamp: 2026-09-13T01:41:25.234165535Z
+  kind: !Create
+    title: 'Entry ''memory lane'': AIDA under the hood as an invisible requirements store / memory / notepad for a normal Claude or Codex chat (no automation machinery)'
+    description: 'The entry adoption lane for AIDA: used transparently as a requirements store + memory + notepad that the coding agent consults and updates on its own, with the user knowing nothing about AIDA (like codegraph under the hood). Store + query CLI + trace + trailer + MCP + --footprint minimal already exist; this epic packages them into a coherent no-machinery lane. Excludes queue/drain/orchestrator/roles/multi-agent and codegraph auto-population (deferred). Plan: docs/plans/2026-09-12-entry-memory-lane.md. Operator-approved shape 2026-09-12.'
+    req_type: Epic
+    status: Approved
+    priority: Medium
+clock: 5028
 node_id: '1'

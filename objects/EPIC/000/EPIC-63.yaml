@@ -1,0 +1,17 @@
+id: 01a0986d-20a6-7601-aeec-b2fd2ecee69d
+spec_id: EPIC-63
+agreed_id: EPIC-63
+title: 'Entry ''memory lane'': AIDA under the hood as an invisible requirements store / memory / notepad for a normal Claude or Codex chat (no automation machinery)'
+description: 'The entry adoption lane for AIDA: used transparently as a requirements store + memory + notepad that the coding agent consults and updates on its own, with the user knowing nothing about AIDA (like codegraph under the hood). Store + query CLI + trace + trailer + MCP + --footprint minimal already exist; this epic packages them into a coherent no-machinery lane. Excludes queue/drain/orchestrator/roles/multi-agent and codegraph auto-population (deferred). Plan: docs/plans/2026-09-12-entry-memory-lane.md. Operator-approved shape 2026-09-12.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T01:41:23.750489926Z
+modified_at: 2026-09-13T01:41:23.750489926Z
+req_type: Epic
+tags:
+- adoption
+- entry-lane
+- memory
+- positioning
