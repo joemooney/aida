@@ -73,10 +73,9 @@ pub(crate) struct ReapFacts {
     /// `harness-worktree` lease, a PR-review scope, …) is NOT finished — the
     /// pass has no completion signal for it and leaves it alone.
     pub spec_finished: bool,
-    /// True when the session's process is VERIFIABLY gone: every pid the lease
-    /// recorded is absent from the process table AND no live agent process sits
-    /// inside the worktree. Unknown liveness is false (absence of evidence is
-    /// never evidence of death).
+    /// True when the session's process is gone: every recorded pid is absent
+    /// from the process table, or a normal worktree lease is Dormant with no
+    /// recorded pid and no live agent process sits inside the worktree.
     pub process_exited: bool,
     /// True when `git worktree list --porcelain` reports a `locked` line for the
     /// worktree — operator-protected, never removed.
@@ -152,7 +151,9 @@ pub(crate) fn classify_session_reap(facts: &ReapFacts) -> ReapVerdict {
 /// state read — none of them looks at what a terminal printed:
 ///   * `owner_gone` — the [`aida_core::liveness::lease_owner_process_gone`]
 ///     tri-state over the lease's recorded pids. `None` (no pid was ever
-///     recorded) means liveness is *undeterminable*, so we refuse.
+///     recorded) normally means liveness is *undeterminable*, except for a
+///     Dormant worktree lease where the shared session/status view has already
+///     found no live process backing it.
 ///   * `lease_state` — the same `● live / ⚠ STALE` verdict `aida ps` renders.
 ///   * `worktree_has_live_process` — a live agent process whose cwd sits in the
 ///     worktree, even if it holds no lease of its own.
@@ -164,6 +165,13 @@ pub(crate) fn session_process_exited(
     owner_gone: Option<bool>,
     worktree_has_live_process: bool,
 ) -> bool {
+    // BUG-1121: a Dormant normal worktree lease with no recorded pid is the
+    // same no-live-process state `aida status <spec>` reports as safe to clear.
+    // There is no pid to force-close, so reap may proceed once the worktree and
+    // merge gates also pass.
+    if lease_state == LeaseState::Dormant && owner_gone.is_none() && !worktree_has_live_process {
+        return true;
+    }
     owner_gone == Some(true)
         && !matches!(lease_state, LeaseState::Live)
         && !worktree_has_live_process
