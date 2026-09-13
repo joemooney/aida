@@ -13,12 +13,12 @@ description: |
   1. `aida queue work --drain` / batch pickup SKIPS specs whose execution_mode is `guided` (and `operator`/`decide`) with an explicit 'skipped — needs guided/operator session' line, same as the deferred skip.
   2. Such a spec can only be driven via `aida do` / `aida queue work --guided` (the interactive path), never a headless drain.
   3. Regression: a queued guided spec is not a drain member and is not driven headless.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:47:30.913688957Z
-modified_at: 2026-09-13T05:23:25.116896167Z
+modified_at: 2026-09-13T05:27:16.400358302Z
 req_type: Bug
 tags:
 - drain
