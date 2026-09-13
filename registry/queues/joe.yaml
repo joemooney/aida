@@ -442,3 +442,9 @@
   added_at: 2026-09-12T23:32:21.696279259Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a097bf-d52e-7522-9ad7-88d1e5dec468
+  position: 347000
+  added_by: joe
+  added_at: 2026-09-13T00:16:26.463251780Z
+  for_role: product
