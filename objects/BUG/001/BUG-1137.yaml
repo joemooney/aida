@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:32:08.049014580Z
-modified_at: 2026-09-13T22:49:11.930841641Z
+modified_at: 2026-09-13T22:52:28.088404935Z
 req_type: Bug
 tags:
 - batch:doctor-fixes
@@ -17,6 +17,13 @@ relationships:
   target_id: 01a09cf4-ba32-7040-bf40-96875de40857
   created_at: 2026-09-13T22:48:04.791442846Z
   created_by: joe
+comments:
+- id: 01a09cf8-d438-7d80-8d90-06f3f47d52ce
+  author: joe
+  content: 'Advisor review of PR #1811: PARTIAL fix, NOT merged. The PR improves detection (http_code + body/tag_name parsing, adds AIDA_GITLAB_TOKEN) but reads the token ONLY from env (AIDA_GITLAB_TOKEN/GITLAB_TOKEN). Verified the operator''s real setup: gitlab ai/aida is PRIVATE (unauth release read → 404) and GITLAB_TOKEN is UNSET (token lives in ~/.config/glab-cli/config.yml). So on the operator''s box the detector still makes an unauthenticated call → 404 → still reports ''release missing''. The fix does not close the bug for a glab user. Needed: authenticate the release check the way glab does — env var first, THEN fall back to the glab config token (hosts.<host>.token), OR shell out to ''glab api projects/:id/releases/:tag'' which uses glab''s own auth. Rework #1811 with a real auth source before completing.'
+  created_at: 2026-09-13T22:52:28.088404935Z
+  modified_at: 2026-09-13T22:52:28.088404935Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 implementation_info:
   implemented: true
   implemented_at: 2026-09-13T22:48:09.807304805Z
