@@ -24,12 +24,12 @@ description: |-
 
   ## Related
   EPIC-62 (reliability), STORY-1051 (auto re-drive — a reflex it uses), STORY-1052 (nudge — a reflex it uses), STORY-998 (idle), STORY-1043/1029 (surface/notify), the field report (docs/testimonials/2026-09-12-llm-field-report.md — the human "became a message-router" cost this removes). Keep OUT of EPIC-63 (no-machinery entry lane).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:31:54.693955308Z
-modified_at: 2026-09-13T19:14:24.474771355Z
+modified_at: 2026-09-13T19:24:33.817992397Z
 req_type: Story
 tags:
 - from-product
