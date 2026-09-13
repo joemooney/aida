@@ -1,0 +1,12 @@
+id: 01a09c18-ad5a-7b40-85ae-063fdc16fcc9
+spec_id: BUG-1128
+agreed_id: BUG-1128
+title: Epic rollup treats a DEFERRED child as unfinished, so an epic whose only open child is parked never reads ready-to-close
+description: EPIC-62's 10 non-deferred children are all terminal (completed/done/accepted); its only remaining child STORY-1096 is deferred on the primed shelf. The rollup still reports the epic in-progress and 'aida why' says 'nothing for you until they all finish' — but all NON-deferred children have finished. A deferred child should be treated as resolved for rollup purposes (like rejected/superseded already are), so the epic reads ready-to-close while the parked child stays on the deferred shelf. trace:BUG-626
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T18:47:38.074311938Z
+modified_at: 2026-09-13T18:47:38.074311938Z
+req_type: Bug
