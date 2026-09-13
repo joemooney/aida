@@ -37,6 +37,9 @@ pub enum InitFootprint {
     Full,
     /// Minimal project footprint: git-canonical store, config, cache, gitignore.
     Minimal,
+    /// Entry memory lane: store, config, cache, gitignore, reflex skills, guidance.
+    // trace:STORY-1093 | ai:codex
+    MemoryLane,
 }
 
 #[derive(Parser, Debug)]
@@ -10654,9 +10657,11 @@ pub enum Command {
         force: bool,
 
         /// Project footprint for git-canonical init. `minimal` writes only the
-        /// store, .aida/config.toml, .aida/cache.db, and AIDA .gitignore block.
+        /// store, .aida/config.toml, .aida/cache.db, and AIDA .gitignore block;
+        /// `memory-lane` adds only reflex guidance plus aida-capture/aida-learn.
         // trace:STORY-830 | ai:codex
-        #[clap(long, value_enum, value_name = "full|minimal")]
+        // trace:STORY-1093 | ai:codex
+        #[clap(long, value_enum, value_name = "full|minimal|memory-lane")]
         footprint: Option<InitFootprint>,
 
         /// Markdown-only first run: scaffold just a `specs/` folder + a runnable
