@@ -64666,5 +64666,17 @@ operations:
   timestamp: 2026-09-13T06:54:23.141398856Z
   kind: !SetStatus
     status: In Progress
-clock: 5099
+- id: 01a09bda-49bc-73d3-9f49-7450c42bfb18
+  target_id: 01a09bda-3b6b-7e71-9599-5d83319c402e
+  author: aida
+  node_id: '1'
+  lamport: 5100
+  timestamp: 2026-09-13T17:39:29.340610348Z
+  kind: !Create
+    title: 'Cross-platform nightly red on main: three Windows-only test failures (gitdir drive-prefix, mtime-only activity signature, bash fake-gh harness)'
+    description: 'The Cross-platform (nightly) workflow on main failed with three Windows-specific test failures, all portability issues not logic defects: (1) worktree_gitdir_path mis-joins a POSIX-absolute container gitdir with the drive letter on Windows; (2) the vendor_activity progress signature keys on log mtime alone, which repeats under coarse NTFS timestamp resolution; (3) the unshipped-work detector test stubs gh with a bash shebang script Windows cannot execute. Fixed on fix/xplat-nightly.'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5100
 node_id: '1'
