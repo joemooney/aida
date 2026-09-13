@@ -7,7 +7,7 @@ use super::*;
 fn toon_list_fields_default_and_selection() {
     assert_eq!(
         toon_list_fields(None).unwrap(),
-        vec!["id", "title", "status", "type"]
+        vec!["id", "title", "status", "type", "modified_at"]
     );
     assert_eq!(
         toon_list_fields(Some("id, status , req_type")).unwrap(),
@@ -16,7 +16,7 @@ fn toon_list_fields_default_and_selection() {
     // Empty / whitespace-only selection falls back to the default.
     assert_eq!(
         toon_list_fields(Some("  ")).unwrap(),
-        vec!["id", "title", "status", "type"]
+        vec!["id", "title", "status", "type", "modified_at"]
     );
     assert!(toon_list_fields(Some("id,bogus")).is_err());
 }
@@ -200,20 +200,20 @@ fn search_fields_agent_emits_toon_human_emits_table() {
 fn search_default_agent_emits_toon_not_boxtable() {
     colored::control::set_override(false); // deterministic, no ANSI
     let selected = toon_list_fields(None).unwrap(); // the no-`--fields` schema
-    assert_eq!(selected, vec!["id", "title", "status", "type"]);
+    assert_eq!(
+        selected,
+        vec!["id", "title", "status", "type", "modified_at"]
+    );
 
-    let results = vec![fields_summary(
-        "STORY-1",
-        "first thing",
-        "in-progress",
-        "high",
-    )];
+    let mut row = fields_summary("STORY-1", "first thing", "in-progress", "high");
+    row.modified_at = "2026-09-12T21:12:00Z".to_string();
+    let results = vec![row];
 
     // AGENT mode (what the default path passes): TOON `specs[...]` shape, the
     // full default schema, and crucially NO box-table divider rule.
     let agent = render_search_fields(&results, &selected, true);
     assert!(
-        agent.contains("specs[1]{id,title,status,type}:"),
+        agent.contains("specs[1]{id,title,status,type,modified_at}:"),
         "default agent search emits the TOON specs table: {agent}"
     );
     assert!(
@@ -221,6 +221,7 @@ fn search_default_agent_emits_toon_not_boxtable() {
         "no human box-table rule leaks into the default agent search: {agent}"
     );
     assert!(agent.contains("STORY-1") && agent.contains("in-progress"));
+    assert!(agent.contains("2026-09-12T21:12:00Z"));
 
     // HUMAN mode keeps the aligned box-table with its divider rule.
     let human = render_search_fields(&results, &selected, false);
@@ -280,11 +281,13 @@ fn search_fields_unknown_name_errors() {
 // standard fixed-layout columns. trace:STORY-734 | ai:claude
 #[test]
 fn fields_default_none_keeps_standard_columns() {
-    // The agent default schema is the historical id/title/status/type — a
-    // None selection never collapses to the human `--fields` path.
+    // The agent default schema includes modified_at as the memory-lane
+    // freshness signal; a None selection never collapses to the human
+    // `--fields` path.
+    // trace:TASK-1215 | ai:codex
     assert_eq!(
         toon_list_fields(None).unwrap(),
-        vec!["id", "title", "status", "type"]
+        vec!["id", "title", "status", "type", "modified_at"]
     );
 }
 
