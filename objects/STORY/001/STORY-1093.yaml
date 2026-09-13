@@ -3,12 +3,12 @@ spec_id: STORY-1093
 agreed_id: STORY-1093
 title: 'Memory-lane init footprint tier: scaffold store + reflex skills + reflex CLAUDE.md/AGENTS.md block, and NOTHING queue/drain/orchestrator/role-related'
 description: 'A third footprint tier (beyond full/minimal) for the entry memory lane. Installs orphan store + config + cache + gitignore + the two reflex skills + the reflex agent-guidance block; installs no queue/drain/orchestrator/role skills or hooks. Extends the existing --footprint minimal scaffolding path. Acceptance: (1) the tier scaffolds exactly the lane fileset; (2) unit test asserts machinery skills/hooks/roles are absent; (3) --help documents it. trace:EPIC-63'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:49.178715232Z
-modified_at: 2026-09-13T04:37:20.696209262Z
+modified_at: 2026-09-13T06:09:41.903019273Z
 req_type: Story
 tags:
 - entry-lane
