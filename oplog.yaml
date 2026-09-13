@@ -65522,5 +65522,24 @@ operations:
   timestamp: 2026-09-13T21:58:13.518253813Z
   kind: !RemoveTag
     tag: guest-user-persona role intake parent:epic-64 slice-1
-clock: 5161
+- id: 01a09ccf-ecbd-7a03-b470-a651ccd38186
+  target_id: 01a09ccf-e718-7233-a46c-99209bcadfbb
+  author: aida
+  node_id: '1'
+  lamport: 5162
+  timestamp: 2026-09-13T22:07:47.389261441Z
+  kind: !Create
+    title: 'Deliberate sweep of stale worktree/branch cruft: 226 unshipped branches (74-101d, 1000+ commits ahead), ~43 on-disk worktrees, ~68 aida-* sibling dirs'
+    description: |-
+      aida session reap --dry-run (2026-09-13) surfaced 226 'unshipped work' branches, most 1000+ commits ahead and 74-101 days old (abandoned worktree branches from months ago whose specs almost certainly completed via other branches). Plus ~43 on-disk git worktrees and ~68 /home/joe/ai/aida-* sibling dirs accumulated over the alpha cycle.
+
+      NOT a blind batch-delete (clean git status != no work; some worktrees hold uncommitted work — e.g. STORY-1006 and STORY-993 are Completed but their worktrees carry uncommitted changes the reap correctly refused to remove).
+
+      Deliberate sweep: for each stale branch/worktree, check the spec status — if Completed/merged-elsewhere, delete the branch + remove the worktree; if it holds genuine uncommitted work, salvage-commit or discard per a per-item decision. aida session reap already handles the finished+merged+exited class safely; this task is the long-tail the reap conservatively leaves (unfinished-spec or uncommitted-work worktrees, and pure branch cruft). Consider an aida worktree gc --older-than / --stale sweep if one doesn't cover it.
+
+      Immediate: STORY-1006 + STORY-993 (both Completed) have uncommitted worktree changes — operator decision: salvage or discard, then remove those two worktrees.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5162
 node_id: '1'
