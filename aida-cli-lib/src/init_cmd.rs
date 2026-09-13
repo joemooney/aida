@@ -994,34 +994,45 @@ fn write_memory_lane_scaffolding(
     root: &std::path::Path,
     store: &RequirementsStore,
     storage_label: &str,
+    no_skills: bool,
     force: bool,
 ) -> Result<(usize, usize)> {
     let mut written = 0usize;
     let mut skipped = 0usize;
 
-    for (rel, content) in [
-        ("CLAUDE.md", memory_lane_claude_md(store, storage_label)),
-        (
-            ".claude/skills/aida-capture.md",
-            memory_lane_skill_template("aida-capture"),
-        ),
-        (
-            ".claude/skills/aida-learn.md",
-            memory_lane_skill_template("aida-learn"),
-        ),
-        (
-            ".codex/skills/aida-capture/SKILL.md",
-            memory_lane_skill_template("aida-capture"),
-        ),
-        (
-            ".codex/skills/aida-learn/SKILL.md",
-            memory_lane_skill_template("aida-learn"),
-        ),
-    ] {
+    for (rel, content) in [("CLAUDE.md", memory_lane_claude_md(store, storage_label))] {
         if write_memory_lane_artifact(root, rel, &content, force)? {
             written += 1;
         } else {
             skipped += 1;
+        }
+    }
+
+    // trace:STORY-1093 | ai:codex
+    if !no_skills {
+        for (rel, content) in [
+            (
+                ".claude/skills/aida-capture.md",
+                memory_lane_skill_template("aida-capture"),
+            ),
+            (
+                ".claude/skills/aida-learn.md",
+                memory_lane_skill_template("aida-learn"),
+            ),
+            (
+                ".codex/skills/aida-capture/SKILL.md",
+                memory_lane_skill_template("aida-capture"),
+            ),
+            (
+                ".codex/skills/aida-learn/SKILL.md",
+                memory_lane_skill_template("aida-learn"),
+            ),
+        ] {
+            if write_memory_lane_artifact(root, rel, &content, force)? {
+                written += 1;
+            } else {
+                skipped += 1;
+            }
         }
     }
 
@@ -1250,7 +1261,7 @@ fn complete_init_scaffolding(
             db_path.to_string_lossy().to_string()
         };
         let (written, skipped) =
-            write_memory_lane_scaffolding(root, store, &plain_storage_label, force)?;
+            write_memory_lane_scaffolding(root, store, &plain_storage_label, no_skills, force)?;
         println!();
         println!(
             "{}",
@@ -2707,6 +2718,50 @@ mod task_631_init_self_commit_tests {
         assert!(agents.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
         assert!(agents.contains("/aida-capture"));
         assert!(agents.contains("/aida-learn"));
+    }
+
+    // trace:STORY-1093 | ai:codex
+    #[test]
+    fn memory_lane_no_skills_skips_reflex_skill_files() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".gitignore"), ".aida/*\n!.aida/config.toml\n").unwrap();
+        let store = aida_core::models::RequirementsStore::new();
+
+        complete_init_scaffolding(
+            root,
+            &store,
+            None,
+            true,  // no_skills
+            false, // no_hooks
+            false, // force
+            root.join(".aida-store"),
+            "test store",
+            false, // verbose
+            crate::cli::InitFootprint::MemoryLane,
+            true, // suppress scaffold commit
+        )
+        .unwrap();
+
+        for rel in ["CLAUDE.md", "AGENTS.md"] {
+            assert!(
+                root.join(rel).exists(),
+                "memory-lane no-skills still writes guidance artifact {rel}"
+            );
+        }
+
+        for rel in [
+            ".claude/skills/aida-capture.md",
+            ".claude/skills/aida-learn.md",
+            ".codex/skills/aida-capture/SKILL.md",
+            ".codex/skills/aida-learn/SKILL.md",
+        ] {
+            assert!(
+                !root.join(rel).exists(),
+                "memory-lane --no-skills must not scaffold reflex skill artifact {rel}"
+            );
+        }
     }
 
     // BUG-789: init reports the orphan-store push, then makes a second commit
