@@ -63929,5 +63929,13 @@ operations:
   timestamp: 2026-09-13T03:13:08.189716923Z
   kind: !SetStatus
     status: Completed
-clock: 5051
+- id: 01a098c1-2d5e-7270-9a0b-63d2855fda58
+  target_id: 01a098b9-e79f-7380-9b69-d63740476d9f
+  author: aida
+  node_id: '1'
+  lamport: 5052
+  timestamp: 2026-09-13T03:13:12.030898746Z
+  kind: !SetStatus
+    status: Rejected
+clock: 5052
 node_id: '1'
