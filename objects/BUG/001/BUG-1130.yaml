@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:54:06.092219170Z
-modified_at: 2026-09-13T20:15:23.978980752Z
+modified_at: 2026-09-13T20:19:53.898570322Z
 req_type: Bug
 tags:
 - followup oversight supervise-watch parent:EPIC-62
@@ -24,3 +24,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-13T19:54:08.866670277Z
+comments:
+- id: 01a09c6d-25aa-74f0-91b2-a6f49e7136d3
+  author: joe
+  content: Commit 63ba1045d references this requirement
+  created_at: 2026-09-13T20:19:53.898570322Z
+  modified_at: 2026-09-13T20:19:53.898570322Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
