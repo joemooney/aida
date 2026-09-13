@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:43:56.081792661Z
-modified_at: 2026-09-13T21:44:45.349480498Z
+modified_at: 2026-09-13T21:58:31.585281015Z
 req_type: Bug
 tags:
 - antigravity vendor-parity ux papercut
@@ -52,4 +52,10 @@ comments:
   content: 'In progress: advisor dispatched a worktree-isolated implementer to convert .claude/skills scaffolding to the directory form <name>/SKILL.md (central path-normalize in create_artifact + sync-templates + dev-repo symlinks + tests + docs). PR incoming for advisor review. (Note: this status was set late — the work was already underway when the spec still read Draft.)'
   created_at: 2026-09-13T21:44:45.349480498Z
   modified_at: 2026-09-13T21:44:45.349480498Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09cc7-71a1-7a12-bfe9-3c630437335f
+  author: joe
+  content: Commit 396aa892b references this requirement
+  created_at: 2026-09-13T21:58:31.585281015Z
+  modified_at: 2026-09-13T21:58:31.585281015Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
