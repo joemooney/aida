@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:31:54.693955308Z
-modified_at: 2026-09-13T18:56:21.129299831Z
+modified_at: 2026-09-13T19:14:24.474771355Z
 req_type: Story
 tags:
 - from-product
@@ -61,6 +61,12 @@ comments:
   content: 'Operator accepted the combined design 2026-09-13: slice 1 = substrate-first ''aida supervise watch --objective'' loop composing the shipped redrive+nudge reflexes + objective-drift realign + aida awaiting escalation (never drives/merges); slice 2 = promote to a first-class ''oversight'' role (STORY-1107, sequenced after). Architecture recorded in ADR-29. Building slice 1 via the guided flow now.'
   created_at: 2026-09-13T18:56:21.129299831Z
   modified_at: 2026-09-13T18:56:21.129299831Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a09c31-305a-7bb3-a97c-14ca578c65ca
+  author: joe
+  content: 'Slice 1 implemented: PR #1803 (branch story-1096-slice1) — ''aida supervise watch --objective'' composing redrive+nudge+realign+awaiting, substrate-first, never drives/merges. 8 new tests + reflex suite green; fmt/clippy/catalog-guard clean; dry-run smoke test against EPIC-63 reports aligned. Slice 2 = STORY-1107. Keystone: for human review, no auto-merge.'
+  created_at: 2026-09-13T19:14:24.474771355Z
+  modified_at: 2026-09-13T19:14:24.474771355Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 deferred: true
 deferred_at: 2026-09-13T06:14:27.751213905Z
