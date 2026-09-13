@@ -69,6 +69,20 @@ pub(crate) fn handle_supervise_command(
             };
             crate::supervisor::handle_supervise_command(backend, project_root, opts)
         }
+        // trace:STORY-1096 | ai:claude
+        SuperviseCommand::Watch {
+            objective,
+            execute,
+            interval,
+            json,
+        } => handle_supervise_watch(
+            backend,
+            store_path,
+            objective.as_deref(),
+            *execute,
+            *interval,
+            *json,
+        ),
     }
 }
 
@@ -321,6 +335,300 @@ fn format_operator_notification(items: &[StuckItem]) -> String {
     out
 }
 
+// ---------------------------------------------------------------------------
+// STORY-1096 slice 1 — the oversight watch loop.
+//
+// `aida supervise watch --objective <EPIC>` is the substrate-first oversight
+// pass from ADR-29. It COMPOSES the two shipped reflexes (redrive + nudge) and
+// adds the one new capability — objective-drift detection + realign — then
+// surfaces the human-decision items. It reads the substrate (store + queue +
+// events) and never drives or merges. Default is a dry-run report; --execute
+// realigns the queue. --interval repeats the pass on a sleep loop.
+// trace:STORY-1096 | ai:claude
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+struct WatchReport {
+    objective: String,
+    total_children: usize,
+    done_children: usize,
+    /// Approved, actionable children not yet queued — the drift to realign.
+    drift: Vec<String>,
+    /// Children queued this pass (only populated under --execute).
+    realigned: Vec<String>,
+}
+
+fn handle_supervise_watch(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &Path,
+    objective: Option<&str>,
+    execute: bool,
+    interval: Option<u64>,
+    json: bool,
+) -> Result<()> {
+    let project_root = store_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
+    let objective = resolve_objective(objective, project_root)?;
+    loop {
+        run_watch_pass(backend, store_path, project_root, &objective, execute, json)?;
+        match interval {
+            Some(secs) if secs > 0 => std::thread::sleep(std::time::Duration::from_secs(secs)),
+            _ => break,
+        }
+    }
+    Ok(())
+}
+
+/// Resolve the objective from the flag, else the `[oversight] objective` config
+/// value. Errors with guidance when neither is set.
+fn resolve_objective(flag: Option<&str>, project_root: &Path) -> Result<String> {
+    if let Some(o) = flag.map(str::trim).filter(|s| !s.is_empty()) {
+        return Ok(o.to_string());
+    }
+    let cfg_path = project_root.join(".aida").join("config.toml");
+    if let Ok(body) = std::fs::read_to_string(&cfg_path) {
+        if let Ok(value) = body.parse::<toml::Value>() {
+            if let Some(obj) = value
+                .get("oversight")
+                .and_then(|t| t.get("objective"))
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                return Ok(obj.to_string());
+            }
+        }
+    }
+    anyhow::bail!(
+        "no objective given — pass --objective <EPIC> or set `[oversight] objective` in .aida/config.toml"
+    )
+}
+
+fn run_watch_pass(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &Path,
+    project_root: &Path,
+    objective: &str,
+    execute: bool,
+    json: bool,
+) -> Result<()> {
+    use aida_core::models::{RelationshipType, RequirementStatus};
+
+    let store = backend.load()?;
+    let obj_req = store
+        .requirements
+        .iter()
+        .find(|r| crate::queue_cmd::spec_matches(r, objective))
+        .ok_or_else(|| anyhow::anyhow!("no requirement matches objective `{objective}`"))?;
+    let obj_id = obj_req.id;
+    let obj_display = display_id(obj_req).unwrap_or_else(|| objective.to_string());
+    let parent_tag = format!("parent:{}", obj_display.to_ascii_lowercase());
+
+    // Children of the objective: a Parent relationship OR a `parent:<obj>` tag.
+    let children: Vec<&aida_core::Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| {
+            r.relationships
+                .iter()
+                .any(|rel| rel.rel_type == RelationshipType::Parent && rel.target_id == obj_id)
+                || r.tags.iter().any(|t| t.to_ascii_lowercase() == parent_tag)
+        })
+        .collect();
+
+    let total = children.len();
+    let done = children
+        .iter()
+        .filter(|r| {
+            matches!(
+                r.status,
+                RequirementStatus::Done | RequirementStatus::Completed
+            )
+        })
+        .count();
+
+    // Drift = Approved, not archived, not deferred, not already queued.
+    let queued = queued_spec_ids();
+    let drift = compute_drift(&children, &queued);
+
+    // Realign: queue each drifted child for the implementer (idempotent — the
+    // Approved filter + queue-add dupe tolerance keep it safe to re-run).
+    let mut realigned: Vec<String> = Vec::new();
+    if execute {
+        for spec in &drift {
+            if queue_add_implementer(spec) {
+                realigned.push(spec.clone());
+            }
+        }
+    }
+
+    let report = WatchReport {
+        objective: obj_display.clone(),
+        total_children: total,
+        done_children: done,
+        drift: drift.clone(),
+        realigned: realigned.clone(),
+    };
+
+    if json {
+        println!("{}", serde_json::to_string(&report)?);
+    } else {
+        print_watch_report(&report, execute);
+    }
+
+    // Compose the shipped reflexes: redrive transient parks, nudge advisor stalls.
+    let redrive_opts = crate::supervisor::SuperviseOpts {
+        execute,
+        max_attempts: crate::supervisor::DEFAULT_MAX_ATTEMPTS,
+        backoff: crate::supervisor::DEFAULT_BACKOFF.to_vec(),
+        max: None,
+        json,
+    };
+    let _ = crate::supervisor::handle_supervise_command(backend, project_root, redrive_opts);
+    // Nudge sends a real mailbox message / notification, so it only fires under
+    // --execute; a dry-run pass has no side effects.
+    if execute {
+        let _ = handle_supervise_nudge(backend, store_path);
+    }
+
+    // Surface only human-decision items.
+    if !json {
+        print_awaiting_surface();
+    }
+    Ok(())
+}
+
+fn print_watch_report(report: &WatchReport, execute: bool) {
+    println!("▸ oversight · objective {}", report.objective);
+    println!(
+        "  progress: {}/{} children done",
+        report.done_children, report.total_children
+    );
+    if report.drift.is_empty() {
+        println!("  drift: none — objective work is aligned");
+    } else if execute {
+        println!(
+            "  realigned: queued {} ready child(ren) → {}",
+            report.realigned.len(),
+            report.realigned.join(", ")
+        );
+    } else {
+        println!(
+            "  drift: {} ready child(ren) unqueued → {} (dry-run; --execute to realign)",
+            report.drift.len(),
+            report.drift.join(", ")
+        );
+    }
+}
+
+/// Objective children that are ready but unqueued: status Approved, not
+/// archived, not deferred, and not already in a queue. Pure, so it is unit
+/// tested directly.
+fn compute_drift(
+    children: &[&aida_core::Requirement],
+    queued: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    use aida_core::models::RequirementStatus;
+    let mut drift = Vec::new();
+    for c in children {
+        if c.status == RequirementStatus::Approved && !c.archived && !c.deferred {
+            if let Some(id) = display_id(c) {
+                if !queued.contains(&id.to_ascii_uppercase()) {
+                    drift.push(id);
+                }
+            }
+        }
+    }
+    drift
+}
+
+/// Best-effort set of spec ids currently in a queue (uppercased). Scans
+/// `aida queue list --json` for spec-id-shaped strings; an empty set on any
+/// failure just means the --execute path relies on queue-add dupe tolerance.
+fn queued_spec_ids() -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    let Ok(exe) = std::env::current_exe() else {
+        return set;
+    };
+    let Ok(out) = std::process::Command::new(exe)
+        .args(["queue", "list", "--json"])
+        .output()
+    else {
+        return set;
+    };
+    if !out.status.success() {
+        return set;
+    }
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+        collect_spec_ids(&value, &mut set);
+    }
+    set
+}
+
+fn collect_spec_ids(value: &serde_json::Value, set: &mut std::collections::HashSet<String>) {
+    match value {
+        serde_json::Value::String(s) => {
+            if is_spec_id(s) {
+                set.insert(s.to_ascii_uppercase());
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_spec_ids(item, set);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for v in map.values() {
+                collect_spec_ids(v, set);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Loosely: `LETTERS-DIGITS` (e.g. STORY-1094, BUG-12, EPIC-1-001).
+fn is_spec_id(s: &str) -> bool {
+    let s = s.trim();
+    let Some((prefix, rest)) = s.split_once('-') else {
+        return false;
+    };
+    !prefix.is_empty()
+        && prefix.chars().all(|c| c.is_ascii_alphabetic())
+        && rest.chars().next().is_some_and(|c| c.is_ascii_digit())
+        && rest.chars().all(|c| c.is_ascii_digit() || c == '-')
+}
+
+/// Queue one spec for the implementer. Tolerates the "already queued" outcome
+/// (returns false so it is not reported as a fresh realign).
+fn queue_add_implementer(spec: &str) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    std::process::Command::new(exe)
+        .args(["queue", "add", spec, "--for", "implementer", "--no-scope"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Print the `aida awaiting` human-decision surface (best-effort).
+fn print_awaiting_surface() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    if let Ok(out) = std::process::Command::new(exe).args(["awaiting"]).output() {
+        let text = String::from_utf8_lossy(&out.stdout);
+        if !text.trim().is_empty() {
+            print!("{text}");
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/story_1052_supervise_nudge_tests.rs"]
 mod story_1052_supervise_nudge_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1096_supervise_watch_tests.rs"]
+mod story_1096_supervise_watch_tests;
