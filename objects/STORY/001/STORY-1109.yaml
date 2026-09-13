@@ -1,0 +1,26 @@
+id: 01a09c64-8fd1-7770-8f39-e6cff785400a
+spec_id: STORY-1109
+agreed_id: STORY-1109
+title: 'Review PR-1805: [AI:codex] fix(why): avoid queue-done hint for epics (BUG-1129)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09c58`) for branch `bug-1129`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1805>
+  - Branch: `bug-1129` → `main`
+
+  ## Covers
+
+  - BUG-1129
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1805` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T20:10:31.249079418Z
+modified_at: 2026-09-13T20:10:31.249079418Z
+req_type: Story
