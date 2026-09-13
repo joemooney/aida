@@ -63564,5 +63564,17 @@ operations:
     req_type: Epic
     status: Approved
     priority: Medium
-clock: 5028
+- id: 01a0986d-87d8-7310-81a3-a2da8f55b774
+  target_id: 01a0986d-83fa-7753-a21f-7bcd46f62b8f
+  author: aida
+  node_id: '1'
+  lamport: 5029
+  timestamp: 2026-09-13T01:41:50.168601289Z
+  kind: !Create
+    title: 'Memory-lane init footprint tier: scaffold store + reflex skills + reflex CLAUDE.md/AGENTS.md block, and NOTHING queue/drain/orchestrator/role-related'
+    description: 'A third footprint tier (beyond full/minimal) for the entry memory lane. Installs orphan store + config + cache + gitignore + the two reflex skills + the reflex agent-guidance block; installs no queue/drain/orchestrator/role skills or hooks. Extends the existing --footprint minimal scaffolding path. Acceptance: (1) the tier scaffolds exactly the lane fileset; (2) unit test asserts machinery skills/hooks/roles are absent; (3) --help documents it. trace:EPIC-63'
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5029
 node_id: '1'
