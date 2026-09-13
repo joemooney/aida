@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T22:32:06.702001920Z
-modified_at: 2026-09-13T00:16:45.257018822Z
+modified_at: 2026-09-13T01:41:05.756456331Z
 req_type: Story
 tags:
 - drain
@@ -37,4 +37,9 @@ comments:
   created_at: 2026-09-12T22:35:11.939252500Z
   modified_at: 2026-09-12T22:35:11.939252500Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0986c-da5c-7e92-9180-f2b215bde98b
+  author: joe
+  content: 'Implemented bounded child-process batch pipelining per ADR-28: batch/nextN now launch through-CI children up to [drain] pipeline_depth while the parent serializes reviewer/merge/pull/build. Child outcomes are returned through a JSON sidecar so punt/hold/inconclusive/escalation/shelved classifications preserve the existing in-process batch semantics. Verification: cargo fmt --all -- --check; cargo test -p aida-cli-lib drain_batch_pipelined --no-default-features; env -u AIDA_SESSION_ROLE cargo test -p aida-cli-lib --no-default-features. Note: full suite fails under ambient AIDA_SESSION_ROLE=product in existing MCP queue tests, and passes with that env cleared.'
+  created_at: 2026-09-13T01:41:05.756456331Z
+  modified_at: 2026-09-13T01:41:05.756456331Z
 execution_mode: guided
