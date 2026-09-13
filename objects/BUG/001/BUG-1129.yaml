@@ -3,12 +3,16 @@ spec_id: BUG-1129
 agreed_id: BUG-1129
 title: aida why <epic> suggests 'aida queue done EPIC-N' but epic status is a read-only rollup — the hint is not actionable
 description: 'aida why EPIC-62 prints Next: ''aida queue done EPIC-62 — mark it done (finished on a branch)''. But an epic''s status is a read-only rollup of its children (BUG-626: aida edit <epic> --status is rejected). The why next-step for an epic should not offer queue done; it should point at the unfinished children (or say the epic auto-closes when they finish). trace:BUG-626'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:47:44.013481780Z
-modified_at: 2026-09-13T19:58:16.191339918Z
+modified_at: 2026-09-13T20:03:13.826534327Z
 req_type: Bug
 tags:
 - batch:oversight-cleanup
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-13T20:03:13.826534327Z
+  implemented_by: joe
