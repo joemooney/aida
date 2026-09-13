@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T06:35:16.165523134Z
-modified_at: 2026-09-13T06:37:01.091310705Z
+modified_at: 2026-09-13T06:38:56.723800496Z
 req_type: Task
 tags:
 - adoption
@@ -25,4 +25,10 @@ comments:
   content: Commit 88b6c6d1f references this requirement
   created_at: 2026-09-13T06:37:01.091310705Z
   modified_at: 2026-09-13T06:37:01.091310705Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0997d-8ad3-7a90-8658-5bd484f5d460
+  author: joe
+  content: 'Work complete and merged to main as commit 88b6c6d1f (docs(readme): memory-lane on-ramp section, [skip ci]). Filed from the product seat so it stayed Draft (can''t self-approve). Advisor: safe to approve→complete; the README change is live on origin/main and mirrored to gitlab.'
+  created_at: 2026-09-13T06:38:56.723800496Z
+  modified_at: 2026-09-13T06:38:56.723800496Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
