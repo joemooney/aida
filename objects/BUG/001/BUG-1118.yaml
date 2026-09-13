@@ -3,12 +3,12 @@ spec_id: BUG-1118
 agreed_id: BUG-1118
 title: Stop populating the dead ~/.codex/prompts surface (46 undiscoverable prompts + 46 .aida-bak cruft) on modern codex
 description: 'Observed 2026-09-12: ~/.codex/prompts/ holds 46 aida-*.md prompts codex 0.154 cannot discover as slash commands, PLUS 46 .aida-bak backup files (one per prompt) left by refresh. AIDA keeps scaffolding + backing up a surface that does not function. Acceptance: (1) aida scaffold codex-prompts / refresh gate on codex version and either skip or emit a clear ''not discoverable on codex >=0.142, use .codex/skills'' warning rather than silently writing dead files; (2) refresh does not accumulate .aida-bak files (clean up or stop creating the 1:1 backup pile); (3) an existing dead ~/.codex/prompts install is reported by doctor with a prune hint.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:05:17.801570281Z
-modified_at: 2026-09-13T03:05:20.526566699Z
+modified_at: 2026-09-13T03:13:07.472923195Z
 req_type: Bug
 tags:
 - codex
@@ -20,7 +20,23 @@ relationships:
   target_id: 01a098b9-e79f-7380-9b69-d63740476d9f
   created_at: 2026-09-13T03:05:20.526562413Z
   created_by: joe
+history:
+- id: 01a098c1-1b89-70e3-8490-05713b29ff49
+  author: aida-auto-bump
+  timestamp: 2026-09-13T03:13:07.465605646Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a098c1-1b90-7043-85ff-ef2d10c26798
+  timestamp: 2026-09-13T03:13:07.472921828Z
+  agent: aida
+  commit_sha: 9b8d5717c74f26868dedc2a2b588312110446026
+  summary: Completed via merge 9b8d5717
 implementation_info:
   implemented: true
   implemented_at: 2026-09-13T02:57:24.633436793Z
   implemented_by: joe
+  completed_at: 2026-09-13T03:13:07.465481867Z
+  completion_sha: 9b8d5717c74f26868dedc2a2b588312110446026
