@@ -746,12 +746,21 @@ fn parse_agent_selection_list(input: &str) -> Result<AgentSelection> {
     parse_agent_selection(input)
 }
 
-fn resolve_init_agent_selection(agent: Option<&str>) -> Result<AgentSelection> {
+fn resolve_init_agent_selection_for_root(
+    project_root: &std::path::Path,
+    agent: Option<&str>,
+) -> Result<AgentSelection> {
     if let Some(agent) = agent {
         return parse_agent_selection(agent);
     }
 
-    let detected = detected_agent_selection();
+    let mut detected = detected_agent_selection();
+    // trace:BUG-1117 | ai:codex
+    // A codex-vendor project must get the discoverable `.codex/skills/`
+    // surface even when binary auto-detection would otherwise omit Codex.
+    if aida_core::agents_config::resolve_default_vendor(project_root).as_deref() == Some("codex") {
+        detected.codex = true;
+    }
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
         return Ok(detected);
     }
@@ -1102,7 +1111,7 @@ fn complete_init_scaffolding(
     // get. Selection is now parsed to a profile set and every agent-facing
     // flag is DERIVED from membership, so an unselected agent cannot leak by
     // omission when the next surface is added.
-    let selection = resolve_init_agent_selection(agent)?;
+    let selection = resolve_init_agent_selection_for_root(root, agent)?;
     write_enabled_agent_selection(root, selection)?;
     let mut config = ScaffoldConfig::default();
     selection.apply_to_scaffold_config(&mut config);
@@ -2475,6 +2484,59 @@ mod task_631_init_self_commit_tests {
             }
         );
         assert_eq!(resolved.path, dir.path().join(".aida/agents.toml"));
+    }
+
+    #[test]
+    fn codex_vendor_config_selects_codex_skill_surface() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+
+        let selection = resolve_init_agent_selection_for_root(dir.path(), None).unwrap();
+        assert!(
+            selection.codex,
+            "codex-vendor init must select the .codex/skills scaffold"
+        );
+
+        let mut config = ScaffoldConfig::default();
+        selection.apply_to_scaffold_config(&mut config);
+        assert!(config.generate_codex_skills);
+        assert!(config.include_aida_capture_skill);
+    }
+
+    #[test]
+    fn codex_agent_init_writes_discoverable_aida_capture_skill() {
+        let tmp = TempDir::new().unwrap();
+        let (root, _) = setup_clone_like_repo(&tmp);
+        let store = aida_core::models::RequirementsStore::new();
+
+        complete_init_scaffolding(
+            &root,
+            &store,
+            Some("codex"),
+            false, // no_skills
+            true,  // no_hooks
+            false, // force
+            root.join(".aida-store"),
+            "test store",
+            false, // verbose
+            crate::cli::InitFootprint::Full,
+            true, // suppress bootstrap commit
+        )
+        .unwrap();
+
+        assert!(
+            root.join(".codex/skills/aida-capture/SKILL.md").is_file(),
+            "codex init must scaffold the discoverable $aida-capture skill"
+        );
+        assert!(
+            !root.join(".claude/skills/aida-capture.md").exists(),
+            "--agent codex remains a strict agent allow-list"
+        );
     }
 
     // trace:STORY-830 | ai:codex
