@@ -12329,6 +12329,17 @@ mod tests {
         assert!(parse_duration_ms("1.5s").is_err());
     }
 
+    // trace:TASK-157 | ai:codex
+    #[test]
+    fn remote_mirror_push_hook_plumbing_parses() {
+        let cli = Cli::try_parse_from(["aida", "remote", "mirror-push", "origin"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Remote(RemoteCommand::MirrorPush { pushed_remote })
+                if pushed_remote == "origin"
+        ));
+    }
+
     /// TASK-1055: the parser is actually wired onto the clap flag, so
     /// `usage --slower-than 500ms events` parses to 500 (not a parse error).
     #[test]
