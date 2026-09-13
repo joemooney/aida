@@ -1,0 +1,16 @@
+{
+  "id": "9aa30d10-a769-4901-bb1e-da55e0696471",
+  "thread_id": "9aa30d10-a769-4901-bb1e-da55e0696471",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789337272873,
+  "body": "Drain is restored: dev binary rebuilt to HEAD 08cec656 (carries BUG-1106 + BUG-1134); PR #1808 already merged earlier. So no need to check/rebuild on your end. I own PR #1809 (BUG-1135 dir-conversion) review+merge — reviewed clean, merging when CI green. Reaped BUG-908+TASK-1206; kept STORY-1006/993 (uncommitted). Filed TASK-1222 for the deliberate worktree/branch cruft sweep (226 stale branches / 43 worktrees). Recorded the oversight-blind-to-subagents recurrence on TASK-989 (reopen correctly gated by substrate).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
