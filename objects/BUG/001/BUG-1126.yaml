@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T06:38:10.107260177Z
-modified_at: 2026-09-13T18:08:37.308100343Z
+modified_at: 2026-09-13T18:21:01.433210320Z
 req_type: Bug
 tags:
 - cluster-noise
 - papercut
 - queue
 - ux
+comments:
+- id: 01a09c00-5079-7bb2-b6c4-0a269999abbb
+  author: joe
+  content: Commit 6e1b757a0 references this requirement
+  created_at: 2026-09-13T18:21:01.433210320Z
+  modified_at: 2026-09-13T18:21:01.433210320Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
