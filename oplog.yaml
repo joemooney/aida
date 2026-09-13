@@ -63824,5 +63824,32 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5045
+- id: 01a098b9-eb85-79d0-8148-c18179044bef
+  target_id: 01a098b9-e79f-7380-9b69-d63740476d9f
+  author: aida
+  node_id: '1'
+  lamport: 5046
+  timestamp: 2026-09-13T03:05:16.421315765Z
+  kind: !Create
+    title: 'Review PR-1790: [AI:codex] fix(codex): stop writing legacy prompt surface (BUG-1118)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a098a7`) for branch `story-1094`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1790>
+      - Branch: `story-1094` → `main`
+
+      ## Covers
+
+      - BUG-1118
+      - BUG-1117
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1790` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5046
 node_id: '1'
