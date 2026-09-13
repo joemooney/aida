@@ -22,3 +22,7 @@ modified_at: 2026-09-13T19:23:15.413537404Z
 req_type: Task
 tags:
 - followup oversight supervise-watch parent:STORY-1096 papercut
+relationships:
+- rel_type: Child
+  target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
+  created_at: 2026-09-13T19:23:19.922317032Z
