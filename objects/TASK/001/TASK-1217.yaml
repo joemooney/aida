@@ -1,0 +1,34 @@
+id: 01a09893-752c-7ba2-9e0f-ce931fc45b1e
+spec_id: TASK-1217
+agreed_id: TASK-1217
+title: 'CI: auto-skip the full build/test for doc-only changes (docs/**, *.md) — safely under branch protection'
+description: |-
+  ## Why
+  Operator (2026-09-12): a doc-only commit (e.g. a testimonial under docs/) should NOT consume a full CI cycle (build + tests + clippy, ~10 min). Today the only lever is a manual `[skip ci]` in the commit message (used for the 957bed64a testimonial commit — worked, zero runs) or the AIDA `lifecycle:no-ci-wait` tag (which only skips the drain's WAIT, not the remote run). Make it automatic for changes that touch only docs/markdown.
+
+  ## The branch-protection gotcha (must handle)
+  A bare `paths-ignore: ['**/*.md', 'docs/**']` on the ci.yml push+pull_request triggers skips the run — but if `Build (ubuntu-latest)` is a REQUIRED status check, a SKIPPED required check stays "expected" and BLOCKS the PR from merging (GitHub's well-known paths-filter + required-check trap). So a naive paths-ignore breaks doc PRs.
+
+  ## Acceptance
+  1. A doc-only change (only files matching docs/**, **/*.md, and other non-code paths — NOT aida-core/aida-cli-lib/*.rs, Cargo.*, .github/workflows/**) does NOT run the heavy build/test/clippy job.
+  2. Doc-only PRs still MERGE under branch protection. Use ONE of: (a) a tiny always-run "CI (docs-only)" job that is the required check and passes instantly when only docs changed while the heavy job runs on code changes; OR (b) keep the heavy job required but add a `dorny/paths-filter` gate that short-circuits it green for doc-only; OR (c) a required "gate" job that depends on the heavy job only when code changed. Pick one, note why in the PR.
+  3. A code change (or a change to workflows / Cargo / lockfile) STILL runs the full suite — no way to sneak code past CI by touching a doc in the same commit (the filter is 'ONLY doc paths changed', not 'any doc changed').
+  4. Direct-to-main doc commits also skip (the push trigger), preserving the manual `[skip ci]` escape hatch.
+  5. Evidence: a doc-only PR shows the heavy job skipped/short-circuited AND the PR mergeable; a mixed doc+code PR shows the full suite running.
+
+  ## Related
+  TASK-257 (CI split), the release docs-gate, the trace-gate/glyph-lint/CLI-drift gates (decide whether those cheap checks should still run on docs — probably yes, they're seconds).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T02:23:15.756417243Z
+modified_at: 2026-09-13T02:23:15.756417243Z
+req_type: Task
+tags:
+- ci
+- docs
+- from-product
+- lifecycle:no-review
+- perf
+- recommend:approve
