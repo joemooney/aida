@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T16:00:44.646962875Z
-modified_at: 2026-06-30T02:45:53.841334907Z
+modified_at: 2026-09-13T22:04:34.684027914Z
 req_type: Task
 tags:
 - advisor
@@ -26,3 +26,9 @@ comments:
   content: Folded into the aida integrate throughput-view slice (the throughput view surfaces advisor/integrator fan-out activity + queue + throughput in one glanceable view). Superseded by that slice.
   created_at: 2026-06-30T02:45:53.015262480Z
   modified_at: 2026-06-30T02:45:53.015262480Z
+- id: 01a09ccc-fbfc-7162-b85b-74debd49a5d2
+  author: joe
+  content: 'Reopened (was rejected). Recurrence signal (2026-09-13): both the advisor and the product seat tripped on the same ''flag-only, no session'' ambiguity when a Claude Code subagent did worktree-isolated work (BUG-1135) that aida ps cannot see. NEW consumer of this blindspot: the /aida-oversee supervisor (STORY-1096) reads the SAME substrate, so the oversight layer is equally blind to subagent-delegated work — it can''t watch, digest, or escalate on it. That is a stronger case than when this was rejected: the hole now undermines the oversight seat itself. Recommend building a minimal surface (spec-linked subagent fan-out activity in aida ps / the oversight read) so the supervisor isn''t blind.'
+  created_at: 2026-09-13T22:04:34.684027914Z
+  modified_at: 2026-09-13T22:04:34.684027914Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
