@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:49.178715232Z
-modified_at: 2026-09-13T03:44:57.074147867Z
+modified_at: 2026-09-13T03:46:41.692942848Z
 req_type: Story
 tags:
 - entry-lane
@@ -23,6 +23,13 @@ relationships:
   target_id: 01a098d7-7806-7100-98b8-eb23e26bc383
   created_at: 2026-09-13T03:37:47.962711615Z
   created_by: joe
+comments:
+- id: 01a098df-d79c-7550-b984-04b0a1941686
+  author: joe
+  content: 'Advisor: valid RequestChanges (not circular). complete_init_scaffolding returns early for InitFootprint::MemoryLane before the no_skills gate, so --footprint memory-lane --no-skills still writes .claude/skills + .codex/skills. Fix: apply the existing no_skills check on the memory-lane branch too (honor --no-skills within the lane — a user who explicitly opts out of skills gets the store + reflex block but no skill files). Keep the lane''s default (skills ON) when --no-skills is absent.'
+  created_at: 2026-09-13T03:46:41.692942848Z
+  modified_at: 2026-09-13T03:46:41.692942848Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
