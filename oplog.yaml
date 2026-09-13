@@ -64416,5 +64416,31 @@ operations:
   timestamp: 2026-09-13T04:33:23.351768214Z
   kind: !SetStatus
     status: Completed
-clock: 5080
+- id: 01a09911-9177-7d10-95f2-a78856539199
+  target_id: 01a09911-8d75-75f0-820f-2d4cf4b9306a
+  author: aida
+  node_id: '1'
+  lamport: 5081
+  timestamp: 2026-09-13T04:41:00.535127924Z
+  kind: !Create
+    title: 'Review PR-1794: [AI:codex] docs(positioning): define memory-lane entry path (TASK-1216)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0990d`) for branch `task-1216`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1794>
+      - Branch: `task-1216` → `main`
+
+      ## Covers
+
+      - TASK-1216
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1794` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5081
 node_id: '1'
