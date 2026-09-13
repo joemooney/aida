@@ -1,0 +1,14 @@
+id: 01a09c3b-11fa-79e1-b2f2-ba95d48ddf18
+spec_id: TASK-1221
+agreed_id: TASK-1221
+title: '`/aida-oversee` skill (judgment layer) — after the loop is dogfooded'
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T19:25:12.058187387Z
+modified_at: 2026-09-13T19:25:12.058187387Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
