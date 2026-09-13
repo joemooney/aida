@@ -52,6 +52,9 @@ relationships:
   target_id: 01a09181-7c91-7131-a401-1b4524ac6c08
   created_at: 2026-09-13T02:32:09.929152344Z
   created_by: joe
+- rel_type: Parent
+  target_id: 01a09c20-51e8-7f01-b1d9-290cd5635a7a
+  created_at: 2026-09-13T18:56:01.188611549Z
 deferred: true
 deferred_at: 2026-09-13T06:14:27.751213905Z
 deferred_until: operator wants to design the meta-supervisor/oversight seat (architecture-class, needs a guided session)
