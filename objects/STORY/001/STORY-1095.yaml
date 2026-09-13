@@ -3,12 +3,12 @@ spec_id: STORY-1095
 agreed_id: STORY-1095
 title: 'Memory-lane cheap default query path: reflex uses AIDA_AGENT_OUTPUT=toon over the CLI; MCP opt-in behind a flag'
 description: 'Ensure the invisible-memory reflex queries via the token-cheap CLI/TOON path by default (MCP is ~2x tokens for equal work). MCP stays optional behind a flag. Acceptance: the scaffolded reflex guidance and any lane defaults select the CLI/TOON surface; MCP is not required for the lane to function. trace:EPIC-63'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:42:06.499121358Z
-modified_at: 2026-09-13T01:42:13.027622263Z
+modified_at: 2026-09-13T03:45:05.242442704Z
 req_type: Story
 tags:
 - agent-surface
