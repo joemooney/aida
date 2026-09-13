@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   build:
     name: Build (${{ matrix.os }})
@@ -30,7 +34,30 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # TASK-1217: keep the required Build job green for doc-only PRs/pushes
+      # while short-circuiting the expensive Rust/tooling suite. The filter is
+      # inverted: any non-doc/non-metadata path (including workflows, Cargo
+      # files, lockfiles, and Rust sources) opts back into full CI.
+      # trace:TASK-1217 | ai:codex
+      - name: Detect full-CI changes
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            full_ci:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+              - '!LICENSE'
+              - '!.gitignore'
+
+      - name: CI docs-only short-circuit
+        if: steps.changes.outputs.full_ci != 'true'
+        run: echo "Docs-only change detected; skipping build, test, fmt, clippy, and trace gates."
+
       - name: Install Rust toolchain
+        if: steps.changes.outputs.full_ci == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       # BUG-103: the macos-latest runner intermittently has a stale cache
@@ -42,6 +69,7 @@ jobs:
       # elsewhere) via `shell: bash`, which GitHub provides on all
       # runners. trace:BUG-103 | ai:claude
       - name: Pin stable toolchain & verify cargo
+        if: steps.changes.outputs.full_ci == 'true'
         shell: bash
         run: |
           rustup default stable
@@ -57,17 +85,19 @@ jobs:
       # because arduino/setup-protoc still ships on Node.js 20 (deprecated)
       # and has no Node 24 release. trace:TASK-290 | ai:claude
       - name: Install Linux dependencies
-        if: runner.os == 'Linux'
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
 
       - name: Cache Rust dependencies
+        if: steps.changes.outputs.full_ci == 'true'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile
 
       - name: Build all packages
+        if: steps.changes.outputs.full_ci == 'true'
         # TASK-1204: compile the PR drain path once in the dev profile. The
         # MCP stdio and bwrap gates already exercise dev-profile artifacts, and
         # the later binary gates below now use target/debug too.
@@ -75,6 +105,7 @@ jobs:
         run: cargo build --workspace
 
       - name: Run tests
+        if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
         run: cargo test --workspace --no-fail-fast
@@ -88,7 +119,7 @@ jobs:
       # degrading to the fail-closed branch. This is the gate the PR's merge is
       # blocked on. trace:STORY-612 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
-        if: runner.os == 'Linux'
+        if: steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux'
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib \
@@ -104,32 +135,38 @@ jobs:
       # trace:TASK-451 | ai:claude
       # trace:TASK-453 | ai:claude
       - name: Run MCP stdio compatibility tests
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_mcp_stdio.sh
 
       # Doc-vs-MCP consistency gate — every tool + argument documented in
       # docs/agents/cross-agent-onboarding.md must appear in `tools/list`.
       # trace:TASK-452 | ai:claude
       - name: Run MCP doc-consistency test
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_mcp_doc_consistency.sh
 
       # STORY-670: advisor-code-guard PreToolUse hook decision matrix.
       - name: Run advisor-code-guard hook test
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_advisor_code_guard.sh
 
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
       - name: Run advisor-code-gate substrate test
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_advisor_code_gate.sh
 
       # TASK-144: pre-commit ///-provenance gate must excuse PURE MOVES
       # (line deleted elsewhere in the same staged diff) while still refusing
       # genuinely new /// trace debt.
       - name: Run pre-commit provenance move-detection test
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_precommit_provenance_move.sh
 
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
       - name: Run distributed / sibling-store integration tests
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_distributed.sh
 
       # STORY-498: CI spec-id validity gate (MVP slice of EPIC-34). Walk the
@@ -145,7 +182,7 @@ jobs:
       # commits with no trailer are exempt by the existing audited rule.
       # trace:STORY-498 | ai:claude
       - name: Validate commit SPEC-ID references (trace gate)
-        if: github.event_name == 'pull_request'
+        if: steps.changes.outputs.full_ci == 'true' && github.event_name == 'pull_request'
         run: |
           git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store
           # trace:TASK-1206 | ai:codex
@@ -173,7 +210,7 @@ jobs:
       # No `--block` here, so this step annotates the coverage ratio + any
       # uncovered hunks but never fails the PR. trace:STORY-499 | ai:claude
       - name: Report diff trace coverage (report-only)
-        if: github.event_name == 'pull_request'
+        if: steps.changes.outputs.full_ci == 'true' && github.event_name == 'pull_request'
         run: |
           BASE="origin/${{ github.base_ref }}"
           ./target/debug/aida trace coverage --range "${BASE}..HEAD" || true
@@ -187,7 +224,7 @@ jobs:
       # on the orphan `aida-store` branch; sync/attach it from the remote-tracking
       # ref before checking doc intent. trace:STORY-603
       - name: Doc-intent gate (surface changes mark doc-impact)
-        if: github.event_name == 'pull_request'
+        if: steps.changes.outputs.full_ci == 'true' && github.event_name == 'pull_request'
         run: |
           git fetch --no-tags origin aida-store:refs/remotes/origin/aida-store
           # trace:TASK-1206 | ai:codex
@@ -216,17 +253,21 @@ jobs:
       # backs the reflection check; it SKIPs non-failing when the store can't
       # resolve. trace:STORY-597
       - name: CLI-manual drift-guard (every command documented)
+        if: steps.changes.outputs.full_ci == 'true'
         run: |
           export PATH="$PWD/target/debug:$PATH"
           python3 docs/cli/verify-manual.py
 
       - name: Check formatting
+        if: steps.changes.outputs.full_ci == 'true'
         run: cargo fmt --all -- --check
 
       - name: Removed mode-flag spelling guard
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash scripts/check-removed-flags.sh
 
       - name: Run clippy
+        if: steps.changes.outputs.full_ci == 'true'
         # Style/pedantic lints stay warnings; the deny-by-default CORRECTNESS
         # lints are denied so a real logic bug can't merge (BUG-473 slipped past
         # the old blanket -W). Full `-D warnings` was deferred: on a floating
@@ -242,6 +283,7 @@ jobs:
       # IS the tracked back-migration inventory); --block catches only new ones,
       # so coverage ratchets up and cannot regress. trace:TASK-835 | ai:claude
       - name: Glyph-literal lint (block new raw glyphs)
+        if: steps.changes.outputs.full_ci == 'true'
         run: bash scripts/glyph-lint.sh --block
 
   # Create release artifacts for tags
