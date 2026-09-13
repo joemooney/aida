@@ -2148,6 +2148,26 @@ pub enum SuperviseCommand {
         #[clap(long)]
         json: bool,
     },
+    /// Watch a named objective and keep work aligned to it: realign the queue
+    /// toward the objective's ready children, fire the redrive + nudge reflexes,
+    /// and surface only the items that need a human. Reads the substrate
+    /// (events + store + queue) so it is safe to run with no agent awake; it
+    /// never drives or merges. Default is a dry-run report; pass --execute to act.
+    // trace:STORY-1096 | ai:claude
+    Watch {
+        /// The objective to keep work aligned to (an epic id). When omitted,
+        /// falls back to the `[oversight] objective` config value.
+        #[clap(long)]
+        objective: Option<String>,
+        /// Actually realign the queue (default is a dry-run report of what it WOULD do).
+        #[clap(long)]
+        execute: bool,
+        /// Repeat the pass every N seconds (default: a single pass then exit).
+        #[clap(long)]
+        interval: Option<u64>,
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// of an in-repo build, running dev servers, installing shell helpers).
