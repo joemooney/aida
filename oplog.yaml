@@ -64869,5 +64869,21 @@ operations:
   timestamp: 2026-09-13T19:28:11.365886961Z
   kind: !SetStatus
     status: Approved
-clock: 5117
+- id: 01a09c3d-d61a-7643-9065-28ec0375c773
+  target_id: 01a09c39-4a55-7750-b6e5-eada3062b308
+  author: aida
+  node_id: '1'
+  lamport: 5118
+  timestamp: 2026-09-13T19:28:13.338467496Z
+  kind: !AddTag
+    tag: batch:oversight-cleanup
+- id: 01a09c3d-d69c-7d42-b27a-f3b7a025f0a6
+  target_id: 01a09c39-4a55-7750-b6e5-eada3062b308
+  author: aida
+  node_id: '1'
+  lamport: 5119
+  timestamp: 2026-09-13T19:28:13.468340885Z
+  kind: !RemoveTag
+    tag: followup oversight supervise-watch parent:STORY-1096 papercut
+clock: 5119
 node_id: '1'
