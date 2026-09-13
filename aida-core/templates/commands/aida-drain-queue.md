@@ -8,7 +8,7 @@ active role's queue — one item at a time, until it is empty.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-drain-queue.md`:
+Follow the workflow in `.claude/skills/aida-drain-queue/SKILL.md`:
 
 1. Resolve the parameters from `$ARGUMENTS`: `--mode review|merge`
    (default `review`), `--role <name>` (default the active role),

@@ -367,14 +367,22 @@ sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
 	@# The master glob below only walks aida-core/templates/skills/*.md, and
 	@# any *.local.md is explicitly skipped as a belt-and-braces guard so a
 	@# stray master never overwrites a project's local extension.
+	@# BUG-1135: masters stay FLAT (aida-core/templates/skills/<name>.md), but
+	@# Antigravity CLI 1.2.2 only recognizes the DIRECTORY form
+	@# .claude/skills/<name>/SKILL.md — a flat <name>.md sibling is invisible
+	@# to it. So the .claude/ side links per-skill directories, one file per
+	@# master, and a leftover flat symlink from before this fix is removed.
 	@for f in aida-core/templates/skills/*.md; do \
 		name=$$(basename "$$f"); \
 		case "$$name" in \
 			*.local.md) echo "  Skip: $$name (STORY-305: .local.md never synced)"; continue ;; \
 		esac; \
+		stem="$${name%.md}"; \
 		rm -f ".claude/skills/$$name"; \
-		ln -sf "../../aida-core/templates/skills/$$name" ".claude/skills/$$name"; \
-		echo "  Linked: .claude/skills/$$name -> aida-core/templates/skills/$$name"; \
+		mkdir -p ".claude/skills/$$stem"; \
+		rm -f ".claude/skills/$$stem/SKILL.md"; \
+		ln -sf "../../../aida-core/templates/skills/$$name" ".claude/skills/$$stem/SKILL.md"; \
+		echo "  Linked: .claude/skills/$$stem/SKILL.md -> aida-core/templates/skills/$$name"; \
 	done
 	@# TASK-574: folder-form skills (<name>/SKILL.md + templates/ + examples/)
 	@# link as a single directory symlink (the *.md loop above skips dirs).
@@ -404,7 +412,8 @@ check-templates: ## Check if .claude/ templates are properly linked
 		case "$$name" in \
 			*.local.md) continue ;; \
 		esac; \
-		target=".claude/skills/$$name"; \
+		stem="$${name%.md}"; \
+		target=".claude/skills/$$stem/SKILL.md"; \
 		if [ -L "$$target" ]; then \
 			echo "  OK: $$target (symlink)"; \
 		elif [ -f "$$target" ]; then \
@@ -417,6 +426,10 @@ check-templates: ## Check if .claude/ templates are properly linked
 			fi; \
 		else \
 			echo "  MISSING: $$target"; \
+			errors=1; \
+		fi; \
+		if [ -e ".claude/skills/$$name" ]; then \
+			echo "  STALE: .claude/skills/$$name (old flat form — run 'make sync-templates')"; \
 			errors=1; \
 		fi; \
 	done; \

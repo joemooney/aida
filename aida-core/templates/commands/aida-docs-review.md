@@ -13,7 +13,7 @@ Exhaustive documentation quality review — finds stale, inconsistent, unprofess
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-docs-review.md`:
+Follow the workflow in `.claude/skills/aida-docs-review/SKILL.md`:
 
 1. Inventory all documentation files
 2. Cross-reference factual claims against codebase

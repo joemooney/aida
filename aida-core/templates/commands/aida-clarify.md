@@ -9,7 +9,7 @@ sweep flagged as under-specified — the human-decision PRODUCER that turns
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-clarify.md`:
+Follow the workflow in `.claude/skills/aida-clarify/SKILL.md`:
 
 1. Resolve the target spec(s) from `$ARGUMENTS` (one spec, or the swept set
    when launched via `aida questions clarify`).

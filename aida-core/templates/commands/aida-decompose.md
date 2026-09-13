@@ -7,7 +7,7 @@ Break a large requirement into independently deliverable vertical-slice children
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-decompose.md`:
+Follow the workflow in `.claude/skills/aida-decompose/SKILL.md`:
 
 1. Read the parent requirement (`aida show <ID>`)
 2. Identify the layers it touches (DB, API, UI, infra, docs)

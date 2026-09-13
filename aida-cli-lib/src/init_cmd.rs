@@ -307,8 +307,10 @@ pub(crate) fn init_scaffold_candidate_paths_for_footprint(
             ".aida/config.toml",
             "CLAUDE.md",
             "AGENTS.md",
-            ".claude/skills/aida-capture.md",
-            ".claude/skills/aida-learn.md",
+            // trace:BUG-1135 | ai:claude — dir-form: Antigravity only sees
+            // `.claude/skills/<name>/SKILL.md`, not a flat `<name>.md`.
+            ".claude/skills/aida-capture/SKILL.md",
+            ".claude/skills/aida-learn/SKILL.md",
             ".codex/skills/aida-capture/SKILL.md",
             ".codex/skills/aida-learn/SKILL.md",
         ],
@@ -1009,14 +1011,16 @@ fn write_memory_lane_scaffolding(
     }
 
     // trace:STORY-1093 | ai:codex
+    // trace:BUG-1135 | ai:claude — dir-form so Antigravity (which only
+    // recognizes `.claude/skills/<name>/SKILL.md`) can see these too.
     if !no_skills {
         for (rel, content) in [
             (
-                ".claude/skills/aida-capture.md",
+                ".claude/skills/aida-capture/SKILL.md",
                 memory_lane_skill_template("aida-capture"),
             ),
             (
-                ".claude/skills/aida-learn.md",
+                ".claude/skills/aida-learn/SKILL.md",
                 memory_lane_skill_template("aida-learn"),
             ),
             (
@@ -2643,8 +2647,8 @@ mod task_631_init_self_commit_tests {
                 ".aida/config.toml",
                 "CLAUDE.md",
                 "AGENTS.md",
-                ".claude/skills/aida-capture.md",
-                ".claude/skills/aida-learn.md",
+                ".claude/skills/aida-capture/SKILL.md",
+                ".claude/skills/aida-learn/SKILL.md",
                 ".codex/skills/aida-capture/SKILL.md",
                 ".codex/skills/aida-learn/SKILL.md",
             ]
@@ -2676,8 +2680,8 @@ mod task_631_init_self_commit_tests {
             ".aida/config.toml",
             "CLAUDE.md",
             "AGENTS.md",
-            ".claude/skills/aida-capture.md",
-            ".claude/skills/aida-learn.md",
+            ".claude/skills/aida-capture/SKILL.md",
+            ".claude/skills/aida-learn/SKILL.md",
             ".codex/skills/aida-capture/SKILL.md",
             ".codex/skills/aida-learn/SKILL.md",
         ] {
@@ -2752,8 +2756,8 @@ mod task_631_init_self_commit_tests {
         }
 
         for rel in [
-            ".claude/skills/aida-capture.md",
-            ".claude/skills/aida-learn.md",
+            ".claude/skills/aida-capture/SKILL.md",
+            ".claude/skills/aida-learn/SKILL.md",
             ".codex/skills/aida-capture/SKILL.md",
             ".codex/skills/aida-learn/SKILL.md",
         ] {
@@ -2920,7 +2924,7 @@ mod task_631_init_self_commit_tests {
             "codex init must scaffold the discoverable $aida-capture skill"
         );
         assert!(
-            !root.join(".claude/skills/aida-capture.md").exists(),
+            !root.join(".claude/skills/aida-capture/SKILL.md").exists(),
             "--agent codex remains a strict agent allow-list"
         );
     }

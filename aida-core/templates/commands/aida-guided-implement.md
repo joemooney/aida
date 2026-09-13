@@ -9,7 +9,7 @@ Drive a structured, step-by-step decision dialog for a keystone / architecture
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-guided-implement.md`. The HYBRID flow:
+Follow the workflow in `.claude/skills/aida-guided-implement/SKILL.md`. The HYBRID flow:
 
 **PHASE 1 — major decisions up front**
 1. Read the spec + its graph (`aida show <SPEC>`, `aida graph tree <SPEC>`, `aida graph blocked-by <SPEC>`, `aida graph impact <SPEC>`, existing ADRs/comments).

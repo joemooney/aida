@@ -7,7 +7,7 @@ Decompose and design an approved requirement before coding begins.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-plan.md`:
+Follow the workflow in `.claude/skills/aida-plan/SKILL.md`:
 
 1. Read the requirement (`aida show <ID>`) and its related links
 2. Survey the affected code surface

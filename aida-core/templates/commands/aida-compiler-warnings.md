@@ -7,7 +7,7 @@ Categorize workspace warnings by risk and produce a prioritized cleanup plan.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-compiler-warnings.md`:
+Follow the workflow in `.claude/skills/aida-compiler-warnings/SKILL.md`:
 
 1. Run the appropriate build (`cargo build`, `tsc`, etc.) and capture warnings
 2. Group warnings by category (unused, deprecation, type, lint) and risk level

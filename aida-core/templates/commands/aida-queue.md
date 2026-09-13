@@ -7,7 +7,7 @@ Show what's queued for the active role — read-only counterpart to `/aida-picku
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-queue.md`:
+Follow the workflow in `.claude/skills/aida-queue/SKILL.md`:
 
 1. Show active role + `aida queue list` (role-routed + scope-filtered by default)
 2. If filtered queue is empty, offer `--no-scope` and `--all` as broader views

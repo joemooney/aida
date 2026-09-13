@@ -8,7 +8,7 @@ into first-class AIDA state.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-import-plan.md`:
+Follow the workflow in `.claude/skills/aida-import-plan/SKILL.md`:
 
 1. Read the file and detect its target SPEC-ID (frontmatter → heading → filename → ask)
 2. Move it to `docs/plans/YYYY-MM-DD-<slug>.md` per AIDA convention

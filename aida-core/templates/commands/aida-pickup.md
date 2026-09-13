@@ -7,7 +7,7 @@ Pull the next item routed to your active role, work it, mark it done.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-pickup.md`:
+Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
 
 1. Show the active role and queue head (`aida queue next`)
 2. If `aida findings list --count` is non-zero, surface a one-line nudge that findings await triage

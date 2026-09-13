@@ -7,7 +7,7 @@ Produce a curated narrative work digest for a time window.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-digest.md`:
+Follow the workflow in `.claude/skills/aida-digest/SKILL.md`:
 
 1. Pick a window — bare `aida digest` (marker fallback to 24h), `--since 7d`,
    `--since 30d`, or `--since <git-tag>` for a release-anchored cut.

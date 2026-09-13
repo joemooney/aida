@@ -3,7 +3,7 @@ description: "Run a read-only multi-agent drift report on the AIDA project and s
 ---
 # /aida-doctor
 
-Follow the workflow in `.claude/skills/aida-doctor.md`:
+Follow the workflow in `.claude/skills/aida-doctor/SKILL.md`:
 
 1. Run `aida doctor` for a read-only multi-agent drift report.
 2. Use `aida doctor check <category>` for a focused diagnostic.

@@ -12,7 +12,7 @@ freshness, sync state, recent activity.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-status.md`:
+Follow the workflow in `.claude/skills/aida-status/SKILL.md`:
 
 1. Read the snapshot above and surface the sections that matter — don't
    recite the whole dump

@@ -7,7 +7,7 @@ Capture a rule, lesson, or convention from a mistake — substrate-aware "update
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-learn.md`:
+Follow the workflow in `.claude/skills/aida-learn/SKILL.md`:
 
 1. Surface the specific mistake (what happened, what should have happened)
 2. Classify the rule's scope:

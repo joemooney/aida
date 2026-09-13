@@ -19,7 +19,7 @@ orchestrator spawns it when a phase-1 implementer punts on a design-fork.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-advise.md`:
+Follow the workflow in `.claude/skills/aida-advise/SKILL.md`:
 
 1. Read the punt request — `cat "$AIDA_PUNT_REQUEST_FILE"` (the fork, its
    options, the implementer's lean, and an ultraplan-grade context brief)

@@ -8,7 +8,7 @@ allowed-tools: Bash, Read, Grep, Edit, Write
 
 Codex prompt arguments: `$ARGUMENTS`
 
-Follow the workflow in `.claude/skills/aida-handoff.md`:
+Follow the workflow in `.claude/skills/aida-handoff/SKILL.md`:
 
 1. Capture conversation-only residue using the `/aida-capture` discipline.
 2. Run `aida session handoff --check` and inspect drains, leases, briefs, and open PR/review state.

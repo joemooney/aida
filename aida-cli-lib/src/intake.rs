@@ -506,7 +506,7 @@ pub fn seed_skill_prompt(project_root: &std::path::Path, bare: &str) -> String {
 /// branch gets live context via `--resume`, so only the cold-boot needs the
 /// seed.
 ///
-/// Claude Code expands `/aida-advise` from `.claude/skills/aida-advise.md` on
+/// Claude Code expands `/aida-advise` from `.claude/skills/aida-advise/SKILL.md` on
 /// demand, so for Claude the bare slash invocation is kept (cheap — the body
 /// loads lazily). A non-Claude vendor (Codex, Gemini) never reads
 /// `.claude/skills/`, so the slash token is inert noise to it; for those we

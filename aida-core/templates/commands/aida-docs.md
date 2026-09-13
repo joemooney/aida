@@ -7,7 +7,7 @@ Keep guides, reports, and reference docs in sync with code and requirements.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-docs.md`:
+Follow the workflow in `.claude/skills/aida-docs/SKILL.md`:
 
 1. Identify the docs surface in scope (CLAUDE.md, OVERVIEW.md, docs/, READMEs)
 2. Compare against current code/requirements for drift

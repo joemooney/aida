@@ -336,7 +336,7 @@ calibration annotate <punt-id> "gap → wrote memory <name>"` closes the
 loop. Cost is real (both runs fire) — turn it on to mine substrate gaps,
 off when the substrate is mature.
 
-Trace anchor: STORY-306, STORY-347, `.claude/skills/aida-advise.md`,
+Trace anchor: STORY-306, STORY-347, `.claude/skills/aida-advise/SKILL.md`,
 `feedback_headless_advisor_is_cold_boot.md`.
 
 ---
@@ -939,9 +939,9 @@ that divergence is the point of a dated record.
 |---------|-------------|
 | Three-mode taxonomy | `docs/autonomous-drain.md`, `docs/aida/discipline/skill-prompt-kinds.md`, STORY-287 |
 | Provenance corroboration | `aida zen status`, `aida orchestrator status`, BUG-233, BUG-237 |
-| Punt mechanics | `aida-cli/src/punt.rs`, `.claude/skills/aida-punt.md`, STORY-332 |
-| Advisor tier | `aida-cli/src/auto_complete.rs::run_advisor`, `.claude/skills/aida-advise.md`, STORY-306 |
-| Type A/B/C calibration | `.claude/skills/aida-advise.md`, STORY-347 |
+| Punt mechanics | `aida-cli/src/punt.rs`, `.claude/skills/aida-punt/SKILL.md`, STORY-332 |
+| Advisor tier | `aida-cli/src/auto_complete.rs::run_advisor`, `.claude/skills/aida-advise/SKILL.md`, STORY-306 |
+| Type A/B/C calibration | `.claude/skills/aida-advise/SKILL.md`, STORY-347 |
 | Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/spikes/2026-05-20-spike-11-session-forking.md` |
 | File-based comms | `.aida/` (gitignored), TASK-329, `docs/architecture/mcp-coordination-surface.md` |
 | Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-0435, TASK-0436, TASK-0437 |

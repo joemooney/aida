@@ -8,7 +8,7 @@ capture as you go; do not leave durable decisions only in chat.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-memory-capture.md`:
+Follow the workflow in `.claude/skills/aida-memory-capture/SKILL.md`:
 
 1. Check for existing memory first:
    ```bash

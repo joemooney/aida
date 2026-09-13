@@ -13,7 +13,7 @@ Commit staged changes with automatic requirement linking.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-commit.md`:
+Follow the workflow in `.claude/skills/aida-commit/SKILL.md`:
 
 1. Analyze staged changes and extract requirement traces
 2. Check for untraced implementation code

@@ -27,12 +27,12 @@ Guardrails (compose with the `[intake]` config; flags override config for a run)
 ```
 
 This command launches `claude -p "/aida-assess"` headless. It is not the skill
-itself — the skill (`.claude/skills/aida-assess.md`) is the judgment the spawned
+itself — the skill (`.claude/skills/aida-assess/SKILL.md`) is the judgment the spawned
 advisor follows.
 
 ## Instructions (for the spawned advisor)
 
-Follow the workflow in `.claude/skills/aida-assess.md`:
+Follow the workflow in `.claude/skills/aida-assess/SKILL.md`:
 
 1. Read your fence — the specs in `$AIDA_INTAKE_CANDIDATES` (the launcher
    already excluded the do-not-approve classes + `needs-human`/`strategic`).

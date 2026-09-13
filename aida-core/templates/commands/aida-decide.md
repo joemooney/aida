@@ -10,7 +10,7 @@ mirror of `aida burndown run` (which drains the decision-FREE ready set headless
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-decide.md`:
+Follow the workflow in `.claude/skills/aida-decide/SKILL.md`:
 
 1. If `$ARGUMENTS` has `--sweep`, refresh detection first:
    `aida questions sweep --apply`. Otherwise drain what's already in the inbox —
