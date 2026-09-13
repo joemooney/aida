@@ -155,7 +155,9 @@ pub fn render_codex_config_document(name: &str, spec: &McpServerSpec) -> String 
     out.push_str("# Trust is deliberately NOT set here. Codex records it per machine, keyed by\n");
     out.push_str("# path, in ~/.codex/config.toml — a repository cannot vouch for itself, and\n");
     out.push_str("# setting it in this file makes Codex discard the whole config silently.\n\n");
-    out.push_str("# AIDA MCP server: spec graph + cross-agent coordination surface.\n");
+    out.push_str("# AIDA MCP server: optional structured coordination surface.\n");
+    out.push_str("# The routine invisible-memory lane should use the CLI with\n");
+    out.push_str("# AIDA_AGENT_OUTPUT=toon; this registration keeps MCP opt-in and compact.\n");
     if spec.command == "aida" {
         out.push_str(
             "# If `aida` is not on PATH, replace `command` with the absolute binary path.\n",

@@ -4,6 +4,17 @@ Status: empirical setup from STORY-398, refreshed by STORY-417 on 2026-05-22.
 
 This document records the working local setup for connecting Codex CLI to AIDA's MCP server. It supersedes the Codex-specific placeholder in `docs/agents/cross-agent-onboarding.md`.
 
+For the invisible memory/notepad lane, the default path is still the AIDA CLI
+with compact agent output:
+
+```bash
+AIDA_AGENT_OUTPUT=toon aida show <SPEC-ID> --brief
+AIDA_AGENT_OUTPUT=toon aida search "<query>"
+```
+
+Use MCP as an opt-in structured coordination surface when the tool schemas are
+worth the extra context. The lane works without MCP discovery.
+
 ## Preconditions
 
 - `aida` is installed and available on `PATH`, or you can substitute an absolute path to the binary.
@@ -57,7 +68,7 @@ Expected shape:
 
 ```text
 Name  Command  Args       Env  Cwd  Status   Auth
-aida  aida     mcp-serve  -    -    enabled  Unsupported
+aida  aida     mcp-serve  ...  -    enabled  Unsupported
 ```
 
 `Auth: Unsupported` is expected for this local stdio setup. There is no HTTP server or bearer token in the current local-machine transport.
@@ -219,12 +230,19 @@ tests/test_mcp_stdio.sh --require-structured-content
 
 ## Operational Expectations for Codex
 
-Use MCP for AIDA substrate operations instead of shelling out when the tool exists. Shell commands are still appropriate for build/test/git work and for independent verification.
+Default to CLI/TOON for routine memory reads and lightweight context lookup.
+That keeps normal AIDA-as-notepad behavior cheap and avoids making MCP
+discovery a prerequisite.
 
 Recommended pattern:
 
-- Read via MCP first: `show_requirement`, `list_requirements`, `list_active_leases`, `list_findings`, `list_briefs`, `read_brief`.
-- Write via MCP when coordinating: `post_punt`, `file_finding`, `claim_task`, `post_directive`, `ack_brief`.
+- Read via CLI first: `AIDA_AGENT_OUTPUT=toon aida show <SPEC-ID> --brief`,
+  `AIDA_AGENT_OUTPUT=toon aida search "<query>"`, `AIDA_AGENT_OUTPUT=toon aida list --status approved`.
+- Opt into MCP for structured coordination: `show_requirement`,
+  `list_requirements`, `list_active_leases`, `list_findings`, `list_briefs`,
+  `read_brief`.
+- Write via MCP when structured coordination is useful: `post_punt`,
+  `file_finding`, `claim_task`, `post_directive`, `ack_brief`.
 - Verify cross-surface state with CLI when testing the substrate: MCP write, then CLI read.
 - Parse tool output defensively. Error and success bodies are human-readable text envelopes today.
 - Avoid concurrent claims on the same spec until TASK-438 closes the `claim_task` TOCTOU race.
@@ -240,7 +258,7 @@ cd /path/to/project-<spec>
 ln -s /path/to/project/.aida-store .aida-store
 ```
 
-Claim work through MCP when available:
+Claim work through MCP when you intentionally opt into the structured surface:
 
 ```text
 claim_task({spec_id: "TASK-123", role: "implementer"})
@@ -274,7 +292,10 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 - Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
-- Project-local Codex registration IS scaffolded by `aida init` (a `.codex/config.toml` with an `[mcp_servers.aida]` block, plus a baseline `project_trust_level = "trusted"`). Manual `codex mcp add aida -- aida mcp-serve` remains available for pre-scaffold projects or a personal `~/.codex/config.toml`. trace:TASK-0424
+- Project-local Codex registration IS scaffolded by `aida init` (a `.codex/config.toml` with an `[mcp_servers.aida]` block). Manual `codex mcp add aida -- aida mcp-serve` remains available for pre-scaffold projects or a personal `~/.codex/config.toml`. trace:TASK-0424
+- The default invisible-memory path is CLI/TOON; MCP is optional. The
+  scaffolded Codex config sets `AIDA_AGENT_OUTPUT=toon` for the AIDA server
+  entry so opt-in MCP remains compact too. trace:STORY-1095
 - `aida mcp-serve` self-respawns after handled requests when the on-disk `aida --version` reports a newer package version or a different build SHA. If MCP still appears stale, kill that agent's server process and let the client respawn it.
 - Headless drains have the same binary-staleness caveat. If an existing `target/debug/aida` or `target/release/aida` binary predates a merged orchestrator reliability fix, that running binary will not enforce the new behavior. Rebuild/relaunch and use `aida dev status` when runtime behavior disagrees with current source.
 
