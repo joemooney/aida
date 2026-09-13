@@ -14,12 +14,12 @@ description: |-
 
   ## Related
   STORY-1041 (parent story + the depth-state slice), ADR-27.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-12T22:32:06.702001920Z
-modified_at: 2026-09-13T01:43:52.259944513Z
+modified_at: 2026-09-13T02:10:45.067843838Z
 req_type: Story
 tags:
 - drain
@@ -42,8 +42,24 @@ comments:
   content: 'Implemented bounded child-process batch pipelining per ADR-28: batch/nextN now launch through-CI children up to [drain] pipeline_depth while the parent serializes reviewer/merge/pull/build. Child outcomes are returned through a JSON sidecar so punt/hold/inconclusive/escalation/shelved classifications preserve the existing in-process batch semantics. Verification: cargo fmt --all -- --check; cargo test -p aida-cli-lib drain_batch_pipelined --no-default-features; env -u AIDA_SESSION_ROLE cargo test -p aida-cli-lib --no-default-features. Note: full suite fails under ambient AIDA_SESSION_ROLE=product in existing MCP queue tests, and passes with that env cleared.'
   created_at: 2026-09-13T01:41:05.756456331Z
   modified_at: 2026-09-13T01:41:05.756456331Z
+history:
+- id: 01a09888-00b9-7483-9654-1790d08bd52c
+  author: aida-auto-bump
+  timestamp: 2026-09-13T02:10:45.049509091Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09888-00cb-7a92-b197-f7e0732389e7
+  timestamp: 2026-09-13T02:10:45.067842497Z
+  agent: product
+  commit_sha: de1eb1028269e0a4a6c4cf5077a8daf9b1bd59b7
+  summary: Completed via merge de1eb102
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-09-13T01:43:52.259944513Z
   implemented_by: joe
+  completed_at: 2026-09-13T02:10:45.049354118Z
+  completion_sha: de1eb1028269e0a4a6c4cf5077a8daf9b1bd59b7
