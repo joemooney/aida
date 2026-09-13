@@ -33,6 +33,13 @@ pub(crate) struct ActivitySnapshot {
     pub(crate) alive: bool,
     pub(crate) last_activity: Option<SystemTime>,
     pub(crate) source: Option<&'static str>,
+    /// Byte length of the activity log at snapshot time, when the source is a
+    /// file we can size. Folded into the signature so appended content counts
+    /// as progress even when the filesystem's mtime resolution is too coarse
+    /// to distinguish two rapid writes (Windows NTFS timestamps can repeat
+    /// within a poll window).
+    // trace:BUG-1063 | ai:claude
+    pub(crate) bytes: Option<u64>,
 }
 
 impl ActivitySnapshot {
@@ -45,7 +52,13 @@ impl ActivitySnapshot {
             alive,
             last_activity,
             source,
+            bytes: None,
         }
+    }
+
+    fn with_bytes(mut self, bytes: Option<u64>) -> Self {
+        self.bytes = bytes;
+        self
     }
 
     pub(crate) fn signature(&self) -> Option<String> {
@@ -55,7 +68,8 @@ impl ActivitySnapshot {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        Some(format!("{source}:{nanos}:{}", self.alive))
+        let bytes = self.bytes.unwrap_or(0);
+        Some(format!("{source}:{nanos}:{bytes}:{}", self.alive))
     }
 }
 
@@ -99,7 +113,7 @@ fn log_path_for_session(project_root: &Path, session_id: &str) -> Option<PathBuf
     newest.map(|(_, path)| path)
 }
 
-fn parsed_jsonl_activity(path: &Path) -> Option<SystemTime> {
+fn parsed_jsonl_activity(path: &Path) -> Option<(SystemTime, u64)> {
     let body = fs::read_to_string(path).ok()?;
     let saw_event = body.lines().any(|line| {
         !line.trim().is_empty() && serde_json::from_str::<serde_json::Value>(line).is_ok()
@@ -107,10 +121,11 @@ fn parsed_jsonl_activity(path: &Path) -> Option<SystemTime> {
     if !saw_event {
         return None;
     }
-    fs::metadata(path).ok()?.modified().ok()
+    let meta = fs::metadata(path).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
 }
 
-fn shared_log_activity(ctx: &VendorActivityContext) -> Option<SystemTime> {
+fn shared_log_activity(ctx: &VendorActivityContext) -> Option<(SystemTime, u64)> {
     let path = log_path_for_session(&ctx.project_root, &ctx.session_id)?;
     parsed_jsonl_activity(&path)
 }
@@ -143,22 +158,25 @@ struct AgyActivity;
 
 impl VendorActivity for ClaudeActivity {
     fn snapshot(&self, ctx: &VendorActivityContext) -> ActivitySnapshot {
+        let activity = shared_log_activity(ctx);
         ActivitySnapshot::from_parts(
             lease_pid_alive(ctx),
-            shared_log_activity(ctx),
+            activity.map(|(at, _)| at),
             Some("headless_log"),
         )
+        .with_bytes(activity.map(|(_, len)| len))
     }
 }
 
 impl VendorActivity for CodexActivity {
     fn snapshot(&self, ctx: &VendorActivityContext) -> ActivitySnapshot {
-        if let Some(at) = shared_log_activity(ctx) {
+        if let Some((at, len)) = shared_log_activity(ctx) {
             return ActivitySnapshot::from_parts(
                 lease_pid_alive(ctx),
                 Some(at),
                 Some("headless_log"),
-            );
+            )
+            .with_bytes(Some(len));
         }
         ActivitySnapshot::from_parts(
             lease_pid_alive(ctx),
@@ -170,11 +188,13 @@ impl VendorActivity for CodexActivity {
 
 impl VendorActivity for AgyActivity {
     fn snapshot(&self, ctx: &VendorActivityContext) -> ActivitySnapshot {
+        let activity = shared_log_activity(ctx);
         ActivitySnapshot::from_parts(
             lease_pid_alive(ctx),
-            shared_log_activity(ctx),
+            activity.map(|(at, _)| at),
             Some("headless_log"),
         )
+        .with_bytes(activity.map(|(_, len)| len))
     }
 }
 

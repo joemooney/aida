@@ -62421,6 +62421,15 @@ mod story_1043_unshipped_work_tests {
         .unwrap();
     }
 
+    // The fake `gh` used here is a `#!/usr/bin/env bash` script stubbed via
+    // AIDA_TEST_GH_BINARY; Windows cannot execute it through a shebang, so the
+    // open-PR branch is misread as unshipped. The detector itself is
+    // platform-agnostic (real gh.exe works); only this harness is Unix-only.
+    // trace:STORY-1043 | ai:claude
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
     #[test]
     fn detector_lists_unshipped_work_and_skips_live_terminal_and_open_pr_branches() {
         let tmp = tempfile::tempdir().unwrap();
