@@ -65482,5 +65482,29 @@ operations:
   timestamp: 2026-09-13T21:57:59.158325315Z
   kind: !SetTitle
     title: 'Least-privilege guest/requester role: read surfaces + Draft-only intake, gated out of the build loop'
-clock: 5158
+- id: 01a09cc7-0bf5-7ea0-b5dd-4a551473d745
+  target_id: 01a09cbf-6e91-7b12-a116-7ee60cb88c70
+  author: aida
+  node_id: '1'
+  lamport: 5159
+  timestamp: 2026-09-13T21:58:05.557632067Z
+  kind: !SetDescription
+    description: |-
+      Slice 1 of the guest/requester stakeholder persona (parent EPIC-64). Add two role identifiers and a least-privilege permission gate.
+
+      - guest: read-only. Allowed: why, list, status, graph tree, digest, search. Denied: any write / status transition / queue op / merge.
+      - requester: guest + a single write verb — add, constrained to types change-request / bug / user, forced to status Draft, tagged intake:requester. Denied: approve, planned, queue add/work, edit --status, merge, done.
+
+      (Naming: "requester", not "user" — avoids the queue user_id / AIDA_USER / `user`-requirement-type triple collision.)
+
+      Requests filed by a requester land as Draft in the advisor groom pass (aida groom / intake), so the existing triage loop absorbs them. Least-privilege MUST be a programmatic gate: reuse the SAME approve/queue/merge gates the build seats hit, so guest/requester are mechanically unable to escalate — not a documented convention. Reuse the role plumbing (AIDA_SESSION_ROLE, role files, queue routing) with a read+intake capability profile rather than a work profile.
+
+      Acceptance:
+      - AIDA_SESSION_ROLE=guest can run the read surfaces and is REFUSED every write (add/edit/queue/merge) with a one-line hint.
+      - AIDA_SESSION_ROLE=requester can add a change-request/bug/user spec (lands Draft, tagged intake:requester) and is REFUSED approve/queue/edit-status/merge — via the existing programmatic gates, verified by the gate rejecting it, not by convention.
+      - guest/requester are NOT offered as build-loop seats (not routable queue targets); many may exist concurrently (no singleton lock).
+      - Tests cover: guest write-refusal, requester add-allowed-as-Draft, requester non-add-write-refusal.
+
+      Out of scope (deferred to epic followups): curated /aida-intro surface, per-user identity + rate-limiting (revisit when attribution/spam becomes a forcing function), hosted request front door.
+clock: 5159
 node_id: '1'
