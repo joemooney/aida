@@ -8,10 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:25:03.954541022Z
-modified_at: 2026-09-13T19:43:15.391308524Z
+modified_at: 2026-09-13T19:43:17.085209477Z
 req_type: Task
 tags:
-- followup-src:docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
+- duplicate-of:STORY-1107
 relationships:
 - rel_type: Child
   target_id: 01a0989b-6045-7e11-b697-6bd20de920f4
