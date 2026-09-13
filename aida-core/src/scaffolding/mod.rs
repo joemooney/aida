@@ -22,7 +22,8 @@ pub mod refresh;
 mod settings;
 
 pub use aida_md::{
-    aida_md_matches, extract_aida_block, merge_agents_md_aida_block, AgentsMdBlockMerge,
+    aida_md_matches, extract_aida_block, extract_memory_reflex_block, merge_agents_md_aida_block,
+    merge_memory_reflex_block, AgentsMdBlockMerge, MemoryReflexBlockMerge,
 };
 pub use claude_md::{claude_md_has_import, insert_claude_md_import, CLAUDE_AIDA_IMPORT};
 pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
@@ -144,18 +145,32 @@ pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> Dif
     match name {
         "CLAUDE.md" => {
             // CLAUDE.md is mostly user-owned; the only thing AIDA cares
-            // about is the `@.claude/AIDA.md` import line that pulls in
-            // the conventions. If that's present, no drift to surface.
+            // about is the `@.claude/AIDA.md` import line and, when present,
+            // the marker-guarded memory reflex block.
+            // trace:STORY-1094 | ai:codex
             const KEY: &str = "@.claude/AIDA.md";
-            if actual.contains(KEY) {
-                DiffSlice::Match
-            } else {
-                DiffSlice::MarkerMissing {
+            if !actual.contains(KEY) {
+                return DiffSlice::MarkerMissing {
                     message: format!(
                         "CLAUDE.md does not import `{}`. Add the line to pull in AIDA conventions, or run `aida scaffold upgrade`.",
                         KEY
                     ),
+                };
+            }
+            match (
+                extract_memory_reflex_block(actual),
+                extract_memory_reflex_block(expected),
+            ) {
+                (Some(actual_block), Some(expected_block))
+                    if actual_block.trim() != expected_block.trim() =>
+                {
+                    DiffSlice::SliceDiff {
+                        expected: expected_block.to_string(),
+                        actual: actual_block.to_string(),
+                        note: "diff scoped to <!-- AIDA-MEMORY-REFLEX-BEGIN --> ... <!-- AIDA-MEMORY-REFLEX-END --> block".to_string(),
+                    }
                 }
+                _ => DiffSlice::Match,
             }
         }
         "AGENTS.md" => {
@@ -585,6 +600,12 @@ pub struct ScaffoldConfig {
     /// Include aida-learn skill for capturing durable rules and lessons
     // trace:STORY-1093 | ai:codex
     pub include_aida_learn_skill: bool,
+    /// Include the slim memory-lane query skill.
+    // trace:STORY-1094 | ai:codex
+    pub include_aida_memory_query_skill: bool,
+    /// Include the slim memory-lane capture-as-you-go skill.
+    // trace:STORY-1094 | ai:codex
+    pub include_aida_memory_capture_skill: bool,
     /// Include aida-docs skill for documentation management
     pub include_aida_docs_skill: bool,
     /// Include aida-docs-review skill for exhaustive documentation quality review
@@ -681,6 +702,8 @@ impl Default for ScaffoldConfig {
             include_aida_implement_skill: true,
             include_aida_capture_skill: true,
             include_aida_learn_skill: true,
+            include_aida_memory_query_skill: true,
+            include_aida_memory_capture_skill: true,
             include_aida_docs_skill: true,
             include_aida_docs_review_skill: true,
             include_aida_release_skill: true,
@@ -1750,6 +1773,13 @@ aida show <SPEC-ID>
                         Some(s) if s.rel_path.ends_with(".md") => s,
                         _ => continue,
                     };
+                    if (skill.name == "aida-memory-query"
+                        && !self.config.include_aida_memory_query_skill)
+                        || (skill.name == "aida-memory-capture"
+                            && !self.config.include_aida_memory_capture_skill)
+                    {
+                        continue;
+                    }
                     let path = PathBuf::from(format!(".claude/skills/{}", skill.rel_path));
                     // Skip if a handwritten block already scaffolded this skill
                     if artifacts.iter().any(|a| a.path == path) {
@@ -1790,6 +1820,14 @@ aida show <SPEC-ID>
                 ("aida-implement", self.config.include_aida_implement_skill),
                 ("aida-capture", self.config.include_aida_capture_skill),
                 ("aida-learn", self.config.include_aida_learn_skill),
+                (
+                    "aida-memory-query",
+                    self.config.include_aida_memory_query_skill,
+                ),
+                (
+                    "aida-memory-capture",
+                    self.config.include_aida_memory_capture_skill,
+                ),
                 ("aida-docs", self.config.include_aida_docs_skill),
                 (
                     "aida-docs-review",
@@ -1860,6 +1898,14 @@ aida show <SPEC-ID>
                 ("aida-implement", self.config.include_aida_implement_skill),
                 ("aida-capture", self.config.include_aida_capture_skill),
                 ("aida-learn", self.config.include_aida_learn_skill),
+                (
+                    "aida-memory-query",
+                    self.config.include_aida_memory_query_skill,
+                ),
+                (
+                    "aida-memory-capture",
+                    self.config.include_aida_memory_capture_skill,
+                ),
                 ("aida-docs", self.config.include_aida_docs_skill),
                 (
                     "aida-docs-review",
@@ -2449,11 +2495,13 @@ aida show <SPEC-ID>
                 FileStatus::OlderVersion { .. } => true, // Always upgrade
                 FileStatus::Modified { .. } => match category {
                     FileCategory::Template => true,
+                    FileCategory::Seed if artifact.path == Path::new("CLAUDE.md") => true,
                     FileCategory::Seed if artifact.path == Path::new("AGENTS.md") => true,
                     FileCategory::Seed | FileCategory::ManagedMerge => options.force,
                 },
                 FileStatus::NoHeader => match category {
                     FileCategory::Template => true,
+                    FileCategory::Seed if artifact.path == Path::new("CLAUDE.md") => true,
                     FileCategory::Seed if artifact.path == Path::new("AGENTS.md") => true,
                     FileCategory::Seed | FileCategory::ManagedMerge => options.force,
                 },
@@ -2471,6 +2519,21 @@ aida show <SPEC-ID>
             // Skip + record instead. trace:BUG-718 | ai:claude
             if symlink_target(&full_path).is_some() {
                 skipped_files.push(artifact.path.clone());
+                continue;
+            }
+            if artifact.path == Path::new("CLAUDE.md") && full_path.exists() && !options.force {
+                let existing =
+                    fs::read_to_string(&full_path).map_err(|e| ScaffoldError::IoError {
+                        path: full_path.clone(),
+                        message: e.to_string(),
+                    })?;
+                let with_import = insert_claude_md_import(&existing);
+                let (merged, _) = merge_memory_reflex_block(&with_import, &artifact.content);
+                fs::write(&full_path, merged).map_err(|e| ScaffoldError::IoError {
+                    path: full_path.clone(),
+                    message: e.to_string(),
+                })?;
+                written_files.push(artifact.path.clone());
                 continue;
             }
             if artifact.path == Path::new("AGENTS.md") && full_path.exists() && !options.force {
@@ -3273,6 +3336,8 @@ mod tests {
         assert!(config.include_aida_implement_skill);
         assert!(config.include_aida_capture_skill);
         assert!(config.include_aida_learn_skill);
+        assert!(config.include_aida_memory_query_skill);
+        assert!(config.include_aida_memory_capture_skill);
         assert_eq!(config.project_type, ProjectType::Generic);
     }
 
@@ -3497,6 +3562,28 @@ mod tests {
         assert!(content.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
         assert!(content.contains("# AIDA Conventions"));
         assert!(content.contains("<!-- AIDA-AUTOGEN-END -->"));
+    }
+
+    #[test]
+    fn apply_appends_memory_reflex_to_existing_claude_md_without_force() {
+        // trace:STORY-1094 | ai:codex
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig::default();
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let store = create_test_store();
+        let original = "# CLAUDE.md\n\nUser-owned setup.\n\n## Project\n\nNotes.\n";
+        std::fs::write(temp_dir.path().join("CLAUDE.md"), original).unwrap();
+
+        let preview = scaffolder.preview(&store);
+        scaffolder.apply(&preview).unwrap();
+
+        let content = std::fs::read_to_string(temp_dir.path().join("CLAUDE.md")).unwrap();
+        assert!(content.starts_with("# CLAUDE.md\n\nUser-owned setup."));
+        assert!(content.contains("@.claude/AIDA.md"));
+        assert!(content.contains("<!-- AIDA-MEMORY-REFLEX-BEGIN -->"));
+        assert!(content.contains("AIDA_AGENT_OUTPUT=toon aida search"));
+        assert!(content.contains("<!-- AIDA-MEMORY-REFLEX-END -->"));
+        assert!(content.contains("## Project\n\nNotes."));
     }
 
     #[test]

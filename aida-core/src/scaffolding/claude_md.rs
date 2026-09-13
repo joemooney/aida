@@ -104,6 +104,8 @@ them.
 
 @.claude/AIDA.md
 
+{memory_reflex}
+
 ## Project overview
 
 {project_name}{description}{tech_stack}{features}{type_section}{discipline}
@@ -113,6 +115,7 @@ them.
             tech_stack = tech_stack_section,
             features = features_section,
             type_section = type_section,
+            memory_reflex = self.generate_memory_reflex_block(),
             discipline = Self::discipline_section(),
         )
     }

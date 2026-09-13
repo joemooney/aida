@@ -30,6 +30,7 @@ impl Scaffolder {
         };
 
         let aida_block = self.generate_aida_md_for_agents(store);
+        let memory_reflex = self.generate_memory_reflex_block();
 
         format!(
             r#"# AGENTS.md
@@ -54,6 +55,8 @@ against AIDA's MCP server. Use `docs/agents/session-communication.md`
 for agent pause/abort/defer semantics.
 
 {aida_block}
+
+{memory_reflex}
 
 ## Codex Operating Discipline
 
