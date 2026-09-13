@@ -3,12 +3,16 @@ spec_id: BUG-1136
 agreed_id: BUG-1136
 title: 'aida doctor heal: spec-status-drift + stale-leases in one pass can leave a spec in the OPPOSITE drift (bump-then-reap ordering)'
 description: 'Running aida doctor heal across categories in one invocation: spec-status-drift bumped TASK-1207 Approved to In Progress (it had a lease), then stale-leases reaped that stale lease, leaving TASK-1207 In-Progress-with-no-lease (the opposite drift). A second heal pass converges it (reverts to Approved). Fix: order heals so lease reaping precedes status derivation, or re-derive status after lease heals within a single pass, so one ''aida doctor heal'' converges without needing a second run.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:16:20.688211372Z
-modified_at: 2026-09-13T22:36:38.695832290Z
+modified_at: 2026-09-13T22:41:56.043360626Z
 req_type: Bug
 tags:
 - batch:doctor-fixes
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-13T22:41:56.043360626Z
+  implemented_by: joe
