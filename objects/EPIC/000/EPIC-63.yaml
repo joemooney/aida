@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:41:23.750489926Z
-modified_at: 2026-09-13T01:42:17.797120459Z
+modified_at: 2026-09-13T01:42:26.331082561Z
 req_type: Epic
 tags:
 - adoption
@@ -28,3 +28,6 @@ relationships:
 - rel_type: Parent
   target_id: 01a0986d-e682-7f70-b3df-a36ab12d14cf
   created_at: 2026-09-13T01:42:17.797120459Z
+- rel_type: Parent
+  target_id: 01a0986e-0be7-7571-a638-0887f1d72488
+  created_at: 2026-09-13T01:42:26.331082561Z
