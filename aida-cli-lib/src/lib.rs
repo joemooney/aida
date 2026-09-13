@@ -1332,11 +1332,12 @@ fn agent_list_default_cap(
 // field set; `--fields` expands `aida list`. trace:TASK-964
 
 /// The minimal default column schema for `aida list` in agent mode (AXI #2).
-/// Four fields cover the agent's routine need — id / title / status / type —
-/// instead of the human table's id/origin/type/status/title/tags/glyph spread.
-/// `--fields` widens it.
+/// Five fields cover the agent's routine memory-lane need — id / title /
+/// status / type / modified_at — instead of the human table's
+/// id/origin/type/status/title/tags/glyph spread. `--fields` widens it.
 // trace:TASK-964
-const TOON_LIST_DEFAULT_FIELDS: &[&str] = &["id", "title", "status", "type"];
+// trace:TASK-1215 | ai:codex
+const TOON_LIST_DEFAULT_FIELDS: &[&str] = &["id", "title", "status", "type", "modified_at"];
 
 /// The list fields the agent-mode `--fields` selector understands, mapped onto
 /// the cache summary plus the work-routing axis. Unknown names are rejected with
@@ -1353,6 +1354,8 @@ const TOON_LIST_KNOWN_FIELDS: &[&str] = &[
     "assignee",
     "tags",
     "heft",
+    // trace:TASK-1215 | ai:codex — freshness signal for authored lane memory.
+    "modified_at",
     // trace:FR-283 | ai:claude — the optional numeric weight/score.
     "weight",
     "queued",
@@ -1449,6 +1452,8 @@ fn toon_list_cell(
         "assignee" => r.assignee.clone().unwrap_or_default(),
         "tags" => r.tags.join(" "),
         "heft" => r.heft.to_string(),
+        // trace:TASK-1215 | ai:codex
+        "modified_at" => r.modified_at.clone(),
         // trace:FR-283 | ai:claude — empty cell = no weight set.
         "weight" => r.weight.map(format_weight).unwrap_or_default(),
         "queued" => queued.to_string(),
@@ -1491,6 +1496,8 @@ fn list_field_header(field: &str) -> String {
         "assignee" => "Assignee",
         "tags" => "Tags",
         "heft" => "Heft",
+        // trace:TASK-1215 | ai:codex
+        "modified_at" => "Modified",
         // trace:FR-283 | ai:claude
         "weight" => "Weight",
         "queued" => "Queued",

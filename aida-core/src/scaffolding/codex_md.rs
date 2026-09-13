@@ -85,6 +85,16 @@ Before implementing, make sure a requirement exists and read it with
 MCP, pass a valid lowercase `type`; AIDA derives the canonical ID prefix
 from that type. Do not invent `SPEC-N` IDs.
 
+### Memory Hygiene
+
+For invisible memory/notepad use, query first and capture as you go:
+`AIDA_AGENT_OUTPUT=toon aida search "<terms>"` or
+`AIDA_AGENT_OUTPUT=toon aida list --status approved`. The default TOON
+query fields include `modified_at`; treat it as a freshness signal for
+authored memory. If an old spec still matters, verify it before leaning
+on it, and record new decisions with `aida add`, `aida edit`, or
+`aida comment add` during the work instead of leaving them only in chat.
+
 ### Daily-Use Commands
 
 ```bash
@@ -335,6 +345,11 @@ mod tests {
         assert!(md.contains("use the CLI with\n`AIDA_AGENT_OUTPUT=toon`"));
         assert!(md.contains("Default to the CLI/TOON lane"));
         assert!(md.contains("Opt into AIDA MCP"));
+        // trace:TASK-1215 | ai:codex
+        assert!(md.contains("### Memory Hygiene"));
+        assert!(md.contains("query first and capture as you go"));
+        assert!(md.contains("default TOON\nquery fields include `modified_at`"));
+        assert!(md.contains("treat it as a freshness signal"));
         assert!(md.contains("[AI:codex]"));
         assert!(md.contains("### Optional Status Lines"));
         assert!(md.contains("status_line = [\"model-with-reasoning\""));
