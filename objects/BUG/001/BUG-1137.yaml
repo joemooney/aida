@@ -1,0 +1,14 @@
+id: 01a09ce6-3671-7c51-80ee-2ef322636e41
+spec_id: BUG-1137
+agreed_id: BUG-1137
+title: aida remote status / doctor reports 'release v0.15.0 missing' on gitlab even after the release exists (false negative)
+description: 'After creating the GitLab release v0.15.0 on gitlab.joemooney.com (verified via API: name+tag+4 asset links present), aida remote status still reports ''release v0.15.0 drift / gitlab release missing''. The release-drift detector has a false negative — it does not recognize a release created with asset LINKS (glab release create uploads assets as links, not direct attachments), or it caches, or it checks a field the API populates differently. Fix: align the detector''s release-existence check with the GitLab releases API shape (a release object at /projects/:id/releases/:tag with assets.links counts as present).'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T22:32:08.049014580Z
+modified_at: 2026-09-13T22:32:08.049014580Z
+req_type: Bug
+tags:
+- remote-drift doctor gitlab papercut
