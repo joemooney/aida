@@ -1,0 +1,11 @@
+scope = "STORY-1091"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 2228826
+agent = "product"
+started_at = "2026-09-13T00:16:35.887018471+00:00"
+heartbeat_at = "2026-09-13T00:16:35.887018471+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
