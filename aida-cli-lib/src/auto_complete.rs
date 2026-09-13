@@ -2937,6 +2937,37 @@ pub(crate) fn should_compensate_phase1_bump(
     bumped && !lease_acquired && failed_phase == Some(Phase::Implementer)
 }
 
+/// BUG-1134: after a lease-less phase-1 failure the TASK-133 compensation
+/// restores the spec to a clean un-started status. That is right when no work
+/// happened — but a lease-less phase-1 failure can also be a worktree-reuse
+/// collision AFTER a prior attempt already opened a PR. Restoring to un-started
+/// then ORPHANS that successful PR and misleads with "no work was stranded".
+///
+/// So skip the restore only when an open PR DEFINITIVELY exists. An absent or
+/// flaky forge (CliMissing / CliFailed / Unreachable) is inconclusive and must
+/// fall back to the restore — a transient `gh` hiccup must never strand the
+/// spec InProgress with no lease.
+// trace:BUG-1134 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Phase1FailureRecovery {
+    /// No definitive open PR — run the original TASK-133 restore-to-un-started.
+    RestoreUnstarted,
+    /// An open PR already exists — do not restore; surface it + the resume path.
+    PreserveOpenPr,
+}
+
+pub(crate) fn classify_phase1_failure_recovery(
+    pr_lookup: &crate::forge::ChangeLookup,
+) -> Phase1FailureRecovery {
+    match pr_lookup {
+        crate::forge::ChangeLookup::Found(_) => Phase1FailureRecovery::PreserveOpenPr,
+        // NoChange / CliMissing / CliFailed / Unreachable are all NON-definitive:
+        // fall back to the safe restore rather than strand the spec on a
+        // transient or absent forge.
+        _ => Phase1FailureRecovery::RestoreUnstarted,
+    }
+}
+
 /// STORY-265 slice 3: the `--with-plan` PLAN PRELUDE. A `--with-plan`
 /// auto-complete run does the design work in its own planning session
 /// *before* the existing 6-phase drain — produces a `docs/plans/` file and
@@ -7939,6 +7970,43 @@ mod tests {
         // No failed phase at all (clean ship / punt / inconclusive) → the
         // status is legitimately advanced or deliberately held; never reset.
         assert!(!should_compensate_phase1_bump(true, false, None));
+    }
+
+    // BUG-1134: a lease-less phase-1 failure that masks an already-open PR must
+    // NOT restore the spec to un-started (that orphans the PR). Only a
+    // DEFINITIVE open PR skips the restore; an absent/flaky forge falls back.
+    #[test]
+    fn phase1_recovery_preserves_an_existing_open_pr() {
+        let found = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 1806,
+            url: "https://example.test/pull/1806".to_string(),
+            branch: "fix/bug-1130".to_string(),
+            base: "main".to_string(),
+            title: None,
+        });
+        assert_eq!(
+            classify_phase1_failure_recovery(&found),
+            Phase1FailureRecovery::PreserveOpenPr
+        );
+    }
+
+    #[test]
+    fn phase1_recovery_restores_when_no_definitive_pr() {
+        // NoChange (definitively none) and every INCONCLUSIVE lookup fall back
+        // to the safe restore — a transient/absent forge must not strand the
+        // spec InProgress with no lease.
+        for lookup in [
+            crate::forge::ChangeLookup::NoChange,
+            crate::forge::ChangeLookup::CliMissing,
+            crate::forge::ChangeLookup::CliFailed("auth".to_string()),
+            crate::forge::ChangeLookup::Unreachable("network".to_string()),
+        ] {
+            assert_eq!(
+                classify_phase1_failure_recovery(&lookup),
+                Phase1FailureRecovery::RestoreUnstarted,
+                "inconclusive/absent forge must restore, not skip: {lookup:?}"
+            );
+        }
     }
 
     /// Regression guard at phase 3 — a genuine no-verdict failure (reality
