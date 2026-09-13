@@ -24,7 +24,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:43:56.081792661Z
-modified_at: 2026-09-13T20:43:56.081792661Z
+modified_at: 2026-09-13T21:29:42.551714216Z
 req_type: Bug
 tags:
 - antigravity vendor-parity ux papercut
+comments:
+- id: 01a09cad-0f97-7f21-a205-c48c1d6caa11
+  author: joe
+  content: |-
+    ROOT CAUSE CONFIRMED (probe + dir comparison in ~/ai/mind, AGY CLI 1.2.2):
+    AGY only recognizes the DIRECTORY skill form .claude/skills/<name>/SKILL.md. It does NOT recognize AIDA's FLAT form .claude/skills/<name>.md.
+
+    Evidence:
+    - mind-capture → .claude/skills/mind-capture/SKILL.md (dir) → clean /mind-capture
+    - aida-pr → .claude/skills/aida-pr/SKILL.md (dir) → clean /aida-pr
+    - aida-req → .claude/skills/aida-req.md (FLAT file), no .claude/skills/aida-req/ dir → invisible to AGY; only its .claude/commands/aida-req.md shows, rendered /source-command-aida-req.
+    - (Earlier probe .antigravity/skills/zzz-agy-probe → 'No matches': AGY CLI does not read .antigravity/skills; it reads .claude/skills (dir form) + .claude/commands.)
+
+    So the /source-command-* dupes are NOT an .antigravity issue and NOT unfixable AGY behavior — they are AIDA scaffolding its .claude/skills as flat <name>.md files that AGY can't see. .antigravity/skills scaffold is confirmed unread by AGY CLI 1.2.2 (separate cleanup question).
+
+    FIX (re-scoped, mechanical): standardize AIDA's .claude/skills scaffolding on the directory form <name>/SKILL.md (as it already does for .codex/skills and .antigravity/skills, and as mind-* uses). Blast radius: scaffolding generator, make sync-templates, the skill/command parity test, and the dev-repo per-file flat symlinks. trace:PRIN-3
+  created_at: 2026-09-13T21:29:42.551714216Z
+  modified_at: 2026-09-13T21:29:42.551714216Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
