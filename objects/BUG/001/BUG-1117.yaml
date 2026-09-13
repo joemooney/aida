@@ -3,12 +3,12 @@ spec_id: BUG-1117
 agreed_id: BUG-1117
 title: codex-vendor init does not scaffold .codex/skills/ — a codex project has NO working skill surface ($aida-* finds nothing; ~/.codex/prompts is undiscoverable on codex >=0.142)
 description: 'Observed 2026-09-12: this repo is [agents] vendor=codex, codex-cli 0.154.0. `$aida-capture` (and all $aida-*) find nothing in codex. aida scaffold preview shows .codex/skills/aida-*/SKILL.md as MISSING — the codex skills pack was never installed at init. The only codex surface that WAS populated, ~/.codex/prompts/*.md, is not discovered by codex >=0.142 (confirmed by aida doctor --category scaffold-drift). Net: a codex-vendor project ends up with zero working AIDA skill surface — a first-user trap directly against the codex-parity goal. Acceptance: (1) aida init on a codex-vendor project scaffolds .codex/skills/ by default (the discoverable surface), not just ~/.codex/prompts; (2) doctor scaffold-drift flags a codex project missing .codex/skills/ with the exact fix; (3) fresh codex-vendor init → $aida-capture resolves.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:05:11.532178192Z
-modified_at: 2026-09-13T03:05:22.767028411Z
+modified_at: 2026-09-13T03:12:05.577686612Z
 req_type: Bug
 tags:
 - codex
@@ -32,7 +32,23 @@ comments:
   created_at: 2026-09-13T02:19:04.418239900Z
   modified_at: 2026-09-13T02:19:04.418239900Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a098c0-29c2-7b43-9c27-29e1d4eaaf47
+  author: aida-auto-bump
+  timestamp: 2026-09-13T03:12:05.570264581Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a098c0-29c9-7401-93d5-29e79ccbebf6
+  timestamp: 2026-09-13T03:12:05.577684671Z
+  agent: aida
+  commit_sha: 8d67ce8001da3b8478705ebad557ade4bd9de76a
+  summary: Completed via merge 8d67ce80
 implementation_info:
   implemented: true
   implemented_at: 2026-09-13T02:27:52.508437293Z
   implemented_by: joe
+  completed_at: 2026-09-13T03:12:05.570104402Z
+  completion_sha: 8d67ce8001da3b8478705ebad557ade4bd9de76a
