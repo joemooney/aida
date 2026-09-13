@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-09T06:41:07.999388001Z
-modified_at: 2026-09-13T19:43:59.118896797Z
+modified_at: 2026-09-13T19:44:01.673202848Z
 req_type: Bug
 tags:
 - drain
@@ -89,6 +89,12 @@ comments:
   content: 'Note: the 12:31 ''shipped (reconciled)'' was a PHANTOM completion — the reconciler credited the days-old PR-1739 against the reopened scope (filed as BUG-1112). The reopened scope itself is re-filed as BUG-1111 (anchor-pid defect). 908 stays Completed for its ORIGINAL scope only.'
   created_at: 2026-09-12T19:42:29.633552551Z
   modified_at: 2026-09-12T19:42:29.633552551Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09c4c-4e89-77e3-8d90-4403f7cd53ae
+  author: joe
+  content: 'Fix merged in PR #1739 (commit e5676286b) as part of EPIC-62; the done→completed auto-bump was missed. Completing by hand and clearing the stale implementer-queue entry.'
+  created_at: 2026-09-13T19:44:01.673202848Z
+  modified_at: 2026-09-13T19:44:01.673202848Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 history:
 - id: 01a0918c-6794-7143-96b0-c346e17f07c1
