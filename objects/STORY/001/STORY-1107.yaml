@@ -1,0 +1,14 @@
+id: 01a09c20-51e8-7f01-b1d9-290cd5635a7a
+spec_id: STORY-1107
+agreed_id: STORY-1107
+title: 'Oversight SLICE 2: promote the watch loop to a first-class ''oversight'' role (routing + statusline + role-context)'
+description: 'Sequenced AFTER slice 1 (the aida supervise watch loop) proves out. Promote oversight to a first-class role alongside advisor/implementer: queue routing so escalations/nudges are addressable to @oversight (advisor coordinates with oversight through role-addressed substrate, not through the operator); statusline seat indicator; role-context snapshot on launch. When the seat is unoccupied, the headless slice-1 loop still runs the mechanical reflexes. Revisit trigger: build this once slice 1 has driven at least one real drain toward a named objective and the loop''s realign/nudge/escalate behavior is validated in a PR.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T18:55:58.952357043Z
+modified_at: 2026-09-13T18:55:58.952357043Z
+req_type: Story
+tags:
+- oversight role slice-2 parent:STORY-1096 depends-on:slice-1
