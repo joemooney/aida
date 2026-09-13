@@ -65561,5 +65561,27 @@ operations:
     req_type: Bug
     status: Draft
     priority: Low
-clock: 5164
+- id: 01a09cda-3659-7c41-afbd-eb2fa373df9a
+  target_id: 01a09cda-32ac-7b60-b6d1-38dd9904b197
+  author: aida
+  node_id: '1'
+  lamport: 5165
+  timestamp: 2026-09-13T22:19:01.593504236Z
+  kind: !Create
+    title: Is multi-repo (multi-hub) development viable for an AIDA project? (github origin + self-hosted gitlab mirror)
+    description: |-
+      Operator wants gitlab.joemooney.com kept in decent shape and MAY actively maintain it (not just a passive mirror). Question: can an AIDA project sustain genuine multi-hub development (two live hubs, not one canonical + one mirror)?
+
+      Concerns to work through:
+      - The aida-store orphan branch is the writer-of-record; two hubs both taking writes need conflict-free merge (conflict.rs unions oplog.yaml — does it hold under two active hubs?).
+      - Node id / dispenser: spec-id allocation across two hubs without collision.
+      - The [store.sync] mirror_remotes fan-out is one-directional (canonical → mirror). Bidirectional active dev needs a real reconcile story (aida remote reconcile union-merge).
+      - Release fan-out (tags + release objects + binary assets) to both hubs.
+      - Drift detection + reconcile cadence (aida doctor remote-drift already surfaces it).
+
+      Deliverable: a viability assessment + the config/tooling gaps to close if we go active-multi-hub. Today's setup is canonical(github) + behind-mirror(gitlab), kept in sync by manual ff-push; this spike decides whether to invest in true multi-hub.
+    req_type: Spike
+    status: Draft
+    priority: Medium
+clock: 5165
 node_id: '1'
