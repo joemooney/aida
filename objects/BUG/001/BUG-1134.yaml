@@ -17,12 +17,12 @@ description: |-
   - Regression: simulate a worktree-reuse collision after a PR is opened; the drain resumes to merge rather than parking the spec as un-started.
 
   Caught by the oversight layer (STORY-1096 dogfooding) — the triage that noticed the 'parked' spec had actually shipped.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T20:30:53.626739432Z
-modified_at: 2026-09-13T21:41:49.302898677Z
+modified_at: 2026-09-13T21:41:54.871254068Z
 req_type: Bug
 tags:
 - orchestrator drain-reliability parent:EPIC-62 oversight-caught
@@ -49,3 +49,21 @@ comments:
   created_at: 2026-09-13T21:29:11.352438675Z
   modified_at: 2026-09-13T21:29:11.352438675Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a09cb8-3c22-7291-a663-eb9f5bbc15ce
+  author: aida-auto-bump
+  timestamp: 2026-09-13T21:41:54.850661276Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09cb8-3c37-7733-80dd-d14d30ec7bcf
+  timestamp: 2026-09-13T21:41:54.871252639Z
+  agent: aida
+  commit_sha: 08cec656756489c039ada0a1c82195e0fe0db60d
+  summary: Completed via merge 08cec656
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-13T21:41:54.850522408Z
+  completion_sha: 08cec656756489c039ada0a1c82195e0fe0db60d
