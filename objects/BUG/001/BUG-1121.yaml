@@ -15,12 +15,12 @@ description: |-
   - The reap and per-spec-status liveness views agree on the same session.
 
   Squash-merge note: both branches read "NOT ancestor of origin/main" yet were merged (PR #1787 / #1785). Reap already handles this via the merged-PR check; the ONLY gap is the null-pid liveness branch.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:53:21.090085588Z
-modified_at: 2026-09-13T02:53:21.090085588Z
+modified_at: 2026-09-13T06:14:25.261088090Z
 req_type: Bug
 tags:
 - oversight-signal
