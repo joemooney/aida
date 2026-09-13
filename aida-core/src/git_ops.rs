@@ -1312,7 +1312,13 @@ pub fn worktree_gitdir_path(worktree_path: &Path) -> Option<PathBuf> {
         return None;
     }
     let path = PathBuf::from(raw);
-    if path.is_absolute() {
+    // A gitdir file always writes POSIX (forward-slash) paths, so a leading
+    // `/` marks an absolute path even on Windows — where `is_absolute()` is
+    // false without a drive letter and would otherwise graft the worktree's
+    // drive onto a container-mounted host path (e.g. `/host/...` → `C:/host/
+    // ...`). Windows-relative gitdir paths start with `..`/a name, never `/`.
+    // trace:BUG-915 | ai:claude
+    if path.is_absolute() || raw.starts_with('/') {
         Some(path)
     } else {
         Some(worktree_path.join(path))
