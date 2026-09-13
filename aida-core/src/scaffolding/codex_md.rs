@@ -60,18 +60,20 @@ for agent pause/abort/defer semantics.
 ### Storage Model
 
 AIDA's source of truth is the git-canonical spec store, not an ad hoc
-notes file. Use MCP tools for spec graph and coordination operations
-when available; use shell commands for build, test, git inspection, and
-cross-surface verification.
+notes file. For invisible memory/notepad reflexes, use the CLI with
+`AIDA_AGENT_OUTPUT=toon` so routine graph reads stay token-cheap and do
+not depend on MCP discovery. Use shell commands for build, test, git
+inspection, and cross-surface verification; opt into MCP when you need
+the structured coordination surface.
 
 ### MCP Server Registration
 
 `aida init` scaffolds `.codex/config.toml` with an `[mcp_servers.aida]`
 block that registers AIDA's MCP server (`aida mcp-serve`) for this
-project — the Codex-side parallel to the `.mcp.json` Claude Code uses. A
-Codex session started from the project root therefore discovers AIDA's
-tools out of the box; you do not need to run `codex mcp add aida -- aida
-mcp-serve` by hand. If `aida` is not on `PATH`, edit the scaffolded
+project — the Codex-side parallel to the `.mcp.json` Claude Code uses.
+The registration sets `AIDA_AGENT_OUTPUT=toon` so any agent-facing AIDA
+subprocess spawned from that surface keeps the same compact default as
+the CLI memory lane. If `aida` is not on `PATH`, edit the scaffolded
 `command` to the absolute binary path. See
 `docs/agents/codex-mcp-setup.md` for verification (`codex mcp list`,
 `/mcp`).
@@ -152,12 +154,16 @@ writing `~/.gemini/antigravity-cli/settings.json`.
 
 ### MCP Coordination
 
-Use AIDA MCP for substrate operations: `show_requirement`,
-`list_active_leases`, `claim_task`, `release_task`, `file_finding`,
-`post_punt`, `list_briefs`, `read_brief`, `ack_brief`, `add_comment`,
-and directive tools. Trust MCP `tools/list` for argument names. Current
-responses are text envelopes; parse defensively until structuredContent
-ships.
+Default to the CLI/TOON lane for low-friction memory reads:
+`AIDA_AGENT_OUTPUT=toon aida show <SPEC-ID> --brief`,
+`AIDA_AGENT_OUTPUT=toon aida list --status approved`, and
+`AIDA_AGENT_OUTPUT=toon aida search "<query>"`. Opt into AIDA MCP for
+typed coordination when the MCP tools are available and worth the token
+cost: `show_requirement`, `list_active_leases`, `claim_task`,
+`release_task`, `file_finding`, `post_punt`, `list_briefs`,
+`read_brief`, `ack_brief`, `add_comment`, and directive tools. Trust MCP
+`tools/list` for argument names. Current responses are text envelopes;
+parse defensively until structuredContent ships.
 
 For cross-agent communication semantics, especially Claude Code
 `PreToolUse` / `PostToolUse`, `continue: false`, `ask`, and `defer`, use
@@ -265,7 +271,11 @@ project convention.
         let spec = crate::scaffolding::mcp_translate::McpServerSpec {
             command: "aida".to_string(),
             args: vec!["mcp-serve".to_string()],
-            env: Default::default(),
+            // trace:STORY-1095 | ai:codex
+            // Keep agent-facing AIDA subprocess output compact by default.
+            env: [("AIDA_AGENT_OUTPUT".to_string(), "toon".to_string())]
+                .into_iter()
+                .collect(),
         };
         crate::scaffolding::mcp_translate::render_codex_config_document("aida", &spec)
     }
@@ -287,6 +297,8 @@ mod tests {
         assert!(toml.contains("[mcp_servers.aida]"));
         assert!(toml.contains("command = \"aida\""));
         assert!(toml.contains("args = [\"mcp-serve\"]"));
+        assert!(toml.contains("[mcp_servers.aida.env]"));
+        assert!(toml.contains("AIDA_AGENT_OUTPUT = \"toon\""));
         // Baseline trusted-project posture so the local server runs without a
         // per-session prompt (parallel to the Claude pre-approval).
         // BUG-793: this key makes Codex silently discard the entire project
@@ -300,6 +312,10 @@ mod tests {
         assert_eq!(
             parsed["mcp_servers"]["aida"]["command"].as_str(),
             Some("aida")
+        );
+        assert_eq!(
+            parsed["mcp_servers"]["aida"]["env"]["AIDA_AGENT_OUTPUT"].as_str(),
+            Some("toon")
         );
     }
 
@@ -315,6 +331,10 @@ mod tests {
         assert!(md.contains("## Codex Operating Discipline"));
         assert!(md.contains("docs/agents/codex-mcp-setup.md"));
         assert!(md.contains("docs/agents/session-communication.md"));
+        // trace:STORY-1095 | ai:codex
+        assert!(md.contains("use the CLI with\n`AIDA_AGENT_OUTPUT=toon`"));
+        assert!(md.contains("Default to the CLI/TOON lane"));
+        assert!(md.contains("Opt into AIDA MCP"));
         assert!(md.contains("[AI:codex]"));
         assert!(md.contains("### Optional Status Lines"));
         assert!(md.contains("status_line = [\"model-with-reasoning\""));

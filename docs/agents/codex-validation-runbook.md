@@ -64,9 +64,10 @@ For an existing AIDA project that predates the Codex scaffold, re-run init to ad
 aida init --agent codex --force
 ```
 
-This writes a project-local `.codex/config.toml` with an `[mcp_servers.aida]` block plus a
-baseline `project_trust_level = "trusted"` line — the Codex-side parallel to the `.mcp.json`
-AIDA writes for Claude Code. Confirm the file:
+This writes a project-local `.codex/config.toml` with an `[mcp_servers.aida]`
+block — the Codex-side parallel to the `.mcp.json` AIDA writes for Claude Code.
+The scaffold sets `AIDA_AGENT_OUTPUT=toon` so opt-in MCP stays aligned with the
+cheap CLI/TOON memory lane. Confirm the file:
 
 ```bash
 cat .codex/config.toml
@@ -75,12 +76,15 @@ cat .codex/config.toml
 Expected content (the load-bearing lines):
 
 ```toml
-project_trust_level = "trusted"
-
 [mcp_servers.aida]
 command = "aida"
 args = ["mcp-serve"]
+
+[mcp_servers.aida.env]
+AIDA_AGENT_OUTPUT = "toon"
 ```
+
+<!-- trace:STORY-1095 | ai:codex -->
 
 If `aida` is not on `PATH`, edit the scaffolded `command` to the absolute binary path.
 
