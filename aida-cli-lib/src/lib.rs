@@ -73270,6 +73270,8 @@ fn run_auto_complete(
     // drain-state. The zen flag is the carried typed field, not a bare env
     // re-read (ADR-10). trace:STORY-301 trace:TASK-336 trace:ADR-10 | ai:claude
     let run_zen = driver.is_zen_run();
+    let owns_drain_state =
+        owns_drain_state && std::env::var_os("AIDA_PIPELINED_BATCH_CHILD").is_none();
     if owns_drain_state {
         let _ = drain_state::DrainState::new_single(spec, &run_token, run_zen).write(&project_root);
     } else {
@@ -73401,6 +73403,7 @@ fn run_auto_complete(
         result.exit_code == 0,
         auto_complete::PhaseDriver::hint_context(&driver).pr_number,
     );
+    write_pipelined_child_result_sidecar(&result);
 
     record_auto_complete_run(
         &driver,
@@ -73439,6 +73442,123 @@ fn run_auto_complete(
     let _ = agent_registry::gc_dead_agents(&project_root, false, None);
 
     result
+}
+
+// Child-process batch pipelining preserves the existing per-spec engine while
+// passing the in-process outcome back to the parent scheduler.
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+fn write_pipelined_child_result_sidecar(result: &auto_complete::OrchestrationResult) {
+    let Some(path) = std::env::var_os("AIDA_PIPELINED_RESULT_PATH") else {
+        return;
+    };
+    let path = std::path::PathBuf::from(path);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let escalation = result.escalation.as_ref().map(|e| {
+        serde_json::json!({
+            "kind": match e.kind {
+                auto_complete::EscalationKind::MergeDecision => "merge-decision",
+                auto_complete::EscalationKind::DesignFork => "design-fork",
+                auto_complete::EscalationKind::SupervisedMerge => "supervised-merge",
+            },
+            "reason": e.reason,
+        })
+    });
+    let value = serde_json::json!({
+        "exit_code": result.exit_code,
+        "failed_phase": result.failed_phase.map(|p| p.index()),
+        "punt_reason": result.punt_reason,
+        "shipped_spec_id": result.shipped_spec_id,
+        "escalation": escalation,
+        "inconclusive_reason": result.inconclusive_reason,
+        "shelved": result.shelved_reason.is_some(),
+        "held_reason": result.held_reason,
+    });
+    if let Ok(bytes) = serde_json::to_vec_pretty(&value) {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
+// trace:STORY-1091 trace:ADR-28 | ai:codex
+fn read_pipelined_child_result_sidecar(
+    path: &std::path::Path,
+) -> Option<auto_complete::OrchestrationResult> {
+    let bytes = std::fs::read(path).ok()?;
+    let _ = std::fs::remove_file(path);
+    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    let exit_code = value
+        .get("exit_code")
+        .and_then(|v| v.as_i64())
+        .and_then(|v| i32::try_from(v).ok())?;
+    let failed_phase = value
+        .get("failed_phase")
+        .and_then(|v| v.as_i64())
+        .and_then(|v| i32::try_from(v).ok())
+        .and_then(auto_complete::Phase::from_index);
+    let escalation = value.get("escalation").and_then(|v| {
+        let kind = match v.get("kind").and_then(|k| k.as_str())? {
+            "merge-decision" => auto_complete::EscalationKind::MergeDecision,
+            "design-fork" => auto_complete::EscalationKind::DesignFork,
+            "supervised-merge" => auto_complete::EscalationKind::SupervisedMerge,
+            _ => return None,
+        };
+        Some(auto_complete::EscalationSummary {
+            kind,
+            reason: v
+                .get("reason")
+                .and_then(|r| r.as_str())
+                .unwrap_or("pipelined child escalated")
+                .to_string(),
+        })
+    });
+    let shelved_reason = value
+        .get("shelved")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+        .then(|| aida_core::FailureReason {
+            phase: failed_phase
+                .unwrap_or(auto_complete::Phase::Ci)
+                .slug()
+                .to_string(),
+            phase_index: failed_phase
+                .unwrap_or(auto_complete::Phase::Ci)
+                .index()
+                .try_into()
+                .unwrap_or(2),
+            kind: "pipelined-child-shelved".to_string(),
+            detail: "pipelined child parked this spec".to_string(),
+            recovery_hint: Some(
+                "inspect the child drain output and `aida findings list`".to_string(),
+            ),
+            shelved_by: Some("orchestrator".to_string()),
+            shelved_at: chrono::Utc::now(),
+        });
+    Some(auto_complete::OrchestrationResult {
+        exit_code,
+        failed_phase,
+        failure: None,
+        phase_durations: Vec::new(),
+        total_ms: 0,
+        punt_reason: value
+            .get("punt_reason")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        shipped_spec_id: value
+            .get("shipped_spec_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        escalation,
+        inconclusive_reason: value
+            .get("inconclusive_reason")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        shelved_reason,
+        held_reason: value
+            .get("held_reason")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+    })
 }
 
 /// BUG-438: should a finished single-spec drain clear its `drain-state.json`?
@@ -73556,6 +73676,17 @@ struct RealBatchDriver<'a> {
     // TASK-966: project root + drain-start for the `--max-tokens` meter. `None`
     // when no token cap is active. trace:TASK-966 | ai:claude
     token_meter: Option<(std::path::PathBuf, std::time::SystemTime)>,
+    /// STORY-1091: configured in-flight implementer/CI window.
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    pipeline_depth: usize,
+    /// STORY-1091: child `aida queue work <spec> --auto-complete=through-ci`
+    /// processes keyed by opaque scheduler handles.
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    pipelined_children: std::collections::HashMap<usize, std::process::Child>,
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    pipelined_result_paths: std::collections::HashMap<usize, std::path::PathBuf>,
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    next_pipelined_handle: usize,
 }
 
 impl auto_complete::BatchDriver for RealBatchDriver<'_> {
@@ -73616,11 +73747,178 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
     }
 }
 
+impl RealBatchDriver<'_> {
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    fn child_common_args(
+        &self,
+        spec: &str,
+        mode: auto_complete::AutoCompleteVariant,
+    ) -> Vec<String> {
+        let mut args = vec![
+            "queue".to_string(),
+            "work".to_string(),
+            spec.to_string(),
+            format!("--auto-complete={}", mode.slug()),
+        ];
+        if self.json {
+            args.push("--json".to_string());
+        }
+        if let Some(permission_mode) = &self.permission_mode {
+            args.push("--permission-mode".to_string());
+            args.push(permission_mode.clone());
+        }
+        if let Some(no_human) = self.no_human {
+            args.push(format!("--no-human={}", no_human.slug()));
+        }
+        match self.escalate_mode {
+            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
+            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
+        }
+        if self.steal {
+            args.push("--steal".to_string());
+        }
+        if self.force_claim {
+            args.push("--force-claim".to_string());
+        }
+        if self.allow_stale_base {
+            args.push("--allow-stale-base".to_string());
+        }
+        if self.no_auto_rebase {
+            args.push("--no-auto-rebase".to_string());
+        }
+        args
+    }
+}
+
+impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
+    fn pipeline_depth(&self) -> usize {
+        self.pipeline_depth
+    }
+
+    fn start_spec_through_ci(&mut self, spec: &str) -> auto_complete::PipelinedHandle {
+        let handle = auto_complete::PipelinedHandle(self.next_pipelined_handle);
+        self.next_pipelined_handle += 1;
+        if let Err(e) = prepare_auto_complete_phase1_status(self.storage, spec) {
+            eprintln!(
+                "{} could not prepare pipelined member {}: {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                spec,
+                e
+            );
+            return handle;
+        }
+        let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+        let result_path = find_main_worktree_root()
+            .unwrap_or_else(|_| {
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            })
+            .join(".aida")
+            .join("pipelined-results")
+            .join(format!("{}-{}.json", spec, handle.0));
+        let mut cmd = std::process::Command::new(exe);
+        cmd.args(self.child_common_args(spec, auto_complete::AutoCompleteVariant::ThroughCi))
+            .env("AIDA_PIPELINED_BATCH_CHILD", "1")
+            .env("AIDA_PIPELINED_RESULT_PATH", &result_path);
+        match cmd.spawn() {
+            Ok(child) => {
+                self.pipelined_children.insert(handle.0, child);
+                self.pipelined_result_paths.insert(handle.0, result_path);
+                handle
+            }
+            Err(e) => {
+                eprintln!(
+                    "{} could not start pipelined implementer for {}: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    spec,
+                    e
+                );
+                handle
+            }
+        }
+    }
+
+    fn wait_spec_through_ci(
+        &mut self,
+        handle: auto_complete::PipelinedHandle,
+    ) -> auto_complete::OrchestrationResult {
+        let Some(mut child) = self.pipelined_children.remove(&handle.0) else {
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        };
+        let result_path = self.pipelined_result_paths.remove(&handle.0);
+        match child.wait() {
+            Ok(status) if status.success() => result_path
+                .as_deref()
+                .and_then(read_pipelined_child_result_sidecar)
+                .unwrap_or_else(auto_complete::OrchestrationResult::ok),
+            Ok(status) if status.code() == Some(auto_complete::DRIVE_EXIT_SHELVED) => result_path
+                .as_deref()
+                .and_then(read_pipelined_child_result_sidecar)
+                .unwrap_or_else(|| {
+                    let mut result =
+                        auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
+                    result.shelved_reason = Some(aida_core::FailureReason {
+                        phase: "ci".to_string(),
+                        phase_index: 2,
+                        kind: "pipelined-child-shelved".to_string(),
+                        detail: "pipelined implementer/CI child parked this spec".to_string(),
+                        recovery_hint: Some(
+                            "inspect the child drain output and `aida findings list`".to_string(),
+                        ),
+                        shelved_by: Some("orchestrator".to_string()),
+                        shelved_at: chrono::Utc::now(),
+                    });
+                    result
+                }),
+            Ok(_status) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
+            Err(_) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
+        }
+    }
+
+    fn finish_spec_after_ci(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        if i32::from(self.variant.last_phase()) <= auto_complete::Phase::Ci.index() {
+            return auto_complete::OrchestrationResult::ok();
+        }
+        let project_root = match find_main_worktree_root() {
+            Ok(root) => root,
+            Err(_) => {
+                return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Reviewer)
+            }
+        };
+        let lookup = detect_open_pr_for_spec_via_forge(&project_root, spec);
+        let (branch, pr) = match lookup {
+            PrLookup::Found(pr) => (pr.head_branch, Some(pr.number as u32)),
+            _ => return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Reviewer),
+        };
+        let resume = Some(ResumeEntry {
+            start_phase: auto_complete::Phase::Reviewer,
+            branch,
+            pr,
+            from_pr: true,
+        });
+        run_auto_complete(
+            self.storage,
+            &self.user_id,
+            spec,
+            self.variant,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+            self.escalate_mode,
+            false,
+            self.steal,
+            self.force_claim,
+            self.allow_stale_base,
+            self.no_auto_rebase,
+            resume,
+        )
+    }
+}
+
 /// Entry point for `aida queue work --batch NAME --auto-complete` (TASK-285).
-/// Drains the whole batch — one full `--auto-complete` lifecycle per member,
-/// advancing the head after each — until the batch is empty, `--max` is
-/// reached, or a phase fails. Never returns: exits `0` on a clean drain, else
-/// the failed-phase index (per STORY-246's exit codes). trace:TASK-285
+/// Drains the whole batch. Depth 1 keeps the historical one-full-lifecycle per
+/// member loop; depth >1 starts later implementer/CI children while this parent
+/// serializes reviewer/merge/pull/build for ready PRs. Never returns.
+// trace:TASK-285 STORY-1091
 #[allow(clippy::too_many_arguments)]
 fn handle_auto_complete_batch(
     storage: &Storage,
@@ -73693,6 +73991,10 @@ fn handle_auto_complete_batch(
         .max_tokens
         .and(drain_root.clone())
         .map(|root| (root, drain_started));
+    let pipeline_depth = drain_root
+        .as_deref()
+        .map(|root| DrainTuning::resolve(root).pipeline_depth())
+        .unwrap_or_else(drain_state::default_pipeline_depth);
     let mut driver = RealBatchDriver {
         storage,
         user_id: user_id.to_string(),
@@ -73708,6 +74010,10 @@ fn handle_auto_complete_batch(
         allow_stale_base,
         no_auto_rebase,
         token_meter,
+        pipeline_depth,
+        pipelined_children: std::collections::HashMap::new(),
+        pipelined_result_paths: std::collections::HashMap::new(),
+        next_pipelined_handle: 1,
     };
     // EPIC-28: a `None` `--max-failures` from the CLI means "use the
     // built-in default cap" — set here so the orchestrator never runs
@@ -73715,7 +74021,7 @@ fn handle_auto_complete_batch(
     let max_failures = max_failures.or(Some(DEFAULT_MAX_FAILURES));
     // TASK-966: thread the hard budget caps through the batch drain.
     let mut cap_stop = None;
-    let result = auto_complete::drain_batch_with_caps(
+    let result = auto_complete::drain_batch_pipelined_with_caps(
         &mut driver,
         max,
         max_failures,
@@ -74345,6 +74651,13 @@ fn handle_auto_complete_batches(
                 no_auto_rebase,
                 // TASK-966: shared start + root → cumulative token meter.
                 token_meter: token_meter_root.clone().map(|root| (root, chain_started)),
+                pipeline_depth: drain_root
+                    .as_deref()
+                    .map(|root| DrainTuning::resolve(root).pipeline_depth())
+                    .unwrap_or_else(drain_state::default_pipeline_depth),
+                pipelined_children: std::collections::HashMap::new(),
+                pipelined_result_paths: std::collections::HashMap::new(),
+                next_pipelined_handle: 1,
             })
         },
     );
@@ -75384,6 +75697,14 @@ struct RealNextNDriver<'a> {
     /// skipped before launching any phase-1 session.
     role_skipped: Vec<(String, String)>,
     seen_role_skips: std::collections::HashSet<String>,
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    pipeline_depth: usize,
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    pipelined_children: std::collections::HashMap<usize, std::process::Child>,
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    pipelined_result_paths: std::collections::HashMap<usize, std::path::PathBuf>,
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    next_pipelined_handle: usize,
 }
 
 impl auto_complete::BatchDriver for RealNextNDriver<'_> {
@@ -75436,12 +75757,179 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
     }
 }
 
+impl RealNextNDriver<'_> {
+    // trace:STORY-1091 trace:ADR-28 | ai:codex
+    fn child_common_args(
+        &self,
+        spec: &str,
+        mode: auto_complete::AutoCompleteVariant,
+    ) -> Vec<String> {
+        let mut args = vec![
+            "queue".to_string(),
+            "work".to_string(),
+            spec.to_string(),
+            format!("--auto-complete={}", mode.slug()),
+        ];
+        if self.json {
+            args.push("--json".to_string());
+        }
+        if let Some(permission_mode) = &self.permission_mode {
+            args.push("--permission-mode".to_string());
+            args.push(permission_mode.clone());
+        }
+        if let Some(no_human) = self.no_human {
+            args.push(format!("--no-human={}", no_human.slug()));
+        }
+        match self.escalate_mode {
+            auto_complete::EscalateMode::Blocks => args.push("--escalate-blocks".to_string()),
+            auto_complete::EscalateMode::Defaults => args.push("--escalate-defaults".to_string()),
+        }
+        if self.steal {
+            args.push("--steal".to_string());
+        }
+        if self.force_claim {
+            args.push("--force-claim".to_string());
+        }
+        if self.allow_stale_base {
+            args.push("--allow-stale-base".to_string());
+        }
+        if self.no_auto_rebase {
+            args.push("--no-auto-rebase".to_string());
+        }
+        args
+    }
+}
+
+impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
+    fn pipeline_depth(&self) -> usize {
+        self.pipeline_depth
+    }
+
+    fn start_spec_through_ci(&mut self, spec: &str) -> auto_complete::PipelinedHandle {
+        let handle = auto_complete::PipelinedHandle(self.next_pipelined_handle);
+        self.next_pipelined_handle += 1;
+        if let Err(e) = prepare_auto_complete_phase1_status(self.storage, spec) {
+            eprintln!(
+                "{} could not prepare pipelined member {}: {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                spec,
+                e
+            );
+            return handle;
+        }
+        let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+        let result_path = find_main_worktree_root()
+            .unwrap_or_else(|_| {
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+            })
+            .join(".aida")
+            .join("pipelined-results")
+            .join(format!("{}-{}.json", spec, handle.0));
+        let mut cmd = std::process::Command::new(exe);
+        cmd.args(self.child_common_args(spec, auto_complete::AutoCompleteVariant::ThroughCi))
+            .env("AIDA_PIPELINED_BATCH_CHILD", "1")
+            .env("AIDA_PIPELINED_RESULT_PATH", &result_path);
+        match cmd.spawn() {
+            Ok(child) => {
+                self.pipelined_children.insert(handle.0, child);
+                self.pipelined_result_paths.insert(handle.0, result_path);
+                handle
+            }
+            Err(e) => {
+                eprintln!(
+                    "{} could not start pipelined implementer for {}: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    spec,
+                    e
+                );
+                handle
+            }
+        }
+    }
+
+    fn wait_spec_through_ci(
+        &mut self,
+        handle: auto_complete::PipelinedHandle,
+    ) -> auto_complete::OrchestrationResult {
+        let Some(mut child) = self.pipelined_children.remove(&handle.0) else {
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        };
+        let result_path = self.pipelined_result_paths.remove(&handle.0);
+        match child.wait() {
+            Ok(status) if status.success() => result_path
+                .as_deref()
+                .and_then(read_pipelined_child_result_sidecar)
+                .unwrap_or_else(auto_complete::OrchestrationResult::ok),
+            Ok(status) if status.code() == Some(auto_complete::DRIVE_EXIT_SHELVED) => result_path
+                .as_deref()
+                .and_then(read_pipelined_child_result_sidecar)
+                .unwrap_or_else(|| {
+                    let mut result =
+                        auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci);
+                    result.shelved_reason = Some(aida_core::FailureReason {
+                        phase: "ci".to_string(),
+                        phase_index: 2,
+                        kind: "pipelined-child-shelved".to_string(),
+                        detail: "pipelined implementer/CI child parked this spec".to_string(),
+                        recovery_hint: Some(
+                            "inspect the child drain output and `aida findings list`".to_string(),
+                        ),
+                        shelved_by: Some("orchestrator".to_string()),
+                        shelved_at: chrono::Utc::now(),
+                    });
+                    result
+                }),
+            Ok(_status) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
+            Err(_) => auto_complete::OrchestrationResult::failed(auto_complete::Phase::Ci),
+        }
+    }
+
+    fn finish_spec_after_ci(&mut self, spec: &str) -> auto_complete::OrchestrationResult {
+        if i32::from(self.variant.last_phase()) <= auto_complete::Phase::Ci.index() {
+            return auto_complete::OrchestrationResult::ok();
+        }
+        let project_root = match find_main_worktree_root() {
+            Ok(root) => root,
+            Err(_) => {
+                return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Reviewer)
+            }
+        };
+        let lookup = detect_open_pr_for_spec_via_forge(&project_root, spec);
+        let (branch, pr) = match lookup {
+            PrLookup::Found(pr) => (pr.head_branch, Some(pr.number as u32)),
+            _ => return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Reviewer),
+        };
+        let resume = Some(ResumeEntry {
+            start_phase: auto_complete::Phase::Reviewer,
+            branch,
+            pr,
+            from_pr: true,
+        });
+        run_auto_complete(
+            self.storage,
+            &self.user_id,
+            spec,
+            self.variant,
+            self.json,
+            self.permission_mode.as_deref(),
+            self.no_human,
+            self.escalate_mode,
+            false,
+            self.steal,
+            self.force_claim,
+            self.allow_stale_base,
+            self.no_auto_rebase,
+            resume,
+        )
+    }
+}
+
 /// Entry point for `aida queue work nextN --auto-complete` (TASK-293). Drains
-/// the next `N` items from the queue head — one full `--auto-complete`
-/// lifecycle per spec, advancing the head after each — until `N` specs ship,
-/// the queue is exhausted, or a phase fails. Never returns: exits `0` on a
-/// clean drain, else the failed-phase index (per STORY-246's exit codes).
-/// trace:TASK-293 | ai:claude
+/// the next `N` items from the queue head. Depth 1 keeps the historical
+/// one-full-lifecycle per member loop; depth >1 starts later implementer/CI
+/// children while this parent serializes reviewer/merge/pull/build for ready
+/// PRs. Never returns.
+// trace:TASK-293 STORY-1091 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn handle_auto_complete_next_n(
     storage: &Storage,
@@ -75518,6 +76006,10 @@ fn handle_auto_complete_next_n(
         .max_tokens
         .and(drain_root.clone())
         .map(|root| (root, drain_started));
+    let pipeline_depth = drain_root
+        .as_deref()
+        .map(|root| DrainTuning::resolve(root).pipeline_depth())
+        .unwrap_or_else(drain_state::default_pipeline_depth);
     let mut driver = RealNextNDriver {
         storage,
         user_id: user_id.to_string(),
@@ -75534,6 +76026,10 @@ fn handle_auto_complete_next_n(
         token_meter,
         role_skipped: Vec::new(),
         seen_role_skips: std::collections::HashSet::new(),
+        pipeline_depth,
+        pipelined_children: std::collections::HashMap::new(),
+        pipelined_result_paths: std::collections::HashMap::new(),
+        next_pipelined_handle: 1,
     };
     // EPIC-28: apply the same default failure cap as the batch path.
     // trace:EPIC-28 | ai:claude
@@ -75541,7 +76037,7 @@ fn handle_auto_complete_next_n(
     // TASK-966: thread the hard budget caps through the drain. A cap stop is a
     // clean `MaxReached` carrying the reason in `cap_stop`. trace:TASK-966
     let mut cap_stop = None;
-    let mut result = auto_complete::drain_batch_with_caps(
+    let mut result = auto_complete::drain_batch_pipelined_with_caps(
         &mut driver,
         Some(n),
         max_failures,
