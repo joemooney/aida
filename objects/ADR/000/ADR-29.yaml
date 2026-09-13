@@ -20,12 +20,12 @@ description: |-
 
   ## Reuses (already shipped)
   STORY-1051 `aida supervise redrive`, STORY-1052 `aida supervise nudge`, `aida awaiting`. Slice 1 composes these; it does not reinvent them.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T18:55:54.615729149Z
-modified_at: 2026-09-13T19:13:46.877972647Z
+modified_at: 2026-09-13T19:24:32.357200751Z
 req_type: Decision
 tags:
 - adr oversight architecture parent:EPIC-62
