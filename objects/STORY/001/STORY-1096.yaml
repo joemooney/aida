@@ -1,0 +1,42 @@
+id: 01a0989b-6045-7e11-b697-6bd20de920f4
+spec_id: STORY-1096
+agreed_id: STORY-1096
+title: 'Formalize the OVERSIGHT seat: a meta-supervisor above drive that keeps the operator out of babysitting AND agent-to-agent relay'
+description: |-
+  ## Why
+  Operator (2026-09-12): "a breakthrough this past week was your oversight of the process… I don't want to lose whatever magic… that helped this automated drain work more smoothly without my intervention or needing to communicate back and forth between agents." It is beyond the product seat's remit; may want "a separate role or spawn a different process." Keep the LIVE version running until this lands.
+
+  ## What to formalize (observed, working)
+  A third layer above the drain, distinct from advisor (DRIVES) and implementer (EXECUTES): an OVERSIGHT/meta-supervisor that (a) watches drain EVENTS (event-driven, not timer-poll), (b) catches the drain working the WRONG thing vs the operator's PRIMARY objective and realigns it (e.g. 2026-09-12: EPIC-63 children approved-but-unqueued while the drain ground bugs — oversight queued them), (c) nudges/coordinates the advisor through the SUBSTRATE (mailbox + drain lock), NOT by relaying through the operator, (d) triages failures / salvages parked work / rebuilds on fix-merge, (e) surfaces to the operator ONLY human-decision items. STORY-1051 (auto re-drive) + STORY-1052 (nudge) are automated slivers; this is the judgment-driven whole.
+
+  ## Design questions to decide (guided, with the operator)
+  1. A new SEAT (`oversight`/`supervisor` role) vs a spawned PROCESS (`aida oversee` loop) vs a skill (`/aida-oversee`)? Trade-offs: a seat integrates with roles/routing; a process/loop is session-independent (substrate-first) and can run headless; a skill is the lightest.
+  2. What is its authority? It COORDINATES + triages + realigns-the-queue, but does it DRIVE/merge, or strictly propose+nudge like product? (Lean: coordinate + queue-realign + nudge; escalate drive/merge decisions.)
+  3. Its objective input: how does it know the operator's PRIMARY objective (an EPIC tag? a `[oversight] objective = EPIC-63` config? the top of the queue?) so it can catch drift.
+  4. Event surface it consumes: events.jsonl actionable set + mailbox + drain status. Fold in STORY-998 (idle) + STORY-1051 (re-drive) as its automated reflexes.
+  5. Operator-facing contract: batch report cadence, and the ONE-line "here is what needs YOU" surface (aida awaiting is the seed).
+
+  ## Acceptance (first slice)
+  1. A documented oversight loop (skill or `aida oversee`) that, given a PRIMARY objective, watches drain events and: realigns the queue toward the objective, nudges a live advisor (STORY-1052) on transient stalls, and escalates only human-decision items — WITHOUT the operator relaying between agents.
+  2. It never DRIVES/merges autonomously (escalates those); it coordinates + realigns + triages.
+  3. Substrate-first: it reads events/mailbox/status, not a live process it must keep alive; safe to run headless or as a session skill.
+  4. Dogfood: one drain toward a named objective where the oversight loop realigns + surfaces only decisions, cited in the PR.
+
+  ## Related
+  EPIC-62 (reliability), STORY-1051 (auto re-drive — a reflex it uses), STORY-1052 (nudge — a reflex it uses), STORY-998 (idle), STORY-1043/1029 (surface/notify), the field report (docs/testimonials/2026-09-12-llm-field-report.md — the human "became a message-router" cost this removes). Keep OUT of EPIC-63 (no-machinery entry lane).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T02:31:54.693955308Z
+modified_at: 2026-09-13T02:31:54.693955308Z
+req_type: Story
+tags:
+- from-product
+- meta-supervision
+- oversight
+- parent:EPIC-62
+- recommend:approve
+- reliability
+- risk:medium
+- supervisor
