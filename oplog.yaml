@@ -65506,5 +65506,21 @@ operations:
       - Tests cover: guest write-refusal, requester add-allowed-as-Draft, requester non-add-write-refusal.
 
       Out of scope (deferred to epic followups): curated /aida-intro surface, per-user identity + rate-limiting (revisit when attribution/spam becomes a forcing function), hosted request front door.
-clock: 5159
+- id: 01a09cc7-2a61-79f2-90f5-9fa6d4edf07b
+  target_id: 01a09cbf-6e91-7b12-a116-7ee60cb88c70
+  author: aida
+  node_id: '1'
+  lamport: 5160
+  timestamp: 2026-09-13T21:58:13.345203084Z
+  kind: !AddTag
+    tag: guest-requester-persona role intake parent:epic-64 slice-1
+- id: 01a09cc7-2b0e-76f1-8407-efead6946978
+  target_id: 01a09cbf-6e91-7b12-a116-7ee60cb88c70
+  author: aida
+  node_id: '1'
+  lamport: 5161
+  timestamp: 2026-09-13T21:58:13.518253813Z
+  kind: !RemoveTag
+    tag: guest-user-persona role intake parent:epic-64 slice-1
+clock: 5161
 node_id: '1'
