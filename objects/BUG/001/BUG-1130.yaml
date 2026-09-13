@@ -16,10 +16,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T19:54:06.092219170Z
-modified_at: 2026-09-13T20:19:53.898570322Z
+modified_at: 2026-09-13T20:24:17.267667605Z
 req_type: Bug
 tags:
-- followup oversight supervise-watch parent:EPIC-62
+- followup oversight supervise-watch parent:EPIC-62 batch:oversight-cleanup
 relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259

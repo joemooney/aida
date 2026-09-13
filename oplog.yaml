@@ -65171,5 +65171,21 @@ operations:
   timestamp: 2026-09-13T20:15:24.055253696Z
   kind: !SetStatus
     status: Approved
-clock: 5138
+- id: 01a09c71-2abd-7fe0-b1be-c13ddcce82ad
+  target_id: 01a09c55-878c-7390-9bdd-dd1939304083
+  author: aida
+  node_id: '1'
+  lamport: 5139
+  timestamp: 2026-09-13T20:24:17.341995286Z
+  kind: !AddTag
+    tag: followup oversight supervise-watch parent:EPIC-62 batch:oversight-cleanup
+- id: 01a09c71-2b3f-7900-8418-3f7fdc50de7c
+  target_id: 01a09c55-878c-7390-9bdd-dd1939304083
+  author: aida
+  node_id: '1'
+  lamport: 5140
+  timestamp: 2026-09-13T20:24:17.471992028Z
+  kind: !RemoveTag
+    tag: followup oversight supervise-watch parent:EPIC-62
+clock: 5140
 node_id: '1'
