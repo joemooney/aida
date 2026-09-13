@@ -63963,5 +63963,51 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5053
+- id: 01a098de-50e9-7292-b116-88cfba657734
+  target_id: 01a098de-46e4-71b1-a482-db4daa36b9f7
+  author: aida
+  node_id: '1'
+  lamport: 5054
+  timestamp: 2026-09-13T03:45:01.673814267Z
+  kind: !Create
+    title: 'auto-complete failure: phase 3 (reviewer) on STORY-1093'
+    description: |
+      Auto-drafted by `aida queue work STORY-1093 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `verdict:request-changes`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework STORY-1093 --work`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-13T03:44:58.268391043+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 727776 ms
+        - phase 2 (ci): 505472 ms
+        - phase 3 (reviewer): 426709 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"STORY-1093","started_at":"2026-09-13T03:17:16.062237337+00:00","completed_at":"2026-09-13T03:44:58.268391043+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":727776},{"phase":2,"slug":"ci","elapsed_ms":505472},{"phase":3,"slug":"reviewer","elapsed_ms":426709}],"total_ms":1660933,"binary_sha":"9b8d5717c"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 5054
 node_id: '1'
