@@ -65325,5 +65325,41 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5148
+- id: 01a09c8b-5451-79d3-af26-6e2e246c7357
+  target_id: 01a09c8b-5067-7d12-9da0-14525042089c
+  author: aida
+  node_id: '1'
+  lamport: 5149
+  timestamp: 2026-09-13T20:52:51.921437186Z
+  kind: !Create
+    title: Skills/commands are AIDA's agent API and capability map — not a human command-palette UI
+    description: |-
+      Recorded 2026-09-13 from an operator observation: the operator (AIDA's author) essentially never types the slash commands — they rely on the LLM agent to invoke skills, running only the occasional /aida-capture as a periodic sanity net. That is the intended state, and it defines how we should think about the skill surface.
+
+      ## The stance
+      AIDA's skills/commands are primarily (a) the AGENT API — named entry points an LLM invokes with context — and (b) a landscape MAP of what AIDA can do, useful to both an interested human browsing 'what can this do?' and an agent understanding its surface. They are NOT a human command-palette UI. The human interface is conversation plus a few sharp read/query surfaces (aida why, list, status, the TUI, the oversight digest).
+
+      ## Three invocation styles (design for the third)
+      1. Explicit — human types the slash command.
+      2. Delegated — human asks in natural language; the agent picks the skill. (The operator's style.)
+      3. Proactive — the agent invokes from discipline/hooks/substrate signals with NO human trigger.
+      The drudgery-reduction goal points at #3. Delegated (#2) still depends on a human nudge in prose; real leverage is proactive invocation (hooks, discipline pack, oversight loop).
+
+      ## Vendor terminology does NOT map 1:1
+      Claude: skills (instructions) + commands (the /name entry point). Codex: skills + prompts (~/.codex/prompts is Codex's /name). Antigravity: skills only. AIDA maintains one capability landscape and projects it into each vendor's invocation surface; do not assume the words are equivalent across vendors.
+
+      ## A few are genuine human tools
+      /aida-capture (periodic 'did I miss anything?' net) and the read surfaces are legitimately human-facing. Serve those deliberately and keep them good.
+
+      ## Investment consequences
+      - Invest in: proactive agent invocation (hooks/discipline/substrate signals); the few human-facing read surfaces; a coherent, well-described, discoverable catalog (the map role).
+      - Do NOT invest in: polishing 48 slash commands as if humans will browse them daily; pitching the command count to a human as a headline feature (that is surface complexity — the Trojan-horse anti-pattern).
+      - Measure skill quality by whether agents invoke the right skill correctly and often (aida usage telemetry), not by whether --help reads nicely.
+
+      ## Related
+      The memory-lane README on-ramp (query-first + capture-as-you-go, agent guidance) already embodies this. Ties to the Trojan-horse positioning (OVERVIEW.md), the discipline pack (proactive invocation), and the oversight work (STORY-1096/TASK-1221 — the digest is a human-facing surface; the loop is agent-proactive).
+    req_type: Principle
+    status: Draft
+    priority: High
+clock: 5149
 node_id: '1'

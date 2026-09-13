@@ -197,7 +197,7 @@ blocks:
   type_prefix: PRIN
   range_start: 1
   range_end: 100
-  next: 3
+  next: 4
   allocated_at: 2026-05-09T18:09:51.978243Z
 - node_id: '3'
   owner: Joe.Mooney@work.example
