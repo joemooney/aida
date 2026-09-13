@@ -1,0 +1,26 @@
+id: 01a09c58-5c2e-7fc3-8d1b-76a70fc75cc4
+spec_id: STORY-1108
+agreed_id: STORY-1108
+title: 'Review PR-1804: [AI:codex] fix(supervise): parse queued ids from identity fields (TASK-1219)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09c4c`) for branch `task-1219`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1804>
+  - Branch: `task-1219` → `main`
+
+  ## Covers
+
+  - TASK-1219
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1804` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T19:57:11.598515832Z
+modified_at: 2026-09-13T19:57:11.598515832Z
+req_type: Story
