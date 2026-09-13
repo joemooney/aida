@@ -21,6 +21,12 @@ fn empty_queue() -> std::collections::HashSet<String> {
     std::collections::HashSet::new()
 }
 
+fn typed_child(spec_id: &str, status: RequirementStatus, req_type: RequirementType) -> Requirement {
+    let mut r = child(spec_id, status);
+    r.req_type = req_type;
+    r
+}
+
 #[test]
 fn drift_detects_approved_unqueued_children() {
     let reqs = vec![
@@ -30,6 +36,37 @@ fn drift_detects_approved_unqueued_children() {
     let children: Vec<&Requirement> = reqs.iter().collect();
     let drift = compute_drift(&children, &empty_queue());
     assert_eq!(drift, vec!["STORY-1".to_string(), "STORY-2".to_string()]);
+}
+
+// BUG-1130: an accepted ADR carries status Approved but is NOT implementable
+// work — realign must never queue it (nor any knowledge-class / structural
+// type). Only the real Approved story child is drift.
+// trace:BUG-1130 | ai:claude
+#[test]
+fn drift_excludes_non_implementable_child_types() {
+    let reqs = vec![
+        typed_child(
+            "ADR-26",
+            RequirementStatus::Approved,
+            RequirementType::Decision,
+        ),
+        typed_child(
+            "CON-1",
+            RequirementStatus::Approved,
+            RequirementType::Constraint,
+        ),
+        typed_child("EPIC-9", RequirementStatus::Approved, RequirementType::Epic),
+        typed_child("DOC-1", RequirementStatus::Approved, RequirementType::Doc),
+        typed_child(
+            "STORY-40",
+            RequirementStatus::Approved,
+            RequirementType::Story,
+        ),
+    ];
+    let children: Vec<&Requirement> = reqs.iter().collect();
+    let drift = compute_drift(&children, &empty_queue());
+    assert_eq!(drift, vec!["STORY-40".to_string()]);
+    assert!(!drift.contains(&"ADR-26".to_string()));
 }
 
 #[test]

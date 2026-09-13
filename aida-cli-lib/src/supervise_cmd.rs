@@ -522,9 +522,35 @@ fn print_watch_report(report: &WatchReport, execute: bool) {
     }
 }
 
-/// Objective children that are ready but unqueued: status Approved, not
-/// archived, not deferred, and not already in a queue. Pure, so it is unit
-/// tested directly.
+/// Whether a child type is realignable — i.e. buildable work an implementer
+/// can pick up. Realign QUEUES the spec for the implementer under `--execute`,
+/// so it must never target a knowledge-class / structural record: an accepted
+/// ADR carries status Approved (BUG-1130), a Constraint/Vision/Principle/Term
+/// is authored not implemented, an Epic's status is a read-only rollup, and
+/// Folder/Meta/Doc are organizational. This is intentionally STRICTER than the
+/// candidate-view filter `aida_core::lifecycle::is_work_item_type` (which a
+/// triage view uses): realign also excludes Epic/Folder/Meta/Constraint/Doc
+/// because none is queueable implementer work.
+// trace:BUG-1130 | ai:claude
+fn is_realignable_type(req_type: &aida_core::models::RequirementType) -> bool {
+    use aida_core::models::RequirementType as T;
+    !matches!(
+        req_type,
+        T::Decision
+            | T::Epic
+            | T::Folder
+            | T::Meta
+            | T::Principle
+            | T::Vision
+            | T::Constraint
+            | T::Term
+            | T::Doc
+    )
+}
+
+/// Objective children that are ready but unqueued: an implementable type with
+/// status Approved, not archived, not deferred, and not already in a queue.
+/// Pure, so it is unit tested directly.
 fn compute_drift(
     children: &[&aida_core::Requirement],
     queued: &std::collections::HashSet<String>,
@@ -532,7 +558,11 @@ fn compute_drift(
     use aida_core::models::RequirementStatus;
     let mut drift = Vec::new();
     for c in children {
-        if c.status == RequirementStatus::Approved && !c.archived && !c.deferred {
+        if is_realignable_type(&c.req_type)
+            && c.status == RequirementStatus::Approved
+            && !c.archived
+            && !c.deferred
+        {
             if let Some(id) = display_id(c) {
                 if !queued.contains(&id.to_ascii_uppercase()) {
                     drift.push(id);
