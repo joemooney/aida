@@ -65474,5 +65474,13 @@ operations:
 
       Slice 1 (the STORY): role identifiers + least-privilege permission gate + Draft-only intake tagging.
       Deferred followups: a curated /aida-intro read surface; per-user identity in the intake tag (revisit trigger: when we need to ATTRIBUTE or RATE-LIMIT external filings — spam is the forcing function); a hosted 'file a request' front door.
-clock: 5157
+- id: 01a09cc6-f2f6-7310-a8cb-977f06c567a8
+  target_id: 01a09cbf-6e91-7b12-a116-7ee60cb88c70
+  author: aida
+  node_id: '1'
+  lamport: 5158
+  timestamp: 2026-09-13T21:57:59.158325315Z
+  kind: !SetTitle
+    title: 'Least-privilege guest/requester role: read surfaces + Draft-only intake, gated out of the build loop'
+clock: 5158
 node_id: '1'
