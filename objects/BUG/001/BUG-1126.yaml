@@ -3,12 +3,12 @@ spec_id: BUG-1126
 agreed_id: BUG-1126
 title: 'queue work --guided --force-claim on a spec routed to another role: blocked on role-routing AND spews every archived cluster member (60+ lines)'
 description: 'Operator ran: aida queue work STORY-1094 --guided --force-claim, active role=product. STORY-1094 is queued for role=implementer. Two problems: (1) --force-claim overrode the shelved/needs-attention state but NOT the role-routing gate, so the command still failed with ''isn''t routed to you'' — confusing after an explicit --force. The error''s own fix (role enter implementer) is correct, but a forced guided pickup could offer to enter the routed role, or the docs/help should note --force-claim does not cross role routing. (2) Before the error, the cluster expansion printed ~63 lines of ''cluster STORY-1094 - skipping un-pickable <ID> (archived - skipped)''. Archived cluster members should be summarized (e.g. ''skipped 63 archived cluster members'') not enumerated. Acceptance: forced guided pickup either auto-enters the routed role (with a clear notice) or fails with a one-line role hint and NO per-member archived spew; archived cluster members are summarized as a count.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T06:38:10.107260177Z
-modified_at: 2026-09-13T18:21:01.433210320Z
+modified_at: 2026-09-13T18:31:36.425904640Z
 req_type: Bug
 tags:
 - cluster-noise
@@ -22,3 +22,21 @@ comments:
   created_at: 2026-09-13T18:21:01.433210320Z
   modified_at: 2026-09-13T18:21:01.433210320Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09c0a-00e2-70b1-a334-b53e3106ddd1
+  author: aida-auto-bump
+  timestamp: 2026-09-13T18:31:36.418577991Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09c0a-00e9-7922-8601-0627be49634e
+  timestamp: 2026-09-13T18:31:36.425903467Z
+  agent: aida
+  commit_sha: d2bb2de67783738d794e4b13b2db47d31cb11644
+  summary: Completed via merge d2bb2de6
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-13T18:31:36.418464792Z
+  completion_sha: d2bb2de67783738d794e4b13b2db47d31cb11644
