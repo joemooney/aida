@@ -64885,5 +64885,13 @@ operations:
   timestamp: 2026-09-13T19:28:13.468340885Z
   kind: !RemoveTag
     tag: followup oversight supervise-watch parent:STORY-1096 papercut
-clock: 5119
+- id: 01a09c3d-dd80-7e80-97c5-90d9bd95d593
+  target_id: 01a09c18-c48d-7ef1-a681-86b772f83864
+  author: aida
+  node_id: '1'
+  lamport: 5120
+  timestamp: 2026-09-13T19:28:15.232229298Z
+  kind: !AddTag
+    tag: batch:oversight-cleanup
+clock: 5120
 node_id: '1'
