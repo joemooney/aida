@@ -8,5 +8,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T17:39:25.675720856Z
-modified_at: 2026-09-13T18:00:39.969894102Z
+modified_at: 2026-09-13T18:00:42.229836070Z
 req_type: Bug
+comments:
+- id: 01a09bed-b5f5-7181-8d1b-971b8118e333
+  author: joe
+  content: 'Fixed + merged in PR #1800 (commit 3ea6e54ef). All three platforms green (windows/macos/ubuntu Build=success) via PR CI + a dispatched cross-platform run on the same head. Note: the merge commit trailer read (BUG-1063), so auto-bump keyed off that; completing BUG-1127 by hand.'
+  created_at: 2026-09-13T18:00:42.229836070Z
+  modified_at: 2026-09-13T18:00:42.229836070Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
