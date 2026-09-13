@@ -3,12 +3,12 @@ spec_id: TASK-1216
 agreed_id: TASK-1216
 title: 'Memory-lane positioning + discoverable-but-quiet footprint: one doc naming the entry lane; .aida footprint findable without being noisy'
 description: A positioning doc naming the memory lane as AIDA's entry adoption lane (the on-ramp before any machinery), and ensure the .aida/ footprint is discoverable when the user looks (git hygiene, 'what is this dir') without being intrusive day-to-day. trace:EPIC-63
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T01:42:23.975696489Z
-modified_at: 2026-09-13T01:42:30.584438951Z
+modified_at: 2026-09-13T04:36:43.948426947Z
 req_type: Task
 tags:
 - docs
