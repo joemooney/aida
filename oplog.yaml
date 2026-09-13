@@ -64951,5 +64951,25 @@ operations:
       3. Coordinates with a live advisor through the substrate (mailbox/queue), not through the operator.
       4. Never drives or merges; escalates those.
       5. Dogfood: run it against one real drain toward a named objective; cite the administrative view + the escalations it surfaced in the PR. That run satisfies STORY-1107's revisit trigger.
-clock: 5126
+- id: 01a09c55-8eb7-7690-934e-997504fa15c0
+  target_id: 01a09c55-878c-7390-9bdd-dd1939304083
+  author: aida
+  node_id: '1'
+  lamport: 5127
+  timestamp: 2026-09-13T19:54:07.927955703Z
+  kind: !Create
+    title: supervise watch drift detector flags non-implementable child types (accepted ADR shown as drift; --execute would queue it)
+    description: |-
+      Found by dogfooding slice 1 (STORY-1096) on 2026-09-13: 'aida supervise watch --objective EPIC-62' reported drift = ADR-26, an ACCEPTED decision. compute_drift filters on status == Approved, but an accepted ADR carries status Approved even though it is not implementable/queueable work. Under --execute the loop would queue ADR-26 for the implementer — an over-realign into a non-work spec.
+
+      Fix: exclude non-implementable requirement types from drift. Only implementable work should be realigned — story/task/bug/spike (and functional/non-functional/system/user/change-request if they represent work). Exclude decision/epic/folder/meta/principle/vision/constraint/term/doc.
+
+      Acceptance:
+      - compute_drift skips children whose req_type is non-implementable (decision, epic, folder, meta, principle, vision, constraint, term, doc).
+      - An accepted ADR under an objective is NOT reported as drift and is NOT queued under --execute.
+      - Regression test: an objective with an accepted ADR child + a real Approved story child reports only the story as drift.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 5127
 node_id: '1'

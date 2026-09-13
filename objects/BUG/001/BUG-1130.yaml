@@ -1,0 +1,22 @@
+id: 01a09c55-878c-7390-9bdd-dd1939304083
+spec_id: BUG-1130
+agreed_id: BUG-1130
+title: supervise watch drift detector flags non-implementable child types (accepted ADR shown as drift; --execute would queue it)
+description: |-
+  Found by dogfooding slice 1 (STORY-1096) on 2026-09-13: 'aida supervise watch --objective EPIC-62' reported drift = ADR-26, an ACCEPTED decision. compute_drift filters on status == Approved, but an accepted ADR carries status Approved even though it is not implementable/queueable work. Under --execute the loop would queue ADR-26 for the implementer — an over-realign into a non-work spec.
+
+  Fix: exclude non-implementable requirement types from drift. Only implementable work should be realigned — story/task/bug/spike (and functional/non-functional/system/user/change-request if they represent work). Exclude decision/epic/folder/meta/principle/vision/constraint/term/doc.
+
+  Acceptance:
+  - compute_drift skips children whose req_type is non-implementable (decision, epic, folder, meta, principle, vision, constraint, term, doc).
+  - An accepted ADR under an objective is NOT reported as drift and is NOT queued under --execute.
+  - Regression test: an objective with an accepted ADR child + a real Approved story child reports only the story as drift.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T19:54:06.092219170Z
+modified_at: 2026-09-13T19:54:06.092219170Z
+req_type: Bug
+tags:
+- followup oversight supervise-watch parent:EPIC-62
