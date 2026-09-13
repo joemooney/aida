@@ -11,7 +11,7 @@ Invoke with: `/aida-implement <SPEC-ID>`
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-implement.md`:
+Follow the workflow in `.claude/skills/aida-implement/SKILL.md`:
 
 1. Load requirement: `aida show $ARGUMENTS`
 2. Analyze scope and identify files to modify

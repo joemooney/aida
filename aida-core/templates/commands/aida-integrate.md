@@ -10,7 +10,7 @@ and escalate (never resolve) anything that needs a judgment call.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-integrate.md`:
+Follow the workflow in `.claude/skills/aida-integrate/SKILL.md`:
 
 1. Resolve the integration set + conflict forecast first:
    `aida queue integrate --dry-run`. Cross-check dependency order with

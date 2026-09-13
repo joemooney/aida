@@ -14,7 +14,7 @@ branch onto its upstream.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-rebase.md`:
+Follow the workflow in `.claude/skills/aida-rebase/SKILL.md`:
 
 1. Probe with `aida rebase --dry-run --json` — fetches, classifies, no
    side effects

@@ -8,7 +8,7 @@ Reconcile every `aida human` item so the "does this need me?" report is true
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-human-audit.md`:
+Follow the workflow in `.claude/skills/aida-human-audit/SKILL.md`:
 
 1. Run `aida human` + `aida awaiting --json`; enumerate every surfaced item
    (reviews-awaiting, needs-attention, findings, mail, verdicts, escalations).

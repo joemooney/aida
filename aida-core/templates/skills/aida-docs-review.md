@@ -155,7 +155,7 @@ Categorize each file:
 - **Root docs**: README.md, CLAUDE.md, OVERVIEW.md, AGENTS.md
 - **User docs**: docs/*.md
 - **Plan docs**: docs/plans/*.md (skip these — they're historical records)
-- **Skill docs**: .claude/skills/*.md, aida-core/templates/skills/*.md
+- **Skill docs**: .claude/skills/*/SKILL.md, aida-core/templates/skills/*.md
 - **Config docs**: inline in Cargo.toml, docker-compose files
 
 ### Step 2: Cross-Reference Check
@@ -226,7 +226,7 @@ Issues found: N (N critical, N important, N minor)
 #### CRITICAL: Feature count wrong (line 42)
 - **Before**: "15 Claude Code skills"
 - **After**: "21 Claude Code skills"
-- **Why**: Actual count of .claude/skills/aida-*.md is 21
+- **Why**: Actual count of .claude/skills/aida-*/SKILL.md is 21
 
 #### IMPORTANT: Hype language (line 58)
 - **Before**: "blazing fast requirements management"
@@ -311,7 +311,7 @@ aida init --help
 aida github --help
 
 # Count skills
-ls .claude/skills/aida-*.md | wc -l
+ls .claude/skills/aida-*/SKILL.md | wc -l
 
 # Count storage backends
 grep -c "BackendType::" aida-core/src/db/traits.rs

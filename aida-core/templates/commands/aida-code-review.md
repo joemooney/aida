@@ -7,7 +7,7 @@ Exhaustive code quality review with a structured report and before/after diffs.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-code-review.md`:
+Follow the workflow in `.claude/skills/aida-code-review/SKILL.md`:
 
 1. Determine review scope (current branch diff, a specific path, or recent commits)
 2. Check for sloppy code, untested paths, missing trace comments, excessive complexity, inconsistent style

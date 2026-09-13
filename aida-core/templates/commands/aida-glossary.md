@@ -7,7 +7,7 @@ Build the ubiquitous language dictionary by scanning reqs and code for domain te
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-glossary.md`:
+Follow the workflow in `.claude/skills/aida-glossary/SKILL.md`:
 
 1. Scan requirements (`aida list`, `aida search`) and key code paths for domain terms
 2. Surface inconsistencies, synonyms, and ambiguous usage with file:line evidence

@@ -7,7 +7,7 @@ Review conversation and capture any missed requirements.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-capture.md`:
+Follow the workflow in `.claude/skills/aida-capture/SKILL.md`:
 
 1. Scan the conversation for discussed features, bugs, or ideas
 2. Identify any implemented work not yet in requirements database

@@ -16,7 +16,7 @@ Drive a PR review to completion — checklist, verdicts, fix-forward, merge, mar
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-review.md`:
+Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 
 1. Resolve the PR number from the active session lease's scope, or accept `--pr N`
 2. `aida review prompt --pr N --write .aida/review-prompt-pr-N.md` to generate the per-spec checklist (STORY-67)

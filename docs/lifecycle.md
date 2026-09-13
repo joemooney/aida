@@ -99,7 +99,7 @@ reason: an obstacle **category** (`design-fork` / `ambiguous-spec` /
 
 The full punt mechanism — when to punt, the obstacle categories, and the
 `aida punt` invocation — is documented in the `/aida-punt` skill
-(`.claude/skills/aida-punt.md`).
+(`.claude/skills/aida-punt/SKILL.md`).
 
 The load-bearing distinction is **Done vs Completed** (STORY-86): `done`
 means "work finished on a branch"; `completed` means "merged to the default

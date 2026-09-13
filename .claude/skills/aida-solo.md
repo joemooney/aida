@@ -1,1 +1,0 @@
-../../aida-core/templates/skills/aida-solo.md

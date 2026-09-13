@@ -7,7 +7,7 @@ Run a read-only end-of-session sweep for duplication and code debt, then surface
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-techdebt.md`:
+Follow the workflow in `.claude/skills/aida-techdebt/SKILL.md`:
 
 1. Scope the scan to the session's diff first (`git diff --name-only main...HEAD`), not the whole repo, unless the user asks for a full sweep
 2. Run the five scans: duplicated code blocks, copy-pasted trace comments, dead trace paths (`trace:` → Rejected spec), spec-graph duplicates, orphan files

@@ -10,7 +10,7 @@ escalate into `aida awaiting`, but it NEVER starts work, takes a lease, or merge
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-fleet-watch.md`. Each tick:
+Follow the workflow in `.claude/skills/aida-fleet-watch/SKILL.md`. Each tick:
 
 1. **Substrate sweep (authoritative):** `aida ps --json` (live/STALE/orphaned),
    `aida awaiting --json` (operator gates), the new `.aida/events.jsonl` lines

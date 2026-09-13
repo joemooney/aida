@@ -311,19 +311,25 @@ mod tests {
         // Write a deliberately stale-but-pristine copy of a real skill: same
         // marker shape, different body → the checksum still matches its OWN
         // body, so refresh must overlay it with the embedded master.
+        // BUG-1135: skills scaffold in directory form (`<name>/SKILL.md`), so
+        // the installed fixture lives there too.
         let stale = wrap_with_aida_header(
-            Path::new(".claude/skills/aida-req.md"),
+            Path::new(".claude/skills/aida-req/SKILL.md"),
             "---\nname: aida-req\n---\n# Old\n\nstale body\n",
         );
-        std::fs::write(skills.join("aida-req.md"), &stale).unwrap();
+        let req_dir = skills.join("aida-req");
+        std::fs::create_dir_all(&req_dir).unwrap();
+        std::fs::write(req_dir.join("SKILL.md"), &stale).unwrap();
 
         // An edited copy of another skill must survive untouched.
         let edited = wrap_with_aida_header(
-            Path::new(".claude/skills/aida-commit.md"),
+            Path::new(".claude/skills/aida-commit/SKILL.md"),
             "---\nname: aida-commit\n---\n# Mine\n\nbody\n",
         )
         .replace("body", "MY OWN body");
-        std::fs::write(skills.join("aida-commit.md"), &edited).unwrap();
+        let commit_dir = skills.join("aida-commit");
+        std::fs::create_dir_all(&commit_dir).unwrap();
+        std::fs::write(commit_dir.join("SKILL.md"), &edited).unwrap();
 
         let packs = refresh_agent_packs(root, None);
         let claude = packs
@@ -338,11 +344,11 @@ mod tests {
         );
         assert_eq!(claude.report.kept_edited.len(), 1);
         assert_ne!(
-            std::fs::read_to_string(skills.join("aida-req.md")).unwrap(),
+            std::fs::read_to_string(req_dir.join("SKILL.md")).unwrap(),
             stale
         );
         assert_eq!(
-            std::fs::read_to_string(skills.join("aida-commit.md")).unwrap(),
+            std::fs::read_to_string(commit_dir.join("SKILL.md")).unwrap(),
             edited,
             "an edited pack file is never overwritten"
         );
@@ -422,15 +428,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let skills = root.join(".claude/skills");
-        std::fs::create_dir_all(&skills).unwrap();
+        let req_dir = skills.join("aida-req");
+        std::fs::create_dir_all(&req_dir).unwrap();
 
         let master = root.join("master-aida-req.md");
         let original = wrap_with_aida_header(
-            Path::new(".claude/skills/aida-req.md"),
+            Path::new(".claude/skills/aida-req/SKILL.md"),
             "---\nname: aida-req\n---\n# Master\n\nsource of truth\n",
         );
         std::fs::write(&master, &original).unwrap();
-        std::os::unix::fs::symlink(&master, skills.join("aida-req.md")).unwrap();
+        std::os::unix::fs::symlink(&master, req_dir.join("SKILL.md")).unwrap();
 
         let packs = refresh_agent_packs(root, None);
         let claude = packs

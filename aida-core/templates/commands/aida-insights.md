@@ -13,7 +13,7 @@ the on-demand health fact-finding mode.
 Arguments: `$ARGUMENTS`
 
 - If `$ARGUMENTS` contains `--health` or `--deep`, run the **Health
-  fact-finding mode** from `.claude/skills/aida-insights.md` (steps H1–H5):
+  fact-finding mode** from `.claude/skills/aida-insights/SKILL.md` (steps H1–H5):
   pull `aida usage --json health` + `aida usage --json drains`,
   flag the loudest anomaly, root-cause it, bucket the free-text failure
   reasons, and synthesise a short health narrative + recommended fixes.
@@ -30,7 +30,7 @@ Arguments: `$ARGUMENTS`
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-insights.md`:
+Follow the workflow in `.claude/skills/aida-insights/SKILL.md`:
 
 1. Read the three signals from the snapshot above — top 3 non-statusline
    commands, drain success rate (`N% success`), calibration agreement
@@ -48,4 +48,4 @@ Follow the workflow in `.claude/skills/aida-insights.md`:
 
 For the on-demand health fact-finding mode (when `$ARGUMENTS` carries
 `--health` / `--deep`), follow steps H1–H5 in the "Health fact-finding
-mode" section of `.claude/skills/aida-insights.md`.
+mode" section of `.claude/skills/aida-insights/SKILL.md`.

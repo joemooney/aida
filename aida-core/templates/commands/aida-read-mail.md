@@ -8,7 +8,7 @@ on-demand companion to the per-turn unread-mail notice.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-read-mail.md`:
+Follow the workflow in `.claude/skills/aida-read-mail/SKILL.md`:
 
 1. Peek the unread set without consuming it:
    ```bash

@@ -8,7 +8,7 @@ Put the current (warm) Claude session in the solo advisor+integrator seat and ru
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-solo.md`:
+Follow the workflow in `.claude/skills/aida-solo/SKILL.md`:
 
 1. ENTER: `aida solo` (marks this session solo — statusline marker + 24h TTL; exit later with `aida solo stop`).
 2. LOOP until the safe backlog is drained:

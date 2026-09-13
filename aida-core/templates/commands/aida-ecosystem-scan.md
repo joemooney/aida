@@ -13,7 +13,7 @@ Systematically scan the competitor landscape, log capability changes, update pos
 
 ## Instructions
 
-Follow the detailed playbook in `.claude/skills/aida-ecosystem-scan.md`:
+Follow the detailed playbook in `.claude/skills/aida-ecosystem-scan/SKILL.md`:
 
 1. **Research**: Review release feeds (Claude Code, Cursor, Aider, MCP, Skillfold) for new agent capabilities.
 2. **Classify**: Categorize findings under the AIDA matrix: **Compete**, **Complement**, **Integrate**, or **Ignore**.

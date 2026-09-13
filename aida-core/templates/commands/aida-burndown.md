@@ -9,7 +9,7 @@ encoded so the "never stop to ask" rules are structural.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-burndown.md`:
+Follow the workflow in `.claude/skills/aida-burndown/SKILL.md`:
 
 1. Resolve the selector from `$ARGUMENTS` (default `--status approved`; also
    `--tag <T>` / `--batch <B>` / `--max <N>`).

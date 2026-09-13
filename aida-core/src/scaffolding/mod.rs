@@ -307,6 +307,101 @@ pub(crate) fn normalize_lf(s: &str) -> String {
     s.replace("\r\n", "\n").replace('\r', "\n")
 }
 
+/// Rewrite a FLAT `.claude/skills/<name>.md` artifact path to the directory
+/// form `.claude/skills/<name>/SKILL.md`.
+///
+/// Antigravity CLI 1.2.2 only recognizes skills in directory form
+/// (`.claude/skills/<name>/SKILL.md`) — a flat `<name>.md` file directly
+/// under `.claude/skills/` is invisible to it, so only the matching
+/// `.claude/commands/<name>.md` twin shows up, rendered as an ugly
+/// `/source-command-<name>`. Claude Code itself accepts both forms, so
+/// normalizing here (the single chokepoint every skill artifact passes
+/// through) fixes Antigravity without touching Claude Code behavior.
+///
+/// The guard is intentionally narrow: only a path whose parent is exactly
+/// `.claude/skills` (one segment below it) and which is not already in
+/// directory form is rewritten. This leaves untouched:
+/// - `.claude/commands/*.md` (twins, not skills)
+/// - `.codex/skills/**`, `.antigravity/skills/**` (already dir-form or a
+///   different vendor's tree)
+/// - `.claude/skills/local/**` (project-owned extensions, STORY-305 —
+///   `local/README.md` and any project skill under `local/` pass through
+///   as-is; this function is never called with a `<name>.local.md` sibling
+///   path either, since AIDA never scaffolds those)
+/// - `.claude/skills/<name>/SKILL.md` (already dir-form, e.g. aida-pr)
+// trace:BUG-1135 | ai:claude
+fn normalize_claude_skill_path(path: &Path) -> PathBuf {
+    let Some(parent) = path.parent() else {
+        return path.to_path_buf();
+    };
+    if parent != Path::new(".claude/skills") {
+        return path.to_path_buf();
+    }
+    let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+        return path.to_path_buf();
+    };
+    let Some(stem) = file_name.strip_suffix(".md") else {
+        return path.to_path_buf();
+    };
+    if stem.is_empty() {
+        return path.to_path_buf();
+    }
+    PathBuf::from(".claude/skills").join(stem).join("SKILL.md")
+}
+
+#[cfg(test)]
+mod normalize_claude_skill_path_tests {
+    use super::*;
+
+    #[test]
+    fn rewrites_flat_skill_to_dir_form() {
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".claude/skills/aida-req.md")),
+            PathBuf::from(".claude/skills/aida-req/SKILL.md")
+        );
+    }
+
+    #[test]
+    fn leaves_already_dir_form_untouched() {
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".claude/skills/aida-pr/SKILL.md")),
+            PathBuf::from(".claude/skills/aida-pr/SKILL.md")
+        );
+    }
+
+    #[test]
+    fn leaves_local_extensions_untouched() {
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".claude/skills/local/README.md")),
+            PathBuf::from(".claude/skills/local/README.md")
+        );
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".claude/skills/local/my-deploy.md")),
+            PathBuf::from(".claude/skills/local/my-deploy.md")
+        );
+    }
+
+    #[test]
+    fn leaves_commands_untouched() {
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".claude/commands/aida-req.md")),
+            PathBuf::from(".claude/commands/aida-req.md")
+        );
+    }
+
+    #[test]
+    fn leaves_other_vendor_trees_untouched() {
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".codex/skills/aida-req.md")),
+            PathBuf::from(".codex/skills/aida-req.md")
+        );
+        assert_eq!(
+            normalize_claude_skill_path(Path::new(".antigravity/skills/aida-req/SKILL.md")),
+            PathBuf::from(".antigravity/skills/aida-req/SKILL.md")
+        );
+    }
+}
+
 /// Compute a simple checksum for content (first 8 chars of hex-encoded hash)
 fn compute_checksum(content: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
@@ -1001,6 +1096,13 @@ aida show <SPEC-ID>
         description: String,
         is_shell: bool,
     ) -> ScaffoldArtifact {
+        // BUG-1135: a flat `.claude/skills/<name>.md` artifact is rewritten
+        // to the directory form `.claude/skills/<name>/SKILL.md` here, the
+        // single chokepoint every skill artifact passes through, so
+        // Antigravity (which only recognizes the directory form) can see it.
+        // `apply()` create_dir_all's each artifact's parent, so the per-skill
+        // directory is created automatically.
+        let path = normalize_claude_skill_path(&path);
         let full_path = resolve_artifact_path(&self.project_root, &path);
         let exists = full_path.exists();
 
@@ -1252,7 +1354,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1276,7 +1378,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1300,7 +1402,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1324,7 +1426,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1348,7 +1450,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1372,7 +1474,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1396,7 +1498,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1420,7 +1522,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1444,7 +1546,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1468,7 +1570,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1492,7 +1594,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1516,7 +1618,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1540,7 +1642,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1564,7 +1666,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1588,7 +1690,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1612,7 +1714,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1636,7 +1738,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1660,7 +1762,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1684,7 +1786,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1708,7 +1810,7 @@ aida show <SPEC-ID>
                 );
 
                 match &artifact.file_status {
-                    FileStatus::New => new_files.push(path),
+                    FileStatus::New => new_files.push(artifact.path.clone()),
                     FileStatus::Modified { .. } | FileStatus::NoHeader => {
                         modified_files.push(artifact.path.clone())
                     }
@@ -1781,8 +1883,15 @@ aida show <SPEC-ID>
                         continue;
                     }
                     let path = PathBuf::from(format!(".claude/skills/{}", skill.rel_path));
-                    // Skip if a handwritten block already scaffolded this skill
-                    if artifacts.iter().any(|a| a.path == path) {
+                    // Skip if a handwritten block already scaffolded this skill.
+                    // Compare against the NORMALIZED form (BUG-1135): a flat
+                    // master like `aida-req.md` lands at
+                    // `.claude/skills/aida-req/SKILL.md` once normalized, which
+                    // is what the 20 handwritten blocks' `artifact.path` now
+                    // holds too — comparing raw `path` against that would never
+                    // match and double-scaffold the skill.
+                    let normalized_path = normalize_claude_skill_path(&path);
+                    if artifacts.iter().any(|a| a.path == normalized_path) {
                         continue;
                     }
                     let content = EMBEDDED_TEMPLATES
@@ -1796,7 +1905,7 @@ aida show <SPEC-ID>
                     };
                     let artifact = self.create_artifact(path.clone(), content, desc, false);
                     match &artifact.file_status {
-                        FileStatus::New => new_files.push(path),
+                        FileStatus::New => new_files.push(artifact.path.clone()),
                         FileStatus::Modified { .. } | FileStatus::NoHeader => {
                             modified_files.push(artifact.path.clone())
                         }
@@ -3891,7 +4000,9 @@ mod tests {
         let preview = scaffolder.preview(&store);
         scaffolder.apply(&preview).expect("scaffolding apply");
 
-        let skill = temp_dir.path().join(".claude/skills/aida-techdebt.md");
+        let skill = temp_dir
+            .path()
+            .join(".claude/skills/aida-techdebt/SKILL.md");
         let command = temp_dir.path().join(".claude/commands/aida-techdebt.md");
         assert!(skill.is_file(), "aida-techdebt skill should be scaffolded");
         assert!(

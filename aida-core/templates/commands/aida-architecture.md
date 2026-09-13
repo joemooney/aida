@@ -7,7 +7,7 @@ Audit structural health and propose improvements aligned with requirements.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-architecture.md`:
+Follow the workflow in `.claude/skills/aida-architecture/SKILL.md`:
 
 1. Map the actual module/crate structure against the domain model in requirements
 2. Identify structural issues: god objects, circular deps, shallow modules, orphaned code

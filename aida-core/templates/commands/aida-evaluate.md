@@ -13,7 +13,7 @@ Evaluate a requirement's quality using AI analysis.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-evaluate.md`:
+Follow the workflow in `.claude/skills/aida-evaluate/SKILL.md`:
 
 1. Load the requirement from the database using `aida show <SPEC-ID>`
 2. Run AI evaluation for clarity, testability, completeness, and consistency

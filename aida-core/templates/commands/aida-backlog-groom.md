@@ -7,7 +7,7 @@ Guided burndown-prep: one advisor pass from approvable drafts and Approved-but-n
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-backlog-groom.md`:
+Follow the workflow in `.claude/skills/aida-backlog-groom/SKILL.md`:
 
 Burndown-prep surfacing + approval (start here for a full prep):
 

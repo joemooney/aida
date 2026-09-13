@@ -18,7 +18,7 @@ reflexes, and brings you only the things that genuinely need a human decision.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-oversee.md`:
+Follow the workflow in `.claude/skills/aida-oversee/SKILL.md`:
 
 1. Run the mechanical pass — `aida supervise watch --objective <OBJECTIVE>`
    (add `--execute` to realign the queue + fire reflexes; `--interval <secs>`

@@ -10,7 +10,7 @@ CI + a reviewer; it is fast because it is *reliably routed*, not less gated.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-fasttrack.md`:
+Follow the workflow in `.claude/skills/aida-fasttrack/SKILL.md`:
 
 1. Read `$ARGUMENTS` as the change description.
 2. Run the **eligibility litmus** (bounded / low-blast-radius / reversible /

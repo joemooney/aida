@@ -1,9 +1,9 @@
 ---
-description: "Two modes — clear the draft inbox, or investigate a bug. Follow the workflow in `.claude/skills/aida-triage.md` and pick the mode by what was asked."
+description: "Two modes — clear the draft inbox, or investigate a bug. Follow the workflow in `.claude/skills/aida-triage/SKILL.md` and pick the mode by what was asked."
 ---
 # Triage
 
-Two modes — clear the draft inbox, or investigate a bug. Follow the workflow in `.claude/skills/aida-triage.md` and pick the mode by what was asked.
+Two modes — clear the draft inbox, or investigate a bug. Follow the workflow in `.claude/skills/aida-triage/SKILL.md` and pick the mode by what was asked.
 
 ## Inbox triage (clear the draft backlog)
 

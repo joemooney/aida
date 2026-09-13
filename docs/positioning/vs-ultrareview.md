@@ -76,6 +76,6 @@ Both fit in most workflows. The point of this doc is that picking *one* in a bin
 
 ## See also
 
-- STORY-109 — `/aida-review` adversarial phase. Landed 2026-05-12. See step 4 of [aida-review skill](../../.claude/skills/aida-review.md).
-- [/aida-review skill](../../.claude/skills/aida-review.md)
+- STORY-109 — `/aida-review` adversarial phase. Landed 2026-05-12. See step 4 of [aida-review skill](../../.claude/skills/aida-review/SKILL.md).
+- [/aida-review skill](../../.claude/skills/aida-review/SKILL.md)
 - [composition.md](composition.md) — generic guidance on layering AIDA with other tools (future page).

@@ -8,7 +8,7 @@ ordinary chat sessions: CLI first, compact TOON output, no extra setup.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-memory-query.md`:
+Follow the workflow in `.claude/skills/aida-memory-query/SKILL.md`:
 
 1. Start with the cheapest useful read:
    ```bash

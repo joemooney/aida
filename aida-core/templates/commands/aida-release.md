@@ -7,7 +7,7 @@ Bump version, generate changelog, and tag a release tied to AIDA requirements.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-release.md`:
+Follow the workflow in `.claude/skills/aida-release/SKILL.md`:
 
 1. Confirm release scope (major/minor/patch or explicit version) with the user
 2. Verify the working tree is clean and on the release branch

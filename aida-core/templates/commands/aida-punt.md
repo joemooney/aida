@@ -8,7 +8,7 @@ make — the honest alternative to guessing during an autonomous drain.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-punt.md`:
+Follow the workflow in `.claude/skills/aida-punt/SKILL.md`:
 
 1. Confirm it is a real fork — re-read the spec, its `## Acceptance`, parent,
    and any owning plan. Punt only a decision you genuinely cannot make.

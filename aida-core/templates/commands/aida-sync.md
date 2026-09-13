@@ -13,7 +13,7 @@ Sync AIDA templates and scaffolding across projects.
 
 ## Instructions
 
-Follow the workflow in `.claude/skills/aida-sync.md`:
+Follow the workflow in `.claude/skills/aida-sync/SKILL.md`:
 
 1. Detect if we're in the AIDA source repo or a scaffolded project
 2. For AIDA repo: Check template integrity and propagation needs
