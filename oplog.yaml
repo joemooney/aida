@@ -63600,5 +63600,17 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5031
+- id: 01a0986d-ec34-7222-b870-67387616cc8f
+  target_id: 01a0986d-e682-7f70-b3df-a36ab12d14cf
+  author: aida
+  node_id: '1'
+  lamport: 5032
+  timestamp: 2026-09-13T01:42:15.860939731Z
+  kind: !Create
+    title: 'Memory-lane hygiene floor: capture-as-you-go plus a light staleness signal so authored memory does not silently rot'
+    description: 'Because lane memory is authored (not derived like codegraph, which cannot rot), ship a light hygiene floor: the capture habit plus a staleness signal (e.g. surface last-touched age in the reflex query) so stale specs do not mislead the agent. Full codegraph auto-population is deferred. Acceptance: the reflex query exposes a freshness/age signal; capture guidance is present. trace:EPIC-63'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 5032
 node_id: '1'
