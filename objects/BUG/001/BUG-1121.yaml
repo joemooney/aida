@@ -1,0 +1,28 @@
+id: 01a098af-0142-7240-ac96-eef1ada61aa8
+spec_id: BUG-1121
+agreed_id: BUG-1121
+title: session reap skips a dormant null-pid lease that is completed+merged+clean (status says safe-to-clear, reap says 'process still running')
+description: |-
+  Observed 2026-09-12 while cleaning up two stale sessions (STORY-1091, STORY-1041). Both: spec completed, PR squash-merged to main, worktree clean, lease state=dormant, lease pid=null, no live OS process for the worktree.
+
+  `aida session reap --dry-run` refused both with: "its process is still running — left untouched (never force-closed)". But `aida status <SPEC>` correctly reported "✓ Completed (a dormant lease/worktree is still attached — aida session end <id> to clear)" and there was NO live process.
+
+  Root cause (hypothesis): reap's liveness predicate treats pid=null as "can't confirm exited -> assume running", so it never reaps a session whose lease simply has no recorded pid. That is the exact class the user hits after manually exiting a terminal (the pid was never persisted / was cleared), leaving finished work that must be torn down by hand via `aida session end <id> --yes`.
+
+  Acceptance:
+  - reap treats a dormant lease with pid=null + spec Done/Completed + branch merged + clean worktree as REAPABLE (there is no process to force-close), matching what `aida status <spec>` already asserts.
+  - A lease with a non-null pid that is verifiably alive is still never force-closed (STORY-1091's original guard holds).
+  - The reap and per-spec-status liveness views agree on the same session.
+
+  Squash-merge note: both branches read "NOT ancestor of origin/main" yet were merged (PR #1787 / #1785). Reap already handles this via the merged-PR check; the ONLY gap is the null-pid liveness branch.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-13T02:53:21.090085588Z
+modified_at: 2026-09-13T02:53:21.090085588Z
+req_type: Bug
+tags:
+- oversight-signal
+- papercut
+- session-lifecycle
