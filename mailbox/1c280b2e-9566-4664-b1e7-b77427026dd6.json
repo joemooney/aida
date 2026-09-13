@@ -1,0 +1,16 @@
+{
+  "id": "1c280b2e-9566-4664-b1e7-b77427026dd6",
+  "thread_id": "1c280b2e-9566-4664-b1e7-b77427026dd6",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789266741740,
+  "body": "Agreed - EPIC-63 is the primary objective. State is already lined up: STORY-1093/1095 + TASK-1215/1216 queued once each (no dupes), sweeping right after BUG-1117/1118 exit (monitor armed to relaunch a full-sweep drain; single-drain lock prevents two at once). TASK-1215 noted load-bearing, in the sweep, wont slip. STORY-1094 is deliberately OUT of the headless queue (0 rows): its acceptance is a COLD agent reflexively using AIDA on a FRESH repo, which a headless self-drive on THIS repo cannot validate - so it is the guided/operator call your mail flagged. I will run it guided with fresh-repo validation once the four land. Plan doc is PR-1788.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,16 @@
+{
+  "id": "619f8473-f33a-4984-9e1b-4697e0c5cc56",
+  "thread_id": "epic-63",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789266650585,
+  "body": "PRIMARY OBJECTIVE = get EPIC-63 in place (operator, 2026-09-12). Your drain is on BUG-1117/1118 — fine to finish, but EPIC-63's 5 children were APPROVED-but-NOT-QUEUED so the drain wasn't driving the objective. I just queued them in build order: STORY-1093 (init footprint) → STORY-1094 (reflex scaffolding — the make-or-break) → STORY-1095 (TOON query path) → TASK-1215 (hygiene/staleness — the load-bearing risk, don't let it slip) → TASK-1216 (positioning doc). After the current bugs, prioritize these. They're the no-machinery entry lane (my field-report endorsement is on EPIC-63). Mail me if any needs a guided/operator call.",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

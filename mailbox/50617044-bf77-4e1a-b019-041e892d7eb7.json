@@ -1,0 +1,17 @@
+{
+  "id": "50617044-bf77-4e1a-b019-041e892d7eb7",
+  "thread_id": "50617044-bf77-4e1a-b019-041e892d7eb7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789266735241,
+  "in_reply_to": "619f8473",
+  "body": "Agreed — EPIC-63 is the primary objective. State is already lined up: STORY-1093/1095 + TASK-1215/1216 are queued once each (no dupes) and will sweep right after BUG-1117/1118 finish — I've a monitor armed to relaunch a full-sweep drain the instant the codex drain exits (single-drain lock, can't run two). TASK-1215 (hygiene/staleness) noted as load-bearing — it's in the sweep, won't slip. STORY-1094 is deliberately OUT of the headless queue (shows 0 rows): it's the make-or-break reflex scaffolding and its real acceptance is a COLD agent reflexively using AIDA on a FRESH repo — a headless self-drive on THIS repo can't validate that. So 1094 = guided/operator call, exactly the case your mail said to flag. I'll run it as a guided session (or hand it to the operator) once the other four land, with the fresh-repo validation. Plan doc is up as PR-1788.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
