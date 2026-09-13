@@ -302,6 +302,16 @@ pub(crate) fn init_scaffold_candidate_paths_for_footprint(
     match footprint {
         crate::cli::InitFootprint::Full => init_scaffold_candidate_paths(),
         crate::cli::InitFootprint::Minimal => &[".gitignore", ".aida/config.toml"],
+        crate::cli::InitFootprint::MemoryLane => &[
+            ".gitignore",
+            ".aida/config.toml",
+            "CLAUDE.md",
+            "AGENTS.md",
+            ".claude/skills/aida-capture.md",
+            ".claude/skills/aida-learn.md",
+            ".codex/skills/aida-capture/SKILL.md",
+            ".codex/skills/aida-learn/SKILL.md",
+        ],
     }
 }
 
@@ -784,6 +794,9 @@ fn parse_init_footprint(raw: &str) -> Option<crate::cli::InitFootprint> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "full" | "default" | "team" => Some(crate::cli::InitFootprint::Full),
         "minimal" | "min" | "clean" => Some(crate::cli::InitFootprint::Minimal),
+        "memory-lane" | "memory_lane" | "memory" | "lane" | "reflex" => {
+            Some(crate::cli::InitFootprint::MemoryLane)
+        }
         _ => None,
     }
 }
@@ -805,6 +818,7 @@ pub(crate) fn write_init_footprint(
     let value = match footprint {
         crate::cli::InitFootprint::Full => "full",
         crate::cli::InitFootprint::Minimal => "minimal",
+        crate::cli::InitFootprint::MemoryLane => "memory-lane",
     };
     crate::config_edit::set_kv(
         &config_path_for_project(project_root),
@@ -834,6 +848,7 @@ pub(crate) fn resolve_init_footprint(
         "  [1] Full - team adoption scaffold: agent packs, docs, hooks, MCP config (recommended)"
     );
     println!("  [2] Minimal - clean repo: store + config only");
+    println!("  [3] Memory lane - store + reflex capture/learn skills only");
     print!("Choose setup style [1]: ");
     use std::io::Write;
     let _ = std::io::stdout().flush();
@@ -842,6 +857,11 @@ pub(crate) fn resolve_init_footprint(
     let trimmed = line.trim();
     if trimmed == "2" || trimmed.eq_ignore_ascii_case("minimal") {
         Ok(crate::cli::InitFootprint::Minimal)
+    } else if trimmed == "3"
+        || trimmed.eq_ignore_ascii_case("memory-lane")
+        || trimmed.eq_ignore_ascii_case("memory")
+    {
+        Ok(crate::cli::InitFootprint::MemoryLane)
     } else {
         Ok(crate::cli::InitFootprint::Full)
     }
@@ -861,6 +881,170 @@ fn ensure_minimal_cache(root: &std::path::Path, db_path: &std::path::Path) {
     if let Ok(store) = Storage::new(&source).load() {
         let _ = Storage::new(&cache_path).save(&store);
     }
+}
+
+// trace:STORY-1093 | ai:codex
+fn memory_lane_project_name(store: &RequirementsStore) -> &str {
+    if !store.title.is_empty() {
+        &store.title
+    } else if !store.name.is_empty() {
+        &store.name
+    } else {
+        "Project"
+    }
+}
+
+// trace:STORY-1093 | ai:codex
+fn memory_lane_guidance_block(storage_label: &str) -> String {
+    format!(
+        "<!-- AIDA-AUTOGEN-BEGIN -->\n\
+         # AIDA Memory Lane\n\
+         \n\
+         This project uses AIDA as a lightweight requirements and memory store.\n\
+         Requirements live in AIDA, not in a parallel `REQUIREMENTS.md` file.\n\
+         \n\
+         Storage: {storage_label}\n\
+         \n\
+         ## Daily Commands\n\
+         \n\
+         ```bash\n\
+         aida list\n\
+         aida show <ID>\n\
+         aida search \"<query>\"\n\
+         aida add --title \"...\" --type task --status draft\n\
+         aida comment add <ID> \"note...\"\n\
+         aida history\n\
+         ```\n\
+         \n\
+         ## Trace Comments\n\
+         \n\
+         Link code to requirements with `// trace:<SPEC-ID> | ai:<tool>` near the relevant implementation.\n\
+         \n\
+         ## Reflex Skills\n\
+         \n\
+         Use `/aida-capture` to sweep a session for missed requirements.\n\
+         Use `/aida-learn` when a rule, lesson, or convention should become durable.\n\
+         <!-- AIDA-AUTOGEN-END -->\n"
+    )
+}
+
+// trace:STORY-1093 | ai:codex
+fn memory_lane_claude_md(store: &RequirementsStore, storage_label: &str) -> String {
+    format!(
+        "# CLAUDE.md\n\
+         \n\
+         Guidance for Claude Code working in this repository.\n\
+         \n\
+         ## Project Overview\n\
+         \n\
+         {}\n\
+         \n\
+         {}\n",
+        memory_lane_project_name(store),
+        memory_lane_guidance_block(storage_label)
+    )
+}
+
+// trace:STORY-1093 | ai:codex
+fn memory_lane_agents_md(store: &RequirementsStore, storage_label: &str) -> String {
+    format!(
+        "# AGENTS.md\n\
+         \n\
+         Guidance for Codex and MCP-compatible coding agents working in this repository.\n\
+         \n\
+         ## Project Overview\n\
+         \n\
+         {}\n\
+         \n\
+         {}\n",
+        memory_lane_project_name(store),
+        memory_lane_guidance_block(storage_label)
+    )
+}
+
+// trace:STORY-1093 | ai:codex
+fn memory_lane_skill_template(name: &str) -> String {
+    let key = format!("skills/{name}.md");
+    aida_core::templates::EMBEDDED_TEMPLATES
+        .get(key.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("# {name}\n\n(template not found)\n"))
+}
+
+// trace:STORY-1093 | ai:codex
+fn write_memory_lane_artifact(
+    root: &std::path::Path,
+    rel: &str,
+    content: &str,
+    force: bool,
+) -> Result<bool> {
+    let path = root.join(rel);
+    if path.exists() && !force {
+        return Ok(false);
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, content)?;
+    Ok(true)
+}
+
+// trace:STORY-1093 | ai:codex
+fn write_memory_lane_scaffolding(
+    root: &std::path::Path,
+    store: &RequirementsStore,
+    storage_label: &str,
+    force: bool,
+) -> Result<(usize, usize)> {
+    let mut written = 0usize;
+    let mut skipped = 0usize;
+
+    for (rel, content) in [
+        ("CLAUDE.md", memory_lane_claude_md(store, storage_label)),
+        (
+            ".claude/skills/aida-capture.md",
+            memory_lane_skill_template("aida-capture"),
+        ),
+        (
+            ".claude/skills/aida-learn.md",
+            memory_lane_skill_template("aida-learn"),
+        ),
+        (
+            ".codex/skills/aida-capture/SKILL.md",
+            memory_lane_skill_template("aida-capture"),
+        ),
+        (
+            ".codex/skills/aida-learn/SKILL.md",
+            memory_lane_skill_template("aida-learn"),
+        ),
+    ] {
+        if write_memory_lane_artifact(root, rel, &content, force)? {
+            written += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    let agents_path = root.join("AGENTS.md");
+    let generated_agents = memory_lane_agents_md(store, storage_label);
+    if agents_path.exists() && !force {
+        let existing = std::fs::read_to_string(&agents_path)?;
+        let (merged, _) = merge_agents_md_aida_block(&existing, &generated_agents);
+        if merged == existing {
+            skipped += 1;
+        } else {
+            std::fs::write(&agents_path, merged)?;
+            written += 1;
+        }
+    } else {
+        if let Some(parent) = agents_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&agents_path, generated_agents)?;
+        written += 1;
+    }
+
+    Ok((written, skipped))
 }
 
 fn agent_selection_from_file(path: &std::path::Path) -> Option<AgentSelection> {
@@ -1058,6 +1242,65 @@ fn complete_init_scaffolding(
     suppress_scaffold_commit: bool,
 ) -> Result<()> {
     write_init_footprint(root, footprint)?;
+    if footprint == crate::cli::InitFootprint::MemoryLane {
+        ensure_minimal_cache(root, &db_path);
+        let plain_storage_label = if db_path.is_absolute() {
+            db_path.display().to_string()
+        } else {
+            db_path.to_string_lossy().to_string()
+        };
+        let (written, skipped) =
+            write_memory_lane_scaffolding(root, store, &plain_storage_label, force)?;
+        println!();
+        println!(
+            "{}",
+            format!(
+                "AIDA initialized {}",
+                crate::glyph(crate::glyphs::Glyph::Check)
+            )
+            .green()
+            .bold()
+        );
+        println!("  Storage: {}", storage_label.dimmed());
+        println!("  Footprint: {}", "memory-lane".dimmed());
+        println!(
+            "  {} wrote {} memory-lane artifact(s), skipped {} existing artifact(s)",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            written,
+            skipped
+        );
+        let scaffolding_committed = if suppress_scaffold_commit {
+            let paths = init_scaffold_commit_paths(root, footprint);
+            if !paths.is_empty() {
+                println!(
+                    "  {} wrote memory-lane AIDA setup and left it uncommitted — commit deliberately with `git add {} && git commit` if you want it on this clone's branch.",
+                    "Note:".dimmed(),
+                    paths.join(" "),
+                );
+            }
+            false
+        } else {
+            commit_init_scaffolding(root, footprint).unwrap_or(false)
+        };
+        if scaffolding_committed {
+            use aida_core::git_ops;
+            if let Ok(branch) = git_ops::current_branch(root) {
+                let has_origin = git_ops::has_remote(root, "origin");
+                let remote_ref = format!("origin/{branch}");
+                let ab = git_ops::ahead_behind(root, &branch, &remote_ref);
+                if let Some(note) = unpushed_scaffold_note(
+                    &branch,
+                    has_origin,
+                    ab.is_some(),
+                    ab.map(|(a, _)| a).unwrap_or(0),
+                ) {
+                    println!("  {} {}", "Note:".yellow().bold(), note);
+                }
+            }
+        }
+        first_run::after_init(root);
+        return Ok(());
+    }
     if footprint == crate::cli::InitFootprint::Minimal {
         ensure_minimal_cache(root, &db_path);
         println!();
@@ -1131,6 +1374,7 @@ fn complete_init_scaffolding(
         config.include_aida_plan_skill = false;
         config.include_aida_implement_skill = false;
         config.include_aida_capture_skill = false;
+        config.include_aida_learn_skill = false;
         config.include_aida_docs_skill = false;
         config.include_aida_release_skill = false;
         config.include_aida_evaluate_skill = false;
@@ -2378,6 +2622,93 @@ mod task_631_init_self_commit_tests {
         );
     }
 
+    // trace:STORY-1093 | ai:codex
+    #[test]
+    fn memory_lane_footprint_scaffolds_only_reflex_lane_files() {
+        assert_eq!(
+            init_scaffold_candidate_paths_for_footprint(crate::cli::InitFootprint::MemoryLane),
+            &[
+                ".gitignore",
+                ".aida/config.toml",
+                "CLAUDE.md",
+                "AGENTS.md",
+                ".claude/skills/aida-capture.md",
+                ".claude/skills/aida-learn.md",
+                ".codex/skills/aida-capture/SKILL.md",
+                ".codex/skills/aida-learn/SKILL.md",
+            ]
+        );
+
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(root.join(".gitignore"), ".aida/*\n!.aida/config.toml\n").unwrap();
+        let store = aida_core::models::RequirementsStore::new();
+
+        complete_init_scaffolding(
+            root,
+            &store,
+            None,
+            false, // no_skills
+            false, // no_hooks
+            false, // force
+            root.join(".aida-store"),
+            "test store",
+            false, // verbose
+            crate::cli::InitFootprint::MemoryLane,
+            true, // suppress scaffold commit
+        )
+        .unwrap();
+
+        for rel in [
+            ".gitignore",
+            ".aida/config.toml",
+            "CLAUDE.md",
+            "AGENTS.md",
+            ".claude/skills/aida-capture.md",
+            ".claude/skills/aida-learn.md",
+            ".codex/skills/aida-capture/SKILL.md",
+            ".codex/skills/aida-learn/SKILL.md",
+        ] {
+            assert!(
+                root.join(rel).exists(),
+                "expected memory-lane artifact {rel}"
+            );
+        }
+
+        for rel in [
+            ".mcp.json",
+            ".aida/project.toml",
+            ".aida/agents.toml",
+            ".aida/discipline",
+            "docs/agents",
+            "docs/extending-skills.md",
+            ".claude/commands",
+            ".claude/settings.json",
+            ".claude/hooks",
+            ".claude/skills/aida-queue.md",
+            ".claude/skills/aida-drain-queue.md",
+            ".claude/skills/aida-implement.md",
+            ".codex/config.toml",
+            ".codex/hooks.json",
+            ".codex/hooks",
+            ".codex/skills/aida-queue/SKILL.md",
+            ".codex/skills/aida-drain-queue/SKILL.md",
+            ".codex/skills/aida-implement/SKILL.md",
+            ".antigravity",
+        ] {
+            assert!(
+                !root.join(rel).exists(),
+                "memory-lane footprint must not scaffold machinery artifact {rel}"
+            );
+        }
+
+        let agents = std::fs::read_to_string(root.join("AGENTS.md")).unwrap();
+        assert!(agents.contains("<!-- AIDA-AUTOGEN-BEGIN -->"));
+        assert!(agents.contains("/aida-capture"));
+        assert!(agents.contains("/aida-learn"));
+    }
+
     // BUG-789: init reports the orphan-store push, then makes a second commit
     // on the code branch and does not push it. These pin the wording that stops
     // "AIDA initialized ✓" reading as "everything is pushed".
@@ -2559,6 +2890,17 @@ mod task_631_init_self_commit_tests {
         assert_eq!(
             read_init_footprint(dir.path()),
             Some(crate::cli::InitFootprint::Full)
+        );
+
+        write_init_footprint(dir.path(), crate::cli::InitFootprint::MemoryLane).unwrap();
+        let body = std::fs::read_to_string(dir.path().join(".aida/config.toml")).unwrap();
+        assert!(
+            body.contains("footprint = \"memory-lane\""),
+            "memory-lane footprint persisted: {body}"
+        );
+        assert_eq!(
+            read_init_footprint(dir.path()),
+            Some(crate::cli::InitFootprint::MemoryLane)
         );
     }
 

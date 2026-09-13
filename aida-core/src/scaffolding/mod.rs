@@ -582,6 +582,9 @@ pub struct ScaffoldConfig {
     pub include_aida_implement_skill: bool,
     /// Include aida-capture skill for session review
     pub include_aida_capture_skill: bool,
+    /// Include aida-learn skill for capturing durable rules and lessons
+    // trace:STORY-1093 | ai:codex
+    pub include_aida_learn_skill: bool,
     /// Include aida-docs skill for documentation management
     pub include_aida_docs_skill: bool,
     /// Include aida-docs-review skill for exhaustive documentation quality review
@@ -677,6 +680,7 @@ impl Default for ScaffoldConfig {
             include_aida_plan_skill: true,
             include_aida_implement_skill: true,
             include_aida_capture_skill: true,
+            include_aida_learn_skill: true,
             include_aida_docs_skill: true,
             include_aida_docs_review_skill: true,
             include_aida_release_skill: true,
@@ -1310,6 +1314,30 @@ aida show <SPEC-ID>
                 artifacts.push(artifact);
             }
 
+            // Add aida-learn skill
+            if self.config.include_aida_learn_skill {
+                let path = PathBuf::from(".claude/skills/aida-learn.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_learn_skill(),
+                    "Skill for capturing durable rules and lessons".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
             // Add aida-docs skill
             if self.config.include_aida_docs_skill {
                 let path = PathBuf::from(".claude/skills/aida-docs.md");
@@ -1761,6 +1789,7 @@ aida show <SPEC-ID>
                 ("aida-plan", self.config.include_aida_plan_skill),
                 ("aida-implement", self.config.include_aida_implement_skill),
                 ("aida-capture", self.config.include_aida_capture_skill),
+                ("aida-learn", self.config.include_aida_learn_skill),
                 ("aida-docs", self.config.include_aida_docs_skill),
                 (
                     "aida-docs-review",
@@ -1830,6 +1859,7 @@ aida show <SPEC-ID>
                 ("aida-plan", self.config.include_aida_plan_skill),
                 ("aida-implement", self.config.include_aida_implement_skill),
                 ("aida-capture", self.config.include_aida_capture_skill),
+                ("aida-learn", self.config.include_aida_learn_skill),
                 ("aida-docs", self.config.include_aida_docs_skill),
                 (
                     "aida-docs-review",
@@ -2659,6 +2689,16 @@ aida show <SPEC-ID>
             .unwrap_or_else(|| "# AIDA Session Capture Skill\n\n(template not found)".to_string())
     }
 
+    /// Generate aida-learn skill content (loads from embedded template)
+    // trace:STORY-1093 | ai:codex
+    fn generate_aida_learn_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-learn.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Learn Skill\n\n(template not found)".to_string())
+    }
+
     /// Generate aida-docs skill content (loads from embedded template)
     fn generate_aida_docs_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
@@ -3232,6 +3272,7 @@ mod tests {
         assert!(config.include_aida_req_skill);
         assert!(config.include_aida_implement_skill);
         assert!(config.include_aida_capture_skill);
+        assert!(config.include_aida_learn_skill);
         assert_eq!(config.project_type, ProjectType::Generic);
     }
 
