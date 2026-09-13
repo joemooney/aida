@@ -63524,5 +63524,33 @@ operations:
   timestamp: 2026-09-12T23:53:42.680062148Z
   kind: !SetStatus
     status: Completed
-clock: 5026
+- id: 01a09858-0c33-7bb0-8dce-d0eb26d878fa
+  target_id: 01a09858-061e-7c51-9e03-bab9949d0341
+  author: aida
+  node_id: '1'
+  lamport: 5027
+  timestamp: 2026-09-13T01:18:22.259082587Z
+  kind: !Create
+    title: 'STORY-1091: child-process bounded drain scheduler'
+    description: |
+      ## Context
+      STORY-1091 completes the concurrent scheduler promised by STORY-1041 and ADR-27. ADR-27 already chose a bounded scheduler over the existing phase engine; the remaining load-bearing implementation choice was whether overlapping implementer work should run as child `aida` processes or as in-process scheduler threads.
+
+      ## Options considered
+      - Child process per in-flight implementer/CI leg - preserves existing per-spec worktree, lease, drain-state, telemetry, and process isolation, while letting the parent serialize later phases.
+      - In-process threads - avoids subprocess supervision overhead, but forces shared storage, driver state, drain-state, and telemetry through thread-safe boundaries in the orchestrator core.
+      - Pure loop/status only - lowest immediate implementation risk, but would not satisfy the acceptance requirement for real overlapping implementer phases.
+
+      ## Decision
+      Use child processes for each in-flight implementer/CI leg, with the parent orchestrator retaining serial ownership of review, merge, pull, and build.
+
+      ## Rationale
+      This matches ADR-27's bounded-scheduler direction while keeping the proven per-spec phase engine intact. It also keeps the serial merge invariant simple: only the parent runs phases 3-6, one ready member at a time.
+
+      ## Consequences
+      The scheduler can overlap later specs' implementer/CI work while an earlier spec is waiting, but it does not introduce a broad in-process concurrent phase graph. Failures remain attributed per child/spec, and follow-on phases are resumed by the parent from the PR-bearing state.
+    req_type: Decision
+    status: Approved
+    priority: Medium
+clock: 5027
 node_id: '1'
