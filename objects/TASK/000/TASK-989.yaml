@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T16:00:44.646962875Z
-modified_at: 2026-09-13T22:04:34.684027914Z
+modified_at: 2026-09-13T22:04:36.633711533Z
 req_type: Task
 tags:
 - advisor
@@ -32,3 +32,6 @@ comments:
   created_at: 2026-09-13T22:04:34.684027914Z
   modified_at: 2026-09-13T22:04:34.684027914Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+deferred: true
+deferred_at: 2026-09-13T22:04:36.633711533Z
+deferred_until: the /aida-oversee supervisor needs to watch subagent-delegated work (or a 3rd recurrence of the flag-only ambiguity)
