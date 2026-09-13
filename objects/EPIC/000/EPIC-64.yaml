@@ -1,7 +1,7 @@
 id: 01a09cbf-1760-7bd0-9168-85a143ff19cc
 spec_id: EPIC-64
 agreed_id: EPIC-64
-title: 'Guest/User stakeholder persona: external read + intake roles outside the build loop'
+title: 'Guest/Requester stakeholder persona: external read + intake roles outside the build loop'
 description: |-
   A NEW axis in the role model. Today's roles (advisor, implementer, oversight, product) are all INTERNAL build-loop seats that drive work and are effectively singletons. This epic adds an EXTERNAL stakeholder/consumer persona: someone outside the build loop who wants to UNDERSTAND the project and FEED it, not drive it. Unlike the work seats there can be MANY, and their authority is least-privilege (read + at most one write verb: file a request).
 
@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:24.192961100Z
-modified_at: 2026-09-13T21:54:21.965152427Z
+modified_at: 2026-09-13T21:57:33.815585510Z
 req_type: Epic
 comments:
 - id: 01a09cc3-a28d-76e1-9fa8-32a9f3a64b65

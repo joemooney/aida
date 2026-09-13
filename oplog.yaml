@@ -65441,5 +65441,13 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5155
+- id: 01a09cc6-913e-76c2-83b7-4c073183be12
+  target_id: 01a09cbf-1760-7bd0-9168-85a143ff19cc
+  author: aida
+  node_id: '1'
+  lamport: 5156
+  timestamp: 2026-09-13T21:57:34.142600910Z
+  kind: !SetTitle
+    title: 'Guest/Requester stakeholder persona: external read + intake roles outside the build loop'
+clock: 5156
 node_id: '1'
