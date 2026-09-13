@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T02:31:54.693955308Z
-modified_at: 2026-09-13T19:25:01.381488444Z
+modified_at: 2026-09-13T19:25:18.602834245Z
 req_type: Story
 tags:
 - from-product
@@ -77,6 +77,13 @@ comments:
   created_at: 2026-09-13T19:14:24.474771355Z
   modified_at: 2026-09-13T19:14:24.474771355Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a09c3b-2c79-7e71-9cf6-97c7bf25ffda
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-09-13-story-1096-oversight-watch-loop.md
+    filed 2 task(s): TASK-1220, TASK-1221
+  created_at: 2026-09-13T19:25:18.841150356Z
+  modified_at: 2026-09-13T19:25:18.841150356Z
 history:
 - id: 01a09c3a-e82d-7440-a296-d1c794b3cfcd
   author: aida-auto-bump
