@@ -1076,6 +1076,11 @@ pub(crate) fn queue_drain_pickup_policy(
     queue_fresh_pickup_policy(req, store, force_needs_attention)
 }
 
+pub(crate) fn queue_list_json_requested(json_flag: bool, format: Option<OutputFormat>) -> bool {
+    // trace:BUG-1149 | ai:codex
+    json_flag || matches!(format, Some(OutputFormat::Json))
+}
+
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
 /// than the legacy full YAML load.
@@ -1191,7 +1196,7 @@ pub(crate) fn handle_queue_command(
             // — the legacy full YAML/git scan that cost ~1s on the cockpit
             // paint. `RequirementSummary` carries id/spec_id/agreed_id/title/
             // status, everything the JSON shape needs. trace:BUG-618 | ai:claude
-            if *json {
+            if queue_list_json_requested(*json, output_format_override()) {
                 let raw = if *global {
                     Vec::new()
                 } else {
