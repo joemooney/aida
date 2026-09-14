@@ -1,10 +1,4 @@
 - user_id: joe
-  requirement_id: 019e9118-203e-78a1-a907-8ee1cb85970f
-  position: 339000
-  added_by: joe
-  added_at: 2026-06-04T07:03:29.787823869Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a09e01-fe38-7861-b6cf-2a8e94bf1fc7
   position: 342000
   added_by: joe
