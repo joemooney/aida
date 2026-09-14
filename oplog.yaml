@@ -67141,5 +67141,32 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5286
+- id: 01a09edc-8e22-7450-8770-811f6ffb955f
+  target_id: 01a09edc-8a2b-7a23-bb0e-7d5f7f45c1f4
+  author: aida
+  node_id: '1'
+  lamport: 5287
+  timestamp: 2026-09-14T07:40:49.570775758Z
+  kind: !Create
+    title: 'Review PR-1824: [AI:codex] fix(intake): inline groom assess prompt for headless drain (BUG-1152)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09ed3`) for branch `bug-1152`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1824>
+      - Branch: `bug-1152` → `main`
+
+      ## Covers
+
+      - BUG-1152
+      - BUG-1148
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1824` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5287
 node_id: '1'
