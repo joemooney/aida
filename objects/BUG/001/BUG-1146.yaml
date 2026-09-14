@@ -1,0 +1,30 @@
+id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+spec_id: BUG-1146
+agreed_id: BUG-1146
+title: backlog groom --pickable queues DEFERRED specs (TASK-1207 landed on the queue as an unknown-spec UUID)
+description: |-
+  Observed 2026-09-13: aida backlog groom --pickable --apply reported "Auto-groomed 3 pickable item(s)" including TASK-1207, which is DEFERRED (deferred: true in its YAML, shown by aida list --deferred). The entry landed on the advisor queue as a bare UUID: the default aida queue list hid it (deferred lens) while aida queue list --all-users rendered it as "(unknown spec)". A drain would have picked up a spec the operator explicitly parked.
+
+  Root cause: collect_backlog_candidates in aida-cli-lib/src/backlog.rs filters Approved + !archived + !queued + work-item type, but never !deferred. The explicit-groom guard (the archived check near "is archived — un-archive before grooming") has the same gap: no deferred check.
+
+  Fix: treat deferred exactly like archived on both paths — exclude from the pickable candidate set, and refuse an explicit groom of a deferred spec with "spec X is deferred — aida undefer X before grooming". Honor the legacy deferred:* tag convention the same way the list view does (STORY-584).
+
+  ## Acceptance
+  - aida backlog groom --pickable (dry run and --apply) never lists or queues a spec with deferred: true or a deferred:* tag; the parked count/reason line names "deferred" for such specs.
+  - aida backlog groom <deferred-spec> (explicit) exits non-zero with an undefer hint and writes nothing to the queue.
+  - A unit test in backlog.rs alongside collect_backlog_candidates_excludes_queued_and_terminal covers a deferred Approved spec (flag form and tag form) being excluded.
+  - Existing non-deferred pickable behaviour unchanged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T04:15:20.951246035Z
+modified_at: 2026-09-14T04:15:20.951246035Z
+req_type: Bug
+tags:
+- backlog
+- deferred
+- groom
+- papercut
+- queue
+- substrate-truth
