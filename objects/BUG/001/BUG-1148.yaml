@@ -14,12 +14,12 @@ description: |-
   - Scheduled failure at T0, dispatch success on a NON-main branch only: nightly_red stays set (a branch-only green proves nothing about main).
   - Scheduled failure at T0, later dispatch FAILURE on main: nightly_red stays set.
   - Unit tests next to latest_scheduled_success_clears_nightly_red cover the three cases with fixture runs (no network).
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:16:10.978923407Z
-modified_at: 2026-09-14T08:00:27.280762940Z
+modified_at: 2026-09-14T08:14:17.473065878Z
 req_type: Bug
 tags:
 - batch:burst1
@@ -36,7 +36,23 @@ relationships:
   target_id: 01a09eee-5699-7d92-989d-4b59cc346933
   created_at: 2026-09-14T08:00:27.280755216Z
   created_by: joe
+history:
+- id: 01a09efb-317a-7342-88d7-6517f6a3ac81
+  author: aida-auto-bump
+  timestamp: 2026-09-14T08:14:17.466723882Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09efb-3181-7940-898e-b340d248415a
+  timestamp: 2026-09-14T08:14:17.473064882Z
+  agent: aida
+  commit_sha: a2b4a8a8cc7e04a81869794c2375fb865f0a71d9
+  summary: Completed via merge a2b4a8a8
 implementation_info:
   implemented: true
   implemented_at: 2026-09-14T07:00:22.865014559Z
   implemented_by: joe
+  completed_at: 2026-09-14T08:14:16.783278688Z
+  completion_sha: a2b4a8a8cc7e04a81869794c2375fb865f0a71d9
