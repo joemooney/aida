@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T03:39:28.668549204Z
-modified_at: 2026-09-14T03:39:28.668549204Z
+modified_at: 2026-09-14T03:41:26.045468141Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-13-spike-79-multi-hub-viability.md
@@ -16,3 +16,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09cda-32ac-7b60-b6d1-38dd9904b197
   created_at: 2026-09-14T03:39:32.093281551Z
+comments:
+- id: 01a09e01-629d-7e70-975c-f0bb23e43d30
+  author: joe
+  content: 'Auto-filed artifact: the SPIKE-79 assessment''s ''## Followups'' bullet named the already-existing TASK-1223, and the auto-followup mechanism filed it as a new task. Duplicate of TASK-1223. Rejecting. trace:TASK-1223'
+  created_at: 2026-09-14T03:41:26.045468141Z
+  modified_at: 2026-09-14T03:41:26.045468141Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
