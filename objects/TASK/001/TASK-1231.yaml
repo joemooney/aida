@@ -18,12 +18,12 @@ description: |-
   Acceptance:
   - One command drains the ready set safely from a bare cron (no cd/PATH/count/batch footguns), keystones fenced, lock-aware, wrong-store-proof.
   - Documented as THE durable autonomous-progress entry point; the cron line is just that command.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T15:29:48.322099926Z
-modified_at: 2026-09-14T15:29:48.322099926Z
+modified_at: 2026-09-14T15:32:13.927751348Z
 req_type: Task
 tags:
 - autonomy cron drain-invocation papercut parent:EPIC-62
@@ -31,3 +31,4 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-14T15:29:50.932665372Z
+execution_mode: drive
