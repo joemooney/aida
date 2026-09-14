@@ -80340,12 +80340,16 @@ impl RealPhaseDriver {
     /// filed.
     // trace:BUG-711 | ai:claude
     fn end_implementer_session(&self) -> Result<(), auto_complete::PhaseFailure> {
-        let lease = self.implementer_lease.clone().ok_or_else(|| {
-            auto_complete::PhaseFailure::of(
-                auto_complete::FailureKind::Internal,
-                "internal: implementer lease not recorded",
-            )
-        })?;
+        // BUG-1145: the phase-1 recovery path (open PR found after a lease-match
+        // failure) re-enters at Ci with NO matched implementer lease recorded —
+        // discover_orchestrated_lease failed before self.implementer_lease was
+        // set. There is then no session to end here; the orphan lease/worktree
+        // is cleaned by a later `aida session reap`. Treat a missing lease as a
+        // best-effort no-op rather than an Internal failure that would shelve
+        // the (successful) PR. trace:BUG-1145 | ai:claude
+        let Some(lease) = self.implementer_lease.clone() else {
+            return Ok(());
+        };
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .args(["session", "end", &lease, "--yes", "--skip-ci"])
@@ -81485,6 +81489,47 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
         self.pr_number = Some(pr as u32);
         self.pr_number
+    }
+
+    fn recover_phase1_failure_with_open_pr(
+        &mut self,
+        _failure: &auto_complete::PhaseFailure,
+    ) -> Option<auto_complete::Phase> {
+        // BUG-1145: if phase 1 fails after the child already opened a PR, the
+        // substrate beats the local failure. Continue through the PR-only path
+        // instead of retrying phase 1, which can collide with the already-Done
+        // spec/worktree. This is the in-process counterpart of `--from-pr`.
+        // trace:BUG-1145 | ai:codex
+        let pr = match crate::forge::forge_for(&self.project_root).change_for_spec(&self.spec) {
+            Ok(crate::forge::ChangeLookup::Found(pr)) => pr,
+            _ => return None,
+        };
+        self.pr_number = Some(pr.id as u32);
+        if !pr.branch.is_empty() {
+            self.branch = Some(pr.branch.clone());
+        } else if let Some(head) = pr_head_branch(&self.project_root, pr.id) {
+            self.branch = Some(head);
+        }
+        self.from_pr = true;
+        if !self.json {
+            eprintln!(
+                "  {} phase-1 failed, but {} has open PR-{} — continuing from the \
+                 CI gate (phase 2) on the PR's branch instead of retrying phase 1",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                self.spec,
+                pr.id,
+            );
+        }
+        // BUG-1145 (advisor review of the initial re-enter-at-Reviewer): re-enter
+        // at Ci, NOT Reviewer. finish_ci (phase 2) is the drain's ONLY CI gate
+        // (CiProbe::Red -> CiRed shelve; InProgress -> CiTimeout shelve); merge()
+        // uses `gh pr merge` which does NOT gate CI, and main has no branch
+        // protection — so re-entering past phase 2 would merge red/in-progress
+        // CI ungated. Ci runs on the seeded branch (set above), gating before
+        // reviewer/merge. The failed attempt left no matched lease, so
+        // end_implementer_session is best-effort on a None lease.
+        // trace:BUG-1145 | ai:claude
+        Some(auto_complete::Phase::Ci)
     }
 
     fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
