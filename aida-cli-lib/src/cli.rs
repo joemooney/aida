@@ -6384,10 +6384,7 @@ pub enum NoHumanCommand {
     Status,
 }
 
-/// Three-way complexity-calibration views (pickup vs ship vs reviewer).
-/// The parent `aida autonomy` namespace is shared with an eventual `report`
-/// subcommand; this adds only the calibration surface so the two land cleanly
-/// side-by-side.
+/// Autonomy overview, mode ladder, and maturity/calibration views.
 // trace:STORY-439 trace:TASK-340 | ai:claude
 #[derive(Subcommand, Debug, Clone)]
 pub enum AutonomyCommand {
@@ -8529,14 +8526,12 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Punts(PuntsCommand),
 
-    /// Autonomy + calibration views. Today this carries the three-way
-    /// complexity-calibration surface from `aida autonomy calibration
-    /// mismatches`; the broader autonomy-report views land alongside
-    /// the autonomy-metric work that owns them.
+    /// Show AIDA's autonomy ladder and the commands/config knobs for each rung.
     // trace:STORY-439 | ai:claude
-    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(subcommand, hide = true)]
-    Autonomy(AutonomyCommand),
+    Autonomy {
+        #[clap(subcommand)]
+        command: Option<AutonomyCommand>,
+    },
 
     // trace:TASK-394 | ai:claude
     /// Persist (or revoke) the one-time `--no-human` scope acknowledgement so
@@ -12412,6 +12407,22 @@ mod tests {
             }
             other => panic!("expected Usage command, got {other:?}"),
         }
+    }
+
+    // trace:TASK-1228 | ai:codex
+    #[test]
+    fn autonomy_overview_parses_as_bare_command() {
+        let cli = Cli::try_parse_from(["aida", "autonomy"])
+            .expect("bare `aida autonomy` should print the overview");
+        assert!(matches!(cli.command, Command::Autonomy { command: None }));
+
+        let cli = Cli::try_parse_from(["aida", "autonomy", "report"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Autonomy {
+                command: Some(AutonomyCommand::Report { .. })
+            }
+        ));
     }
 
     // trace:TASK-1209 | ai:codex

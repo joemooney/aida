@@ -15,9 +15,13 @@ use crate::{
     calibration, complexity_calibration, find_project_root, main_worktree_root_from, punt,
 };
 
-pub(crate) fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
+pub(crate) fn handle_autonomy_command(cmd: Option<&AutonomyCommand>) -> Result<()> {
     match cmd {
-        AutonomyCommand::Calibration(sub) => match sub {
+        None => {
+            print_autonomy_overview();
+            Ok(())
+        }
+        Some(AutonomyCommand::Calibration(sub)) => match sub {
             CalibrationSubcommand::Mismatches { since, last, json } => {
                 let project_root = find_project_root()?;
                 let main_root = main_worktree_root_from(&project_root);
@@ -119,7 +123,7 @@ pub(crate) fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
         // (Operator decision 2026-06-06: ship the intervention-count only;
         // the availability-polluted duration fraction is skipped.)
         // trace:TASK-340 | ai:claude
-        AutonomyCommand::Report { last, json } => {
+        Some(AutonomyCommand::Report { last, json }) => {
             let project_root = find_project_root()?;
             let records = punt::read_ledger(&project_root);
             let days = punt::human_interventions_by_day(&records);
@@ -181,4 +185,61 @@ pub(crate) fn handle_autonomy_command(cmd: &AutonomyCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// trace:TASK-1228 | ai:codex
+fn print_autonomy_overview() {
+    println!("{}", "AIDA autonomy ladder".bold());
+    println!(
+        "  {}",
+        "one concept, three places: always-on headless, live supervised solo, and the dials that decide what is safe".dimmed()
+    );
+    println!();
+    println!(
+        "  {:<18} {:<34} {}",
+        "RUNG".dimmed(),
+        "RUN".dimmed(),
+        "WHAT IT MEANS".dimmed()
+    );
+    println!(
+        "  {:<18} {:<34} {}",
+        "Headless cron".cyan().bold(),
+        "aida groom --apply --then-drain",
+        "always-on: approve the safe fence, drain it, park design forks"
+    );
+    println!(
+        "  {:<18} {:<34} {}",
+        "Live solo".cyan().bold(),
+        "/aida-solo",
+        "supervised: this warm session grooms, implements, integrates"
+    );
+    println!(
+        "  {:<18} {:<34} {}",
+        "Zen".cyan().bold(),
+        "aida queue work --zen",
+        "advisor-on-standby: mechanical prompts resolve, real forks surface"
+    );
+    println!(
+        "  {:<18} {:<34} {}",
+        "One-shot".cyan().bold(),
+        "aida zen <spec|thought>",
+        "single item: draft/drive one change to a gated merge"
+    );
+    println!();
+    println!("{}", "Dials".bold());
+    println!(
+        "  {}",
+        "[intake] policy, [autopilot] posture, [presence].current_solo, --risk/--mode, and --no-human/--zen decide which rung AIDA may use.".dimmed()
+    );
+    println!(
+        "  {}",
+        "cron = always-on headless; /aida-solo = live supervised; [intake]/--risk = the safety knobs.".dimmed()
+    );
+    println!();
+    println!("{}", "More".bold());
+    println!("  docs/aida-power-features.md");
+    println!("  docs/autonomous-drain.md");
+    println!("  docs/solo-mode.md");
+    println!("  aida autonomy report");
+    println!("  aida autonomy calibration mismatches");
 }

@@ -61,6 +61,19 @@ Every change — typed thought or hand-written code — goes through the same ch
 
 Pick the row that matches your mood today. The top one needs nothing but a sentence; the rest let you keep more of the trip in your own hands.
 
+### The autonomy ladder in one command
+
+Run `aida autonomy` when the surfaces blur together. It names the ladder and the dials in one place:
+
+| Rung | Use | Meaning |
+|---|---|---|
+| **Headless cron** | `aida groom --apply --then-drain` | Always-on unattended grooming and draining: approve the safe fence, work what is ready, park the rest. |
+| **Live solo** | `/aida-solo` | Supervised warm loop: this session grooms, implements, and integrates spec after spec with your live judgment. |
+| **Zen drain** | `aida queue work --zen` | Advisor-on-standby: mechanical prompts resolve automatically; real design forks still surface. |
+| **One-shot zen** | `aida zen <spec>` or `aida zen "<thought>"` | One item, headless, to a gated merge. |
+
+The relationship is deliberate: **cron = always-on headless**, **`/aida-solo` = live supervised**, and **`[intake]` / `[autopilot]` / `--risk` / `--mode` = the safety dials** that decide what AIDA may do unattended. `--no-human` and `--zen` tune the drain side; `[presence].current_solo` tightens policy while a solo posture is active.
+
 ### `aida zen` — from a thought, or from a spec
 
 You've already met the headline use: pass free text and AIDA drafts the spec for you. But `zen` takes a spec id just as happily — when the idea is already filed and approved, point it straight at the work:

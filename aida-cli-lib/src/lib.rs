@@ -3646,8 +3646,8 @@ fn run() -> Result<()> {
     // STORY-439: autonomy / calibration surface. Dispatched before storage
     // init — it reads only `.aida/complexity-calibration/`, no requirement
     // store. trace:STORY-439 | ai:claude
-    if let Command::Autonomy(autonomy_cmd) = &cli.command {
-        return autonomy_cmd::handle_autonomy_command(autonomy_cmd);
+    if let Command::Autonomy { command } = &cli.command {
+        return autonomy_cmd::handle_autonomy_command(command.as_ref());
     }
 
     // TASK-394: the `--no-human` acknowledgement marker just touches/removes a
@@ -4434,7 +4434,7 @@ fn run() -> Result<()> {
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
-        Command::Autonomy(_) => unreachable!("autonomy is dispatched before storage init"),
+        Command::Autonomy { .. } => unreachable!("autonomy is dispatched before storage init"),
         Command::NoHuman(_) => unreachable!("no-human is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             relationship_cmd::handle_relationship_command(rel_cmd, &storage)?;
