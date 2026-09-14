@@ -18,8 +18,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:19:00.652217072Z
-modified_at: 2026-09-13T22:19:00.652217072Z
+modified_at: 2026-09-14T03:39:25.817236158Z
 req_type: Spike
 tags:
 - multi-hub multi-repo gitlab aida-viability
+comments:
+- id: 01a09dff-8cf9-7692-a54c-bda22bea3d8b
+  author: joe
+  content: 'Assessment complete: docs/plans/2026-09-13-spike-79-multi-hub-viability.md. Recommendation: keep canonical(github)+mirror(gitlab); do NOT invest in active bidirectional multi-hub now. Harden the mirror''s silent-drift failure instead (highest-value: a failed store fan-out leg should raise a doctor finding, not warn into drift). Revisit active multi-hub only on a concrete second-site need; gating work enumerated in the doc.'
+  created_at: 2026-09-14T03:39:25.817236158Z
+  modified_at: 2026-09-14T03:39:25.817236158Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 human_only: true
