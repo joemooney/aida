@@ -67251,5 +67251,53 @@ operations:
   timestamp: 2026-09-14T08:14:20.960324135Z
   kind: !SetStatus
     status: Completed
-clock: 5295
+- id: 01a09efc-7f5b-7e22-b837-52eac4da1186
+  target_id: 01a09ed2-fc25-7a91-8b39-b2dcf5aab5be
+  author: aida
+  node_id: '1'
+  lamport: 5296
+  timestamp: 2026-09-14T08:15:42.939601765Z
+  kind: !AddTag
+    tag: duplicate-of:BUG-1149
+- id: 01a09efc-7fdf-7e60-808b-9354b77ecdd6
+  target_id: 01a09ed2-fc25-7a91-8b39-b2dcf5aab5be
+  author: aida
+  node_id: '1'
+  lamport: 5297
+  timestamp: 2026-09-14T08:15:43.071159413Z
+  kind: !RemoveTag
+    tag: auto-drafted
+- id: 01a09efc-8061-7d21-9968-9d82c1ad9aa6
+  target_id: 01a09ed2-fc25-7a91-8b39-b2dcf5aab5be
+  author: aida
+  node_id: '1'
+  lamport: 5298
+  timestamp: 2026-09-14T08:15:43.201075316Z
+  kind: !RemoveTag
+    tag: reviewer
+- id: 01a09efc-80e2-78d1-af62-84f03b9cdc11
+  target_id: 01a09ed2-fc25-7a91-8b39-b2dcf5aab5be
+  author: aida
+  node_id: '1'
+  lamport: 5299
+  timestamp: 2026-09-14T08:15:43.330525903Z
+  kind: !RemoveTag
+    tag: auto-complete
+- id: 01a09efc-8164-7640-869f-b7d8e0c8fefb
+  target_id: 01a09ed2-fc25-7a91-8b39-b2dcf5aab5be
+  author: aida
+  node_id: '1'
+  lamport: 5300
+  timestamp: 2026-09-14T08:15:43.460022953Z
+  kind: !RemoveTag
+    tag: failure-kind:verdict:request-changes
+- id: 01a09efc-81e6-7632-a966-4898a3d5a011
+  target_id: 01a09ed2-fc25-7a91-8b39-b2dcf5aab5be
+  author: aida
+  node_id: '1'
+  lamport: 5301
+  timestamp: 2026-09-14T08:15:43.590163353Z
+  kind: !RemoveTag
+    tag: failure-3
+clock: 5301
 node_id: '1'
