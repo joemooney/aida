@@ -22,6 +22,10 @@ modified_at: 2026-09-14T03:39:26.929311071Z
 req_type: Spike
 tags:
 - multi-hub multi-repo gitlab aida-viability
+relationships:
+- rel_type: Parent
+  target_id: 01a09dff-981c-7b30-9669-45bfe8d9fe99
+  created_at: 2026-09-14T03:39:32.093281551Z
 comments:
 - id: 01a09dff-8cf9-7692-a54c-bda22bea3d8b
   author: joe
