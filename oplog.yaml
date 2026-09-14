@@ -65936,5 +65936,17 @@ operations:
   timestamp: 2026-09-14T01:52:46.451901238Z
   kind: !SetStatus
     status: Completed
-clock: 5192
+- id: 01a09da3-017a-72c3-9bfe-4d0396b474bc
+  target_id: 01a09da2-f32f-70a3-96b6-f2860044bc93
+  author: aida
+  node_id: '1'
+  lamport: 5193
+  timestamp: 2026-09-14T01:58:20.794889456Z
+  kind: !Create
+    title: 'aida digest panics on every invocation: subcommand ''format: DigestFormat'' collides with the global --format (OutputFormat) clap arg'
+    description: 'aida digest (with ANY args, incl. none) panics: ''Mismatch between definition and access of format. Could not downcast...'' (clap_builder error.rs). Root cause: the root Cli struct defines a GLOBAL ''--format: Option<OutputFormat>'' (global=true, propagates to every subcommand), and the Digest subcommand ALSO defines ''format: DigestFormat'' (cli.rs:9327). Two --format args of different value types reach the digest subcommand; clap''s derive downcast fails at access -> panic. digest is the ONLY subcommand redefining ''format'', so it''s the only one that crashes. DigestFormat {Markdown,Plain,Json,Brief} is distinct from OutputFormat {human,toon,json}, so they can''t be unified. Fix: rename the digest arg to a non-colliding id+long (field digest_format, clap long ''digest-format'') and update the handler; keep the 4 digest formats. Acceptance: aida digest runs (no panic); aida digest --digest-format json|markdown|plain|brief works; the global --format still applies where relevant. Add a test that the CLI parses digest without panicking (a parse/downcast regression guard).'
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5193
 node_id: '1'
