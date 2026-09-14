@@ -66004,5 +66004,13 @@ operations:
   timestamp: 2026-09-14T03:37:57.871783430Z
   kind: !RemoveTag
     tag: test drain reliability followup parent:BUG-1140
-clock: 5200
+- id: 01a09dff-919b-7bf1-a777-fd16bd76a9c9
+  target_id: 01a09cda-32ac-7b60-b6d1-38dd9904b197
+  author: aida
+  node_id: '1'
+  lamport: 5201
+  timestamp: 2026-09-14T03:39:27.003221438Z
+  kind: !SetStatus
+    status: Completed
+clock: 5201
 node_id: '1'
