@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T01:58:17.135448106Z
-modified_at: 2026-09-14T02:06:09.394574453Z
+modified_at: 2026-09-14T02:06:41.013356972Z
 req_type: Bug
 tags:
 - cli clap digest crash regression
@@ -18,4 +18,10 @@ comments:
   content: Commit af0300d2c references this requirement
   created_at: 2026-09-14T02:06:09.394574453Z
   modified_at: 2026-09-14T02:06:09.394574453Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09daa-a375-7de1-8ec5-7bd160197b1f
+  author: joe
+  content: Commit af0300d2c references this requirement
+  created_at: 2026-09-14T02:06:41.013356972Z
+  modified_at: 2026-09-14T02:06:41.013356972Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
