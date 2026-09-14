@@ -1,6 +1,6 @@
 - user_id: role:implementer
   requirement_id: 01a09e35-78a6-74b3-9f1e-6f3a3821742c
-  position: 10000
+  position: 11000
   added_by: role:implementer
   note: 'assess 2026-09-13: docs/discoverability task over existing capability; mode=drive (adds a small overview command + README/discipline cross-links; human keeps the merge). Bugs on the queue ahead of it take precedence.'
   added_at: 2026-09-14T04:40:48.719763028Z
