@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:15:43.714546625Z
-modified_at: 2026-09-14T06:43:56.520563162Z
+modified_at: 2026-09-14T06:44:01.801120833Z
 req_type: Bug
 tags:
 - batch:burst1
@@ -31,6 +31,12 @@ relationships:
   created_by: joe
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo fmt --all -- --check
+    cargo test -p aida-cli-lib queue_dead_target_summary_filter_includes_archived_targets_for_gc -- --nocapture
+    cargo test -p aida-cli-lib dead_queue_entries -- --nocapture
+    /home/joe/ai/aida/target/debug/aida queue gc --user joe --for implementer --dry-run
+    /home/joe/ai/aida/target/debug/aida queue gc --user joe --for implementer
   implemented_at: 2026-09-14T06:42:59.760646255Z
   implemented_by: joe
 interface_changes: {}
