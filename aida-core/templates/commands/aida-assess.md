@@ -26,8 +26,9 @@ Guardrails (compose with the `[intake]` config; flags override config for a run)
 --permission-mode MODE     Claude permission mode (default: bypassPermissions).
 ```
 
-This command launches `claude -p "/aida-assess"` headless. It is not the skill
-itself — the skill (`.claude/skills/aida-assess/SKILL.md`) is the judgment the spawned
+This command launches `claude -p` headless with the assess skill body inlined,
+so cron/non-TTY runs do not depend on client slash-command resolution. The
+skill (`.claude/skills/aida-assess/SKILL.md`) is the judgment the spawned
 advisor follows.
 
 ## Instructions (for the spawned advisor)
@@ -45,7 +46,7 @@ Follow the workflow in `.claude/skills/aida-assess/SKILL.md`:
 5. Under `--apply`: `aida edit --status approved` within the fence (≤ max-approvals,
    never a parked spec), reject the stale ones, then groom the queue with
    `aida backlog groom --pickable --apply --risk "$AIDA_INTAKE_RISK"`. If
-   `on_apply=drain`, chain `aida burndown run`.
+   `on_apply=drain`, chain `aida queue work --auto-complete --no-human=both`.
 6. Report what changed (approved / rejected / parked / queued) + check
    `aida findings list` if a drain shelved anything.
 
