@@ -1,11 +1,4 @@
 - user_id: joe
-  requirement_id: 019e5319-6741-7e60-a6fa-53e77aaf6642
-  position: 256000
-  added_by: joe
-  note: Promoted from finding SPEC-411 via `aida findings promote`
-  added_at: 2026-05-23T04:34:18.045302236Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 019e53a7-1e47-7bd2-8d50-0597ca49cd01
   position: 264000
   added_by: joe
