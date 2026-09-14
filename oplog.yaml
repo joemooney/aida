@@ -67390,5 +67390,31 @@ operations:
   timestamp: 2026-09-14T15:32:14.035996311Z
   kind: !SetStatus
     status: Approved
-clock: 5310
+- id: 01a0a090-f63a-75d2-b5be-18a1794df3d1
+  target_id: 01a0a090-f26f-76a3-b3a2-f1ffd535368e
+  author: aida
+  node_id: '1'
+  lamport: 5311
+  timestamp: 2026-09-14T15:37:29.914465213Z
+  kind: !Create
+    title: 'Review PR-1826: [AI:codex] docs(autonomy): surface autonomy ladder (TASK-1228)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a088`) for branch `task-1228`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1826>
+      - Branch: `task-1228` → `main`
+
+      ## Covers
+
+      - TASK-1228
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1826` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5311
 node_id: '1'
