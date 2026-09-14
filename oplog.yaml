@@ -66548,5 +66548,31 @@ operations:
   timestamp: 2026-09-14T05:23:59.630186918Z
   kind: !RemoveTag
     tag: auto-followup papercut docs
-clock: 5238
+- id: 01a09e66-628f-72d1-86a1-b5d2e02edbd2
+  target_id: 01a09e66-5c7e-7860-9d9b-6a5855c3a16f
+  author: aida
+  node_id: '1'
+  lamport: 5239
+  timestamp: 2026-09-14T05:31:45.167317873Z
+  kind: !Create
+    title: 'Review PR-1817: [AI:codex] fix(store): surface mirror fanout failures (TASK-1227)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09e60`) for branch `task-1227`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1817>
+      - Branch: `task-1227` → `main`
+
+      ## Covers
+
+      - TASK-1227
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1817` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5239
 node_id: '1'
