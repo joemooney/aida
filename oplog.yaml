@@ -65988,5 +65988,21 @@ operations:
   timestamp: 2026-09-14T03:37:56.225927347Z
   kind: !SetStatus
     status: Approved
-clock: 5198
+- id: 01a09dfe-34ef-71e2-81e3-511159407103
+  target_id: 01a09d9d-586b-7513-8320-60051b16136f
+  author: aida
+  node_id: '1'
+  lamport: 5199
+  timestamp: 2026-09-14T03:37:57.743165699Z
+  kind: !AddTag
+    tag: batch:closeout
+- id: 01a09dfe-356f-79f2-9298-8688373856b3
+  target_id: 01a09d9d-586b-7513-8320-60051b16136f
+  author: aida
+  node_id: '1'
+  lamport: 5200
+  timestamp: 2026-09-14T03:37:57.871783430Z
+  kind: !RemoveTag
+    tag: test drain reliability followup parent:BUG-1140
+clock: 5200
 node_id: '1'
