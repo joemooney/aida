@@ -20,6 +20,13 @@ pub(crate) fn handle_focus_command(
     backend: &aida_core::CachedGitBackend,
 ) -> Result<()> {
     let project_root = find_project_root()?;
+    if crate::output_format_is_json() {
+        // trace:BUG-1149 | ai:codex
+        eprintln!(
+            "warning: --format json requested, but `aida focus` has no JSON projection; \
+             falling back to human output."
+        );
+    }
 
     if clear {
         if crate::focus::clear_focus_marker(&project_root) {
