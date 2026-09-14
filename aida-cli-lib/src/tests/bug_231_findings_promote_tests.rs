@@ -753,6 +753,57 @@ fn seed_plain_spec(root: &std::path::Path, spec_id: &str) -> Uuid {
     id
 }
 
+/// BUG-1147: the queue-GC call sites must query through an archive/defer-wide
+/// list lens. `ListFilter::default()` structurally hides archived specs, which
+/// made archived+Completed queue targets resolve as absent and survive GC.
+// trace:BUG-1147 | ai:codex
+#[test]
+fn queue_dead_target_summary_filter_includes_archived_targets_for_gc() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let cached = test_cached_backend(&root);
+    let mut store = RequirementsStore::new();
+    let mut req = Requirement::new("Archived completed story".into(), "desc".into());
+    req.spec_id = Some("STORY-1147".to_string());
+    req.status = RequirementStatus::Completed;
+    req.archived = true;
+    let id = req.id;
+    store.requirements.push(req);
+    cached.save(&store).unwrap();
+
+    let default_rows = cached
+        .list_summaries(&aida_core::ListFilter::default())
+        .unwrap();
+    assert!(
+        default_rows.iter().all(|s| s.id != id),
+        "the default list lens reproduces the old blind spot"
+    );
+
+    let widened_rows = cached
+        .list_summaries(&queue_dead_target_summary_filter())
+        .unwrap();
+    assert!(
+        widened_rows.iter().any(|s| s.id == id && s.archived),
+        "queue GC summary lookup must include archived targets"
+    );
+
+    let entries = vec![aida_core::QueueEntry {
+        user_id: "joe".to_string(),
+        requirement_id: id,
+        position: 1000,
+        added_by: "joe".to_string(),
+        note: None,
+        added_at: chrono::Utc::now(),
+        for_role: Some("implementer".to_string()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    }];
+    let dead = dead_queue_entries(&entries, &widened_rows, Some("implementer"));
+    assert_eq!(dead.len(), 1, "archived completed targets are dead");
+    assert_eq!(dead[0].requirement_id, id);
+}
+
 /// BUG-615 regression: `aida add --parent X --blocked-by Y` in a SINGLE
 /// invocation must persist BOTH edges. The bug was that the `--parent`
 /// block re-saved a STALE pre-blocked-by snapshot of the child
