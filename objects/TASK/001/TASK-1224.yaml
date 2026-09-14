@@ -3,12 +3,12 @@ spec_id: TASK-1224
 agreed_id: TASK-1224
 title: 'Integration test: implementer non-zero exit WITH an open PR proceeds to CI+review (not shelved as tool-exit)'
 description: 'Follow-up to BUG-1140/PR #1812. The fix (fall through to substrate resolution on a non-zero implementer exit) has no automated test — the path is subprocess-integration-level. Add a test that stands up a fake implementer which commits+pushes+opens a PR then exits 1, and asserts the phase resolves via PR lookup (proceeds to CI/review) rather than returning a tool-exit PhaseFailure. Guards against a regression re-introducing the exit-code-trusting shelve.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T01:52:09.835798385Z
-modified_at: 2026-09-14T03:37:57.668482638Z
+modified_at: 2026-09-14T03:45:54.659291733Z
 req_type: Task
 tags:
 - batch:closeout
