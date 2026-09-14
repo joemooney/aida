@@ -9,13 +9,17 @@ description: |-
   - aida queue list --format json emits the same JSON rows as --json.
   - AIDA_OUTPUT_FORMAT=json aida queue list behaves the same.
   - If a command truly has no JSON projection, --format json errors or warns rather than silently falling back to TOON.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:42:53.131322841Z
-modified_at: 2026-09-14T07:12:30.253297021Z
+modified_at: 2026-09-14T07:17:49.913206666Z
 req_type: Bug
 tags:
 - batch:burst1
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-14T07:17:49.913206666Z
+  implemented_by: joe
