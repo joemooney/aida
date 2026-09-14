@@ -12,12 +12,12 @@ description: |-
   2. Tear down the failed attempt's worktree before a retry so the retry cannot collide (the root of the 'isn't queued / lease mismatch' on attempt 2).
 
   Impact: this is the last gap between 'drain preserves the PR but I hand-merge' and 'drain lands codex work hands-off' — the whole point of EPIC-62. Acceptance: a codex spec that commits+pushes+opens a PR then exits 1 DRAINS to merge with no manual --resume/hand-merge (validated on a throwaway spec or via the TASK-1224 test harness extended to assert merge, not just no-shelve).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:03:50.701858136Z
-modified_at: 2026-09-14T04:17:10.083823270Z
+modified_at: 2026-09-14T04:48:10.969577461Z
 req_type: Bug
 tags:
 - auto-complete drain reliability worktree keystone
