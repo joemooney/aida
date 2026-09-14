@@ -47,3 +47,55 @@ fn mirror_remotes_absent_is_empty() {
         .mirror_remotes
         .is_empty());
 }
+
+// TASK-1227: failed mirror fan-out persists as remote-drift doctor input.
+#[test]
+fn mirror_fanout_failure_records_remote_drift_marker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(&repo).unwrap();
+
+    record_store_mirror_fanout_failure(
+        tmp.path(),
+        &repo,
+        "aida-store",
+        "gitlab",
+        "authentication failed",
+    );
+
+    let failures = read_store_mirror_fanout_failures(tmp.path());
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].repo, repo.display().to_string());
+    assert_eq!(failures[0].branch, "aida-store");
+    assert_eq!(failures[0].remote, "gitlab");
+    assert_eq!(failures[0].reason, "authentication failed");
+
+    let findings = scan_store_mirror_fanout_failures(tmp.path());
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].category, "remote-drift");
+    assert_eq!(
+        findings[0].id,
+        "remote-drift-mirror-fanout-gitlab-aida-store"
+    );
+    assert!(findings[0].summary.contains("authentication failed"));
+    assert!(findings[0].action.contains("aida remote reconcile"));
+    assert!(!findings[0].safe_heal);
+}
+
+// TASK-1227: a later successful mirror push clears the stale marker.
+#[test]
+fn mirror_fanout_success_clears_matching_failure() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = tmp.path().join(".aida-store");
+    let other_repo = tmp.path().join("code");
+
+    record_store_mirror_fanout_failure(tmp.path(), &repo, "aida-store", "gitlab", "failed");
+    record_store_mirror_fanout_failure(tmp.path(), &other_repo, "main", "gitlab", "failed");
+
+    clear_store_mirror_fanout_failure(tmp.path(), &repo, "aida-store", "gitlab");
+
+    let failures = read_store_mirror_fanout_failures(tmp.path());
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].repo, other_repo.display().to_string());
+    assert_eq!(failures[0].branch, "main");
+}
