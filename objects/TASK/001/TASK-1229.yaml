@@ -1,0 +1,29 @@
+id: 01a09e49-9f52-7bd1-a07a-34481f7fd76c
+spec_id: TASK-1229
+agreed_id: TASK-1229
+title: 'guided-implement (and implementer finishes) should end with a clean off-ramp: ''complete, submitted for review — free to close; resume on review-changes'''
+description: |-
+  Operator (2026-09-13, after a guided BUG-1145 build): the guided session ended with a technical dump but no clear human off-ramp. It should close with an explicit finish-checkpoint so the operator knows they can walk away and how to come back.
+
+  Correct closing message (precise — corrects two things the operator's draft glossed):
+  - Implementation complete and submitted for review — PR #<N>.
+  - CI is running / review pending (do NOT claim 'done' before CI is green).
+  - This session's work is finished — you're free to close it.
+  - The remaining steps happen through the PR: review -> merge. For a KEYSTONE, the merge stays human/advisor (not auto) — say so.
+  - Resume only if review requests changes: `aida queue work <SPEC> --resume`.
+  - List the ADRs recorded.
+
+  Acceptance:
+  - /aida-guided-implement's Phase-3 finish emits this off-ramp checkpoint (state / CI+review status / 'free to close' / what happens next without you / resume command / ADR list).
+  - Wording is honest about CI-pending and about keystone-merge-stays-human (never implies auto-merge or 'done' pre-CI).
+  - Consider the same off-ramp for the normal implementer/pickup finish (non-guided), scoped to whether that path auto-merges.
+  Small skill-text change (aida-core/templates/skills/aida-guided-implement.md); autonomous-safe → the drain can take it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T05:00:20.178149326Z
+modified_at: 2026-09-14T05:00:20.178149326Z
+req_type: Task
+tags:
+- ux skills guided-implement finish-checkpoint parent:EPIC-62
