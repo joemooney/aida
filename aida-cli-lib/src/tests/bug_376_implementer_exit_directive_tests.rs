@@ -21,6 +21,13 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
+fn normalized_lowercase(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_lowercase()
+}
+
 /// Banner carries every load-bearing substrate-as-bouncer signal:
 /// the headline, the concrete PR number, the explicit Ctrl+D
 /// instruction, the "Do NOT watch CI" prohibition, and the hand-off
@@ -102,5 +109,41 @@ fn aida_implement_skill_template_carries_exit_directive() {
     assert!(
         template.contains("aida queue done"),
         "skill template missing aida queue done symmetric rule"
+    );
+}
+
+#[test]
+fn guided_implement_template_carries_pr_off_ramp_checkpoint() {
+    let template = include_str!("../../../aida-core/templates/skills/aida-guided-implement.md");
+    let normalized = normalized_lowercase(template);
+
+    // trace:TASK-1229 | ai:codex
+    assert!(
+        normalized.contains("implementation complete and submitted for review"),
+        "guided template must name the submitted-for-review state"
+    );
+    assert!(
+        normalized.contains("ci is running / review pending"),
+        "guided template must be honest about pending CI/review"
+    );
+    assert!(
+        normalized.contains("you're free to close"),
+        "guided template must provide the human off-ramp"
+    );
+    assert!(
+        normalized.contains("keystone merge stays human/advisor"),
+        "guided template must not imply keystone auto-merge"
+    );
+    assert!(
+        normalized.contains("aida queue work <spec> --resume"),
+        "guided template must name the review-changes resume command"
+    );
+    assert!(
+        normalized.contains("adrs recorded"),
+        "guided template must require the recorded ADR list"
+    );
+    assert!(
+        !normalized.contains("verify ci green, then finish simply"),
+        "guided template must not restore the old wait-for-green closing"
     );
 }
