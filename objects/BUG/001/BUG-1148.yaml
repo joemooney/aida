@@ -19,11 +19,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:16:10.978923407Z
-modified_at: 2026-09-14T04:16:10.978923407Z
+modified_at: 2026-09-14T06:12:16.933019677Z
 req_type: Bug
 tags:
-- awaiting
-- ci
-- cross-platform
-- papercut
-- stale-signal
+- batch:burst1

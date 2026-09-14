@@ -66871,5 +66871,53 @@ operations:
   timestamp: 2026-09-14T06:12:13.539326924Z
   kind: !RemoveTag
     tag: gc
-clock: 5266
+- id: 01a09e8b-7e06-78e1-a69c-17ac9be60ce9
+  target_id: 01a09e21-32e2-79a0-ac04-40397bf30919
+  author: aida
+  node_id: '1'
+  lamport: 5267
+  timestamp: 2026-09-14T06:12:17.030471776Z
+  kind: !AddTag
+    tag: batch:burst1
+- id: 01a09e8b-7e90-7ca1-b777-7449b0f7c7a5
+  target_id: 01a09e21-32e2-79a0-ac04-40397bf30919
+  author: aida
+  node_id: '1'
+  lamport: 5268
+  timestamp: 2026-09-14T06:12:17.168589955Z
+  kind: !RemoveTag
+    tag: cross-platform
+- id: 01a09e8b-7f12-7941-8948-9314d28204df
+  target_id: 01a09e21-32e2-79a0-ac04-40397bf30919
+  author: aida
+  node_id: '1'
+  lamport: 5269
+  timestamp: 2026-09-14T06:12:17.298343844Z
+  kind: !RemoveTag
+    tag: ci
+- id: 01a09e8b-7f93-7c03-8b0e-633a925a0ec1
+  target_id: 01a09e21-32e2-79a0-ac04-40397bf30919
+  author: aida
+  node_id: '1'
+  lamport: 5270
+  timestamp: 2026-09-14T06:12:17.427132042Z
+  kind: !RemoveTag
+    tag: awaiting
+- id: 01a09e8b-8013-7d62-9b45-9a07020be15e
+  target_id: 01a09e21-32e2-79a0-ac04-40397bf30919
+  author: aida
+  node_id: '1'
+  lamport: 5271
+  timestamp: 2026-09-14T06:12:17.555752079Z
+  kind: !RemoveTag
+    tag: papercut
+- id: 01a09e8b-8095-7603-b6e5-e43ccddafd8b
+  target_id: 01a09e21-32e2-79a0-ac04-40397bf30919
+  author: aida
+  node_id: '1'
+  lamport: 5272
+  timestamp: 2026-09-14T06:12:17.685007001Z
+  kind: !RemoveTag
+    tag: stale-signal
+clock: 5272
 node_id: '1'
