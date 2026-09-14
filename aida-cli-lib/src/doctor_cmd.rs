@@ -234,6 +234,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // `--category` filter. trace:TASK-1095 | ai:claude
     if doctor_category_selected(opts.category.as_deref(), "remote-drift")? {
         findings.extend(scan_remote_drift(&project_root));
+        findings.extend(scan_store_mirror_fanout_failures(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 

@@ -18892,6 +18892,169 @@ struct DoctorFinding {
     safe_heal: bool,
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+struct StoreMirrorFanoutFailure {
+    repo: String,
+    branch: String,
+    remote: String,
+    reason: String,
+    observed_at: String,
+}
+
+const STORE_MIRROR_FANOUT_FAILURES_FILE: &str = "store-mirror-fanout-failures.json";
+const STORE_MIRROR_FANOUT_NOTIFY_RULE: &str = "store-mirror-fanout-failed";
+
+fn store_mirror_fanout_failures_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root
+        .join(".aida")
+        .join(STORE_MIRROR_FANOUT_FAILURES_FILE)
+}
+
+fn read_store_mirror_fanout_failures(
+    project_root: &std::path::Path,
+) -> Vec<StoreMirrorFanoutFailure> {
+    let path = store_mirror_fanout_failures_path(project_root);
+    let Ok(body) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    serde_json::from_str(&body).unwrap_or_default()
+}
+
+fn write_store_mirror_fanout_failures(
+    project_root: &std::path::Path,
+    failures: &[StoreMirrorFanoutFailure],
+) -> std::io::Result<()> {
+    let path = store_mirror_fanout_failures_path(project_root);
+    if failures.is_empty() {
+        match std::fs::remove_file(&path) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e),
+        }
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let body = serde_json::to_string_pretty(failures).map_err(std::io::Error::other)?;
+    std::fs::write(path, format!("{body}\n"))
+}
+
+fn same_store_mirror_fanout_leg(
+    failure: &StoreMirrorFanoutFailure,
+    repo: &std::path::Path,
+    branch: &str,
+    remote: &str,
+) -> bool {
+    failure.repo == repo.display().to_string()
+        && failure.branch == branch
+        && failure.remote == remote
+}
+
+fn record_store_mirror_fanout_failure(
+    project_root: &std::path::Path,
+    repo: &std::path::Path,
+    branch: &str,
+    remote: &str,
+    reason: &str,
+) {
+    let mut failures = read_store_mirror_fanout_failures(project_root);
+    failures.retain(|f| !same_store_mirror_fanout_leg(f, repo, branch, remote));
+    failures.push(StoreMirrorFanoutFailure {
+        repo: repo.display().to_string(),
+        branch: branch.to_string(),
+        remote: remote.to_string(),
+        reason: reason.to_string(),
+        observed_at: chrono::Utc::now().to_rfc3339(),
+    });
+    if let Err(e) = write_store_mirror_fanout_failures(project_root, &failures) {
+        eprintln!(
+            "  {} could not record mirror drift finding: {e}",
+            "Warning:".yellow().bold()
+        );
+    }
+
+    // trace:TASK-1227 | ai:codex
+    let title = format!("AIDA mirror `{remote}` stopped syncing `{branch}`");
+    let message = format!(
+        "AIDA mirror fan-out failed for `{branch}` to `{remote}` from `{}`: {reason}\n\
+         Canonical push continued. Run `aida doctor --category remote-drift` and then \
+         `aida remote reconcile` once the mirror is healthy.",
+        repo.display()
+    );
+    if let Err(e) = crate::notify::send_direct(
+        project_root,
+        STORE_MIRROR_FANOUT_NOTIFY_RULE,
+        &title,
+        &message,
+    ) {
+        eprintln!(
+            "  {} mirror failure notification skipped: {e}",
+            "Warning:".yellow().bold()
+        );
+    }
+}
+
+fn clear_store_mirror_fanout_failure(
+    project_root: &std::path::Path,
+    repo: &std::path::Path,
+    branch: &str,
+    remote: &str,
+) {
+    let mut failures = read_store_mirror_fanout_failures(project_root);
+    let before = failures.len();
+    failures.retain(|f| !same_store_mirror_fanout_leg(f, repo, branch, remote));
+    if failures.len() != before {
+        if let Err(e) = write_store_mirror_fanout_failures(project_root, &failures) {
+            eprintln!(
+                "  {} could not clear mirror drift finding: {e}",
+                "Warning:".yellow().bold()
+            );
+        }
+    }
+}
+
+fn scan_store_mirror_fanout_failures(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    read_store_mirror_fanout_failures(project_root)
+        .into_iter()
+        .map(|failure| DoctorFinding {
+            category: "remote-drift".to_string(),
+            id: format!(
+                "remote-drift-mirror-fanout-{}-{}",
+                sanitize_doctor_finding_token(&failure.remote),
+                sanitize_doctor_finding_token(&failure.branch)
+            ),
+            summary: format!(
+                "mirror `{}` failed to sync branch `{}` from `{}` at {}: {}",
+                failure.remote, failure.branch, failure.repo, failure.observed_at, failure.reason
+            ),
+            action:
+                "restore the mirror remote/auth, then rerun `aida push` or `aida remote reconcile`"
+                    .to_string(),
+            safe_heal: false,
+        })
+        .collect()
+}
+
+fn sanitize_doctor_finding_token(raw: &str) -> String {
+    let token = raw
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+    if token.is_empty() {
+        "unknown".to_string()
+    } else {
+        token
+    }
+}
+
 /// TASK-1122: read a single `git config --get <key>` value in `dir`, or None.
 // trace:TASK-1122 | ai:claude
 fn git_config_value(dir: &std::path::Path, key: &str) -> Option<String> {
@@ -56478,10 +56641,10 @@ fn push_notice_suppressed_by_env() -> bool {
 /// Best-effort fan-out of a just-pushed `branch` to every configured mirror
 /// remote (`[store.sync] mirror_remotes`). `repo` is the git dir to push from,
 /// `project_root` is where `.aida/config.toml` lives. A non-ff / unreachable /
-/// unconfigured mirror WARNS (with a reconcile hint) and is skipped — it never
-/// errors, because a mirror may be intentionally behind (mid-reconcile). Shared
-/// by `aida db sync --push` (store leg) and `aida push` (both legs) so a clone
-/// can't silently leave one hub behind.
+/// unconfigured mirror is still non-fatal, but it is recorded as remote drift
+/// and notify'd when configured so the operator is not left with silent mirror
+/// drift. Shared by `aida db sync --push` (store leg) and `aida push` (both
+/// legs) so a clone can't silently leave one hub behind.
 // trace:STORY-760 | ai:claude
 fn fan_out_mirror_push(repo: &std::path::Path, branch: &str, project_root: &std::path::Path) {
     let cfg = read_store_sync_config(project_root).unwrap_or_default();
@@ -56495,15 +56658,34 @@ fn fan_out_mirror_push(repo: &std::path::Path, branch: &str, project_root: &std:
         }
         if !aida_core::git_ops::has_remote(repo, mirror) {
             eprintln!("  {warn} mirror remote `{mirror}` not configured — skipping");
+            // trace:TASK-1227 | ai:codex
+            record_store_mirror_fanout_failure(
+                project_root,
+                repo,
+                branch,
+                mirror,
+                "mirror remote is configured in [store.sync] but missing from this repo",
+            );
             continue;
         }
         println!("Mirroring {branch} → {mirror}...");
         match aida_core::git_ops::push(repo, mirror, branch) {
-            Ok(true) => println!("  Mirror push complete."),
-            Ok(false) => eprintln!(
-                "  {warn} mirror `{mirror}` rejected (diverged) — run `aida remote reconcile` to union-merge and re-sync every hub"
-            ),
-            Err(e) => eprintln!("  {warn} mirror `{mirror}` push failed: {e} — skipped"),
+            Ok(true) => {
+                println!("  Mirror push complete.");
+                clear_store_mirror_fanout_failure(project_root, repo, branch, mirror);
+            }
+            Ok(false) => {
+                let reason = "push rejected (diverged)";
+                eprintln!(
+                    "  {warn} mirror `{mirror}` rejected (diverged) — run `aida remote reconcile` to union-merge and re-sync every hub"
+                );
+                record_store_mirror_fanout_failure(project_root, repo, branch, mirror, reason);
+            }
+            Err(e) => {
+                let reason = e.to_string();
+                eprintln!("  {warn} mirror `{mirror}` push failed: {reason} — skipped");
+                record_store_mirror_fanout_failure(project_root, repo, branch, mirror, &reason);
+            }
         }
     }
 }
