@@ -17,8 +17,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:15:54.293122565Z
-modified_at: 2026-09-14T05:49:26.645363667Z
+modified_at: 2026-09-14T06:24:25.817981626Z
 req_type: Task
 tags:
 - auto-complete drain worktree cleanup followup parent:BUG-1145
+comments:
+- id: 01a09e96-9cd9-7480-809a-04ca962c87c8
+  author: joe
+  content: |-
+    DESIGN (operator idea, 2026-09-13) — resolves the destructive-teardown concern: ARCHIVE-not-delete + retention. Instead of `git worktree remove` / `git branch -D` outright, back up the failed attempt's worktree (and any UNMERGED branch's unique commits) into an archive (e.g. .aida/archive/worktrees/<name>-<ts>/ or a refs/archive bundle), then a retention sweep purges archived entries older than 30 days. This makes auto-teardown SAFE (fully recoverable) — the concern that held this task goes away, so it becomes drainable.
+
+    SHARED MECHANISM with TASK-1222 (the 226 stale worktrees/branches bulk sweep): both should use the same archive + 30-day-retention primitive — build it once, use it for auto-teardown (this task) and the bulk cruft sweep (TASK-1222).
+
+    Acceptance addendum: nothing is hard-deleted without first landing in the 30-day archive; a MERGED branch (commits already on main) needs no archive; an UNMERGED branch's unique commits are archived (tag/bundle) before deletion; a retention sweep purges >30d archived entries.
+  created_at: 2026-09-14T06:24:25.817981626Z
+  modified_at: 2026-09-14T06:24:25.817981626Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
