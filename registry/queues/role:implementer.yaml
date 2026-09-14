@@ -14,14 +14,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a09ec8-e5c9-71b2-ae16-6c7b30d0adea
-  position: 16000
-  added_by: role:implementer
-  note: auto-queued by `session end` (01a09ec2); covers 1 spec
-  added_at: 2026-09-14T07:19:28.081096118Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a09e39-a54b-7953-aa9e-627574c3b371
   position: 19000
   added_by: role:implementer
