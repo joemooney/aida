@@ -66935,5 +66935,21 @@ operations:
   timestamp: 2026-09-14T06:12:20.185052460Z
   kind: !RemoveTag
     tag: papercut aida:queue:list output-format lifecycle:trivial
-clock: 5274
+- id: 01a09e8b-93a6-7021-ab3c-e1acfa6e5423
+  target_id: 01a09e74-9e47-7d21-8e2f-3d7873a23dbc
+  author: aida
+  node_id: '1'
+  lamport: 5275
+  timestamp: 2026-09-14T06:12:22.566527499Z
+  kind: !AddTag
+    tag: batch:burst1
+- id: 01a09e8b-942b-7511-be6b-c889b65b3bb4
+  target_id: 01a09e74-9e47-7d21-8e2f-3d7873a23dbc
+  author: aida
+  node_id: '1'
+  lamport: 5276
+  timestamp: 2026-09-14T06:12:22.699179828Z
+  kind: !RemoveTag
+    tag: orchestrator burndown drain-reliability groom parent:EPIC-62
+clock: 5276
 node_id: '1'
