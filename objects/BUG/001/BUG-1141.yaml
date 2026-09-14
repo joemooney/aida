@@ -3,12 +3,12 @@ spec_id: BUG-1141
 agreed_id: BUG-1141
 title: 'aida digest panics on every invocation: subcommand ''format: DigestFormat'' collides with the global --format (OutputFormat) clap arg'
 description: 'aida digest (with ANY args, incl. none) panics: ''Mismatch between definition and access of format. Could not downcast...'' (clap_builder error.rs). Root cause: the root Cli struct defines a GLOBAL ''--format: Option<OutputFormat>'' (global=true, propagates to every subcommand), and the Digest subcommand ALSO defines ''format: DigestFormat'' (cli.rs:9327). Two --format args of different value types reach the digest subcommand; clap''s derive downcast fails at access -> panic. digest is the ONLY subcommand redefining ''format'', so it''s the only one that crashes. DigestFormat {Markdown,Plain,Json,Brief} is distinct from OutputFormat {human,toon,json}, so they can''t be unified. Fix: rename the digest arg to a non-colliding id+long (field digest_format, clap long ''digest-format'') and update the handler; keep the 4 digest formats. Acceptance: aida digest runs (no panic); aida digest --digest-format json|markdown|plain|brief works; the global --format still applies where relevant. Add a test that the CLI parses digest without panicking (a parse/downcast regression guard).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T01:58:17.135448106Z
-modified_at: 2026-09-14T02:06:41.013356972Z
+modified_at: 2026-09-14T02:16:58.802413861Z
 req_type: Bug
 tags:
 - cli clap digest crash regression
@@ -25,3 +25,21 @@ comments:
   created_at: 2026-09-14T02:06:41.013356972Z
   modified_at: 2026-09-14T02:06:41.013356972Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09db4-109b-7630-925b-550e9d844be3
+  author: aida-auto-bump
+  timestamp: 2026-09-14T02:16:58.779498308Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09db4-10b2-7213-991a-33571e765853
+  timestamp: 2026-09-14T02:16:58.802412491Z
+  agent: aida
+  commit_sha: 4d1c5346026c5a7898967cd7ea226467f11b085b
+  summary: Completed via merge 4d1c5346
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-14T02:16:58.779367810Z
+  completion_sha: 4d1c5346026c5a7898967cd7ea226467f11b085b
