@@ -3,12 +3,12 @@ spec_id: TASK-1226
 agreed_id: TASK-1226
 title: 'Consider a small task: "store mirror fan-out failure raises a doctor finding'
 description: ''
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T03:39:36.049221774Z
-modified_at: 2026-09-14T03:41:31.952174030Z
+modified_at: 2026-09-14T03:41:34.190921498Z
 req_type: Task
 tags:
 - duplicate-of:TASK-1227

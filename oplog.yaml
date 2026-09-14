@@ -66088,5 +66088,13 @@ operations:
   timestamp: 2026-09-14T03:41:32.258891732Z
   kind: !RemoveTag
     tag: followup-src:docs/plans/2026-09-13-spike-79-multi-hub-viability.md
-clock: 5209
+- id: 01a09e01-82ce-7840-8438-894173d23643
+  target_id: 01a09dff-b4f1-73d0-82fd-f255e1d8d76e
+  author: aida
+  node_id: '1'
+  lamport: 5210
+  timestamp: 2026-09-14T03:41:34.288979748Z
+  kind: !SetStatus
+    status: Rejected
+clock: 5210
 node_id: '1'
