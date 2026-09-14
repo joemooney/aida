@@ -66767,5 +66767,61 @@ operations:
   timestamp: 2026-09-14T06:12:06.721014008Z
   kind: !SetStatus
     status: Approved
-clock: 5253
+- id: 01a09e8b-6072-7681-895e-3267084186f5
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5254
+  timestamp: 2026-09-14T06:12:09.458454599Z
+  kind: !AddTag
+    tag: batch:burst1
+- id: 01a09e8b-60f5-7920-a806-58bbe8415393
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5255
+  timestamp: 2026-09-14T06:12:09.589810410Z
+  kind: !RemoveTag
+    tag: deferred
+- id: 01a09e8b-6176-70e1-b07e-6242d6aefb33
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5256
+  timestamp: 2026-09-14T06:12:09.718701881Z
+  kind: !RemoveTag
+    tag: queue
+- id: 01a09e8b-61f7-74e3-8902-fa92e7f8ab3b
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5257
+  timestamp: 2026-09-14T06:12:09.847947701Z
+  kind: !RemoveTag
+    tag: substrate-truth
+- id: 01a09e8b-6278-75b0-a74e-f43dfe6eeb66
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5258
+  timestamp: 2026-09-14T06:12:09.976308009Z
+  kind: !RemoveTag
+    tag: backlog
+- id: 01a09e8b-62f9-7161-b9ab-ff522847de14
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5259
+  timestamp: 2026-09-14T06:12:10.105408640Z
+  kind: !RemoveTag
+    tag: papercut
+- id: 01a09e8b-6379-71e2-be85-a7b4309a7546
+  target_id: 01a09e20-6f77-7ac2-8df6-558f9397459c
+  author: aida
+  node_id: '1'
+  lamport: 5260
+  timestamp: 2026-09-14T06:12:10.233818502Z
+  kind: !RemoveTag
+    tag: groom
+clock: 5260
 node_id: '1'
