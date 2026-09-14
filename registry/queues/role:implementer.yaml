@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a09e57-e035-7683-88bf-2717619e8f11
-  position: 5000
-  added_by: role:implementer
-  note: 'assess 2026-09-13 22:52 (live advisor, outside fence — acceptance authored): best-effort worktree teardown in open-PR recovery; low priority, tail; mode=drive, human merges'
-  added_at: 2026-09-14T05:49:27.996634745Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a09e39-a54b-7953-aa9e-627574c3b371
   position: 19000
   added_by: role:implementer
@@ -18,5 +10,12 @@
   position: 20000
   added_by: role:implementer
   added_at: 2026-09-14T15:27:34.213522006Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a09e57-e035-7683-88bf-2717619e8f11
+  position: 21000
+  added_by: role:implementer
+  added_at: 2026-09-14T15:27:34.932818432Z
   for_role: implementer
   added_by_machine: imac
