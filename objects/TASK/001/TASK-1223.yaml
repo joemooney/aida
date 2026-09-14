@@ -1,0 +1,14 @@
+id: 01a09d87-3611-7471-ba0e-6b52ef4d7d9f
+spec_id: TASK-1223
+agreed_id: TASK-1223
+title: 'gitlab release-drift check: fall back to the glab config token (~/.config/glab-cli) when no env token is set'
+description: 'Follow-up to BUG-1137/PR #1811. The release-existence check reads the token only from AIDA_GITLAB_TOKEN|GITLAB_TOKEN. A glab user (operator) keeps the token in ~/.config/glab-cli/config.yml (hosts.<host>.token), so on a PRIVATE repo the check still 404s (false ''release missing'') unless they export the env var. Add: env var first, then fall back to the glab config token (or shell to ''glab api projects/:id/releases/:tag'' which uses glab''s own auth). Verified failing case: gitlab.joemooney.com ai/aida (private), release v0.15.0 exists, GITLAB_TOKEN unset, token present in glab config -> unauth 404. Acceptance: aida remote status recognizes the existing v0.15.0 release with NO env var set, using the glab config token.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T01:27:59.249706662Z
+modified_at: 2026-09-14T01:27:59.249706662Z
+req_type: Task
+tags:
+- remote-drift gitlab auth followup parent:BUG-1137
