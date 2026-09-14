@@ -66951,5 +66951,31 @@ operations:
   timestamp: 2026-09-14T06:12:22.699179828Z
   kind: !RemoveTag
     tag: orchestrator burndown drain-reliability groom parent:EPIC-62
-clock: 5276
+- id: 01a09e90-c087-7373-99fb-1579af25b26f
+  target_id: 01a09e90-bc81-7251-a855-3fc91adb5770
+  author: aida
+  node_id: '1'
+  lamport: 5277
+  timestamp: 2026-09-14T06:18:01.735763457Z
+  kind: !Create
+    title: 'Review PR-1820: [AI:codex] fix(backlog): skip deferred groom candidates (BUG-1146)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09e8c`) for branch `bug-1146`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1820>
+      - Branch: `bug-1146` → `main`
+
+      ## Covers
+
+      - BUG-1146
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1820` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5277
 node_id: '1'
