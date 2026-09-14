@@ -66296,5 +66296,26 @@ operations:
   timestamp: 2026-09-14T04:02:10.699592563Z
   kind: !SetStatus
     status: Rejected
-clock: 5221
+- id: 01a09e15-ecb2-7700-a55b-d8f4b2d9f427
+  target_id: 01a09e15-e72d-71a3-bf02-ea5bcc9766e4
+  author: aida
+  node_id: '1'
+  lamport: 5222
+  timestamp: 2026-09-14T04:03:52.114879421Z
+  kind: !Create
+    title: 'Drain shelves a codex spec despite success: phase-1 retry reuses the worktree and collides — proceed to CI+review on the substrate-verified PR, and tear down the failed attempt''s worktree'
+    description: |-
+      Every codex drain this session shelved despite the work shipping. Pattern: the codex implementer commits+pushes+opens the PR, its session exits 1, the orchestrator retries phase 1, the retry REUSES the same worktree → 'isn't queued. Status is Done' / 'could not match the orchestrated session to a session lease' → phase-1 marked failed → spec shelved (exit 2), needing a manual advisor merge.
+
+      BUG-1140 fixed the MISCLASSIFICATION (verify-by-substrate: it now detects the open PR and does NOT restore-to-un-started, so the PR is preserved). BUG-1134 fixed the ORPHANING. But the drain still SHELVES instead of PROCEEDING: after substrate-verify finds the open PR, phase 1 should hand off to phase 2 (CI) + phase 3 (review) + merge on that PR, not return a failure.
+
+      Two coupled fixes:
+      1. Proceed-on-verified-PR: when the substrate check finds an open PR for the spec after a non-zero implementer exit, treat phase 1 as SUCCEEDED (PR exists) and continue the pipeline, rather than returning a lease-match/tool-exit failure.
+      2. Tear down the failed attempt's worktree before a retry so the retry cannot collide (the root of the 'isn't queued / lease mismatch' on attempt 2).
+
+      Impact: this is the last gap between 'drain preserves the PR but I hand-merge' and 'drain lands codex work hands-off' — the whole point of EPIC-62. Acceptance: a codex spec that commits+pushes+opens a PR then exits 1 DRAINS to merge with no manual --resume/hand-merge (validated on a throwaway spec or via the TASK-1224 test harness extended to assert merge, not just no-shelve).
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5222
 node_id: '1'
