@@ -66096,5 +66096,17 @@ operations:
   timestamp: 2026-09-14T03:41:34.288979748Z
   kind: !SetStatus
     status: Rejected
-clock: 5210
+- id: 01a09e02-0c49-7820-8e0d-8224adeed2b8
+  target_id: 01a09e01-fe38-7861-b6cf-2a8e94bf1fc7
+  author: aida
+  node_id: '1'
+  lamport: 5211
+  timestamp: 2026-09-14T03:42:09.481625274Z
+  kind: !Create
+    title: 'Auto-followup filing over-files: creates tasks from ''## Followups'' bullets that name an existing spec-id or are meta-prose (''Consider a small task: ...'')'
+    description: 'Completing SPIKE-79 (with a docs/plans assessment containing a ''## Followups'' section) auto-filed each bullet as a child TASK. Two were noise: TASK-1225 from a bullet that NAMED the already-existing TASK-1223 (''TASK-1223 — ... (in flight)''), and TASK-1226 from a meta-prose bullet (''Consider a small task: store mirror fan-out ...'') that duplicated the manually-filed TASK-1227. Fix: the auto-followup parser should (a) skip a bullet that already contains a resolvable spec-id reference (it''s a pointer, not new work), and (b) skip meta-prose bullets like ''Consider a small task:'' / ''Consider ...'' openers, or require an imperative shape. Prevents the exact duplicate-noise cleanup this created. trace:AIDA_AUTO_FOLLOWUPS'
+    req_type: Bug
+    status: Draft
+    priority: Low
+clock: 5211
 node_id: '1'
