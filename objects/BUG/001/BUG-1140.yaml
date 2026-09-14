@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:50:56.950971870Z
-modified_at: 2026-09-13T22:50:56.950971870Z
+modified_at: 2026-09-14T01:41:34.950555619Z
 req_type: Bug
 tags:
 - orchestrator drain-reliability codex parent:EPIC-62 oversight-caught
@@ -29,3 +29,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-13T22:50:59.843291916Z
+comments:
+- id: 01a09d93-a866-73c2-8cd6-6c9752659887
+  author: joe
+  content: Commit 4a53dc9e2 references this requirement
+  created_at: 2026-09-14T01:41:34.950555619Z
+  modified_at: 2026-09-14T01:41:34.950555619Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
