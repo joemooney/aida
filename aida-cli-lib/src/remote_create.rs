@@ -773,21 +773,69 @@ pub(crate) fn gitlab_release_api_url(remote_url: &str, tag: &str) -> Option<Stri
     ))
 }
 
-fn gitlab_release_exists(api_url: &str) -> Option<bool> {
-    let mut cmd = Command::new("curl");
-    cmd.args(["--silent", "--show-error", "--fail", "--max-time", "10"]);
-    if let Ok(token) = std::env::var("GITLAB_TOKEN") {
-        if !token.trim().is_empty() {
-            cmd.args(["--header", &format!("PRIVATE-TOKEN: {token}")]);
+fn gitlab_release_token_from_env() -> Option<String> {
+    std::env::var("AIDA_GITLAB_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("GITLAB_TOKEN").ok())
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty())
+}
+
+fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
+    let json: serde_json::Value = serde_json::from_str(body).ok()?;
+    if let Some(message) = json.get("message").and_then(|v| v.as_str()) {
+        let normalized = message.to_ascii_lowercase();
+        if normalized.contains("404") || normalized.contains("not found") {
+            return Some(false);
         }
     }
-    let out = cmd
-        .arg("--output")
-        .arg("/dev/null")
-        .arg(api_url)
-        .output()
-        .ok()?;
-    Some(out.status.success())
+    // trace:BUG-1137 | ai:codex
+    // GitLab's release endpoint reports uploaded artifacts under `assets.links`
+    // when releases are created by `glab release create`; the release object
+    // itself, keyed by `tag_name`, is the existence signal.
+    let Some(object) = json.as_object() else {
+        return None;
+    };
+    if object
+        .get("tag_name")
+        .and_then(|v| v.as_str())
+        .is_some_and(|release_tag| release_tag == tag)
+    {
+        return Some(true);
+    }
+    if object.contains_key("tag_name") {
+        return Some(true);
+    }
+    None
+}
+
+fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
+    let mut cmd = Command::new("curl");
+    cmd.args([
+        "--silent",
+        "--show-error",
+        "--max-time",
+        "10",
+        "--write-out",
+        "\n%{http_code}",
+    ]);
+    if let Some(token) = gitlab_release_token_from_env() {
+        cmd.args(["--header", &format!("PRIVATE-TOKEN: {token}")]);
+    }
+    let out = cmd.arg(api_url).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let (body, status) = stdout.rsplit_once('\n')?;
+    let status_code = status.trim().parse::<u16>().ok()?;
+    if (200..300).contains(&status_code) {
+        Some(gitlab_release_body_exists(tag, body).unwrap_or(true))
+    } else if status_code == 404 {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn collect_release_standings(
@@ -803,7 +851,7 @@ pub(crate) fn collect_release_standings(
                 .and_then(|url| gitlab_release_api_url(&url, tag));
             let gitlab_release_exists = gitlab_release_url
                 .as_deref()
-                .and_then(gitlab_release_exists);
+                .and_then(|url| gitlab_release_exists(url, tag));
             RemoteReleaseStanding {
                 remote: remote.clone(),
                 tag_head,
@@ -2024,6 +2072,29 @@ mod tests {
             Some("https://gitlab.joemooney.com/api/v4/projects/ai%2Faida/releases/v1.2.3")
         );
         assert!(gitlab_release_api_url("git@github.com:joemooney/aida.git", "v1.2.3").is_none());
+    }
+
+    #[test]
+    fn gitlab_release_body_counts_asset_links_release_as_present() {
+        let body = r#"{
+            "name": "v0.15.0",
+            "tag_name": "v0.15.0",
+            "assets": {
+                "count": 4,
+                "links": [
+                    {"name": "aida-linux-x86_64", "url": "https://gitlab.example.com/o/r/-/releases/v0.15.0/downloads/aida"}
+                ]
+            }
+        }"#;
+
+        assert_eq!(gitlab_release_body_exists("v0.15.0", body), Some(true));
+    }
+
+    #[test]
+    fn gitlab_release_body_reports_not_found_message_as_missing() {
+        let body = r#"{"message":"404 Release Not Found"}"#;
+
+        assert_eq!(gitlab_release_body_exists("v0.15.0", body), Some(false));
     }
 
     #[test]
