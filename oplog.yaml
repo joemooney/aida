@@ -66419,5 +66419,29 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 5228
+- id: 01a09e35-7ecf-7df2-b9bd-6ae3b3b0b633
+  target_id: 01a09e35-78a6-74b3-9f1e-6f3a3821742c
+  author: aida
+  node_id: '1'
+  lamport: 5229
+  timestamp: 2026-09-14T04:38:21.135306307Z
+  kind: !Create
+    title: Surface AIDA's autonomy modes as ONE coherent concept (cron/groom --apply · /aida-solo · [intake]/solo-posture · zen) — they're scattered and undiscoverable
+    description: |-
+      Operator (2026-09-13) proposed 'auto-approve drafts as a matter of protocol when the advisor isn't busy, configurable, tied to modes' — and it turned out the CAPABILITY already fully exists, just scattered across three unrelated surfaces the operator couldn't find (they'd forgotten /aida-solo existed). The gap is DISCOVERABILITY, not capability.
+
+      The three faces of the same 'do more autonomously' idea:
+      - aida groom --apply [--then-drain] — headless auto-approve of the safe fence + drain (now on a durable cron).
+      - /aida-solo — the LIVE in-session warm driver (groom→implement→integrate with judgment, keystone-parked).
+      - [intake] policy + solo posture (presence::current_solo, TASK-827) + --zen — the config dials.
+
+      Acceptance:
+      - One place (a doc section + a discoverable command, e.g. `aida autonomy` or an `aida modes` overview) that names the autonomy ladder and how to engage each rung (headless cron / live solo / zen / the config knobs), so a user finds it without prior knowledge.
+      - The relationship is explicit: cron = always-on headless; /aida-solo = live supervised; [intake]/--risk = the dials.
+      - Cross-link from README + the discipline pack.
+      Not new machinery — a naming/surfacing/doc task over existing capability.
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 5229
 node_id: '1'
