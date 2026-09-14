@@ -1,0 +1,14 @@
+id: 01a09dff-981c-7b30-9669-45bfe8d9fe99
+spec_id: TASK-1225
+agreed_id: TASK-1225
+title: TASK-1223 — release-drift check reads the glab config token (in flight)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T03:39:28.668549204Z
+modified_at: 2026-09-14T03:39:28.668549204Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-13-spike-79-multi-hub-viability.md
