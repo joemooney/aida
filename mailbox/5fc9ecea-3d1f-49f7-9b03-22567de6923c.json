@@ -1,0 +1,16 @@
+{
+  "id": "5fc9ecea-3d1f-49f7-9b03-22567de6923c",
+  "thread_id": "5fc9ecea-3d1f-49f7-9b03-22567de6923c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789362431746,
+  "body": "PR #1816 (BUG-1145): REQUEST CHANGES — do not merge as-is. The proceed-on-verified-PR design is right, but recover_phase1_failure_with_open_pr returns Phase::Reviewer, which SKIPS finish_ci (phase 2) — the drain's ONLY CI gate (finish_ci fails on CiProbe::Red/InProgress). merge() uses 'gh pr merge --squash' (no CI gate) and main has NO branch protection (verified: 404 Branch not protected), so the auto-recovery would merge red/in-progress CI ungated — worse than the current shelve+advisor-verify. The mock test passes only because MockPhaseDriver runs no real CI. FIX: re-enter at Phase::Ci instead of Phase::Reviewer (finish_ci gates CI on the seeded branch — branch is already seeded by the recovery hook), and make finish_ci's end_implementer_session tolerate the already-gone/unmatched lease (best-effort no-op) — that's presumably why phase 2 was skipped. Extend the test to assert Phase::Ci runs and that a red-CI PR shelves (not merges). Full detail in .aida/review-verdicts/PR-1816.json + BUG-1145 comment.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
