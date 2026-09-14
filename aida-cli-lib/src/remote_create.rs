@@ -781,6 +781,61 @@ fn gitlab_release_token_from_env() -> Option<String> {
         .filter(|token| !token.is_empty())
 }
 
+fn gitlab_host_from_api_url(api_url: &str) -> Option<String> {
+    let after_scheme = api_url
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(api_url);
+    after_scheme
+        .split('/')
+        .next()
+        .map(str::trim)
+        .filter(|host| !host.is_empty())
+        .map(|host| host.split_once(':').map(|(h, _)| h).unwrap_or(host))
+        .map(|host| host.to_ascii_lowercase())
+}
+
+fn glab_config_path() -> Option<PathBuf> {
+    dirs::config_dir().map(|dir| dir.join("glab-cli").join("config.yml"))
+}
+
+fn gitlab_release_token_from_glab_config_for_host(host: &str) -> Option<String> {
+    let path = glab_config_path()?;
+    let body = std::fs::read_to_string(path).ok()?;
+    gitlab_release_token_from_glab_config_body(host, &body)
+}
+
+fn gitlab_release_token_from_glab_config_body(host: &str, body: &str) -> Option<String> {
+    let yaml: serde_yaml::Value = serde_yaml::from_str(body).ok()?;
+    let host_key = host.to_ascii_lowercase();
+    let hosts = yaml.get("hosts")?.as_mapping()?;
+    for (key, value) in hosts {
+        let Some(config_host) = key.as_str() else {
+            continue;
+        };
+        if config_host.trim().to_ascii_lowercase() != host_key {
+            continue;
+        }
+        return value
+            .get("token")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .map(str::to_string);
+    }
+    None
+}
+
+fn gitlab_release_token_for_api_url(api_url: &str) -> Option<String> {
+    gitlab_release_token_from_env().or_else(|| {
+        // trace:TASK-1223 | ai:codex
+        // Private GitLab mirrors often rely on `glab auth login`; reuse glab's
+        // host-scoped token when no AIDA/GitLab env token is present.
+        let host = gitlab_host_from_api_url(api_url)?;
+        gitlab_release_token_from_glab_config_for_host(&host)
+    })
+}
+
 fn gitlab_release_body_exists(tag: &str, body: &str) -> Option<bool> {
     let json: serde_json::Value = serde_json::from_str(body).ok()?;
     if let Some(message) = json.get("message").and_then(|v| v.as_str()) {
@@ -819,7 +874,7 @@ fn gitlab_release_exists(api_url: &str, tag: &str) -> Option<bool> {
         "--write-out",
         "\n%{http_code}",
     ]);
-    if let Some(token) = gitlab_release_token_from_env() {
+    if let Some(token) = gitlab_release_token_for_api_url(api_url) {
         cmd.args(["--header", &format!("PRIVATE-TOKEN: {token}")]);
     }
     let out = cmd.arg(api_url).output().ok()?;
@@ -2095,6 +2150,80 @@ mod tests {
         let body = r#"{"message":"404 Release Not Found"}"#;
 
         assert_eq!(gitlab_release_body_exists("v0.15.0", body), Some(false));
+    }
+
+    #[test]
+    fn gitlab_release_token_reads_matching_glab_host_config() {
+        let body = r#"
+hosts:
+  gitlab.com:
+    token: public-token
+  gitlab.joemooney.com:
+    token: private-token
+"#;
+
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("gitlab.joemooney.com", body).as_deref(),
+            Some("private-token")
+        );
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("GITLAB.JOEMOONEY.COM", body).as_deref(),
+            Some("private-token")
+        );
+    }
+
+    #[test]
+    fn gitlab_release_token_ignores_wrong_or_blank_glab_config_entries() {
+        let body = r#"
+hosts:
+  gitlab.joemooney.com:
+    token: "   "
+  gitlab.example.com:
+    token: example-token
+"#;
+
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("gitlab.joemooney.com", body),
+            None
+        );
+        assert_eq!(
+            gitlab_release_token_from_glab_config_body("missing.example.com", body),
+            None
+        );
+    }
+
+    #[test]
+    fn gitlab_release_token_env_wins_before_glab_config() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_GITLAB_TOKEN", Some("env-token")),
+            ("GITLAB_TOKEN", Some("secondary-token")),
+        ]);
+
+        assert_eq!(
+            gitlab_release_token_for_api_url(
+                "https://gitlab.joemooney.com/api/v4/projects/ai%2Faida/releases/v0.15.0"
+            )
+            .as_deref(),
+            Some("env-token")
+        );
+    }
+
+    #[test]
+    fn gitlab_release_token_extracts_host_from_api_url() {
+        assert_eq!(
+            gitlab_host_from_api_url(
+                "https://gitlab.joemooney.com/api/v4/projects/ai%2Faida/releases/v0.15.0"
+            )
+            .as_deref(),
+            Some("gitlab.joemooney.com")
+        );
+        assert_eq!(
+            gitlab_host_from_api_url(
+                "https://gitlab.joemooney.com:8443/api/v4/projects/ai%2Faida/releases/v0.15.0"
+            )
+            .as_deref(),
+            Some("gitlab.joemooney.com")
+        );
     }
 
     #[test]
