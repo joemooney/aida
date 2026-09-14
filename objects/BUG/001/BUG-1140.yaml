@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:50:56.950971870Z
-modified_at: 2026-09-14T01:52:49.620590435Z
+modified_at: 2026-09-14T03:47:41.921643822Z
 req_type: Bug
 tags:
 - orchestrator drain-reliability codex parent:EPIC-62 oversight-caught
@@ -42,3 +42,18 @@ comments:
   created_at: 2026-09-14T01:52:49.620590435Z
   modified_at: 2026-09-14T01:52:49.620590435Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09e07-1ee1-7142-aabe-a43e9629fae7
+  author: joe
+  content: |-
+    Oversight follow-up (2026-09-13, autonomous drain of the `closeout` batch): TASK-1223 hit the SAME done-on-branch outcome (work committed as fadb28c19, spec Done, no PR) but via a DIFFERENT failure than the codex-exit-1 case: "tool-exit at implementer — could not match the orchestrated session (claude id 01a09e05) to a session lease" (attempt 2/2).
+
+    Implication: PR #1812's fix is NECESSARY BUT NOT SUFFICIENT. #1812 makes a non-zero EXIT fall through to the substrate resolution — but that resolution calls `discover_orchestrated_lease(&session_uuid)?`, which is exactly what fails here (lease mismatch), so it still returns Err and shelves despite the work being landed.
+
+    Follow-up needed (verify-by-substrate, deeper): when lease-discovery fails BUT the spec is Done + a branch is pushed with the commit, recover from the PUSHED BRANCH (the BUG-895 `recover_missing_review_pr` path already opens a PR from a pushed branch without the worktree) instead of shelling. i.e. treat 'committed + pushed + Done' as success regardless of BOTH exit code AND lease-match.
+
+    Also suspect: the anomalous 199h harness lease `abf9f7f087dbb254e-c3a7f12a9af4d18b` (listed as the active lease) may be interfering with orchestrated-session→lease matching. Worth reaping/investigating that stale lease separately.
+
+    Recommend: land #1812 (it fixes the exit-code case), then file a follow-up for the lease-discovery-failure variant. Both are the same operator-visible defect: correct work stranded on a branch.
+  created_at: 2026-09-14T03:47:41.921643822Z
+  modified_at: 2026-09-14T03:47:41.921643822Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
