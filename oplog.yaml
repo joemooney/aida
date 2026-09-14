@@ -67035,5 +67035,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5282
+- id: 01a09eb7-5b9c-7fd3-aedb-bca6d3ea8323
+  target_id: 01a09eb7-57cb-7351-9ef7-34d519171c38
+  author: aida
+  node_id: '1'
+  lamport: 5283
+  timestamp: 2026-09-14T07:00:11.804064790Z
+  kind: !Create
+    title: 'Review PR-1822: [AI:codex] fix(status): clear stale nightly red after main green (BUG-1148)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09eb3`) for branch `bug-1148`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1822>
+      - Branch: `bug-1148` → `main`
+
+      ## Covers
+
+      - BUG-1148
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1822` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5283
 node_id: '1'
