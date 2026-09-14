@@ -5,13 +5,6 @@
   added_at: 2026-09-14T04:12:41.978381271Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a09e20-c862-7d01-8f35-241a7b8bffdb
-  position: 344000
-  added_by: joe
-  note: advisor-cleared at filing
-  added_at: 2026-09-14T04:15:53.003994005Z
-  for_role: implementer
-- user_id: joe
   requirement_id: 01a09e21-32e2-79a0-ac04-40397bf30919
   position: 345000
   added_by: joe
