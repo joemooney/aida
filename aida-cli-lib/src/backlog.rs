@@ -290,6 +290,7 @@ fn collect_backlog_candidates(
         // !is_terminal_status filter needed. trace:TASK-536 | ai:claude
         .filter(|r| matches!(r.status, RequirementStatus::Approved))
         .filter(|r| !r.archived)
+        .filter(|r| !requirement_is_deferred(r))
         .filter(|r| !queued_ids.contains(&r.id))
         // trace:BUG-784 | ai:claude
         .filter(|r| {
@@ -304,6 +305,30 @@ fn collect_backlog_candidates(
         pb.cmp(&pa).then(a.created_at.cmp(&b.created_at))
     });
     out
+}
+
+// trace:BUG-1146 | ai:codex
+fn requirement_is_deferred(req: &Requirement) -> bool {
+    req.deferred
+        || req
+            .tags
+            .iter()
+            .any(|t| t.trim().to_ascii_lowercase().starts_with("deferred:"))
+}
+
+fn count_deferred_backlog_candidates(
+    store: &aida_core::RequirementsStore,
+    queued_ids: &HashSet<uuid::Uuid>,
+) -> usize {
+    store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::Approved))
+        .filter(|r| !r.archived)
+        .filter(|r| requirement_is_deferred(r))
+        .filter(|r| !queued_ids.contains(&r.id))
+        .filter(|r| aida_core::lifecycle::is_work_item_type(&r.req_type))
+        .count()
 }
 
 fn priority_rank(p: &RequirementPriority) -> u8 {
@@ -888,6 +913,13 @@ fn handle_groom(
                 display_id(req)
             );
         }
+        if requirement_is_deferred(req) {
+            anyhow::bail!(
+                "spec `{}` is deferred — aida undefer {} before grooming",
+                display_id(req),
+                display_id(req)
+            );
+        }
         to_groom.push(req.clone());
     }
 
@@ -1106,6 +1138,7 @@ fn handle_groom_pickable(
     // No type opt-in here: the auto-groom path moves work onto the queue, and a
     // knowledge-class record is never queueable work. trace:BUG-784 | ai:claude
     let candidates = collect_backlog_candidates(&store, &queued_ids, None);
+    let deferred_parked = count_deferred_backlog_candidates(&store, &queued_ids);
     let mut items: Vec<PickableItem> = Vec::with_capacity(candidates.len());
     // id → req, so we can resolve the would-groom set back to requirements for
     // the enqueue write without re-scanning the store.
@@ -1140,7 +1173,14 @@ fn handle_groom_pickable(
 
     // ---- DRY-RUN BY DEFAULT ----
     if !apply {
-        render_pickable_dry_run(&groom_ids, &parked, &by_id, max_risk, batch);
+        render_pickable_dry_run(
+            &groom_ids,
+            &parked,
+            deferred_parked,
+            &by_id,
+            max_risk,
+            batch,
+        );
         return Ok(());
     }
 
@@ -1182,11 +1222,11 @@ fn handle_groom_pickable(
             updated.to_string().bold()
         );
     }
-    if !parked.is_empty() {
+    if !parked.is_empty() || deferred_parked > 0 {
         println!(
-            "  {} {} item(s) parked (gate / risk ceiling) — see `aida backlog groom --pickable` (dry run) for reasons.",
+            "  {} {} item(s) parked (gate / risk ceiling / deferred) — see `aida backlog groom --pickable` (dry run) for reasons.",
             glyph(crate::glyphs::Glyph::Bullet).dimmed(),
-            parked.len().to_string().bold()
+            (parked.len() + deferred_parked).to_string().bold()
         );
     }
     Ok(())
@@ -1195,6 +1235,7 @@ fn handle_groom_pickable(
 fn render_pickable_dry_run(
     groom_ids: &[String],
     parked: &[(String, ParkReason)],
+    deferred_parked: usize,
     by_id: &std::collections::HashMap<String, Requirement>,
     max_risk: RiskLevel,
     batch: Option<&str>,
@@ -1236,16 +1277,23 @@ fn render_pickable_dry_run(
             );
         }
     }
+    if deferred_parked > 0 {
+        println!(
+            "  {} {} deferred item(s) held off the queue",
+            glyph(crate::glyphs::Glyph::FlowBlocked).dimmed(),
+            deferred_parked.to_string().bold()
+        );
+    }
 
     println!();
     let suffix = batch
         .map(|n| format!(", each tagged `batch:{}`", n))
         .unwrap_or_default();
     println!(
-        "Would queue {} item(s){}; {} parked.",
+        "Would queue {} item(s){}; {} parked (gate / risk ceiling / deferred).",
         groom_ids.len().to_string().bold(),
         suffix,
-        parked.len().to_string().bold()
+        (parked.len() + deferred_parked).to_string().bold()
     );
     println!(
         "{}",
@@ -1463,6 +1511,46 @@ mod tests {
         let got = collect_backlog_candidates(&store, &queued, None);
         assert_eq!(got.len(), 1, "only the Approved-unqueued spec is in scope");
         assert_eq!(got[0].id, approved_unqueued.id);
+    }
+
+    // trace:BUG-1146 | ai:codex
+    #[test]
+    fn collect_backlog_candidates_excludes_deferred_flag_and_tag() {
+        let active = req_fixture(
+            "T-1",
+            RequirementType::Task,
+            RequirementPriority::Low,
+            RequirementStatus::Approved,
+            &[],
+        );
+        let mut deferred_flag = req_fixture(
+            "T-2",
+            RequirementType::Task,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &[],
+        );
+        deferred_flag.deferred = true;
+        let deferred_tag = req_fixture(
+            "T-3",
+            RequirementType::Task,
+            RequirementPriority::High,
+            RequirementStatus::Approved,
+            &["deferred:post-stability"],
+        );
+        let store = aida_core::RequirementsStore {
+            requirements: vec![active.clone(), deferred_flag, deferred_tag],
+            ..Default::default()
+        };
+        let queued = HashSet::new();
+
+        let got = collect_backlog_candidates(&store, &queued, None);
+        assert_eq!(
+            got.iter().map(display_id).collect::<Vec<_>>(),
+            vec!["T-1"],
+            "deferred flag and deferred:* tags must stay off the pickable backlog"
+        );
+        assert_eq!(count_deferred_backlog_candidates(&store, &queued), 2);
     }
 
     /// BUG-784: a repo whose store carries accepted ADRs / visions / terms /
