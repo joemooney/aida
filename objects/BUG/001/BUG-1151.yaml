@@ -3,12 +3,30 @@ spec_id: BUG-1151
 agreed_id: BUG-1151
 title: 'BUG-1145 open-PR recovery: finish_ci fails ''implementer worktree not recorded'' — skip the branch-push when the PR/branch already exist remotely'
 description: 'After BUG-1145 re-enters at Ci on an open-PR recovery, finish_ci calls ensure_implementer_branch_pushed which requires self.implementer_worktree — but the recovery path (lease-match failure) never recorded the local worktree. The branch is ALREADY pushed (the PR exists remotely: verified live, TASK-1227 -> PR-1817 open), so there is nothing to push. Fix: when implementer_worktree is None AND from_pr/pr_number is set, treat the branch as already-pushed (return Ok) instead of erroring. This is the 3rd missing-local-state gap in the recovery path (after lease at end_implementer_session, now worktree at branch-push). Acceptance: a codex spec that opens a PR then exits-1 with an unmatched lease drains through phase 2 (CI gate) to merge, hands-off.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:33:44.833934071Z
-modified_at: 2026-09-14T05:33:44.833934071Z
+modified_at: 2026-09-14T05:46:55.328981676Z
 req_type: Bug
 tags:
 - auto-complete drain reliability worktree BUG-1145-residual
+history:
+- id: 01a09e74-45da-72b3-a92a-44e726806471
+  author: aida-auto-bump
+  timestamp: 2026-09-14T05:46:55.322550485Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a09e74-45e0-74c3-b77a-80e52195e29c
+  timestamp: 2026-09-14T05:46:55.328980006Z
+  agent: aida
+  commit_sha: fa662a5ce838b80e8541b94954eceed9e1a00467
+  summary: Completed via merge fa662a5c
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-14T05:46:55.322445128Z
+  completion_sha: fa662a5ce838b80e8541b94954eceed9e1a00467
