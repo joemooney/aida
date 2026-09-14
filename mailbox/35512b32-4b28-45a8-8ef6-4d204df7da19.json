@@ -1,0 +1,16 @@
+{
+  "id": "35512b32-4b28-45a8-8ef6-4d204df7da19",
+  "thread_id": "35512b32-4b28-45a8-8ef6-4d204df7da19",
+  "from": "aida-session-reap",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1789364983420,
+  "body": "Spec BUG-1145 has merged and its branch is finished — you are free to exit this session whenever you like. Its worktree (/home/joe/ai/aida-bug-1145) will be reaped automatically once your process exits (the post-merge pass, or `aida session reap`). Nothing here needs you; this is an FYI, no action required.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
