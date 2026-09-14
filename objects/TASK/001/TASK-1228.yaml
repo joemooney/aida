@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:38:19.558872650Z
-modified_at: 2026-09-14T04:49:33.491310328Z
+modified_at: 2026-09-14T06:24:24.087548184Z
 req_type: Task
 tags:
 - ux docs autonomy discoverability parent:EPIC-62
@@ -35,5 +35,19 @@ comments:
     This is the Trojan-horse quiet-depth tradeoff biting: deep capability, no discovery path. Broaden this task from 'autonomy modes' to a general DISCOVERABILITY surface: a lightweight 'what can I do / where am I' overview (e.g. `aida help` topics, an `aida modes`/context summary, or a first-run tour) that names the role commands, the autonomy ladder, and the read surfaces (why/status/digest). The bar: a user who doesn't already know a command exists should be able to find it. Two find-what-exists misses in one session = the signal to act.
   created_at: 2026-09-14T04:49:33.491310328Z
   modified_at: 2026-09-14T04:49:33.491310328Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a09e96-9617-7083-a766-5e0fea5d9ab9
+  author: joe
+  content: |-
+    DESIGN (operator-approved 2026-09-13, proceed): smallest valuable slice — a concise autonomy-modes doc (e.g. docs/autonomy-modes.md or a discipline-pack section) naming ONE coherent ladder:
+    1. Read/orient surfaces: aida why · list · status · role show/current
+    2. Capture: /aida-capture · groom
+    3. Live supervised: /aida-solo (in-session warm driver, keystone-parked)
+    4. Headless/scheduled: groom --apply --then-drain (and the durable cron)
+    5. Config dials: [intake] · --risk · solo posture · --zen
+    Cross-link from README + a one-line pointer in `aida --help`/`aida status`.
+    Deliberately do NOT add a new `aida modes` command — a doc + cross-links is the smallest surface that fixes discoverability (avoid new machinery). Ties to PRIN-3. Low-risk doc work; drainable.
+  created_at: 2026-09-14T06:24:24.087548184Z
+  modified_at: 2026-09-14T06:24:24.087548184Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
