@@ -1,0 +1,20 @@
+id: 01a09e39-a54b-7953-aa9e-627574c3b371
+spec_id: BUG-1149
+agreed_id: BUG-1149
+title: queue list --format json is silently ignored (emits TOON); only --json yields JSON
+description: |-
+  Observed 2026-09-13 (assess pass): AIDA_SESSION_ROLE=advisor aida queue list --format json prints the TOON projection (count:/queue[N]{...}) instead of JSON, while aida queue list --json prints the BUG-618 JSON rows. The global --format help promises json = machine JSON for commands that support a JSON projection, and queue list does support one, so the two flags should agree.
+
+  Acceptance:
+  - aida queue list --format json emits the same JSON rows as --json.
+  - AIDA_OUTPUT_FORMAT=json aida queue list behaves the same.
+  - If a command truly has no JSON projection, --format json errors or warns rather than silently falling back to TOON.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T04:42:53.131322841Z
+modified_at: 2026-09-14T04:42:53.131322841Z
+req_type: Bug
+tags:
+- papercut aida:queue:list output-format lifecycle:trivial
