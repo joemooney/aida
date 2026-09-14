@@ -1,0 +1,14 @@
+id: 01a09e68-3601-7df2-ac5c-978854acf04b
+spec_id: BUG-1151
+agreed_id: BUG-1151
+title: 'BUG-1145 open-PR recovery: finish_ci fails ''implementer worktree not recorded'' — skip the branch-push when the PR/branch already exist remotely'
+description: 'After BUG-1145 re-enters at Ci on an open-PR recovery, finish_ci calls ensure_implementer_branch_pushed which requires self.implementer_worktree — but the recovery path (lease-match failure) never recorded the local worktree. The branch is ALREADY pushed (the PR exists remotely: verified live, TASK-1227 -> PR-1817 open), so there is nothing to push. Fix: when implementer_worktree is None AND from_pr/pr_number is set, treat the branch as already-pushed (return Ok) instead of erroring. This is the 3rd missing-local-state gap in the recovery path (after lease at end_implementer_session, now worktree at branch-push). Acceptance: a codex spec that opens a PR then exits-1 with an unmatched lease drains through phase 2 (CI gate) to merge, hands-off.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T05:33:44.833934071Z
+modified_at: 2026-09-14T05:33:44.833934071Z
+req_type: Bug
+tags:
+- auto-complete drain reliability worktree BUG-1145-residual
