@@ -35123,6 +35123,60 @@ fn followup_filed_anywhere(existing_titles: &[String], bullet: &str) -> bool {
 // trace:BUG-680 | ai:claude
 const FOLLOWUP_SRC_TAG_PREFIX: &str = "followup-src:";
 
+const FOLLOWUP_META_PROSE_OPENERS: &[&str] = &["consider", "maybe", "possibly", "optionally"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum FollowupSkip {
+    PointerToExistingSpec(String),
+    MetaProse(&'static str),
+}
+
+fn followup_strip_markdown_emphasis(text: &str) -> &str {
+    text.trim()
+        .trim_start_matches('*')
+        .trim_start_matches('_')
+        .trim_end_matches('*')
+        .trim_end_matches('_')
+        .trim()
+}
+
+// trace:BUG-1142 | ai:codex
+fn followup_meta_prose_opener(text: &str) -> Option<&'static str> {
+    let stripped = followup_strip_markdown_emphasis(text);
+    let lower = stripped.to_ascii_lowercase();
+    FOLLOWUP_META_PROSE_OPENERS.iter().copied().find(|opener| {
+        lower == *opener
+            || lower.starts_with(&format!("{opener}:"))
+            || lower.starts_with(&format!("{opener} "))
+    })
+}
+
+// trace:BUG-1142 | ai:codex
+fn followup_existing_spec_pointer(
+    store: &aida_core::models::RequirementsStore,
+    text: &str,
+) -> Option<String> {
+    let re = regex::Regex::new(r"\b[A-Z][A-Z0-9]+(?:-\d+){1,3}\b").ok()?;
+    let found = re.find_iter(text).find_map(|m| {
+        let token = m.as_str();
+        store
+            .get_requirement_by_spec_id(token)
+            .map(|req| req.display_id())
+    });
+    found
+}
+
+// trace:BUG-1142 | ai:codex
+fn classify_plan_followup(
+    store: &aida_core::models::RequirementsStore,
+    text: &str,
+) -> Option<FollowupSkip> {
+    if let Some(id) = followup_existing_spec_pointer(store, text) {
+        return Some(FollowupSkip::PointerToExistingSpec(id));
+    }
+    followup_meta_prose_opener(text).map(FollowupSkip::MetaProse)
+}
+
 /// BUG-680: a followup bullet already filed from the SAME source plan that has
 /// since reached a terminal status (Completed / Rejected — the work shipped or
 /// was rejected). `filed_from_plan` is `(recorded_plan_path, title, spec_id,
@@ -35995,9 +36049,22 @@ fn extract_plan_followups(
     let mut declined: Vec<String> = Vec::new();
     let mut deduped: Vec<String> = Vec::new(); // BUG-655: already-filed bullets
     let mut shipped: Vec<(String, String)> = Vec::new(); // BUG-680: (bullet, existing id)
+    let mut pointer_skips: Vec<(String, String)> = Vec::new(); // BUG-1142: (bullet, existing id)
+    let mut meta_skips: Vec<(String, &'static str)> = Vec::new(); // BUG-1142: (bullet, opener)
     let mut skip_rest = false;
 
     for (followup, source_plan) in &followups {
+        match classify_plan_followup(&store, followup) {
+            Some(FollowupSkip::PointerToExistingSpec(id)) => {
+                pointer_skips.push((followup.clone(), id));
+                continue;
+            }
+            Some(FollowupSkip::MetaProse(opener)) => {
+                meta_skips.push((followup.clone(), opener));
+                continue;
+            }
+            None => {}
+        }
         // BUG-680: a bullet already filed from one of this spec's plans that has
         // since shipped (Completed) or been rejected — re-filing it would open a
         // duplicate for work that already ran its course. Skip and link to the
@@ -36103,6 +36170,21 @@ fn extract_plan_followups(
             marker.push_str(&format!("\n  - {bullet} → {id}"));
         }
     }
+    if !pointer_skips.is_empty() {
+        marker.push_str(&format!(
+            "\nskipped {} pointer-to-existing-spec:",
+            pointer_skips.len()
+        ));
+        for (bullet, id) in &pointer_skips {
+            marker.push_str(&format!("\n  - {bullet} → {id}"));
+        }
+    }
+    if !meta_skips.is_empty() {
+        marker.push_str(&format!("\nskipped {} meta-prose:", meta_skips.len()));
+        for (bullet, opener) in &meta_skips {
+            marker.push_str(&format!("\n  - {bullet} (opener: {opener})"));
+        }
+    }
     let now = chrono::Utc::now();
     let author = get_default_author();
     let req_uuid = req.id;
@@ -36147,6 +36229,26 @@ fn extract_plan_followups(
                 "  {} already shipped as {} — skipped {}",
                 "·".dimmed(),
                 id.bold(),
+                bullet.dimmed(),
+            );
+        }
+    }
+    if !pointer_skips.is_empty() {
+        for (bullet, id) in &pointer_skips {
+            println!(
+                "  {} pointer-to-existing-spec {} — skipped {}",
+                "·".dimmed(),
+                id.bold(),
+                bullet.dimmed(),
+            );
+        }
+    }
+    if !meta_skips.is_empty() {
+        for (bullet, opener) in &meta_skips {
+            println!(
+                "  {} meta-prose opener `{}` — skipped {}",
+                "·".dimmed(),
+                opener,
                 bullet.dimmed(),
             );
         }

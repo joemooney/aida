@@ -3410,6 +3410,88 @@ fn plan_followups_drops_sentinel_bullets() {
     }
 }
 
+/// BUG-1142: `## Followups` bullets that point at an existing spec are
+/// references, not new work. A non-resolving spec-looking token is just text
+/// and remains fileable.
+#[test]
+fn plan_followups_classifies_existing_spec_pointer_only_when_resolved() {
+    let mut store = RequirementsStore::new();
+    let mut existing = Requirement::new("Existing followup".into(), String::new());
+    existing.spec_id = Some("TASK-1223".to_string());
+    store.requirements.push(existing);
+
+    let plan = "\
+## Followups
+
+- TASK-1223 — store mirror fan-out audit (in flight)
+- TASK-9999 — file this if it does not exist yet
+
+## Related
+";
+    let followups = parse_plan_followups(plan);
+    assert_eq!(
+        followups,
+        vec![
+            "TASK-1223 — store mirror fan-out audit (in flight)".to_string(),
+            "TASK-9999 — file this if it does not exist yet".to_string(),
+        ]
+    );
+    assert_eq!(
+        classify_plan_followup(&store, &followups[0]),
+        Some(FollowupSkip::PointerToExistingSpec("TASK-1223".to_string()))
+    );
+    assert_eq!(classify_plan_followup(&store, &followups[1]), None);
+}
+
+/// BUG-1142: tentative/meta prose in Followups is an instruction to think,
+/// not an imperative TASK title. Matching is case-insensitive after the list
+/// marker and simple Markdown emphasis are stripped.
+#[test]
+fn plan_followups_classifies_meta_prose_openers() {
+    let store = RequirementsStore::new();
+    let plan = "\
+## Followups
+
+- **Consider a small task:** store mirror fan-out should expose counts
+- maybe add a retry someday
+- Possibly: document the edge case
+- optionally wire the dashboard
+
+## Related
+";
+    let followups = parse_plan_followups(plan);
+    assert_eq!(followups.len(), 4);
+    for followup in &followups {
+        assert!(
+            matches!(
+                classify_plan_followup(&store, followup),
+                Some(FollowupSkip::MetaProse(_))
+            ),
+            "expected meta-prose skip for {followup:?}"
+        );
+    }
+}
+
+/// BUG-1142: ordinary imperative followups still flow through as fileable task
+/// titles.
+#[test]
+fn plan_followups_keeps_plain_imperative_bullets_fileable() {
+    let store = RequirementsStore::new();
+    let plan = "\
+## Followups
+
+- Add a doctor finding for stale cache rebuild failures.
+
+## Related
+";
+    let followups = parse_plan_followups(plan);
+    assert_eq!(
+        followups,
+        vec!["Add a doctor finding for stale cache rebuild failures".to_string()]
+    );
+    assert_eq!(classify_plan_followup(&store, &followups[0]), None);
+}
+
 /// BUG-104: a real followup that merely *contains* `<` (generics, a `<`
 /// comparison) is kept; only a literal `<placeholder>` bullet is dropped.
 #[test]
