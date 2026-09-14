@@ -18,12 +18,12 @@ description: |-
   - Wording is honest about CI-pending and about keystone-merge-stays-human (never implies auto-merge or 'done' pre-CI).
   - Consider the same off-ramp for the normal implementer/pickup finish (non-guided), scoped to whether that path auto-merges.
   Small skill-text change (aida-core/templates/skills/aida-guided-implement.md); autonomous-safe → the drain can take it.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:00:20.178149326Z
-modified_at: 2026-09-14T08:00:25.242073503Z
+modified_at: 2026-09-14T08:14:18.836458034Z
 req_type: Task
 tags:
 - batch:burst1
@@ -32,8 +32,24 @@ relationships:
   target_id: 01a09eee-5699-7d92-989d-4b59cc346933
   created_at: 2026-09-14T08:00:25.242069345Z
   created_by: joe
+history:
+- id: 01a09efb-36ce-70c1-9c06-fdb3b1b353c8
+  author: aida-auto-bump
+  timestamp: 2026-09-14T08:14:18.830157993Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09efb-36d4-7f51-8052-71d092eafc4d
+  timestamp: 2026-09-14T08:14:18.836457210Z
+  agent: aida
+  commit_sha: 23836f8a1c87e46d5621e42d21552e45d6c6be52
+  summary: Completed via merge 23836f8a
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-14T07:58:52.301488698Z
   implemented_by: joe
+  completed_at: 2026-09-14T08:14:16.783278688Z
+  completion_sha: 23836f8a1c87e46d5621e42d21552e45d6c6be52
