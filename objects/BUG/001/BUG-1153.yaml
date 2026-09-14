@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T07:30:22.373826889Z
-modified_at: 2026-09-14T07:30:22.373826889Z
+modified_at: 2026-09-14T08:15:41.242755618Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,10 @@ tags:
 - failure-3
 - failure-kind:verdict:request-changes
 - reviewer
+comments:
+- id: 01a09efc-78ba-7bf3-bf84-1b6008972372
+  author: joe
+  content: Auto-drafted failure artifact from BUG-1149's phase-3 reviewer RequestChanges (the reviewer correctly bounced the partial fix). Not a distinct defect — BUG-1149 + its review story STORY-1120 track the rework. Rejecting as duplicate. trace:BUG-1149
+  created_at: 2026-09-14T08:15:41.242755618Z
+  modified_at: 2026-09-14T08:15:41.242755618Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
