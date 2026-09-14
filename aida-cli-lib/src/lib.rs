@@ -80321,12 +80321,21 @@ impl RealPhaseDriver {
         &self,
         branch: &str,
     ) -> Result<(), auto_complete::PhaseFailure> {
-        let worktree = self.implementer_worktree.as_deref().ok_or_else(|| {
-            auto_complete::PhaseFailure::of(
+        let Some(worktree) = self.implementer_worktree.as_deref() else {
+            // BUG-1151 (BUG-1145 residual): the open-PR recovery re-enters at Ci
+            // with no local worktree recorded (the lease-match failure returned
+            // before it was set). The branch is already pushed — the PR exists
+            // remotely — so there is nothing to push here. Only error when this
+            // is NOT the recovery path (no PR / not from_pr), where a missing
+            // worktree is a genuine internal bug. trace:BUG-1151 | ai:claude
+            if self.from_pr || self.pr_number.is_some() {
+                return Ok(());
+            }
+            return Err(auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Internal,
                 "internal: implementer worktree not recorded before the CI phase",
-            )
-        })?;
+            ));
+        };
         ensure_implementer_branch_pushed(worktree, branch, self.json)
     }
 
