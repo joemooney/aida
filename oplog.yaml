@@ -66178,5 +66178,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5213
+- id: 01a09e0c-9e7a-7500-9062-42b9b8c5652d
+  target_id: 01a09e0c-9a61-7460-97b6-cf27a1ed28e5
+  author: aida
+  node_id: '1'
+  lamport: 5214
+  timestamp: 2026-09-14T03:53:42.266298393Z
+  kind: !Create
+    title: 'Review PR-1815: [AI:codex] test(orchestrator): cover nonzero implementer exit with PR (TASK-1224)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a09e05`) for branch `task-1224`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1815>
+      - Branch: `task-1224` → `main`
+
+      ## Covers
+
+      - TASK-1224
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1815` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5214
 node_id: '1'

@@ -1,0 +1,26 @@
+id: 01a09e0c-9a61-7460-97b6-cf27a1ed28e5
+spec_id: STORY-1114
+agreed_id: STORY-1114
+title: 'Review PR-1815: [AI:codex] test(orchestrator): cover nonzero implementer exit with PR (TASK-1224)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09e05`) for branch `task-1224`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1815>
+  - Branch: `task-1224` → `main`
+
+  ## Covers
+
+  - TASK-1224
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1815` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T03:53:41.217981590Z
+modified_at: 2026-09-14T03:53:41.217981590Z
+req_type: Story
