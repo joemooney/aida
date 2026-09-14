@@ -14,10 +14,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:42:53.131322841Z
-modified_at: 2026-09-14T07:17:49.913206666Z
+modified_at: 2026-09-14T07:19:27.014720086Z
 req_type: Bug
 tags:
 - batch:burst1
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a09ec8-e5c9-71b2-ae16-6c7b30d0adea
+  created_at: 2026-09-14T07:19:27.014712337Z
+  created_by: joe
 execution_mode: drain
 implementation_info:
   implemented: true
