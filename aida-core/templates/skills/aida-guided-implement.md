@@ -259,6 +259,7 @@ compiles and the acceptance holds, move to Phase 3.
 Keystone work finishes with a **PR for human review** — the merge stays
 human. This is a new capability surface; the advisor reviews it and the
 operator tries it, so do **not** auto-merge.
+<!-- trace:TASK-1229 | ai:codex -->
 
 1. **Commit** with the `(SPEC-ID)` trailer (and any ADR ids in the body) so
    the merge auto-completes the spec:
@@ -287,25 +288,33 @@ operator tries it, so do **not** auto-merge.
 
    Then open the PR with `/aida-pr` (it links the spec + writes a test plan).
 
-4. **Verify CI green, then finish simply — DO NOT merge.** First watch the PR's
-   required check to SUCCESS in a separate step (`gh pr merge` does NOT gate on
-   CI; local-green ≠ CI-green). Only once CI is green, close out with exactly
-   three things and one command:
+4. **Finish with the off-ramp checkpoint — DO NOT merge and DO NOT claim done
+   before CI.** Once the PR is open, this implementer session is finished. Do
+   not linger watching CI from the implementer chair; the remaining state lives
+   on the PR.
 
-   1. **The spec** — `<SPEC>` · `<PR URL>` · CI ✅ green.
-   2. **The ADRs filed** — one line each: `<ADR-ID>` — `<the decision>`.
-   3. **The merge command** — show it literally:
+   Print a final checkpoint with these exact pieces of information:
 
-      ```bash
-      gh pr merge <N> --squash; aida pull
-      ```
+   1. **Implementation submitted** — `Implementation complete and submitted for
+      review — PR #<N>: <PR URL>.`
+   2. **Current state** — `CI is running / review pending.` If checks have
+      already completed by the time you print, say the observed state
+      precisely; never imply the work is merged or fully done before the PR is
+      green and reviewed.
+   3. **Off-ramp** — `This session's work is finished — you're free to close
+      it.`
+   4. **What happens next** — `The remaining steps happen through the PR:
+      review -> merge.` For a KEYSTONE, add: `Keystone merge stays
+      human/advisor; this session does not auto-merge.`
+   5. **Resume path** — `Resume only if review requests changes: aida queue
+      work <SPEC> --resume`.
+   6. **ADRs recorded** — list each recorded decision as
+      `<ADR-ID> — <the decision>`. If no ADR was needed, say
+      `ADRs recorded: none`.
 
-   Keystone merge stays yours: review the PR + the ADRs, then run that command
-   when satisfied. (`aida pull`, not raw `git pull`, so the `Done → Completed`
-   auto-bump fires. `;` not `&&`, and no `--delete-branch`: the session's
-   worktree still holds the branch, so a branch delete would be refused — and
-   an `&&` chain would then silently drop the `aida pull` leg. Branch cleanup
-   belongs to worktree cleanup, e.g. `aida session end`.)
+   Do not print a merge command as the next action in this closing checkpoint.
+   The human/advisor reviews the PR and decides the merge outside this
+   implementer session.
 
 ---
 

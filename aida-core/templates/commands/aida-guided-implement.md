@@ -23,7 +23,7 @@ Follow the workflow in `.claude/skills/aida-guided-implement/SKILL.md`. The HYBR
 
 **PHASE 3 — finish**
 7. Commit with the `(SPEC-ID)` trailer (ADR ids in the body), rebase onto `origin/main`, `aida queue done <SPEC>`, open the PR with `/aida-pr`.
-8. Verify CI green in a separate step, then present the PR + the recorded ADRs for human review. Keystone merge stays HUMAN — DO NOT auto-merge.
+8. Finish with the off-ramp checkpoint, not an auto-merge: implementation complete and submitted for review — PR #<N>; CI is running / review pending; this session's work is finished and the operator is free to close it; remaining steps happen through the PR (review -> merge); for a KEYSTONE the merge stays human/advisor; resume only if review requests changes with `aida queue work <SPEC> --resume`; list the ADRs recorded. Do not claim "done" before CI is green.
 
 This is an INTERACTIVE skill — if there is no human at the keyboard, stop.
 Launch via `aida queue work <SPEC> --guided` or invoke `/aida-guided-implement <SPEC>` directly.

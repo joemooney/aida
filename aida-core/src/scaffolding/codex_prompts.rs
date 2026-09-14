@@ -345,6 +345,37 @@ mod tests {
         assert!(render_codex_command_prompt("no-such-command", "x").is_none());
     }
 
+    // trace:TASK-1229 | ai:codex
+    #[test]
+    fn codex_guided_prompt_carries_the_pr_off_ramp_checkpoint() {
+        let out = render_codex_command_prompt("aida-guided-implement", "TASK-9").unwrap();
+        let normalized = out.to_ascii_lowercase();
+        assert!(
+            normalized.contains("submitted for review"),
+            "guided Codex prompt must name the submitted-for-review state: {out}"
+        );
+        assert!(
+            normalized.contains("ci is running / review pending"),
+            "guided Codex prompt must be honest about pending CI/review: {out}"
+        );
+        assert!(
+            normalized.contains("free to close"),
+            "guided Codex prompt must provide the human off-ramp: {out}"
+        );
+        assert!(
+            normalized.contains("keystone") && normalized.contains("merge stays human/advisor"),
+            "guided Codex prompt must not imply keystone auto-merge: {out}"
+        );
+        assert!(
+            normalized.contains("aida queue work <spec> --resume"),
+            "guided Codex prompt must name the review-changes resume command: {out}"
+        );
+        assert!(
+            normalized.contains("list the adrs recorded"),
+            "guided Codex prompt must carry the ADR-list requirement: {out}"
+        );
+    }
+
     #[test]
     fn codex_prompts_with_advertised_arguments_reference_codex_arguments() {
         use crate::templates::EMBEDDED_TEMPLATES;
