@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a09e49-9f52-7bd1-a07a-34481f7fd76c
-  position: 4000
-  added_by: role:implementer
-  note: 'assess 2026-09-13 22:50: small skill-text change (guided-implement Phase-3 off-ramp checkpoint); mode=drive, human merges'
-  added_at: 2026-09-14T05:49:00.581009195Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a09e57-e035-7683-88bf-2717619e8f11
   position: 5000
   added_by: role:implementer
@@ -49,4 +41,11 @@
   note: auto-queued by `aida pr` (01a09e8c); covers 1 spec
   added_at: 2026-09-14T06:18:06.969151192Z
   for_role: reviewer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a09e49-9f52-7bd1-a07a-34481f7fd76c
+  position: 13000
+  added_by: role:implementer
+  added_at: 2026-09-14T06:20:58.509714255Z
+  for_role: implementer
   added_by_machine: imac
