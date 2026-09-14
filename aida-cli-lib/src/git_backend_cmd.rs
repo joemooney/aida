@@ -395,7 +395,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Digest {
             since,
             audience,
-            format,
+            digest_format,
             include_next,
             include_process,
             out,
@@ -406,7 +406,7 @@ pub(crate) fn handle_git_backend_command(
             return digest_cmd::handle_digest_command(
                 since.as_deref(),
                 *audience,
-                *format,
+                *digest_format,
                 *include_next,
                 *include_process,
                 out.clone(),

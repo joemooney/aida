@@ -9323,9 +9323,13 @@ pub enum Command {
         /// Tailor framing + SPEC-ID visibility for the reader.
         #[clap(long, value_enum, default_value_t = crate::digest::DigestAudience::Customer)]
         audience: crate::digest::DigestAudience,
-        /// Output format.
-        #[clap(long, value_enum, default_value_t = crate::digest::DigestFormat::Markdown)]
-        format: crate::digest::DigestFormat,
+        /// Digest rendering format (markdown / plain / json / brief). Named
+        /// `--digest-format` because `--format` is the global output-format flag
+        /// (OutputFormat), and a same-named subcommand arg of a different type
+        /// makes clap panic on parse.
+        // trace:BUG-1141 | ai:claude
+        #[clap(long = "digest-format", value_enum, default_value_t = crate::digest::DigestFormat::Markdown)]
+        digest_format: crate::digest::DigestFormat,
         /// Include forward-looking "Next iteration" section. Default on; pass
         /// `--include-next=false` to suppress.
         #[clap(
@@ -12338,6 +12342,34 @@ pub fn parse_duration_ms(raw: &str) -> Result<u64, String> {
 mod tests {
     use super::*;
     use clap::CommandFactory;
+
+    // BUG-1141: the global `--format` (Option<OutputFormat>, global=true)
+    // propagates into every subcommand. The `digest` subcommand had ALSO
+    // defined `format: DigestFormat` — two `--format` args of different types
+    // reached `digest`, and clap panicked on parse ("Mismatch between
+    // definition and access of `format`"). debug_assert() validates the whole
+    // arg tree for exactly this class of definition conflict; the parse tests
+    // reproduce the exact crash path. trace:BUG-1141 | ai:claude
+    #[test]
+    fn cli_arg_tree_has_no_definition_conflicts() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn digest_parses_without_format_collision() {
+        // Previously panicked at parse. Bare invocation + the renamed flag.
+        assert!(Cli::try_parse_from(["aida", "digest"]).is_ok());
+        let cli = Cli::try_parse_from(["aida", "digest", "--digest-format", "json"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Digest {
+                digest_format: crate::digest::DigestFormat::Json,
+                ..
+            }
+        ));
+        // The global --format still parses alongside the digest subcommand.
+        assert!(Cli::try_parse_from(["aida", "--format", "json", "digest"]).is_ok());
+    }
 
     /// TASK-1055: `--slower-than` accepts a bare number (ms), an explicit `ms`
     /// suffix, or an `s` suffix (seconds → ms). The help text reads `Nms`,
