@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T01:27:59.249706662Z
-modified_at: 2026-09-14T03:37:52.004985340Z
+modified_at: 2026-09-14T03:37:53.520052509Z
 req_type: Task
 tags:
-- remote-drift gitlab auth followup parent:BUG-1137
+- batch:closeout

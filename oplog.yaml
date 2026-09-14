@@ -65964,5 +65964,21 @@ operations:
   timestamp: 2026-09-14T03:37:52.079539323Z
   kind: !SetStatus
     status: Approved
-clock: 5195
+- id: 01a09dfe-24b9-7613-b1c1-558a6d6531f0
+  target_id: 01a09d87-3611-7471-ba0e-6b52ef4d7d9f
+  author: aida
+  node_id: '1'
+  lamport: 5196
+  timestamp: 2026-09-14T03:37:53.593729466Z
+  kind: !AddTag
+    tag: batch:closeout
+- id: 01a09dfe-253b-71f1-a4f4-f9d542377dcb
+  target_id: 01a09d87-3611-7471-ba0e-6b52ef4d7d9f
+  author: aida
+  node_id: '1'
+  lamport: 5197
+  timestamp: 2026-09-14T03:37:53.723573430Z
+  kind: !RemoveTag
+    tag: remote-drift gitlab auth followup parent:BUG-1137
+clock: 5197
 node_id: '1'
