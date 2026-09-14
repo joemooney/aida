@@ -65282,6 +65282,8 @@ struct GhWorkflowRun {
     created_at: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(rename = "databaseId")]
     database_id: Option<u64>,
+    #[serde(rename = "headSha")]
+    head_sha: Option<String>,
     url: Option<String>,
 }
 
@@ -65334,7 +65336,7 @@ fn fetch_cross_platform_ci_runs_with_args(
         "--limit",
         "20",
         "--json",
-        "status,conclusion,createdAt,databaseId,url",
+        "status,conclusion,createdAt,databaseId,headSha,url",
     ];
     args.extend_from_slice(extra_args);
     let output = std::process::Command::new("gh")
@@ -65472,9 +65474,17 @@ fn summarize_cross_platform_ci_runs(
 // trace:STORY-1043 | ai:codex
 fn nightly_red_status(project_root: &std::path::Path) -> Option<awaiting_you::NightlyRedItem> {
     let now = chrono::Utc::now();
+    let latest_completed_main_run =
+        fetch_cross_platform_ci_runs_with_args(project_root, &["--status", "completed"])
+            .ok()
+            .and_then(|runs| runs.into_iter().next());
     summarize_nightly_red_runs(
         now,
         fetch_scheduled_cross_platform_ci_runs(project_root).ok(),
+        latest_completed_main_run.as_ref(),
+        |ancestor, descendant| {
+            is_ancestor_commit(project_root, ancestor, descendant).unwrap_or(false)
+        },
     )
 }
 
@@ -65482,12 +65492,21 @@ fn nightly_red_status(project_root: &std::path::Path) -> Option<awaiting_you::Ni
 fn summarize_nightly_red_runs(
     now: chrono::DateTime<chrono::Utc>,
     runs: Option<Vec<GhWorkflowRun>>,
+    latest_completed_main_run: Option<&GhWorkflowRun>,
+    head_descends_from_latest_scheduled_failure: impl Fn(&str, &str) -> bool,
 ) -> Option<awaiting_you::NightlyRedItem> {
     let runs = runs?;
     let latest = runs.first()?;
     if latest.status.as_deref() != Some("completed")
         || latest.conclusion.as_deref() == Some("success")
     {
+        return None;
+    }
+    if latest_completed_main_run_clears_nightly_red(
+        latest,
+        latest_completed_main_run,
+        head_descends_from_latest_scheduled_failure,
+    ) {
         return None;
     }
     let streak: Vec<&GhWorkflowRun> = runs
@@ -65521,6 +65540,46 @@ fn summarize_nightly_red_runs(
         run_id: run,
         nights,
     })
+}
+
+// trace:BUG-1148 | ai:codex
+fn latest_completed_main_run_clears_nightly_red(
+    latest_scheduled_failure: &GhWorkflowRun,
+    latest_completed_main_run: Option<&GhWorkflowRun>,
+    head_descends_from_latest_scheduled_failure: impl Fn(&str, &str) -> bool,
+) -> bool {
+    let Some(latest_completed_main_run) = latest_completed_main_run else {
+        return false;
+    };
+    if latest_completed_main_run.status.as_deref() != Some("completed")
+        || latest_completed_main_run.conclusion.as_deref() != Some("success")
+    {
+        return false;
+    }
+    let Some(failure_created_at) = latest_scheduled_failure.created_at else {
+        return false;
+    };
+    let Some(clearing_created_at) = latest_completed_main_run.created_at else {
+        return false;
+    };
+    if clearing_created_at <= failure_created_at {
+        return false;
+    }
+    let Some(failure_sha) = latest_scheduled_failure
+        .head_sha
+        .as_deref()
+        .filter(|sha| !sha.trim().is_empty())
+    else {
+        return false;
+    };
+    let Some(clearing_sha) = latest_completed_main_run
+        .head_sha
+        .as_deref()
+        .filter(|sha| !sha.trim().is_empty())
+    else {
+        return false;
+    };
+    head_descends_from_latest_scheduled_failure(failure_sha, clearing_sha)
 }
 
 fn format_ci_age(
