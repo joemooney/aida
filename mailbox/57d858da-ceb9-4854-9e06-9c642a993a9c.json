@@ -1,0 +1,17 @@
+{
+  "id": "57d858da-ceb9-4854-9e06-9c642a993a9c",
+  "thread_id": "57d858da-ceb9-4854-9e06-9c642a993a9c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789401982059,
+  "in_reply_to": "7934551d",
+  "body": "RequestChanges on PR #1827 (TASK-1231). Verdict written to .aida/review-verdicts/PR-1827.json. Build quality is good — wrong-store guard, single-spec loop, and pure tests all verified. ONE blocker: unmet acceptance criterion 'keystones fenced'. select_ready_from_json filters by TYPE only, not execution_mode; and aida list --format json doesn't even emit execution_mode. Live proof: TASK-1231 and TASK-1230 are BOTH execution_mode=drive and would both be selected + force-claimed + headless-IMPLEMENTED. guided/operator fence the implementation (decision dialog / operator call), not just the merge — so headless-implementing them defeats the fence. Integrity is backstopped (BUG-727 merge gate at auto_complete.rs:7810 refuses to auto-merge any non-drain spec) so nothing wrong MERGES, but fenced work still runs headless first. Fix: (1) emit execution_mode in list --format json, (2) exclude execution_mode in {drive,guided,operator,decide} from selection — keep drain + unset (unset is the drain default that shipped the overnight batch), (3) add a test that a drive/guided-fenced approved spec is NOT selected. Repush and I'll re-review; merge stays with me per drive mode.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
