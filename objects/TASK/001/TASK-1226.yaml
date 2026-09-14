@@ -12,3 +12,7 @@ modified_at: 2026-09-14T03:39:36.049221774Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-13-spike-79-multi-hub-viability.md
+relationships:
+- rel_type: Child
+  target_id: 01a09cda-32ac-7b60-b6d1-38dd9904b197
+  created_at: 2026-09-14T03:39:39.421334298Z
