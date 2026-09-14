@@ -1,0 +1,27 @@
+id: 01a09eee-5699-7d92-989d-4b59cc346933
+spec_id: STORY-1122
+agreed_id: STORY-1122
+title: 'Review PR-1825: [AI:codex] docs(guided): add PR off-ramp checkpoint (TASK-1229)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09ee8`) for branch `task-1229`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1825>
+  - Branch: `task-1229` → `main`
+
+  ## Covers
+
+  - TASK-1229
+  - BUG-1148
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1825` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T08:00:15.001508538Z
+modified_at: 2026-09-14T08:00:15.001508538Z
+req_type: Story
