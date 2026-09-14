@@ -14,12 +14,12 @@ description: |-
   - aida backlog groom <deferred-spec> (explicit) exits non-zero with an undefer hint and writes nothing to the queue.
   - A unit test in backlog.rs alongside collect_backlog_candidates_excludes_queued_and_terminal covers a deferred Approved spec (flag form and tag form) being excluded.
   - Existing non-deferred pickable behaviour unchanged.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:15:20.951246035Z
-modified_at: 2026-09-14T06:18:11.760474609Z
+modified_at: 2026-09-14T06:33:34.334163314Z
 req_type: Bug
 tags:
 - batch:burst1
