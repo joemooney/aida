@@ -18,12 +18,12 @@ description: |-
   - Wording is honest about CI-pending and about keystone-merge-stays-human (never implies auto-merge or 'done' pre-CI).
   - Consider the same off-ramp for the normal implementer/pickup finish (non-guided), scoped to whether that path auto-merges.
   Small skill-text change (aida-core/templates/skills/aida-guided-implement.md); autonomous-safe → the drain can take it.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:00:20.178149326Z
-modified_at: 2026-09-14T06:20:56.865803151Z
+modified_at: 2026-09-14T07:53:59.599819523Z
 req_type: Task
 tags:
 - batch:burst1
