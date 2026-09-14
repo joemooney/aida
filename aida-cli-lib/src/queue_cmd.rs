@@ -187,6 +187,19 @@ pub(crate) fn advance_backend(store_path: &std::path::Path) -> Result<aida_core:
     aida_core::CachedGitBackend::with_inner(inner, &cache_path)
 }
 
+/// BUG-1147: queue GC and fleet queue rendering need to resolve archived
+/// targets before deciding whether to hide, label, or prune them. The default
+/// list lens hides archived/deferred rows, which makes archived corpses look
+/// like unknown live specs.
+// trace:BUG-1147 | ai:codex
+pub(crate) fn queue_dead_target_summary_filter() -> aida_core::ListFilter {
+    aida_core::ListFilter {
+        archive: aida_core::ArchiveFilter::Both,
+        defer: aida_core::DeferFilter::Both,
+        ..aida_core::ListFilter::default()
+    }
+}
+
 /// STORY-566: dispatch ONE advance action to the existing flow. Review and the
 /// status mutations (approve / reject / drop the `review:draft-only` tag) run
 /// in-process via the cached backend; the build/drain verbs shell out to the
@@ -731,11 +744,16 @@ pub(crate) fn render_all_users_queue(
     let users = storage.queue_users()?;
 
     let display_id = |s: &aida_core::RequirementSummary| -> String {
-        s.agreed_id
+        let mut id = s
+            .agreed_id
             .as_deref()
             .or(s.spec_id.as_deref())
             .unwrap_or("?")
-            .to_string()
+            .to_string();
+        if s.archived {
+            id.push_str(" (archived)");
+        }
+        id
     };
 
     // user → role-bucket → rows. BTreeMap keeps users + roles deterministically
@@ -959,7 +977,7 @@ pub(crate) fn opportunistic_queue_gc(
         _ => return 0,
     };
     let summaries = match advance_backend(store_path)
-        .and_then(|b| b.list_summaries(&aida_core::ListFilter::default()))
+        .and_then(|b| b.list_summaries(&queue_dead_target_summary_filter()))
     {
         Ok(s) => s,
         Err(_) => return 0,
@@ -1149,7 +1167,7 @@ pub(crate) fn handle_queue_command(
             // a slow `storage.load()` full YAML scan. trace:STORY-672
             if *all_users {
                 let backend = advance_backend(store_path)?;
-                let summaries = backend.list_summaries(&aida_core::ListFilter::default())?;
+                let summaries = backend.list_summaries(&queue_dead_target_summary_filter())?;
                 render_all_users_queue(
                     storage,
                     &summaries,
@@ -3593,7 +3611,7 @@ pub(crate) fn handle_queue_command(
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, /* include_completed */ true)?;
             let summaries =
-                advance_backend(store_path)?.list_summaries(&aida_core::ListFilter::default())?;
+                advance_backend(store_path)?.list_summaries(&queue_dead_target_summary_filter())?;
             let dead = dead_queue_entries(&entries, &summaries, r#for.as_deref());
 
             if dead.is_empty() {
