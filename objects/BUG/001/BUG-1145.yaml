@@ -17,7 +17,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:03:50.701858136Z
-modified_at: 2026-09-14T04:03:50.701858136Z
+modified_at: 2026-09-14T04:17:10.083823270Z
 req_type: Bug
 tags:
 - auto-complete drain reliability worktree keystone
+comments:
+- id: 01a09e22-19c3-7271-8064-5acf6395d736
+  author: joe
+  content: 'Assess 2026-09-13: stays Approved, NOT queued for the autonomous drain — keystone drain-reliability work ships keyboard-supervised (aida zen BUG-1145 at the keyboard, operator present). Ready set otherwise: TASK-1227 + BUG-1142 queued (advisor), BUG-1146/1147/1148 queued (implementer) from this pass.'
+  created_at: 2026-09-14T04:17:10.083823270Z
+  modified_at: 2026-09-14T04:17:10.083823270Z
+  session_id: 66ef4bc3-2723-44a8-a360-51890639ab63
