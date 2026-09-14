@@ -11,12 +11,12 @@ description: |-
   - A plain imperative bullet ('Add a doctor finding for ...') is still filed as a child TASK exactly as before (no regression in the existing [aida:followups] idempotency marker behaviour).
   - Unit tests cover the three shapes above (pointer, meta-prose, imperative) against the followup parser; the pointer test uses an id that exists in the test store and one that does NOT (a non-resolving id is treated as plain text and filed).
   - Scope: parser-only; no change to when auto-followup filing fires or to AIDA_AUTO_FOLLOWUPS gating.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T03:42:05.880902690Z
-modified_at: 2026-09-14T05:56:28.543983779Z
+modified_at: 2026-09-14T05:56:34.209278618Z
 req_type: Bug
 tags:
 - batch:closeout2
@@ -25,3 +25,7 @@ relationships:
   target_id: 01a09e7c-f0a4-78d3-b5ea-68a0715c8132
   created_at: 2026-09-14T05:56:28.543979558Z
   created_by: joe
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-14T05:56:34.209278618Z
+  implemented_by: joe
