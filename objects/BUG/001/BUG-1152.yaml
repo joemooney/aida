@@ -1,0 +1,23 @@
+id: 01a09e74-9e47-7d21-8e2f-3d7873a23dbc
+spec_id: BUG-1152
+agreed_id: BUG-1152
+title: 'aida groom --then-drain (burndown leg) fails with ''Unknown command: /aida-assess'' — grooms+approves but never drains'
+description: |-
+  Observed 2026-09-13 running `aida groom --apply --then-drain` headlessly (the durable autonomous-progress cron). The groom/approve/queue steps work, but the chained BURNDOWN drain leg fails immediately with `Unknown command: /aida-assess` (logged to ~/.aida/autoprogress.log). Net: the loop APPROVES+QUEUES the safe backlog but never DRAINS it — a silent stall (work piles up approved-but-undrained).
+
+  `/aida-assess` is the deprecated alias for the groom/assess skill; something in the burndown / groom-then-drain path invokes the slash-command `/aida-assess` which no longer resolves. Likely a renamed/removed skill reference in the burndown fan-out or the headless advisor tier.
+
+  Workaround in place: the cron was switched from `--then-drain` to the working headless path `aida queue work --auto-complete --no-human=both <N>` (proven by the closeout2 drain). But `--then-drain` itself is broken and should either be fixed (resolve the /aida-assess reference) or route through the same headless queue-work path.
+
+  Acceptance:
+  - `aida groom --apply --then-drain` actually drains after queuing (no 'Unknown command' failure), from both a TTY and a bare cron/non-TTY context.
+  - Regression: a headless `--then-drain` run approves N safe specs AND drains them (not just approves).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T05:47:17.959494677Z
+modified_at: 2026-09-14T05:47:17.959494677Z
+req_type: Bug
+tags:
+- orchestrator burndown drain-reliability groom parent:EPIC-62
