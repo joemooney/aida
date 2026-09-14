@@ -2,13 +2,21 @@ id: 01a09e01-fe38-7861-b6cf-2a8e94bf1fc7
 spec_id: BUG-1142
 agreed_id: BUG-1142
 title: 'Auto-followup filing over-files: creates tasks from ''## Followups'' bullets that name an existing spec-id or are meta-prose (''Consider a small task: ...'')'
-description: 'Completing SPIKE-79 (with a docs/plans assessment containing a ''## Followups'' section) auto-filed each bullet as a child TASK. Two were noise: TASK-1225 from a bullet that NAMED the already-existing TASK-1223 (''TASK-1223 — ... (in flight)''), and TASK-1226 from a meta-prose bullet (''Consider a small task: store mirror fan-out ...'') that duplicated the manually-filed TASK-1227. Fix: the auto-followup parser should (a) skip a bullet that already contains a resolvable spec-id reference (it''s a pointer, not new work), and (b) skip meta-prose bullets like ''Consider a small task:'' / ''Consider ...'' openers, or require an imperative shape. Prevents the exact duplicate-noise cleanup this created. trace:AIDA_AUTO_FOLLOWUPS'
-status: Draft
+description: |-
+  Completing SPIKE-79 (with a docs/plans assessment containing a '## Followups' section) auto-filed each bullet as a child TASK. Two were noise: TASK-1225 from a bullet that NAMED the already-existing TASK-1223 ('TASK-1223 — ... (in flight)'), and TASK-1226 from a meta-prose bullet ('Consider a small task: store mirror fan-out ...') that duplicated the manually-filed TASK-1227. Fix: the auto-followup parser should (a) skip a bullet that already contains a resolvable spec-id reference (it's a pointer, not new work), and (b) skip meta-prose bullets like 'Consider a small task:' / 'Consider ...' openers, or require an imperative shape. Prevents the exact duplicate-noise cleanup this created. trace:AIDA_AUTO_FOLLOWUPS
+
+  ## Acceptance
+  - A '## Followups' bullet whose text contains a spec-id token that resolves in the store (e.g. 'TASK-1223 — ... (in flight)') is skipped: no child TASK is filed, and the skip is reported on stdout as a pointer-to-existing-spec (with the id).
+  - A bullet whose text starts with a meta-prose opener ('Consider', 'Consider a small task:', 'Maybe', 'Possibly', 'Optionally', case-insensitive, after list-marker/bold stripping) is skipped and reported as meta-prose; the opener list is a small constant in the parser, not config.
+  - A plain imperative bullet ('Add a doctor finding for ...') is still filed as a child TASK exactly as before (no regression in the existing [aida:followups] idempotency marker behaviour).
+  - Unit tests cover the three shapes above (pointer, meta-prose, imperative) against the followup parser; the pointer test uses an id that exists in the test store and one that does NOT (a non-resolving id is treated as plain text and filed).
+  - Scope: parser-only; no change to when auto-followup filing fires or to AIDA_AUTO_FOLLOWUPS gating.
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T03:42:05.880902690Z
-modified_at: 2026-09-14T03:42:05.880902690Z
+modified_at: 2026-09-14T04:12:35.433929020Z
 req_type: Bug
 tags:
 - auto-followup papercut docs
