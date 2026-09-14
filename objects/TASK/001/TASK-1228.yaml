@@ -15,12 +15,12 @@ description: |-
   - The relationship is explicit: cron = always-on headless; /aida-solo = live supervised; [intake]/--risk = the dials.
   - Cross-link from README + the discipline pack.
   Not new machinery — a naming/surfacing/doc task over existing capability.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:38:19.558872650Z
-modified_at: 2026-09-14T15:37:33.848135738Z
+modified_at: 2026-09-14T21:23:48.410519830Z
 req_type: Task
 tags:
 - ux docs autonomy discoverability parent:EPIC-62 batch:morning
@@ -55,8 +55,24 @@ comments:
   created_at: 2026-09-14T06:24:24.087548184Z
   modified_at: 2026-09-14T06:24:24.087548184Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0a1ce-0434-7cb3-9c0e-051ee2a7ee51
+  author: aida-auto-bump
+  timestamp: 2026-09-14T21:23:48.404239191Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a1ce-043a-7c92-9308-f4dfcb5821fd
+  timestamp: 2026-09-14T21:23:48.410519288Z
+  agent: aida
+  commit_sha: e207493d016029247f1ea821d1248aa74681c91a
+  summary: Completed via merge e207493d
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-14T15:35:17.301087411Z
   implemented_by: joe
+  completed_at: 2026-09-14T21:23:48.404076242Z
+  completion_sha: e207493d016029247f1ea821d1248aa74681c91a
