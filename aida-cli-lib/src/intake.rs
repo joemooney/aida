@@ -60,8 +60,8 @@ impl DispositionBias {
 /// one shot). trace:STORY-560 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnApply {
-    /// DEFAULT: stop at queuing; draining is a separate explicit
-    /// `aida burndown run`.
+    /// DEFAULT: stop at queuing; draining is a separate explicit queue-work or
+    /// burndown command.
     Queue,
     /// Chain straight into a burndown drain after queuing.
     Drain,
@@ -450,11 +450,29 @@ pub fn select_intake_candidates(
     (eligible, fenced)
 }
 
-/// Build the `/aida-assess` slash-command string the headless session runs.
-/// Propose-by-default; `--apply` executes. Pure + unit-testable. The policy and
-/// the bounded candidate fence are passed via env (`AIDA_INTAKE_*`), not the
-/// prompt, so the prompt stays the human-facing surface. trace:STORY-560
+/// Build the assess prompt the headless session runs. Propose-by-default;
+/// `--apply` executes. The policy and the bounded candidate fence are passed
+/// via env (`AIDA_INTAKE_*`), not the prompt, so the prompt stays the
+/// human-facing surface.
+///
+/// BUG-1152: inline the skill body instead of depending on Claude resolving the
+/// retired `/aida-assess` slash command. Headless cron has no follow-up turn to
+/// recover from `Unknown command`, so the prompt must be self-contained.
+// trace:STORY-560 trace:BUG-1152 | ai:claude,codex
 pub fn intake_skill_prompt(apply: bool) -> String {
+    let invocation = if apply {
+        "/aida-assess --apply"
+    } else {
+        "/aida-assess"
+    };
+    materialize_skill_invocation(invocation, false)
+}
+
+/// The legacy slash-command spelling retained only for tests/documentation that
+/// need to assert argument construction apart from prompt materialization.
+// trace:BUG-1152 | ai:codex
+#[cfg(test)]
+fn legacy_intake_skill_invocation(apply: bool) -> String {
     if apply {
         "/aida-assess --apply".to_string()
     } else {
@@ -464,21 +482,21 @@ pub fn intake_skill_prompt(apply: bool) -> String {
 
 /// Relative path (under the project root) of the live advisor's context-seed
 /// file. The LIVE advisor maintains this file directly; the cold-boot launcher
-/// reads it and prepends it to the `/aida-assess` prompt. `.aida/*` is
+/// reads it and prepends it to the inlined assess prompt. `.aida/*` is
 /// gitignored deny-by-default, so this is per-clone runtime state.
 /// trace:STORY-626 | ai:claude
 pub const ADVISOR_CONTEXT_SEED_REL: &str = ".aida/advisor-context.md";
 
-/// Build the cold-boot `/aida-assess` prompt, seeded with the live advisor's
+/// Build the cold-boot assess prompt, seeded with the live advisor's
 /// context file when one is present and non-empty. The headless cold-boot
 /// advisor otherwise starts context-poor and re-derives priorities every run;
 /// prepending the seed lets unattended assess decisions match the live session.
 ///
 /// When `.aida/advisor-context.md` exists and has non-whitespace content the
 /// returned prompt is the seed wrapped in a `## Live advisor context (seed …)`
-/// heading, a `---` rule, then the bare `/aida-assess [--apply]`. With no seed
-/// (or an empty file) it returns the bare `intake_skill_prompt(apply)` form.
-/// trace:STORY-626 | ai:claude
+/// heading, a `---` rule, then the inlined assess workflow. With no seed (or an
+/// empty file) it returns the bare `intake_skill_prompt(apply)` form.
+// trace:STORY-626 trace:BUG-1152 | ai:claude,codex
 pub fn seeded_assess_prompt(project_root: &std::path::Path, apply: bool) -> String {
     seed_skill_prompt(project_root, &intake_skill_prompt(apply))
 }
@@ -795,8 +813,32 @@ workflow_hints = true
 
     #[test]
     fn skill_prompt_propose_vs_apply() {
-        assert_eq!(intake_skill_prompt(false), "/aida-assess");
-        assert_eq!(intake_skill_prompt(true), "/aida-assess --apply");
+        assert_eq!(legacy_intake_skill_invocation(false), "/aida-assess");
+        assert_eq!(legacy_intake_skill_invocation(true), "/aida-assess --apply");
+
+        let propose = intake_skill_prompt(false);
+        assert!(
+            propose.starts_with("# AIDA Assess Skill"),
+            "prompt should inline the skill body: {propose}"
+        );
+        assert!(
+            !propose.trim_start().starts_with("/aida-assess"),
+            "prompt must not depend on slash-command resolution: {propose}"
+        );
+
+        let apply = intake_skill_prompt(true);
+        assert!(
+            apply.starts_with("# AIDA Assess Skill"),
+            "apply prompt should inline the skill body: {apply}"
+        );
+        assert!(
+            apply.contains("(Invocation arguments: --apply)"),
+            "apply prompt should preserve invocation args: {apply}"
+        );
+        assert!(
+            apply.contains("aida queue work --auto-complete --no-human=both"),
+            "then-drain guidance should use the durable queue-work drain: {apply}"
+        );
     }
 
     #[test]
@@ -804,8 +846,11 @@ workflow_hints = true
         let dir = std::env::temp_dir().join(format!("aida-seed-none-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         // No .aida/advisor-context.md present.
-        assert_eq!(seeded_assess_prompt(&dir, false), "/aida-assess");
-        assert_eq!(seeded_assess_prompt(&dir, true), "/aida-assess --apply");
+        assert_eq!(
+            seeded_assess_prompt(&dir, false),
+            intake_skill_prompt(false)
+        );
+        assert_eq!(seeded_assess_prompt(&dir, true), intake_skill_prompt(true));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -814,7 +859,10 @@ workflow_hints = true
         let dir = std::env::temp_dir().join(format!("aida-seed-empty-{}", std::process::id()));
         std::fs::create_dir_all(dir.join(".aida")).unwrap();
         std::fs::write(dir.join(ADVISOR_CONTEXT_SEED_REL), "   \n\n").unwrap();
-        assert_eq!(seeded_assess_prompt(&dir, false), "/aida-assess");
+        assert_eq!(
+            seeded_assess_prompt(&dir, false),
+            intake_skill_prompt(false)
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -831,10 +879,10 @@ workflow_hints = true
         ));
         assert!(out.contains(body));
         assert!(out.contains("\n---\n"));
-        assert!(out.ends_with("/aida-assess"));
+        assert!(out.ends_with(&intake_skill_prompt(false)));
 
         let out_apply = seeded_assess_prompt(&dir, true);
-        assert!(out_apply.ends_with("/aida-assess --apply"));
+        assert!(out_apply.ends_with(&intake_skill_prompt(true)));
         assert!(out_apply.contains(body));
 
         let _ = std::fs::remove_dir_all(&dir);

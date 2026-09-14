@@ -63,7 +63,7 @@ human gating on the trivial tier, still integrity-gated everywhere.
 When an express request arrives, the advisor's disposition is **bounded and
 prompt** — the operator's trust is in *speed of decision*, not just speed of
 build. Five verbs, each with a recorded one-line reason; all map to existing
-`aida assess` / `/aida-assess` actions:
+`aida groom` / `aida assess` actions:
 
 - **accept** — eligible per litmus + worth doing now ⇒ apply the tier tag,
   **queue it, and drain** (accept *implies* routing; see below). Trivial: `aida
@@ -161,7 +161,7 @@ filtered drains over the same engine; the only difference is whether
 `lifecycle:no-review` is present.
 
 Pairs with the normal review flow (for anything that fails the litmus),
-`/aida-assess` (the headless disposition pass), `/aida-punt` (the punt-out step),
+`aida groom` (the headless disposition pass), `/aida-punt` (the punt-out step),
 and `/aida-commit` (the trailer convention).
 
 ARGUMENTS: $ARGUMENTS

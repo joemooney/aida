@@ -167,13 +167,16 @@ Only when `AIDA_INTAKE_APPLY=1`:
    already advisor-approved, so queuing it is legitimate. The tag filters scope
    what you newly *approve*, not the groom.)
 
-5. **Drain (only if `AIDA_INTAKE_ON_APPLY=drain`)** — chain straight into a
-   burndown over what you just queued:
+5. **Drain (only if `AIDA_INTAKE_ON_APPLY=drain`)** — chain straight into the
+   durable queue-work drain over what you just queued:
    ```bash
-   aida burndown run
+   aida queue work --auto-complete --no-human=both
    ```
    The default is `queue` — stop at queuing, leaving the drain a separate
-   explicit step. This bounds the compounding unattended authority.
+   explicit step. This bounds the compounding unattended authority. The
+   `queue work` leg is used here because it is the same headless path as the
+   autonomous-progress cron; it does not depend on a client resolving
+   `/aida-assess` before the drain can start. trace:BUG-1152 | ai:codex
 
 ### 6. Post-run integrity report (BUG-496 lesson — acceptance #5)
 
