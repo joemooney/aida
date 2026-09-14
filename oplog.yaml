@@ -66108,5 +66108,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Low
-clock: 5211
+- id: 01a09e04-72c0-7971-b16b-17cd31c5b670
+  target_id: 01a09e04-6eba-7c62-a4ee-831dc7fbfd9c
+  author: aida
+  node_id: '1'
+  lamport: 5212
+  timestamp: 2026-09-14T03:44:46.784743004Z
+  kind: !Create
+    title: 'Review PR-1814: [AI:codex] fix(remote): reuse glab token for GitLab release checks (TASK-1223)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09dfe`) for branch `task-1223`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1814>
+      - Branch: `task-1223` → `main`
+
+      ## Covers
+
+      - TASK-1223
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1814` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5212
 node_id: '1'
