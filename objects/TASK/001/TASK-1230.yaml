@@ -2,13 +2,22 @@ id: 01a09e57-e035-7683-88bf-2717619e8f11
 spec_id: TASK-1230
 agreed_id: TASK-1230
 title: Tear down a failed phase-1 attempt's worktree in the open-PR recovery path (BUG-1145 second half)
-description: 'BUG-1145''s title included ''tear down the failed attempt''s worktree''; the shipped fix does the proceed-on-verified-PR half (re-enter at Ci) but not the teardown. Proceeding-from-PR sidesteps the phase-1 retry so the branch-reuse collision no longer recurs in this flow, but the stale worktree from the failed attempt lingers (the cruft the product seat hand-cleaned off aida-bug1130). Add: when the open-PR recovery fires, remove the failed attempt''s worktree (best-effort, respecting the reap safety checks — never remove a dirty/uncommitted worktree). Closes the cruft-accumulation half honestly.'
+description: |-
+  BUG-1145's title included 'tear down the failed attempt's worktree'; the shipped fix (PR #1816 + BUG-1151) does the proceed-on-verified-PR half (re-enter at Ci) but not the teardown. Proceeding-from-PR sidesteps the phase-1 retry so the branch-reuse collision no longer recurs in this flow, but the stale worktree from the failed attempt lingers (the cruft the product seat hand-cleaned off aida-bug1130). Add: when the open-PR recovery fires, remove the failed attempt's worktree (best-effort, respecting the reap safety checks — never remove a dirty/uncommitted worktree). Closes the cruft-accumulation half honestly.
+
+  ## Acceptance
+  - When the orchestrator's open-PR recovery path fires (phase-1 attempt failed but a substrate-verified PR exists for the spec), it attempts to remove the failed attempt's worktree after the recovery decision is recorded, before re-entering at the CI phase.
+  - Teardown reuses the existing worktree-gc / session-reap safety predicate: a dirty worktree, a locked worktree, or one holding unique unmerged commits is never removed; the skip reason is logged (drain log + burndown jsonl), not silently swallowed.
+  - Teardown is best-effort: a removal failure never fails or shelves the spec — the drain continues to CI on the verified PR exactly as today.
+  - The lease record for the failed attempt is released (or updated to point at the PR branch) so aida ps / aida session leases stop listing a worktree that no longer exists.
+  - Unit test: a simulated failed attempt with a clean worktree + verified PR results in the worktree directory removed; a second test with a dirty worktree results in it kept and a logged skip.
+  - No change to the non-recovery phase-1 path.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:15:54.293122565Z
-modified_at: 2026-09-14T05:15:54.293122565Z
+modified_at: 2026-09-14T05:49:25.167139645Z
 req_type: Task
 tags:
 - auto-complete drain worktree cleanup followup parent:BUG-1145
