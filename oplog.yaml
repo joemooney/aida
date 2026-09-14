@@ -66919,5 +66919,21 @@ operations:
   timestamp: 2026-09-14T06:12:17.685007001Z
   kind: !RemoveTag
     tag: stale-signal
-clock: 5272
+- id: 01a09e8b-89d1-72f1-b1b3-9faaafad398c
+  target_id: 01a09e39-a54b-7953-aa9e-627574c3b371
+  author: aida
+  node_id: '1'
+  lamport: 5273
+  timestamp: 2026-09-14T06:12:20.049043215Z
+  kind: !AddTag
+    tag: batch:burst1
+- id: 01a09e8b-8a59-7b92-9a13-54ac7d3bcc2a
+  target_id: 01a09e39-a54b-7953-aa9e-627574c3b371
+  author: aida
+  node_id: '1'
+  lamport: 5274
+  timestamp: 2026-09-14T06:12:20.185052460Z
+  kind: !RemoveTag
+    tag: papercut aida:queue:list output-format lifecycle:trivial
+clock: 5274
 node_id: '1'
