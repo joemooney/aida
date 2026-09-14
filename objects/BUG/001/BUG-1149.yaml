@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:42:53.131322841Z
-modified_at: 2026-09-14T07:30:20.886737817Z
+modified_at: 2026-09-14T08:15:46.491732978Z
 req_type: Bug
 tags:
 - batch:burst1
@@ -23,6 +23,13 @@ relationships:
   target_id: 01a09ec8-e5c9-71b2-ae16-6c7b30d0adea
   created_at: 2026-09-14T07:19:27.014712337Z
   created_by: joe
+comments:
+- id: 01a09efc-8d3b-72f3-b7e9-aec73a913ef2
+  author: joe
+  content: 'Reviewer RequestChanges on PR #1823: the fix honors the json pin for ''queue list'' but unsupported --format json paths still silently emit human output. Rework scope: honor --format json UNIVERSALLY (every command that respects --json should equally respect --format json), or explicitly reject --format json where unsupported — no silent human-output fallthrough. Re-driving.'
+  created_at: 2026-09-14T08:15:46.491732978Z
+  modified_at: 2026-09-14T08:15:46.491732978Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
