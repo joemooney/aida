@@ -66532,5 +66532,21 @@ operations:
   timestamp: 2026-09-14T05:23:56.184979428Z
   kind: !RemoveTag
     tag: remote-drift mirror gitlab hardening followup parent:SPIKE-79
-clock: 5236
+- id: 01a09e5f-478a-7802-845d-38e41f82b6b2
+  target_id: 01a09e01-fe38-7861-b6cf-2a8e94bf1fc7
+  author: aida
+  node_id: '1'
+  lamport: 5237
+  timestamp: 2026-09-14T05:23:59.498036890Z
+  kind: !AddTag
+    tag: batch:closeout2
+- id: 01a09e5f-480e-73d0-bc3b-7d30e37676f2
+  target_id: 01a09e01-fe38-7861-b6cf-2a8e94bf1fc7
+  author: aida
+  node_id: '1'
+  lamport: 5238
+  timestamp: 2026-09-14T05:23:59.630186918Z
+  kind: !RemoveTag
+    tag: auto-followup papercut docs
+clock: 5238
 node_id: '1'
