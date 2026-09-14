@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:24.192961100Z
-modified_at: 2026-09-13T21:57:39.012192371Z
+modified_at: 2026-09-14T03:40:47.894475533Z
 req_type: Epic
 comments:
 - id: 01a09cc3-a28d-76e1-9fa8-32a9f3a64b65
@@ -47,3 +47,6 @@ comments:
   created_at: 2026-09-13T21:54:21.965152427Z
   modified_at: 2026-09-13T21:54:21.965152427Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+deferred: true
+deferred_at: 2026-09-14T03:40:47.894475533Z
+deferred_until: operator greenlights building the guest/requester role (STORY-1110) — its 'after stabilization' trigger is now met; guided keystone work, not headless
