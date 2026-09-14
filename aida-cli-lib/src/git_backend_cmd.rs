@@ -4567,8 +4567,8 @@ pub(crate) fn handle_git_backend_command(
         Command::Punts(punts_cmd) => {
             handle_punts_command(punts_cmd.clone())?;
         }
-        Command::Autonomy(autonomy_cmd) => {
-            autonomy_cmd::handle_autonomy_command(autonomy_cmd)?;
+        Command::Autonomy { command } => {
+            autonomy_cmd::handle_autonomy_command(command.as_ref())?;
         }
         Command::Archive {
             id,

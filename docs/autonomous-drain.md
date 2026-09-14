@@ -199,6 +199,10 @@ trace:TASK-1201 | ai:codex
 
 ## The three autonomy modes
 
+For the short map across all autonomy surfaces — headless cron, live
+`/aida-solo`, `--zen`, and the `[intake]` / `[autopilot]` / risk knobs — run
+`aida autonomy` or see [`docs/aida-power-features.md`](aida-power-features.md#the-autonomy-ladder-in-one-command).
+
 `--no-human` is the far end of a three-mode ladder. The middle rung,
 `--zen`, exists because "is a human present" and "what does the human want
 to be asked" are two different axes — a user can be *at the keyboard* and

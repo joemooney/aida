@@ -196,6 +196,10 @@ reasoning shown — and one confirm records it; headless callers are refused
 until the spec is groomed. `--mode` overrides one-shot: toward *more* human
 involvement freely, toward *less* only with `--force`.
 
+Trying to remember how headless cron, `/aida-solo`, `aida zen`, `--zen`, and
+the intake/risk knobs fit together? Run `aida autonomy` for the one-screen map,
+or read the autonomy ladder in [`docs/aida-power-features.md`](docs/aida-power-features.md#the-autonomy-ladder-in-one-command).
+
 ## Quick start
 
 ### Install
