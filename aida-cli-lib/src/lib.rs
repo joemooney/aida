@@ -81192,13 +81192,32 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         });
                     }
                 }
-                return Err(auto_complete::PhaseFailure::new(format!(
-                    "the implementer session exited {} — it was aborted or errored",
-                    status
-                        .code()
-                        .map(|c| c.to_string())
-                        .unwrap_or_else(|| "with a signal".to_string())
-                )));
+                // BUG-1140: a non-zero exit is NOT proof the work failed. The
+                // codex implementer commits + pushes and advances the spec to
+                // Done, then its session exits 1 — and shelving as "tool-exit"
+                // here orphaned correct work behind a manual `--resume` (every
+                // codex-drained spec ended Done-on-a-branch, un-landed). Verify
+                // by SUBSTRATE instead of trusting the exit code: fall through to
+                // the lease/PR resolution below, which — via the BUG-893 recovery
+                // — opens a PR for committed-but-unopened work and proceeds into
+                // CI + review (the real quality gates). A non-zero exit with NO
+                // landed work still falls through, to the accurate NoPr shelve
+                // (or an errored lease-discovery), not a misleading tool-exit.
+                // The zero-byte-log (LaunchNoOutput) and API-outage (Inconclusive)
+                // cases returned above already; this is the residual "errored
+                // after doing the work" case. trace:BUG-1140 | ai:claude
+                if !self.json {
+                    eprintln!(
+                        "  {} implementer session exited {} — verifying by substrate before \
+                         classifying (a non-zero exit after committed work is not a failure)",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        status
+                            .code()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| "with a signal".to_string())
+                    );
+                }
+                // Deliberately fall through — the resolution below is the arbiter.
             }
         } else {
             eprintln!(
