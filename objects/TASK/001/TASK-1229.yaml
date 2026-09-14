@@ -23,8 +23,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:00:20.178149326Z
-modified_at: 2026-09-14T05:48:59.121938952Z
+modified_at: 2026-09-14T06:20:56.865803151Z
 req_type: Task
 tags:
-- ux skills guided-implement finish-checkpoint parent:EPIC-62
+- batch:burst1
 execution_mode: drive

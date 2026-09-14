@@ -66977,5 +66977,21 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5277
+- id: 01a09e93-6cf0-74f2-a5d4-fb82a4ec49e7
+  target_id: 01a09e49-9f52-7bd1-a07a-34481f7fd76c
+  author: aida
+  node_id: '1'
+  lamport: 5278
+  timestamp: 2026-09-14T06:20:56.944722014Z
+  kind: !AddTag
+    tag: batch:burst1
+- id: 01a09e93-6d76-77c1-b97f-db71759a8936
+  target_id: 01a09e49-9f52-7bd1-a07a-34481f7fd76c
+  author: aida
+  node_id: '1'
+  lamport: 5279
+  timestamp: 2026-09-14T06:20:57.078677625Z
+  kind: !RemoveTag
+    tag: ux skills guided-implement finish-checkpoint parent:EPIC-62
+clock: 5279
 node_id: '1'
