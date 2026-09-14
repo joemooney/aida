@@ -15,12 +15,12 @@ description: |-
   - The relationship is explicit: cron = always-on headless; /aida-solo = live supervised; [intake]/--risk = the dials.
   - Cross-link from README + the discipline pack.
   Not new machinery — a naming/surfacing/doc task over existing capability.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:38:19.558872650Z
-modified_at: 2026-09-14T15:29:04.794309047Z
+modified_at: 2026-09-14T15:35:17.301087411Z
 req_type: Task
 tags:
 - ux docs autonomy discoverability parent:EPIC-62 batch:morning
@@ -51,3 +51,7 @@ comments:
   modified_at: 2026-09-14T06:24:24.087548184Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-14T15:35:17.301087411Z
+  implemented_by: joe
