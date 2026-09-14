@@ -16,12 +16,12 @@ description: |-
   Impact: this is the current ceiling on unattended codex-drain reliability (EPIC-62). The reviewer-gate (BUG-1106) and worktree-collision (BUG-1134) fixes held — this is the next seam.
 
   Next (needs the drain's stdout/exit logs to confirm root cause): determine WHY codex exec exits 1 after a successful turn (turn-limit? a post-commit step? codex exec exit-code semantics?), and either fix the exit condition or teach the orchestrator to treat 'work committed + pushed + spec Done' as success regardless of the session's exit code (verify-by-substrate, not by exit code).
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:50:56.950971870Z
-modified_at: 2026-09-14T01:41:34.950555619Z
+modified_at: 2026-09-14T01:52:46.371345692Z
 req_type: Bug
 tags:
 - orchestrator drain-reliability codex parent:EPIC-62 oversight-caught
