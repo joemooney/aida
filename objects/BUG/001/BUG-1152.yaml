@@ -12,12 +12,12 @@ description: |-
   Acceptance:
   - `aida groom --apply --then-drain` actually drains after queuing (no 'Unknown command' failure), from both a TTY and a bare cron/non-TTY context.
   - Regression: a headless `--then-drain` run approves N safe specs AND drains them (not just approves).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:47:17.959494677Z
-modified_at: 2026-09-14T05:47:17.959494677Z
+modified_at: 2026-09-14T06:12:06.639891835Z
 req_type: Bug
 tags:
 - orchestrator burndown drain-reliability groom parent:EPIC-62
