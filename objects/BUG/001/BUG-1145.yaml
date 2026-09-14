@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:03:50.701858136Z
-modified_at: 2026-09-14T05:07:00.763547836Z
+modified_at: 2026-09-14T05:15:26.847662288Z
 req_type: Bug
 tags:
 - auto-complete drain reliability worktree keystone
@@ -33,4 +33,10 @@ comments:
   content: 'PR #1816 review: REQUEST CHANGES (not merged). The proceed-on-verified-PR mechanism is correct, but it re-enters at Phase::Reviewer, SKIPPING finish_ci (phase 2) — the drain''s only CI gate. merge() uses gh pr merge --squash (no CI gate) and main has NO branch protection (verified 404), so the auto-recovery would merge red/in-progress CI ungated — worse than today''s shelve+advisor-verify. Fix: re-enter at Phase::Ci (not Reviewer) so finish_ci gates CI on the seeded branch first; make finish_ci''s end_implementer_session tolerate the gone lease; extend the test to assert Phase::Ci runs and a red-CI PR shelves not merges. The mock test passed only because the mock runs no real CI.'
   created_at: 2026-09-14T05:07:00.763547836Z
   modified_at: 2026-09-14T05:07:00.763547836Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a09e57-74ff-7f73-85a3-3af4d69c3654
+  author: joe
+  content: Commit a1d26ad5c references this requirement
+  created_at: 2026-09-14T05:15:26.847662288Z
+  modified_at: 2026-09-14T05:15:26.847662288Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
