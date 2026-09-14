@@ -107,6 +107,19 @@ fn missing_both_ids_falls_back_to_question_mark() {
     assert_eq!(rows[0]["spec_id"], "?");
 }
 
+#[test]
+fn queue_list_json_requested_honors_global_format_pin() {
+    // BUG-1149: `--format json` / AIDA_OUTPUT_FORMAT=json must select the same
+    // JSON projection as the command-local `--json`, not fall through to TOON.
+    // trace:BUG-1149 | ai:codex
+    assert!(queue_list_json_requested(false, Some(OutputFormat::Json)));
+    assert!(queue_list_json_requested(true, Some(OutputFormat::Toon)));
+    assert!(queue_list_json_requested(true, Some(OutputFormat::Human)));
+    assert!(!queue_list_json_requested(false, Some(OutputFormat::Toon)));
+    assert!(!queue_list_json_requested(false, Some(OutputFormat::Human)));
+    assert!(!queue_list_json_requested(false, None));
+}
+
 // TASK-1052: a summary with a chosen status + archived flag, so the GC
 // predicate can be exercised over the full live/dead spread.
 fn summary_st(id: Uuid, status: &str, archived: bool) -> aida_core::RequirementSummary {
