@@ -1193,6 +1193,16 @@ pub(crate) trait PhaseDriver {
     fn recover_missing_review_pr(&mut self) -> Option<u32> {
         None
     }
+    /// BUG-1145: phase 1 can fail locally after the implementer already
+    /// pushed/opened a PR, especially when the orchestrator cannot match the
+    /// child lease after a non-zero tool exit. A driver that can prove an open
+    /// PR exists may seed its branch/PR state here and return the PR-only
+    /// re-entry phase (Reviewer/Merge), so the pipeline proceeds instead of
+    /// retrying phase 1 or shelving the spec.
+    // trace:BUG-1145 | ai:codex
+    fn recover_phase1_failure_with_open_pr(&mut self, _failure: &PhaseFailure) -> Option<Phase> {
+        None
+    }
     /// Phase-agnostic reality check (BUG-241). Before the orchestrator
     /// declares `phase` a failure, it asks the driver whether ground truth — a
     /// merged PR, a Completed spec — shows the work shipped anyway. Two real
@@ -3126,6 +3136,7 @@ pub(crate) fn orchestrate_with_resume(
     start_phase: Phase,
 ) -> OrchestrationResult {
     let start = Instant::now();
+    let mut start_phase = start_phase;
     // Per-phase wall time, captured as each phase runs so a failure carries
     // the timing of the phases that did complete. trace:TASK-266 | ai:claude
     let mut durations: Vec<(Phase, u128)> = Vec::new();
@@ -3187,6 +3198,12 @@ pub(crate) fn orchestrate_with_resume(
         loop {
             match driver.run_implementer() {
                 Err(f) => {
+                    if let Some(reentry_phase) = driver.recover_phase1_failure_with_open_pr(&f) {
+                        durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                        emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
+                        start_phase = reentry_phase;
+                        break;
+                    }
                     match maybe_retry_transient_failure(
                         driver,
                         Phase::Implementer,
@@ -5446,6 +5463,10 @@ mod tests {
         /// BUG-895: phase-3 missing-PR recovery result.
         // trace:BUG-895 | ai:codex
         recover_review_pr: Option<u32>,
+        /// BUG-1145: phase-1 failure redeemed by an already-open PR; the
+        /// orchestrator must continue from this PR-only re-entry phase instead
+        /// of retrying phase 1 or shelving.
+        phase1_pr_recovery: Option<Phase>,
     }
 
     impl MockPhaseDriver {
@@ -5483,6 +5504,7 @@ mod tests {
                 transient_retry_budget: 0,
                 transient_retry_events: Vec::new(),
                 recover_review_pr: None,
+                phase1_pr_recovery: None,
             }
         }
 
@@ -5602,6 +5624,12 @@ mod tests {
         // trace:BUG-895 | ai:codex
         fn recovering_review_pr(mut self, pr_number: u32) -> Self {
             self.recover_review_pr = Some(pr_number);
+            self
+        }
+
+        // trace:BUG-1145 | ai:codex
+        fn recovering_phase1_failure_from_pr(mut self, phase: Phase) -> Self {
+            self.phase1_pr_recovery = Some(phase);
             self
         }
 
@@ -5801,6 +5829,12 @@ mod tests {
             let pr = self.recover_review_pr.filter(|n| *n > 0)?;
             self.pr_number = Some(pr);
             Some(pr)
+        }
+        fn recover_phase1_failure_with_open_pr(
+            &mut self,
+            _failure: &PhaseFailure,
+        ) -> Option<Phase> {
+            self.phase1_pr_recovery
         }
         fn shipped_spec_id(&mut self) -> Option<String> {
             self.shipped_spec_id.clone()
@@ -7851,6 +7885,37 @@ mod tests {
         // The pipeline still stopped at phase 1 — reconcile redeems the
         // outcome, it does not resume the remaining phases.
         assert_eq!(driver.calls, vec![Phase::Implementer]);
+    }
+
+    /// BUG-1145: a phase-1 child can commit/push/open a PR and then exit in a
+    /// way that prevents the parent from matching the lease. Once the driver
+    /// verifies an open PR, the drain must continue through the PR-only path
+    /// instead of retrying phase 1 (which collides with the already-Done spec)
+    /// or shelving the member.
+    #[test]
+    fn orchestrate_phase1_failure_with_verified_pr_proceeds_from_reviewer() {
+        let mut driver = MockPhaseDriver::failing_at(Phase::Implementer)
+            .recovering_phase1_failure_from_pr(Phase::Reviewer);
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1145",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.exit_code, 0);
+        assert!(result.failed_phase.is_none());
+        assert!(result.shelved_reason.is_none());
+        assert_eq!(
+            driver.calls,
+            vec![
+                Phase::Implementer,
+                Phase::Reviewer,
+                Phase::Merge,
+                Phase::Pull,
+                Phase::Build,
+            ]
+        );
     }
 
     /// Instance A — phase 3 ends with no verdict file because the reviewer

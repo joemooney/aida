@@ -81487,6 +81487,38 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         self.pr_number
     }
 
+    fn recover_phase1_failure_with_open_pr(
+        &mut self,
+        _failure: &auto_complete::PhaseFailure,
+    ) -> Option<auto_complete::Phase> {
+        // BUG-1145: if phase 1 fails after the child already opened a PR, the
+        // substrate beats the local failure. Continue through the PR-only path
+        // instead of retrying phase 1, which can collide with the already-Done
+        // spec/worktree. This is the in-process counterpart of `--from-pr`.
+        // trace:BUG-1145 | ai:codex
+        let pr = match crate::forge::forge_for(&self.project_root).change_for_spec(&self.spec) {
+            Ok(crate::forge::ChangeLookup::Found(pr)) => pr,
+            _ => return None,
+        };
+        self.pr_number = Some(pr.id as u32);
+        if !pr.branch.is_empty() {
+            self.branch = Some(pr.branch.clone());
+        } else if let Some(head) = pr_head_branch(&self.project_root, pr.id) {
+            self.branch = Some(head);
+        }
+        self.from_pr = true;
+        if !self.json {
+            eprintln!(
+                "  {} phase-1 failed, but {} has open PR-{} — continuing from the \
+                 PR-only reviewer path instead of retrying phase 1",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                self.spec,
+                pr.id,
+            );
+        }
+        Some(auto_complete::Phase::Reviewer)
+    }
+
     fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Ci);
         let branch = self.branch.clone().ok_or_else(|| {
