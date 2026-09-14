@@ -13,7 +13,22 @@ fn run(
         conclusion: conclusion.map(str::to_string),
         created_at: Some(now - chrono::Duration::hours(hours_ago)),
         database_id: Some(id),
+        head_sha: None,
         url: None,
+    }
+}
+
+fn run_at_sha(
+    status: &str,
+    conclusion: Option<&str>,
+    hours_ago: i64,
+    id: u64,
+    now: chrono::DateTime<chrono::Utc>,
+    head_sha: &str,
+) -> GhWorkflowRun {
+    GhWorkflowRun {
+        head_sha: Some(head_sha.to_string()),
+        ..run(status, conclusion, hours_ago, id, now)
     }
 }
 
@@ -100,6 +115,8 @@ fn scheduled_failures_render_nightly_red_streak() {
             run("completed", Some("failure"), 30, 299, now),
             run("completed", Some("success"), 54, 298, now),
         ]),
+        None,
+        |_, _| false,
     )
     .expect("latest scheduled failure should render");
 
@@ -123,7 +140,74 @@ fn latest_scheduled_success_clears_nightly_red() {
     let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
     assert!(summarize_nightly_red_runs(
         now,
-        Some(vec![run("completed", Some("success"), 6, 301, now)])
+        Some(vec![run("completed", Some("success"), 6, 301, now)]),
+        None,
+        |_, _| false,
     )
     .is_none());
+}
+
+#[test]
+fn newer_successful_main_dispatch_clears_nightly_red_when_descendant() {
+    let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+    let latest_main = run_at_sha("completed", Some("success"), 1, 401, now, "main-green");
+
+    assert!(summarize_nightly_red_runs(
+        now,
+        Some(vec![run_at_sha(
+            "completed",
+            Some("failure"),
+            6,
+            400,
+            now,
+            "scheduled-red"
+        )]),
+        Some(&latest_main),
+        |ancestor, descendant| ancestor == "scheduled-red" && descendant == "main-green",
+    )
+    .is_none());
+}
+
+#[test]
+fn non_main_success_does_not_clear_nightly_red() {
+    let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+    let red = summarize_nightly_red_runs(
+        now,
+        Some(vec![run_at_sha(
+            "completed",
+            Some("failure"),
+            6,
+            400,
+            now,
+            "scheduled-red",
+        )]),
+        None,
+        |_, _| false,
+    )
+    .expect("branch-only success is not passed as a main run");
+
+    assert_eq!(red.run_id, Some(400));
+    assert_eq!(red.nights, 1);
+}
+
+#[test]
+fn newer_failed_main_dispatch_does_not_clear_nightly_red() {
+    let now = chrono::Utc.with_ymd_and_hms(2026, 5, 23, 12, 0, 0).unwrap();
+    let latest_main = run_at_sha("completed", Some("failure"), 1, 401, now, "main-red");
+    let red = summarize_nightly_red_runs(
+        now,
+        Some(vec![run_at_sha(
+            "completed",
+            Some("failure"),
+            6,
+            400,
+            now,
+            "scheduled-red",
+        )]),
+        Some(&latest_main),
+        |ancestor, descendant| ancestor == "scheduled-red" && descendant == "main-red",
+    )
+    .expect("failed main dispatch should keep nightly red set");
+
+    assert_eq!(red.run_id, Some(400));
 }
