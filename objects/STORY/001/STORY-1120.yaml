@@ -1,0 +1,26 @@
+id: 01a09ec8-e5c9-71b2-ae16-6c7b30d0adea
+spec_id: STORY-1120
+agreed_id: STORY-1120
+title: 'Review PR-1823: [AI:codex] fix(queue): honor json format pin (BUG-1149)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a09ec2`) for branch `bug-1149`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1823>
+  - Branch: `bug-1149` → `main`
+
+  ## Covers
+
+  - BUG-1149
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1823` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T07:19:21.289753264Z
+modified_at: 2026-09-14T07:19:21.289753264Z
+req_type: Story
