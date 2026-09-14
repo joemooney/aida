@@ -66372,5 +66372,29 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 5226
+- id: 01a09e20-d665-7920-b2eb-0b20c0fbb125
+  target_id: 01a09e20-c862-7d01-8f35-241a7b8bffdb
+  author: aida
+  node_id: '1'
+  lamport: 5227
+  timestamp: 2026-09-14T04:15:47.301584313Z
+  kind: !Create
+    title: queue gc cannot see ARCHIVED targets (default list lens hides them) — 64 dead implementer entries render as '(unknown spec)' and never prune
+    description: |-
+      Observed 2026-09-13: aida queue list --all-users shows joe [implementer] with 64 routed entries rendered as bare UUIDs + "(unknown spec)". Resolving two of them in the store: 019e31d1-... = STORY-248 (Completed, archived: true), 019e2f1a-... = STORY-244 (Completed, archived: true). They are exactly the dead class TASK-1052 defined (target archived / Completed). Yet aida queue gc --dry-run and aida queue gc --for implementer --dry-run both report "No dead queue entries found", and the opportunistic self-heal on queue list never prunes them.
+
+      Root cause (aida-cli-lib/src/queue_cmd.rs): the Gc arm and opportunistic_queue_gc build summaries via list_summaries(&ListFilter::default()). ListFilter's ArchiveFilter default is NonArchivedOnly (aida-core/src/db/cache.rs), so an ARCHIVED target is absent from the summaries map, and dead_queue_entries' lookup arm "None => false" treats the absent spec as alive. The exact class gc was built to prune (archived targets) is the one it structurally cannot see. The same default-lens lookup is why --all-users renders them "(unknown spec)" instead of the archived spec's id.
+
+      Fix: fetch summaries for gc / opportunistic gc / the all-users renderer with ArchiveFilter::Both (and the deferred lens = all) so archived targets resolve; keep "None => false" (a truly deleted target is queue prune --orphaned's job, not gc's). Render an archived target as "STORY-248 (archived)" rather than "(unknown spec)".
+
+      ## Acceptance
+      - With a queue entry whose target is archived+Completed, aida queue gc --dry-run lists it as dead and aida queue gc removes it; --for <role> scoping still works.
+      - The opportunistic self-heal on aida queue list prunes the same class.
+      - aida queue list --all-users renders an archived target with its spec id + "(archived)" instead of "(unknown spec)".
+      - A unit test covers dead_queue_entries fed summaries that include an archived spec, plus an integration-style test that the gc path's summaries include archived rows (the regression was in the lens, not the predicate).
+      - On this repo after the fix: the 64 stale implementer entries are gone after one aida queue gc.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5227
 node_id: '1'
