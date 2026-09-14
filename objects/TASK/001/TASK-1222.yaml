@@ -15,7 +15,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T22:07:45.944235607Z
-modified_at: 2026-09-13T22:07:45.944235607Z
+modified_at: 2026-09-14T03:40:44.133970260Z
 req_type: Task
 tags:
 - cleanup worktree cruft hygiene
+deferred: true
+deferred_at: 2026-09-14T03:40:44.133970260Z
+deferred_until: branch/worktree cruft actually impedes work, or a scheduled batch-review session (the merged-safe worktrees are already reaped; the remaining ~226 are UNMERGED origin branches needing a per-branch human glance — not a blind delete)
