@@ -7889,13 +7889,17 @@ mod tests {
 
     /// BUG-1145: a phase-1 child can commit/push/open a PR and then exit in a
     /// way that prevents the parent from matching the lease. Once the driver
-    /// verifies an open PR, the drain must continue through the PR-only path
-    /// instead of retrying phase 1 (which collides with the already-Done spec)
-    /// or shelving the member.
+    /// verifies an open PR, the drain must continue through the PR path instead
+    /// of retrying phase 1 (which collides with the already-Done spec) or
+    /// shelving the member — AND it must re-enter at Ci (phase 2), not Reviewer,
+    /// so the CI gate still runs before merge (advisor review: main has no
+    /// branch protection and merge() does not gate CI, so skipping phase 2 would
+    /// merge red CI). The real driver returns Phase::Ci; this asserts the Ci
+    /// phase is in the executed sequence.
     #[test]
-    fn orchestrate_phase1_failure_with_verified_pr_proceeds_from_reviewer() {
+    fn orchestrate_phase1_failure_with_verified_pr_proceeds_from_ci() {
         let mut driver = MockPhaseDriver::failing_at(Phase::Implementer)
-            .recovering_phase1_failure_from_pr(Phase::Reviewer);
+            .recovering_phase1_failure_from_pr(Phase::Ci);
         let result = orchestrate(
             &mut driver,
             "BUG-1145",
@@ -7906,10 +7910,13 @@ mod tests {
         assert_eq!(result.exit_code, 0);
         assert!(result.failed_phase.is_none());
         assert!(result.shelved_reason.is_none());
+        // Ci is present → the CI gate runs before reviewer/merge.
+        assert!(driver.calls.contains(&Phase::Ci));
         assert_eq!(
             driver.calls,
             vec![
                 Phase::Implementer,
+                Phase::Ci,
                 Phase::Reviewer,
                 Phase::Merge,
                 Phase::Pull,
