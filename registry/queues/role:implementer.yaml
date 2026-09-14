@@ -1,1 +1,7 @@
-[]
+- user_id: role:implementer
+  requirement_id: 01a09dff-dc1a-7002-b7d9-55e35504bb3f
+  position: 1000
+  added_by: role:implementer
+  added_at: 2026-09-14T05:23:57.501316567Z
+  for_role: implementer
+  added_by_machine: imac
