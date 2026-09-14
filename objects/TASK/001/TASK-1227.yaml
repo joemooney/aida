@@ -3,12 +3,12 @@ spec_id: TASK-1227
 agreed_id: TASK-1227
 title: Store mirror fan-out failure should raise a doctor finding / notify, not warn into silent drift
 description: 'From SPIKE-79. [store.sync] mirror_remotes fan-out is best-effort (''warns, never fails''), so a failed mirror leg (e.g. expired glab token) silently drifts the mirror (observed: aida-store +210 behind gitlab). Make a failed fan-out leg surface loudly: raise an aida doctor remote-drift finding at push time and/or route through aida notify, so the operator learns the mirror stopped syncing instead of discovering 210 commits of drift later. Keep the push non-fatal (don''t block the canonical push), but record + surface the failure.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T03:39:46.074132109Z
-modified_at: 2026-09-14T05:23:55.972685116Z
+modified_at: 2026-09-14T05:25:24.029800285Z
 req_type: Task
 tags:
 - batch:closeout2
