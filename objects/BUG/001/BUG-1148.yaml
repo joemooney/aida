@@ -14,12 +14,12 @@ description: |-
   - Scheduled failure at T0, dispatch success on a NON-main branch only: nightly_red stays set (a branch-only green proves nothing about main).
   - Scheduled failure at T0, later dispatch FAILURE on main: nightly_red stays set.
   - Unit tests next to latest_scheduled_success_clears_nightly_red cover the three cases with fixture runs (no network).
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:16:10.978923407Z
-modified_at: 2026-09-14T06:12:16.933019677Z
+modified_at: 2026-09-14T06:55:13.301253685Z
 req_type: Bug
 tags:
 - batch:burst1
