@@ -67355,5 +67355,32 @@ operations:
   timestamp: 2026-09-14T15:27:30.955112303Z
   kind: !RemoveTag
     tag: auto-complete drain worktree cleanup followup parent:BUG-1145
-clock: 5308
+- id: 01a0a089-f277-7ad2-8d6a-cc111987cf59
+  target_id: 01a0a089-eb22-7df2-9400-ef53befec585
+  author: aida
+  node_id: '1'
+  lamport: 5309
+  timestamp: 2026-09-14T15:29:50.199666400Z
+  kind: !Create
+    title: 'Robust unattended autonomous-progress: one tested ''safely drain the ready set from anywhere'' command, not a fragile crontab one-liner'
+    description: |-
+      2026-09-14: the hand-rolled durable cron (`groom --apply --then-drain` / `queue work --auto-complete <N>`) failed repeatedly overnight and in the morning. Root causes are MULTIPLE invocation footguns — each a product gap:
+
+      1. cwd-dependent: the cron needs an explicit `cd <repo>` or it grooms whatever store it finds from $HOME (overnight it groomed a stale/demo 'centralized backend' store, not this project — silent wrong-target).
+      2. PATH-dependent: needs the full PATH for `claude`/`codex` (already hit BUG-1152-adjacent).
+      3. `queue work --auto-complete <COUNT>` picks a BAD default on an empty queue — grabbed archived EPIC-20 and errored.
+      4. `queue work --batch NAME` reads the CALLER's queue, so specs queued `--for implementer` are invisible to an advisor/user caller (role-queue mismatch) — 'no queued items tagged batch:NAME'.
+      5. Only the single-spec form (`queue work <spec> --auto-complete`) reliably claims-and-drains regardless of routing.
+
+      The missing surface: a single, tested `aida` command (e.g. `aida autoprogress` / `aida drain-ready`) that, from ANYWHERE, safely: resolves the project, groom-approves the safe fence, and drains the READY SET (approved implementable specs, keystones fenced) via the reliable single-spec path, skipping if a drain is live — suitable to drop into a cron with zero footguns. Then the durable loop is `* aida autoprogress` and nothing else.
+
+      Interim: the broken cron is DISABLED (crontab -r'd, 2026-09-14). The advisor's live supervised drain is the working autonomous mechanism until this lands.
+
+      Acceptance:
+      - One command drains the ready set safely from a bare cron (no cd/PATH/count/batch footguns), keystones fenced, lock-aware, wrong-store-proof.
+      - Documented as THE durable autonomous-progress entry point; the cron line is just that command.
+    req_type: Task
+    status: Draft
+    priority: High
+clock: 5309
 node_id: '1'
