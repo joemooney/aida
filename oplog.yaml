@@ -66072,5 +66072,21 @@ operations:
   timestamp: 2026-09-14T03:41:29.226647026Z
   kind: !SetStatus
     status: Rejected
-clock: 5207
+- id: 01a09e01-7a03-7a91-908a-323c1955f726
+  target_id: 01a09dff-b4f1-73d0-82fd-f255e1d8d76e
+  author: aida
+  node_id: '1'
+  lamport: 5208
+  timestamp: 2026-09-14T03:41:32.035860602Z
+  kind: !AddTag
+    tag: duplicate-of:TASK-1227
+- id: 01a09e01-7ae2-7f83-a57c-b2ba121b90e4
+  target_id: 01a09dff-b4f1-73d0-82fd-f255e1d8d76e
+  author: aida
+  node_id: '1'
+  lamport: 5209
+  timestamp: 2026-09-14T03:41:32.258891732Z
+  kind: !RemoveTag
+    tag: followup-src:docs/plans/2026-09-13-spike-79-multi-hub-viability.md
+clock: 5209
 node_id: '1'
