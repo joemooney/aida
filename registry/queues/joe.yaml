@@ -1,0 +1,8 @@
+- user_id: joe
+  requirement_id: 01a09e57-e035-7683-88bf-2717619e8f11
+  position: 1000
+  added_by: joe
+  added_at: 2026-09-14T15:36:52.486657017Z
+  for_role: implementer
+  for_scope: TASK-1228
+  added_by_machine: imac
