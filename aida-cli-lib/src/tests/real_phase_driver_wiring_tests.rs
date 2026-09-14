@@ -129,6 +129,11 @@ fn driver(root: &std::path::Path, spec: &str) -> RealPhaseDriver {
 
 fn fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
     let path = root.join("gh");
+    write_executable(&path, body);
+    path
+}
+
+fn write_executable(path: &std::path::Path, body: &str) {
     std::fs::write(&path, body).unwrap();
     #[cfg(unix)]
     {
@@ -137,7 +142,6 @@ fn fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
         perms.set_mode(0o755);
         std::fs::set_permissions(&path, perms).unwrap();
     }
-    path
 }
 
 #[test]
@@ -483,6 +487,130 @@ fn phase1_no_pr_recovery_uses_implementer_worktree_branch_state() {
     assert_eq!(
         git(&remote, &["rev-parse", "bug-893"]),
         git(&implementer, &["rev-parse", "HEAD"])
+    );
+}
+
+#[cfg_attr(
+    windows,
+    ignore = "fake aida/gh harness is a bash script; Windows cannot execute shebang fixtures"
+)]
+#[test]
+fn phase1_nonzero_implementer_exit_with_open_pr_still_proceeds() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    let branch = "task-1224";
+
+    git(tmp.path(), &["init", "--bare", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida").join("config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    write_commit(&root, "README.md", "fixture\n", "chore: init");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+    git(&root, &["checkout", "-q", "-b", branch]);
+
+    let fake_aida = tmp.path().join("aida");
+    write_executable(
+        &fake_aida,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+session_id=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-id)
+      session_id="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+if [[ -z "$session_id" ]]; then
+  echo "missing --session-id" >&2
+  exit 64
+fi
+branch="${AIDA_FAKE_BRANCH:?}"
+worktree="${AIDA_FAKE_WORKTREE:?}"
+mkdir -p .aida/sessions .aida/headless-logs
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"fake work done"}]}}\n' > ".aida/headless-logs/${branch}-${session_id}.jsonl"
+printf 'implemented\n' > implemented.txt
+git add implemented.txt
+git commit -q -m "[AI:codex] test(orchestrator): fake implementation (TASK-1224)"
+git push -q -u origin HEAD:"$branch"
+lease_id="lease-task-1224"
+cat > ".aida/sessions/${lease_id}.toml" <<EOF
+id = "${lease_id}"
+scope = "TASK-1224"
+slug = "task-1224"
+owner = "codex@example.test"
+worktree_path = "${worktree}"
+branch = "${branch}"
+started_at = "2026-09-13T00:00:00Z"
+hostname = "test"
+role = "implementer"
+EOF
+cat > ".aida/sessions/${lease_id}.manifest.toml" <<EOF
+session_id = "${lease_id}"
+planned_at = "2026-09-13T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "${session_id}"
+items = []
+EOF
+exit 1
+"#,
+    );
+    let fake_gh = fake_gh(
+        tmp.path(),
+        r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* && "$*" == *"--head task-1224"* ]]; then
+  printf '1813\t[AI:codex] test(orchestrator): fake implementation (TASK-1224)\thttps://github.example.invalid/acme/aida/pull/1813\ttask-1224\n'
+  exit 0
+fi
+if [[ "$*" == *"pr list"* ]]; then
+  exit 0
+fi
+exit 1
+"#,
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_TEST_GH_BINARY", fake_gh.to_str().unwrap()),
+        ("AIDA_FAKE_BRANCH", branch),
+        ("AIDA_FAKE_WORKTREE", root.to_str().unwrap()),
+        ("AIDA_EXIT_POLL_MS", "1"),
+        ("AIDA_GH_VERIFY_RETRIES", "0"),
+    ]);
+
+    let mut driver = driver(&root, "TASK-1224");
+    driver.aida_exe = fake_aida;
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+
+    // The fake implementer commits, pushes, "opens" a PR according to gh,
+    // then exits 1. The BUG-1140/TASK-1224 contract is that the non-zero
+    // status does not win over the substrate: open PR discovery proceeds to
+    // the CI/review path instead of returning a tool-exit PhaseFailure.
+    // trace:TASK-1224 | ai:codex
+    match driver.run_implementer() {
+        Ok(crate::auto_complete::ImplementerOutcome::PrOpened) => {}
+        other => panic!("expected PrOpened after non-zero implementer exit, got {other:?}"),
+    }
+    assert_eq!(driver.pr_number, Some(1813));
+    assert_eq!(driver.branch.as_deref(), Some(branch));
+    assert_eq!(
+        git(&remote, &["rev-parse", branch]),
+        git(&root, &["rev-parse", "HEAD"])
     );
 }
 
