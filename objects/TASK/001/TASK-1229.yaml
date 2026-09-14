@@ -18,12 +18,13 @@ description: |-
   - Wording is honest about CI-pending and about keystone-merge-stays-human (never implies auto-merge or 'done' pre-CI).
   - Consider the same off-ramp for the normal implementer/pickup finish (non-guided), scoped to whether that path auto-merges.
   Small skill-text change (aida-core/templates/skills/aida-guided-implement.md); autonomous-safe → the drain can take it.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:00:20.178149326Z
-modified_at: 2026-09-14T05:00:20.178149326Z
+modified_at: 2026-09-14T05:48:59.121938952Z
 req_type: Task
 tags:
 - ux skills guided-implement finish-checkpoint parent:EPIC-62
+execution_mode: drive
