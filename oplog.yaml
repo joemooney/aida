@@ -67009,5 +67009,31 @@ operations:
   timestamp: 2026-09-14T06:33:36.226673399Z
   kind: !SetStatus
     status: Completed
-clock: 5281
+- id: 01a09ea7-532a-7352-9823-5b267ced6597
+  target_id: 01a09ea7-474a-7b83-a9ed-552a8ae55bab
+  author: aida
+  node_id: '1'
+  lamport: 5282
+  timestamp: 2026-09-14T06:42:41.066636147Z
+  kind: !Create
+    title: 'Review PR-1821: [AI:codex] fix(queue): include archived targets in queue gc lens (BUG-1147)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09ea0`) for branch `bug-1147`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1821>
+      - Branch: `bug-1147` → `main`
+
+      ## Covers
+
+      - BUG-1147
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1821` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5282
 node_id: '1'
