@@ -1,0 +1,26 @@
+id: 01a09e7c-f0a4-78d3-b5ea-68a0715c8132
+spec_id: STORY-1116
+agreed_id: STORY-1116
+title: 'Review PR-1819: [AI:codex] fix(followups): skip pointer and meta bullets (BUG-1142)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a09e77`) for branch `bug-1142`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1819>
+  - Branch: `bug-1142` → `main`
+
+  ## Covers
+
+  - BUG-1142
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1819` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-14T05:56:23.332349973Z
+modified_at: 2026-09-14T05:56:23.332349973Z
+req_type: Story
