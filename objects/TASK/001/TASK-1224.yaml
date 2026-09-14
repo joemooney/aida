@@ -3,12 +3,12 @@ spec_id: TASK-1224
 agreed_id: TASK-1224
 title: 'Integration test: implementer non-zero exit WITH an open PR proceeds to CI+review (not shelved as tool-exit)'
 description: 'Follow-up to BUG-1140/PR #1812. The fix (fall through to substrate resolution on a non-zero implementer exit) has no automated test — the path is subprocess-integration-level. Add a test that stands up a fake implementer which commits+pushes+opens a PR then exits 1, and asserts the phase resolves via PR lookup (proceeds to CI/review) rather than returning a tool-exit PhaseFailure. Guards against a regression re-introducing the exit-code-trusting shelve.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T01:52:09.835798385Z
-modified_at: 2026-09-14T03:54:37.248021928Z
+modified_at: 2026-09-14T04:02:09.060847636Z
 req_type: Task
 tags:
 - batch:closeout
@@ -17,15 +17,25 @@ relationships:
   target_id: 01a09e0c-9a61-7460-97b6-cf27a1ed28e5
   created_at: 2026-09-14T03:53:46.407032533Z
   created_by: joe
+history:
+- id: 01a09e14-5a1e-7752-89e5-e62c8863a846
+  author: aida-auto-bump
+  timestamp: 2026-09-14T04:02:09.054462723Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a09e14-5a24-7eb1-8e9c-27152f3e6661
+  timestamp: 2026-09-14T04:02:09.060845874Z
+  agent: aida
+  commit_sha: a1d26ad5c62ffd28f3a48f461138c88eaf647938
+  summary: Completed via merge a1d26ad5
+  punted:
+  - 'punted: could not match the orchestrated session (claude id 01a09e0d) to a session lease. Resume the most recent recorded session with `aida queue work TASK-1224 --resume` (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids): abf9f7f087dbb254e-c3a7f12a9af4d18b. (attempt 2/2)'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-14T03:52:59.023233966Z
   implemented_by: joe
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: tool-exit
-  detail: 'could not match the orchestrated session (claude id 01a09e0d) to a session lease. Resume the most recent recorded session with `aida queue work TASK-1224 --resume` (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids): abf9f7f087dbb254e-c3a7f12a9af4d18b. (attempt 2/2)'
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-1224 --resume`'
-  shelved_by: advisor
-  shelved_at: 2026-09-14T03:54:37.248021928Z
+  completed_at: 2026-09-14T04:02:09.054334238Z
+  completion_sha: a1d26ad5c62ffd28f3a48f461138c88eaf647938
