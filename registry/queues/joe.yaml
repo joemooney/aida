@@ -445,3 +445,11 @@
   note: advisor-cleared at filing
   added_at: 2026-09-14T04:16:19.013280284Z
   for_role: implementer
+- user_id: joe
+  requirement_id: 01a09e35-78a6-74b3-9f1e-6f3a3821742c
+  position: 346000
+  added_by: joe
+  note: 'assess 2026-09-13: docs/discoverability task over existing capability; mode=drive (adds a small overview command + README/discipline cross-links; human keeps the merge). Bugs ahead of it take precedence.'
+  added_at: 2026-09-14T04:42:07.221473607Z
+  for_role: implementer
+  added_by_machine: imac
