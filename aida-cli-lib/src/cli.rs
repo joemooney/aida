@@ -9626,6 +9626,28 @@ pub enum Command {
     #[clap(subcommand)]
     Supervise(SuperviseCommand),
 
+    /// Robust unattended autonomous-progress: safely drain the approved ready
+    /// set from ANYWHERE. Resolves the project explicitly (no cwd/wrong-store
+    /// surprises), skips if a drain is already running, and drains via the
+    /// reliable single-spec path. Drain-only by default; `--groom` approves the
+    /// safe fence first. Built for a cron: `aida autoprogress --groom --project <path>`.
+    // trace:TASK-1231 | ai:claude
+    Autoprogress {
+        /// Project path (the cron uses this — no cwd dependency). Defaults to
+        /// resolving from the current directory.
+        #[clap(long)]
+        project: Option<String>,
+        /// Approve the safe fence (advisor intake) before draining.
+        #[clap(long)]
+        groom: bool,
+        /// Drain at most this many ready specs this pass (default 5).
+        #[clap(long)]
+        max: Option<usize>,
+        /// Report what it WOULD drain without draining.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Vital-signs read: is this project HEALTHY right now? One screen across
     /// backlog state (ready/stale/blocked/aging work, burn-down direction) and
     /// coordination state (queue depth, live/stale leases, drains, open
