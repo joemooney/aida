@@ -6,3 +6,11 @@
   for_role: implementer
   for_scope: TASK-1228
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a0a090-f26f-76a3-b3a2-f1ffd535368e
+  position: 2000
+  added_by: joe
+  note: auto-queued by `session end` (01a0a088); covers 1 spec
+  added_at: 2026-09-14T15:37:34.974271773Z
+  for_role: reviewer
+  added_by_machine: imac
