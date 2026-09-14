@@ -12,12 +12,12 @@ description: |-
   2. Tear down the failed attempt's worktree before a retry so the retry cannot collide (the root of the 'isn't queued / lease mismatch' on attempt 2).
 
   Impact: this is the last gap between 'drain preserves the PR but I hand-merge' and 'drain lands codex work hands-off' — the whole point of EPIC-62. Acceptance: a codex spec that commits+pushes+opens a PR then exits 1 DRAINS to merge with no manual --resume/hand-merge (validated on a throwaway spec or via the TASK-1224 test harness extended to assert merge, not just no-shelve).
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T04:03:50.701858136Z
-modified_at: 2026-09-14T05:15:26.847662288Z
+modified_at: 2026-09-14T05:23:40.965829054Z
 req_type: Bug
 tags:
 - auto-complete drain reliability worktree keystone
@@ -40,3 +40,21 @@ comments:
   created_at: 2026-09-14T05:15:26.847662288Z
   modified_at: 2026-09-14T05:15:26.847662288Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a09e5e-ff1f-75c2-a7bb-b1deb6267bee
+  author: aida-auto-bump
+  timestamp: 2026-09-14T05:23:40.959647425Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a09e5e-ff25-7922-850f-0679c67770b8
+  timestamp: 2026-09-14T05:23:40.965828307Z
+  agent: implementer
+  commit_sha: c2bd70cb42d155fe20f410d1727c85f22dd11b69
+  summary: Completed via merge c2bd70cb
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-14T05:23:40.959496536Z
+  completion_sha: c2bd70cb42d155fe20f410d1727c85f22dd11b69
