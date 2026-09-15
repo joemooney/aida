@@ -27,8 +27,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:12.409577134Z
-modified_at: 2026-09-15T06:32:21.943040189Z
+modified_at: 2026-09-15T06:36:02.794051059Z
 req_type: Story
 tags:
 - mcp cli agent-surface scaffolding token-economics decision
+comments:
+- id: 01a0a3c7-9b6a-7ad0-8f1f-d4968ef7281e
+  author: joe
+  content: 'Fork RESOLVED (operator, 2026-09-14): fork B — recorded as ADR-30 (accepted). aida init registers the AIDA MCP server OPT-IN via --with-mcp; default init does NOT register it for Claude/Codex. Fork A''s guidance steer (CLAUDE.md/AGENTS.md/skills → CLI+TOON, name the ~2x cost) ships regardless (subset, not alternative). Safe to flip NOW because there are no downstream users but the operator; reversible via --with-mcp. Acceptance now pins B: default init has no AIDA MCP registration; --with-mcp opts in; the MCP-native install matrix stays a documented one-liner; THIS dev repo''s checked-in .mcp.json (dogfood) is unaffected — a scaffold refresh here must NOT strip it. Advisor note: with the keystone fork decided, execution_mode can move operator → drive (mechanical from here).'
+  created_at: 2026-09-15T06:36:02.794051059Z
+  modified_at: 2026-09-15T06:36:02.794051059Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
