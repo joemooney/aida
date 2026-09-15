@@ -3,12 +3,13 @@ spec_id: TASK-1232
 agreed_id: TASK-1232
 title: 'aida agent new --noexec/--print-command: show the resolved command line + permission posture (sandbox/approval) without launching'
 description: 'Operator (2026-09-14) keeps getting prompted for approvals launching codex at work and wants to SEE the exact command line AIDA would run + which permission rules apply, without executing. --show-context shows the role snapshot but not the argv. Add --noexec (alias --print-command) to aida agent new: print the fully-resolved vendor command line (codex/claude argv incl. sandbox/approval flags) AND the resolved permission posture (agents.toml bypass, codex --sandbox mode + --ask-for-approval policy) to stdout, then exit 0 without launching. Lets a user inspect + copy/tune the command. Pairs with the codex contained-autonomous posture task.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:03.079297975Z
-modified_at: 2026-09-15T05:24:03.079297975Z
+modified_at: 2026-09-15T06:21:22.728831067Z
 req_type: Task
 tags:
 - agents codex launcher ux permission-posture
+execution_mode: drain
