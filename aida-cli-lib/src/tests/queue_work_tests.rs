@@ -226,6 +226,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             for_role: Some("reviewer".to_string()),
             deferred: false,
             execution_mode: None,
+            tags: Default::default(),
         },
         AutoCompleteHeadCandidate {
             id: "TASK-944".to_string(),
@@ -233,6 +234,7 @@ fn auto_complete_head_skips_entries_routed_to_other_roles() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: None,
+            tags: Default::default(),
         },
     ];
 
@@ -255,6 +257,7 @@ fn auto_complete_head_skips_deferred_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: true,
             execution_mode: None,
+            tags: Default::default(),
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1208".to_string(),
@@ -262,6 +265,7 @@ fn auto_complete_head_skips_deferred_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: None,
+            tags: Default::default(),
         },
     ];
 
@@ -271,6 +275,39 @@ fn auto_complete_head_skips_deferred_candidates() {
     assert_eq!(pick.deferred_skipped, vec!["TASK-1205".to_string()]);
     assert!(pick.status_skipped.is_empty());
     assert!(pick.role_skipped.is_empty());
+}
+
+// trace:STORY-1125 | ai:codex
+#[test]
+fn auto_complete_head_skips_release_tagged_candidates() {
+    let candidates = vec![
+        AutoCompleteHeadCandidate {
+            id: "STORY-1125".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+            execution_mode: Some(aida_core::ExecutionMode::Drain),
+            tags: ["aida:release".to_string()].into_iter().collect(),
+        },
+        AutoCompleteHeadCandidate {
+            id: "TASK-1126".to_string(),
+            status: RequirementStatus::Approved,
+            for_role: Some("implementer".to_string()),
+            deferred: false,
+            execution_mode: Some(aida_core::ExecutionMode::Drain),
+            tags: Default::default(),
+        },
+    ];
+
+    let pick = pick_auto_complete_head_for_role(&candidates, "implementer")
+        .expect("headless drain should skip release tasks and pick normal drainable work");
+
+    assert_eq!(pick.spec, "TASK-1126");
+    assert_eq!(pick.release_skipped, vec!["STORY-1125".to_string()]);
+    assert!(pick.status_skipped.is_empty());
+    assert!(pick.role_skipped.is_empty());
+    assert!(pick.deferred_skipped.is_empty());
+    assert!(pick.guided_or_operator_skipped.is_empty());
 }
 
 // trace:BUG-1120 | ai:codex
@@ -283,6 +320,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Guided),
+            tags: Default::default(),
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1121".to_string(),
@@ -290,6 +328,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Operator),
+            tags: Default::default(),
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1122".to_string(),
@@ -297,6 +336,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Decide),
+            tags: Default::default(),
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1123".to_string(),
@@ -304,6 +344,7 @@ fn auto_complete_head_skips_guided_operator_and_decide_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Drain),
+            tags: Default::default(),
         },
     ];
 
