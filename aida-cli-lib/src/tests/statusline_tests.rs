@@ -956,6 +956,17 @@ fn advisor_authority_grants_orchestrated_ops_but_gates_bare_agents() {
     assert!(advisor_authority_from("reviewer", false, true)); // orchestrated reviewer phase
 }
 
+#[test]
+fn companion_instance_does_not_hold_advisor_authority() {
+    // trace:STORY-1133 | ai:codex
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_SESSION_ROLE", "advisor"),
+        ("AIDA_ROLE_INSTANCE", "companion"),
+    ]);
+
+    assert!(!super::has_advisor_authority());
+}
+
 /// BUG-498: the advisor-seat hint fires only when the resolved role is
 /// advisor (advisor work) AND the persistent seat was never established
 /// (`AIDA_SESSION_PROJECT` unset — i.e. advisor came from a one-off

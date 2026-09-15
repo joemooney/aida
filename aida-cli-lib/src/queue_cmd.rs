@@ -5065,6 +5065,13 @@ pub(crate) fn handle_queue_command(
             // bypasses; there is no `--force` on this path, so a non-advisor
             // seats the role. trace:STORY-647 | ai:claude
             if auto_complete.is_some() && !*resume_drain {
+                // trace:STORY-1133 | ai:codex
+                if current_role_instance_is_companion() {
+                    anyhow::bail!(
+                        "companion sessions cannot drive drains. Start the authoritative driver \
+                         seat for this role, or run `aida queue work --auto-complete` from the driver."
+                    );
+                }
                 enforce_team_gate(permissions::GatedOp::DrainStart, false)?;
             }
             // STORY-246: `--auto-complete` drives the full
@@ -8102,6 +8109,13 @@ pub(crate) fn handle_queue_work(
     if let Some(sid) = session_id {
         uuid::Uuid::parse_str(sid)
             .with_context(|| format!("--session-id `{}` is not a valid UUID", sid))?;
+    }
+    // trace:STORY-1133 | ai:codex
+    if current_role_instance_is_companion() {
+        anyhow::bail!(
+            "companion sessions cannot drive queued work. Use the authoritative driver seat \
+             for this role, or launch a doer role for implementation/review work."
+        );
     }
     // TASK-630: a deliberate PR-hold (BUG-250) parks the spec Done + dequeued
     // with a persisted marker at `.aida/pr-holds/<spec>.json`. Normal queue

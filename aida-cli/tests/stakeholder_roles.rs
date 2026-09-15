@@ -91,6 +91,32 @@ fn guest_refuses_write_commands() {
 }
 
 #[test]
+fn companion_refuses_to_drive_a_drain_via_burndown_run() {
+    // STORY-1133 (reviewer gap): a companion is a NON-authoritative instance of
+    // a driver role — it may read/converse/draft/advise but must NEVER drive a
+    // drain. `burndown run` is a drain-start path and was missing the companion
+    // gate that `queue work --auto-complete` already had. Even WITH advisor
+    // authority (AIDA_SESSION_ROLE=advisor), the companion INSTANCE is refused —
+    // and even the safe `--dry-run` gate-probe. trace:STORY-1133 | ai:claude
+    let (_base, repo, home) = init_repo();
+    let run = aida(&repo, &home)
+        .env("AIDA_ROLE_INSTANCE", "companion")
+        .env("AIDA_SESSION_ROLE", "advisor")
+        .args(["burndown", "run", "--dry-run"])
+        .output()
+        .expect("run companion burndown");
+    assert!(
+        !run.status.success(),
+        "companion burndown run must be refused"
+    );
+    let err = String::from_utf8_lossy(&run.stderr);
+    assert!(
+        err.contains("companion sessions cannot drive drains"),
+        "{err}"
+    );
+}
+
+#[test]
 fn requester_adds_allowed_intake_as_draft_with_tag() {
     let (_base, repo, home) = init_repo();
 
