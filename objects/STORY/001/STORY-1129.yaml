@@ -1,0 +1,33 @@
+id: 01a0a3c4-1779-7b00-acb2-eaad35b3f46b
+spec_id: STORY-1129
+agreed_id: STORY-1129
+title: Make the token-efficient CLI the DEFAULT agent surface end-to-end for CLI-capable agents; MCP stays the opt-in typed surface for MCP-native clients
+description: |-
+  The 2026-06-29 agent-surface benchmark (committed) found MCP costs ~2x the token-efficient CLI (AIDA_AGENT_OUTPUT/TOON) for identical tasks at equal-or-lower success. CLI-primary is already the documented doctrine AND the default OUTPUT surface (agent_output_mode() defaults to TOON for non-TTY callers, lib.rs:956). Two gaps remain that still nudge CLI-capable agents (Claude Code, Codex) toward the 2x surface:
+
+  GAP 1 — scaffolding registers MCP by default. `aida init` scaffolds the AIDA MCP server registration in BOTH Claude's .mcp.json AND Codex's [mcp_servers.aida] (scaffolding/codex_md.rs:74). So every fresh project registers the expensive surface; Claude Code in particular surfaces MCP tools prominently, so agents reach for them out of habit.
+
+  GAP 2 — scaffolded guidance does not steer to CLI. The scaffolded CLAUDE.md / AGENTS.md / skills templates do NOT contain the 'CLI is the primary agent surface; MCP is ~2x, use it only as the typed option' language (that lives only in THIS dev repo's CLAUDE.md, not the downstream template).
+
+  NOT a 'remove MCP' change — real tradeoff: MCP-native-only clients (Cursor, Windsurf, Continue, Cline, Copilot, Devin, Amp — the whole install matrix) can't drive a CLI ergonomically; for them MCP-by-default IS the on-ramp. Killing default MCP scaffolding hurts their first run.
+
+  DECISION FORK (operator's call):
+  A. Keep MCP registered by default for all, but STRENGTHEN scaffolded CLAUDE.md/AGENTS.md/skills to steer Claude+Codex hard to CLI+TOON and name the ~2x MCP cost. (Lowest risk; guidance-only.)
+  B. Make AIDA MCP registration for Claude/Codex OPT-IN (`aida init --with-mcp`), keep a documented one-command MCP setup for MCP-native clients, AND do the guidance steer. (Doctrine-consistent default; bigger change to init behavior + the install matrix on-ramp.)
+
+  Recommendation: at minimum A now (cheap, high-value, no downside); evaluate B as the doctrine-consistent default, gated on not regressing the MCP-native-client on-ramp (the install matrix stays a documented one-liner).
+
+  Acceptance:
+  - Scaffolded CLAUDE.md + AGENTS.md + the relevant skills tell CLI-capable agents to use the CLI (AIDA_AGENT_OUTPUT/TOON) for routine ops and name the ~2x MCP cost; MCP framed as the typed option for MCP-native clients.
+  - The chosen fork (A or B) is recorded as an ADR with the benchmark as evidence.
+  - If B: `aida init` no longer registers the AIDA MCP server by default for Claude/Codex; `--with-mcp` (or equivalent) opts in; the MCP-native-client install path stays a documented one-command setup; the dev repo's own dogfooding .mcp.json is unaffected.
+  - No regression to MCP-native client first-run (the install matrix path still works).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T06:32:12.409577134Z
+modified_at: 2026-09-15T06:32:12.409577134Z
+req_type: Story
+tags:
+- mcp cli agent-surface scaffolding token-economics decision
