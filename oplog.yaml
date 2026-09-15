@@ -68080,5 +68080,24 @@ operations:
       - --bypass-sandbox remains the explicit nuclear opt-in, unchanged; contained never implies bypass.
       - The resolved posture (tier + exact flags) is visible via --noexec (pairs with TASK-1232).
       - SPEC-ID / internal tokens stay out of any user-facing --help / stdout (user-facing-text conventions).
-clock: 5352
+- id: 01a0a3eb-2790-7e81-9af5-e7826740f39d
+  target_id: 01a0a3eb-14a1-78c2-8361-bb748eaf6008
+  author: aida
+  node_id: '1'
+  lamport: 5353
+  timestamp: 2026-09-15T07:14:52.432690464Z
+  kind: !Create
+    title: Posture writer defaults to --local scope; AIDA owns the ~/.codex write via a tested backed-up merge-writer (resolves EPIC-65 forks a+b)
+    description: |-
+      Decision (operator via /aida-derisk on STORY-1128, 2026-09-15) resolving EPIC-65 open forks (a) default scope and (b) whether AIDA writes the vendor-owned ~/.codex.
+
+      Fork (a) — default scope: BARE `aida config permissions set <tier>` writes PROJECT-LOCAL files (.aida/agents.toml + project .codex/config.toml). --user opts INTO machine-global (~/.aida/agents.toml + ~/.codex/config.toml). Rationale: lowest blast-radius default; sandboxes the work repo without touching a personal repo or the global codex; mixed-trust safe. The global convenience (covers plain codex + all projects) is an explicit --user opt-in.
+
+      Fork (b) — vendor file ownership: AIDA WRITES ~/.codex/config.toml itself (when --user), via the merge-preserving writer (top-level scalars kept before any table, so an inserted [sandbox_workspace_write] table cannot be prepended above existing scalars), ALWAYS writing a backup (~/.codex/config.toml.bak) before editing. Rationale: hand-editing is exactly what corrupted it on 2026-09-14 (the TOML table-ordering trap) — a tested writer is safer than a human editing TOML. The round-trip-config-with-leading-scalars corruption test is the gate.
+
+      Consequence: `set <tier> [--user|--local]` writes the correct files per scope; the ~/.codex write is tested (valid parse + preserved rest + backup) and gated by the corruption round-trip test. This applies to STORY-1128 (writer) and is inherited by TASK-1233 (init/scaffold) and STORY-1131 (config menu edit).
+    req_type: Decision
+    status: Approved
+    priority: Medium
+clock: 5353
 node_id: '1'
