@@ -60,6 +60,24 @@ fn accepts_specs_wrapper_shape() {
 }
 
 #[test]
+fn fences_keystone_tagged_work_specs() {
+    // A story/task is a drainable TYPE, but a keystone-marker tag must fence it
+    // — autoprogress may never headless-drive a keystone (BUG-1120 class). Tags
+    // arrive space-joined in one array element (the real list-surface shape).
+    let json = serde_json::json!([
+        { "spec_id": "STORY-1", "req_type": "Story", "tags": ["frontend keystone parent:EPIC-9"] },
+        { "spec_id": "TASK-2", "req_type": "Task", "tags": ["security"] },
+        { "spec_id": "TASK-3", "req_type": "Task", "tags": ["docs papercut"] },
+    ])
+    .to_string();
+    // Only the un-keystoned TASK-3 survives.
+    assert_eq!(
+        select_ready_from_json(&json, 10),
+        vec!["TASK-3".to_string()]
+    );
+}
+
+#[test]
 fn empty_or_malformed_json_is_empty_not_a_panic() {
     assert!(select_ready_from_json("", 5).is_empty());
     assert!(select_ready_from_json("not json", 5).is_empty());

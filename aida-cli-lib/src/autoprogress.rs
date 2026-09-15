@@ -179,7 +179,26 @@ pub(crate) fn select_ready_from_json(json: &str, max: usize) -> Vec<String> {
                 .or_else(|| it.get("type"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if is_drainable_type(ty) {
+            // Individual tags — the list surface space-joins them into array
+            // elements, so split each element back out.
+            let tags: Vec<String> = it
+                .get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|t| t.as_str())
+                        .flat_map(|s| s.split_whitespace())
+                        .map(str::to_string)
+                        .collect()
+                })
+                .unwrap_or_default();
+            // Fence: a drainable type AND never a keystone. Keystones (an epic,
+            // or a keystone/architecture/security/supervised-marker tag) must
+            // never be headless-driven by an unattended pass — the BUG-1120
+            // class. Reuses the canonical presence::is_keystone_class detector.
+            if is_drainable_type(ty)
+                && !crate::presence::is_keystone_class(ty, tags.iter().map(|s| s.as_str()))
+            {
                 Some(id.to_string())
             } else {
                 None
