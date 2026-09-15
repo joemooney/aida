@@ -1,0 +1,21 @@
+id: 01a0a385-ec30-7ed0-b1a9-9d5b90a00c91
+spec_id: STORY-1124
+agreed_id: STORY-1124
+title: 'Codex ''contained-autonomous'' posture: prompt-free BUT sandboxed (workspace-write + approve-for-me), a middle tier between codex-defaults and --bypass-sandbox'
+description: |-
+  Today aida agent new codex has two postures: bare = codex's normal approval/sandbox (constant prompts) or --bypass-sandbox = --dangerously-bypass-approvals-and-sandbox (removes BOTH sandbox and approvals — the nuclear the operator wants to avoid). There is no MIDDLE tier.
+
+  Codex supports the safe middle: --sandbox workspace-write (writes confined to the workspace, no unrestricted egress) + either --ask-for-approval on-failure/never OR --approve-for-me (auto-review approvals within the workspace-write sandbox). This is prompt-free BUT still sandboxed — dramatically safer than --dangerously-bypass (which drops the sandbox entirely).
+
+  Add a 'contained-autonomous' codex posture to the launcher, config-driven (agents.toml / .aida/config.toml), so aida agent new codex runs prompt-free-but-sandboxed without the operator hand-assembling --extra-flag chains, and WITHOUT the nuclear bypass. Surface the resolved posture in --noexec output. Also document setting ~/.codex/config.toml (sandbox_mode='workspace-write', approval_policy='on-failure') as the persistent per-user equivalent that covers non-AIDA codex use too.
+
+  Acceptance: a documented codex posture that is prompt-free but sandboxed; the launcher passes --sandbox workspace-write + the chosen approval policy; --bypass-sandbox stays the explicit nuclear opt-in; the resolved posture is visible via --noexec.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T05:24:18.096155572Z
+modified_at: 2026-09-15T05:24:18.096155572Z
+req_type: Story
+tags:
+- agents codex permission-posture sandbox security
