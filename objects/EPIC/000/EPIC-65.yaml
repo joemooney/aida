@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:11.375734789Z
-modified_at: 2026-09-15T06:27:14.735365192Z
+modified_at: 2026-09-15T06:27:16.202632798Z
 req_type: Epic
 tags:
 - agents permission-posture sandbox security config aida:config aida:doctor
@@ -34,4 +34,8 @@ relationships:
 - rel_type: References
   target_id: 01a0a385-ec30-7ed0-b1a9-9d5b90a00c91
   created_at: 2026-09-15T06:27:14.735359623Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0a385-b187-7aa3-98e4-cfe824f4a352
+  created_at: 2026-09-15T06:27:16.202627921Z
   created_by: joe
