@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:02:27.966162658Z
-modified_at: 2026-09-15T12:53:18.350576292Z
+modified_at: 2026-09-15T12:53:19.895189751Z
 req_type: Story
 tags:
 - agents roles driver-vs-companion adr-3 architecture aida:agent
@@ -41,4 +41,11 @@ relationships:
   target_id: 019e962e-71b5-7153-a856-b8d444389b34
   created_at: 2026-09-15T07:03:00.387891894Z
   created_by: joe
+comments:
+- id: 01a0a521-0597-7260-87c2-1f29be946568
+  author: joe
+  content: 'DE-RISK (operator resolved the fork, ADR-33 amends ADR-3): mode DRIVE. Companion boundary folded in — CAN read/converse/draft/advise; CANNOT approve/queue/mode-write/drive/hold-driver-lease (refusal points at the live driver); launcher OFFERS ''launch as companion'' when a driver seat is live. GATE (test): a companion is REFUSED each of approve/queue/mode-write/drive/lease, and the one driver stays singleton+authoritative. Advisor merges w/ review.'
+  created_at: 2026-09-15T12:53:19.895189751Z
+  modified_at: 2026-09-15T12:53:19.895189751Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
