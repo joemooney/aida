@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:57.963597562Z
-modified_at: 2026-09-15T06:26:57.963597562Z
+modified_at: 2026-09-15T06:29:35.962059384Z
 req_type: Story
 tags:
 - agents permission-posture config sandbox security aida:config aida:doctor parent:EPIC-65 depends-on:phase-1
@@ -28,3 +28,13 @@ relationships:
 - rel_type: Child
   target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
   created_at: 2026-09-15T06:27:02.007163768Z
+comments:
+- id: 01a0a3c1-b45a-7bb1-8f2b-0c1accf5f300
+  author: joe
+  content: |-
+    Acceptance additions (locked by operator decision on EPIC-65, 2026-09-14):
+    - Default scope is --local (project .aida/agents.toml + project .codex/config.toml); --user targets ~/.aida/agents.toml + ~/.codex/config.toml as the explicit machine-wide opt-in.
+    - Every write to a vendor-owned config file (~/.codex/config.toml or project .codex/config.toml) MUST: (1) write a timestamped backup first, (2) merge-preserve all unrelated keys/tables, (3) re-parse the result and FAIL (restoring the backup) if it does not parse. A regression test must round-trip a config whose file begins with top-level scalars (model/etc.) followed by tables, asserting an inserted [sandbox_workspace_write] table does NOT absorb those scalars.
+  created_at: 2026-09-15T06:29:35.962059384Z
+  modified_at: 2026-09-15T06:29:35.962059384Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
