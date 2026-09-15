@@ -19,12 +19,12 @@ description: |-
   - The one driver seat remains singleton and authoritative; no split-brain on disposition.
   - The driver-vs-companion distinction is recorded as an ADR amending ADR-3.
   - Multi-instance roles (implementer/reviewer/integrator) are unaffected.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:02:27.966162658Z
-modified_at: 2026-09-15T15:58:28.497268539Z
+modified_at: 2026-09-15T16:07:56.248247032Z
 req_type: Story
 tags:
 - agents roles driver-vs-companion adr-3 architecture aida:agent
@@ -58,16 +58,26 @@ comments:
   created_at: 2026-09-15T15:58:28.497268539Z
   modified_at: 2026-09-15T15:58:28.497268539Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a5d3-3051-7853-bd1b-971263430a7f
+  author: aida-auto-bump
+  timestamp: 2026-09-15T16:07:56.241857987Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a5d3-3058-7401-9cd8-00d64f2c29f8
+  timestamp: 2026-09-15T16:07:56.248246425Z
+  agent: aida
+  commit_sha: 3b4a519bb3750e73cfddef3d64c11a1865f3b07d
+  summary: Completed via merge 3b4a519b
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T14:56:58.116897151Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1133 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-15T15:12:02.204418963Z
+  completed_at: 2026-09-15T16:07:55.464400027Z
+  completion_sha: 3b4a519bb3750e73cfddef3d64c11a1865f3b07d
