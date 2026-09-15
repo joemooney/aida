@@ -10,12 +10,12 @@ description: |-
   Depends on accurate liveness: BUG-1156 (role/agent liveness currently tracks a long-lived ancestor shell pid, so 'live' can be wrong). Land BUG-1156 first or this alert shows false 'already live' flags.
 
   Acceptance: the `aida agent` role picker annotates each role with live-driver + single-instance status; a user is warned about a taken single-instance seat BEFORE selecting; the annotation reflects accurate liveness (post-BUG-1156); no behavior change to multi-instance roles (implementer/reviewer/integrator).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:01:50.895874489Z
-modified_at: 2026-09-15T15:26:34.273630986Z
+modified_at: 2026-09-15T15:39:30.656264551Z
 req_type: Task
 tags:
 - agents role-picker liveness ux aida:agent depends-on:bug-1156
@@ -32,7 +32,25 @@ relationships:
   target_id: 01a0a5ad-219c-77f2-92d5-32545b7ad40c
   created_at: 2026-09-15T15:26:27.988469098Z
   created_by: joe
+history:
+- id: 01a0a5b9-29d9-7a71-9aa5-e2832eff4ff0
+  author: aida-auto-bump
+  timestamp: 2026-09-15T15:39:30.649835856Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a5b9-29e0-7513-8f57-74ee8bb55d4b
+  timestamp: 2026-09-15T15:39:30.656263956Z
+  agent: aida
+  commit_sha: f8edb477df538b300cd1a53853a6edff43390373
+  summary: Completed via merge f8edb477
+  punted:
+  - 'punted: could not match the orchestrated session (claude id 01a0a494) to a session lease. Resume the most recent recorded session with `aida queue work TASK-1236 --resume` (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids): 01a09e3e7dbd, abf9f7f087dbb254e-c3a7f12a9af4d18b. (attempt 2/2)'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T15:26:34.273630986Z
   implemented_by: joe
+  completed_at: 2026-09-15T15:39:30.649718342Z
+  completion_sha: f8edb477df538b300cd1a53853a6edff43390373
