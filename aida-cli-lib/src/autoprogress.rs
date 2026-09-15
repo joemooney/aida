@@ -96,7 +96,7 @@ pub(crate) fn handle_autoprogress(opts: AutoprogressOpts) -> Result<()> {
 /// checked; otherwise we walk up from cwd. Refuses anything that is not a
 /// git-canonical AIDA project (`.aida/config.toml`) — this is the wrong-store
 /// guard that the hand-rolled cron lacked.
-fn resolve_project(explicit: Option<&str>) -> Result<PathBuf> {
+pub(crate) fn resolve_project(explicit: Option<&str>) -> Result<PathBuf> {
     let root = match explicit {
         Some(p) => {
             let path = PathBuf::from(p);

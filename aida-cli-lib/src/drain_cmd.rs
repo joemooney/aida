@@ -6,6 +6,18 @@
 // trace:STORY-771 | ai:claude
 
 use crate::*;
+use anyhow::Context;
+use serde::{Deserialize, Serialize};
+
+const DRAIN_STOP_FILE: &str = "drain-stop.json";
+const DRAIN_STOP_ENV: &str = "AIDA_DRAIN_STOP_FILE";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DrainStopRequest {
+    requested_at_utc: String,
+    mode: String,
+    pid: Option<u32>,
+}
 
 /// `aida drain status` — show the active `aida queue work --auto-complete`
 /// drain (STORY-301). Reads `.aida/drain-state.json`, corroborates the recorded
@@ -19,6 +31,36 @@ use crate::*;
 // LIVE, report the drain from the lock instead. trace:BUG-759 | ai:claude
 pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
     match cmd {
+        DrainCommand::Start {
+            selector,
+            project,
+            batch,
+            once,
+            no_human,
+            role,
+            max_failures,
+            max_iterations,
+            max_runtime,
+            max_tokens,
+            json,
+            vendor,
+            model,
+        } => handle_drain_start(
+            selector.as_deref(),
+            project.as_deref(),
+            batch.as_deref(),
+            *once,
+            no_human.as_deref(),
+            role.as_deref(),
+            *max_failures,
+            *max_iterations,
+            max_runtime.as_deref(),
+            *max_tokens,
+            *json,
+            vendor.as_deref(),
+            model.as_deref(),
+        ),
+        DrainCommand::Stop { now, project } => handle_drain_stop(project.as_deref(), *now),
         DrainCommand::Clear => {
             let project_root = find_main_worktree_root()
                 .or_else(|_| std::env::current_dir())
@@ -137,6 +179,161 @@ pub(crate) fn handle_drain_command(cmd: &DrainCommand) -> Result<()> {
             *annotate,
         ),
     }
+}
+
+// trace:STORY-1130 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn handle_drain_start(
+    selector: Option<&str>,
+    project: Option<&str>,
+    batch: Option<&str>,
+    once: bool,
+    no_human: Option<&str>,
+    role: Option<&str>,
+    max_failures: Option<usize>,
+    max_iterations: Option<u64>,
+    max_runtime: Option<&str>,
+    max_tokens: Option<u64>,
+    json: bool,
+    vendor: Option<&str>,
+    model: Option<&str>,
+) -> Result<()> {
+    let root = autoprogress::resolve_project(project)?;
+    if let drain_lock::LockStatus::Running(lock) = drain_lock::probe_lock(&root) {
+        anyhow::bail!(
+            "a drain is already running (pid {}, started {}, cmd `{}`)",
+            lock.pid,
+            lock.started_at_utc,
+            lock.command
+        );
+    }
+
+    clear_stop_request(&root);
+    let mut args: Vec<String> = vec!["queue".into(), "work".into()];
+    if let Some(sel) = selector.filter(|s| !s.trim().is_empty()) {
+        args.push(sel.to_string());
+    } else if once {
+        args.push("next".into());
+    }
+    args.push("--auto-complete".into());
+    if selector.is_none() && batch.is_none() && !once {
+        args.push("--drain".into());
+    }
+    if let Some(batch) = batch.filter(|s| !s.trim().is_empty()) {
+        args.push("--batch".into());
+        args.push(batch.to_string());
+    }
+    args.push(format!("--no-human={}", no_human.unwrap_or("both")));
+    if let Some(role) = role.filter(|s| !s.trim().is_empty()) {
+        args.push("--role".into());
+        args.push(role.to_string());
+    }
+    if let Some(n) = max_failures {
+        args.push("--max-failures".into());
+        args.push(n.to_string());
+    }
+    if let Some(n) = max_iterations {
+        args.push("--max-iterations".into());
+        args.push(n.to_string());
+    }
+    if let Some(v) = max_runtime.filter(|s| !s.trim().is_empty()) {
+        args.push("--max-runtime".into());
+        args.push(v.to_string());
+    }
+    if let Some(n) = max_tokens {
+        args.push("--max-tokens".into());
+        args.push(n.to_string());
+    }
+    if json {
+        args.push("--json".into());
+    }
+    if let Some(vendor) = vendor.filter(|s| !s.trim().is_empty()) {
+        args.push("--vendor".into());
+        args.push(vendor.to_string());
+    }
+    if let Some(model) = model.filter(|s| !s.trim().is_empty()) {
+        args.push("--model".into());
+        args.push(model.to_string());
+    }
+
+    if !json {
+        eprintln!("aida drain start -> aida {}", args.join(" "));
+        eprintln!("  project: {}", root.display().to_string().cyan());
+        eprintln!("  stop:    aida drain stop");
+    }
+
+    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let status = std::process::Command::new(exe)
+        .current_dir(&root)
+        .args(&args)
+        .env(DRAIN_STOP_ENV, drain_stop_path(&root))
+        .status()
+        .with_context(|| format!("failed to run `aida {}`", args.join(" ")))?;
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+// trace:STORY-1130 | ai:codex
+fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
+    let root = autoprogress::resolve_project(project)?;
+    let lock = match drain_lock::probe_lock(&root) {
+        drain_lock::LockStatus::Running(lock) => Some(lock),
+        _ => None,
+    };
+    if lock.is_none() {
+        println!("No drain in progress.");
+        return Ok(());
+    }
+    let lock = lock.unwrap();
+    write_stop_request(&root, if now { "now" } else { "graceful" }, Some(lock.pid))?;
+    if now {
+        let _ = std::process::Command::new("kill")
+            .arg("-TERM")
+            .arg(lock.pid.to_string())
+            .status();
+        let _ = std::fs::remove_file(drain_lock::drain_lock_path(&root));
+        let _ = drain_state::DrainState::clear(&root);
+        println!("Hard stop requested for drain pid {}.", lock.pid);
+    } else {
+        println!(
+            "Graceful stop requested for drain pid {}. The in-flight phase may finish; no new spec will be picked up.",
+            lock.pid
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn drain_stop_path(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join(DRAIN_STOP_FILE)
+}
+
+pub(crate) fn install_stop_request_env(project_root: &std::path::Path) {
+    std::env::set_var(DRAIN_STOP_ENV, drain_stop_path(project_root));
+}
+
+pub(crate) fn clear_stop_request(project_root: &std::path::Path) {
+    let _ = std::fs::remove_file(drain_stop_path(project_root));
+}
+
+pub(crate) fn stop_requested_from_env() -> bool {
+    std::env::var_os(DRAIN_STOP_ENV)
+        .map(std::path::PathBuf::from)
+        .map(|p| p.exists())
+        .unwrap_or(false)
+}
+
+fn write_stop_request(project_root: &std::path::Path, mode: &str, pid: Option<u32>) -> Result<()> {
+    let path = drain_stop_path(project_root);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let req = DrainStopRequest {
+        requested_at_utc: chrono::Utc::now().to_rfc3339(),
+        mode: mode.to_string(),
+        pid,
+    };
+    let json = serde_json::to_string_pretty(&req)?;
+    aida_core::write_atomic(&path, json)?;
+    Ok(())
 }
 
 /// `aida drain clear` — remove a stale drain-state file. Refuses
