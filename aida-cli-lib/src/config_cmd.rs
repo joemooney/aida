@@ -222,6 +222,8 @@ enum PolicySource {
     ProjectCodexConfig,
     /// Set in the global `~/.codex/config.toml`.
     GlobalCodexConfig,
+    /// Set by project-local `.mcp.json` file presence.
+    ProjectMcpJson,
     /// Overridden by an environment variable (named).
     Env(&'static str),
 }
@@ -236,6 +238,7 @@ impl PolicySource {
             PolicySource::GlobalConfig => "~/.aida/config.toml".dimmed().to_string(),
             PolicySource::ProjectCodexConfig => ".codex/config.toml".dimmed().to_string(),
             PolicySource::GlobalCodexConfig => "~/.codex/config.toml".dimmed().to_string(),
+            PolicySource::ProjectMcpJson => ".mcp.json".dimmed().to_string(),
             PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
         }
     }
@@ -252,6 +255,7 @@ impl PolicySource {
             PolicySource::GlobalConfig => "~/.aida/config.toml".to_string(),
             PolicySource::ProjectCodexConfig => ".codex/config.toml".to_string(),
             PolicySource::GlobalCodexConfig => "~/.codex/config.toml".to_string(),
+            PolicySource::ProjectMcpJson => ".mcp.json".to_string(),
             PolicySource::Env(name) => format!("{name} (env)"),
         }
     }
@@ -456,34 +460,44 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "egress deny — edit .aida/config.toml deliberately",
         },
     },
-    // --- [permissions] — computed per-agent launch posture (read-only). ---
-    // trace:STORY-1127 | ai:codex
+    // --- [permissions] — computed per-agent launch posture, menu-editable via
+    // `config permissions set` (STORY-1131). ---
+    // trace:STORY-1127 trace:STORY-1131 | ai:codex
     KnobSpec {
         section: "permissions",
         key: "claude",
-        doc: "Computed effective Claude launch permission tier, flags, and net effect.",
+        doc: "Computed effective Claude launch permission tier; cycle to write the selected posture.",
         default: "native",
-        edit: EditSafety::ReadOnly {
-            reason: "computed posture — use `aida config permissions show` for detail",
+        edit: EditSafety::Enum {
+            allowed: &["native", "contained", "bypass"],
         },
     },
     KnobSpec {
         section: "permissions",
         key: "codex",
-        doc: "Computed effective Codex launch permission tier, flags, and net effect.",
+        doc: "Computed effective Codex launch permission tier; cycle to write the selected posture.",
         default: "native",
-        edit: EditSafety::ReadOnly {
-            reason: "computed posture — use `aida config permissions show` for detail",
+        edit: EditSafety::Enum {
+            allowed: &["native", "contained", "bypass"],
         },
     },
     KnobSpec {
         section: "permissions",
         key: "antigravity",
-        doc: "Computed effective Antigravity launch permission tier, flags, and net effect.",
+        doc: "Computed effective Antigravity launch permission tier; cycle to write the selected posture.",
         default: "native",
-        edit: EditSafety::ReadOnly {
-            reason: "computed posture — use `aida config permissions show` for detail",
+        edit: EditSafety::Enum {
+            allowed: &["native", "contained", "bypass"],
         },
+    },
+    // --- [mcp] — derived project-local AIDA MCP registration. ---
+    // trace:STORY-1131 | ai:codex
+    KnobSpec {
+        section: "mcp",
+        key: "aida_registered",
+        doc: "Whether this project has a local `.mcp.json` AIDA MCP server registration.",
+        default: "no",
+        edit: EditSafety::Bool { default: false },
     },
     // --- [burndown]. ---
     KnobSpec {
@@ -1508,6 +1522,7 @@ fn policy_source_from_plain(label: &str) -> PolicySource {
         "~/.aida/config.toml" => PolicySource::GlobalConfig,
         ".codex/config.toml" => PolicySource::ProjectCodexConfig,
         "~/.codex/config.toml" => PolicySource::GlobalCodexConfig,
+        ".mcp.json" => PolicySource::ProjectMcpJson,
         _ => PolicySource::Default,
     }
 }
@@ -1844,10 +1859,11 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         }
     });
 
-    // --- Computed permission posture (STORY-1127). Compact read-only rows for
-    // `aida config show` / `aida config menu`; the detailed table and JSON live
-    // at `aida config permissions show`.
-    // trace:STORY-1127 | ai:codex
+    // --- Computed permission posture (STORY-1127). Compact rows for `aida
+    // config show` / `aida config menu`; the menu can cycle the tier through
+    // the same writer as `aida config permissions set` (STORY-1131). The
+    // detailed table and JSON live at `aida config permissions show`.
+    // trace:STORY-1127 trace:STORY-1131 | ai:codex
     sections.push({
         let report = permission_posture_report(project_root);
         let rows = report
@@ -1866,9 +1882,33 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
             .collect();
         PolicySection {
             section: "permissions",
-            header: "[permissions] — computed per-agent launch posture (read-only detail command)"
+            header: "[permissions] — computed per-agent launch posture (detail command available)"
                 .to_string(),
             rows,
+        }
+    });
+
+    // --- Local AIDA MCP registration (ADR-30 / STORY-1131). This is a derived
+    // row over `.mcp.json` presence, not a persistent config knob.
+    // trace:STORY-1131 | ai:codex
+    sections.push({
+        let registered = local_aida_mcp_registered(project_root);
+        let (value, source) = if registered {
+            (
+                "yes (local .mcp.json)".to_string(),
+                PolicySource::ProjectMcpJson,
+            )
+        } else {
+            ("no".to_string(), PolicySource::Default)
+        };
+        PolicySection {
+            section: "mcp",
+            header: "[mcp] — project-local MCP registration".to_string(),
+            rows: vec![PolicyRow {
+                key: "aida_registered",
+                value,
+                source,
+            }],
         }
     });
 
@@ -2553,7 +2593,7 @@ fn build_config_menu_items(project_root: &std::path::Path) -> Vec<aida_tui::Conf
             items.push(aida_tui::ConfigMenuItem {
                 section: section.section.to_string(),
                 name: row.key.to_string(),
-                value: strip_ansi_color(&row.value),
+                value: menu_row_value(section.section, row.key, &row.value),
                 default: default.to_string(),
                 scope: row.source.plain_label(),
                 explanation: explanation.to_string(),
@@ -2613,7 +2653,10 @@ fn resolve_config_menu_row(
         }
         for row in &s.rows {
             if row.key == key {
-                return Some((strip_ansi_color(&row.value), row.source.plain_label()));
+                return Some((
+                    menu_row_value(section, key, &row.value),
+                    row.source.plain_label(),
+                ));
             }
         }
     }
@@ -2648,6 +2691,14 @@ fn cli_edit_config_knob(
     if item.section == "agents" && matches!(item.name.as_str(), "claude" | "codex" | "antigravity")
     {
         return cli_edit_agent_profile(project_root, item);
+    }
+    if item.section == "permissions"
+        && matches!(item.name.as_str(), "claude" | "codex" | "antigravity")
+    {
+        return cli_edit_permission_posture(project_root, item, requested);
+    }
+    if item.section == "mcp" && item.name == "aida_registered" {
+        return cli_toggle_local_aida_mcp_registration(project_root);
     }
     let Some(meta) = config_knob_meta(&item.section, &item.name) else {
         return EditOutcome::Blocked(format!("{} is not editable here", item.name));
@@ -2722,6 +2773,159 @@ fn cli_edit_config_knob(
             scope: path.display().to_string(),
         },
     }
+}
+
+#[cfg(feature = "tui")]
+fn menu_row_value(section: &str, key: &str, raw: &str) -> String {
+    let plain = strip_ansi_color(raw);
+    if section == "permissions" && matches!(key, "claude" | "codex" | "antigravity") {
+        plain
+            .split_whitespace()
+            .next()
+            .unwrap_or(plain.as_str())
+            .to_string()
+    } else if section == "mcp" && key == "aida_registered" {
+        plain
+            .split_whitespace()
+            .next()
+            .unwrap_or(plain.as_str())
+            .to_string()
+    } else {
+        plain
+    }
+}
+
+#[cfg(feature = "tui")]
+fn cli_edit_permission_posture(
+    project_root: &std::path::Path,
+    item: &aida_tui::ConfigMenuItem,
+    requested: Option<&str>,
+) -> aida_tui::EditOutcome {
+    use aida_tui::EditOutcome;
+
+    let Some(requested) = requested else {
+        return EditOutcome::Blocked(format!("no tier supplied for {}", item.name));
+    };
+    let tier = match requested {
+        "contained" => ConfigPermissionTier::Contained,
+        "native" => ConfigPermissionTier::Native,
+        "bypass" => ConfigPermissionTier::Bypass,
+        other => return EditOutcome::Blocked(format!("{other:?} is not an allowed tier")),
+    };
+    let scope = if item.scope.starts_with("~/.") {
+        PermissionPostureScope::User
+    } else {
+        PermissionPostureScope::Local
+    };
+    if let Err(e) = apply_permission_posture(project_root, tier, scope) {
+        return EditOutcome::Blocked(format!("write failed: {e}"));
+    }
+    match resolve_config_menu_row(project_root, &item.section, &item.name) {
+        Some((value, scope)) => EditOutcome::Updated { value, scope },
+        None => EditOutcome::Updated {
+            value: requested.to_string(),
+            scope: scope.label().to_string(),
+        },
+    }
+}
+
+// trace:STORY-1131 | ai:codex
+fn local_aida_mcp_registered(project_root: &std::path::Path) -> bool {
+    read_local_mcp_json(project_root)
+        .ok()
+        .flatten()
+        .and_then(|root| {
+            root.get("mcpServers")
+                .and_then(|servers| servers.get("aida"))
+                .cloned()
+        })
+        .is_some()
+}
+
+#[cfg(feature = "tui")]
+fn cli_toggle_local_aida_mcp_registration(project_root: &std::path::Path) -> aida_tui::EditOutcome {
+    use aida_tui::EditOutcome;
+
+    let result = if local_aida_mcp_registered(project_root) {
+        remove_local_aida_mcp_registration(project_root)
+    } else {
+        add_local_aida_mcp_registration(project_root)
+    };
+    if let Err(e) = result {
+        return EditOutcome::Blocked(format!("MCP registration toggle failed: {e}"));
+    }
+    match resolve_config_menu_row(project_root, "mcp", "aida_registered") {
+        Some((value, scope)) => EditOutcome::Updated { value, scope },
+        None => EditOutcome::Updated {
+            value: if local_aida_mcp_registered(project_root) {
+                "yes".to_string()
+            } else {
+                "no".to_string()
+            },
+            scope: ".mcp.json".to_string(),
+        },
+    }
+}
+
+// trace:STORY-1131 | ai:codex
+fn add_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
+    let mut root = read_local_mcp_json(project_root)?.unwrap_or_else(|| serde_json::json!({}));
+    let root_obj = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!(".mcp.json must be a JSON object"))?;
+    let servers = root_obj
+        .entry("mcpServers")
+        .or_insert_with(|| serde_json::json!({}));
+    let servers_obj = servers
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("mcpServers must be a JSON object"))?;
+    let aida_exe = resolve_aida_exe();
+    servers_obj.insert(
+        "aida".to_string(),
+        serde_json::json!({
+            "command": aida_exe.to_string_lossy(),
+            "args": ["mcp-serve"],
+            "description": "AIDA — spec graph + coordination surface (STORY-361)"
+        }),
+    );
+    write_local_mcp_json(project_root, &root)
+}
+
+// trace:STORY-1131 | ai:codex
+fn remove_local_aida_mcp_registration(project_root: &std::path::Path) -> Result<()> {
+    let Some(mut root) = read_local_mcp_json(project_root)? else {
+        return Ok(());
+    };
+    let root_obj = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!(".mcp.json must be a JSON object"))?;
+    if let Some(servers) = root_obj
+        .get_mut("mcpServers")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        servers.remove("aida");
+    }
+    write_local_mcp_json(project_root, &root)
+}
+
+// trace:STORY-1131 | ai:codex
+fn read_local_mcp_json(project_root: &std::path::Path) -> Result<Option<serde_json::Value>> {
+    let path = project_root.join(".mcp.json");
+    match std::fs::read_to_string(&path) {
+        Ok(body) => serde_json::from_str(&body)
+            .map(Some)
+            .with_context(|| format!("parsing {}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+    }
+}
+
+// trace:STORY-1131 | ai:codex
+fn write_local_mcp_json(project_root: &std::path::Path, root: &serde_json::Value) -> Result<()> {
+    let path = project_root.join(".mcp.json");
+    let body = serde_json::to_string_pretty(root)?;
+    aida_core::write_atomic(&path, format!("{body}\n"))
+        .with_context(|| format!("writing {}", path.display()))
 }
 
 #[cfg(feature = "tui")]
@@ -3611,6 +3815,62 @@ mod bug_533_config_show_tests {
         let (fallback, _) = config_knob_doc("no_such_section", "no_such_key");
         assert_eq!(fallback, "(no description available)");
     }
+
+    // trace:STORY-1131 | ai:codex
+    #[test]
+    fn mcp_registration_row_reflects_local_file_presence() {
+        let dir = tempfile::tempdir().unwrap();
+        let section = policy_registry(dir.path())
+            .into_iter()
+            .find(|s| s.section == "mcp")
+            .expect("mcp section");
+        let row = section
+            .rows
+            .iter()
+            .find(|r| r.key == "aida_registered")
+            .expect("aida_registered row");
+        assert_eq!(row.value, "no");
+        assert!(matches!(row.source, PolicySource::Default));
+
+        add_local_aida_mcp_registration(dir.path()).unwrap();
+        let section = policy_registry(dir.path())
+            .into_iter()
+            .find(|s| s.section == "mcp")
+            .expect("mcp section");
+        let row = section
+            .rows
+            .iter()
+            .find(|r| r.key == "aida_registered")
+            .expect("aida_registered row");
+        assert!(row.value.starts_with("yes"), "{}", row.value);
+        assert!(matches!(row.source, PolicySource::ProjectMcpJson));
+    }
+
+    // trace:STORY-1131 | ai:codex
+    #[test]
+    fn mcp_registration_remove_preserves_unrelated_servers() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(".mcp.json"),
+            r#"{
+  "mcpServers": {
+    "aida": { "command": "aida", "args": ["mcp-serve"] },
+    "other": { "command": "other" }
+  },
+  "keep": true
+}"#,
+        )
+        .unwrap();
+
+        remove_local_aida_mcp_registration(dir.path()).unwrap();
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.path().join(".mcp.json")).unwrap())
+                .unwrap();
+        assert!(parsed["mcpServers"].get("aida").is_none(), "{parsed}");
+        assert_eq!(parsed["mcpServers"]["other"]["command"], "other");
+        assert_eq!(parsed["keep"], true);
+    }
 }
 
 /// STORY-671: the menu/edit surfaces derive their editability from `CONFIG_KNOBS`
@@ -3654,6 +3914,18 @@ mod story_671_edit_kind_tests {
             config_knob_edit_kind("agents", "codex"),
             aida_tui::EditKind::Bool
         );
+        assert_eq!(
+            config_knob_edit_kind("permissions", "codex"),
+            aida_tui::EditKind::Enum(vec![
+                "native".to_string(),
+                "contained".to_string(),
+                "bypass".to_string(),
+            ])
+        );
+        assert_eq!(
+            config_knob_edit_kind("mcp", "aida_registered"),
+            aida_tui::EditKind::Bool
+        );
         // Read-only declarations and undeclared knobs are not editable.
         assert_eq!(
             config_knob_edit_kind("agents", "bypass"),
@@ -3688,5 +3960,52 @@ mod story_671_edit_kind_tests {
         assert!(config_knob_meta("contained", "os_wrap").is_none());
         assert!(config_knob_meta("ui", "glyphs").is_none());
         assert!(config_knob_meta("seats", "anything").is_none());
+    }
+
+    // trace:STORY-1131 | ai:codex
+    #[test]
+    fn menu_permission_posture_edit_uses_posture_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let item = aida_tui::ConfigMenuItem {
+            section: "permissions".to_string(),
+            name: "codex".to_string(),
+            value: "native".to_string(),
+            default: "native".to_string(),
+            scope: "default".to_string(),
+            explanation: "".to_string(),
+            edit: config_knob_edit_kind("permissions", "codex"),
+        };
+
+        let outcome = cli_edit_permission_posture(dir.path(), &item, Some("contained"));
+        match outcome {
+            aida_tui::EditOutcome::Updated { value, .. } => assert_eq!(value, "contained"),
+            aida_tui::EditOutcome::Blocked(reason) => panic!("{reason}"),
+        }
+        let codex = std::fs::read_to_string(dir.path().join(".codex/config.toml")).unwrap();
+        assert!(
+            codex.contains("sandbox_mode = \"workspace-write\""),
+            "{codex}"
+        );
+        assert!(dir.path().join(".aida/agents.toml.bak").exists());
+    }
+
+    // trace:STORY-1131 | ai:codex
+    #[test]
+    fn menu_mcp_toggle_adds_then_removes_local_registration() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let added = cli_toggle_local_aida_mcp_registration(dir.path());
+        match added {
+            aida_tui::EditOutcome::Updated { value, .. } => assert_eq!(value, "yes"),
+            aida_tui::EditOutcome::Blocked(reason) => panic!("{reason}"),
+        }
+        assert!(local_aida_mcp_registered(dir.path()));
+
+        let removed = cli_toggle_local_aida_mcp_registration(dir.path());
+        match removed {
+            aida_tui::EditOutcome::Updated { value, .. } => assert_eq!(value, "no"),
+            aida_tui::EditOutcome::Blocked(reason) => panic!("{reason}"),
+        }
+        assert!(!local_aida_mcp_registered(dir.path()));
     }
 }
