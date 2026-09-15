@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:54.162451443Z
-modified_at: 2026-09-15T10:19:20.176432082Z
+modified_at: 2026-09-15T11:36:57.719864385Z
 req_type: Story
 tags:
 - release workflow meta-task aida:release
@@ -34,6 +34,13 @@ relationships:
   target_id: 01a0a490-b00e-7e92-84fe-1f4b2a41506a
   created_at: 2026-09-15T10:15:45.863418824Z
   created_by: joe
+comments:
+- id: 01a0a4db-1a77-76f2-9ab0-882f18b3fb08
+  author: joe
+  content: 'REWORK (reviewer RequestChanges on PR #1836): release-prep is fenced in autoprogress/batch paths, but the BARE auto-complete head-pickup path can still select release-tagged work. Extend the fence to the bare queue-work head-pickup path too; add a test that head-pickup skips a release-tagged spec.'
+  created_at: 2026-09-15T11:36:57.719864385Z
+  modified_at: 2026-09-15T11:36:57.719864385Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
   implemented: true
