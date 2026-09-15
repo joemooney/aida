@@ -15,12 +15,12 @@ description: |-
   - Launching an agent under terminator with a remotinator that lacks set_tab_title produces NO remotinator usage/error text in the terminal.
   - The agent still launches; title-setting remains best-effort.
   - Same suppression on the restore path.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:02:34.496069786Z
-modified_at: 2026-09-15T05:02:34.496069786Z
+modified_at: 2026-09-15T05:03:08.998027746Z
 req_type: Bug
 tags:
 - terminal-title story:994 papercut
