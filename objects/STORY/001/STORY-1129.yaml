@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:12.409577134Z
-modified_at: 2026-09-15T13:28:34.326231574Z
+modified_at: 2026-09-15T13:33:55.893604214Z
 req_type: Story
 tags:
 - mcp cli agent-surface scaffolding token-economics decision
@@ -54,3 +54,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-15T13:28:34.326231574Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1844: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 34975192373 — view it: `gh run view 34975192373`. Push fixups to the same branch: `aida queue work STORY-1129 --branch story-1129 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-15T13:33:55.893604214Z
