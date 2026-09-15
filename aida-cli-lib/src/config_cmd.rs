@@ -9,6 +9,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
+use crate::cli::ConfigPermissionsCommand;
 use crate::*;
 
 /// Handle ID configuration commands
@@ -185,6 +186,10 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
         ConfigCommand::Glyph(_) => {
             unreachable!("`aida config glyph` is dispatched before handle_config_command")
         }
+        ConfigCommand::Permissions(cmd) => {
+            // trace:STORY-1127 | ai:codex
+            handle_config_permissions_command(cmd)?;
+        }
         // STORY-661: `aida config menu` is intercepted before storage init in
         // the early-dispatch block, so it never reaches this generic handler.
         // trace:STORY-661 | ai:claude
@@ -200,7 +205,7 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
 /// `aida config show` so the operator can tell a deliberate override from an
 /// inherited default at a glance.
 // trace:BUG-533 | ai:claude
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum PolicySource {
     /// No file or env set this — the built-in default is in force.
     Default,
@@ -212,6 +217,10 @@ enum PolicySource {
     GlobalAgents,
     /// Set in the global `~/.aida/config.toml` (user-wide default). STORY-620.
     GlobalConfig,
+    /// Set in the project's `.codex/config.toml`.
+    ProjectCodexConfig,
+    /// Set in the global `~/.codex/config.toml`.
+    GlobalCodexConfig,
     /// Overridden by an environment variable (named).
     Env(&'static str),
 }
@@ -224,6 +233,8 @@ impl PolicySource {
             PolicySource::ProjectAgents => ".aida/agents.toml".dimmed().to_string(),
             PolicySource::GlobalAgents => "~/.aida/agents.toml".dimmed().to_string(),
             PolicySource::GlobalConfig => "~/.aida/config.toml".dimmed().to_string(),
+            PolicySource::ProjectCodexConfig => ".codex/config.toml".dimmed().to_string(),
+            PolicySource::GlobalCodexConfig => "~/.codex/config.toml".dimmed().to_string(),
             PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
         }
     }
@@ -238,6 +249,8 @@ impl PolicySource {
             PolicySource::ProjectAgents => ".aida/agents.toml".to_string(),
             PolicySource::GlobalAgents => "~/.aida/agents.toml".to_string(),
             PolicySource::GlobalConfig => "~/.aida/config.toml".to_string(),
+            PolicySource::ProjectCodexConfig => ".codex/config.toml".to_string(),
+            PolicySource::GlobalCodexConfig => "~/.codex/config.toml".to_string(),
             PolicySource::Env(name) => format!("{name} (env)"),
         }
     }
@@ -440,6 +453,35 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "false",
         edit: EditSafety::ReadOnly {
             reason: "egress deny — edit .aida/config.toml deliberately",
+        },
+    },
+    // --- [permissions] — computed per-agent launch posture (read-only). ---
+    // trace:STORY-1127 | ai:codex
+    KnobSpec {
+        section: "permissions",
+        key: "claude",
+        doc: "Computed effective Claude launch permission tier, flags, and net effect.",
+        default: "native",
+        edit: EditSafety::ReadOnly {
+            reason: "computed posture — use `aida config permissions show` for detail",
+        },
+    },
+    KnobSpec {
+        section: "permissions",
+        key: "codex",
+        doc: "Computed effective Codex launch permission tier, flags, and net effect.",
+        default: "native",
+        edit: EditSafety::ReadOnly {
+            reason: "computed posture — use `aida config permissions show` for detail",
+        },
+    },
+    KnobSpec {
+        section: "permissions",
+        key: "antigravity",
+        doc: "Computed effective Antigravity launch permission tier, flags, and net effect.",
+        default: "native",
+        edit: EditSafety::ReadOnly {
+            reason: "computed posture — use `aida config permissions show` for detail",
         },
     },
     // --- [burndown]. ---
@@ -730,6 +772,596 @@ fn render_effective_policy(project_root: &std::path::Path) {
     );
 }
 
+// trace:STORY-1127 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct PermissionPostureReport {
+    pub agents: Vec<PermissionPostureRow>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<PermissionPostureFinding>,
+}
+
+// trace:STORY-1127 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct PermissionPostureRow {
+    pub agent: String,
+    pub tier: String,
+    pub tier_source: String,
+    pub flags: Vec<String>,
+    pub flags_source: String,
+    pub prompts: String,
+    pub sandboxed: String,
+    pub network: String,
+    pub writable_roots: Vec<String>,
+    pub net_effect: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<PermissionPostureFinding>,
+}
+
+// trace:STORY-1127 | ai:codex
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct PermissionPostureFinding {
+    pub severity: String,
+    pub id: String,
+    pub agent: String,
+    pub summary: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone)]
+struct ScopedValue<T> {
+    value: T,
+    source: PolicySource,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CodexConfigPosture {
+    sandbox_mode: Option<ScopedValue<String>>,
+    approval_policy: Option<ScopedValue<String>>,
+    workspace_table_source: Option<PolicySource>,
+    network_access: Option<ScopedValue<bool>>,
+    writable_roots: Option<ScopedValue<Vec<String>>>,
+}
+
+/// `aida config permissions show` — read-only effective permission posture.
+// trace:STORY-1127 | ai:codex
+pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) -> Result<()> {
+    match cmd {
+        ConfigPermissionsCommand::Show { json } => {
+            let project_root = main_worktree_root_from(&find_project_root()?);
+            let report = permission_posture_report(&project_root);
+            if *json || output_format_is_json() || aida_agent_output_truthy() {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                render_permission_posture_report(&report);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn aida_agent_output_truthy() -> bool {
+    std::env::var("AIDA_AGENT_OUTPUT")
+        .ok()
+        .map(|v| {
+            !matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "" | "0" | "false" | "no" | "off" | "human"
+            )
+        })
+        .unwrap_or(false)
+}
+
+/// Doctor bridge: convert permission-posture warnings into normal doctor
+/// findings so `aida doctor --category permission-posture` exits non-zero.
+// trace:STORY-1127 | ai:codex
+pub(crate) fn scan_permission_posture_findings(
+    project_root: &std::path::Path,
+) -> Vec<DoctorFinding> {
+    permission_posture_report(project_root)
+        .findings
+        .into_iter()
+        .map(|f| DoctorFinding {
+            category: "permission-posture".to_string(),
+            id: f.id,
+            summary: format!("{}: {} ({})", f.agent, f.summary, f.severity),
+            action: format!(
+                "inspect `aida config permissions show`; adjust the setting at {} deliberately",
+                f.source
+            ),
+            safe_heal: false,
+        })
+        .collect()
+}
+
+// trace:STORY-1127 | ai:codex
+pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> PermissionPostureReport {
+    let codex = codex_config_posture(project_root);
+    let mut agents = Vec::new();
+    for agent in ["claude", "codex", "antigravity"] {
+        agents.push(permission_posture_for_agent(project_root, agent, &codex));
+    }
+    let findings = agents
+        .iter()
+        .flat_map(|a| a.findings.iter().cloned())
+        .collect();
+    PermissionPostureReport { agents, findings }
+}
+
+fn render_permission_posture_report(report: &PermissionPostureReport) {
+    println!("{}", "Permission Posture:".blue().bold());
+    println!(
+        "  {}",
+        "Read-only view of AIDA agent launch defaults and native Codex sandbox config.".dimmed()
+    );
+    println!();
+    println!(
+        "  {:<12} {:<10} {:<24} {:<12} {:<12} {}",
+        "agent".cyan(),
+        "tier".cyan(),
+        "flags".cyan(),
+        "prompts".cyan(),
+        "sandbox".cyan(),
+        "net effect".cyan()
+    );
+    for row in &report.agents {
+        println!(
+            "  {:<12} {:<10} {:<24} {:<12} {:<12} {}",
+            row.agent,
+            row.tier,
+            truncate_middle(&row.flags.join(" "), 24),
+            row.prompts,
+            row.sandboxed,
+            row.net_effect
+        );
+        println!(
+            "    scope: tier={} · flags={} · network={} · writable_roots={}",
+            row.tier_source.dimmed(),
+            row.flags_source.dimmed(),
+            row.network.dimmed(),
+            if row.writable_roots.is_empty() {
+                "(none)".dimmed().to_string()
+            } else {
+                row.writable_roots.join(", ").dimmed().to_string()
+            }
+        );
+        for finding in &row.findings {
+            let sev = if finding.severity == "high" {
+                finding.severity.red().bold().to_string()
+            } else {
+                finding.severity.yellow().to_string()
+            };
+            println!(
+                "    {} {}: {}",
+                "finding".yellow().bold(),
+                sev,
+                finding.summary
+            );
+        }
+    }
+    if report.findings.is_empty() {
+        println!();
+        println!(
+            "  {} no dangerous permission-posture inconsistencies detected",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
+    }
+}
+
+fn truncate_middle(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let keep = max.saturating_sub(1);
+    let left = keep / 2;
+    let right = keep.saturating_sub(left);
+    let start: String = s.chars().take(left).collect();
+    let end: String = s
+        .chars()
+        .rev()
+        .take(right)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    format!("{start}…{end}")
+}
+
+fn permission_posture_for_agent(
+    project_root: &std::path::Path,
+    agent: &str,
+    codex: &CodexConfigPosture,
+) -> PermissionPostureRow {
+    let per_tool = agent_default_flags_with_source(project_root, agent);
+    let bypass = agents_bool_with_source(project_root, "bypass").unwrap_or(ScopedValue {
+        value: false,
+        source: PolicySource::Default,
+    });
+    let contained = agents_contained_with_source(project_root).unwrap_or(ScopedValue {
+        value: false,
+        source: PolicySource::Default,
+    });
+
+    let (tier, tier_source, flags, flags_source) = if let Some(flags) = per_tool {
+        let tier = if flags.value.iter().any(|f| nuclear_permission_flag(f)) {
+            "bypass"
+        } else if flags.value.iter().any(|f| contained_permission_flag(f)) {
+            "contained"
+        } else {
+            "native"
+        };
+        (
+            tier.to_string(),
+            flags.source.plain_label(),
+            flags.value,
+            flags.source.plain_label(),
+        )
+    } else if contained.value {
+        (
+            "contained".to_string(),
+            contained.source.plain_label(),
+            display_tool_contained_flags(agent),
+            contained.source.plain_label(),
+        )
+    } else if bypass.value {
+        (
+            "bypass".to_string(),
+            bypass.source.plain_label(),
+            display_tool_bypass_flags(agent),
+            bypass.source.plain_label(),
+        )
+    } else {
+        (
+            "native".to_string(),
+            PolicySource::Default.plain_label(),
+            Vec::new(),
+            PolicySource::Default.plain_label(),
+        )
+    };
+
+    let mut findings = Vec::new();
+    let codex_sandbox_mode = codex
+        .sandbox_mode
+        .as_ref()
+        .map(|v| v.value.as_str())
+        .unwrap_or("native-default");
+    let codex_approval = codex
+        .approval_policy
+        .as_ref()
+        .map(|v| v.value.as_str())
+        .unwrap_or("native-default");
+    let codex_has_workspace_table = codex.workspace_table_source.is_some();
+    let network = if agent == "codex" {
+        match &codex.network_access {
+            Some(v) => format!("{} ({})", v.value, v.source.plain_label()),
+            None => "native-default".to_string(),
+        }
+    } else {
+        "native/tool-specific".to_string()
+    };
+    let writable_roots = if agent == "codex" {
+        codex
+            .writable_roots
+            .as_ref()
+            .map(|v| v.value.clone())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let prompts = if tier == "bypass"
+        || flags
+            .iter()
+            .any(|f| f == "bypassPermissions" || f.contains("dontAsk"))
+    {
+        "no".to_string()
+    } else if agent == "codex" && codex_approval == "never" {
+        "no".to_string()
+    } else {
+        "native".to_string()
+    };
+    let sandboxed = if tier == "bypass" {
+        "no".to_string()
+    } else if tier == "contained" {
+        if agent == "codex" && !codex_has_workspace_table {
+            "intended".to_string()
+        } else {
+            "yes".to_string()
+        }
+    } else if agent == "codex" {
+        match codex_sandbox_mode {
+            "danger-full-access" => "no".to_string(),
+            "workspace-write" | "read-only" => "yes".to_string(),
+            _ => "native".to_string(),
+        }
+    } else {
+        "native".to_string()
+    };
+
+    if tier == "bypass" && !codex_has_workspace_table {
+        findings.push(PermissionPostureFinding {
+            severity: "high".to_string(),
+            id: format!("{agent}-full-access-no-sandbox"),
+            agent: agent.to_string(),
+            summary:
+                "FULL ACCESS: bypass posture with no Codex sandbox_workspace_write table visible"
+                    .to_string(),
+            source: tier_source.clone(),
+        });
+    }
+    if tier == "contained" && !codex_has_workspace_table {
+        findings.push(PermissionPostureFinding {
+            severity: "high".to_string(),
+            id: format!("{agent}-contained-missing-codex-sandbox-table"),
+            agent: agent.to_string(),
+            summary:
+                "contained posture is configured, but Codex lacks [sandbox_workspace_write]; network/cargo may silently break"
+                    .to_string(),
+            source: tier_source.clone(),
+        });
+    }
+    if agent == "codex"
+        && codex.sandbox_mode.is_some()
+        && flags.iter().any(|f| nuclear_permission_flag(f))
+    {
+        findings.push(PermissionPostureFinding {
+            severity: "high".to_string(),
+            id: "codex-sandbox-overridden-by-default-flags".to_string(),
+            agent: agent.to_string(),
+            summary:
+                "Codex sandbox_mode is set, but nuclear default_flags override it with full access"
+                    .to_string(),
+            source: flags_source.clone(),
+        });
+    }
+
+    let net_effect = if tier == "bypass" {
+        "no prompts; unsandboxed".to_string()
+    } else if tier == "contained" {
+        "AIDA-contained launch".to_string()
+    } else if agent == "codex" {
+        format!("codex sandbox={codex_sandbox_mode}; approval={codex_approval}")
+    } else {
+        "tool native defaults".to_string()
+    };
+
+    PermissionPostureRow {
+        agent: agent.to_string(),
+        tier,
+        tier_source,
+        flags,
+        flags_source,
+        prompts,
+        sandboxed,
+        network,
+        writable_roots,
+        net_effect,
+        findings,
+    }
+}
+
+fn display_tool_bypass_flags(agent: &str) -> Vec<String> {
+    match agent {
+        "claude" => vec!["--permission-mode".into(), "bypassPermissions".into()],
+        "codex" => vec!["--dangerously-bypass-approvals-and-sandbox".into()],
+        "antigravity" => vec!["--dangerously-skip-permissions".into()],
+        _ => Vec::new(),
+    }
+}
+
+fn display_tool_contained_flags(agent: &str) -> Vec<String> {
+    match agent {
+        "claude" => vec!["--permission-mode".into(), "dontAsk".into()],
+        _ => Vec::new(),
+    }
+}
+
+fn nuclear_permission_flag(flag: &str) -> bool {
+    matches!(
+        flag,
+        "bypassPermissions"
+            | "--dangerously-bypass-approvals-and-sandbox"
+            | "--dangerously-skip-permissions"
+    )
+}
+
+fn contained_permission_flag(flag: &str) -> bool {
+    matches!(flag, "dontAsk" | "--sandbox" | "--settings")
+}
+
+fn agent_default_flags_with_source(
+    project_root: &std::path::Path,
+    agent: &str,
+) -> Option<ScopedValue<Vec<String>>> {
+    let global = aida_home_dir().map(|h| h.join(".aida/agents.toml"));
+    let project = project_root.join(".aida/agents.toml");
+    let global_flags = global
+        .as_deref()
+        .and_then(|p| agent_default_flags_from_file(p, agent));
+    let project_flags = agent_default_flags_from_file(&project, agent);
+    match (project_flags, global_flags) {
+        (Some(value), _) => Some(ScopedValue {
+            value,
+            source: PolicySource::ProjectAgents,
+        }),
+        (None, Some(value)) => Some(ScopedValue {
+            value,
+            source: PolicySource::GlobalAgents,
+        }),
+        (None, None) => None,
+    }
+}
+
+fn agent_default_flags_from_file(path: &std::path::Path, agent: &str) -> Option<Vec<String>> {
+    let value = parse_agents_toml(path).ok().flatten()?;
+    let flags = value
+        .get("agents")?
+        .get(agent)?
+        .get("default_flags")?
+        .as_array()?
+        .iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    Some(flags)
+}
+
+fn agents_bool_with_source(project_root: &std::path::Path, key: &str) -> Option<ScopedValue<bool>> {
+    let global = aida_home_dir().map(|h| h.join(".aida/agents.toml"));
+    let project = project_root.join(".aida/agents.toml");
+    let global_value = global
+        .as_deref()
+        .and_then(|p| read_agents_bool_from_file(p, key).ok().flatten());
+    let project_value = read_agents_bool_from_file(&project, key).ok().flatten();
+    match (project_value, global_value) {
+        (Some(value), _) => Some(ScopedValue {
+            value,
+            source: PolicySource::ProjectAgents,
+        }),
+        (None, Some(value)) => Some(ScopedValue {
+            value,
+            source: PolicySource::GlobalAgents,
+        }),
+        (None, None) => None,
+    }
+}
+
+fn agents_contained_with_source(project_root: &std::path::Path) -> Option<ScopedValue<bool>> {
+    let legacy = agents_bool_with_source(project_root, "contained");
+    let cfg = read_project_config_value(project_root);
+    let unified = config_lookup(cfg.as_ref(), "contained", "enable").and_then(|v| v.as_bool());
+    unified
+        .map(|value| ScopedValue {
+            value,
+            source: PolicySource::ProjectConfig,
+        })
+        .or(legacy)
+}
+
+fn policy_source_from_plain(label: &str) -> PolicySource {
+    match label {
+        ".aida/config.toml" => PolicySource::ProjectConfig,
+        ".aida/agents.toml" => PolicySource::ProjectAgents,
+        "~/.aida/agents.toml" => PolicySource::GlobalAgents,
+        "~/.aida/config.toml" => PolicySource::GlobalConfig,
+        ".codex/config.toml" => PolicySource::ProjectCodexConfig,
+        "~/.codex/config.toml" => PolicySource::GlobalCodexConfig,
+        _ => PolicySource::Default,
+    }
+}
+
+fn codex_config_posture(project_root: &std::path::Path) -> CodexConfigPosture {
+    let global = aida_home_dir().map(|h| h.join(".codex/config.toml"));
+    let project = project_root.join(".codex/config.toml");
+    let global_cfg = global.as_deref().and_then(read_toml_file);
+    let project_cfg = read_toml_file(&project);
+    let get_string = |key: &str| {
+        scoped_root_string(project_cfg.as_ref(), PolicySource::ProjectCodexConfig, key).or_else(
+            || scoped_root_string(global_cfg.as_ref(), PolicySource::GlobalCodexConfig, key),
+        )
+    };
+    let get_workspace_bool = |key: &str| {
+        scoped_table_bool(
+            project_cfg.as_ref(),
+            PolicySource::ProjectCodexConfig,
+            "sandbox_workspace_write",
+            key,
+        )
+        .or_else(|| {
+            scoped_table_bool(
+                global_cfg.as_ref(),
+                PolicySource::GlobalCodexConfig,
+                "sandbox_workspace_write",
+                key,
+            )
+        })
+    };
+    let get_workspace_array = |key: &str| {
+        scoped_table_string_array(
+            project_cfg.as_ref(),
+            PolicySource::ProjectCodexConfig,
+            "sandbox_workspace_write",
+            key,
+        )
+        .or_else(|| {
+            scoped_table_string_array(
+                global_cfg.as_ref(),
+                PolicySource::GlobalCodexConfig,
+                "sandbox_workspace_write",
+                key,
+            )
+        })
+    };
+    CodexConfigPosture {
+        sandbox_mode: get_string("sandbox_mode"),
+        approval_policy: get_string("approval_policy"),
+        workspace_table_source: if project_cfg
+            .as_ref()
+            .and_then(|v| v.get("sandbox_workspace_write"))
+            .and_then(|v| v.as_table())
+            .is_some()
+        {
+            Some(PolicySource::ProjectCodexConfig)
+        } else if global_cfg
+            .as_ref()
+            .and_then(|v| v.get("sandbox_workspace_write"))
+            .and_then(|v| v.as_table())
+            .is_some()
+        {
+            Some(PolicySource::GlobalCodexConfig)
+        } else {
+            None
+        },
+        network_access: get_workspace_bool("network_access"),
+        writable_roots: get_workspace_array("writable_roots"),
+    }
+}
+
+fn read_toml_file(path: &std::path::Path) -> Option<toml::Value> {
+    let body = std::fs::read_to_string(path).ok()?;
+    toml::from_str(&body).ok()
+}
+
+fn scoped_root_string(
+    cfg: Option<&toml::Value>,
+    source: PolicySource,
+    key: &str,
+) -> Option<ScopedValue<String>> {
+    let value = cfg?.get(key)?.as_str()?.trim().to_string();
+    (!value.is_empty()).then_some(ScopedValue { value, source })
+}
+
+fn scoped_table_bool(
+    cfg: Option<&toml::Value>,
+    source: PolicySource,
+    table: &str,
+    key: &str,
+) -> Option<ScopedValue<bool>> {
+    Some(ScopedValue {
+        value: cfg?.get(table)?.get(key)?.as_bool()?,
+        source,
+    })
+}
+
+fn scoped_table_string_array(
+    cfg: Option<&toml::Value>,
+    source: PolicySource,
+    table: &str,
+    key: &str,
+) -> Option<ScopedValue<Vec<String>>> {
+    Some(ScopedValue {
+        value: cfg?
+            .get(table)?
+            .get(key)?
+            .as_array()?
+            .iter()
+            .filter_map(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect(),
+        source,
+    })
+}
+
 /// The central config-policy registry (BUG-533 slice 2 / TASK-793). Returns one
 /// [`PolicySection`] per known config section, each carrying its resolved knob
 /// rows. This is the **single source of truth** consumed by `aida config show`
@@ -944,6 +1576,34 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         PolicySection {
             section: "contained",
             header: "[contained] — sandbox + egress posture".to_string(),
+            rows,
+        }
+    });
+
+    // --- Computed permission posture (STORY-1127). Compact read-only rows for
+    // `aida config show` / `aida config menu`; the detailed table and JSON live
+    // at `aida config permissions show`.
+    // trace:STORY-1127 | ai:codex
+    sections.push({
+        let report = permission_posture_report(project_root);
+        let rows = report
+            .agents
+            .into_iter()
+            .map(|row| PolicyRow {
+                key: match row.agent.as_str() {
+                    "claude" => "claude",
+                    "codex" => "codex",
+                    "antigravity" => "antigravity",
+                    _ => "unknown",
+                },
+                value: format!("{} ({})", row.tier, row.net_effect),
+                source: policy_source_from_plain(&row.tier_source),
+            })
+            .collect();
+        PolicySection {
+            section: "permissions",
+            header: "[permissions] — computed per-agent launch posture (read-only detail command)"
+                .to_string(),
             rows,
         }
     });
@@ -2413,6 +3073,88 @@ mod bug_533_config_show_tests {
         assert_eq!(value_for("claude"), "disabled");
         assert_eq!(value_for("codex"), "enabled");
         assert_eq!(value_for("antigravity"), "disabled");
+    }
+
+    #[test]
+    fn permission_posture_flags_full_access_without_codex_sandbox_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+        std::fs::write(
+            home.path().join(".aida/agents.toml"),
+            "[agents]\nbypass = true\n",
+        )
+        .unwrap();
+
+        let report = permission_posture_report(dir.path());
+
+        assert!(
+            report
+                .findings
+                .iter()
+                .any(|f| f.severity == "high" && f.id == "claude-full-access-no-sandbox"),
+            "bypass without a Codex sandbox table must be called out loudly: {report:?}"
+        );
+    }
+
+    #[test]
+    fn permission_posture_flags_contained_without_codex_sandbox_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[contained]\nenable = true\n",
+        )
+        .unwrap();
+
+        let report = permission_posture_report(dir.path());
+
+        assert!(
+            report.findings.iter().any(|f| {
+                f.severity == "high" && f.id == "codex-contained-missing-codex-sandbox-table"
+            }),
+            "contained without [sandbox_workspace_write] must be flagged: {report:?}"
+        );
+    }
+
+    #[test]
+    fn permission_posture_accepts_codex_workspace_sandbox_table() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::create_dir_all(home.path().join(".codex")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[contained]\nenable = true\n",
+        )
+        .unwrap();
+        std::fs::write(
+            home.path().join(".codex/config.toml"),
+            "sandbox_mode = \"workspace-write\"\n\
+             approval_policy = \"on-request\"\n\
+             [sandbox_workspace_write]\n\
+             network_access = true\n\
+             writable_roots = [\"/tmp/cache\"]\n",
+        )
+        .unwrap();
+
+        let report = permission_posture_report(dir.path());
+
+        assert!(
+            report.findings.is_empty(),
+            "workspace-write table satisfies contained diagnostics: {report:?}"
+        );
+        let codex = report
+            .agents
+            .iter()
+            .find(|row| row.agent == "codex")
+            .expect("codex row");
+        assert_eq!(codex.network, "true (~/.codex/config.toml)");
+        assert_eq!(codex.writable_roots, vec!["/tmp/cache".to_string()]);
     }
 
     /// The doc table is now a view over the registry (STORY-671): a declared

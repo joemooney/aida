@@ -19867,6 +19867,14 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         // headless, or configured TUI) whose CLI binary is missing from PATH.
         // trace:STORY-762 | ai:claude
         "vendor-binary" | "vendor-binaries" | "vendor" | "vendors" => "vendor-binary",
+        // STORY-1127: effective sandbox/approval posture across AIDA agent
+        // launch defaults and native Codex config.
+        // trace:STORY-1127 | ai:codex
+        "permission-posture"
+        | "permission-postures"
+        | "permissions"
+        | "agent-permissions"
+        | "sandbox-posture" => "permission-posture",
         // TASK-1124: deployed vendor prompts/skills (project .claude/.codex +
         // ~/.codex/prompts) drifted from the binary's embedded source templates
         // — rule-delivery-rot. trace:TASK-1124 | ai:claude
@@ -19892,8 +19900,8 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
              orphan-branches, stale-remote-branches, merged-agent-worktrees, \
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
-             store-tracked-runtime, remote-drift, ci, vendor-binary, scaffold-drift, \
-             store-scrub, agents-wiring, worktree-container-gitdir)",
+             store-tracked-runtime, remote-drift, ci, vendor-binary, permission-posture, \
+             scaffold-drift, store-scrub, agents-wiring, worktree-container-gitdir)",
             other
         ),
     };
