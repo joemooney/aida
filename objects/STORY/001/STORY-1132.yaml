@@ -21,12 +21,12 @@ description: |-
   - It REFUSES to propose drain for a destructive-action or drain-self-modification spec, naming the class.
   - The advisor confirms the execution_mode write (never silent).
   - No change to the drain engine or the pickup fence itself — this only moves specs across the existing guided/drive/drain boundary by making them ready.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:43:10.752381481Z
-modified_at: 2026-09-15T06:51:37.361181082Z
+modified_at: 2026-09-15T06:52:51.963118664Z
 req_type: Story
 tags:
 - autonomy execution-mode guided derisk skill calibration aida:groom decision
@@ -37,4 +37,22 @@ comments:
   created_at: 2026-09-15T06:51:37.361181082Z
   modified_at: 2026-09-15T06:51:37.361181082Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a3d7-0174-7773-b873-f49c78e47a40
+  author: aida-auto-bump
+  timestamp: 2026-09-15T06:52:51.956822794Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0a3d7-017b-7e73-963a-addc38a4ba75
+  timestamp: 2026-09-15T06:52:51.963117878Z
+  agent: aida
+  commit_sha: 6bd5532d41d6eb2e7f0c185fd62a3d3a38a92731
+  summary: Completed via merge 6bd5532d
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-15T06:52:51.956692902Z
+  completion_sha: 6bd5532d41d6eb2e7f0c185fd62a3d3a38a92731
