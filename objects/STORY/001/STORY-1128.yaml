@@ -3,24 +3,31 @@ spec_id: STORY-1128
 agreed_id: STORY-1128
 title: 'aida config permissions set contained|native|bypass [--user|--local] + doctor heal: idempotent TOML-merge writer for the posture files'
 description: |-
-  The WRITER slice (depends on the show/check slice + STORY-1124's named posture). `aida config permissions set <tier> [--user|--local]` applies a named posture by editing the right files idempotently, merge-preserving, with a backup:
-  - contained: writes [agents.<tool>] default_flags (codex: --sandbox=workspace-write --ask-for-approval=never) + the vendor [sandbox_workspace_write] table (network_access=true, writable_roots seeded with ~/.cargo,~/.rustup,~/.aida). Claude native contained equivalent via .aida/config.toml [contained].
+  The WRITER slice of EPIC-65 (depends on STORY-1127 show/check + STORY-1124's named contained posture). `aida config permissions set <tier> [--user|--local]` applies a named posture by editing the right files idempotently, merge-preserving, with a backup.
+
+  DECIDED (ADR-32, via /aida-derisk 2026-09-15 — resolves EPIC-65 forks a+b):
+  - SCOPE DEFAULT: bare `set <tier>` writes PROJECT-LOCAL (.aida/agents.toml + project .codex/config.toml); --user opts INTO machine-global (~/.aida/agents.toml + ~/.codex/config.toml). Local is the low-blast-radius default; global is explicit.
+  - AIDA WRITES ~/.codex itself (on --user) via the tested merge-preserving writer + a backup — a tested writer beats the hand-edit that corrupted it on 2026-09-14.
+
+  Tiers:
+  - contained: [agents.codex] default_flags = --sandbox workspace-write --ask-for-approval never (per ADR-31) + the vendor [sandbox_workspace_write] table (network_access=true, writable_roots seeded ~/.cargo,~/.rustup,~/.aida). Claude native contained equivalent via .aida/config.toml [contained].
   - native: removes the injected flags, restores faithful-launcher prompting.
-  - bypass: the explicit nuclear opt-in (what bypass=true does today), gated with a clear warning.
+  - bypass: the explicit nuclear opt-in (--dangerously-bypass), gated with a clear warning.
 
-  Scope fork (--user vs --local): --user writes ~/.aida/agents.toml + ~/.codex/config.toml (covers plain codex + all projects); --local writes project .aida/agents.toml + project .codex/config.toml (safe for mixed trust — sandbox the work repo, leave a personal repo alone). Default TBD by EPIC-65 fork (a).
-
-  MUST handle the TOML table-ordering trap that corrupted the file during the 2026-09-14 hand-edit: top-level scalars (sandbox_mode/approval_policy/model) must precede any table, so an inserted [sandbox_workspace_write] table cannot be prepended above existing scalars. Reuse the merge-preserving writer pattern from `config glyph`/`config user`/mcp_translate (which already writes project .codex/config.toml). Always back up the vendor file before editing.
-
-  `aida doctor --category permission-posture heal` calls this to apply the fix for a flagged drift.
-
-  Acceptance: set contained/native/bypass each produce a valid, tomllib-parseable file with the rest preserved and a backup written; --user vs --local target the correct files; re-running is idempotent (no dup blocks); the codex table-ordering trap is covered by a test that round-trips a config with leading scalars; doctor heal applies contained for a flagged full-access state.
+  Acceptance (forks decided; safety testable/CI-gated — merge stays supervised, see mode):
+  - set contained/native/bypass each produce a valid, parseable file with the rest preserved and a backup written; re-running is idempotent (no duplicate blocks).
+  - Bare command targets PROJECT-LOCAL files; --user targets the machine-global files. A test asserts each scope writes the correct paths.
+  - TABLE-ORDERING GATE (test): a round-trip of a ~/.codex config with LEADING top-level scalars (sandbox_mode/approval_policy/model) followed by tables stays valid — the inserted [sandbox_workspace_write] table never lands above the scalars. This is the 2026-09-14 corruption, covered.
+  - HERMETICITY (test + review): every writer test targets a TEMP dir, never the real $HOME/~/.codex — verified in review before merge.
+  - BACKUP GATE: the vendor file is always backed up before editing; a test asserts the .bak is written.
+  - doctor --category permission-posture heal calls this to apply contained for a flagged full-access state.
+  - set bypass requires the explicit tier + prints the nuclear warning; no other tier yields --dangerously-bypass (test).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:57.963597562Z
-modified_at: 2026-09-15T06:35:50.599492867Z
+modified_at: 2026-09-15T07:15:16.911550893Z
 req_type: Story
 tags:
 - agents permission-posture config sandbox security aida:config aida:doctor parent:EPIC-65 depends-on:phase-1
