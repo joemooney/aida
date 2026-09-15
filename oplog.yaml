@@ -68717,5 +68717,31 @@ operations:
   timestamp: 2026-09-15T12:06:42.502145930Z
   kind: !SetStatus
     status: Completed
-clock: 5389
+- id: 01a0a509-72c9-75f1-8534-d982d4d93f09
+  target_id: 01a0a509-6a06-7612-be56-9d9636e56959
+  author: aida
+  node_id: '1'
+  lamport: 5390
+  timestamp: 2026-09-15T12:27:34.985600483Z
+  kind: !Create
+    title: 'Review PR-1841: [AI:codex] feat(release): gate queued release prep before publish (STORY-1125)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a4fa`) for branch `story-1125`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1841>
+      - Branch: `story-1125` → `main`
+
+      ## Covers
+
+      - STORY-1125
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1841` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5390
 node_id: '1'
