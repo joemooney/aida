@@ -12,12 +12,12 @@ description: |-
   Depends on STORY-1127 (resolved-tier display) + STORY-1128 (the set writer). References ADR-30 / STORY-1129 for the MCP-registration semantics.
 
   Acceptance: config menu can change at least the permission-posture tier per agent in place (via the STORY-1128 writer, with its safety + scope), no longer purely read-only for that knob; an 'AIDA MCP registered' row shows the current state and a toggle adds/removes the local registration; integrity-floor knobs remain read-only or confirm-gated; the read-only fallback (no TTY) still points at `config show` / `config permissions show`.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:39:41.386724952Z
-modified_at: 2026-09-15T06:39:55.115374847Z
+modified_at: 2026-09-15T06:47:11.866949428Z
 req_type: Story
 tags:
 - config config-menu ux editability permission-posture mcp aida:config parent:EPIC-65
@@ -33,3 +33,4 @@ relationships:
   target_id: 01a0a3bf-4b2b-7511-b772-05fce9155280
   created_at: 2026-09-15T06:39:55.115369235Z
   created_by: joe
+execution_mode: guided
