@@ -15,12 +15,12 @@ description: |-
   - Launching an agent under terminator with a remotinator that lacks set_tab_title produces NO remotinator usage/error text in the terminal.
   - The agent still launches; title-setting remains best-effort.
   - Same suppression on the restore path.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:02:34.496069786Z
-modified_at: 2026-09-15T05:06:46.115987867Z
+modified_at: 2026-09-15T05:15:46.187524298Z
 req_type: Bug
 tags:
 - terminal-title story:994 papercut
@@ -31,3 +31,21 @@ comments:
   created_at: 2026-09-15T05:06:46.115987867Z
   modified_at: 2026-09-15T05:06:46.115987867Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a37e-1c85-74c0-8484-bfd9c67d3702
+  author: aida-auto-bump
+  timestamp: 2026-09-15T05:15:46.181116052Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0a37e-1c8b-7480-b186-db0ebe9cdf61
+  timestamp: 2026-09-15T05:15:46.187523059Z
+  agent: aida
+  commit_sha: 27561a14576d4cd3265d0a39701781f27dcbefe8
+  summary: Completed via merge 27561a14
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-15T05:15:46.180987183Z
+  completion_sha: 27561a14576d4cd3265d0a39701781f27dcbefe8
