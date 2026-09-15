@@ -287,7 +287,9 @@ fn auto_complete_head_skips_release_tagged_candidates() {
             for_role: Some("implementer".to_string()),
             deferred: false,
             execution_mode: Some(aida_core::ExecutionMode::Drain),
-            tags: ["aida:release".to_string()].into_iter().collect(),
+            tags: ["release workflow meta-task aida:release".to_string()]
+                .into_iter()
+                .collect(),
         },
         AutoCompleteHeadCandidate {
             id: "TASK-1126".to_string(),

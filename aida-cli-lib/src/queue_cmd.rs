@@ -9894,7 +9894,8 @@ impl AutoCompleteHeadCandidate {
     pub(crate) fn is_release_task(&self) -> bool {
         self.tags
             .iter()
-            .any(|tag| tag.trim().eq_ignore_ascii_case("aida:release"))
+            .flat_map(|tag| tag.split_whitespace())
+            .any(crate::presence::is_release_operator_tag)
     }
 }
 
