@@ -19,12 +19,12 @@ description: |-
   - Tests cover: guest write-refusal, requester add-allowed-as-Draft, requester non-add-write-refusal.
 
   Out of scope (deferred to epic followups): curated /aida-intro surface, per-user identity + rate-limiting (revisit when attribution/spam becomes a forcing function), hosted request front door.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:46.513977697Z
-modified_at: 2026-09-15T07:07:29.289593702Z
+modified_at: 2026-09-15T10:42:21.224757412Z
 req_type: Story
 tags:
 - guest-requester-persona role intake parent:epic-64 slice-1
