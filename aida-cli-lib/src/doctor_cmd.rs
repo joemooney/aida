@@ -2142,6 +2142,10 @@ fn heal_doctor_finding(
         "orphan-queue-entries" => heal_doctor_orphan_queue_entry(project_root, finding),
         "stale-locks" => heal_doctor_stale_lock(finding),
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
+        // STORY-1128: permission-posture heal applies the contained profile
+        // through the same merge-preserving writer as `config permissions set`.
+        // trace:STORY-1128 | ai:codex
+        "permission-posture" => heal_doctor_permission_posture(project_root, finding),
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
         }
@@ -2180,6 +2184,39 @@ fn heal_doctor_finding(
             detail: Some("diagnostic-only category; follow the printed action".to_string()),
         }),
     }
+}
+
+// trace:STORY-1128 | ai:codex
+fn heal_doctor_permission_posture(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let result = crate::config_cmd::apply_permission_posture(
+        project_root,
+        cli::ConfigPermissionTier::Contained,
+        crate::config_cmd::PermissionPostureScope::Local,
+    )?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: "applied contained permission posture".to_string(),
+        status: "healed".to_string(),
+        detail: Some(format!(
+            "wrote {}; backups {}",
+            result
+                .edited_paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            result
+                .backup_paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    })
 }
 
 /// STORY-496: reap a dead-PID agent-registry entry. The finding id is
@@ -4341,6 +4378,45 @@ hostname = "localhost"
         );
         let reloaded = storage.load().unwrap();
         assert_eq!(reloaded.requirements[0].status, RequirementStatus::Approved);
+    }
+
+    // trace:STORY-1128 | ai:codex
+    #[test]
+    fn permission_posture_heal_applies_contained_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let finding = DoctorFinding {
+            category: "permission-posture".to_string(),
+            id: "codex-full-access-no-sandbox".to_string(),
+            summary: "Codex full access without sandbox".to_string(),
+            action: "apply contained posture".to_string(),
+            safe_heal: true,
+        };
+
+        let result = heal_doctor_finding(
+            dir.path(),
+            &finding,
+            &DoctorRunOptions {
+                heal: true,
+                yes: true,
+                category: Some("permission-posture".to_string()),
+                json: false,
+                force: false,
+                all: false,
+                since: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.status, "healed");
+        let agents = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
+        let codex = std::fs::read_to_string(dir.path().join(".codex/config.toml")).unwrap();
+        assert!(agents.contains("contained = true"), "{agents}");
+        assert!(
+            codex.contains("sandbox_mode = \"workspace-write\""),
+            "{codex}"
+        );
+        assert!(dir.path().join(".aida/agents.toml.bak").exists());
+        assert!(dir.path().join(".codex/config.toml.bak").exists());
     }
 
     #[test]
