@@ -1044,7 +1044,7 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
         QueueFreshPickup::Archived => Some("archived — skipped".to_string()),
         QueueFreshPickup::Deferred => Some("deferred — skipped".to_string()),
         QueueFreshPickup::NeedsGuidedOrOperatorSession(mode) => Some(format!(
-            "skipped — needs guided/operator session ({mode}); use `aida queue work --guided` or `aida do`"
+            "skipped — needs guided/operator session ({mode}); use `aida queue work --guided`, `aida do`, or de-risk it with `aida derisk <SPEC>`"
         )),
         QueueFreshPickup::AwaitingMerge => Some(
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
@@ -10040,7 +10040,7 @@ pub(crate) fn resolve_auto_complete_head(
             }
             for (id, mode) in &pick.guided_or_operator_skipped {
                 eprintln!(
-                    "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided` or `aida do {id}`"
+                    "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided`, `aida do {id}`, or de-risk it with `aida derisk {id}`"
                 );
             }
             // Acceptance criterion: name each item skipped to reach the
@@ -10130,7 +10130,7 @@ pub(crate) fn resolve_auto_complete_head(
                 .collect();
             for (id, mode) in &guided_or_operator_skipped {
                 eprintln!(
-                    "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided` or `aida do {id}`"
+                    "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided`, `aida do {id}`, or de-risk it with `aida derisk {id}`"
                 );
             }
             // The queue has items, but every one is in-flight or terminal —

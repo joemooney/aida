@@ -136,6 +136,8 @@ order = "priority"   # or "queue" for strict queue-insertion order
 
 **Don't reach for it when** — you want to *start* a drain (`queue work --auto-complete`) or see the *ready set* before one starts (`burndown plan`). `drain` is observation of an in-flight run only.
 
+**A spec won't drain?** If the queue says it needs a guided/operator session, run `aida derisk <SPEC>` to launch the advisor de-risking workflow for that spec.
+
 **Chains with** — the observation counterpart to `queue work --auto-complete`; pairs with `aida findings` to triage anything the drain shelved.
 
 ---

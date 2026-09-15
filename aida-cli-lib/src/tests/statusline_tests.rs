@@ -4211,6 +4211,18 @@ fn test_ultraplan_copy_flag() {
     assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--json"]).is_err());
 }
 
+#[test]
+fn test_derisk_command_parses_spec() {
+    use crate::cli::{Cli, Command};
+    use clap::Parser;
+
+    let cli = Cli::try_parse_from(["aida", "derisk", "TASK-1235"]).unwrap();
+    match cli.command {
+        Command::Derisk { spec } => assert_eq!(spec, "TASK-1235"),
+        other => panic!("expected Derisk command, got {other:?}"),
+    }
+}
+
 /// TASK-516: the `aida queue work` warn-decision fires exactly when the
 /// spec carries `plan-review:pending`, and stays silent otherwise.
 /// Fully isolated — feeds tag sets straight into the pure decision
