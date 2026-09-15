@@ -69031,5 +69031,17 @@ operations:
   timestamp: 2026-09-15T14:46:23.238807910Z
   kind: !SetStatus
     status: Completed
-clock: 5406
+- id: 01a0a58c-a6bb-7eb1-a5bb-6649031fc4a8
+  target_id: 01a0a58c-a0cc-7e30-b9db-ef4e0901eac7
+  author: aida
+  node_id: '1'
+  lamport: 5407
+  timestamp: 2026-09-15T14:50:53.499206276Z
+  kind: !Create
+    title: Driver seats may have non-authoritative companion instances
+    description: Amends ADR-3 for singleton driver roles. The singleton invariant applies to the authoritative driver seat, not every process wearing that role. Advisor/product keep exactly one driver seat for approval, queueing, execution-mode changes, drain driving, and other disposition authority. Additional companion instances may wear the same role for read/converse/advice and draft-to-inbox proposal work, but they do not acquire the driver seat and are refused authoritative disposition or drain operations. This preserves ADR-3's no-split-brain invariant while allowing parallel conversations in the same role.
+    req_type: Decision
+    status: Approved
+    priority: Medium
+clock: 5407
 node_id: '1'
