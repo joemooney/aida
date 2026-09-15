@@ -27,7 +27,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:12.409577134Z
-modified_at: 2026-09-15T06:32:12.409577134Z
+modified_at: 2026-09-15T06:32:21.943040189Z
 req_type: Story
 tags:
 - mcp cli agent-surface scaffolding token-economics decision
+execution_mode: operator
