@@ -10,12 +10,12 @@ description: |-
   Surfaces: `aida config permissions show` (human table + --json/AIDA_AGENT_OUTPUT), listed in `aida config menu` read-only, and `aida doctor --category permission-posture` (the check half; heal is STORY-B). Model after `aida config user`/`memories check`/`cache verify`. No writes.
 
   Acceptance: `aida config permissions show` prints per-agent resolved tier + flags + scope + net effect; a full-access-no-sandbox posture is flagged as high-severity; a contained-but-missing-sandbox-table mismatch is flagged; `--json` emits structured output; `aida doctor --category permission-posture` (check) exits non-zero on a flagged state; nothing is mutated.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:50.777221033Z
-modified_at: 2026-09-15T09:44:06.868954178Z
+modified_at: 2026-09-15T09:52:46.266484031Z
 req_type: Story
 tags:
 - agents permission-posture config aida:config aida:doctor parent:EPIC-65
@@ -37,8 +37,24 @@ comments:
   created_at: 2026-09-15T06:39:39.902919569Z
   modified_at: 2026-09-15T06:39:39.902919569Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0a47b-b6b3-7eb3-b5a3-be62c17bd641
+  author: aida-auto-bump
+  timestamp: 2026-09-15T09:52:46.259739958Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a47b-b6ba-7993-b226-ef5a277df2e2
+  timestamp: 2026-09-15T09:52:46.266482505Z
+  agent: aida
+  commit_sha: ebeb9fe39ff2f373e6009c0eae63f13a6806f5ee
+  summary: Completed via merge ebeb9fe3
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T09:35:09.789246046Z
   implemented_by: joe
+  completed_at: 2026-09-15T09:52:46.259577626Z
+  completion_sha: ebeb9fe39ff2f373e6009c0eae63f13a6806f5ee
