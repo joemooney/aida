@@ -1,0 +1,21 @@
+id: 01a0a3df-3aaf-7b20-9fd6-35b714cb8ff5
+spec_id: TASK-1236
+agreed_id: TASK-1236
+title: 'aida agent role picker: annotate live-driver / single-instance status BEFORE selection (don''t select-then-error)'
+description: |-
+  Operator (2026-09-15): at the `aida agent` role-selection prompt AIDA already knows whether a role has a live session and whether it is single-instance (one advisor / one product per ADR-3). Today you SELECT the role and only then hit the single-instance error. Surface the constraint IN the picker row so the user sees it before Enter.
+
+  Add an inline annotation per role row: whether a live driver already holds the (single-instance) seat, e.g. `advisor [global] · 1m ago ● live driver (single-instance)` vs a free role. On a taken single-instance seat, the picker should say so and (once the secondary-instance work lands) offer the secondary path instead of erroring.
+
+  Depends on accurate liveness: BUG-1156 (role/agent liveness currently tracks a long-lived ancestor shell pid, so 'live' can be wrong). Land BUG-1156 first or this alert shows false 'already live' flags.
+
+  Acceptance: the `aida agent` role picker annotates each role with live-driver + single-instance status; a user is warned about a taken single-instance seat BEFORE selecting; the annotation reflects accurate liveness (post-BUG-1156); no behavior change to multi-instance roles (implementer/reviewer/integrator).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T07:01:50.895874489Z
+modified_at: 2026-09-15T07:01:50.895874489Z
+req_type: Task
+tags:
+- agents role-picker liveness ux aida:agent depends-on:bug-1156
