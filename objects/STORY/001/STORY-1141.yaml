@@ -1,0 +1,26 @@
+id: 01a0a4b8-b439-7e61-bd64-b918ec03af9a
+spec_id: STORY-1141
+agreed_id: STORY-1141
+title: 'Review PR-1838: Add guest requester stakeholder gate (STORY-1110)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a4a9`) for branch `story-1110`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1838>
+  - Branch: `story-1110` → `main`
+
+  ## Covers
+
+  - STORY-1110
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1838` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T10:59:23.321302428Z
+modified_at: 2026-09-15T10:59:23.321302428Z
+req_type: Story
