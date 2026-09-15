@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T10:15:40.814235892Z
-modified_at: 2026-09-15T15:18:11.883467256Z
+modified_at: 2026-09-15T15:18:13.907819628Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0a386-7912-7050-9c61-43154cc986d0
   created_at: 2026-09-15T10:15:45.025699766Z
   created_by: joe
+comments:
+- id: 01a0a5a5-ae93-7241-afc7-c63ddb5dcb83
+  author: joe
+  content: 'Dead review-story: PR-1836 was closed; STORY-1125 shipped via #1841. Completing.'
+  created_at: 2026-09-15T15:18:13.907819628Z
+  modified_at: 2026-09-15T15:18:13.907819628Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
