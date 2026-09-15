@@ -22065,6 +22065,7 @@ fn agent_resume_ended(
         project_root: project_root.to_path_buf(),
         launch_cwd: entry.worktree_path.clone(),
         role: entry.role.clone(),
+        role_instance: RoleInstanceKind::Driver,
         current_spec: entry.current_spec.clone(),
         name: entry
             .name
@@ -22187,6 +22188,7 @@ struct AgentLaunchPlan {
     project_root: std::path::PathBuf,
     launch_cwd: std::path::PathBuf,
     role: Option<String>,
+    role_instance: RoleInstanceKind,
     current_spec: Option<String>,
     name: String,
     /// SPIKE-34: id of the lease created by `prepare_agent_launch` when
@@ -22201,6 +22203,22 @@ struct AgentLaunchPlan {
     // trace:STORY-790 | ai:codex
     /// Registry id of the ended launcher session this launch resumes.
     resumed_from: Option<String>,
+}
+
+// trace:STORY-1133 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RoleInstanceKind {
+    Driver,
+    Companion,
+}
+
+impl RoleInstanceKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Driver => "driver",
+            Self::Companion => "companion",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22993,12 +23011,20 @@ fn agent_new_with_config(
         return Ok(());
     }
 
-    enforce_agent_singleton_preflight(
+    let early_role_instance = resolve_role_instance_for_launch(
         &project_root,
         role.as_deref(),
         spec.as_deref(),
         &project_root,
-    )?;
+    );
+    if early_role_instance == RoleInstanceKind::Driver {
+        enforce_agent_singleton_preflight(
+            &project_root,
+            role.as_deref(),
+            spec.as_deref(),
+            &project_root,
+        )?;
+    }
     let plan = prepare_agent_launch(&project_root, role, spec, config.agent_type, name)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
@@ -23025,6 +23051,13 @@ fn agent_new_with_config(
     }
     if let Some(role) = &plan.role {
         eprintln!("  {}: {}", "role".bold(), role.cyan());
+    }
+    if plan.role_instance == RoleInstanceKind::Companion {
+        eprintln!(
+            "  {}: {} (driver seat already live; read/converse/draft only)",
+            "instance".bold(),
+            plan.role_instance.as_str().cyan()
+        );
     }
     // BUG-558: surface the agent's addressable identity — the stable name is now
     // its mailbox/queue handle (AIDA_USER), so a coordinator reaches it with
@@ -24300,6 +24333,7 @@ fn prepare_agent_launch(
                 project_root: project_root.to_path_buf(),
                 launch_cwd: lease.worktree_path,
                 role: plan_role,
+                role_instance: RoleInstanceKind::Driver,
                 current_spec: Some(spec),
                 name,
                 lease_id,
@@ -24309,6 +24343,12 @@ fn prepare_agent_launch(
         }
         None => {
             let plan_role = role.clone();
+            let role_instance = resolve_role_instance_for_launch(
+                project_root,
+                plan_role.as_deref(),
+                None,
+                project_root,
+            );
             let name = agent_registry::generate_or_validate_name(
                 project_root,
                 agent_type,
@@ -24320,6 +24360,7 @@ fn prepare_agent_launch(
                 project_root: project_root.to_path_buf(),
                 launch_cwd: project_root.to_path_buf(),
                 role: plan_role,
+                role_instance,
                 current_spec: None,
                 name,
                 lease_id: None,
@@ -24330,8 +24371,38 @@ fn prepare_agent_launch(
     }
 }
 
+// trace:STORY-1133 | ai:codex
+fn resolve_role_instance_for_launch(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    current_spec: Option<&str>,
+    worktree_path: &std::path::Path,
+) -> RoleInstanceKind {
+    let Some(role) = role else {
+        return RoleInstanceKind::Driver;
+    };
+    if current_spec.is_some() {
+        return RoleInstanceKind::Driver;
+    }
+    let role_lc = role.to_ascii_lowercase();
+    if !matches!(role_lc.as_str(), "advisor" | "product") {
+        return RoleInstanceKind::Driver;
+    }
+    let cfg = agent_registry::Config::load(project_root);
+    if agent_registry::same_scope_conflict(project_root, &cfg, Some(role), None, worktree_path)
+        .is_some()
+    {
+        RoleInstanceKind::Companion
+    } else {
+        RoleInstanceKind::Driver
+    }
+}
+
 // trace:STORY-791 | ai:codex
 fn enforce_agent_singleton(project_root: &std::path::Path, plan: &AgentLaunchPlan) -> Result<()> {
+    if plan.role_instance == RoleInstanceKind::Companion {
+        return Ok(());
+    }
     enforce_agent_singleton_preflight(
         project_root,
         plan.role.as_deref(),
@@ -24634,6 +24705,12 @@ fn prepare_agent_launch_dry(
     custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
     let plan_role = role;
+    let role_instance = resolve_role_instance_for_launch(
+        project_root,
+        plan_role.as_deref(),
+        spec.as_deref(),
+        project_root,
+    );
     let name = agent_registry::generate_or_validate_name(
         project_root,
         agent_type,
@@ -24645,6 +24722,7 @@ fn prepare_agent_launch_dry(
         project_root: project_root.to_path_buf(),
         launch_cwd: project_root.to_path_buf(),
         role: plan_role,
+        role_instance,
         current_spec: spec,
         name,
         lease_id: None,
@@ -25051,6 +25129,7 @@ fn render_agent_launch_noexec(
     if let Some(role) = &plan.role {
         out.push_str(&format!("role: {role}\n"));
     }
+    out.push_str(&format!("role_instance: {}\n", plan.role_instance.as_str()));
     if let Some(spec) = &plan.current_spec {
         out.push_str(&format!("spec: {spec}\n"));
     }
@@ -25163,6 +25242,7 @@ fn run_tracked_agent(
     if let Some(role) = &plan.role {
         command.env("AIDA_SESSION_ROLE", role);
     }
+    command.env("AIDA_ROLE_INSTANCE", plan.role_instance.as_str());
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
@@ -25199,6 +25279,13 @@ fn run_tracked_agent(
         env!("CARGO_PKG_VERSION").to_string(),
         env!("AIDA_BUILD_GIT_SHA").to_string(),
     );
+    let description = match (plan.role_instance, description) {
+        (RoleInstanceKind::Companion, Some(text)) => Some(format!("companion: {text}")),
+        (RoleInstanceKind::Companion, None) => Some(
+            "companion: read/converse/draft only; no disposition or drain authority".to_string(),
+        ),
+        (RoleInstanceKind::Driver, text) => text,
+    };
     agent_registry::register_spawned_agent(
         &plan.project_root,
         config.agent_type,
@@ -41216,6 +41303,13 @@ pub(crate) fn advisor_authority_from(role: &str, is_tty: bool, orchestrated: boo
     role == "advisor" || is_tty || orchestrated
 }
 
+// trace:STORY-1133 | ai:codex
+pub(crate) fn current_role_instance_is_companion() -> bool {
+    std::env::var("AIDA_ROLE_INSTANCE")
+        .map(|v| v.eq_ignore_ascii_case("companion"))
+        .unwrap_or(false)
+}
+
 /// STORY-646: a one-line clause for an advisor-authority refusal that names the
 /// caller's *durable team role* when the roster supplies one. Empty when the
 /// effective role came from the env/default (the refusal message already covers
@@ -41234,6 +41328,9 @@ fn team_role_refusal_clause() -> String {
 }
 
 fn has_advisor_authority() -> bool {
+    if current_role_instance_is_companion() {
+        return false;
+    }
     // BUG-460: a CLI op spawned by (or under) a live --auto-complete drain
     // inherits AIDA_AUTO_COMPLETE + the run token, so `orchestrator::detect`
     // corroborates it against the drain-state file. Grant it authority so
