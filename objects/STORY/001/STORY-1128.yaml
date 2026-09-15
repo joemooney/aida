@@ -24,3 +24,7 @@ modified_at: 2026-09-15T06:26:57.963597562Z
 req_type: Story
 tags:
 - agents permission-posture config sandbox security aida:config aida:doctor parent:EPIC-65 depends-on:phase-1
+relationships:
+- rel_type: Child
+  target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
+  created_at: 2026-09-15T06:27:02.007163768Z
