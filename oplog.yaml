@@ -67956,5 +67956,33 @@ operations:
   timestamp: 2026-09-15T06:52:52.045118641Z
   kind: !SetStatus
     status: Completed
-clock: 5346
+- id: 01a0a3d8-d24e-7f62-91b8-a673044f40c6
+  target_id: 01a0a3d8-cc8e-71d1-bbbb-180fa6f57292
+  author: aida
+  node_id: '1'
+  lamport: 5347
+  timestamp: 2026-09-15T06:54:50.958653972Z
+  kind: !Create
+    title: 'aida derisk <SPEC> CLI verb: a thin vendor-aware launcher for the /aida-derisk skill (advisor session)'
+    description: |-
+      /aida-derisk (STORY-1132) is a Claude Code skill — it only fires inside a Claude session. Give it a CLI entry so it is discoverable via `aida`, scriptable, and VENDOR-AWARE (works for codex too), following the existing skill-launcher pattern (aida do / aida queue work --guided / aida ultraplan).
+
+      Behavior: `aida derisk <SPEC>` launches an ADVISOR-role session (derisk writes execution_mode, which is advisor-gated per ADR-3) seeded with the /aida-derisk prompt, vendor-resolved like `aida do` (claude native; codex adapted). Reuse the existing launcher plumbing (do_dispatch / the guided launch path); do NOT reimplement the skill logic in Rust — the CLI is a thin front door to the skill, same as guided.
+
+      NAMING FORK (operator's call — this is your command surface):
+      - Recommended: top-level `aida derisk <SPEC>` — mirrors aida do/groom/zen (the skill-launching advisor verbs); derisk is a grooming/disposition action (re-decides mode), not part of a drain RUN, and it can target drive as well as drain. Handle discoverability by pointing `aida drain --help` (and the 'skipped — needs guided/operator session' hint) at it: 'a spec won't drain? de-risk it: aida derisk <SPEC>'.
+      - Operator-proposed alternative: `aida drain derisk <SPEC>` (nested under the drain noun — discoverable where the pain is). Downside: implies it is part of the drain run; risks two homes drifting.
+      - Third option: `aida groom derisk` (most semantically precise; more buried).
+      Pick ONE canonical home; avoid two commands that can drift.
+
+      Depends-on/relates: STORY-1130 (aida drain start/stop lifecycle — if the drain noun grows, keep the derisk pointer in its help). STORY-1132 (the skill this launches).
+
+      Acceptance:
+      - One canonical `aida <...> derisk <SPEC>` verb (name per the fork) launches the /aida-derisk skill in an advisor session, vendor-aware (claude native / codex adapted), via the existing launcher plumbing — no duplicated skill logic in Rust.
+      - `aida drain`'s help / the drain-skip hint points at the derisk command so a user whose spec won't drain finds it.
+      - SPEC-ID / internal tokens kept out of the user-facing --help text (user-facing-text conventions).
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 5347
 node_id: '1'
