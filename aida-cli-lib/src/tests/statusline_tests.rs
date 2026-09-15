@@ -784,6 +784,8 @@ fn picker_row(
     global: bool,
     recency: &str,
     purpose: Option<&str>,
+    live_driver_recency: Option<&str>,
+    single_instance: bool,
 ) -> super::RolePickerRow {
     super::RolePickerRow {
         marker: marker.to_string(),
@@ -791,6 +793,8 @@ fn picker_row(
         global,
         recency: recency.to_string(),
         purpose: purpose.map(|p| p.to_string()),
+        live_driver_recency: live_driver_recency.map(|p| p.to_string()),
+        single_instance,
     }
 }
 
@@ -806,6 +810,8 @@ fn role_picker_option_shows_name_scope_recency_and_purpose() {
         true,
         "3h ago",
         Some("Routes work and gardens the queue."),
+        None,
+        false,
     );
     let label = format_role_picker_option(&row, 80);
     assert!(
@@ -830,12 +836,22 @@ fn role_picker_option_shows_name_scope_recency_and_purpose() {
 #[test]
 fn role_picker_option_no_purpose_has_no_separator() {
     use super::format_role_picker_option;
-    let with_none =
-        format_role_picker_option(&picker_row("*", "advisor", false, "5m ago", None), 80);
+    let with_none = format_role_picker_option(
+        &picker_row("*", "advisor", false, "5m ago", None, None, false),
+        80,
+    );
     assert_eq!(with_none, "* advisor · 5m ago");
     // A whitespace-only purpose is treated as absent.
     let blank = format_role_picker_option(
-        &picker_row(" ", "implementer", false, "2d ago", Some("   ")),
+        &picker_row(
+            " ",
+            "implementer",
+            false,
+            "2d ago",
+            Some("   "),
+            None,
+            false,
+        ),
         80,
     );
     assert_eq!(blank, "  implementer · 2d ago");
@@ -849,7 +865,7 @@ fn role_picker_option_truncates_to_width() {
     let long = "word ".repeat(200);
     let width = 50;
     let label = format_role_picker_option(
-        &picker_row(" ", "advisor", false, "now", Some(&long)),
+        &picker_row(" ", "advisor", false, "now", Some(&long), None, false),
         width,
     );
     assert!(
@@ -869,11 +885,57 @@ fn role_picker_option_truncates_to_width() {
 fn role_picker_option_drops_purpose_when_no_room() {
     use super::format_role_picker_option;
     // Width just past the header so <8 cols remain for the purpose.
-    let row = picker_row(" ", "advisor", false, "now", Some("Routes work."));
+    let row = picker_row(
+        " ",
+        "advisor",
+        false,
+        "now",
+        Some("Routes work."),
+        None,
+        false,
+    );
     let header_only = "  advisor · now";
     let width = header_only.chars().count() + 4;
     let label = format_role_picker_option(&row, width);
     assert_eq!(label, header_only, "purpose should be dropped: {label:?}");
+}
+
+// trace:TASK-1236 | ai:codex
+#[test]
+fn role_picker_option_warns_when_single_instance_role_has_live_driver() {
+    use super::format_role_picker_option;
+    let row = picker_row(" ", "advisor", true, "1m ago", None, Some("1m ago"), true);
+    let label = format_role_picker_option(&row, 100);
+    assert!(
+        label.contains("advisor [global] · 1m ago · 1m ago live driver (single-instance)"),
+        "label was {label:?}"
+    );
+}
+
+// trace:TASK-1236 | ai:codex
+#[test]
+fn role_picker_option_shows_live_driver_without_single_instance_for_doer_roles() {
+    use super::format_role_picker_option;
+    let label = format_role_picker_option(
+        &picker_row(
+            " ",
+            "implementer",
+            false,
+            "now",
+            Some("Builds queued specs."),
+            Some("30s ago"),
+            false,
+        ),
+        100,
+    );
+    assert!(
+        label.contains("implementer · now · 30s ago live driver"),
+        "label was {label:?}"
+    );
+    assert!(
+        !label.contains("single-instance"),
+        "multi-instance roles must not carry the single-instance warning: {label:?}"
+    );
 }
 
 /// TASK-645: the read-side role default. Unset/blank → implementer
