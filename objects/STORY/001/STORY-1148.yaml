@@ -1,0 +1,26 @@
+id: 01a0a556-15fc-74b2-a7dc-bbe5710c3f42
+spec_id: STORY-1148
+agreed_id: STORY-1148
+title: 'Review PR-1845: [AI:codex] feat(drain): add start and stop lifecycle verbs (STORY-1130)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a546`) for branch `story-1130`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1845>
+  - Branch: `story-1130` → `main`
+
+  ## Covers
+
+  - STORY-1130
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1845` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T13:51:17.500291918Z
+modified_at: 2026-09-15T13:51:17.500291918Z
+req_type: Story
