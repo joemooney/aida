@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:50.777221033Z
-modified_at: 2026-09-15T06:35:48.964011814Z
+modified_at: 2026-09-15T06:39:39.902919569Z
 req_type: Story
 tags:
 - agents permission-posture config aida:config aida:doctor parent:EPIC-65
@@ -23,4 +23,14 @@ relationships:
 - rel_type: Child
   target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
   created_at: 2026-09-15T06:26:53.329914805Z
+comments:
+- id: 01a0a3ca-eb7e-76a2-b23d-b30d9ba02177
+  author: joe
+  content: |-
+    Concrete visibility bug found via `aida config show` (2026-09-14): the [agents] section shows the global `bypass: bypass` + `codex: enabled`, which IMPLIES codex runs on nuclear bypass — but after setting [agents.codex] default_flags = [--sandbox=workspace-write, --ask-for-approval=never], codex is actually on the CONTAINED tier. config show/menu is blind to per-agent default_flags and to the entire ~/.codex/config.toml sandbox tuning (sandbox_mode/approval_policy/[sandbox_workspace_write]), so it currently MISREPRESENTS the effective codex posture.
+
+    Acceptance addition: `config show` / `config menu` [agents] rows must display the RESOLVED per-agent tier (native | contained | bypass) accounting for per-agent default_flags overriding the global bypass knob — not the raw global bypass bit. `config permissions show` carries the full cross-file detail (incl. the codex vendor config + writable_roots/network_access); config menu surfaces the tier per agent and points to `permissions show` for the full resolution. The 'codex shows as bypass while actually contained' case is an explicit test.
+  created_at: 2026-09-15T06:39:39.902919569Z
+  modified_at: 2026-09-15T06:39:39.902919569Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
