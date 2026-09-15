@@ -1,0 +1,26 @@
+id: 01a0a5ad-219c-77f2-92d5-32545b7ad40c
+spec_id: STORY-1152
+agreed_id: STORY-1152
+title: 'Review PR-1849: [AI:codex] feat(agent): annotate live role-picker seats (TASK-1236)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a5a6`) for branch `task-1236`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1849>
+  - Branch: `task-1236` → `main`
+
+  ## Covers
+
+  - TASK-1236
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1849` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T15:26:22.108040199Z
+modified_at: 2026-09-15T15:26:22.108040199Z
+req_type: Story
