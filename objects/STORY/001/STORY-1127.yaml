@@ -10,12 +10,12 @@ description: |-
   Surfaces: `aida config permissions show` (human table + --json/AIDA_AGENT_OUTPUT), listed in `aida config menu` read-only, and `aida doctor --category permission-posture` (the check half; heal is STORY-B). Model after `aida config user`/`memories check`/`cache verify`. No writes.
 
   Acceptance: `aida config permissions show` prints per-agent resolved tier + flags + scope + net effect; a full-access-no-sandbox posture is flagged as high-severity; a contained-but-missing-sandbox-table mismatch is flagged; `--json` emits structured output; `aida doctor --category permission-posture` (check) exits non-zero on a flagged state; nothing is mutated.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:50.777221033Z
-modified_at: 2026-09-15T09:18:45.253509157Z
+modified_at: 2026-09-15T09:35:09.789246046Z
 req_type: Story
 tags:
 - agents permission-posture config aida:config aida:doctor parent:EPIC-65
@@ -34,3 +34,7 @@ comments:
   modified_at: 2026-09-15T06:39:39.902919569Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-15T09:35:09.789246046Z
+  implemented_by: joe
