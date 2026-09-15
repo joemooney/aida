@@ -46609,6 +46609,19 @@ fn handle_burndown_run(
     if let Some(host) = panes {
         std::env::set_var(pane_host::HOST_ENV, host);
     }
+    // STORY-1133: a companion is a NON-AUTHORITATIVE instance of a driver role —
+    // it may read / converse / draft / advise, but must never drive a drain.
+    // Refuse BEFORE the team gate (and before any sync/preflight), mirroring the
+    // `aida queue work --auto-complete` companion gate, so even a companion that
+    // otherwise carries advisor authority cannot start (or gate-probe) a drain
+    // via `burndown run`. `--force` does NOT bypass this — the driver seat does.
+    // trace:STORY-1133 | ai:claude
+    if current_role_instance_is_companion() {
+        anyhow::bail!(
+            "companion sessions cannot drive drains. Start the authoritative driver \
+             seat for this role, or run `aida burndown run` from the driver."
+        );
+    }
     // STORY-647: team RBAC guardrail — starting an autonomous drain is an
     // advisor-gated op by default (tunable via `[team.permissions] drain_start`).
     // Checked FIRST, before any sync/preflight, so even `--dry-run` (the safe
