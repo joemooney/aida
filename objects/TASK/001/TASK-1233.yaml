@@ -15,3 +15,7 @@ modified_at: 2026-09-15T06:27:06.143174507Z
 req_type: Task
 tags:
 - agents permission-posture config aida:init aida:scaffold parent:EPIC-65 depends-on:phase-1
+relationships:
+- rel_type: Child
+  target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
+  created_at: 2026-09-15T06:27:08.339320087Z
