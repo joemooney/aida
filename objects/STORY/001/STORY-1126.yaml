@@ -21,7 +21,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:38:13.525680488Z
-modified_at: 2026-09-15T05:38:13.525680488Z
+modified_at: 2026-09-15T05:38:21.969340114Z
 req_type: Story
 tags:
 - attachments images req-authoring substrate-tax
+deferred: true
+deferred_at: 2026-09-15T05:38:21.969340114Z
+deferred_until: a real visual bug or UX mockup needs the image preserved (demand-pulled); settle the storage fork via SPIKE/ADR first
