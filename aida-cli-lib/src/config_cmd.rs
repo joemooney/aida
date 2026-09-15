@@ -2784,7 +2784,7 @@ fn scaffold_enabled_agent_profile(project_root: &std::path::Path, profile: &str)
         _ => return Ok(()),
     }
     let mut config = ScaffoldConfig::default();
-    selection.apply_to_scaffold_config(&mut config);
+    selection.apply_to_scaffold_config(&mut config, false);
     let db_path = project_root.join(".aida").join("cache.db");
     let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
         project_root.to_path_buf(),

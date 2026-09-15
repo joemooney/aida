@@ -200,7 +200,19 @@ memory before relying on it. Prefer the `$aida-memory-query` and
         // state. trace:TASK-1-098 | ai:claude
         s.push_str("\n\n");
         s.push_str(
-            "### Daily commands\n\
+            "### Agent surface\n\
+             \n\
+             For CLI-capable agents, the AIDA CLI with compact TOON output is the\n\
+             primary agent surface. Use `AIDA_AGENT_OUTPUT=toon aida show`,\n\
+             `aida list`, and `aida search` for routine reads and coordination\n\
+             checks. AIDA MCP is the typed/structural option for MCP-native clients\n\
+             or explicit opt-ins; the 2026-06-29 benchmark found MCP costs about\n\
+             2x the token-efficient CLI for identical tasks at equal-or-lower\n\
+             success. Register MCP only when that typed surface is worth the\n\
+             token cost, for example with `aida init --with-mcp` or\n\
+             `aida mcp register-agent`.\n\
+             \n\
+             ### Daily commands\n\
              \n\
              ```bash\n\
              aida list                              # list all requirements (cache-backed)\n\

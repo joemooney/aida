@@ -47,21 +47,22 @@ Step 3).
 
 ## Step 1 — Scaffold the Codex MCP registration
 
-`aida init` scaffolds the Codex-side MCP registration as part of project setup. The
-`--agent` flag selects which agent profiles get scaffolded; the default is `both`.
+`aida init` defaults CLI-capable agents to the token-efficient CLI/TOON surface.
+Pass `--with-mcp` when this validation specifically needs Codex's typed MCP
+surface. The `--agent` flag selects which agent profiles get scaffolded.
 
 For a fresh validation project:
 
 ```bash
 mkdir aida-codex-validation && cd aida-codex-validation
 git init
-aida init --agent codex      # or `--agent both` (the default) for Claude + Codex
+aida init --agent codex --with-mcp
 ```
 
-For an existing AIDA project that predates the Codex scaffold, re-run init to add it:
+For an existing AIDA project without the Codex MCP scaffold, re-run init to add it:
 
 ```bash
-aida init --agent codex --force
+aida init --agent codex --with-mcp --force
 ```
 
 This writes a project-local `.codex/config.toml` with an `[mcp_servers.aida]`

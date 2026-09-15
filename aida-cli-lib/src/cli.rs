@@ -10732,6 +10732,15 @@ pub enum Command {
         #[clap(long)]
         no_skills: bool,
 
+        /// Opt into scaffolding AIDA MCP registrations for Claude/Codex.
+        ///
+        /// The token-efficient CLI/TOON surface is the default for
+        /// CLI-capable agents; MCP remains available as the typed surface for
+        /// MCP-native clients and explicit opt-ins.
+        // trace:STORY-1129 | ai:codex
+        #[clap(long)]
+        with_mcp: bool,
+
         /// Agent profiles to scaffold — a STRICT allow-list: only the named
         /// agents' surfaces are written. Accepts `claude`, `codex`,
         /// `antigravity`, a comma-list (`claude,codex`), `both`

@@ -2358,6 +2358,7 @@ fn run() -> Result<()> {
     // Handle init before path resolution (no DB exists yet)
     if let Command::Init {
         no_skills,
+        with_mcp,
         agent,
         no_hooks,
         no_post_hooks,
@@ -2433,6 +2434,7 @@ fn run() -> Result<()> {
             init_cmd::handle_init_command(
                 *no_skills,
                 agent.as_deref(),
+                *with_mcp,
                 *no_hooks,
                 *force,
                 *verbose,
@@ -2449,6 +2451,7 @@ fn run() -> Result<()> {
                 store_path.as_deref(),
                 *no_skills,
                 agent.as_deref(),
+                *with_mcp,
                 *no_hooks,
                 *verbose,
                 name.as_deref(),
@@ -2459,6 +2462,7 @@ fn run() -> Result<()> {
                 *force,
                 *no_skills,
                 agent.as_deref(),
+                *with_mcp,
                 *no_hooks,
                 *verbose,
                 name.as_deref(),
