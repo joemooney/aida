@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:12.409577134Z
-modified_at: 2026-09-15T12:52:26.918719531Z
+modified_at: 2026-09-15T12:52:28.103840119Z
 req_type: Story
 tags:
 - mcp cli agent-surface scaffolding token-economics decision
@@ -38,4 +38,10 @@ comments:
   created_at: 2026-09-15T06:36:02.794051059Z
   modified_at: 2026-09-15T06:36:02.794051059Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a520-3b47-76e0-8eb8-3b1b79de8850
+  author: joe
+  content: 'DE-RISK: fork DECIDED (ADR-30 fork B = MCP opt-in --with-mcp). GATE: test default init scaffolds NO AIDA-MCP reg + --with-mcp does; scaffold-refresh must NOT strip THIS dev repo''s dogfood .mcp.json; MCP-native install matrix stays a one-liner. Mode DRIVE.'
+  created_at: 2026-09-15T12:52:28.103840119Z
+  modified_at: 2026-09-15T12:52:28.103840119Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
