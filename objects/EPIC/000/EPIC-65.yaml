@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:11.375734789Z
-modified_at: 2026-09-15T06:27:16.202632798Z
+modified_at: 2026-09-15T06:29:34.595863819Z
 req_type: Epic
 tags:
 - agents permission-posture sandbox security config aida:config aida:doctor
@@ -39,3 +39,14 @@ relationships:
   target_id: 01a0a385-b187-7aa3-98e4-cfe824f4a352
   created_at: 2026-09-15T06:27:16.202627921Z
   created_by: joe
+comments:
+- id: 01a0a3c1-af03-77c3-8bc7-98866a2bdb1e
+  author: joe
+  content: |-
+    Design forks RESOLVED by operator (2026-09-14):
+    (a) Default scope = --local (write project .aida/agents.toml + project .codex/config.toml). --user (~/.aida + ~/.codex, machine-wide + plain codex) is the explicit opt-in. Rationale: sandbox the repo in front of you; never silently re-posture every project + plain codex.
+    (b) AIDA MAY write the vendor-owned ~/.codex/config.toml (under --user) AND the project .codex/config.toml (under --local), but MUST back up the file first and re-parse (tomllib-equivalent) after writing to prove validity — the 2026-09-14 hand-edit corrupted the file by leaking leading scalars into an inserted table, which a tested+validated merge-writer prevents.
+    These are load-bearing; they bind STORY-1128's acceptance.
+  created_at: 2026-09-15T06:29:34.595863819Z
+  modified_at: 2026-09-15T06:29:34.595863819Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
