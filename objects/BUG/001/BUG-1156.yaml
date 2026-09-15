@@ -28,8 +28,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:15:09.613688539Z
-modified_at: 2026-09-15T06:21:25.991887191Z
+modified_at: 2026-09-15T12:52:24.529306641Z
 req_type: Bug
 tags:
 - liveness session-reap role-enter papercut story:994
-execution_mode: guided
+execution_mode: drive
