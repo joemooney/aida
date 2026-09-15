@@ -67553,5 +67553,17 @@ operations:
   timestamp: 2026-09-15T05:15:46.267343221Z
   kind: !SetStatus
     status: Completed
-clock: 5321
+- id: 01a0a385-de84-7a61-8b3d-40a632dc3f2b
+  target_id: 01a0a385-b187-7aa3-98e4-cfe824f4a352
+  author: aida
+  node_id: '1'
+  lamport: 5322
+  timestamp: 2026-09-15T05:24:14.596707097Z
+  kind: !Create
+    title: 'aida agent new --noexec/--print-command: show the resolved command line + permission posture (sandbox/approval) without launching'
+    description: 'Operator (2026-09-14) keeps getting prompted for approvals launching codex at work and wants to SEE the exact command line AIDA would run + which permission rules apply, without executing. --show-context shows the role snapshot but not the argv. Add --noexec (alias --print-command) to aida agent new: print the fully-resolved vendor command line (codex/claude argv incl. sandbox/approval flags) AND the resolved permission posture (agents.toml bypass, codex --sandbox mode + --ask-for-approval policy) to stdout, then exit 0 without launching. Lets a user inspect + copy/tune the command. Pairs with the codex contained-autonomous posture task.'
+    req_type: Task
+    status: Draft
+    priority: Medium
+clock: 5322
 node_id: '1'
