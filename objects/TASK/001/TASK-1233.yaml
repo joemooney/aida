@@ -11,7 +11,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:27:06.143174507Z
-modified_at: 2026-09-15T12:52:34.939895311Z
+modified_at: 2026-09-15T12:52:36.355406017Z
 req_type: Task
 tags:
 - agents permission-posture config aida:init aida:scaffold parent:EPIC-65 depends-on:phase-1
@@ -19,4 +19,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
   created_at: 2026-09-15T06:27:08.339320087Z
+comments:
+- id: 01a0a520-5b83-7f92-b001-174c32987609
+  author: joe
+  content: 'DE-RISK: fork DECIDED (EPIC-65). GATE: first-machine init idempotent; --no-agent-config + non-interactive write nothing; re-run over a coherent posture prompts nothing. Mode DRIVE (writes security config + interactive).'
+  created_at: 2026-09-15T12:52:36.355406017Z
+  modified_at: 2026-09-15T12:52:36.355406017Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
