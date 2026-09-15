@@ -28,8 +28,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:15:09.613688539Z
-modified_at: 2026-09-15T12:52:24.529306641Z
+modified_at: 2026-09-15T12:52:25.723070484Z
 req_type: Bug
 tags:
 - liveness session-reap role-enter papercut story:994
+comments:
+- id: 01a0a520-31fb-7533-b030-0fb3cb48ec1f
+  author: joe
+  content: 'DE-RISK (advisor, applying overseer brief): mode DRIVE (not the brief''s DRAIN). Reason: this fixes the liveness classification that GATES reap; a wrong fix in the false-DEAD direction could reap a LIVE session (destructive/irreversible) — my /aida-derisk hard-limit keeps destructive-class merges human. GATE: test must assert BOTH directions — (a) a false-live ancestor-pid is correctly classified dead+reaped, AND (b) a genuinely-live session is NEVER classified dead (the dangerous direction). Merge held for reap-safety review. Unblocks TASK-1236 on merge.'
+  created_at: 2026-09-15T12:52:25.723070484Z
+  modified_at: 2026-09-15T12:52:25.723070484Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
