@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 1831` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:40:28.690313008Z
-modified_at: 2026-09-15T07:40:33.412950675Z
+modified_at: 2026-09-15T07:45:19.695147696Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
