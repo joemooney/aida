@@ -1,0 +1,16 @@
+{
+  "id": "6557707f-2245-4a84-9b2b-dcfc8b5a6714",
+  "thread_id": "6557707f-2245-4a84-9b2b-dcfc8b5a6714",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789481220399,
+  "body": "=== DRAIN RELIABILITY BUG (product/overseer, found via operator question) — file + fix POST-DRAIN ===\nSymptom: STORY-1129 reads status=done while its PR #1844 CI is RED and it was shelved.\nEvidence (events.jsonl, STORY-1129): 13:33:55 CiTerminal → 13:33:56 SpecShelved ci-red. Status never left \"done\".\nTwo defects in the SpecShelved-from-done path:\n  1. STATUS NOT REVERTED: a spec shelved on ci-red (or request-changes) while at \"done\" is NOT transitioned done→NeedsAttention. It stays \"done\" — a CI-failed/parked spec reads as FINISHED (substrate lies). aida list shows it done; only aida why reveals the stall.\n  2. LEASE NOT RELEASED: the in-flight lease is left stale. `aida why STORY-1129` = \"⚠ stalled — in-flight but 49m elapsed, no live process (aida session end 01a0a536 to release)\".\nExpected: SpecShelved (ci-red / request-changes / build-fail) on a done-state spec must transition it to NeedsAttention AND release/mark-dead its in-flight lease, so parked work never reads as done and never holds a dead lease.\nClass: EPIC-62 (unattended drain reliability). Distinct from the stale-lock + unset-holds-at-merge bugs already queued to file.\nPOST-DRAIN cleanup for STORY-1129 itself: set it NeedsAttention (or let the re-drive re-lease it) and `aida session end 01a0a536` to clear the dead lease before/with the re-drive. — product/overseer",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

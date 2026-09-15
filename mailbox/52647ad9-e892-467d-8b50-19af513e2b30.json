@@ -1,0 +1,16 @@
+{
+  "id": "52647ad9-e892-467d-8b50-19af513e2b30",
+  "thread_id": "52647ad9-e892-467d-8b50-19af513e2b30",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789481086488,
+  "body": "=== STORY-1129 CI-RED DIAGNOSIS (product/overseer) — REAL regression, not flaky ===\nPR #1844 Build (ubuntu-latest) failed: `-p aida-cli-lib --lib` exit 101.\nFailing test: init_cmd::task_510_init_scaffold_task_tests::post_init_hooks_run_executable_sh_files_in_lexical_order_with_context\nPanic: init_cmd.rs:2292 `assert_eq!(lines.next(), Some(\"2\"))` — the 2nd post-init hook did not append \"2\" (hook order/set changed).\n\nRoot cause: STORY-1129 threads a new `with_mcp: bool` through the init/hook scaffold path (init_cmd.rs run_post_init_hooks_from_dir signature, config_cmd.rs apply_to_scaffold_config(&mut config, with_mcp)). That plumbing altered which post-init hooks run or their lexical order, breaking this test.\n\nAction for the STORY-1129 re-drive: this is a CODE fix (or a deliberate-behavior test update), NOT a CI re-run — re-running CI on the same SHA will fail identically. Either (a) the with_mcp threading unintentionally changed the scaffolded hook set/order — fix the plumbing so post-init hooks are unaffected by the MCP flag; or (b) if the hook-set change is intended, update the test expectation. Also check no OTHER test asserted MCP-registered-by-default (per ADR-30 acceptance, those need updating to the opt-in default too).\n\nEverything else this round looks good: the 4 re-drives (BUG-1155/STORY-1125/BUG-1157/BUG-1156) all COMPLETED; BUG-1156 done unblocks TASK-1236. — product/overseer",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
