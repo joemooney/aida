@@ -1,0 +1,23 @@
+id: 01a0a3c8-5d3b-7382-90ad-3cb3ccde8187
+spec_id: TASK-1234
+agreed_id: TASK-1234
+title: Distinct flow glyph for a queued-but-supervised spec (guided/operator/decide) — a headless drain skips it, so it shouldn't look identical to queued-drainable
+description: |-
+  Operator (2026-09-14): a queued spec that is execution_mode guided/operator/decide is SKIPPED by a headless drain (queue_drain_pickup_policy → NeedsGuidedOrOperatorSession), but in the queue/list views it renders with the SAME queued glyph (↑ / FlowQueued, status_display.rs flow_glyph) as a queued-drainable spec. So you can queue 5 items, start a drain, and 2 silently never move — with no visible signal why.
+
+  Fix: flow_glyph should distinguish queued-drainable from queued-but-supervised. Keep ↑ (FlowQueued) for queued-drainable; add a distinct glyph — proposed ⇈ (double up arrow: 'queued AND held for a person') — for a queued spec whose execution_mode is guided/operator/decide. ASCII downgrade ^^ (or [G]). Thread the execution_mode (or a supervised bool) into flow_glyph and its callers (queue list, list, ps where relevant). Add the new glyph to the legend / --help so it's discoverable.
+
+  Acceptance:
+  - A queued spec with execution_mode guided/operator/decide renders a DISTINCT flow glyph (proposed ⇈, ASCII ^^) from a queued-drainable spec (↑).
+  - The Unicode + ASCII profiles both map it (glyph-profile test coverage like the existing flow_glyph/status_glyph tests).
+  - The legend / relevant --help explains the glyph ('queued but needs a guided/operator session; a headless drain skips it').
+  - No change to the underlying pickup behavior — display only.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T06:36:52.411379934Z
+modified_at: 2026-09-15T06:36:52.411379934Z
+req_type: Task
+tags:
+- ux glyph queue flow-glyph guided discoverability aida:queue
