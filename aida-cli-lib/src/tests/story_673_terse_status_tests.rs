@@ -41,11 +41,12 @@ fn requirement_summary_leads_with_open_then_closed_and_points_at_full() {
 
 #[test]
 fn requirement_summary_handles_no_open_work() {
-    let by_status = breakdown(&[("Completed", 3), ("Rejected", 1)]);
+    let by_status = breakdown(&[("Completed", 3), ("Done", 2), ("Rejected", 1)]);
     let line = requirement_breakdown_summary_line(&by_status);
     assert!(line.starts_with("0 open"), "got: {line}");
     assert!(line.contains("3 completed"), "got: {line}");
     assert!(line.contains("1 rejected"), "got: {line}");
+    assert!(!line.contains("2 done"), "got: {line}");
 }
 
 #[test]
