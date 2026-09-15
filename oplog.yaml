@@ -67613,5 +67613,30 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5324
+- id: 01a0a392-b184-7f92-984e-2f32b56db726
+  target_id: 01a0a392-ab95-7781-99e8-eb43a41cea8f
+  author: aida
+  node_id: '1'
+  lamport: 5325
+  timestamp: 2026-09-15T05:38:15.044421684Z
+  kind: !Create
+    title: Optional reference-based image attachment on a spec (caption-required, blob outside the YAML)
+    description: |-
+      When a req is filed from a conversation with a pasted image, the image is usually consumed into the description (the salient text — error message, layout intent — is what matters) and then discardable. But a minority of cases are image-load-bearing: a pixel-level UI bug, a screenshot of an error dialog, a UX mockup for a design fork, an architecture sketch on an ADR. Support an OPTIONAL attach for those.
+
+      Design constraints (the load-bearing part — settle the storage fork before building):
+      - Git-canonical store: the orphan aida-store is lightweight, cleanly-diffable YAML per spec. Do NOT inline image bytes (base64) in the YAML — it bloats the store and makes every diff noisy. Attachments must be REFERENCE-BASED: the blob lives outside objects/ (content-addressed under an attachments/ dir on the orphan branch, git-LFS-able), the spec YAML carries a path/hash + caption only.
+      - Caption REQUIRED: CLI/MCP surfaces are text (TOON); an agent can't see a PNG. A mandatory alt-text/caption keeps the spec queryable + useful without loading the blob (accessibility floor too).
+      - Public-repo scrub gate: joemooney/aida's store is public. A pasted screenshot can carry internal/employer content — an attach path needs a 'committing an image to a PUBLIC store' confirm, or it is a leak vector.
+
+      Disposition: DEFERRED, demand-pulled. Extract-to-text is the 80% solution; don't clutter the active backlog. Revisit when a real visual bug / mockup actually needs the image preserved. When picked up, likely wants a SPIKE/ADR to settle the storage location (attachments-on-orphan-branch vs external URL vs LFS) first.
+
+      Acceptance (when built):
+      - `aida add`/`edit` (and MCP add/update) can attach an image with a required caption; the blob is stored by reference outside the spec YAML; the YAML diff stays text-only.
+      - `aida show` surfaces the attachment (path + caption); the text surfaces remain fully usable without the blob.
+      - A public-store scrub confirm gates the commit of any attachment.
+    req_type: Story
+    status: Approved
+    priority: Low
+clock: 5325
 node_id: '1'
