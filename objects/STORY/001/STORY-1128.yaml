@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:57.963597562Z
-modified_at: 2026-09-15T11:10:05.282201119Z
+modified_at: 2026-09-15T11:10:48.520462467Z
 req_type: Story
 tags:
 - agents permission-posture config sandbox security aida:config aida:doctor parent:EPIC-65 depends-on:phase-1
