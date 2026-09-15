@@ -15,12 +15,12 @@ description: |-
   - --bypass-sandbox remains the explicit nuclear opt-in, unchanged; contained never implies bypass.
   - The resolved posture (tier + exact flags) is visible via --noexec (pairs with TASK-1232).
   - SPEC-ID / internal tokens stay out of any user-facing --help / stdout (user-facing-text conventions).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:18.096155572Z
-modified_at: 2026-09-15T10:34:40.582267125Z
+modified_at: 2026-09-15T10:39:22.573178059Z
 req_type: Story
 tags:
 - agents codex permission-posture sandbox security
@@ -52,8 +52,24 @@ comments:
   created_at: 2026-09-15T05:38:18.105809239Z
   modified_at: 2026-09-15T05:38:18.105809239Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0a4a6-61c6-7360-8e31-6989e2a73c7e
+  author: aida-auto-bump
+  timestamp: 2026-09-15T10:39:22.566273669Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a4a6-61cd-7301-9483-2d78c8855ee5
+  timestamp: 2026-09-15T10:39:22.573176347Z
+  agent: aida
+  commit_sha: 959258a473798713a86aa0a73c5252cb8503f9ac
+  summary: Completed via merge 959258a4
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T10:26:43.116065735Z
   implemented_by: joe
+  completed_at: 2026-09-15T10:39:22.566096642Z
+  completion_sha: 959258a473798713a86aa0a73c5252cb8503f9ac
