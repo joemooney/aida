@@ -16,12 +16,12 @@ description: |-
   - A spec with unset execution_mode AND a keystone-class tag is still fenced (tag-net still guards the ungroomed case).
   - Supervised modes (guided/operator/decide/drive) are still fenced regardless of tags (unchanged).
   - Test covers: drain+security-tag selected; unset+security-tag fenced; guided+no-tag fenced.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:22:17.142170427Z
-modified_at: 2026-09-15T12:40:09.933162054Z
+modified_at: 2026-09-15T12:50:09.893830390Z
 req_type: Bug
 tags:
 - autoprogress derisk execution-mode keystone-tag aida:autoprogress
@@ -30,7 +30,23 @@ relationships:
   target_id: 01a0a514-dee7-7dc3-8243-fc5b2fa92727
   created_at: 2026-09-15T12:40:09.933153906Z
   created_by: joe
+history:
+- id: 01a0a51e-1f5f-7a32-a664-5efbcb258069
+  author: aida-auto-bump
+  timestamp: 2026-09-15T12:50:09.887485274Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a51e-1f65-7910-98c2-d45fd0221566
+  timestamp: 2026-09-15T12:50:09.893829818Z
+  agent: aida
+  commit_sha: 3906125bc06c06bad64ff73849011177587c0e1e
+  summary: Completed via merge 3906125b
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T12:39:51.220986434Z
   implemented_by: joe
+  completed_at: 2026-09-15T12:50:09.887364081Z
+  completion_sha: 3906125bc06c06bad64ff73849011177587c0e1e
