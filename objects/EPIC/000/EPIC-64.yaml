@@ -25,8 +25,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:24.192961100Z
-modified_at: 2026-09-14T03:40:47.894475533Z
+modified_at: 2026-09-15T07:07:12.905208971Z
 req_type: Epic
+relationships:
+- rel_type: Child
+  target_id: 01a09cbf-6e91-7b12-a116-7ee60cb88c70
+  created_at: 2026-09-15T07:07:12.905206203Z
+  created_by: joe
 comments:
 - id: 01a09cc3-a28d-76e1-9fa8-32a9f3a64b65
   author: joe
