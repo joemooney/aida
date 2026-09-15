@@ -68185,5 +68185,31 @@ operations:
   timestamp: 2026-09-15T07:45:19.775909917Z
   kind: !SetStatus
     status: Completed
-clock: 5357
+- id: 01a0a417-9f8b-7cc1-849d-6e4dde81a167
+  target_id: 01a0a417-9bd6-72e1-ad27-94c484b95cdd
+  author: aida
+  node_id: '1'
+  lamport: 5358
+  timestamp: 2026-09-15T08:03:26.732001916Z
+  kind: !Create
+    title: 'Review PR-1832: [AI:codex] fix(status): align open count with list lens (BUG-1155)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a409`) for branch `bug-1155`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1832>
+      - Branch: `bug-1155` → `main`
+
+      ## Covers
+
+      - BUG-1155
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1832` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5358
 node_id: '1'
