@@ -19,12 +19,12 @@ description: |-
   - One canonical `aida <...> derisk <SPEC>` verb (name per the fork) launches the /aida-derisk skill in an advisor session, vendor-aware (claude native / codex adapted), via the existing launcher plumbing — no duplicated skill logic in Rust.
   - `aida drain`'s help / the drain-skip hint points at the derisk command so a user whose spec won't drain finds it.
   - SPEC-ID / internal tokens kept out of the user-facing --help text (user-facing-text conventions).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:54:49.486195936Z
-modified_at: 2026-09-15T08:41:42.940015972Z
+modified_at: 2026-09-15T08:50:57.554809877Z
 req_type: Task
 tags:
 - cli derisk launcher autonomy-ladder aida:derisk vendor-aware
@@ -35,3 +35,7 @@ comments:
   created_at: 2026-09-15T06:55:12.381412549Z
   modified_at: 2026-09-15T06:55:12.381412549Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-15T08:50:57.554809877Z
+  implemented_by: joe
