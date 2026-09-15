@@ -21,3 +21,7 @@ modified_at: 2026-09-15T06:39:41.386724952Z
 req_type: Story
 tags:
 - config config-menu ux editability permission-posture mcp aida:config parent:EPIC-65
+relationships:
+- rel_type: Child
+  target_id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
+  created_at: 2026-09-15T06:39:44.086862559Z
