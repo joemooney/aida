@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T15:29:48.322099926Z
-modified_at: 2026-09-14T15:45:13.783622297Z
+modified_at: 2026-09-15T03:34:42.824854237Z
 req_type: Task
 tags:
 - autonomy cron drain-invocation papercut parent:EPIC-62
@@ -37,5 +37,11 @@ comments:
   content: 'DRIVE DECISION (operator, 2026-09-14): scope = DRAIN-ONLY by default + a --groom flag. Bare ''aida autoprogress'' resolves the project (find_main_worktree_root, cd/wrong-store-proof), skips if a drain is running, and drains ONLY the already-approved ready set (implementable types, single-spec claim form, bounded N) — never approves. ''aida autoprogress --groom'' additionally runs the safe-fence approve pass first (the cron line). Command name: aida autoprogress. Composes existing pieces (find_main_worktree_root + groom + single-spec queue-work); the value is robust orchestration, not reimplementation.'
   created_at: 2026-09-14T15:45:13.783622297Z
   modified_at: 2026-09-14T15:45:13.783622297Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a321-9788-7141-84ee-7b19371a0651
+  author: joe
+  content: Commit e207493d0 references this requirement
+  created_at: 2026-09-15T03:34:42.824854237Z
+  modified_at: 2026-09-15T03:34:42.824854237Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
