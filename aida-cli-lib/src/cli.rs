@@ -3916,6 +3916,29 @@ pub enum ConfigPermissionsCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Apply a named agent permission posture to local or user config files.
+    // trace:STORY-1128 | ai:codex
+    Set {
+        /// Permission posture to write.
+        tier: ConfigPermissionTier,
+
+        /// Write user-global files under `~/.aida` and `~/.codex`.
+        #[clap(long, conflicts_with = "local")]
+        user: bool,
+
+        /// Write project-local files under `.aida` and `.codex` (default).
+        #[clap(long)]
+        local: bool,
+    },
+}
+
+// trace:STORY-1128 | ai:codex
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub enum ConfigPermissionTier {
+    Contained,
+    Native,
+    Bypass,
 }
 
 /// `aida config glyph ...` — CLI surface over the glyph registry, themes, and

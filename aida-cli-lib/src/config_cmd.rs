@@ -9,8 +9,9 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::cli::ConfigPermissionsCommand;
+use crate::cli::{ConfigPermissionTier, ConfigPermissionsCommand};
 use crate::*;
+use toml_edit::{value, Array, DocumentMut, Item, Table};
 
 /// Handle ID configuration commands
 pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
@@ -835,6 +836,269 @@ pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) 
                 render_permission_posture_report(&report);
             }
         }
+        ConfigPermissionsCommand::Set { tier, user, local } => {
+            let project_root = main_worktree_root_from(&find_project_root()?);
+            let scope = PermissionPostureScope::from_flags(*user, *local)?;
+            let result = apply_permission_posture(&project_root, *tier, scope)?;
+            if *tier == ConfigPermissionTier::Bypass {
+                println!(
+                    "{}",
+                    "WARNING: bypass writes a nuclear full-access default; use only as an explicit operator opt-in."
+                        .red()
+                        .bold()
+                );
+            }
+            println!(
+                "{} permission posture set to {:?} ({})",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                tier,
+                scope.label()
+            );
+            for path in result.edited_paths {
+                println!("  wrote {}", path.display());
+            }
+            for path in result.backup_paths {
+                println!("  backup {}", path.display());
+            }
+        }
+    }
+    Ok(())
+}
+
+// trace:STORY-1128 | ai:codex
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PermissionPostureScope {
+    Local,
+    User,
+}
+
+impl PermissionPostureScope {
+    fn from_flags(user: bool, _local: bool) -> Result<Self> {
+        if user {
+            Ok(Self::User)
+        } else {
+            Ok(Self::Local)
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Local => "project-local",
+            Self::User => "user-global",
+        }
+    }
+}
+
+// trace:STORY-1128 | ai:codex
+#[derive(Debug, Clone)]
+pub(crate) struct PermissionPostureWriteResult {
+    pub edited_paths: Vec<std::path::PathBuf>,
+    pub backup_paths: Vec<std::path::PathBuf>,
+}
+
+// trace:STORY-1128 | ai:codex
+pub(crate) fn apply_permission_posture(
+    project_root: &std::path::Path,
+    tier: ConfigPermissionTier,
+    scope: PermissionPostureScope,
+) -> Result<PermissionPostureWriteResult> {
+    let paths = permission_posture_paths(project_root, scope)?;
+    let mut edited_paths = Vec::new();
+    let mut backup_paths = Vec::new();
+
+    backup_paths.push(backup_file(&paths.agents)?);
+    write_agents_posture(&paths.agents, tier)?;
+    edited_paths.push(paths.agents);
+
+    backup_paths.push(backup_file(&paths.codex)?);
+    write_codex_posture(&paths.codex, tier)?;
+    edited_paths.push(paths.codex);
+
+    Ok(PermissionPostureWriteResult {
+        edited_paths,
+        backup_paths,
+    })
+}
+
+#[derive(Debug, Clone)]
+struct PermissionPosturePaths {
+    agents: std::path::PathBuf,
+    codex: std::path::PathBuf,
+}
+
+fn permission_posture_paths(
+    project_root: &std::path::Path,
+    scope: PermissionPostureScope,
+) -> Result<PermissionPosturePaths> {
+    match scope {
+        PermissionPostureScope::Local => Ok(PermissionPosturePaths {
+            agents: project_root.join(".aida/agents.toml"),
+            codex: project_root.join(".codex/config.toml"),
+        }),
+        PermissionPostureScope::User => {
+            let home = aida_home_dir().context("cannot resolve home directory")?;
+            Ok(PermissionPosturePaths {
+                agents: home.join(".aida/agents.toml"),
+                codex: home.join(".codex/config.toml"),
+            })
+        }
+    }
+}
+
+fn backup_file(path: &std::path::Path) -> Result<std::path::PathBuf> {
+    let backup = backup_path(path);
+    if let Some(parent) = backup.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    match std::fs::read(path) {
+        Ok(bytes) => aida_core::write_atomic(&backup, bytes)
+            .with_context(|| format!("failed to write {}", backup.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            aida_core::write_atomic(&backup, b"")
+                .with_context(|| format!("failed to write {}", backup.display()))?;
+        }
+        Err(e) => return Err(e).with_context(|| format!("failed to read {}", path.display())),
+    }
+    Ok(backup)
+}
+
+fn backup_path(path: &std::path::Path) -> std::path::PathBuf {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("config");
+    path.with_file_name(format!("{name}.bak"))
+}
+
+fn load_edit_doc(path: &std::path::Path) -> Result<DocumentMut> {
+    match std::fs::read_to_string(path) {
+        Ok(body) => body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("failed to parse {}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(DocumentMut::new()),
+        Err(e) => Err(e).with_context(|| format!("failed to read {}", path.display())),
+    }
+}
+
+fn save_edit_doc(path: &std::path::Path, doc: &DocumentMut) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    aida_core::write_atomic(path, doc.to_string())
+        .with_context(|| format!("failed to write {}", path.display()))
+}
+
+fn write_agents_posture(path: &std::path::Path, tier: ConfigPermissionTier) -> Result<()> {
+    let mut doc = load_edit_doc(path)?;
+    let agents = ensure_root_table(&mut doc, "agents");
+    match tier {
+        ConfigPermissionTier::Contained => {
+            agents["contained"] = value(true);
+            agents["bypass"] = value(false);
+            let codex = ensure_child_table(agents, "codex");
+            codex["default_flags"] = value(string_array([
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+            ]));
+        }
+        ConfigPermissionTier::Native => {
+            agents.remove("contained");
+            agents.remove("bypass");
+            if let Some(codex) = agents.get_mut("codex").and_then(Item::as_table_mut) {
+                codex.remove("default_flags");
+                if codex.is_empty() {
+                    agents.remove("codex");
+                }
+            }
+        }
+        ConfigPermissionTier::Bypass => {
+            agents["contained"] = value(false);
+            agents["bypass"] = value(true);
+            let codex = ensure_child_table(agents, "codex");
+            codex["default_flags"] =
+                value(string_array(["--dangerously-bypass-approvals-and-sandbox"]));
+        }
+    }
+    save_edit_doc(path, &doc)
+}
+
+fn write_codex_posture(path: &std::path::Path, tier: ConfigPermissionTier) -> Result<()> {
+    let mut doc = load_edit_doc(path)?;
+    match tier {
+        ConfigPermissionTier::Contained => {
+            doc["sandbox_mode"] = value("workspace-write");
+            doc["approval_policy"] = value("never");
+            let sandbox = ensure_root_table(&mut doc, "sandbox_workspace_write");
+            sandbox["network_access"] = value(true);
+            sandbox["writable_roots"] = value(string_array(["~/.cargo", "~/.rustup", "~/.aida"]));
+        }
+        ConfigPermissionTier::Native => {
+            doc.remove("sandbox_mode");
+            doc.remove("approval_policy");
+            doc.remove("sandbox_workspace_write");
+        }
+        ConfigPermissionTier::Bypass => {
+            doc["sandbox_mode"] = value("danger-full-access");
+            doc["approval_policy"] = value("never");
+            doc.remove("sandbox_workspace_write");
+        }
+    }
+    save_edit_doc(path, &doc)?;
+    verify_codex_posture_file(path)
+}
+
+fn ensure_root_table<'a>(doc: &'a mut DocumentMut, key: &str) -> &'a mut Table {
+    if !doc.contains_table(key) {
+        doc.insert(key, Item::Table(Table::new()));
+    }
+    doc[key]
+        .as_table_mut()
+        .expect("just-inserted/confirmed table")
+}
+
+fn ensure_child_table<'a>(table: &'a mut Table, key: &str) -> &'a mut Table {
+    if !table.contains_table(key) {
+        table.insert(key, Item::Table(Table::new()));
+    }
+    table[key]
+        .as_table_mut()
+        .expect("just-inserted/confirmed child table")
+}
+
+fn string_array<const N: usize>(items: [&str; N]) -> Array {
+    let mut array = Array::default();
+    for item in items {
+        array.push(item);
+    }
+    array
+}
+
+fn verify_codex_posture_file(path: &std::path::Path) -> Result<()> {
+    let body = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let parsed: toml::Value =
+        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?;
+    if body.contains("[sandbox_workspace_write]") {
+        anyhow::ensure!(
+            parsed
+                .get("sandbox_mode")
+                .and_then(|v| v.as_str())
+                .is_some(),
+            "Codex config root sandbox_mode was captured by a table in {}",
+            path.display()
+        );
+        anyhow::ensure!(
+            parsed
+                .get("approval_policy")
+                .and_then(|v| v.as_str())
+                .is_some(),
+            "Codex config root approval_policy was captured by a table in {}",
+            path.display()
+        );
     }
     Ok(())
 }
@@ -865,10 +1129,10 @@ pub(crate) fn scan_permission_posture_findings(
             id: f.id,
             summary: format!("{}: {} ({})", f.agent, f.summary, f.severity),
             action: format!(
-                "inspect `aida config permissions show`; adjust the setting at {} deliberately",
+                "apply contained posture with `aida config permissions set contained`; current source: {}",
                 f.source
             ),
-            safe_heal: false,
+            safe_heal: true,
         })
         .collect()
 }
@@ -3155,6 +3419,180 @@ mod bug_533_config_show_tests {
             .expect("codex row");
         assert_eq!(codex.network, "true (~/.codex/config.toml)");
         assert_eq!(codex.writable_roots, vec!["/tmp/cache".to_string()]);
+    }
+
+    // trace:STORY-1128 | ai:codex
+    #[test]
+    fn permissions_set_contained_is_parseable_idempotent_and_backed_up() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::create_dir_all(dir.path().join(".codex")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/agents.toml"),
+            "[agents]\nclaude = true\n[agents.antigravity]\ndefault_flags = []\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".codex/config.toml"),
+            "model = \"gpt-5\"\n[mcp_servers.aida]\ncommand = \"aida\"\n",
+        )
+        .unwrap();
+
+        let first = apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+        let agents_once = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
+        let codex_once = std::fs::read_to_string(dir.path().join(".codex/config.toml")).unwrap();
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+
+        assert_eq!(
+            agents_once,
+            std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap()
+        );
+        assert_eq!(
+            codex_once,
+            std::fs::read_to_string(dir.path().join(".codex/config.toml")).unwrap()
+        );
+        toml::from_str::<toml::Value>(&agents_once).unwrap();
+        let parsed_codex: toml::Value = toml::from_str(&codex_once).unwrap();
+        assert_eq!(
+            parsed_codex.get("sandbox_mode").and_then(|v| v.as_str()),
+            Some("workspace-write")
+        );
+        assert_eq!(
+            parsed_codex
+                .get("sandbox_workspace_write")
+                .and_then(|v| v.get("network_access"))
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert!(dir.path().join(".aida/agents.toml.bak").exists());
+        assert!(dir.path().join(".codex/config.toml.bak").exists());
+        assert_eq!(first.edited_paths.len(), 2);
+        assert_eq!(first.backup_paths.len(), 2);
+    }
+
+    // trace:STORY-1128 | ai:codex
+    #[test]
+    fn permissions_set_scope_selects_local_or_user_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+        assert!(dir.path().join(".aida/agents.toml").exists());
+        assert!(dir.path().join(".codex/config.toml").exists());
+        assert!(!home.path().join(".aida/agents.toml").exists());
+
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::User,
+        )
+        .unwrap();
+        assert!(home.path().join(".aida/agents.toml").exists());
+        assert!(home.path().join(".codex/config.toml").exists());
+    }
+
+    // trace:STORY-1128 | ai:codex
+    #[test]
+    fn permissions_set_codex_table_stays_below_top_level_scalars() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".codex")).unwrap();
+        std::fs::write(
+            dir.path().join(".codex/config.toml"),
+            "sandbox_mode = \"danger-full-access\"\napproval_policy = \"on-request\"\nmodel = \"gpt-5\"\n[mcp_servers.aida]\ncommand = \"aida\"\n",
+        )
+        .unwrap();
+
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+
+        let body = std::fs::read_to_string(dir.path().join(".codex/config.toml")).unwrap();
+        let parsed: toml::Value = toml::from_str(&body).unwrap();
+        assert_eq!(
+            parsed.get("sandbox_mode").and_then(|v| v.as_str()),
+            Some("workspace-write"),
+            "root scalar must remain root, not under a table: {body}"
+        );
+        assert!(
+            body.find("model = \"gpt-5\"").unwrap()
+                < body.find("[sandbox_workspace_write]").unwrap(),
+            "workspace table must not land above leading root scalars: {body}"
+        );
+    }
+
+    // trace:STORY-1128 | ai:codex
+    #[test]
+    fn permissions_set_native_removes_injected_posture() {
+        let dir = tempfile::tempdir().unwrap();
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Native,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+
+        let agents = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
+        let codex = std::fs::read_to_string(dir.path().join(".codex/config.toml")).unwrap();
+        assert!(!agents.contains("default_flags"), "{agents}");
+        assert!(!agents.contains("contained"), "{agents}");
+        assert!(!agents.contains("bypass"), "{agents}");
+        assert!(!codex.contains("sandbox_mode"), "{codex}");
+        assert!(!codex.contains("approval_policy"), "{codex}");
+        assert!(!codex.contains("sandbox_workspace_write"), "{codex}");
+    }
+
+    // trace:STORY-1128 | ai:codex
+    #[test]
+    fn permissions_set_bypass_is_the_only_tier_with_codex_nuclear_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Contained,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+        let contained = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
+        assert!(
+            !contained.contains("--dangerously-bypass-approvals-and-sandbox"),
+            "{contained}"
+        );
+
+        apply_permission_posture(
+            dir.path(),
+            ConfigPermissionTier::Bypass,
+            PermissionPostureScope::Local,
+        )
+        .unwrap();
+        let bypass = std::fs::read_to_string(dir.path().join(".aida/agents.toml")).unwrap();
+        assert!(
+            bypass.contains("--dangerously-bypass-approvals-and-sandbox"),
+            "{bypass}"
+        );
     }
 
     /// The doc table is now a view over the registry (STORY-671): a declared
