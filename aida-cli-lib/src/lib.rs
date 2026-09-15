@@ -2504,17 +2504,26 @@ fn run() -> Result<()> {
                 }
             }
         }
-        // TASK-698: first-machine-setup — surface the STORY-495 permission
-        // posture knob. Part of the same "set up this machine's agent defaults"
-        // step as the role scaffold above (both write GLOBAL ~/.aida/, fire
-        // once, idempotent). Only prompts at a TTY when ~/.aida/agents.toml is
-        // absent; the native (faithful) posture is the safe default. Non-fatal:
-        // a hiccup writing global state must not abort an otherwise-successful
-        // init. trace:TASK-698 | ai:claude
+        // TASK-698 / TASK-1233: first-machine setup plus existing-project
+        // posture repair. The first-machine prompt writes GLOBAL ~/.aida/ and,
+        // for contained, the matching ~/.codex/config.toml sandbox table. A
+        // re-init over existing config never re-prompts unless the read-only
+        // posture report already flags an incoherent state, and even then only
+        // at a TTY. Non-interactive / --no-agent-config init writes nothing.
+        // trace:TASK-698 trace:TASK-1233 | ai:codex
         if !*no_agent_config && init_footprint == cli::InitFootprint::Full {
             if let Err(e) = maybe_prompt_agent_posture() {
                 eprintln!(
                     "  {} agent permission posture skipped: {}",
+                    "Note:".dimmed(),
+                    e
+                );
+            }
+            if let Err(e) =
+                config_cmd::maybe_offer_permission_posture_fix(&statusline_project_root())
+            {
+                eprintln!(
+                    "  {} agent permission posture check skipped: {}",
                     "Note:".dimmed(),
                     e
                 );
@@ -23502,11 +23511,25 @@ fn load_agents_contained(project_root: &std::path::Path) -> Result<bool> {
     Ok(contained)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AgentPermissionPosture {
+    Native,
+    Contained,
+    Bypass,
+}
+
+impl AgentPermissionPosture {
+    fn agents_bypass(self) -> bool {
+        matches!(self, Self::Bypass)
+    }
+}
+
 /// TASK-698: first-machine-setup prompt for the agent permission posture.
-/// Surfaces the STORY-495 `[agents] bypass` knob at `aida init` so the
-/// operator discovers it during onboarding rather than after an agent
-/// unexpectedly prompts. Writes the chosen posture to the GLOBAL
-/// `~/.aida/agents.toml`.
+/// Surfaces the STORY-495 / STORY-567 posture knobs at `aida init` so the
+/// operator discovers them during onboarding rather than after an agent
+/// unexpectedly prompts. Writes the chosen posture to GLOBAL config:
+/// `~/.aida/agents.toml`, plus `~/.codex/config.toml` for contained
+/// Codex-native sandbox settings.
 ///
 /// Guards (all must hold to prompt):
 ///   - `~/.aida/agents.toml` is absent — idempotent; an existing file is
@@ -23518,6 +23541,7 @@ fn load_agents_contained(project_root: &std::path::Path) -> Result<bool> {
 /// consistent with STORY-495's faithful-launcher philosophy. Bypass requires
 /// an explicit pick. "Decide later" writes nothing, so a future `aida init`
 /// re-surfaces the prompt.
+// trace:TASK-1233 | ai:codex
 fn maybe_prompt_agent_posture() -> Result<()> {
     let Some(home) = aida_home_dir() else {
         return Ok(());
@@ -23543,12 +23567,16 @@ fn maybe_prompt_agent_posture() -> Result<()> {
         "1)".bold()
     );
     eprintln!(
-        "    {}  Bypass  — skip all prompts (trusted / autonomous workflows)",
+        "    {}  Contained — no prompts, Codex workspace-write sandbox",
         "2)".bold()
     );
     eprintln!(
-        "    {}  Decide later — ask again on the next init",
+        "    {}  Bypass  — skip all prompts (trusted / autonomous workflows)",
         "3)".bold()
+    );
+    eprintln!(
+        "    {}  Decide later — ask again on the next init",
+        "4)".bold()
     );
     eprint!("  Choose [1]: ");
     use std::io::Write as _;
@@ -23565,11 +23593,12 @@ fn maybe_prompt_agent_posture() -> Result<()> {
         return Ok(());
     }
 
-    let bypass = match answer.trim() {
+    let posture = match answer.trim() {
         // Empty (bare Enter) and "1" both select the safe native default.
-        "" | "1" => false,
-        "2" => true,
-        "3" => {
+        "" | "1" => AgentPermissionPosture::Native,
+        "2" => AgentPermissionPosture::Contained,
+        "3" => AgentPermissionPosture::Bypass,
+        "4" => {
             eprintln!(
                 "  {} no agent posture written; rerun `aida init` to set it.",
                 "Note:".dimmed()
@@ -23586,19 +23615,23 @@ fn maybe_prompt_agent_posture() -> Result<()> {
         }
     };
 
-    write_global_agents_posture(&path, bypass)?;
-    if bypass {
-        eprintln!(
-            "  {} agents will run with permissions bypassed ({} in ~/.aida/agents.toml).",
-            "+".green(),
-            "[agents] bypass = true".cyan()
-        );
-    } else {
-        eprintln!(
+    write_global_agents_permission_posture(&path, posture)?;
+    match posture {
+        AgentPermissionPosture::Native => eprintln!(
             "  {} agents will keep their native posture ({} in ~/.aida/agents.toml).",
             "+".green(),
             "[agents] bypass = false".cyan()
-        );
+        ),
+        AgentPermissionPosture::Contained => eprintln!(
+            "  {} agents will run contained ({} in ~/.aida/agents.toml; Codex sandbox in ~/.codex/config.toml).",
+            "+".green(),
+            "[agents] contained = true".cyan()
+        ),
+        AgentPermissionPosture::Bypass => eprintln!(
+            "  {} agents will run with permissions bypassed ({} in ~/.aida/agents.toml).",
+            "+".green(),
+            "[agents] bypass = true".cyan()
+        ),
     }
     Ok(())
 }
@@ -23943,10 +23976,34 @@ fn append_telemetry_disabled(config_path: &std::path::Path) -> Result<()> {
 
 /// Write the global `~/.aida/agents.toml` recording the chosen permission
 /// posture. Creates `~/.aida/` if needed. trace:TASK-698 | ai:claude
+#[cfg(test)]
 fn write_global_agents_posture(path: &std::path::Path, bypass: bool) -> Result<()> {
+    write_global_agents_permission_posture(
+        path,
+        if bypass {
+            AgentPermissionPosture::Bypass
+        } else {
+            AgentPermissionPosture::Native
+        },
+    )
+}
+
+// trace:TASK-1233 | ai:codex
+fn write_global_agents_permission_posture(
+    path: &std::path::Path,
+    posture: AgentPermissionPosture,
+) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    if matches!(posture, AgentPermissionPosture::Contained) {
+        config_cmd::apply_permission_posture(
+            std::path::Path::new("."),
+            cli::ConfigPermissionTier::Contained,
+            config_cmd::PermissionPostureScope::User,
+        )?;
+        return Ok(());
     }
     let body = format!(
         "# Per-agent launch defaults for `aida agent new` (machine-global).\n\
@@ -23960,7 +24017,8 @@ fn write_global_agents_posture(path: &std::path::Path, bypass: bool) -> Result<(
          #\n\
          # Set during `aida init` first-machine setup (TASK-698). Edit freely.\n\
          [agents]\n\
-         bypass = {bypass}\n"
+         bypass = {}\n",
+        posture.agents_bypass()
     );
     std::fs::write(path, body)
         .with_context(|| format!("writing agent permission posture {}", path.display()))?;
