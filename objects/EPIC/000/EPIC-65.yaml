@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:11.375734789Z
-modified_at: 2026-09-15T06:29:34.595863819Z
+modified_at: 2026-09-15T07:15:18.598483892Z
 req_type: Epic
 tags:
 - agents permission-posture sandbox security config aida:config aida:doctor
@@ -53,3 +53,9 @@ comments:
   created_at: 2026-09-15T06:29:34.595863819Z
   modified_at: 2026-09-15T06:29:34.595863819Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a3eb-8dc6-7533-a285-25bdb351c0ed
+  author: joe
+  content: 'Forks (a) default scope and (b) vendor-file ownership RESOLVED via ADR-32 (/aida-derisk on STORY-1128, 2026-09-15): local-default + AIDA-writes-~/.codex-tested+backup. Inherited by STORY-1128/TASK-1233/STORY-1131. Fork (c) (one config permissions command as core) remains the recommended structure.'
+  created_at: 2026-09-15T07:15:18.598483892Z
+  modified_at: 2026-09-15T07:15:18.598483892Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
