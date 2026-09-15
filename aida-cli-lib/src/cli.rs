@@ -7986,16 +7986,18 @@ pub enum Command {
         show_tags: bool,
 
         /// Also mark specs blocked behind an incomplete blocker with a leading
-        /// ⊘ glyph. Off by default; the cheap queued ↑ / in-flight ▶ overlay is
-        /// always on.
+        /// ⊘ glyph. Off by default; the cheap queued ↑ / supervised queued ⇈
+        /// (needs guided/operator session; headless drain skips) / in-flight ▶
+        /// overlay is always on.
         // trace:TASK-670 | ai:claude
         // trace:TASK-902 | ai:claude — blocked is now read from the cache (a
         // projected column), no longer a full-store load.
         #[clap(long)]
         blocked: bool,
 
-        /// Drop the leading work-routing glyph column (↑ queued / ▶
-        /// in-flight / ⊘ blocked) but keep the status glyphs. "Show me
+        /// Drop the leading work-routing glyph column (↑ queued / ⇈ queued but
+        /// needs guided/operator session; headless drain skips / ▶ in-flight /
+        /// ⊘ blocked) but keep the status glyphs. "Show me
         /// the list without the routing overlay."
         // trace:TASK-670 | ai:claude
         #[clap(long)]
