@@ -1,0 +1,23 @@
+id: 01a0a3e7-f0d5-7703-afbb-e042b81b15fd
+spec_id: ADR-31
+agreed_id: ADR-31
+title: Codex 'contained-autonomous' posture uses --ask-for-approval never (not approve-for-me / on-failure)
+description: |-
+  Decision (operator via /aida-derisk, 2026-09-15): the codex contained-autonomous posture the AIDA launcher passes is --sandbox workspace-write --ask-for-approval never (resolving STORY-1124's internal inconsistency between its title 'approve-for-me' and its ~/.codex doc example 'on-failure').
+
+  Rationale:
+  - Fully prompt-free AND the workspace-write sandbox is the HARD containment wall — ops needing escalation past the sandbox just fail; codex does NOT auto-escalate (approve-for-me would auto-grant within-sandbox escalations, weakening the wall).
+  - Headless-safe: 'never' never hangs an unattended drain on a prompt, whereas 'on-failure' reintroduces a prompt that would hang a headless run.
+  - Not over-restrictive: network/cargo/git work is enabled inside the sandbox via the [sandbox_workspace_write] table (network_access=true, writable_roots=[~/.cargo,~/.rustup,~/.aida]), not via approval escalation.
+  - --bypass-sandbox (--dangerously-bypass-approvals-and-sandbox) stays the SEPARATE explicit nuclear opt-in; contained never implies bypass.
+
+  Consequence: 'contained' = --sandbox workspace-write + --ask-for-approval never + the sandbox table. This is the flag set the launcher resolves and --noexec displays; a test asserts it and that --dangerously-bypass is absent unless the bypass posture is explicitly chosen.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T07:11:21.813869212Z
+modified_at: 2026-09-15T07:11:21.813869212Z
+req_type: Decision
+tags:
+- codex permission-posture sandbox derisk parent:epic-65
