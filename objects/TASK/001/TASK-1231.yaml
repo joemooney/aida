@@ -18,12 +18,12 @@ description: |-
   Acceptance:
   - One command drains the ready set safely from a bare cron (no cd/PATH/count/batch footguns), keystones fenced, lock-aware, wrong-store-proof.
   - Documented as THE durable autonomous-progress entry point; the cron line is just that command.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T15:29:48.322099926Z
-modified_at: 2026-09-15T03:58:00.314267549Z
+modified_at: 2026-09-15T04:05:56.128925507Z
 req_type: Task
 tags:
 - autonomy cron drain-invocation papercut parent:EPIC-62
@@ -72,4 +72,22 @@ comments:
   created_at: 2026-09-15T03:58:00.314267549Z
   modified_at: 2026-09-15T03:58:00.314267549Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a33e-2d1a-7012-91ff-8aca03b9c030
+  author: aida-auto-bump
+  timestamp: 2026-09-15T04:05:56.122595771Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0a33e-2d20-7fd0-b7e9-bc103af66a75
+  timestamp: 2026-09-15T04:05:56.128924872Z
+  agent: aida
+  commit_sha: 9621507302c4b0c3a17663eabf0482018c43a488
+  summary: Completed via merge 96215073
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-15T04:05:56.122412706Z
+  completion_sha: 9621507302c4b0c3a17663eabf0482018c43a488
