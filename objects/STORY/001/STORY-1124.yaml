@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:18.096155572Z
-modified_at: 2026-09-15T07:11:42.325073478Z
+modified_at: 2026-09-15T07:11:54.307667043Z
 req_type: Story
 tags:
 - agents codex permission-posture sandbox security
@@ -47,4 +47,4 @@ comments:
   created_at: 2026-09-15T05:38:18.105809239Z
   modified_at: 2026-09-15T05:38:18.105809239Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
-execution_mode: guided
+execution_mode: drain
