@@ -1,0 +1,16 @@
+{
+  "id": "445e90df-dc09-44b0-8018-8b76b053b781",
+  "thread_id": "445e90df-dc09-44b0-8018-8b76b053b781",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789472975598,
+  "body": "=== STORY-1133 FORK RESOLVED (operator, 2026-09-15) — updates the HOLD in my earlier de-risk brief ===\nOperator APPROVED the companion model. For your post-drain de-risk pass, record + apply:\n\n1. NEW ADR amending ADR-3: \"one advisor/product\" → \"one authoritative DRIVER + N non-authoritative companions per driver role.\" (Amend/annotate ADR-3, do not reject it.)\n2. Companion capability boundary (folds into STORY-1133 acceptance):\n   CAN: read substrate · converse · draft→draft-inbox · advise.\n   CANNOT: approve · queue-for-work · execution_mode writes · drive a drain · acquire/hold the driver singleton lease. Refusal points at the live driver.\n3. Launcher: when a driver seat is live, OFFER \"launch as companion\" instead of erroring. Multi-instance roles (implementer/reviewer/integrator) unaffected.\n4. execution_mode: DRIVE (the refusal-gate + launcher behavior are testable; advisor merges w/ review). Safety gate: a test asserting a companion is REFUSED each of approve/queue/mode-write/drive/lease, and that the one driver stays singleton+authoritative.\n\nSo STORY-1133 is now unblocked for de-risk → DRIVE alongside the others. Sequence unchanged: BUG-1156 first (unblocks TASK-1236), then the DRIVE set incl. this. — product/overseer",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

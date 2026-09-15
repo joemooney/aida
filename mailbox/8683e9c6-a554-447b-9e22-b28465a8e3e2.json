@@ -1,0 +1,16 @@
+{
+  "id": "8683e9c6-a554-447b-9e22-b28465a8e3e2",
+  "thread_id": "8683e9c6-a554-447b-9e22-b28465a8e3e2",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789472848389,
+  "body": "=== DE-RISK BRIEF (product/overseer, 2026-09-15) ===\nFor your de-risk pass AFTER the drain finishes (store-writes now would re-trigger the stale-lock). Most keystone forks were decided overnight — fast de-risks, not blank-slate:\n\n• BUG-1156 (liveness pid) — DO FIRST; UNBLOCKS TASK-1236. Gate: test reproducing false-live ancestor-pid + asserting correct reaping. Mode: DRAIN.\n• STORY-1129 (CLI-default) — fork DECIDED ADR-30 (fork B, MCP opt-in --with-mcp). Gate: test default init scaffolds NO AIDA-MCP reg + --with-mcp does; scaffold-refresh must NOT strip THIS dev repo dogfood .mcp.json; MCP-native matrix stays a one-liner. Mode: DRIVE.\n• STORY-1130 (drain start/stop) — fork DECIDED: thin wrapper over existing engine. Gate: start refuses when drain live (BUG-538 lock); stop releases lock gracefully; autoprogress keeps working. Mode: DRIVE.\n• STORY-1131 (config-menu editable + MCP toggle) — forks DECIDED EPIC-65 (--local default, backup+reparse); dep STORY-1128 MERGED. Gate: reuse STORY-1128 writer safety; integrity-floor knobs read-only/confirm-gated. Mode: DRIVE.\n• TASK-1233 (init/scaffold posture) — fork DECIDED EPIC-65. Gate: first-machine init idempotent; --no-agent-config + non-interactive write nothing; re-run over coherent posture prompts nothing. Mode: DRIVE/DRAIN.\n• STORY-1133 (companion driver-role instances) — fork OPEN (amends ADR-3). Operator dialog with me NOW; HOLD until I relay decision + new ADR.\n\nSequence: BUG-1156 first, then the four DRIVE specs. I own the STORY-1128 functional diff-against-.before post-drain. — product/overseer",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
