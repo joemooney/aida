@@ -3900,10 +3900,10 @@ pub enum ConfigCommand {
     /// Browse every configurable item in a navigable TUI: per row the knob's
     /// name, current value, built-in default, where it was set (scope), and a
     /// one-line explanation. The visual companion to `config show` — same
-    /// resolved surface, one screen, arrow-key navigation. Read-only for now
-    /// (edit knobs with the matching `config` subcommand or your config.toml).
+    /// resolved surface, one screen, arrow-key navigation. Safe knobs can be
+    /// edited in place; integrity-floor knobs stay read-only or subcommand-only.
     /// Needs a TTY; without one it points you at `config show`.
-    // trace:STORY-661 | ai:claude
+    // trace:STORY-661 trace:STORY-1131 | ai:claude+codex
     Menu,
 }
 
