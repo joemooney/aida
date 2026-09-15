@@ -67513,5 +67513,37 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5319
+- id: 01a0a37d-9197-77a1-99f6-c3453e042ad7
+  target_id: 01a0a37d-8dad-7da0-abdb-d32f1ebefa91
+  author: aida
+  node_id: '1'
+  lamport: 5320
+  timestamp: 2026-09-15T05:15:10.615646310Z
+  kind: !Create
+    title: session/role liveness can track a long-lived ancestor shell pid, so an entry reads live after the session exits (never reaped)
+    description: |-
+      Reported from dogfooding: after a claude/codex session exits, its role/agent registry entry still shows as active, and `aida session reap` / doctor's dead-entry reaper never clear it — the user had to hand-delete the registry file under .aida/ to fix it.
+
+      Root cause (verified in code):
+      - `role_enter_shell_pid()` (agent_registry.rs ~1916) records `parent_pid(std::process::id())` = the PARENT SHELL's pid, not the session's. Liveness gates on `pid_is_alive(record.pid)` (agent_registry.rs:421/447/715/814/961), so the seat reads live as long as the shell lives — which is AFTER the in-shell claude/codex session has exited. The seat only clears on `aida role end` or a manual file delete.
+      - Consequence for `aida session reap`: its predicate needs `process_exited=true`; with a live shell pid it stays false, so the entry is never reaped.
+
+      Reported, needs repro: `aida agent new` may likewise record a parent/wrapper pid rather than the actual session pid in some launch path. NOTE the foreground `run_tracked_agent` (lib.rs ~24783) records `child.id()` (the spawned agent), which looks correct in isolation — so the failing case is likely a terminal/launcher-wrapped or detached spawn. Capture the exact repro: `aida agent` interactive picker → codex/claude → exit the session → the entry stays live.
+
+      Impact: stale `aida ps` / `aida role list` liveness, un-reapable registry entries, registry cruft accumulating; the only workaround today is deleting the .aida agent file by hand.
+
+      Fix direction (careful — high blast radius on ps/reap correctness):
+      - Liveness for a session seat should track the ACTUAL agent process (or a session id), not an ancestor shell. Where only an ancestor pid is available, additionally verify the agent is still a live descendant (a pid_has_ancestor-style check in reverse) before treating the entry as live.
+      - For `aida role enter`, either tie liveness to the session rather than the bare shell, or document that `aida role end` is required to release the seat.
+      - Ensure doctor's dead-agent-entry reaper + `aida session reap` can clear a seat whose ancestor shell is alive but whose session process is gone.
+
+      Separately (trivial cleanup): a stale throwaway role `bug427-verify` (106d) still surfaces in `aida role list` — safe to remove.
+
+      Acceptance:
+      - After a claude/codex session launched via `aida agent new` (and via `aida role enter` + session) exits, its registry entry is classified NOT live and is reapable by `aida session reap` / doctor without a manual file delete, even though the launching shell is still alive.
+      - No regression to multi-session PID-keyed registry IDs (STORY-432) or the interactive foreground launch.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5320
 node_id: '1'
