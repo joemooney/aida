@@ -22,12 +22,12 @@ description: |-
   - The chosen fork (A or B) is recorded as an ADR with the benchmark as evidence.
   - If B: `aida init` no longer registers the AIDA MCP server by default for Claude/Codex; `--with-mcp` (or equivalent) opts in; the MCP-native-client install path stays a documented one-command setup; the dev repo's own dogfooding .mcp.json is unaffected.
   - No regression to MCP-native client first-run (the install matrix path still works).
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:12.409577134Z
-modified_at: 2026-09-15T13:33:55.893604214Z
+modified_at: 2026-09-15T15:53:31.439264756Z
 req_type: Story
 tags:
 - mcp cli agent-surface scaffolding token-economics decision
@@ -49,16 +49,26 @@ comments:
   created_at: 2026-09-15T12:52:28.103840119Z
   modified_at: 2026-09-15T12:52:28.103840119Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a5c5-fe28-7f73-ac6c-85140fc09bf4
+  author: aida-auto-bump
+  timestamp: 2026-09-15T15:53:31.432778275Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a5c5-fe2f-7fc2-8dd1-c0b5245ef852
+  timestamp: 2026-09-15T15:53:31.439263930Z
+  agent: implementer
+  commit_sha: 383ef85946184a2c62154af0c31af7109e24fe11
+  summary: Completed via merge 383ef859
+  punted:
+  - 'punted: CI is red on PR-1844: Build (ubuntu-latest)'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T13:28:34.326231574Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1844: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 34975192373 — view it: `gh run view 34975192373`. Push fixups to the same branch: `aida queue work STORY-1129 --branch story-1129 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-15T13:33:55.893604214Z
+  completed_at: 2026-09-15T15:53:31.432600042Z
+  completion_sha: 383ef85946184a2c62154af0c31af7109e24fe11
