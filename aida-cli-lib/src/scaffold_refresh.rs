@@ -61,7 +61,7 @@ pub(crate) fn refresh_agent_packs(
     let mut config = aida_core::scaffolding::ScaffoldConfig::default();
     // trace:STORY-807 | ai:codex
     if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(project_root) {
-        selection.apply_to_scaffold_config(&mut config);
+        selection.apply_to_scaffold_config(&mut config, false);
     }
     let db_path = project_root.join(".aida").join("cache.db");
     let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(

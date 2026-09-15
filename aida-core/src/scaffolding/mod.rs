@@ -673,16 +673,17 @@ pub struct ScaffoldConfig {
     /// Generate .codex/skills/ directory with Codex-compatible skills
     pub generate_codex_skills: bool,
     /// Generate .codex/config.toml registering AIDA's MCP server with Codex
-    /// CLI — the Codex-side parallel to the `.mcp.json` that makes a project
-    /// MCP-ready for Claude Code, so a project that uses Codex instead of
-    /// Claude is first-class out of the box. trace:TASK-0424 | ai:claude
+    /// CLI. This is opt-in for CLI-capable agents; the token-efficient
+    /// CLI/TOON lane is the default.
+    // trace:TASK-0424 STORY-1129 | ai:claude,codex
     pub generate_codex_config: bool,
     /// Generate .antigravity/skills/ directory with Antigravity-compatible
     /// skills. Mirrors the `.codex/skills/` pattern so a second supported
     /// agent inherits the same onboarding parity. trace:TASK-457 | ai:claude
     pub generate_antigravity_skills: bool,
-    /// Generate .mcp.json for Claude Code MCP server discovery.
-    // trace:STORY-807 | ai:codex
+    /// Generate .mcp.json for Claude Code MCP server discovery. Opt-in for
+    /// CLI-capable agents via `aida init --with-mcp`.
+    // trace:STORY-807 STORY-1129 | ai:codex
     pub generate_mcp_json: bool,
     /// Include aida-req skill for requirement creation
     pub include_aida_req_skill: bool,
@@ -787,11 +788,11 @@ impl Default for ScaffoldConfig {
             generate_commands: true,
             generate_skills: true,
             generate_codex_skills: true,
-            // trace:TASK-0424 | ai:claude
-            generate_codex_config: true,
+            // trace:TASK-0424 STORY-1129 | ai:claude,codex
+            generate_codex_config: false,
             // trace:TASK-457 | ai:claude
             generate_antigravity_skills: true,
-            generate_mcp_json: true,
+            generate_mcp_json: false,
             include_aida_req_skill: true,
             include_aida_plan_skill: true,
             include_aida_implement_skill: true,
@@ -2501,39 +2502,32 @@ aida show <SPEC-ID>
 
             artifacts.push(artifact);
 
-            // settings.local.json — per-user, gitignored MCP pre-approval so a
-            // fresh project trusts its OWN scaffolded .mcp.json server and a
-            // first launch doesn't show the scary "⚠ 1 setup issue: MCP"
-            // prompt. Local (not committed) by design: a committed pre-approval
-            // is the exact clone-attack vector Claude Code guards against, and
-            // `aida init` runs per-clone so each user grants their own local
-            // trust to the server they just installed. trace:BUG-484
-            //
-            // BUG-501: the COMMITTED settings.json now also carries
-            // enabledMcpjsonServers: ["aida"] (template), because this local
-            // copy is gitignored and so does NOT propagate into the per-pickup
-            // worktrees AIDA's session machinery creates — each fresh worktree
-            // path re-showed the warning. Claude Code unions both files, so
-            // keeping this local copy is harmless and still covers a downstream
-            // project that pins approval per-user only. trace:BUG-501
-            let path = PathBuf::from(".claude/settings.local.json");
-            let artifact = self.create_artifact(
-                path.clone(),
-                "{\n  \"enabledMcpjsonServers\": [\n    \"aida\"\n  ]\n}\n".to_string(),
-                "Per-user MCP pre-approval for the scaffolded aida server".to_string(),
-                false, // JSON file
-            );
+            if self.config.generate_mcp_json {
+                // settings.local.json — per-user, gitignored MCP pre-approval so
+                // an explicit `aida init --with-mcp` trusts its own scaffolded
+                // .mcp.json server without a first-launch setup warning.
+                // trace:BUG-484 STORY-1129 | ai:claude,codex
+                let path = PathBuf::from(".claude/settings.local.json");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    "{\n  \"enabledMcpjsonServers\": [\n    \"aida\"\n  ]\n}\n".to_string(),
+                    "Per-user MCP pre-approval for the scaffolded aida server".to_string(),
+                    false, // JSON file
+                );
 
-            match &artifact.file_status {
-                FileStatus::New => new_files.push(path),
-                FileStatus::Modified { .. } | FileStatus::NoHeader => {
-                    modified_files.push(artifact.path.clone())
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
-                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
-                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
-            }
 
-            artifacts.push(artifact);
+                artifacts.push(artifact);
+            }
         }
 
         // Filter new_dirs to only include those that don't exist
@@ -3523,12 +3517,16 @@ mod tests {
         );
     }
 
-    // trace:BUG-484 — a fresh init must pre-approve its own scaffolded MCP
-    // server so Claude Code doesn't show "⚠ 1 setup issue: MCP" on first launch.
+    // trace:BUG-484 STORY-1129 — when MCP registration is explicitly enabled,
+    // init pre-approves its own scaffolded server so Claude Code doesn't show a
+    // first-launch setup warning.
     #[test]
-    fn test_settings_local_json_preapproves_mcp_server() {
+    fn test_settings_local_json_preapproves_mcp_server_when_mcp_enabled() {
         let temp_dir = TempDir::new().unwrap();
-        let config = ScaffoldConfig::default();
+        let config = ScaffoldConfig {
+            generate_mcp_json: true,
+            ..Default::default()
+        };
         let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let store = create_test_store();
 
@@ -3628,12 +3626,15 @@ mod tests {
         );
     }
 
-    // trace:BUG-484 — the pre-approval file lands on disk on apply and reads
-    // back as the expected trust document.
+    // trace:BUG-484 STORY-1129 — the pre-approval file lands on disk on apply
+    // only when MCP registration is enabled.
     #[test]
-    fn test_apply_writes_settings_local_json_preapproval() {
+    fn test_apply_writes_settings_local_json_preapproval_when_mcp_enabled() {
         let temp_dir = TempDir::new().unwrap();
-        let config = ScaffoldConfig::default();
+        let config = ScaffoldConfig {
+            generate_mcp_json: true,
+            ..Default::default()
+        };
         let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let store = create_test_store();
 
@@ -3891,15 +3892,38 @@ mod tests {
         assert!(!temp_dir.path().join(".antigravity").exists());
     }
 
-    /// TASK-0424: the default config scaffolds `.codex/config.toml` (the
-    /// Codex-side MCP registration parallel to `.mcp.json`) so a project that
-    /// uses Codex instead of Claude Code is MCP-ready out of the box.
-    /// trace:TASK-0424 | ai:claude
+    // STORY-1129: default scaffolding keeps CLI-capable agents on the
+    // token-efficient CLI/TOON lane and does not register MCP unless opted in.
+    // trace:TASK-0424 STORY-1129 | ai:claude,codex
     #[test]
-    fn codex_config_scaffolded_by_default() {
+    fn mcp_registration_not_scaffolded_by_default() {
         let temp_dir = TempDir::new().unwrap();
         let mut scaffolder =
             Scaffolder::new(temp_dir.path().to_path_buf(), ScaffoldConfig::default());
+        let store = create_test_store();
+        let preview = scaffolder.preview(&store);
+
+        let paths: Vec<PathBuf> = preview.artifacts.iter().map(|a| a.path.clone()).collect();
+        assert!(!paths.contains(&PathBuf::from(".mcp.json")));
+        assert!(!paths.contains(&PathBuf::from(".codex/config.toml")));
+        assert!(!paths.contains(&PathBuf::from(".claude/settings.local.json")));
+
+        scaffolder.apply(&preview).expect("scaffolding apply");
+        assert!(!temp_dir.path().join(".mcp.json").exists());
+        assert!(!temp_dir.path().join(".codex/config.toml").exists());
+        assert!(!temp_dir.path().join(".claude/settings.local.json").exists());
+    }
+
+    /// `aida init --with-mcp` restores the explicit Codex MCP registration.
+    // trace:STORY-1129 | ai:codex
+    #[test]
+    fn codex_config_scaffolded_when_mcp_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = ScaffoldConfig {
+            generate_codex_config: true,
+            ..Default::default()
+        };
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let store = create_test_store();
         let preview = scaffolder.preview(&store);
 
@@ -3907,7 +3931,7 @@ mod tests {
             .artifacts
             .iter()
             .find(|a| a.path == PathBuf::from(".codex/config.toml"))
-            .expect(".codex/config.toml should be scaffolded by default");
+            .expect(".codex/config.toml should be scaffolded when MCP is enabled");
         assert!(codex_config.content.contains("[mcp_servers.aida]"));
 
         scaffolder.apply(&preview).expect("scaffolding apply");

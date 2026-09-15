@@ -164,6 +164,7 @@ fn run_post_init_hooks_from_dir(
 pub(crate) fn handle_init_command(
     no_skills: bool,
     agent: Option<&str>,
+    with_mcp: bool,
     no_hooks: bool,
     force: bool,
     verbose: bool,
@@ -230,6 +231,7 @@ pub(crate) fn handle_init_command(
         &root,
         &store,
         agent,
+        with_mcp,
         no_skills,
         no_hooks,
         force,
@@ -495,18 +497,21 @@ impl AgentSelection {
         names
     }
 
-    pub(crate) fn apply_to_scaffold_config(&self, config: &mut ScaffoldConfig) {
+    pub(crate) fn apply_to_scaffold_config(&self, config: &mut ScaffoldConfig, with_mcp: bool) {
         config.generate_claude_md = self.claude;
         config.generate_claude_local_md = self.claude;
         config.generate_commands = self.claude;
         config.generate_skills = self.claude;
         config.generate_claude_code_hooks = self.claude;
-        config.generate_mcp_json = self.claude;
+        // trace:STORY-1129 | ai:codex
+        // CLI-capable agents default to the token-efficient CLI/TOON lane.
+        // MCP registration is explicit opt-in via `aida init --with-mcp`.
+        config.generate_mcp_json = self.claude && with_mcp;
         // AGENTS.md is the cross-vendor instructions standard — needed by any
         // non-Claude profile, skipped for Claude-only (matching the old arm).
         config.generate_agents_md = self.codex || self.antigravity;
         config.generate_codex_skills = self.codex;
-        config.generate_codex_config = self.codex;
+        config.generate_codex_config = self.codex && with_mcp;
         config.generate_antigravity_skills = self.antigravity;
     }
 }
@@ -1241,6 +1246,7 @@ fn complete_init_scaffolding(
     root: &std::path::Path,
     store: &RequirementsStore,
     agent: Option<&str>,
+    with_mcp: bool,
     no_skills: bool,
     no_hooks: bool,
     force: bool,
@@ -1372,7 +1378,7 @@ fn complete_init_scaffolding(
     let selection = resolve_init_agent_selection_for_root(root, agent)?;
     write_enabled_agent_selection(root, selection)?;
     let mut config = ScaffoldConfig::default();
-    selection.apply_to_scaffold_config(&mut config);
+    selection.apply_to_scaffold_config(&mut config, with_mcp);
     // Captured before `config` moves into the Scaffolder; read at the codex
     // hook-scaffold gate below.
     let codex_profile_selected = selection.codex;
@@ -2664,6 +2670,7 @@ mod task_631_init_self_commit_tests {
             root,
             &store,
             None,
+            false, // with_mcp
             false, // no_skills
             false, // no_hooks
             false, // force
@@ -2737,6 +2744,7 @@ mod task_631_init_self_commit_tests {
             root,
             &store,
             None,
+            false, // with_mcp
             true,  // no_skills
             false, // no_hooks
             false, // force
@@ -2893,8 +2901,9 @@ mod task_631_init_self_commit_tests {
         );
 
         let mut config = ScaffoldConfig::default();
-        selection.apply_to_scaffold_config(&mut config);
+        selection.apply_to_scaffold_config(&mut config, false);
         assert!(config.generate_codex_skills);
+        assert!(!config.generate_codex_config);
         assert!(config.include_aida_capture_skill);
     }
 
@@ -2908,6 +2917,7 @@ mod task_631_init_self_commit_tests {
             &root,
             &store,
             Some("codex"),
+            false, // with_mcp
             false, // no_skills
             true,  // no_hooks
             false, // force
@@ -3190,6 +3200,7 @@ mod task_631_init_self_commit_tests {
             root,
             &store,
             Some("claude"),
+            false, // with_mcp
             false, // no_skills
             true,  // no_hooks — keep the scaffold set lean for the test
             false, // force
@@ -3250,6 +3261,7 @@ mod task_631_init_self_commit_tests {
             &root,
             &store,
             None,  // default all-agent profile generates AGENTS.md
+            false, // with_mcp
             false, // no_skills
             true,  // no_hooks
             false, // force
@@ -3323,6 +3335,7 @@ pub(crate) fn handle_init_distributed_worktree(
     force: bool,
     no_skills: bool,
     agent: Option<&str>,
+    with_mcp: bool,
     no_hooks: bool,
     verbose: bool,
     name: Option<&str>,
@@ -3433,6 +3446,7 @@ pub(crate) fn handle_init_distributed_worktree(
             branch_name,
             no_skills,
             agent,
+            with_mcp,
             no_hooks,
             verbose,
             commit_scaffold,
@@ -3472,6 +3486,7 @@ pub(crate) fn handle_init_distributed_worktree(
                 branch_name,
                 no_skills,
                 agent,
+                with_mcp,
                 no_hooks,
                 verbose,
                 commit_scaffold,
@@ -3508,6 +3523,7 @@ pub(crate) fn handle_init_distributed_worktree(
                 &cwd,
                 &store,
                 agent,
+                with_mcp,
                 no_skills,
                 no_hooks,
                 false,
@@ -3938,6 +3954,7 @@ pub(crate) fn handle_init_distributed_worktree(
         &cwd,
         &store,
         agent,
+        with_mcp,
         no_skills,
         no_hooks,
         force,
@@ -4056,6 +4073,7 @@ fn handle_init_post_clone(
     branch_name: &str,
     no_skills: bool,
     agent: Option<&str>,
+    with_mcp: bool,
     no_hooks: bool,
     verbose: bool,
     // BUG-570: opt-in `--commit-scaffold` to deliberately commit the locally
@@ -4219,6 +4237,7 @@ fn handle_init_post_clone(
         cwd,
         &store,
         agent,
+        with_mcp,
         no_skills,
         no_hooks,
         false, // force
@@ -4389,6 +4408,7 @@ pub(crate) fn handle_init_distributed_sibling(
     store_path_arg: Option<&str>,
     no_skills: bool,
     agent: Option<&str>,
+    with_mcp: bool,
     no_hooks: bool,
     verbose: bool,
     name: Option<&str>,
@@ -4774,6 +4794,7 @@ pub(crate) fn handle_init_distributed_sibling(
         &cwd,
         &store,
         agent,
+        with_mcp,
         no_skills,
         no_hooks,
         force,

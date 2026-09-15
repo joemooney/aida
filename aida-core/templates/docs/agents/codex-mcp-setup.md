@@ -37,13 +37,13 @@ codex mcp add <name> -- <command>...
 
 ## Register AIDA as a Codex MCP Server
 
-`aida init` scaffolds a project-local `.codex/config.toml` with an
-`[mcp_servers.aida]` block that registers `aida mcp-serve` for this project —
-the Codex-side parallel to the `.mcp.json` AIDA writes for Claude Code. A Codex
-session started from the project root picks it up automatically, so the manual
-`codex mcp add` below is only needed for a project that predates the scaffold
-or for a personal `~/.codex/config.toml` registration. If `aida` is not on
-`PATH`, edit the scaffolded `command` to the absolute binary path.
+The CLI/TOON surface is the default for CLI-capable agents. Opt into Codex MCP
+registration with `aida init --with-mcp --agent codex` (or `--agent all`) when
+you want the typed AIDA surface in a project-local `.codex/config.toml`. That
+registration is the Codex-side parallel to Claude Code's opt-in `.mcp.json`.
+Manual `codex mcp add` remains the one-command setup for existing projects or
+for a personal `~/.codex/config.toml` registration. If `aida` is not on `PATH`,
+edit the generated `command` to the absolute binary path.
 
 To register manually (or to verify the scaffolded shape) from the AIDA project
 root:
@@ -292,7 +292,7 @@ Before relying on the wrapper in a new environment, read the five-bug arc that h
 - Error bodies carry both a text envelope and a structured `structuredError` object (STORY-401).
 - `claim_task` has a known race under concurrent claims. TASK-438 tracks atomicity.
 - Cross-machine MCP and auth are out of scope for this local stdio setup.
-- Project-local Codex registration IS scaffolded by `aida init` (a `.codex/config.toml` with an `[mcp_servers.aida]` block). Manual `codex mcp add aida -- aida mcp-serve` remains available for pre-scaffold projects or a personal `~/.codex/config.toml`. trace:TASK-0424
+- Project-local Codex registration is scaffolded only when explicitly requested with `aida init --with-mcp` (a `.codex/config.toml` with an `[mcp_servers.aida]` block). Manual `codex mcp add aida -- aida mcp-serve` remains available for existing projects or a personal `~/.codex/config.toml`. trace:TASK-0424 trace:STORY-1129
 - The default invisible-memory path is CLI/TOON; MCP is optional. The
   scaffolded Codex config sets `AIDA_AGENT_OUTPUT=toon` for the AIDA server
   entry so opt-in MCP remains compact too. trace:STORY-1095
