@@ -16,13 +16,17 @@ description: |-
   B. `aida status` surfaces the tiers SEPARATELY and labeled: e.g. 'open: 1 · deferred: 30 · draft: 17 · archived: N' rather than folding deferred into 'open'.
 
   Acceptance: `aida status`'s headline 'open' equals `aida list`'s open-lens count for the same store; deferred/archived, if shown, are labeled as their own tiers, never counted as 'open'.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:09:10.040361417Z
-modified_at: 2026-09-15T07:48:01.685429297Z
+modified_at: 2026-09-15T07:54:59.624161523Z
 req_type: Bug
 tags:
 - ux status list open-lens consistency papercut
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-15T07:54:59.624161523Z
+  implemented_by: joe
