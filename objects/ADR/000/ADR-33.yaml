@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T12:52:59.067683932Z
-modified_at: 2026-09-15T12:53:15.692774070Z
+modified_at: 2026-09-15T12:53:17.105365454Z
 req_type: Decision
 tags:
 - roles driver-vs-companion adr-3-amendment cardinality
@@ -26,4 +26,8 @@ relationships:
 - rel_type: References
   target_id: 019e962e-71b5-7153-a856-b8d444389b34
   created_at: 2026-09-15T12:53:15.692769263Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0a3df-cb7e-7bd2-b0a9-ad1881e6426c
+  created_at: 2026-09-15T12:53:17.105360187Z
   created_by: joe
