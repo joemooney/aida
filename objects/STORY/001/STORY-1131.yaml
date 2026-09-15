@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:39:41.386724952Z
-modified_at: 2026-09-15T06:39:52.495978516Z
+modified_at: 2026-09-15T06:39:55.115374847Z
 req_type: Story
 tags:
 - config config-menu ux editability permission-posture mcp aida:config parent:EPIC-65
@@ -28,4 +28,8 @@ relationships:
 - rel_type: References
   target_id: 01a0a3c7-4afc-7ac2-8d7b-b96b6d67508e
   created_at: 2026-09-15T06:39:52.495973211Z
+  created_by: joe
+- rel_type: References
+  target_id: 01a0a3bf-4b2b-7511-b772-05fce9155280
+  created_at: 2026-09-15T06:39:55.115369235Z
   created_by: joe
