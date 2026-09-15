@@ -67726,5 +67726,20 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5331
+- id: 01a0a3bf-7041-71c1-97c6-b7ec0f112e58
+  target_id: 01a0a3bf-6b1f-79c2-a74a-d682207472e9
+  author: aida
+  node_id: '1'
+  lamport: 5332
+  timestamp: 2026-09-15T06:27:07.457143994Z
+  kind: !Create
+    title: 'aida init / scaffold: detect missing-or-incoherent permission posture and offer to set contained (extend TASK-698 first-machine agent-config)'
+    description: |-
+      Wire the posture into the setup path. At first-machine `aida init` (the TASK-698 agent-config prompt that writes ~/.aida/agents.toml) add the contained option to the posture choice (native / contained / bypass) instead of just native-vs-bypass, and write the matching ~/.codex/config.toml sandbox table when contained is chosen. At `aida init`/`aida scaffold refresh` in an existing project, run the STORY-A check and, at a TTY, OFFER to fix a flagged state (e.g. full-access-no-sandbox, or contained-without-sandbox-table); headless writes nothing. Idempotent — an already-coherent posture is never re-prompted. Honors --no-agent-config.
+
+      Acceptance: first-machine init offers native/contained/bypass and writes a coherent contained posture when chosen; a re-run over a coherent posture prompts nothing; a flagged posture at a TTY offers the STORY-B fix; --no-agent-config and non-interactive init write nothing.
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 5332
 node_id: '1'
