@@ -21,3 +21,7 @@ modified_at: 2026-09-15T06:26:11.375734789Z
 req_type: Epic
 tags:
 - agents permission-posture sandbox security config aida:config aida:doctor
+relationships:
+- rel_type: Parent
+  target_id: 01a0a3bf-2f19-7741-b2db-a55e0c29c147
+  created_at: 2026-09-15T06:26:53.329914805Z
