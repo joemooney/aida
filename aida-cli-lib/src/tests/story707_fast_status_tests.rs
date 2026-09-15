@@ -1,9 +1,9 @@
 use super::*;
 
-// The pure counter excludes META + standing-artifact types, treats
-// completed/rejected/released as terminal (not "open"), and matches the
-// in-progress / draft statuses case-insensitively across the Debug-form and
-// hyphen/underscore variants the cache may store. trace:STORY-707
+// The pure counter excludes META + standing-artifact types, counts only
+// list-open statuses as "open", and matches the in-progress / draft statuses
+// case-insensitively across the Debug-form and hyphen/underscore variants the
+// cache may store. trace:STORY-707
 #[test]
 fn fast_status_counts_partitions_open_inprogress_draft() {
     let rows = vec![
@@ -14,15 +14,17 @@ fn fast_status_counts_partitions_open_inprogress_draft() {
         ("Completed", "Story"),
         ("Rejected", "Task"),
         ("Released", "Story"),
+        ("Done", "Bug"),
+        ("Superseded", "Decision"),
         // Excluded entirely — not real / standing-artifact types.
         ("Draft", "Meta"),
         ("Approved", "Vision"),
         ("InProgress", "Principle"),
     ];
     let c = fast_status_counts(rows.iter().map(|(s, t)| (*s, *t)));
-    // 7 real rows counted (3 META/standing excluded).
-    assert_eq!(c.total, 7);
-    // open = not terminal: Draft, Approved, InProgress, in-progress = 4.
+    // 9 real rows counted (3 META/standing excluded).
+    assert_eq!(c.total, 9);
+    // open = list-open statuses: Draft, Approved, InProgress, in-progress = 4.
     assert_eq!(c.open, 4);
     // in_progress matches "InProgress" + "in-progress" = 2.
     assert_eq!(c.in_progress, 2);
@@ -34,6 +36,31 @@ fn fast_status_counts_partitions_open_inprogress_draft() {
 fn fast_status_counts_empty_is_zeroed() {
     let c = fast_status_counts(std::iter::empty());
     assert_eq!(c, FastStatusCounts::default());
+}
+
+#[test]
+fn fast_status_counts_with_defer_matches_list_open_lens() {
+    let rows = [
+        ("Draft", "Story", false, "[]"),
+        ("Approved", "Task", false, "[]"),
+        ("InProgress", "Bug", true, "[]"),
+        ("InProgress", "Bug", false, r#"["deferred:on-demand"]"#),
+        ("NeedsAttention", "Bug", false, "[]"),
+        ("Done", "Bug", false, "[]"),
+        ("Completed", "Story", false, "[]"),
+        ("Approved", "Decision", false, "[]"),
+    ];
+
+    let c = fast_status_counts_with_defer(rows);
+    assert_eq!(
+        c.total, 6,
+        "deferred rows are outside the active work lens; closed/accepted rows remain counted"
+    );
+    assert_eq!(
+        c.open, 3,
+        "open = list-open statuses minus deferred rows and accepted decisions"
+    );
+    assert_eq!(c.in_progress, 0, "deferred in-progress work is parked");
 }
 
 // Build a real cache DB with known rows and assert the fast snapshot reads
@@ -49,22 +76,30 @@ fn fast_status_counts_from_cache_reads_only_the_cache() {
                  id TEXT PRIMARY KEY NOT NULL,
                  status TEXT NOT NULL,
                  req_type TEXT NOT NULL,
-                 archived INTEGER NOT NULL DEFAULT 0
+                 tags_json TEXT NOT NULL DEFAULT '[]',
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 deferred INTEGER NOT NULL DEFAULT 0
              );
-             INSERT INTO requirements_cache VALUES ('a','Draft','Story',0);
-             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0);
-             INSERT INTO requirements_cache VALUES ('c','Completed','Bug',0);
+             INSERT INTO requirements_cache VALUES ('a','Draft','Story','[]',0,0);
+             INSERT INTO requirements_cache VALUES ('b','InProgress','Task','[]',0,0);
+             INSERT INTO requirements_cache VALUES ('c','Completed','Bug','[]',0,0);
              -- archived rows are excluded by the WHERE archived = 0 filter
-             INSERT INTO requirements_cache VALUES ('d','Draft','Story',1);
+             INSERT INTO requirements_cache VALUES ('d','Draft','Story','[]',1,0);
              -- META is excluded by the pure counter
-             INSERT INTO requirements_cache VALUES ('e','Draft','Meta',0);",
+             INSERT INTO requirements_cache VALUES ('e','Draft','Meta','[]',0,0);
+             -- deferred rows are parked outside the list-open lens
+             INSERT INTO requirements_cache VALUES ('f','InProgress','Story','[]',0,1);
+             -- legacy deferred:* tags are the same parked shelf
+             INSERT INTO requirements_cache VALUES ('h','InProgress','Story','[\"deferred:on-demand\"]',0,0);
+             -- Done is no longer open, even though it is not terminal for all guards
+             INSERT INTO requirements_cache VALUES ('g','Done','Bug','[]',0,0);",
     )
     .unwrap();
     drop(conn);
 
     let c = fast_status_counts_from_cache(&cache_path);
-    // Counted: a (Draft/Story), b (InProgress/Task), c (Completed/Bug).
-    assert_eq!(c.total, 3);
+    // Counted: a, b, c, g. d archived, e META, f/h deferred.
+    assert_eq!(c.total, 4);
     assert_eq!(c.open, 2); // a + b (c is terminal)
     assert_eq!(c.in_progress, 1); // b
     assert_eq!(c.draft, 1); // a
@@ -95,10 +130,12 @@ fn collect_fast_status_snapshot_works_without_a_loadable_store() {
                  id TEXT PRIMARY KEY NOT NULL,
                  status TEXT NOT NULL,
                  req_type TEXT NOT NULL,
-                 archived INTEGER NOT NULL DEFAULT 0
+                 tags_json TEXT NOT NULL DEFAULT '[]',
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 deferred INTEGER NOT NULL DEFAULT 0
              );
-             INSERT INTO requirements_cache VALUES ('a','Approved','Story',0);
-             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0);",
+             INSERT INTO requirements_cache VALUES ('a','Approved','Story','[]',0,0);
+             INSERT INTO requirements_cache VALUES ('b','InProgress','Task','[]',0,0);",
     )
     .unwrap();
     drop(conn);

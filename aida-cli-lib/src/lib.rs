@@ -64656,23 +64656,20 @@ fn handle_identity_show(store_path: &std::path::Path, id: &str, json: bool) -> R
 fn requirement_breakdown_summary_line(
     by_status: &std::collections::BTreeMap<String, usize>,
 ) -> String {
-    let is_terminal = |s: &str| {
-        let s = s.to_ascii_lowercase();
-        s == "completed" || s == "rejected"
-    };
+    let is_open_lens_status = |s: &str| status_is_open_lens_work(s);
     let completed = by_status.get("Completed").copied().unwrap_or(0);
     let rejected = by_status.get("Rejected").copied().unwrap_or(0);
 
-    // Open = everything that isn't a terminal state, with a compact per-status
+    // Open = the same status set as `aida list open`, with a compact per-status
     // tail in deterministic (BTreeMap) order.
     let open_total: usize = by_status
         .iter()
-        .filter(|(s, _)| !is_terminal(s))
+        .filter(|(s, _)| is_open_lens_status(s))
         .map(|(_, n)| *n)
         .sum();
     let open_parts: Vec<String> = by_status
         .iter()
-        .filter(|(s, _)| !is_terminal(s))
+        .filter(|(s, _)| is_open_lens_status(s))
         .map(|(s, n)| format!("{n} {}", s.to_ascii_lowercase()))
         .collect();
 
@@ -64795,9 +64792,8 @@ struct FastStatusSnapshot {
 }
 
 /// Key requirement tallies for the fast snapshot, derived purely from the
-/// cache's `(status, req_type)` rows (non-archived only). `open` = everything
-/// not in a terminal state (not completed/rejected/released) — the actionable
-/// backlog.
+/// cache's `(status, req_type, deferred)` rows (non-archived only). `open` =
+/// the same actionable status/view lens as `aida list open`.
 // trace:STORY-707 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct FastStatusCounts {
@@ -64807,16 +64803,43 @@ struct FastStatusCounts {
     total: usize,
 }
 
-/// Pure counter over non-archived cache rows: each tuple is `(status,
-/// req_type)`. META and other standing-artifact types are excluded the same way
-/// `aida list` hides them, so the tallies agree with the list/triage surfaces.
-/// Status matching is case-insensitive (the cache stores the Debug form, e.g.
-/// "InProgress"/"Draft").
+fn status_is_open_lens_work(status: &str) -> bool {
+    let normalized_status = status.trim().replace(['-', '_'], "").to_ascii_lowercase();
+    aida_core::RequirementStatus::open_statuses()
+        .iter()
+        .any(|s| s.cache_key().to_ascii_lowercase() == normalized_status)
+}
+
+/// Pure counter over non-archived, non-deferred cache rows: each tuple is
+/// `(status, req_type)`. META and other standing-artifact types are excluded
+/// the same way `aida list` hides them, so the tallies agree with the
+/// list/triage surfaces. Status matching is case-insensitive (the cache stores
+/// the Debug form, e.g. "InProgress"/"Draft").
 // trace:STORY-707 | ai:claude
+#[cfg(test)]
 fn fast_status_counts<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> FastStatusCounts {
+    fast_status_counts_with_defer(
+        rows.into_iter()
+            .map(|(status, req_type)| (status, req_type, false, "[]")),
+    )
+}
+
+/// Pure counter over non-archived cache rows carrying the deferred view flag.
+/// This is the exact fast-status analogue of `aida list open`: deferred rows
+/// are parked work and must not inflate the headline `open` scalar.
+// trace:BUG-1155 | ai:codex
+fn fast_status_counts_with_defer<'a>(
+    rows: impl IntoIterator<Item = (&'a str, &'a str, bool, &'a str)>,
+) -> FastStatusCounts {
     let mut c = FastStatusCounts::default();
-    for (status, req_type) in rows {
+    for (status, req_type, deferred, tags_json) in rows {
         if !is_real_requirement_summary(req_type) || is_standing_artifact_type(req_type) {
+            continue;
+        }
+        // STORY-584: match the cache list lens: deferred means the flag is set
+        // OR a legacy `deferred:*` parking tag is present in tags_json.
+        // trace:BUG-1155 | ai:codex
+        if deferred || tags_json.contains("\"deferred:") {
             continue;
         }
         c.total += 1;
@@ -64824,15 +64847,9 @@ fn fast_status_counts<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) ->
         // that class's TERMINAL state, so it must not inflate the open backlog
         // the same way a not-yet-started task at Approved does — the identical
         // rule the default `aida list` lens applies. trace:BUG-781 | ai:claude
-        let terminal = status.eq_ignore_ascii_case("completed")
-            || status.eq_ignore_ascii_case("rejected")
-            || status.eq_ignore_ascii_case("released")
-            // TASK-1176: adopted-then-superseded is terminal — it must not
-            // inflate the open backlog any more than a rejected spec does.
-            // trace:TASK-1176 | ai:claude
-            || status.eq_ignore_ascii_case("superseded")
-            || aida_core::lifecycle::is_accepted_decision(req_type, status);
-        if !terminal {
+        if status_is_open_lens_work(status)
+            && !aida_core::lifecycle::is_accepted_decision(req_type, status)
+        {
             c.open += 1;
         }
         if status.eq_ignore_ascii_case("inprogress")
@@ -64865,19 +64882,47 @@ fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCoun
         Ok(c) => c,
         Err(_) => return FastStatusCounts::default(),
     };
-    let mut stmt =
-        match conn.prepare("SELECT status, req_type FROM requirements_cache WHERE archived = 0") {
-            Ok(s) => s,
-            Err(_) => return FastStatusCounts::default(),
-        };
+    let has_deferred_column = conn
+        .prepare("SELECT deferred FROM requirements_cache LIMIT 0")
+        .is_ok();
+    let has_tags_json_column = conn
+        .prepare("SELECT tags_json FROM requirements_cache LIMIT 0")
+        .is_ok();
+    let sql = match (has_deferred_column, has_tags_json_column) {
+        (true, true) => {
+            "SELECT status, req_type, deferred, tags_json FROM requirements_cache WHERE archived = 0"
+        }
+        (true, false) => {
+            "SELECT status, req_type, deferred, '[]' AS tags_json FROM requirements_cache WHERE archived = 0"
+        }
+        (false, true) => {
+            "SELECT status, req_type, 0 AS deferred, tags_json FROM requirements_cache WHERE archived = 0"
+        }
+        (false, false) => {
+            "SELECT status, req_type, 0 AS deferred, '[]' AS tags_json FROM requirements_cache WHERE archived = 0"
+        }
+    };
+    let mut stmt = match conn.prepare(sql) {
+        Ok(s) => s,
+        Err(_) => return FastStatusCounts::default(),
+    };
     let rows = stmt.query_map([], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, i64>(2)? != 0,
+            row.get::<_, String>(3)?,
+        ))
     });
     let Ok(rows) = rows else {
         return FastStatusCounts::default();
     };
-    let collected: Vec<(String, String)> = rows.flatten().collect();
-    fast_status_counts(collected.iter().map(|(s, t)| (s.as_str(), t.as_str())))
+    let collected: Vec<(String, String, bool, String)> = rows.flatten().collect();
+    fast_status_counts_with_defer(
+        collected
+            .iter()
+            .map(|(s, t, d, tags)| (s.as_str(), t.as_str(), *d, tags.as_str())),
+    )
 }
 
 /// Assemble the fast snapshot from cache-cheap inputs: role from
