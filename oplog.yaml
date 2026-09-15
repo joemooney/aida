@@ -67683,5 +67683,24 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 5329
+- id: 01a0a3bf-348b-73e1-bb4e-3ae6e9a9712f
+  target_id: 01a0a3bf-2f19-7741-b2db-a55e0c29c147
+  author: aida
+  node_id: '1'
+  lamport: 5330
+  timestamp: 2026-09-15T06:26:52.171014600Z
+  kind: !Create
+    title: 'aida config permissions show + doctor --category permission-posture (check): resolve & display the effective posture, flag full-YOLO-no-sandbox and inconsistencies'
+    description: |-
+      READ-ONLY first slice — highest value, zero mutation risk. Resolve the effective agent permission posture across all sources (~/.aida/agents.toml [agents] bypass + per-agent default_flags, project .aida/agents.toml, ~/.codex/config.toml sandbox_mode/approval_policy/[sandbox_workspace_write], project .codex/config.toml, .aida/config.toml [contained]) and display it per agent (claude/codex/antigravity): the tier (native/contained/bypass), the resolved flags, WHERE each was set (scope), and the net effect (prompts? sandboxed? network? writable roots?).
+
+      Flag the dangerous/incoherent states: bypass=true with no sandbox table = FULL ACCESS (call it out loudly); agents.toml says contained but ~/.codex lacks the [sandbox_workspace_write] table = will silently break network/cargo; sandbox_mode set but overridden by a nuclear default_flags; etc. This is the surface that would have told the operator 'you are on full YOLO' on 2026-09-14.
+
+      Surfaces: `aida config permissions show` (human table + --json/AIDA_AGENT_OUTPUT), listed in `aida config menu` read-only, and `aida doctor --category permission-posture` (the check half; heal is STORY-B). Model after `aida config user`/`memories check`/`cache verify`. No writes.
+
+      Acceptance: `aida config permissions show` prints per-agent resolved tier + flags + scope + net effect; a full-access-no-sandbox posture is flagged as high-severity; a contained-but-missing-sandbox-table mismatch is flagged; `--json` emits structured output; `aida doctor --category permission-posture` (check) exits non-zero on a flagged state; nothing is mutated.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5330
 node_id: '1'
