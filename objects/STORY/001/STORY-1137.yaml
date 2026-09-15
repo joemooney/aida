@@ -1,0 +1,26 @@
+id: 01a0a44a-db3b-7582-8fa8-b852b5f8fcde
+spec_id: STORY-1137
+agreed_id: STORY-1137
+title: 'Review PR-1834: [AI:codex] feat(cli): add derisk advisor launcher (TASK-1235)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a43a`) for branch `task-1235`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1834>
+  - Branch: `task-1235` → `main`
+
+  ## Covers
+
+  - TASK-1235
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1834` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T08:59:24.347740140Z
+modified_at: 2026-09-15T08:59:24.347740140Z
+req_type: Story
