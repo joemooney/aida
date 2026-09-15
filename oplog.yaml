@@ -68003,5 +68003,33 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 5348
+- id: 01a0a3df-d4c2-72c0-ace2-294058259621
+  target_id: 01a0a3df-cb7e-7bd2-b0a9-ad1881e6426c
+  author: aida
+  node_id: '1'
+  lamport: 5349
+  timestamp: 2026-09-15T07:02:30.338099772Z
+  kind: !Create
+    title: 'Companion (non-driver) instances of a singleton driver role: converse + read + draft, but never dispose/drive/hold the seat'
+    description: |-
+      Operator (2026-09-15): sometimes you want a SECOND instance of a driver role (advisor/product) — to have a conversation in that role in another window — without it becoming a competing driver.
+
+      Insight: the singleton constraint is on the DRIVER SEAT, not the role. implementer/reviewer/integrator are already multi-instance (PID-keyed, STORY-432). Only the disposition seats are singleton: one advisor, one product (ADR-3), to avoid split-brain on approve/queue/drive.
+
+      Proposal: a COMPANION instance of a driver role — non-authoritative. It CAN: read the substrate, have the conversation, draft specs to the draft inbox (exactly product's propose-only mode today), advise. It CANNOT: approve, queue-for-work, change execution_mode, drive a drain, or hold the role's singleton driver lease. The one DRIVER stays authoritative; companions are conversational/advisory only. Preserves ADR-3's no-split-brain invariant while allowing parallel conversation.
+
+      This AMENDS ADR-3 ('one advisor/product' → 'one DRIVER advisor/product + N read/converse/draft companions') — needs operator/architecture sign-off; record the amended decision as a new ADR (or supersede/annotate ADR-3). The launcher (aida agent) then offers 'launch as companion' when the driver seat is taken (instead of erroring), and the companion session is gated to non-authoritative operations (the write/dispose/drive commands refuse from a companion, pointing at the driver).
+
+      Pairs with the picker-alert task (surfaces driver-taken state) and BUG-1156 (accurate liveness to know the seat is taken).
+
+      Acceptance:
+      - A driver role whose singleton seat is live can still launch a COMPANION instance via `aida agent` (offered, not errored).
+      - A companion can read/converse/draft-to-inbox but is REFUSED approve / queue-for-work / execution_mode writes / drain-driving / driver-lease acquisition, with a message pointing at the driver.
+      - The one driver seat remains singleton and authoritative; no split-brain on disposition.
+      - The driver-vs-companion distinction is recorded as an ADR amending ADR-3.
+      - Multi-instance roles (implementer/reviewer/integrator) are unaffected.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5349
 node_id: '1'
