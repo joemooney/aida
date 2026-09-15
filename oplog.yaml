@@ -67584,5 +67584,34 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5323
+- id: 01a0a386-7cfd-7311-b404-fe84e2a1be97
+  target_id: 01a0a386-7912-7050-9c61-43154cc986d0
+  author: aida
+  node_id: '1'
+  lamport: 5324
+  timestamp: 2026-09-15T05:24:55.165866467Z
+  kind: !Create
+    title: 'Queueable release meta-task: readiness + prep + stop-for-confirm, never headless'
+    description: |-
+      A first-class, queueable 'cut a release' work item so a release is a tracked, checklist-backed unit instead of a remembered multi-step ritual (bump, changelog, cross-platform gate, tag, push→release.yml).
+
+      MUST be fenced operator/guided — NEVER a headless drain item. A release is an outward, hard-to-reverse publish (tags + published binary tarballs), so the meta-task prepares and gates; the actual tag+push stays a human `scripts/release.sh` confirm.
+
+      Smallest valuable slice (NOT a release daemon):
+      - Gather what shipped since the last tag (completed EPICs/specs since <prev>..HEAD) for the release notes — reuse `aida changelog` + git log.
+      - Verify the pre-release gate: cross-platform CI green within 24h (pre-release-check.sh already does this), main quiet (no live drain pushing), no open release-blockers.
+      - Run the mechanical prep (version bump + changelog refresh), then STOP at the tag/push for explicit operator go.
+      - Queueable + tracked so 'release is due' is a visible backlog item carrying the release's context; re-instantiable each cycle.
+      - Companion `/aida-release` skill is the natural driver.
+
+      Rationale: turns the release ritual into a gated, visible lifecycle unit; dovetails with the post-EPIC-62 release the product seat just handed off. Keep the integrity floors hard (cross-platform gate, human tag/push confirm).
+
+      Acceptance:
+      - `aida` surfaces a queueable release task (a template/skill instance) fenced to operator/guided; a headless drain never picks it up.
+      - Working it produces: the since-last-tag shipped-list, a pre-release-gate verdict (cross-platform <24h + quiet-main + blockers), and the mechanical prep — then stops for operator confirm before any tag/push.
+      - No autonomous tag or binary publish.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5324
 node_id: '1'
