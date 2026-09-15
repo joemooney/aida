@@ -131,7 +131,7 @@ over the native default:
 2. `aida queue work` only: `AIDA_PERMISSION_MODE` env, then `.aida/config.toml [behavior] permission_mode`
 3. `--no-default-flags` (skips agents.toml entirely → native)
 4. Per-tool `[agents.<tool>] default_flags` (overrides the knob for that tool)
-5. `[agents] contained = true` (Claude strict sandbox posture)
+5. `[agents] contained = true` or `.aida/config.toml [contained] enable = true` (sandboxed, prompt-free posture: Claude strict settings; Codex `--sandbox workspace-write --ask-for-approval never`)
 6. `[agents] bypass = true` (uniform knob → each tool's bypass flag)
 7. Otherwise → native posture (nothing injected)
 
@@ -145,6 +145,11 @@ Launch controls:
 - `aida agent new <agent> --extra-flag <FLAG>` appends one raw flag; repeat it for multiple flags.
 - Agent-specific explicit flags such as `--permission-mode` or `--bypass-sandbox` still work and override the knob.
 - `aida agent new claude --bg` (detached, no answerable TTY) force-injects bypass so the child can't hang on a prompt; an explicit `--permission-mode` still overrides.
+
+For Codex, contained is the safe autonomous middle tier: AIDA injects exactly
+`--sandbox workspace-write --ask-for-approval never`. It does **not** inject
+`--dangerously-bypass-approvals-and-sandbox`; that remains reserved for the
+explicit bypass posture.
 
 ### Safety invariant
 

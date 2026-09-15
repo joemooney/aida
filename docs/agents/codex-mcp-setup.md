@@ -179,6 +179,31 @@ aida agent new codex --spec STORY-433 --role implementer --bypass-sandbox
 
 `--bypass-sandbox` passes Codex's `--dangerously-bypass-approvals-and-sandbox`; it is not the interactive default.
 
+For prompt-free but sandboxed Codex launches, enable AIDA's contained posture
+instead of bypass:
+
+```toml
+# .aida/config.toml
+[contained]
+enable = true
+```
+
+`aida agent new codex` then resolves the Codex argv to exactly
+`--sandbox workspace-write --ask-for-approval never`. The workspace-write
+sandbox is the boundary; AIDA does not use `approve-for-me`, `on-failure`, or
+the dangerous bypass flag for this posture. For standalone Codex sessions
+outside AIDA, the persistent equivalent is:
+
+```toml
+# ~/.codex/config.toml
+sandbox_mode = "workspace-write"
+approval_policy = "never"
+
+[sandbox_workspace_write]
+network_access = true
+writable_roots = ["~/.cargo", "~/.rustup", "~/.aida"]
+```
+
 ## Verify Tool Discovery
 
 Inside a Codex session with the MCP server connected, the AIDA tools are exposed as MCP tools. In this environment they were available under the `mcp__aida__` namespace.
