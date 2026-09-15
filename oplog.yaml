@@ -68126,5 +68126,30 @@ operations:
       - BACKUP GATE: the vendor file is always backed up before editing; a test asserts the .bak is written.
       - doctor --category permission-posture heal calls this to apply contained for a flagged full-access state.
       - set bypass requires the explicit tier + prints the nuclear warning; no other tier yields --dangerously-bypass (test).
-clock: 5354
+- id: 01a0a3f1-f649-7e02-918e-0a9773859149
+  target_id: 01a0a3f1-f0b6-7af0-961e-557b600b7546
+  author: aida
+  node_id: '1'
+  lamport: 5355
+  timestamp: 2026-09-15T07:22:18.569540971Z
+  kind: !Create
+    title: 'autoprogress/ready-set selector: is_keystone_class tag-net over-fences a spec whose execution_mode was deliberately set to drain (e.g. via /aida-derisk)'
+    description: |-
+      The autoprogress ready-set selector (select_ready_from_json, TASK-1231) fences a spec when: drainable-type AND not-supervised-execution_mode AND not is_keystone_class(tags). The is_keystone_class tag-net (keystone/architecture/security/supervised tags) was defense-in-depth behind the execution_mode fence.
+
+      Problem surfaced 2026-09-15: STORY-1124 was deliberately de-risked to execution_mode=drain via /aida-derisk (forks decided, testable safety gate, ADR-31) — but it carries the descriptive tag 'security', so is_keystone_class fences it OUT of autoprogress despite the explicit drain decision. The tag HEURISTIC overrides an explicit, human-recorded mode decision.
+
+      The execution_mode is the AUTHORITATIVE, deliberately-set signal (an advisor decided it, often via /aida-derisk with recorded ADRs + gates). The keystone-tag-net is a heuristic fallback for UNGROOMED/unset specs. An explicit execution_mode=drain should WIN over the tag heuristic — otherwise /aida-derisk's whole guided→drain flip is silently defeated for any security/architecture-tagged spec, and the operator has to drain it by hand (as happened here).
+
+      Fix: in the ready-set selector, when execution_mode == drain (explicitly set), do NOT additionally apply the is_keystone_class tag-net — the explicit decision is authoritative. Keep the tag-net ONLY for unset/ungroomed specs (where there is no explicit decision to defer to). Equivalently: tag-net fences unset specs; execution_mode fences the rest; an explicit drain is drainable regardless of descriptive tags.
+
+      Acceptance:
+      - A spec with execution_mode=drain AND a keystone-class descriptive tag (e.g. 'security') IS selected by autoprogress (the explicit mode wins over the tag heuristic).
+      - A spec with unset execution_mode AND a keystone-class tag is still fenced (tag-net still guards the ungroomed case).
+      - Supervised modes (guided/operator/decide/drive) are still fenced regardless of tags (unchanged).
+      - Test covers: drain+security-tag selected; unset+security-tag fenced; guided+no-tag fenced.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5355
 node_id: '1'
