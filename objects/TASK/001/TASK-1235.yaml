@@ -24,7 +24,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:54:49.486195936Z
-modified_at: 2026-09-15T06:54:49.486195936Z
+modified_at: 2026-09-15T06:55:12.381412549Z
 req_type: Task
 tags:
 - cli derisk launcher autonomy-ladder aida:derisk vendor-aware
+comments:
+- id: 01a0a3d9-25fd-7952-bcc5-68cd98a8d76c
+  author: joe
+  content: 'Naming decided (operator, 2026-09-14): CANONICAL verb is top-level `aida derisk <SPEC>`. `aida drain derisk <SPEC>` ships as a thin ALIAS to the same handler (shared code path — cannot drift), giving discoverability under the drain noun. Both resolve to the one launcher; no duplicated logic. Naming fork is now CLOSED — implement to this.'
+  created_at: 2026-09-15T06:55:12.381412549Z
+  modified_at: 2026-09-15T06:55:12.381412549Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
