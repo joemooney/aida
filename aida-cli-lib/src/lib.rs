@@ -34698,6 +34698,84 @@ fn pr_head_branch(project_root: &std::path::Path, pr_number: u64) -> Option<Stri
     }
 }
 
+/// TASK-1230: the UNIQUE registered worktree checked out on `branch`, excluding
+/// the main checkout and the store worktree. Returns None on zero or ambiguous
+/// (>1) matches — the caller must never guess which of several to remove.
+// trace:TASK-1230 | ai:claude
+fn unique_worktree_on_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+    main_root: &std::path::Path,
+    store_wt: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    if branch.is_empty() {
+        return None;
+    }
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    // Porcelain blocks are blank-line-separated; each has a `worktree <path>`
+    // line and (when on a branch) a `branch refs/heads/<name>` line.
+    let mut matches: Vec<std::path::PathBuf> = Vec::new();
+    let mut cur_path: Option<std::path::PathBuf> = None;
+    for line in text.lines() {
+        if let Some(p) = line.strip_prefix("worktree ") {
+            cur_path = Some(std::path::PathBuf::from(p.trim()));
+        } else if let Some(b) = line.strip_prefix("branch ") {
+            let short = b.trim().strip_prefix("refs/heads/").unwrap_or(b.trim());
+            if short == branch {
+                if let Some(p) = &cur_path {
+                    let is_protected = p == main_root
+                        || p == store_wt
+                        || p.canonicalize().ok() == main_root.canonicalize().ok()
+                        || p.canonicalize().ok() == store_wt.canonicalize().ok();
+                    if !is_protected {
+                        matches.push(p.clone());
+                    }
+                }
+            }
+        }
+    }
+    if matches.len() == 1 {
+        matches.into_iter().next()
+    } else {
+        None
+    }
+}
+
+/// TASK-1230: count of commits on the worktree's HEAD that are NOT yet on the
+/// pushed PR branch (`origin/<branch>`) — genuinely-at-risk unpushed work. Zero
+/// means every local commit is safely on the remote PR branch. On any git
+/// failure returns a conservative 1 (treat as at-risk → keep).
+// trace:TASK-1230 | ai:claude
+fn local_commits_not_on_branch(worktree: &std::path::Path, branch: &str) -> u32 {
+    if branch.is_empty() {
+        return 1;
+    }
+    let remote_ref = format!("origin/{branch}");
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["rev-list", "--count", "HEAD", "--not", &remote_ref])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .trim()
+            .parse::<u32>()
+            .unwrap_or(1),
+        // The remote ref not existing, or any other git error, is treated as
+        // "cannot prove the work is pushed" → keep (conservative).
+        _ => 1,
+    }
+}
+
 /// Detect whether `branch` was the head of a now-MERGED PR. Used by
 /// `aida push` (BUG-88) to warn that new commits will be stranded —
 /// pushing to a merged-PR branch puts the commit on `origin/<branch>`
@@ -80742,6 +80820,104 @@ impl RealPhaseDriver {
         Ok(())
     }
 
+    /// TASK-1230: best-effort removal of a FAILED phase-1 attempt's orphan
+    /// worktree during open-PR recovery. NEVER fails/shelves the spec — a
+    /// removal problem is logged and swallowed; the drain proceeds to CI on the
+    /// verified PR exactly as before. Safety is the pure
+    /// [`auto_complete::recovery_worktree_teardown_decision`] gate: a dirty,
+    /// locked, or unpushed-local-commit worktree is kept + logged.
+    ///
+    /// Discovery is deliberately conservative. The recovery path usually has no
+    /// recorded lease/worktree (the BUG-1151 reason), so we fall back to
+    /// matching the UNIQUE registered worktree checked out on the PR branch —
+    /// and we HARD-GUARD against ever removing the main checkout or the
+    /// `.aida-store` worktree. Ambiguity (zero or >1 match) → do nothing.
+    // trace:TASK-1230 | ai:claude
+    fn teardown_failed_attempt_worktree(&mut self, pr_branch: &str) {
+        let log = |msg: String| {
+            if !self.json {
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    msg
+                );
+            }
+        };
+
+        // The one path we never touch, whatever else happens.
+        let main_root = find_main_worktree_root().unwrap_or_else(|_| self.project_root.clone());
+        let store_wt = main_root.join(".aida-store");
+
+        // Prefer a worktree the driver already recorded for the failed attempt;
+        // otherwise discover the unique one on the PR branch.
+        let branch = if !pr_branch.is_empty() {
+            pr_branch.to_string()
+        } else {
+            self.branch.clone().unwrap_or_default()
+        };
+        let candidate = self
+            .implementer_worktree
+            .clone()
+            .or_else(|| self.retry_implementer_worktree.clone())
+            .or_else(|| {
+                unique_worktree_on_branch(&self.project_root, &branch, &main_root, &store_wt)
+            });
+
+        let Some(worktree) = candidate else {
+            log(format!(
+                "no unambiguous orphan worktree for {} on `{}` — leaving cleanup to `aida session reap`",
+                self.spec, branch
+            ));
+            return;
+        };
+
+        // HARD GUARD: never remove the main checkout or the store worktree, even
+        // if a recorded field somehow points at one.
+        let canon = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+        if canon(&worktree) == canon(&main_root) || canon(&worktree) == canon(&store_wt) {
+            log(format!(
+                "refusing to tear down {} — it is the main/store worktree",
+                worktree.display()
+            ));
+            return;
+        }
+
+        let dirty = aida_core::git_ops::worktree_is_dirty(&worktree);
+        let locked = worktree_is_locked(&self.project_root, &worktree);
+        let unpushed = local_commits_not_on_branch(&worktree, &branch);
+        match auto_complete::recovery_worktree_teardown_decision(dirty, locked, unpushed) {
+            auto_complete::RecoveryTeardown::Keep(reason) => {
+                log(format!(
+                    "keeping the failed attempt's worktree {} — {reason}",
+                    worktree.display()
+                ));
+            }
+            auto_complete::RecoveryTeardown::Remove => {
+                match aida_core::git_ops::remove_worktree_at(&self.project_root, &worktree, false) {
+                    Ok(()) => {
+                        log(format!(
+                            "removed the failed attempt's worktree {} (clean, its work is on PR branch `{}`)",
+                            worktree.display(),
+                            branch
+                        ));
+                        // Release the failed attempt's lease so `aida ps` /
+                        // `aida session leases` stop listing a gone worktree.
+                        if let Some(lease) = self.implementer_lease.clone() {
+                            let _ = std::process::Command::new(self.aida_exe())
+                                .current_dir(&self.project_root)
+                                .args(["session", "end", &lease, "--yes", "--skip-ci"])
+                                .status();
+                        }
+                    }
+                    Err(e) => log(format!(
+                        "worktree {} teardown failed ({e}) — harmless; `aida session reap` will retry",
+                        worktree.display()
+                    )),
+                }
+            }
+        }
+    }
+
     /// STORY-492: seed the branch + PR a `--resume-drain` re-entry skipped
     /// phases would have discovered, so the resumed phases (CI / reviewer /
     /// merge / pull) have the context they need. Called once before
@@ -81891,6 +82067,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 pr.id,
             );
         }
+        // TASK-1230: the recovery decision is now recorded (from_pr + branch +
+        // pr_number set). Tear down the failed attempt's orphan worktree BEFORE
+        // re-entering at Ci — best-effort, honoring the safety predicate. This
+        // closes the cruft-accumulation half of BUG-1145 (the stale worktree the
+        // proceed-from-PR path used to leave for a later `aida session reap`).
+        // trace:TASK-1230 | ai:claude
+        self.teardown_failed_attempt_worktree(&pr.branch);
         // BUG-1145 (advisor review of the initial re-enter-at-Reviewer): re-enter
         // at Ci, NOT Reviewer. finish_ci (phase 2) is the drain's ONLY CI gate
         // (CiProbe::Red -> CiRed shelve; InProgress -> CiTimeout shelve); merge()

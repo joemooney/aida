@@ -875,6 +875,55 @@ pub(crate) fn should_attempt_conflict_rebase(budget: usize, attempted: bool, rea
     budget > 0 && !attempted && is_merge_conflict_failure(reason)
 }
 
+/// TASK-1230: the recovery-path worktree-teardown decision.
+///
+/// Verdict for tearing down a FAILED phase-1 attempt's worktree in the open-PR
+/// recovery path. This deliberately does NOT reuse the merged-based gc/reap gate
+/// (`classify_agent_worktree`): that gate needs a positive *merged* signal
+/// (ancestor-of-main or a merged PR), but this recovery fires precisely while
+/// the PR is still OPEN by design — so the merged gate would return Keep every
+/// time and the teardown would be a silent no-op. The safety question here is
+/// "is any work at risk of LOSS?", not "has it merged?". The failed attempt's
+/// commits are safely captured on the pushed PR branch, so the tree is
+/// disposable once nothing local is at risk: keep it on a dirty tree
+/// (uncommitted work), a locked worktree (operator-protected), or when it holds
+/// local commits not yet on the pushed PR branch (unpushed work); otherwise
+/// remove.
+// trace:TASK-1230 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RecoveryTeardown {
+    /// Nothing local is at risk — the worktree may be removed.
+    Remove,
+    /// Work is at risk (reason names the strongest objection) — keep it.
+    Keep(String),
+}
+
+/// Pure decision for [`RecoveryTeardown`] — no git/forge/process probes, so the
+/// whole matrix is unit-testable without a repo. The order names the strongest
+/// objection first: uncommitted work (costliest to lose), then operator lock,
+/// then unpushed local commits.
+// trace:TASK-1230 | ai:claude
+pub(crate) fn recovery_worktree_teardown_decision(
+    dirty: bool,
+    locked: bool,
+    local_commits_not_on_pr_branch: u32,
+) -> RecoveryTeardown {
+    if dirty {
+        return RecoveryTeardown::Keep(
+            "uncommitted changes present — never auto-removed".to_string(),
+        );
+    }
+    if locked {
+        return RecoveryTeardown::Keep("worktree is locked — operator-protected".to_string());
+    }
+    if local_commits_not_on_pr_branch > 0 {
+        return RecoveryTeardown::Keep(format!(
+            "{local_commits_not_on_pr_branch} local commit(s) not on the pushed PR branch — keep"
+        ));
+    }
+    RecoveryTeardown::Remove
+}
+
 /// STORY-975: closed transient cause set eligible for a bounded whole-phase
 /// retry before a spec is parked `NeedsAttention`.
 // trace:STORY-975 | ai:codex
@@ -5102,6 +5151,63 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // TASK-1230: the recovery-path worktree-teardown decision. The safety heart
+    // is this pure predicate; the discovery + git removal in the real driver is
+    // best-effort I/O on top of it.
+
+    #[test]
+    fn recovery_teardown_removes_a_clean_pushed_worktree() {
+        // Clean, unlocked, and every local commit is on the pushed PR branch
+        // (count 0) — nothing is at risk, so the failed attempt's tree goes.
+        assert_eq!(
+            recovery_worktree_teardown_decision(false, false, 0),
+            RecoveryTeardown::Remove
+        );
+    }
+
+    #[test]
+    fn recovery_teardown_keeps_a_dirty_worktree() {
+        let v = recovery_worktree_teardown_decision(true, false, 0);
+        assert!(matches!(v, RecoveryTeardown::Keep(_)), "dirty must be kept");
+        if let RecoveryTeardown::Keep(reason) = v {
+            assert!(
+                reason.contains("uncommitted"),
+                "reason names the dirt: {reason}"
+            );
+        }
+    }
+
+    #[test]
+    fn recovery_teardown_keeps_a_locked_worktree() {
+        // Dirty takes precedence in ordering, but a clean+locked tree is kept.
+        let v = recovery_worktree_teardown_decision(false, true, 0);
+        assert!(
+            matches!(v, RecoveryTeardown::Keep(_)),
+            "locked must be kept"
+        );
+        if let RecoveryTeardown::Keep(reason) = v {
+            assert!(reason.contains("locked"), "reason names the lock: {reason}");
+        }
+    }
+
+    #[test]
+    fn recovery_teardown_keeps_unpushed_local_commits() {
+        // The divergence from the merged-based gc gate: the PR is UNMERGED by
+        // design, so we do not require a merge signal — but a commit that never
+        // made it onto the pushed PR branch is genuinely at risk and is kept.
+        let v = recovery_worktree_teardown_decision(false, false, 2);
+        assert!(
+            matches!(v, RecoveryTeardown::Keep(_)),
+            "unpushed local commits must be kept"
+        );
+        if let RecoveryTeardown::Keep(reason) = v {
+            assert!(
+                reason.contains("not on the pushed PR branch"),
+                "reason: {reason}"
+            );
+        }
+    }
 
     /// The kickoff banner must keep advertising the out-of-band live view
     /// (`aida drain status`) so a drive is discoverable.
