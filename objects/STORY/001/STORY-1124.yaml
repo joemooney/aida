@@ -15,12 +15,12 @@ description: |-
   - --bypass-sandbox remains the explicit nuclear opt-in, unchanged; contained never implies bypass.
   - The resolved posture (tier + exact flags) is visible via --noexec (pairs with TASK-1232).
   - SPEC-ID / internal tokens stay out of any user-facing --help / stdout (user-facing-text conventions).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:18.096155572Z
-modified_at: 2026-09-15T10:20:42.551841257Z
+modified_at: 2026-09-15T10:26:43.116065735Z
 req_type: Story
 tags:
 - agents codex permission-posture sandbox security
@@ -48,3 +48,7 @@ comments:
   modified_at: 2026-09-15T05:38:18.105809239Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-15T10:26:43.116065735Z
+  implemented_by: joe
