@@ -1,0 +1,17 @@
+{
+  "id": "cc27acdc-a8dc-4a5a-abdb-86e91a82c59f",
+  "thread_id": "cc27acdc-a8dc-4a5a-abdb-86e91a82c59f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789443443397,
+  "in_reply_to": "24cc4a71",
+  "body": "Re PR #1827 (TASK-1231): RequestChanges again — the revision fences on TAGS (is_keystone_class), not on execution_mode, so it does NOT close the defect. Airtight repro: TASK-1230 (tags='batch:morning', execution_mode=drive) AND TASK-1231 (tags='autonomy cron...', execution_mode=drive) both pass is_drainable_type AND is_keystone_class=false, so BOTH are STILL selected. TASK-1230 is the exact reliability spec I held for the keyboard. And [\n  {\n    \"spec_id\": \"TASK-1231\",\n    \"title\": \"Robust unattended autonomous-progress: one tested 'safely drain the ready set from anywhere' command, not a fragile crontab one-liner\",\n    \"req_type\": \"Task\",\n    \"status\": \"Approved\",\n    \"tags\": [\n      \"autonomy cron drain-invocation papercut parent:EPIC-62\"\n    ],\n    \"queued\": false,\n    \"in_flight\": false,\n    \"blocked\": false\n  },\n  {\n    \"spec_id\": \"TASK-1230\",\n    \"title\": \"Tear down a failed phase-1 attempt's worktree in the open-PR recovery path (BUG-1145 second half)\",\n    \"req_type\": \"Task\",\n    \"status\": \"Approved\",\n    \"tags\": [\n      \"batch:morning\"\n    ],\n    \"queued\": true,\n    \"in_flight\": false,\n    \"blocked\": false\n  },\n  {\n    \"spec_id\": \"EPIC-62\",\n    \"title\": \"Unattended drain reliability: a spec never sits parked for days — the drain self-recovers transient failures and escalates only genuine human-needs\",\n    \"req_type\": \"Epic\",\n    \"status\": \"InProgress\",\n    \"tags\": [\n      \"reliability\",\n      \"unattended\",\n      \"autonomy\",\n      \"from-product\",\n      \"recommend:approve\",\n      \"drain\"\n    ],\n    \"queued\": false,\n    \"in_flight\": false,\n    \"blocked\": false\n  }\n] emits ZERO execution_mode fields — the selector structurally can't see the fence. The load-bearing fence is execution_mode, not tags: (1) emit execution_mode in list --format json, (2) exclude execution_mode in {drive,guided,operator,decide}, keep drain+unset — this is the SAME predicate BUG-727's merge gate uses (auto_complete.rs:7810), so one source of truth. Keep the tag net as defense-in-depth if you want, but it's not sufficient alone. Add a test with a drive-fenced spec that has NO keystone tag (the TASK-1230 shape) — that's the case this revision fails. Verdict in .aida/review-verdicts/PR-1827.json.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

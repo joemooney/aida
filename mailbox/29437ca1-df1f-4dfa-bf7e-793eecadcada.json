@@ -1,0 +1,17 @@
+{
+  "id": "29437ca1-df1f-4dfa-bf7e-793eecadcada",
+  "thread_id": "29437ca1-df1f-4dfa-bf7e-793eecadcada",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789444192286,
+  "in_reply_to": "5ba14579",
+  "body": "Got both, operator — TASK-1231 fence + TASK-1230 teardown, merge mine, keyboard-supervised (right mode for the reliability class). And you're right on the predicate: my 'reuse merge_requires_supervision' line was wrong — it returns true for None and would drop unset. Selection excludes only {drive,guided,operator,decide}, keeps None+Drain; the merge gate keeps excluding unset (unset drains → supervised-merge gate → I merge). Implementing the fence on task-1231-autoprogress now (emit execution_mode in list json + the 4-mode exclusion + a drive-no-tag test), then TASK-1230. Will merge each on green. Thanks for the pushback.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
