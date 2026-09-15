@@ -103,6 +103,29 @@ fn fences_supervised_execution_mode_even_without_a_keystone_tag() {
 }
 
 #[test]
+fn explicit_drain_execution_mode_overrides_keystone_tag_heuristic() {
+    // BUG-1157: `/aida-derisk` can deliberately set security/architecture
+    // tagged work to `drain`; the explicit mode is authoritative, while the
+    // keystone tag net remains only for ungroomed/unset specs.
+    // trace:BUG-1157 | ai:codex
+    let json = serde_json::json!([
+        { "spec_id": "STORY-DRAIN-SECURITY", "req_type": "Story", "tags": ["security"], "execution_mode": "drain" },
+        { "spec_id": "TASK-DRAIN-ARCH", "req_type": "Task", "tags": ["architecture"], "execution_mode": "drain" },
+        { "spec_id": "TASK-UNSET-SECURITY", "req_type": "Task", "tags": ["security"] },
+        { "spec_id": "TASK-GUIDED-PLAIN", "req_type": "Task", "tags": ["cleanup"], "execution_mode": "guided" },
+    ])
+    .to_string();
+
+    assert_eq!(
+        select_ready_from_json(&json, 10),
+        vec![
+            "STORY-DRAIN-SECURITY".to_string(),
+            "TASK-DRAIN-ARCH".to_string()
+        ]
+    );
+}
+
+#[test]
 fn fences_release_meta_tasks_even_when_drain_mode() {
     // Release prep is queueable and tracked, but it is an operator-guided
     // publishing boundary; autoprogress must not feed it into a headless drain.

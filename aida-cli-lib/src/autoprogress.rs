@@ -154,12 +154,12 @@ fn ready_specs(root: &Path, max: usize) -> Result<Vec<String>> {
 /// PURE: from `aida list --format json`, keep only the READY SET and bound to
 /// `max`. A spec is ready when it is (1) an IMPLEMENTABLE type (a
 /// decision/epic/folder/meta/principle/vision/constraint/term/doc is never
-/// drained), (2) NOT fenced to a supervised execution_mode
-/// (drive/guided/operator/decide — those fence the *implementation*, not just
-/// the merge, so an unattended pass must never headless-drive them; unset/drain
-/// stay drainable), and (3) NOT keystone-tagged (defense-in-depth). Unit-tested
-/// directly.
-// trace:TASK-1231 | ai:claude
+/// drained), (2) NOT fenced to a supervised execution_mode (an explicit
+/// non-drain mode fences the *implementation*, not just the merge, so an
+/// unattended pass must never headless-drive it; explicit drain stays
+/// drainable), and (3) for ungroomed/unset mode only, NOT keystone-tagged
+/// (defense-in-depth). Unit-tested directly.
+// trace:TASK-1231 BUG-1157 | ai:codex
 pub(crate) fn select_ready_from_json(json: &str, max: usize) -> Vec<String> {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else {
         return Vec::new();
@@ -198,34 +198,31 @@ pub(crate) fn select_ready_from_json(json: &str, max: usize) -> Vec<String> {
                         .collect()
                 })
                 .unwrap_or_default();
-            // The groomed execution mode. The 4 SUPERVISED modes fence the
-            // implementation itself (drive = advisor drives; guided = decision
-            // dialog; operator/decide = operator's call) — an unattended pass
-            // must never headless-drive them. This is the LOAD-BEARING fence:
-            // it is what actually marks TASK-1230/TASK-1231 et al., and unlike
-            // the merge gate's `merge_requires_supervision` (which also holds
-            // for None), SELECTION keeps None + Drain so ungroomed/groomed
-            // drainable work still flows. trace:TASK-1231 | ai:claude
+            // The groomed execution mode is the authoritative routing signal.
+            // Explicit drain is drainable even with descriptive keystone-class
+            // tags; unset mode still gets the conservative tag heuristic.
+            // trace:TASK-1231 BUG-1157 | ai:codex
             let mode = it
                 .get("execution_mode")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .trim()
                 .to_ascii_lowercase();
-            let mode_holds_for_supervision =
-                matches!(mode.as_str(), "drive" | "guided" | "operator" | "decide");
+            let mode_is_unset = mode.is_empty();
+            let mode_holds_for_supervision = !mode_is_unset && mode != "drain";
             let release_operator = tags
                 .iter()
                 .any(|tag| crate::presence::is_release_operator_tag(tag));
-            // Fence: a drainable type AND not a supervised mode AND never a
-            // keystone/release-operator task. The keystone-tag net (BUG-1120
-            // class) stays as defense-in-depth behind the execution_mode
-            // fence; the release tag is its own operator-guided publish fence.
-            // trace:STORY-1125 | ai:codex
+            let tag_fences_unset_mode = mode_is_unset
+                && crate::presence::is_keystone_class(ty, tags.iter().map(|s| s.as_str()));
+            // Fence: a drainable type AND not an explicit supervised mode AND
+            // never a release-operator task. The keystone-tag net is a fallback
+            // only for unset/ungroomed specs; an explicit drain decision wins.
+            // trace:STORY-1125 BUG-1157 | ai:codex
             if is_drainable_type(ty)
                 && !mode_holds_for_supervision
                 && !release_operator
-                && !crate::presence::is_keystone_class(ty, tags.iter().map(|s| s.as_str()))
+                && !tag_fences_unset_mode
             {
                 Some(id.to_string())
             } else {
