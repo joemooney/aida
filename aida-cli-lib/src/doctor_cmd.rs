@@ -238,6 +238,17 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-1127: read-only permission posture check. Kept in the opt-in doctor
+    // append path because it inspects user-global and native Codex config files
+    // that `aida status` should not need to read on every run.
+    // trace:STORY-1127 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "permission-posture")? {
+        findings.extend(crate::config_cmd::scan_permission_posture_findings(
+            &project_root,
+        ));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // trace:STORY-1043 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), "ci")? {
         if let Some(red) = nightly_red_status(&project_root) {
@@ -299,6 +310,18 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         if opts.category.is_none() {
             print_doctor_status_diagnostics(&project_root, &store);
         }
+    }
+
+    // STORY-1127: permission posture is intended as a check/gate category: a
+    // flagged full-access or incoherent sandbox state must produce a non-zero
+    // exit so headless drains and scripts cannot miss it.
+    // trace:STORY-1127 | ai:codex
+    if !opts.heal
+        && !report.findings.is_empty()
+        && opts.category.as_deref().is_some()
+        && doctor_category_selected(opts.category.as_deref(), "permission-posture")?
+    {
+        anyhow::bail!("permission-posture finding(s) detected — see the report above");
     }
 
     // BUG-471: heal now continues past a single finding's failure (no more

@@ -3892,6 +3892,11 @@ pub enum ConfigCommand {
     #[clap(subcommand)]
     Glyph(GlyphCommand),
 
+    /// Inspect the effective launch permission posture for managed agents.
+    // trace:STORY-1127 | ai:codex
+    #[clap(subcommand)]
+    Permissions(ConfigPermissionsCommand),
+
     /// Browse every configurable item in a navigable TUI: per row the knob's
     /// name, current value, built-in default, where it was set (scope), and a
     /// one-line explanation. The visual companion to `config show` — same
@@ -3900,6 +3905,17 @@ pub enum ConfigCommand {
     /// Needs a TTY; without one it points you at `config show`.
     // trace:STORY-661 | ai:claude
     Menu,
+}
+
+// trace:STORY-1127 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum ConfigPermissionsCommand {
+    /// Show the resolved per-agent posture and diagnostics. Read-only.
+    Show {
+        /// Emit machine-readable JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// `aida config glyph ...` — CLI surface over the glyph registry, themes, and
