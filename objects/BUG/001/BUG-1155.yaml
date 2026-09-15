@@ -1,0 +1,27 @@
+id: 01a0a378-1118-7a30-ab1f-6236c8ae056b
+spec_id: BUG-1155
+agreed_id: BUG-1155
+title: 'aida status ''open'' count includes deferred specs — disagrees with aida list''s open lens (operator: ''not what I mean by open'')'
+description: |-
+  Operator (2026-09-14): `aida list` open lens showed ~1 open (the true actionable set — EPIC-62 arc just closed), but `aida status` showed '54 open' and flagged 'the 53 open is not what I mean by open.'
+
+  Root cause: the two surfaces use DIFFERENT definitions of 'open'.
+  - `aida list` open lens = Draft/Approved/Planned/InProgress/NeedsAttention, EXCLUDING archived AND deferred (per STORY-441 archive + STORY-584 deferred view tiers).
+  - `aida status` 'open: N' includes the DEFERRED shelf (30 deferred specs here) plus a broader status set — so it over-counts vs the actionable open lens (1 open + 30 deferred + drafts ≈ 54).
+
+  Impact: the operator's primary at-a-glance number ('open') conflates actionable-open work with the parked/primed deferred shelf, so it reads as ~50 open when there is ~1. Confusing, and it undercuts the deferred tier's whole point (park work OUT of the open view).
+
+  Fix (pick one, prefer A):
+  A. `aida status` 'open' count EXCLUDES deferred + archived, matching `aida list`'s open lens — one definition of 'open' across surfaces.
+  B. `aida status` surfaces the tiers SEPARATELY and labeled: e.g. 'open: 1 · deferred: 30 · draft: 17 · archived: N' rather than folding deferred into 'open'.
+
+  Acceptance: `aida status`'s headline 'open' equals `aida list`'s open-lens count for the same store; deferred/archived, if shown, are labeled as their own tiers, never counted as 'open'.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T05:09:10.040361417Z
+modified_at: 2026-09-15T05:09:10.040361417Z
+req_type: Bug
+tags:
+- ux status list open-lens consistency papercut
