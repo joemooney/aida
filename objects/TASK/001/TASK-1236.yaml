@@ -10,12 +10,12 @@ description: |-
   Depends on accurate liveness: BUG-1156 (role/agent liveness currently tracks a long-lived ancestor shell pid, so 'live' can be wrong). Land BUG-1156 first or this alert shows false 'already live' flags.
 
   Acceptance: the `aida agent` role picker annotates each role with live-driver + single-instance status; a user is warned about a taken single-instance seat BEFORE selecting; the annotation reflects accurate liveness (post-BUG-1156); no behavior change to multi-instance roles (implementer/reviewer/integrator).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:01:50.895874489Z
-modified_at: 2026-09-15T10:19:42.593963071Z
+modified_at: 2026-09-15T10:19:46.559646734Z
 req_type: Task
 tags:
 - agents role-picker liveness ux aida:agent depends-on:bug-1156
@@ -28,11 +28,3 @@ relationships:
   target_id: 01a0a37d-8dad-7da0-abdb-d32f1ebefa91
   created_at: 2026-09-15T07:02:58.138418852Z
   created_by: joe
-failure_reason:
-  phase: implementer
-  phase_index: 1
-  kind: tool-exit
-  detail: 'could not match the orchestrated session (claude id 01a0a494) to a session lease. Resume the most recent recorded session with `aida queue work TASK-1236 --resume` (bare — no id needed). Active lease id(s), for diagnosis only (NOT `--resume` arguments — these are lease ids, not claude session ids): 01a09e3e7dbd, abf9f7f087dbb254e-c3a7f12a9af4d18b. (attempt 2/2)'
-  recovery_hint: 'Continue the implementer session: `aida queue work TASK-1236 --resume`'
-  shelved_by: advisor
-  shelved_at: 2026-09-15T10:19:42.593963071Z
