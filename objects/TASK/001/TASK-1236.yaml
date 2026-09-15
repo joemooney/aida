@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:01:50.895874489Z
-modified_at: 2026-09-15T15:18:52.043076854Z
+modified_at: 2026-09-15T15:19:20.748100432Z
 req_type: Task
 tags:
 - agents role-picker liveness ux aida:agent depends-on:bug-1156
