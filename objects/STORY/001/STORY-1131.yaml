@@ -1,0 +1,23 @@
+id: 01a0a3ca-f14a-7611-9d17-cfbe6f86bc96
+spec_id: STORY-1131
+agreed_id: STORY-1131
+title: aida config menu becomes an EDIT surface (not read-only), starting with the permission posture + AIDA-MCP-registration toggle
+description: |-
+  `aida config menu` is 'read-only for now' — you can SEE knobs but must drop to a `config` subcommand or hand-edit TOML to change them. The operator (2026-09-14) wants to see AND change the agent permission posture (and the ADR-30 AIDA-MCP-registration default) from the one navigable surface.
+
+  Two parts:
+  1) Make config menu editable for a first, high-value knob set — start with the permission posture: from a menu row, cycle an agent's tier native | contained | bypass and have it call the STORY-1128 `config permissions set` writer (same backup + merge-preserve + re-parse safety), honoring --user vs --local scope. Generalize to other safe knobs later; keep integrity-floor knobs (e.g. do_not_approve_classes) read-only or confirm-gated.
+  2) Surface AIDA-MCP registration as an inspectable+toggleable item. ADR-30 makes MCP registration opt-in; today whether THIS project registers the AIDA MCP server is just .mcp.json / [mcp_servers.aida] file presence, invisible to config. Add a derived 'AIDA MCP registered: yes/no (scope)' row that a toggle can add/remove (the local registration), so the operator can see and flip it from config menu without editing .mcp.json by hand. (Read-and-toggle of file presence, not a new persistent knob.)
+
+  Depends on STORY-1127 (resolved-tier display) + STORY-1128 (the set writer). References ADR-30 / STORY-1129 for the MCP-registration semantics.
+
+  Acceptance: config menu can change at least the permission-posture tier per agent in place (via the STORY-1128 writer, with its safety + scope), no longer purely read-only for that knob; an 'AIDA MCP registered' row shows the current state and a toggle adds/removes the local registration; integrity-floor knobs remain read-only or confirm-gated; the read-only fallback (no TTY) still points at `config show` / `config permissions show`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T06:39:41.386724952Z
+modified_at: 2026-09-15T06:39:41.386724952Z
+req_type: Story
+tags:
+- config config-menu ux editability permission-posture mcp aida:config parent:EPIC-65
