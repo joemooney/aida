@@ -28,10 +28,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:15:09.613688539Z
-modified_at: 2026-09-15T12:54:42.138960130Z
+modified_at: 2026-09-15T13:01:34.892145297Z
 req_type: Bug
 tags:
 - liveness session-reap role-enter papercut story:994
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a0a528-7c24-7642-a2a5-af360653fccc
+  created_at: 2026-09-15T13:01:34.892141321Z
+  created_by: joe
 comments:
 - id: 01a0a520-31fb-7533-b030-0fb3cb48ec1f
   author: joe
