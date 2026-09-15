@@ -1,0 +1,26 @@
+id: 01a0a56e-24fe-7e51-9cfb-dbb15306b969
+spec_id: STORY-1149
+agreed_id: STORY-1149
+title: 'Review PR-1846: [AI:codex] feat(config): make config menu edit posture and MCP registration (STORY-1131)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a55f`) for branch `story-1131`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1846>
+  - Branch: `story-1131` → `main`
+
+  ## Covers
+
+  - STORY-1131
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1846` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T14:17:34.206568636Z
+modified_at: 2026-09-15T14:17:34.206568636Z
+req_type: Story
