@@ -214,11 +214,17 @@ pub(crate) fn select_ready_from_json(json: &str, max: usize) -> Vec<String> {
                 .to_ascii_lowercase();
             let mode_holds_for_supervision =
                 matches!(mode.as_str(), "drive" | "guided" | "operator" | "decide");
+            let release_operator = tags
+                .iter()
+                .any(|tag| crate::presence::is_release_operator_tag(tag));
             // Fence: a drainable type AND not a supervised mode AND never a
-            // keystone. The keystone-tag net (BUG-1120 class) stays as
-            // defense-in-depth behind the execution_mode fence.
+            // keystone/release-operator task. The keystone-tag net (BUG-1120
+            // class) stays as defense-in-depth behind the execution_mode
+            // fence; the release tag is its own operator-guided publish fence.
+            // trace:STORY-1125 | ai:codex
             if is_drainable_type(ty)
                 && !mode_holds_for_supervision
+                && !release_operator
                 && !crate::presence::is_keystone_class(ty, tags.iter().map(|s| s.as_str()))
             {
                 Some(id.to_string())

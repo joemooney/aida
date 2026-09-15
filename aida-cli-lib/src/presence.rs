@@ -399,6 +399,16 @@ pub(crate) fn is_keystone_marker_tag(tag: &str) -> bool {
         || lo == "risk:high"
 }
 
+// trace:STORY-1125 | ai:codex
+/// PURE: release-cutting work is operator-guided by policy, even when the spec
+/// is otherwise shaped like drainable implementer work. A release can publish
+/// tags and binaries, so autonomous drains may prepare context around it but
+/// must not pick it up as unattended work.
+pub(crate) fn is_release_operator_tag(tag: &str) -> bool {
+    let lo = tag.trim().to_ascii_lowercase();
+    lo == "aida:release" || lo == "release" || lo == "release-workflow"
+}
+
 /// The solo posture's verdict for one punted/escalated design-fork.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SoloPosture {
@@ -1224,6 +1234,19 @@ mod tests {
         }
         // A benign tag alongside no keystone marker stays safe.
         assert!(!is_keystone_class("Task", ["batch:nightly", "papercut"]));
+    }
+
+    #[test]
+    fn release_operator_tag_classification() {
+        // trace:STORY-1125 | ai:codex
+        for tag in ["aida:release", "release", "release-workflow"] {
+            assert!(
+                is_release_operator_tag(tag),
+                "tag {tag} should fence releases"
+            );
+        }
+        assert!(!is_release_operator_tag("release-notes"));
+        assert!(!is_release_operator_tag("cleanup"));
     }
 
     #[test]

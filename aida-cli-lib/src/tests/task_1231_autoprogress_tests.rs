@@ -103,6 +103,23 @@ fn fences_supervised_execution_mode_even_without_a_keystone_tag() {
 }
 
 #[test]
+fn fences_release_meta_tasks_even_when_drain_mode() {
+    // Release prep is queueable and tracked, but it is an operator-guided
+    // publishing boundary; autoprogress must not feed it into a headless drain.
+    // trace:STORY-1125 | ai:codex
+    let json = serde_json::json!([
+        { "spec_id": "STORY-1125", "req_type": "Story", "tags": ["release workflow meta-task aida:release"], "execution_mode": "drain" },
+        { "spec_id": "TASK-OK", "req_type": "Task", "tags": ["cleanup"], "execution_mode": "drain" },
+    ])
+    .to_string();
+
+    assert_eq!(
+        select_ready_from_json(&json, 10),
+        vec!["TASK-OK".to_string()]
+    );
+}
+
+#[test]
 fn empty_or_malformed_json_is_empty_not_a_panic() {
     assert!(select_ready_from_json("", 5).is_empty());
     assert!(select_ready_from_json("not json", 5).is_empty());

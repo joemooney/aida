@@ -1005,6 +1005,7 @@ pub(crate) enum QueueFreshPickup {
     Archived,
     Deferred,
     NeedsGuidedOrOperatorSession(aida_core::ExecutionMode),
+    NeedsReleaseOperatorSession,
     AwaitingMerge,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
@@ -1050,6 +1051,10 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
         QueueFreshPickup::NeedsGuidedOrOperatorSession(mode) => Some(format!(
             "skipped — needs guided/operator session ({mode}); use `aida queue work --guided`, `aida do`, or de-risk it with `aida derisk <ID>`"
         )),
+        QueueFreshPickup::NeedsReleaseOperatorSession => Some(
+            "skipped — release prep is operator-guided; use `/aida-release` at the keyboard"
+                .to_string(),
+        ),
         QueueFreshPickup::AwaitingMerge => Some(
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
                 .to_string(),
@@ -1066,6 +1071,17 @@ pub(crate) fn queue_drain_pickup_policy(
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
 ) -> QueueFreshPickup {
+    // Release meta-tasks may be queued and tracked, but never picked up by an
+    // unattended drain. Their driver is the at-keyboard `/aida-release` prep
+    // flow, which stops before tag/push. trace:STORY-1125 | ai:codex
+    if req
+        .tags
+        .iter()
+        .flat_map(|tag| tag.split_whitespace())
+        .any(crate::presence::is_release_operator_tag)
+    {
+        return QueueFreshPickup::NeedsReleaseOperatorSession;
+    }
     // trace:BUG-1120 | ai:codex
     if matches!(
         req.execution_mode,
@@ -1622,6 +1638,7 @@ pub(crate) fn handle_queue_command(
                         QueueFreshPickup::Archived
                         | QueueFreshPickup::Deferred
                         | QueueFreshPickup::NeedsGuidedOrOperatorSession(_)
+                        | QueueFreshPickup::NeedsReleaseOperatorSession
                         | QueueFreshPickup::AwaitingMerge
                         | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
