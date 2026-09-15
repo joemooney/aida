@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T15:29:48.322099926Z
-modified_at: 2026-09-15T03:34:42.824854237Z
+modified_at: 2026-09-15T03:47:01.549793080Z
 req_type: Task
 tags:
 - autonomy cron drain-invocation papercut parent:EPIC-62
@@ -43,5 +43,21 @@ comments:
   content: Commit e207493d0 references this requirement
   created_at: 2026-09-15T03:34:42.824854237Z
   modified_at: 2026-09-15T03:34:42.824854237Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a32c-dd2d-7cc1-be44-17719b8b7d5d
+  author: joe
+  content: |-
+    HAND-OFF + DECISION (operator, 2026-09-14): the execution_mode fence fix goes to the ADVISOR (its own acceptance criterion; it caught the two misses; merge stays with it). Operator confirmed: KEEP UNSET for selection (defers implications to the advisor).
+
+    Recipe (advisor's, operator-confirmed):
+    1. Emit execution_mode in `list --format json` (structurally absent today; even `--fields mode` is ignored for JSON — a BUG-1149 cousin).
+    2. Selection fence: exclude execution_mode ∈ {drive,guided,operator,decide}; KEEP drain + unset.
+    3. Add a test: a drive-mode spec with NO keystone tag (the case PR #1827's tag-net misses).
+
+    Wrinkle to avoid a third miss: `pr_ship::merge_requires_supervision(mode)` returns true for EVERYTHING except Drain — so it ALSO excludes unset. Do NOT reuse it verbatim for SELECTION (it would drop unset, contra "keep unset"). Selection predicate = exclude only the 4 supervised modes, keep None+Drain. The MERGE gate correctly still treats unset as supervised — a different, also-correct decision (unset drains but won't auto-merge; the advisor merges it).
+
+    Base to build on (PR #1827 / branch task-1231-autoprogress): the command is built + tested (project resolution + wrong-store guard + lock-skip + single-spec drain loop + pure-seam tests). The tag-net (is_keystone_class) can STAY as defense-in-depth. Two impl options for the mode fence: (a) emit execution_mode in the list-json serde struct (I couldn't pinpoint it) + parse in select_ready_from_json; or (b) pivot ready_specs to in-process store load (.aida-store + CachedGitBackend::open) reading r.execution_mode directly + leased_spec_ids(root) for in-flight. Advisor's call.
+  created_at: 2026-09-15T03:47:01.549793080Z
+  modified_at: 2026-09-15T03:47:01.549793080Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
