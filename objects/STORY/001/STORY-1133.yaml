@@ -19,12 +19,12 @@ description: |-
   - The one driver seat remains singleton and authoritative; no split-brain on disposition.
   - The driver-vs-companion distinction is recorded as an ADR amending ADR-3.
   - Multi-instance roles (implementer/reviewer/integrator) are unaffected.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:02:27.966162658Z
-modified_at: 2026-09-15T12:53:19.895189751Z
+modified_at: 2026-09-15T14:47:46.062432936Z
 req_type: Story
 tags:
 - agents roles driver-vs-companion adr-3 architecture aida:agent
