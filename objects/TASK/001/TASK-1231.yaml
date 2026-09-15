@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T15:29:48.322099926Z
-modified_at: 2026-09-15T03:47:01.549793080Z
+modified_at: 2026-09-15T03:57:33.784302234Z
 req_type: Task
 tags:
 - autonomy cron drain-invocation papercut parent:EPIC-62
@@ -60,4 +60,10 @@ comments:
   created_at: 2026-09-15T03:47:01.549793080Z
   modified_at: 2026-09-15T03:47:01.549793080Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a336-82d8-75e0-b994-ba594d70cef6
+  author: joe
+  content: Commit e207493d0 references this requirement
+  created_at: 2026-09-15T03:57:33.784302234Z
+  modified_at: 2026-09-15T03:57:33.784302234Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
