@@ -68151,5 +68151,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 5355
+- id: 01a0a402-9eaf-7073-9b8b-47ef0f4cb52f
+  target_id: 01a0a402-9892-7343-96cb-747355ba9bb0
+  author: aida
+  node_id: '1'
+  lamport: 5356
+  timestamp: 2026-09-15T07:40:30.255199909Z
+  kind: !Create
+    title: 'Review PR-1831: [AI:codex] fix(queue): mark supervised queued specs distinctly (TASK-1234)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a3f1`) for branch `task-1234`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1831>
+      - Branch: `task-1234` → `main`
+
+      ## Covers
+
+      - TASK-1234
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1831` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5356
 node_id: '1'
