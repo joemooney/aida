@@ -20,7 +20,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:02:34.496069786Z
-modified_at: 2026-09-15T05:03:08.998027746Z
+modified_at: 2026-09-15T05:06:46.115987867Z
 req_type: Bug
 tags:
 - terminal-title story:994 papercut
+comments:
+- id: 01a0a375-dee3-7181-bd59-07b8fe4a6aae
+  author: joe
+  content: Commit f9226ad77 references this requirement
+  created_at: 2026-09-15T05:06:46.115987867Z
+  modified_at: 2026-09-15T05:06:46.115987867Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
