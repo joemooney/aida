@@ -3,12 +3,12 @@ spec_id: TASK-1232
 agreed_id: TASK-1232
 title: 'aida agent new --noexec/--print-command: show the resolved command line + permission posture (sandbox/approval) without launching'
 description: 'Operator (2026-09-14) keeps getting prompted for approvals launching codex at work and wants to SEE the exact command line AIDA would run + which permission rules apply, without executing. --show-context shows the role snapshot but not the argv. Add --noexec (alias --print-command) to aida agent new: print the fully-resolved vendor command line (codex/claude argv incl. sandbox/approval flags) AND the resolved permission posture (agents.toml bypass, codex --sandbox mode + --ask-for-approval policy) to stdout, then exit 0 without launching. Lets a user inspect + copy/tune the command. Pairs with the codex contained-autonomous posture task.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:03.079297975Z
-modified_at: 2026-09-15T08:31:42.606995273Z
+modified_at: 2026-09-15T08:36:52.473602366Z
 req_type: Task
 tags:
 - agents codex launcher ux permission-posture
@@ -17,8 +17,24 @@ relationships:
   target_id: 01a0a431-58e5-7011-a9d4-38bcbf0d3df8
   created_at: 2026-09-15T08:31:42.606990650Z
   created_by: joe
+history:
+- id: 01a0a436-3a5c-7ca1-bad1-ba7464893959
+  author: aida-auto-bump
+  timestamp: 2026-09-15T08:36:52.444078841Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a436-3a79-7a20-9292-a985891d38ae
+  timestamp: 2026-09-15T08:36:52.473600981Z
+  agent: aida
+  commit_sha: 4b56ddfe98558040e850b90468602007efb82a9e
+  summary: Completed via merge 4b56ddfe
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T08:22:42.531354651Z
   implemented_by: joe
+  completed_at: 2026-09-15T08:36:52.443967281Z
+  completion_sha: 4b56ddfe98558040e850b90468602007efb82a9e
