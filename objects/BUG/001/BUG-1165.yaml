@@ -1,0 +1,14 @@
+id: 01a0a5c6-13e8-76c3-b265-b26eade3d5a2
+spec_id: BUG-1165
+agreed_id: BUG-1165
+title: post_init_hooks_run_executable_sh_files_in_lexical_order_with_context is flaky on CI (passes on re-run, same SHA)
+description: 'STORY-1129''s PR #1844 failed CI on this test (init_cmd.rs assert ''Some(2)''), but it passes locally deterministically AND passed on a same-SHA CI re-run — so it is FLAKY, not the with_mcp regression it was first read as. The hook runner already sorts (init_cmd.rs run_post_init_hooks_from_dir: hooks.sort()), so ordering is deterministic; the flake is likely test hermeticity (the test''s hooks/temp dir picks up an env-dependent file set) or a CI-only timing/executable-bit difference. Make the test hermetic + deterministic (isolate its temp hooks dir; assert on a fixed set; ensure +x is set portably). Acceptance: the test passes deterministically on CI across repeated runs; no reliance on ambient scaffold files or readdir order.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T15:53:37.000235171Z
+modified_at: 2026-09-15T15:53:37.000235171Z
+req_type: Bug
+tags:
+- test flaky ci init post-init-hooks
