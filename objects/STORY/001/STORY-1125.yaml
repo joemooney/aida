@@ -25,7 +25,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:54.162451443Z
-modified_at: 2026-09-15T05:24:54.162451443Z
+modified_at: 2026-09-15T05:24:59.109506012Z
 req_type: Story
 tags:
 - release workflow meta-task aida:release
+execution_mode: operator
