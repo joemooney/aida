@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:41.132899640Z
-modified_at: 2026-09-15T12:52:29.375309464Z
+modified_at: 2026-09-15T12:52:30.665053007Z
 req_type: Story
 tags:
 - drain queue orchestrator ux discoverability aida:drain aida:queue
@@ -29,4 +29,11 @@ relationships:
   target_id: 01a0a089-eb22-7df2-9400-ef53befec585
   created_at: 2026-09-15T06:32:52.356607352Z
   created_by: joe
+comments:
+- id: 01a0a520-4549-7502-90cf-10acf3ba5c08
+  author: joe
+  content: 'DE-RISK: fork DECIDED (thin wrapper over existing engine, no new drain impl). GATE: start refuses when a drain is live (BUG-538 lock); stop releases the lock gracefully; autoprogress keeps working. Mode DRIVE.'
+  created_at: 2026-09-15T12:52:30.665053007Z
+  modified_at: 2026-09-15T12:52:30.665053007Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
