@@ -1,0 +1,26 @@
+id: 01a0a514-dee7-7dc3-8243-fc5b2fa92727
+spec_id: STORY-1145
+agreed_id: STORY-1145
+title: 'Review PR-1842: [AI:codex] fix(autoprogress): honor explicit drain mode over keystone tags (BUG-1157)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a511`) for branch `bug-1157`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1842>
+  - Branch: `bug-1157` → `main`
+
+  ## Covers
+
+  - BUG-1157
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1842` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T12:40:03.559943502Z
+modified_at: 2026-09-15T12:40:03.559943502Z
+req_type: Story
