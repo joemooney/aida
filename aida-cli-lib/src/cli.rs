@@ -6949,6 +6949,61 @@ pub enum HeadlessCommand {
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DrainCommand {
+    /// Start an autonomous drain through the canonical `queue work
+    /// --auto-complete` engine.
+    // trace:STORY-1130 | ai:codex
+    Start {
+        /// Optional selector: a SPEC id, `next`, `nextN`, or `batch:NAME`.
+        selector: Option<String>,
+        /// Resolve and run against this project instead of the current cwd.
+        #[clap(long, value_name = "PATH")]
+        project: Option<String>,
+        /// Drain a named `batch:NAME`.
+        #[clap(long, value_name = "NAME", conflicts_with = "selector")]
+        batch: Option<String>,
+        /// Drive exactly the queue head (`aida queue work next --auto-complete`).
+        #[clap(long, conflicts_with = "selector")]
+        once: bool,
+        /// Headless mode for the canonical drain. Bare flag means `both`.
+        #[clap(long, value_name = "MODE", num_args = 0..=1, default_missing_value = "both")]
+        no_human: Option<String>,
+        /// Override the drain role.
+        #[clap(long, value_name = "NAME")]
+        role: Option<String>,
+        /// Per-batch failure budget passed through to the engine.
+        #[clap(long, value_name = "N")]
+        max_failures: Option<usize>,
+        /// Stop after this many acted-on specs.
+        #[clap(long, value_name = "N")]
+        max_iterations: Option<u64>,
+        /// Stop after this wall-clock budget (`90s`, `45m`, `2h`).
+        #[clap(long, value_name = "DUR")]
+        max_runtime: Option<String>,
+        /// Cap cumulative reported tokens.
+        #[clap(long, value_name = "N")]
+        max_tokens: Option<u64>,
+        /// Emit JSON progress from the underlying drain.
+        #[clap(long)]
+        json: bool,
+        /// Route the headless agents to a vendor (`claude`, `codex`, `agy`).
+        #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
+        vendor: Option<String>,
+        /// Opaque model override passed through to the selected vendor.
+        #[clap(long, value_name = "MODEL")]
+        model: Option<String>,
+    },
+
+    /// Request that the live drain stop at the next spec boundary.
+    // trace:STORY-1130 | ai:codex
+    Stop {
+        /// Kill the live drain process immediately after writing the stop request.
+        #[clap(long)]
+        now: bool,
+        /// Resolve against this project instead of the current cwd.
+        #[clap(long, value_name = "PATH")]
+        project: Option<String>,
+    },
+
     /// Show the active drain: the launching command, the members and their
     /// lifecycle state, the current phase, and a prediction of what happens on
     /// session exit. Launcher-held drains (`aida burndown run`, `aida queue
@@ -12588,6 +12643,75 @@ mod tests {
         assert_eq!(no_timestamp, drain_no_timestamp);
         assert!(annotate);
         assert_eq!(annotate, drain_annotate);
+    }
+
+    // trace:STORY-1130 | ai:codex
+    #[test]
+    fn drain_start_and_stop_parse_lifecycle_flags() {
+        let cli = Cli::try_parse_from([
+            "aida",
+            "drain",
+            "start",
+            "next3",
+            "--project",
+            "/tmp/aida",
+            "--no-human",
+            "both",
+            "--role",
+            "implementer",
+            "--max-failures",
+            "2",
+            "--max-iterations",
+            "3",
+            "--max-runtime",
+            "45m",
+            "--max-tokens",
+            "1000",
+            "--vendor",
+            "codex",
+            "--model",
+            "gpt-5",
+            "--json",
+        ])
+        .expect("`aida drain start` should parse");
+        match cli.command {
+            Command::Drain(DrainCommand::Start {
+                selector,
+                project,
+                batch,
+                once,
+                no_human,
+                role,
+                max_failures,
+                max_iterations,
+                max_runtime,
+                max_tokens,
+                json,
+                vendor,
+                model,
+            }) => {
+                assert_eq!(selector.as_deref(), Some("next3"));
+                assert_eq!(project.as_deref(), Some("/tmp/aida"));
+                assert_eq!(batch, None);
+                assert!(!once);
+                assert_eq!(no_human.as_deref(), Some("both"));
+                assert_eq!(role.as_deref(), Some("implementer"));
+                assert_eq!(max_failures, Some(2));
+                assert_eq!(max_iterations, Some(3));
+                assert_eq!(max_runtime.as_deref(), Some("45m"));
+                assert_eq!(max_tokens, Some(1000));
+                assert!(json);
+                assert_eq!(vendor.as_deref(), Some("codex"));
+                assert_eq!(model.as_deref(), Some("gpt-5"));
+            }
+            other => panic!("expected Drain::Start command, got {other:?}"),
+        }
+
+        let cli = Cli::try_parse_from(["aida", "drain", "stop", "--now"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::Drain(DrainCommand::Stop { now: true, .. })
+        ));
     }
 
     // trace:TASK-1155 trace:ADR-11 | ai:codex

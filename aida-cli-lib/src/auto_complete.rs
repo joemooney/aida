@@ -4176,6 +4176,9 @@ pub(crate) fn drain_batch_pipelined_with_caps(
 
     loop {
         while !no_more_heads && in_flight.len() < depth {
+            if crate::drain_cmd::stop_requested_from_env() {
+                break;
+            }
             if let Some(limit) = max {
                 if launched >= limit {
                     break;
@@ -4226,6 +4229,7 @@ pub(crate) fn drain_batch_pipelined_with_caps(
 
         let Some(member) = in_flight.pop_front() else {
             if cap_stop_out.is_some()
+                || crate::drain_cmd::stop_requested_from_env()
                 || (max.is_some()
                     && launched >= max.unwrap()
                     && !no_more_heads
@@ -4389,6 +4393,20 @@ pub(crate) fn drain_batch_with_caps(
                 exit_code,
             };
         };
+        // STORY-1130: `aida drain stop` is cooperative: let the in-flight spec
+        // land, then stop before picking up another head.
+        if crate::drain_cmd::stop_requested_from_env() {
+            return BatchDrainResult {
+                shipped,
+                punted,
+                escalated,
+                shelved,
+                skipped,
+                stopped_at: None,
+                outcome: BatchDrainOutcome::MaxReached,
+                exit_code: DRIVE_EXIT_CLEAN,
+            };
+        }
         // `--max` bounds how many members the drain *acts on* — shipped,
         // punted, escalated, or shelved each consumed a slot (a full phase
         // attempt).
@@ -9347,6 +9365,28 @@ mod tests {
                 cap: 2
             })
         );
+    }
+
+    // trace:STORY-1130 | ai:codex
+    #[test]
+    fn drain_stop_request_stops_before_next_spec() {
+        let dir = tempfile::tempdir().unwrap();
+        let stop_file = dir.path().join("drain-stop.json");
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(
+            "AIDA_DRAIN_STOP_FILE",
+            Some(stop_file.to_string_lossy().as_ref()),
+        )]);
+        let mut driver = MockBatchDriver::new(&["TASK-1", "TASK-2"]);
+
+        let first = drain_batch(&mut driver, Some(1), None);
+        assert_eq!(first.shipped, vec!["TASK-1"]);
+        assert_eq!(driver.runs, vec!["TASK-1"]);
+
+        std::fs::write(&stop_file, "{}").unwrap();
+        let second = drain_batch(&mut driver, None, None);
+        assert_eq!(second.outcome, BatchDrainOutcome::MaxReached);
+        assert_eq!(second.exit_code, DRIVE_EXIT_CLEAN);
+        assert_eq!(driver.runs, vec!["TASK-1"]);
     }
 
     /// TASK-966: `--max-runtime` with a deadline already in the past stops the

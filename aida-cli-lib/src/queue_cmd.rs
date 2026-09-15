@@ -5272,6 +5272,8 @@ pub(crate) fn handle_queue_command(
                         c
                     };
                     let project_root = find_main_worktree_root()?;
+                    drain_cmd::install_stop_request_env(&project_root);
+                    drain_cmd::clear_stop_request(&project_root);
                     Some(drain_lock::acquire_drain_lock(
                         &project_root,
                         &drain_lock_command,
