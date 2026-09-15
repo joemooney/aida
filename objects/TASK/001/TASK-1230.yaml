@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:15:54.293122565Z
-modified_at: 2026-09-14T15:27:30.738387279Z
+modified_at: 2026-09-15T03:48:32.222229154Z
 req_type: Task
 tags:
 - batch:morning
@@ -37,5 +37,11 @@ comments:
     Acceptance addendum: nothing is hard-deleted without first landing in the 30-day archive; a MERGED branch (commits already on main) needs no archive; an UNMERGED branch's unique commits are archived (tag/bundle) before deletion; a retention sweep purges >30d archived entries.
   created_at: 2026-09-14T06:24:25.817981626Z
   modified_at: 2026-09-14T06:24:25.817981626Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a32e-3f5e-7200-a2ce-a18260db40c4
+  author: joe
+  content: 'HAND-OFF (operator, 2026-09-14): TASK-1230 goes to the ADVISOR too — same orchestrator-reliability class as the TASK-1231 fence (where the advisor''s code-tracing has been sharper), and it touches the recovery path. Design is already recorded on this spec: archive-not-delete + 30-day retention (nothing hard-deleted without landing in the archive; merged branch needs no archive; unmerged unique commits archived before deletion), sharing ONE archive+retention primitive with TASK-1222. Merge stays with the advisor.'
+  created_at: 2026-09-15T03:48:32.222229154Z
+  modified_at: 2026-09-15T03:48:32.222229154Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
