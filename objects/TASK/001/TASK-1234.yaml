@@ -12,12 +12,16 @@ description: |-
   - The Unicode + ASCII profiles both map it (glyph-profile test coverage like the existing flow_glyph/status_glyph tests).
   - The legend / relevant --help explains the glyph ('queued but needs a guided/operator session; a headless drain skips it').
   - No change to the underlying pickup behavior — display only.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:36:52.411379934Z
-modified_at: 2026-09-15T07:22:05.839479870Z
+modified_at: 2026-09-15T07:32:56.947704634Z
 req_type: Task
 tags:
 - ux glyph queue flow-glyph guided discoverability aida:queue
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-15T07:32:56.947704634Z
+  implemented_by: joe
