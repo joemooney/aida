@@ -20,12 +20,12 @@ description: |-
   - `aida` surfaces a queueable release task (a template/skill instance) fenced to operator/guided; a headless drain never picks it up.
   - Working it produces: the since-last-tag shipped-list, a pre-release-gate verdict (cross-platform <24h + quiet-main + blockers), and the mechanical prep — then stops for operator confirm before any tag/push.
   - No autonomous tag or binary publish.
-status: Done
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:54.162451443Z
-modified_at: 2026-09-15T11:36:57.719864385Z
+modified_at: 2026-09-15T11:38:00.502120024Z
 req_type: Story
 tags:
 - release workflow meta-task aida:release
