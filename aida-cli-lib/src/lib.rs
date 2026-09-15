@@ -21534,6 +21534,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_context: false,
             no_title: false,
             show_context: false,
+            noexec: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -21556,6 +21557,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_context: false,
             no_title: false,
             show_context: false,
+            noexec: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -21576,6 +21578,7 @@ fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand> {
             no_context: false,
             no_title: false,
             show_context: false,
+            noexec: false,
             prompt: None,
             no_prompt: false,
             no_resume: false,
@@ -21662,6 +21665,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_context,
             no_title,
             show_context,
+            noexec,
             prompt,
             no_prompt,
             no_resume,
@@ -21682,6 +21686,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             !*no_title,
+            *noexec,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -21704,6 +21709,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_context,
             no_title,
             show_context,
+            noexec,
             prompt,
             no_prompt,
             no_resume,
@@ -21722,6 +21728,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             !*no_title,
+            *noexec,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -21742,6 +21749,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_context,
             no_title,
             show_context,
+            noexec,
             prompt,
             no_prompt,
             no_resume,
@@ -21760,6 +21768,7 @@ fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             *bypass_sandbox,
             AgentContextOptions::new(!*no_context, *show_context),
             !*no_title,
+            *noexec,
             AgentPromptOptions::new(prompt.clone(), *no_prompt),
             AgentResumeOptions::new(
                 !*no_resume,
@@ -22488,6 +22497,7 @@ fn agent_new_claude(
     sandbox: bool,
     context: AgentContextOptions,
     title: bool,
+    noexec: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22559,6 +22569,7 @@ fn agent_new_claude(
             cwd,
             context,
             title,
+            noexec,
             prompt,
             resume,
             flag_options,
@@ -22575,6 +22586,7 @@ fn agent_new_claude(
             cwd,
             context,
             title,
+            noexec,
             prompt,
             resume,
             flag_options,
@@ -22596,6 +22608,7 @@ fn agent_new_codex(
     bypass_sandbox: bool,
     context: AgentContextOptions,
     title: bool,
+    noexec: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22633,6 +22646,7 @@ fn agent_new_codex(
         cwd,
         context,
         title,
+        noexec,
         prompt,
         resume,
         flag_options,
@@ -22653,6 +22667,7 @@ fn agent_new_antigravity(
     bypass_sandbox: bool,
     context: AgentContextOptions,
     title: bool,
+    noexec: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22690,6 +22705,7 @@ fn agent_new_antigravity(
         cwd,
         context,
         title,
+        noexec,
         prompt,
         resume,
         flag_options,
@@ -22709,6 +22725,7 @@ fn agent_new_with_config(
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
     title: bool,
+    noexec: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22756,6 +22773,15 @@ fn agent_new_with_config(
     // trace:BUG-408 | ai:claude
     if context.show {
         return print_dry_launch_context(&project_root, role, spec, &config, name);
+    }
+    if noexec {
+        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        config.default_args.extend(agent_seed_session_args(
+            config.agent_type,
+            plan.native_session_id.as_deref(),
+        ));
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
+        return print_agent_launch_noexec(&binary, &config, &plan, &prompt_args, true);
     }
 
     // STORY-717: focus-scope drift guard at the agent-launch work-start moment.
@@ -22871,6 +22897,7 @@ fn agent_new_bg_dispatch(
     cwd: Option<&std::path::Path>,
     context: AgentContextOptions,
     _title: bool,
+    noexec: bool,
     prompt: AgentPromptOptions,
     resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
@@ -22915,6 +22942,15 @@ fn agent_new_bg_dispatch(
     // trace:BUG-408 | ai:claude
     if context.show {
         return print_dry_launch_context(&project_root, role, spec, &config, name);
+    }
+    if noexec {
+        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        config.default_args.extend(agent_seed_session_args(
+            config.agent_type,
+            plan.native_session_id.as_deref(),
+        ));
+        let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt);
+        return print_agent_launch_noexec(&binary, &config, &plan, &prompt_args, false);
     }
 
     // STORY-717: focus-scope drift guard (same as the foreground path) for the
@@ -24721,6 +24757,140 @@ fn queue_head_line(project_root: &std::path::Path, role: Option<&str>) -> Option
     ))
 }
 
+// trace:TASK-1232 | ai:codex
+fn resolved_agent_program_and_args(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    prompt_args: &[String],
+    wrap_claude: bool,
+) -> Result<(std::ffi::OsString, Vec<String>)> {
+    let mut all_args: Vec<String> = config.default_args.clone();
+    all_args.extend(prompt_args.iter().cloned());
+    if wrap_claude && config.agent_type == "claude" {
+        let (prog, args) = crate::session::os_wrapped_program_and_args(
+            &plan.launch_cwd,
+            &binary.to_string_lossy(),
+            all_args,
+        )?;
+        Ok((std::ffi::OsString::from(prog), args))
+    } else {
+        Ok((binary.as_os_str().to_os_string(), all_args))
+    }
+}
+
+// trace:TASK-1232 | ai:codex
+fn print_agent_launch_noexec(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    prompt_args: &[String],
+    wrap_claude: bool,
+) -> Result<()> {
+    print!(
+        "{}",
+        render_agent_launch_noexec(binary, config, plan, prompt_args, wrap_claude)?
+    );
+    Ok(())
+}
+
+// trace:TASK-1232 | ai:codex
+fn render_agent_launch_noexec(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    prompt_args: &[String],
+    wrap_claude: bool,
+) -> Result<String> {
+    let (program, exec_args) =
+        resolved_agent_program_and_args(binary, config, plan, prompt_args, wrap_claude)?;
+    let mut argv = vec![program.to_string_lossy().to_string()];
+    argv.extend(exec_args.clone());
+    let agents_bypass = load_agents_bypass(&plan.project_root).unwrap_or(false);
+    let agents_contained = load_agents_contained(&plan.project_root).unwrap_or(false);
+
+    let mut out = String::new();
+    out.push_str("# AIDA agent launch preview — no process was started.\n");
+    out.push_str(&format!("agent: {}\n", config.agent_type));
+    out.push_str(&format!("name: {}\n", plan.name));
+    if let Some(role) = &plan.role {
+        out.push_str(&format!("role: {role}\n"));
+    }
+    if let Some(spec) = &plan.current_spec {
+        out.push_str(&format!("spec: {spec}\n"));
+    }
+    out.push_str(&format!("cwd: {}\n", plan.launch_cwd.display()));
+    out.push_str(&format!("command: {}\n", shell_join_display(&argv)));
+    out.push_str("permission_posture:\n");
+    out.push_str(&format!("  agents.toml bypass: {agents_bypass}\n"));
+    out.push_str(&format!("  agents.toml contained: {agents_contained}\n"));
+    out.push_str(&format!(
+        "  resolved: {}\n",
+        resolved_agent_permission_summary(config.agent_type, &exec_args)
+    ));
+    if config.agent_type == "codex" {
+        out.push_str(&format!(
+            "  codex sandbox: {}\n",
+            resolved_flag_value(&exec_args, "--sandbox").unwrap_or("codex default")
+        ));
+        out.push_str(&format!(
+            "  codex ask-for-approval: {}\n",
+            resolved_flag_value(&exec_args, "--ask-for-approval").unwrap_or("codex default")
+        ));
+    }
+    Ok(out)
+}
+
+// trace:TASK-1232 | ai:codex
+fn resolved_flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    args.iter().enumerate().find_map(|(idx, arg)| {
+        if arg == flag {
+            return args.get(idx + 1).map(String::as_str);
+        }
+        arg.strip_prefix(flag)
+            .and_then(|rest| rest.strip_prefix('='))
+    })
+}
+
+// trace:TASK-1232 | ai:codex
+fn resolved_agent_permission_summary(agent_type: &str, args: &[String]) -> String {
+    match agent_type {
+        "claude" => {
+            if let Some(mode) = resolved_flag_value(args, "--permission-mode") {
+                format!("claude --permission-mode {mode}")
+            } else if args.iter().any(|arg| arg == "--settings") {
+                "claude contained sandbox settings".to_string()
+            } else {
+                "claude native permission posture".to_string()
+            }
+        }
+        "codex" => {
+            if args
+                .iter()
+                .any(|arg| arg == "--dangerously-bypass-approvals-and-sandbox")
+            {
+                "codex approvals and sandbox bypassed".to_string()
+            } else {
+                let sandbox = resolved_flag_value(args, "--sandbox").unwrap_or("codex default");
+                let approval =
+                    resolved_flag_value(args, "--ask-for-approval").unwrap_or("codex default");
+                format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+            }
+        }
+        "antigravity" => {
+            if args
+                .iter()
+                .any(|arg| arg == "--dangerously-skip-permissions")
+            {
+                "antigravity permissions skipped".to_string()
+            } else {
+                "antigravity native permission posture".to_string()
+            }
+        }
+        other => format!("{other} native permission posture"),
+    }
+}
+
 fn run_tracked_agent(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
@@ -24739,18 +24909,8 @@ fn run_tracked_agent(
     // returns the bare program + args, so a normal `aida agent new` is
     // byte-identical to today's behavior. Non-claude agents keep the bare path.
     // trace:TASK-864 | ai:claude
-    let mut all_args: Vec<String> = config.default_args.clone();
-    all_args.extend(prompt_args.iter().cloned());
-    let (program, exec_args): (std::ffi::OsString, Vec<String>) = if config.agent_type == "claude" {
-        let (prog, args) = crate::session::os_wrapped_program_and_args(
-            &plan.launch_cwd,
-            &binary.to_string_lossy(),
-            all_args,
-        )?;
-        (std::ffi::OsString::from(prog), args)
-    } else {
-        (binary.as_os_str().to_os_string(), all_args)
-    };
+    let (program, exec_args) =
+        resolved_agent_program_and_args(binary, config, plan, prompt_args, true)?;
     let mut command = std::process::Command::new(&program);
     command
         .current_dir(&plan.launch_cwd)
@@ -71376,6 +71536,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             true,
+            false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),
@@ -71391,6 +71552,7 @@ pub(crate) fn handle_guided_human_review(spec: &str) -> Result<()> {
             false,
             AgentContextOptions::new(true, false),
             true,
+            false,
             AgentPromptOptions::new(Some(launch.prompt), false),
             AgentResumeOptions::new(false, None, true, false),
             AgentDefaultFlagOptions::new(true, Vec::new(), None),

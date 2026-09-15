@@ -194,6 +194,7 @@ fn parses_agent_new_codex_flags() {
         "--bypass-sandbox",
         "--model",
         "gpt-prod",
+        "--print-command",
         "--no-prompt",
         "--extra-flag",
         "--ask-for-approval=never",
@@ -209,6 +210,7 @@ fn parses_agent_new_codex_flags() {
                 model,
                 no_context,
                 show_context,
+                noexec,
                 no_prompt,
                 extra_flags,
                 ..
@@ -224,8 +226,89 @@ fn parses_agent_new_codex_flags() {
     assert_eq!(model.as_deref(), Some("gpt-prod"));
     assert!(!no_context);
     assert!(!show_context);
+    assert!(noexec);
     assert!(no_prompt);
     assert_eq!(extra_flags, vec!["--ask-for-approval=never"]);
+}
+
+// trace:TASK-1232 | ai:codex
+#[test]
+fn parses_agent_new_noexec_aliases() {
+    let cli = Cli::try_parse_from(["aida", "agent", "new", "claude", "--noexec"]).unwrap();
+    let Command::Agent(AgentCommand::New {
+        command: Some(AgentNewCommand::Claude { noexec, .. }),
+    }) = cli.command
+    else {
+        panic!("expected agent new claude command");
+    };
+    assert!(noexec);
+
+    let cli =
+        Cli::try_parse_from(["aida", "agent", "new", "antigravity", "--print-command"]).unwrap();
+    let Command::Agent(AgentCommand::New {
+        command: Some(AgentNewCommand::Antigravity { noexec, .. }),
+    }) = cli.command
+    else {
+        panic!("expected agent new antigravity command");
+    };
+    assert!(noexec);
+}
+
+// trace:TASK-1232 | ai:codex
+#[test]
+fn noexec_preview_renders_command_and_codex_permission_posture() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\nbypass = false\n",
+    )
+    .unwrap();
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![
+            "--sandbox".to_string(),
+            "workspace-write".to_string(),
+            "--ask-for-approval=never".to_string(),
+        ],
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    let plan = AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project,
+        role: Some("implementer".into()),
+        current_spec: Some("TASK-1232".into()),
+        name: "codex-preview".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let preview = render_agent_launch_noexec(
+        std::path::Path::new("/usr/bin/codex"),
+        &config,
+        &plan,
+        &["work TASK-1232".to_string()],
+        true,
+    )
+    .unwrap();
+
+    assert!(preview.contains("# AIDA agent launch preview"), "{preview}");
+    assert!(preview.contains("command: /usr/bin/codex --sandbox workspace-write --ask-for-approval=never 'work TASK-1232'"), "{preview}");
+    assert!(preview.contains("agents.toml bypass: false"), "{preview}");
+    assert!(
+        preview.contains("resolved: codex sandbox=workspace-write, ask-for-approval=never"),
+        "{preview}"
+    );
+    assert!(
+        preview.contains("codex sandbox: workspace-write"),
+        "{preview}"
+    );
+    assert!(
+        preview.contains("codex ask-for-approval: never"),
+        "{preview}"
+    );
 }
 
 #[test]

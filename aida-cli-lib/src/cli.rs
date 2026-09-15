@@ -7329,6 +7329,11 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
+        /// Print the resolved launch command and permission posture, then exit without spawning.
+        // trace:TASK-1232 | ai:codex
+        #[clap(long, alias = "print-command")]
+        noexec: bool,
+
         /// Initial message to pass to the spawned Claude session.
         #[clap(long)]
         prompt: Option<String>,
@@ -7428,6 +7433,11 @@ pub enum AgentNewCommand {
         #[clap(long)]
         show_context: bool,
 
+        /// Print the resolved launch command and permission posture, then exit without spawning.
+        // trace:TASK-1232 | ai:codex
+        #[clap(long, alias = "print-command")]
+        noexec: bool,
+
         /// Initial message to pass to the spawned Codex session.
         #[clap(long)]
         prompt: Option<String>,
@@ -7510,6 +7520,11 @@ pub enum AgentNewCommand {
         /// Print the generated launch-context snapshot before spawning.
         #[clap(long)]
         show_context: bool,
+
+        /// Print the resolved launch command and permission posture, then exit without spawning.
+        // trace:TASK-1232 | ai:codex
+        #[clap(long, alias = "print-command")]
+        noexec: bool,
 
         /// Initial message to pass to the spawned Antigravity session.
         #[clap(long)]
