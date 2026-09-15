@@ -68593,5 +68593,31 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5378
+- id: 01a0a4cc-a03f-7ef3-a337-1b017389ebd6
+  target_id: 01a0a4cc-9784-7e53-ba36-bb1bfb51c6f3
+  author: aida
+  node_id: '1'
+  lamport: 5379
+  timestamp: 2026-09-15T11:21:08.927614176Z
+  kind: !Create
+    title: 'Review PR-1839: [AI:codex] feat(config): add permission posture writer (STORY-1128)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a4c2`) for branch `story-1128`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1839>
+      - Branch: `story-1128` → `main`
+
+      ## Covers
+
+      - STORY-1128
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1839` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5379
 node_id: '1'
