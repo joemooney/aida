@@ -12,12 +12,12 @@ description: |-
   - The lease record for the failed attempt is released (or updated to point at the PR branch) so aida ps / aida session leases stop listing a worktree that no longer exists.
   - Unit test: a simulated failed attempt with a clean worktree + verified PR results in the worktree directory removed; a second test with a dirty worktree results in it kept and a logged skip.
   - No change to the non-recovery phase-1 path.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-14T05:15:54.293122565Z
-modified_at: 2026-09-15T03:48:32.222229154Z
+modified_at: 2026-09-15T04:39:26.662979811Z
 req_type: Task
 tags:
 - batch:morning
