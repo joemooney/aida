@@ -1026,6 +1026,30 @@ fn drain_pickup_policy_skips_guided_operator_and_decide_specs() {
     }
 }
 
+// trace:STORY-1125 | ai:codex
+#[test]
+fn drain_pickup_policy_skips_release_meta_tasks() {
+    let mut release = req("STORY-1125", None, RequirementType::Story);
+    release.status = RequirementStatus::Approved;
+    release.execution_mode = Some(aida_core::ExecutionMode::Drain);
+    release
+        .tags
+        .insert("release workflow meta-task aida:release".to_string());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements = vec![release.clone()];
+
+    let policy = queue_drain_pickup_policy(&release, &store, false);
+    assert_eq!(policy, QueueFreshPickup::NeedsReleaseOperatorSession);
+    assert!(queue_fresh_pickup_reason_label(&policy)
+        .expect("release skip has a label")
+        .contains("/aida-release"));
+    assert_eq!(
+        queue_fresh_pickup_policy(&release, &store, false),
+        QueueFreshPickup::Pickable,
+        "release meta-tasks stay queueable for guided/operator pickup"
+    );
+}
+
 // trace:BUG-1120 | ai:codex
 #[test]
 fn explicit_auto_complete_guard_names_guided_path() {

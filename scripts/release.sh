@@ -36,6 +36,7 @@ set -euo pipefail
 # EOF immediately on a closed stdin and the prompt falls through to
 # "cancelled" without ever pausing. trace:TASK-79 | ai:claude
 auto_yes=${AIDA_RELEASE_YES:-0}
+prepare_only=0
 # TASK-257: by default the release is gated on a recent, green cross-platform
 # CI run — PR CI is Linux-only during the alpha, so Windows + macOS are only
 # validated by the nightly cross-platform.yml workflow. --skip-xplat-check /
@@ -51,10 +52,11 @@ bump=
 for arg in "$@"; do
     case "$arg" in
         --yes|-y) auto_yes=1 ;;
+        --prepare-only) prepare_only=1 ;;
         --skip-xplat-check) skip_xplat=1 ;;
         --skip-docs-check) skip_docs=1 ;;
         -h|--help)
-            echo "usage: $0 [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}"
+            echo "usage: $0 [--prepare-only] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}"
             exit 0
             ;;
         -*)
@@ -72,7 +74,7 @@ for arg in "$@"; do
 done
 
 if [ -z "$bump" ]; then
-    echo "usage: $0 [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}" >&2
+    echo "usage: $0 [--prepare-only] [--yes] [--skip-xplat-check] [--skip-docs-check] {major|minor|patch|<explicit-version>}" >&2
     exit 1
 fi
 
@@ -345,6 +347,47 @@ cat "$notes_file"
 echo
 echo "─── End tag notes ───"
 echo
+
+# STORY-1125: queueable release prep stops at the publish boundary. This mode
+# produces the mechanical prep (version bump, Cargo.lock, CHANGELOG, docs gate,
+# tag notes) and the cross-platform gate verdict, then exits before commit,
+# tag, or push. The operator can inspect the dirty tree and then publish
+# manually if they approve the prepared release. trace:STORY-1125 | ai:codex
+if [ "$prepare_only" = "1" ]; then
+    if [ "$skip_xplat" = "1" ]; then
+        echo "skipping cross-platform pre-release check (--skip-xplat-check / AIDA_SKIP_XPLAT_CHECK=1)."
+    else
+        echo
+        echo "─── Cross-platform pre-release check ───"
+        if ! "$(dirname "$0")/pre-release-check.sh"; then
+            cat <<EOM >&2
+
+error: cross-platform CI is not green — release prep stopped before tag/commit.
+
+The version bump is in your working tree but not committed. Once
+cross-platform CI is green, re-run this script. To prepare without the check
+(not recommended for a published release), pass --skip-xplat-check.
+
+Tag notes saved at: $notes_file
+EOM
+            exit 1
+        fi
+    fi
+    cat <<EOM
+prepared v$new. No commit, tag, or push was performed.
+
+Next operator step:
+  inspect the version bump and tag notes, then publish manually if approved:
+    git add ${manifest_paths[*]}
+    git commit -m "chore: release v$new"
+    git tag -a v$new -F $notes_file
+    git push origin HEAD
+    git push origin v$new
+
+Tag notes saved at: $notes_file
+EOM
+    exit 0
+fi
 
 if [ "$auto_yes" = "1" ]; then
     echo "auto-confirm: --yes (or AIDA_RELEASE_YES=1) — proceeding without prompt."
