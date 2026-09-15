@@ -1,0 +1,27 @@
+id: 01a0a431-58e5-7011-a9d4-38bcbf0d3df8
+spec_id: STORY-1136
+agreed_id: STORY-1136
+title: 'Review PR-1833: [AI:codex] feat(agents): preview agent launch command (TASK-1232)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a41c`) for branch `task-1232`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1833>
+  - Branch: `task-1232` → `main`
+
+  ## Covers
+
+  - TASK-1232
+  - TASK-1234
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1833` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T08:31:32.581242316Z
+modified_at: 2026-09-15T08:31:32.581242316Z
+req_type: Story
