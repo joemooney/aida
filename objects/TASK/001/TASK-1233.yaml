@@ -6,12 +6,12 @@ description: |-
   Wire the posture into the setup path. At first-machine `aida init` (the TASK-698 agent-config prompt that writes ~/.aida/agents.toml) add the contained option to the posture choice (native / contained / bypass) instead of just native-vs-bypass, and write the matching ~/.codex/config.toml sandbox table when contained is chosen. At `aida init`/`aida scaffold refresh` in an existing project, run the STORY-A check and, at a TTY, OFFER to fix a flagged state (e.g. full-access-no-sandbox, or contained-without-sandbox-table); headless writes nothing. Idempotent — an already-coherent posture is never re-prompted. Honors --no-agent-config.
 
   Acceptance: first-machine init offers native/contained/bypass and writes a coherent contained posture when chosen; a re-run over a coherent posture prompts nothing; a flagged posture at a TTY offers the STORY-B fix; --no-agent-config and non-interactive init write nothing.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:27:06.143174507Z
-modified_at: 2026-09-15T12:52:36.355406017Z
+modified_at: 2026-09-15T14:25:20.961368279Z
 req_type: Task
 tags:
 - agents permission-posture config aida:init aida:scaffold parent:EPIC-65 depends-on:phase-1
