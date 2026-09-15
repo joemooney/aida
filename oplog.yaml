@@ -67456,5 +67456,29 @@ operations:
   timestamp: 2026-09-15T04:58:51.085883408Z
   kind: !SetStatus
     status: Completed
-clock: 5316
+- id: 01a0a372-0dc9-7db3-8a05-e86db6d901f2
+  target_id: 01a0a372-0800-7560-b816-d3ece080e5d0
+  author: aida
+  node_id: '1'
+  lamport: 5317
+  timestamp: 2026-09-15T05:02:35.977431284Z
+  kind: !Create
+    title: terminator title adapter leaks remotinator usage/error text when the installed remotinator lacks set_tab_title
+    description: |-
+      When aida launches an agent under the terminator emulator, set_terminal_title (agent_registry.rs ~1751) runs `remotinator set_tab_title <uuid> <title>` best-effort. On remotinator builds that do NOT have a set_tab_title subcommand (only getters like get_tab_title/get_window_title exist), remotinator prints its usage banner + "error: argument command: invalid choice: 'set_tab_title'" to the terminal. The agent launch proceeds fine (the call is `let _ = ...status()`), but the error text spews into the user's terminal right after the launch banner — looks alarming, isn't fatal.
+
+      Root cause: a best-effort cosmetic title call does not suppress the child's stdout/stderr, so a remotinator version mismatch surfaces as noise. Same pattern on the restore path (native_restore_title_command -> remotinator set_tab_title).
+
+      Fix:
+      - Suppress stdout+stderr (Stdio::null) on the best-effort remotinator title set AND restore calls — a cosmetic title op must never leak tool output into the terminal.
+      - Optionally: probe support (e.g. the verb is absent) and skip/fallback to the OSC title sequence so titles still set where possible.
+
+      Acceptance:
+      - Launching an agent under terminator with a remotinator that lacks set_tab_title produces NO remotinator usage/error text in the terminal.
+      - The agent still launches; title-setting remains best-effort.
+      - Same suppression on the restore path.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5317
 node_id: '1'
