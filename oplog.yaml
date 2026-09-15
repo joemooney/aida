@@ -69043,5 +69043,33 @@ operations:
     req_type: Decision
     status: Approved
     priority: Medium
-clock: 5407
+- id: 01a0a59a-ce0f-7052-af69-ce538168a0c1
+  target_id: 01a0a59a-c9fc-7093-8fa9-3f1a10710e81
+  author: aida
+  node_id: '1'
+  lamport: 5408
+  timestamp: 2026-09-15T15:06:21.071647637Z
+  kind: !Create
+    title: 'Review PR-1848: [AI:codex] feat(agents): allow driver-role companion sessions (STORY-1133 ADR-34)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a589`) for branch `story-1133`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1848>
+      - Branch: `story-1133` → `main`
+
+      ## Covers
+
+      - STORY-1133
+      - ADR-34
+      - STORY-1130
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1848` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5408
 node_id: '1'
