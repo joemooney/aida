@@ -513,6 +513,10 @@ pub(crate) fn handle_scaffold_command(
             }
             let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref());
             crate::scaffold_refresh::print_refresh_summary(&packs);
+            // TASK-1233: refresh is an existing-project setup pass too. Keep
+            // it read-only unless an interactive operator accepts the same
+            // contained-posture repair offered by `aida init`.
+            crate::config_cmd::maybe_offer_permission_posture_fix(&root)?;
         }
 
         ScaffoldCommand::Upgrade {

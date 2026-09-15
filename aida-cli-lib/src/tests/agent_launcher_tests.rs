@@ -730,6 +730,27 @@ fn agent_posture_writer_round_trips_both_postures() {
         read_agents_bypass_from_file(&native_path).unwrap(),
         Some(false)
     );
+
+    // Contained posture writes both the machine-global AIDA knob and the
+    // matching Codex sandbox table. trace:TASK-1233 | ai:codex
+    let home = tmp.path().join("home-contained");
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+    let contained_path = home.join(".aida/agents.toml");
+    write_global_agents_permission_posture(&contained_path, AgentPermissionPosture::Contained)
+        .unwrap();
+    assert_eq!(
+        read_agents_bool_from_file(&contained_path, "contained").unwrap(),
+        Some(true)
+    );
+    assert_eq!(
+        read_agents_bypass_from_file(&contained_path).unwrap(),
+        Some(false)
+    );
+    let codex = std::fs::read_to_string(home.join(".codex/config.toml")).unwrap();
+    let parsed: toml::Value = toml::from_str(&codex).unwrap();
+    assert_eq!(parsed["sandbox_mode"].as_str(), Some("workspace-write"));
+    assert_eq!(parsed["approval_policy"].as_str(), Some("never"));
+    assert!(parsed["sandbox_workspace_write"].as_table().is_some());
 }
 
 /// TASK-698: the posture prompt is idempotent and TTY-gated — when

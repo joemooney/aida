@@ -1137,6 +1137,52 @@ pub(crate) fn scan_permission_posture_findings(
         .collect()
 }
 
+// trace:TASK-1233 | ai:codex
+pub(crate) fn maybe_offer_permission_posture_fix(project_root: &std::path::Path) -> Result<()> {
+    let report = permission_posture_report(project_root);
+    if report.findings.is_empty() {
+        return Ok(());
+    }
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Ok(());
+    }
+
+    eprintln!();
+    eprintln!("{}", "Project setup — agent permission posture".bold());
+    for finding in &report.findings {
+        eprintln!(
+            "  {} {}: {} ({})",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            finding.agent.cyan(),
+            finding.summary,
+            finding.source.dimmed()
+        );
+    }
+    let accepted = crate::prompt_yes_no(
+        "  Set contained posture now (project-local agents + Codex sandbox)? [Y/n]: ",
+        true,
+    )?;
+    if !accepted {
+        eprintln!(
+            "  {} left permission posture unchanged; run {} anytime.",
+            "Note:".dimmed(),
+            "aida config permissions set contained".cyan()
+        );
+        return Ok(());
+    }
+
+    let result = apply_permission_posture(
+        project_root,
+        ConfigPermissionTier::Contained,
+        PermissionPostureScope::Local,
+    )?;
+    eprintln!("  {} contained permission posture written.", "+".green());
+    for path in result.edited_paths {
+        eprintln!("    wrote {}", path.display());
+    }
+    Ok(())
+}
+
 // trace:STORY-1127 | ai:codex
 pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> PermissionPostureReport {
     let codex = codex_config_posture(project_root);
@@ -1415,6 +1461,12 @@ fn display_tool_bypass_flags(agent: &str) -> Vec<String> {
 fn display_tool_contained_flags(agent: &str) -> Vec<String> {
     match agent {
         "claude" => vec!["--permission-mode".into(), "dontAsk".into()],
+        "codex" => vec![
+            "--sandbox".into(),
+            "workspace-write".into(),
+            "--ask-for-approval".into(),
+            "never".into(),
+        ],
         _ => Vec::new(),
     }
 }
