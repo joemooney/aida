@@ -10,12 +10,12 @@ description: |-
   Depends on accurate liveness: BUG-1156 (role/agent liveness currently tracks a long-lived ancestor shell pid, so 'live' can be wrong). Land BUG-1156 first or this alert shows false 'already live' flags.
 
   Acceptance: the `aida agent` role picker annotates each role with live-driver + single-instance status; a user is warned about a taken single-instance seat BEFORE selecting; the annotation reflects accurate liveness (post-BUG-1156); no behavior change to multi-instance roles (implementer/reviewer/integrator).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:01:50.895874489Z
-modified_at: 2026-09-15T10:19:46.559646734Z
+modified_at: 2026-09-15T15:18:52.043076854Z
 req_type: Task
 tags:
 - agents role-picker liveness ux aida:agent depends-on:bug-1156
