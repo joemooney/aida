@@ -15,7 +15,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:18.096155572Z
-modified_at: 2026-09-15T05:24:18.096155572Z
+modified_at: 2026-09-15T05:32:44.124219479Z
 req_type: Story
 tags:
 - agents codex permission-posture sandbox security
+comments:
+- id: 01a0a38d-a4dc-7972-9e2e-d6ab44e05c53
+  author: joe
+  content: |-
+    Root-cause finding (2026-09-14): the operator's home YOLO on `aida agent new codex` comes from ~/.aida/agents.toml `[agents] bypass = true` (STORY-495 knob), which injects --dangerously-bypass-approvals-and-sandbox for codex. The knob is BINARY (nuclear vs native-prompts) — no middle tier, which is the exact gap.
+
+    Workaround available TODAY (no code): a per-agent `[agents.codex] default_flags = ["--sandbox=workspace-write", "--ask-for-approval=never"]` SUPPRESSES the global bypass knob for codex only (apply_agent_default_flags, lib.rs:23153: bypass injected only when per_tool.is_empty()) and yields sandboxed-prompt-free codex while claude/antigravity keep bypass=true. So the story is not 'enable a new capability' but 'promote this hand-written flag array to a first-class named posture (contained) selectable via the bypass knob's value (e.g. bypass = "contained") and surfaced in --noexec (TASK-1232)'. Codex approval values on the current build are only on-request|never (no on-failure/untrusted).
+  created_at: 2026-09-15T05:32:44.124219479Z
+  modified_at: 2026-09-15T05:32:44.124219479Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
