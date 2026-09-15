@@ -1044,7 +1044,7 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
         QueueFreshPickup::Archived => Some("archived — skipped".to_string()),
         QueueFreshPickup::Deferred => Some("deferred — skipped".to_string()),
         QueueFreshPickup::NeedsGuidedOrOperatorSession(mode) => Some(format!(
-            "skipped — needs guided/operator session ({mode}); use `aida queue work --guided`, `aida do`, or de-risk it with `aida derisk <SPEC>`"
+            "skipped — needs guided/operator session ({mode}); use `aida queue work --guided`, `aida do`, or de-risk it with `aida derisk <ID>`"
         )),
         QueueFreshPickup::AwaitingMerge => Some(
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"

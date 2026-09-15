@@ -4223,6 +4223,26 @@ fn test_derisk_command_parses_spec() {
     }
 }
 
+#[test]
+fn test_derisk_help_keeps_internal_tokens_out() {
+    use crate::cli::Cli;
+    use clap::CommandFactory;
+
+    let mut cli = Cli::command();
+    let derisk = cli
+        .get_subcommands_mut()
+        .find(|c| c.get_name() == "derisk")
+        .expect("derisk subcommand exists");
+    let help = derisk.render_long_help().to_string();
+
+    for internal in ["/aida-derisk", "execution_mode", "SPEC-ID", "<SPEC>"] {
+        assert!(
+            !help.contains(internal),
+            "derisk help must not expose internal token `{internal}`:\n{help}"
+        );
+    }
+}
+
 /// TASK-516: the `aida queue work` warn-decision fires exactly when the
 /// spec carries `plan-review:pending`, and stays silent otherwise.
 /// Fully isolated — feeds tag sets straight into the pure decision

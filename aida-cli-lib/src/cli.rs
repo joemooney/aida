@@ -7634,13 +7634,13 @@ pub enum Command {
         force: bool,
     },
 
-    /// Launch an advisor session to de-risk a supervised spec, using the
-    /// `/aida-derisk` skill. This is a thin vendor-aware front door: the
-    /// advisor decides forks, records ADRs, and only changes execution_mode
-    /// with explicit operator confirmation.
+    /// Launch an advisor session to de-risk a supervised requirement. This is
+    /// a thin vendor-aware front door: the advisor surfaces forks, records
+    /// decisions, and only changes routing with explicit operator confirmation.
     // trace:TASK-1235 | ai:codex
     Derisk {
-        /// Requirement ID (UUID or SPEC-ID) to de-risk.
+        /// Requirement identifier to de-risk.
+        #[clap(value_name = "ID")]
         spec: String,
     },
 
@@ -10138,7 +10138,7 @@ pub enum Command {
     /// command launched it, the batch members and their progress, and what
     /// happens to the queue when the current session exits. If a spec will
     /// not drain because it needs guided/operator attention, de-risk it with
-    /// `aida derisk <SPEC>`.
+    /// `aida derisk <ID>`.
     // trace:STORY-301 | ai:claude
     // trace:TASK-1235 | ai:codex
     #[clap(subcommand)]

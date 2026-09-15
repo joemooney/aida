@@ -1016,6 +1016,9 @@ fn drain_pickup_policy_skips_guided_operator_and_decide_specs() {
         assert!(queue_fresh_pickup_reason_label(&policy)
             .expect("mode skip has a label")
             .contains("needs guided/operator session"));
+        assert!(queue_fresh_pickup_reason_label(&policy)
+            .expect("mode skip has a label")
+            .contains("aida derisk <ID>"));
         assert_eq!(
             queue_fresh_pickup_policy(&r, &store, false),
             QueueFreshPickup::Pickable
