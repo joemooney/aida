@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T10:19:48.383651908Z
-modified_at: 2026-09-15T11:36:45.780806250Z
+modified_at: 2026-09-15T11:36:47.316581207Z
 req_type: Bug
 tags:
 - auto-complete
@@ -48,3 +48,10 @@ tags:
 - failure-1
 - failure-kind:tool-exit
 - implementer
+comments:
+- id: 01a0a4da-f1d4-7e62-be8a-c7e6c36e4208
+  author: joe
+  content: Duplicate failure-record — parent TASK-1236 failed phase-1 on a lease-match (stale BUG-1145 lease). Re-driving the parent after lease cleanup. Rejecting to avoid a loop.
+  created_at: 2026-09-15T11:36:47.316581207Z
+  modified_at: 2026-09-15T11:36:47.316581207Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
