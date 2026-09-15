@@ -1,0 +1,24 @@
+id: 01a0a520-b43b-77d3-846d-2860bacf28b9
+spec_id: ADR-33
+agreed_id: ADR-33
+title: 'Driver-vs-companion cardinality amends ADR-3: one authoritative DRIVER + N non-authoritative companions per driver role'
+description: |-
+  Amends (does NOT reject) ADR-3. Operator-approved 2026-09-15 via the companion-instances design (STORY-1133).
+
+  ADR-3 said 'one advisor / one product'. Amendment: the singleton constraint is on the DRIVER SEAT, not the role. Model: ONE authoritative DRIVER per driver role (advisor/product) + N non-authoritative COMPANIONS.
+
+  Companion capability boundary:
+  - CAN: read substrate, converse, draft to the draft-inbox, advise.
+  - CANNOT: approve, queue-for-work, execution_mode writes, drive a drain, or acquire/hold the driver singleton lease. Every refusal points at the live driver.
+  - Launcher: when a driver seat is live, OFFER 'launch as companion' instead of erroring. Multi-instance roles (implementer/reviewer/integrator) unaffected.
+
+  No split-brain: exactly one driver disposes/drives; companions are advisory/read/draft only. Implemented by STORY-1133 (mode drive; the refusal-gate + launcher behavior are testable).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T12:52:59.067683932Z
+modified_at: 2026-09-15T12:52:59.067683932Z
+req_type: Decision
+tags:
+- roles driver-vs-companion adr-3-amendment cardinality
