@@ -1,0 +1,26 @@
+id: 01a0a3bf-4b2b-7511-b772-05fce9155280
+spec_id: STORY-1128
+agreed_id: STORY-1128
+title: 'aida config permissions set contained|native|bypass [--user|--local] + doctor heal: idempotent TOML-merge writer for the posture files'
+description: |-
+  The WRITER slice (depends on the show/check slice + STORY-1124's named posture). `aida config permissions set <tier> [--user|--local]` applies a named posture by editing the right files idempotently, merge-preserving, with a backup:
+  - contained: writes [agents.<tool>] default_flags (codex: --sandbox=workspace-write --ask-for-approval=never) + the vendor [sandbox_workspace_write] table (network_access=true, writable_roots seeded with ~/.cargo,~/.rustup,~/.aida). Claude native contained equivalent via .aida/config.toml [contained].
+  - native: removes the injected flags, restores faithful-launcher prompting.
+  - bypass: the explicit nuclear opt-in (what bypass=true does today), gated with a clear warning.
+
+  Scope fork (--user vs --local): --user writes ~/.aida/agents.toml + ~/.codex/config.toml (covers plain codex + all projects); --local writes project .aida/agents.toml + project .codex/config.toml (safe for mixed trust — sandbox the work repo, leave a personal repo alone). Default TBD by EPIC-65 fork (a).
+
+  MUST handle the TOML table-ordering trap that corrupted the file during the 2026-09-14 hand-edit: top-level scalars (sandbox_mode/approval_policy/model) must precede any table, so an inserted [sandbox_workspace_write] table cannot be prepended above existing scalars. Reuse the merge-preserving writer pattern from `config glyph`/`config user`/mcp_translate (which already writes project .codex/config.toml). Always back up the vendor file before editing.
+
+  `aida doctor --category permission-posture heal` calls this to apply the fix for a flagged drift.
+
+  Acceptance: set contained/native/bypass each produce a valid, tomllib-parseable file with the rest preserved and a backup written; --user vs --local target the correct files; re-running is idempotent (no dup blocks); the codex table-ordering trap is covered by a test that round-trips a config with leading scalars; doctor heal applies contained for a flagged full-access state.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T06:26:57.963597562Z
+modified_at: 2026-09-15T06:26:57.963597562Z
+req_type: Story
+tags:
+- agents permission-posture config sandbox security aida:config aida:doctor parent:EPIC-65 depends-on:phase-1
