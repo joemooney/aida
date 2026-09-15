@@ -15,12 +15,12 @@ description: |-
   Fork resolved by advisor recommendation (pending operator): thin wrapper routing to the existing engine, NOT a new drain implementation.
 
   Acceptance: `aida drain start` launches the canonical auto-complete drain with the documented selectors/defaults, refuses cleanly when a drain is already live (BUG-538 lock), resolves the project correctly from any cwd, and sets the drain role; `aida drain stop` gracefully stops a live drain (in-flight phase lands, no new pickup) and releases the lock, with --now for hard-stop; `aida drain status` is unchanged; no second drain engine is introduced (start/stop delegate to the existing one); autoprogress continues to work (folded in or aliased, not broken).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:41.132899640Z
-modified_at: 2026-09-15T13:34:57.988610583Z
+modified_at: 2026-09-15T13:42:19.808791835Z
 req_type: Story
 tags:
 - drain queue orchestrator ux discoverability aida:drain aida:queue
@@ -37,3 +37,7 @@ comments:
   modified_at: 2026-09-15T12:52:30.665053007Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-15T13:42:19.808791835Z
+  implemented_by: joe
