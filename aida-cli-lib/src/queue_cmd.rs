@@ -1005,6 +1005,7 @@ pub(crate) enum QueueFreshPickup {
     Archived,
     Deferred,
     NeedsGuidedOrOperatorSession(aida_core::ExecutionMode),
+    NeedsReleaseOperatorSession,
     AwaitingMerge,
     Terminal(RequirementStatus),
     Blocked(aida_core::pickability::BlockedReason),
@@ -1050,6 +1051,10 @@ pub(crate) fn queue_fresh_pickup_reason_label(policy: &QueueFreshPickup) -> Opti
         QueueFreshPickup::NeedsGuidedOrOperatorSession(mode) => Some(format!(
             "skipped — needs guided/operator session ({mode}); use `aida queue work --guided`, `aida do`, or de-risk it with `aida derisk <ID>`"
         )),
+        QueueFreshPickup::NeedsReleaseOperatorSession => Some(
+            "skipped — release prep is operator-guided; use `/aida-release` at the keyboard"
+                .to_string(),
+        ),
         QueueFreshPickup::AwaitingMerge => Some(
             "Done — awaiting merge; route via `aida queue work --from-pr` or `aida integrate`"
                 .to_string(),
@@ -1066,6 +1071,17 @@ pub(crate) fn queue_drain_pickup_policy(
     store: &aida_core::RequirementsStore,
     force_needs_attention: bool,
 ) -> QueueFreshPickup {
+    // Release meta-tasks may be queued and tracked, but never picked up by an
+    // unattended drain. Their driver is the at-keyboard `/aida-release` prep
+    // flow, which stops before tag/push. trace:STORY-1125 | ai:codex
+    if req
+        .tags
+        .iter()
+        .flat_map(|tag| tag.split_whitespace())
+        .any(crate::presence::is_release_operator_tag)
+    {
+        return QueueFreshPickup::NeedsReleaseOperatorSession;
+    }
     // trace:BUG-1120 | ai:codex
     if matches!(
         req.execution_mode,
@@ -1622,6 +1638,7 @@ pub(crate) fn handle_queue_command(
                         QueueFreshPickup::Archived
                         | QueueFreshPickup::Deferred
                         | QueueFreshPickup::NeedsGuidedOrOperatorSession(_)
+                        | QueueFreshPickup::NeedsReleaseOperatorSession
                         | QueueFreshPickup::AwaitingMerge
                         | QueueFreshPickup::Terminal(_) => false,
                         QueueFreshPickup::Blocked(reason) => {
@@ -9869,6 +9886,17 @@ pub(crate) struct AutoCompleteHeadCandidate {
     pub(crate) for_role: Option<String>,
     pub(crate) deferred: bool,
     pub(crate) execution_mode: Option<aida_core::ExecutionMode>,
+    pub(crate) tags: std::collections::HashSet<String>,
+}
+
+impl AutoCompleteHeadCandidate {
+    // trace:STORY-1125 | ai:codex
+    pub(crate) fn is_release_task(&self) -> bool {
+        self.tags
+            .iter()
+            .flat_map(|tag| tag.split_whitespace())
+            .any(crate::presence::is_release_operator_tag)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -9878,6 +9906,7 @@ pub(crate) struct AutoCompleteHeadPick {
     pub(crate) role_skipped: Vec<(String, String)>,
     pub(crate) deferred_skipped: Vec<String>,
     pub(crate) guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)>,
+    pub(crate) release_skipped: Vec<String>,
 }
 
 /// The auto-complete engine always starts with a phase-1 implementer unless
@@ -9924,6 +9953,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
     let mut role_skipped = Vec::new();
     let mut deferred_skipped = Vec::new();
     let mut guided_or_operator_skipped = Vec::new();
+    let mut release_skipped = Vec::new();
     for candidate in candidates {
         if let Some(for_role) = candidate.for_role.as_deref() {
             let routed = canonical_role_name(for_role);
@@ -9934,6 +9964,10 @@ pub(crate) fn pick_auto_complete_head_for_role(
         }
         if candidate.deferred {
             deferred_skipped.push(candidate.id.clone());
+            continue;
+        }
+        if candidate.is_release_task() {
+            release_skipped.push(candidate.id.clone());
             continue;
         }
         // trace:BUG-1120 | ai:codex
@@ -9953,6 +9987,7 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 role_skipped,
                 deferred_skipped,
                 guided_or_operator_skipped,
+                release_skipped,
             });
         }
         status_skipped.push((candidate.id.clone(), candidate.status.clone()));
@@ -9988,6 +10023,7 @@ pub(crate) fn auto_complete_head_candidates_with_roles(
                     for_role: e.for_role.clone(),
                     deferred: r.deferred,
                     execution_mode: r.execution_mode,
+                    tags: r.tags.clone(),
                 })
         })
         .collect())
@@ -10017,6 +10053,7 @@ pub(crate) fn auto_complete_head_candidates(
                     )
                 )
             })
+            .filter(|candidate| !candidate.is_release_task())
             .filter(|candidate| {
                 candidate
                     .for_role
@@ -10052,6 +10089,11 @@ pub(crate) fn resolve_auto_complete_head(
             for id in &pick.deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
             }
+            for id in &pick.release_skipped {
+                eprintln!(
+                    "skipped {id} — release task requires operator-guided confirmation; headless auto-complete will not drive it"
+                );
+            }
             for (id, mode) in &pick.guided_or_operator_skipped {
                 eprintln!(
                     "skipped {id} — needs guided/operator session ({mode}); use `aida queue work {id} --guided`, `aida do {id}`, or de-risk it with `aida derisk {id}`"
@@ -10085,6 +10127,7 @@ pub(crate) fn resolve_auto_complete_head(
                         .unwrap_or(true)
                 })
                 .filter(|candidate| !candidate.deferred)
+                .filter(|candidate| !candidate.is_release_task())
                 .filter(|candidate| {
                     !matches!(
                         candidate.execution_mode,
@@ -10121,6 +10164,23 @@ pub(crate) fn resolve_auto_complete_head(
             }
             for id in &deferred_skipped {
                 eprintln!("skipped {id} — deferred — skipped");
+            }
+            let release_skipped: Vec<String> = candidates
+                .iter()
+                .filter(|candidate| {
+                    candidate
+                        .for_role
+                        .as_deref()
+                        .map(|r| canonical_role_name(r) == role_label)
+                        .unwrap_or(true)
+                })
+                .filter(|candidate| candidate.is_release_task())
+                .map(|candidate| candidate.id.clone())
+                .collect();
+            for id in &release_skipped {
+                eprintln!(
+                    "skipped {id} — release task requires operator-guided confirmation; headless auto-complete will not drive it"
+                );
             }
             let guided_or_operator_skipped: Vec<(String, aida_core::ExecutionMode)> = candidates
                 .iter()
@@ -10164,12 +10224,14 @@ pub(crate) fn resolve_auto_complete_head(
                 String::new()
             };
             if skipped.is_empty() {
-                let empty_reason =
-                    if deferred_skipped.is_empty() && guided_or_operator_skipped.is_empty() {
-                        format!("queue is empty for {role_label}")
-                    } else {
-                        format!("no drivable item in the queue for {role_label}")
-                    };
+                let empty_reason = if deferred_skipped.is_empty()
+                    && release_skipped.is_empty()
+                    && guided_or_operator_skipped.is_empty()
+                {
+                    format!("queue is empty for {role_label}")
+                } else {
+                    format!("no drivable item in the queue for {role_label}")
+                };
                 anyhow::bail!(
                     "{empty_reason}; nothing to drive{}",
                     auto_complete_sibling_role_hint(storage, user_id, &role_label)
