@@ -24,6 +24,13 @@ fn human_canonicalizes_to_lowercase() {
     assert_eq!(canonical_role_name("HUMAN"), "human");
 }
 
+#[test]
+fn stakeholder_roles_canonicalize_to_lowercase() {
+    assert_eq!(canonical_role_name("guest"), "guest");
+    assert_eq!(canonical_role_name("Guest"), "guest");
+    assert_eq!(canonical_role_name("REQUESTER"), "requester");
+}
+
 // TASK-747: a `--for human` routed spec counts toward the view only while
 // open; archived or terminal specs that once carried the route drop out.
 // trace:TASK-747 | ai:claude
@@ -112,6 +119,14 @@ fn starter_set_is_agent_wired_only() {
     assert!(
         !names.contains(&"triage"),
         "triage must be opt-in, not a default starter role"
+    );
+    assert!(
+        !names.contains(&"guest"),
+        "guest is a stakeholder identity, not a build-loop starter role"
+    );
+    assert!(
+        !names.contains(&"requester"),
+        "requester is a stakeholder identity, not a build-loop starter role"
     );
 }
 

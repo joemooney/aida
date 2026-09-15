@@ -625,6 +625,10 @@ pub(crate) fn queue_destination_details(
     }
 }
 
+pub(crate) fn role_is_stakeholder_only(role: &str) -> bool {
+    matches!(canonical_role_name(role).as_str(), "guest" | "requester")
+}
+
 // trace:STORY-1002 | ai:codex
 pub(crate) fn queue_mutation_destination_json(
     action: &str,
@@ -2681,6 +2685,16 @@ pub(crate) fn handle_queue_command(
             global,
             force,
         } => {
+            if r#for
+                .as_deref()
+                .map(role_is_stakeholder_only)
+                .unwrap_or(false)
+            {
+                anyhow::bail!(
+                    "`{}` is a least-privilege stakeholder role, not a build-loop queue target. Route intake to advisor instead.",
+                    r#for.as_deref().unwrap_or_default()
+                );
+            }
             // TASK-647 (ADR-3): queue-for-work is an advisor-authority act —
             // it commits a spec to the execution pipeline. A non-advisor,
             // non-TTY caller (headless agent, drain capture) is refused; they

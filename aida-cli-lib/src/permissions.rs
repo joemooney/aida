@@ -237,6 +237,13 @@ fn role_satisfies(have: &str, need: &str) -> bool {
 ///   gets **least-privilege** (`implementer`) regardless of any
 ///   `AIDA_SESSION_ROLE` — default-deny for gated ops.
 ///
+/// Guest/requester personas are explicit least-privilege roles, so they stay
+/// least-privilege even outside strict mode. This lets the same approve/queue/
+/// merge gates that protect build seats also refuse external stakeholder
+/// sessions instead of treating an unknown env role as an implementer-ish
+/// fallback.
+// trace:STORY-1110 | ai:codex
+///
 /// Returns the role plus its source (so the refusal message can name a durable
 /// team role). Pure over its inputs. trace:STORY-647 | ai:claude
 pub(crate) fn gated_effective_role(
@@ -244,6 +251,12 @@ pub(crate) fn gated_effective_role(
     env_role: Option<&str>,
     strict: bool,
 ) -> (String, RoleSource) {
+    if let Some(role) = env_role
+        .map(str::trim)
+        .filter(|role| role.eq_ignore_ascii_case("guest") || role.eq_ignore_ascii_case("requester"))
+    {
+        return (super::canonical_role_name(role), RoleSource::Env);
+    }
     if !strict {
         return team::resolve_effective_role(roster_role, env_role);
     }
@@ -438,6 +451,24 @@ mod tests {
         assert_eq!(src, RoleSource::Roster);
         let cfg = cfg_from("[team]\nstrict = true\n");
         assert!(permits(GatedOp::Integrate, &role, &cfg));
+    }
+
+    #[test]
+    fn guest_and_requester_stay_least_privilege_even_non_strict() {
+        for role in ["guest", "requester"] {
+            let (resolved, src) = gated_effective_role(None, Some(role), false);
+            assert_eq!(resolved, role);
+            assert_eq!(src, RoleSource::Env);
+            let cfg = TeamPermissions::default();
+            assert!(
+                !permits(GatedOp::StatusTransition, &resolved, &cfg),
+                "{role} must not pass advisor-gated status transitions"
+            );
+            assert!(
+                !permits(GatedOp::MergeGate, &resolved, &cfg),
+                "{role} must not pass merge gates"
+            );
+        }
     }
 
     #[test]

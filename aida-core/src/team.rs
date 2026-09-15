@@ -145,8 +145,8 @@ pub const ROLE_GUARDRAIL_CAVEAT: &str =
 /// machine-installed role files (`~/.aida/roles/`) add to this set; the CLI's
 /// `known_role_names()` layers those on. The server validates against this core
 /// set (it has no view of the caller's local roles dir). trace:STORY-650
-pub fn core_role_names() -> [&'static str; 3] {
-    ["advisor", "implementer", "human"]
+pub fn core_role_names() -> [&'static str; 5] {
+    ["advisor", "implementer", "human", "guest", "requester"]
 }
 
 /// Write `user_id = role` into `registry/team.toml` on the store with a
