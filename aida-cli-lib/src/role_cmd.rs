@@ -337,7 +337,7 @@ fn pick_role_interactively(
         None => "Select a role to enter:".to_string(),
     };
     // role-enter marks the *active* shell role; no spawn-default to highlight.
-    pick_role_with_header(project_root, &header, None)
+    pick_role_with_header(project_root, &header, None, None)
 }
 
 fn handle_role_add(

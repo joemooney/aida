@@ -18479,6 +18479,16 @@ struct RolePickerRow {
     /// Pre-humanized recency, e.g. "3h ago".
     recency: String,
     purpose: Option<String>,
+    /// Pre-humanized age for a live agent driver with this role, e.g. "1m ago".
+    live_driver_recency: Option<String>,
+    /// True for repo-wide single-instance seats such as advisor/product.
+    single_instance: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct RolePickerLaunchAnnotation {
+    live_driver_recency: Option<String>,
+    single_instance: bool,
 }
 
 /// TASK-713: terminal width for laying out the picker. Honors `$COLUMNS`
@@ -18551,6 +18561,7 @@ fn pick_role_with_header(
     project_root: &std::path::Path,
     header: &str,
     highlight: Option<&str>,
+    launch_annotations: Option<&std::collections::BTreeMap<String, RolePickerLaunchAnnotation>>,
 ) -> Result<Option<String>> {
     let roles = list_roles(project_root)?;
     if roles.is_empty() {
@@ -18580,12 +18591,15 @@ fn pick_role_with_header(
             } else {
                 " ".to_string()
             };
+            let annotation = launch_annotations.and_then(|a| a.get(&role.name));
             RolePickerRow {
                 marker,
                 name: role.name.clone(),
                 global: role.global,
                 recency: humanize_relative(role.last_active_at),
                 purpose: role.purpose.clone(),
+                live_driver_recency: annotation.and_then(|a| a.live_driver_recency.clone()),
+                single_instance: annotation.map(|a| a.single_instance).unwrap_or(false),
             }
         })
         .collect();
@@ -18623,6 +18637,11 @@ fn format_role_picker_option(row: &RolePickerRow, width: usize) -> String {
     let scope = if row.global { " [global]" } else { "" };
     let mut label = format!("{} {}{} · {}", row.marker, row.name, scope, row.recency);
 
+    if let Some(seat) = format_role_picker_launch_status(row) {
+        label.push_str(" · ");
+        label.push_str(&seat);
+    }
+
     if let Some(purpose) = row
         .purpose
         .as_deref()
@@ -18643,6 +18662,16 @@ fn format_role_picker_option(row: &RolePickerRow, width: usize) -> String {
         }
     }
     label
+}
+
+// trace:TASK-1236 | ai:codex
+fn format_role_picker_launch_status(row: &RolePickerRow) -> Option<String> {
+    match (row.live_driver_recency.as_deref(), row.single_instance) {
+        (Some(age), true) => Some(format!("{age} live driver (single-instance)")),
+        (Some(age), false) => Some(format!("{age} live driver")),
+        (None, true) => Some("free (single-instance)".to_string()),
+        (None, false) => None,
+    }
 }
 
 /// Escape an arbitrary string for safe interpolation inside a
@@ -22337,9 +22366,15 @@ fn resolve_child_role(
     }
     if std::io::stdin().is_terminal() {
         let header = format!("Select a role for the new {} agent:", agent_type);
+        let annotations = role_picker_launch_annotations(project_root, chrono::Utc::now());
         // `pick_role_with_header` returns Ok(None) on cancel → propagate as
         // the abort signal.
-        pick_role_with_header(project_root, &header, Some("implementer"))
+        pick_role_with_header(
+            project_root,
+            &header,
+            Some("implementer"),
+            Some(&annotations),
+        )
     } else {
         eprintln!(
             "{} no --role given, defaulting to {} (non-interactive launch)",
@@ -22469,6 +22504,58 @@ fn matching_ended_resume_views_from(
     });
     matches.truncate(limit);
     matches
+}
+
+// trace:TASK-1236 | ai:codex
+fn role_picker_launch_annotations(
+    project_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> std::collections::BTreeMap<String, RolePickerLaunchAnnotation> {
+    let cfg = agent_registry::Config::load(project_root);
+    let mut annotations: std::collections::BTreeMap<String, RolePickerLaunchAnnotation> =
+        AGENT_ROLES
+            .iter()
+            .map(|role| {
+                (
+                    (*role).to_string(),
+                    RolePickerLaunchAnnotation {
+                        single_instance: role_picker_role_is_single_instance(&cfg, role),
+                        live_driver_recency: None,
+                    },
+                )
+            })
+            .collect();
+
+    for agent in agent_launch_views(project_root)
+        .into_iter()
+        .filter(|agent| {
+            agent.ended_at.is_none() && agent.status != agent_registry::AgentStatus::Stale
+        })
+    {
+        let Some(role) = agent.role.as_deref().map(canonical_role_name) else {
+            continue;
+        };
+        let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
+            now,
+            agent.started_at,
+        ));
+        annotations
+            .entry(role)
+            .or_default()
+            .live_driver_recency
+            .get_or_insert(elapsed);
+    }
+
+    annotations
+}
+
+// The picker copy uses "single-instance" for repo-wide human-visible seats.
+// Scoped duplicate prevention for implementer/reviewer remains enforced later
+// by `same_scope_conflict`, but those roles are not labelled as taken seats.
+// trace:TASK-1236 | ai:codex
+fn role_picker_role_is_single_instance(cfg: &agent_registry::Config, role: &str) -> bool {
+    cfg.role_is_singleton(role)
+        && matches!(canonical_role_name(role).as_str(), "advisor" | "product")
 }
 
 fn agent_launch_should_prompt(headless: bool, stdin_tty: bool, stderr_tty: bool) -> bool {

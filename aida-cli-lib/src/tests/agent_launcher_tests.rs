@@ -1312,6 +1312,53 @@ fn agent_launch_spec_sorts_same_spec_before_same_role_rest() {
     assert_eq!(duplicate.id, same_spec.id);
 }
 
+// trace:TASK-1236 | ai:codex
+#[test]
+fn role_picker_launch_annotations_surface_live_single_instance_seats() {
+    let tmp = TempDir::new().unwrap();
+    let binary = agent_registry::AgentBinaryIdentity::new("1.0.0".into(), "abc123".into());
+    agent_registry::register_spawned_agent(
+        tmp.path(),
+        "codex",
+        std::process::id(),
+        Some("advisor".to_string()),
+        None,
+        tmp.path().to_path_buf(),
+        Some(&binary),
+        Some("codex-advisor-1".to_string()),
+        None,
+        None,
+        Some("repo advisor".to_string()),
+    )
+    .unwrap();
+    let annotations = role_picker_launch_annotations(tmp.path(), chrono::Utc::now());
+    let advisor = annotations.get("advisor").expect("advisor annotation");
+    assert!(advisor.single_instance);
+    assert!(advisor.live_driver_recency.is_some());
+
+    let tmp = TempDir::new().unwrap();
+    agent_registry::register_spawned_agent(
+        tmp.path(),
+        "codex",
+        std::process::id(),
+        Some("implementer".to_string()),
+        Some("TASK-1236".to_string()),
+        tmp.path().join("task-1236"),
+        Some(&binary),
+        Some("codex-implementer-1".to_string()),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let annotations = role_picker_launch_annotations(tmp.path(), chrono::Utc::now());
+    let implementer = annotations
+        .get("implementer")
+        .expect("implementer annotation");
+    assert!(!implementer.single_instance);
+    assert!(implementer.live_driver_recency.is_some());
+}
+
 // trace:STORY-991 | ai:codex
 #[test]
 fn agent_launch_prompt_gate_is_disabled_for_headless_or_non_tty() {
