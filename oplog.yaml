@@ -67902,5 +67902,35 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5342
+- id: 01a0a3ce-292b-7de0-8069-ababa4259027
+  target_id: 01a0a3ce-2320-7ae3-a67c-680d4b0a0fe3
+  author: aida
+  node_id: '1'
+  lamport: 5343
+  timestamp: 2026-09-15T06:43:12.299551920Z
+  kind: !Create
+    title: '/aida-derisk: climb a spec down the autonomy ladder (guided→drain) by locking its design forks into ADRs+acceptance and mandating the safety gates the drain''s CI/review enforce'
+    description: |-
+      Insight (operator, 2026-09-14): execution_mode=guided is being used as a PERMANENT label, but it should be a 'not-yet-de-risked' STATE. A well-specified spec whose design forks are decided and whose safety properties are testable IS drainable. There should be a skill that de-risks a guided spec into drain-eligibility rather than leaving it keyboard-only forever.
+
+      Two reasons a spec is fenced guided, and how a de-risk pass addresses each:
+      1. DECISION RISK (undecided design forks needing a human call). The skill runs the forks as an up-front AskUserQuestion decision dialog (the front-half of /aida-guided-implement), records each answer as an ADR AND folds it into the spec's acceptance criteria. Fully-decided ⇒ the remaining implementation is mechanical ⇒ flip guided→drain. (Strong case.)
+      2. TESTABLE BLAST-RADIUS RISK. The skill mandates the safety gates AS acceptance criteria the drain's CI + reviewer phases then enforce (round-trip/corruption tests, dry-run-and-diff, backup-before-write, atomic swap, project-local-first, never-touch-sensitive-paths). Floor raised enough to drain.
+
+      Hard limit — some risk classes stay keyboard even fully-specified: DESTRUCTIVE/irreversible actions (e.g. reaping a LIVE session's worktree — BUG-1156) and SELF-MODIFICATION of the drain-invocation layer (STORY-1130 drain start/stop). The skill must REFUSE to flip these to drain (or flip only to drive, not drain), and say why.
+
+      Shape: a `/aida-derisk <SPEC>` skill (advisor-driven) that (a) surfaces the spec's forks, (b) runs the decision dialog, (c) writes ADR(s) + rewrites acceptance to encode the decisions + the safety gates, (d) proposes the new execution_mode (drain if de-riskable, drive/guided if not, refusing for destructive/self-mod classes), (e) the advisor confirms the mode write. Reuses aida groom (disposition), /aida-guided-implement (dialog), aida lint (acceptance quality). This makes the fence a function of readiness, not a static tag — aligns with the calibration loop and the TASK-1228 autonomy ladder.
+
+      Concrete on the current backlog: this would flip STORY-1124, STORY-1128, TASK-1233 to drain-eligible (decide forks + lock test gates); BUG-1156 stays keyboard (destructive reap); STORY-1130 is borderline (de-risk but keep eyes on drain stop).
+
+      Acceptance:
+      - `/aida-derisk <SPEC>` runs the spec's design forks as a decision dialog, records answers as ADR(s), and rewrites the acceptance to encode both the decisions and the mandated safety gates.
+      - It proposes a new execution_mode: drain when the spec is fully-decided AND its safety properties are testable/CI-gated; else drive/guided with the reason.
+      - It REFUSES to propose drain for a destructive-action or drain-self-modification spec, naming the class.
+      - The advisor confirms the execution_mode write (never silent).
+      - No change to the drain engine or the pickup fence itself — this only moves specs across the existing guided/drive/drain boundary by making them ready.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5343
 node_id: '1'
