@@ -67796,5 +67796,29 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5334
+- id: 01a0a3c7-50da-7b53-8db0-86ced2f14c8b
+  target_id: 01a0a3c7-4afc-7ac2-8d7b-b96b6d67508e
+  author: aida
+  node_id: '1'
+  lamport: 5335
+  timestamp: 2026-09-15T06:35:43.706479783Z
+  kind: !Create
+    title: aida init registers the AIDA MCP server OPT-IN (--with-mcp); CLI+TOON is the default agent surface for CLI-capable agents (STORY-1129 fork B)
+    description: |-
+      CONTEXT: The 2026-06-29 agent-surface benchmark (committed, bench/agent-surface/results/report.md) found the AIDA MCP server costs ~2x the token-efficient CLI (AIDA_AGENT_OUTPUT/TOON) for identical tasks at equal-or-lower success. CLI-primary is already the doctrine and the default OUTPUT mode, but aida init still REGISTERS the MCP server by default in Claude's .mcp.json and Codex's [mcp_servers.aida], nudging CLI-capable agents to the 2x surface out of habit. STORY-1129 posed the fork.
+
+      DECISION (operator, 2026-09-14): Choose fork B. aida init no longer registers the AIDA MCP server by default for Claude/Codex; registration becomes opt-in via `aida init --with-mcp` (or equivalent). The scaffolded CLAUDE.md/AGENTS.md/skills also steer CLI-capable agents to CLI+TOON and name the ~2x MCP cost (fork A's guidance ships regardless — it is the subset, not the alternative).
+
+      RATIONALE: (1) Doctrine-consistent — the default surface should be the one we tell agents to use. (2) Token economics — every fresh project stops defaulting to the 2x surface. (3) Low risk NOW — there are no downstream users other than the operator, so flipping the default cannot regress anyone's first-run today; the change is also reversible (--with-mcp) and the doctrine can be revisited when real MCP-native users exist. (4) The MCP-native-client on-ramp is preserved as a documented one-command setup (docs/agents/aida-mcp-install-matrix.md), so Cursor/Windsurf/Continue/Cline/Copilot/Devin/Amp are unaffected.
+
+      EVIDENCE: bench/agent-surface/results/report.md (the 72-cell 2026-06-29 run).
+
+      CONSEQUENCES / CONSTRAINTS (bind STORY-1129):
+      - This dev repo's own checked-in .mcp.json (dogfooding, TASK-253) is UNAFFECTED — the flip changes what NEW aida init scaffolds, not this repo's existing registration. Verify a scaffold refresh here does not strip it.
+      - The MCP-native install path stays a documented one-liner; no MCP capability is removed, only the default registration.
+      - Revisit trigger: reconsider MCP-by-default (or a client-type-aware default) once there are real MCP-native downstream users, using their first-run experience as the signal.
+    req_type: Decision
+    status: Draft
+    priority: High
+clock: 5335
 node_id: '1'
