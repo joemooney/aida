@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:22:17.142170427Z
-modified_at: 2026-09-15T12:36:08.841131362Z
+modified_at: 2026-09-15T12:36:46.134100579Z
 req_type: Bug
 tags:
 - autoprogress derisk execution-mode keystone-tag aida:autoprogress
