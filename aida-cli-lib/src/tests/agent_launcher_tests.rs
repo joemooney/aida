@@ -578,7 +578,25 @@ fn tool_contained_flags_for_claude_include_strict_settings() {
         .contains(&serde_json::Value::String(
             "Bash(git push --force *)".into()
         )));
-    assert!(tool_contained_flags("codex").is_empty());
+}
+
+// trace:STORY-1124 | ai:codex
+#[test]
+fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {
+    let flags = tool_contained_flags("codex");
+    assert_eq!(
+        flags,
+        vec![
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never"
+        ]
+    );
+    assert!(!flags
+        .iter()
+        .any(|flag| flag == "--dangerously-bypass-approvals-and-sandbox"));
+    assert!(!flags.iter().any(|flag| flag == "--dangerously-bypass"));
 }
 
 /// STORY-495: the `[agents] bypass` knob is off when no agents.toml
@@ -804,6 +822,58 @@ fn apply_agent_default_flags_contained_injects_when_native() {
     assert_eq!(claude.default_args[0], "--permission-mode");
     assert_eq!(claude.default_args[1], "dontAsk");
     assert!(claude.default_args.contains(&"--settings".to_string()));
+
+    let mut codex = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+    };
+    apply_agent_default_flags(
+        &mut codex,
+        &project,
+        AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        codex.default_args,
+        vec![
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never"
+        ]
+    );
+    assert_eq!(
+        resolved_agent_permission_summary("codex", &codex.default_args),
+        "codex sandbox=workspace-write, ask-for-approval=never"
+    );
+    assert!(!codex
+        .default_args
+        .contains(&"--dangerously-bypass-approvals-and-sandbox".to_string()));
+    assert!(!codex
+        .default_args
+        .contains(&"--dangerously-bypass".to_string()));
+}
+
+// trace:STORY-1124 | ai:codex
+#[test]
+fn codex_bypass_flag_only_comes_from_bypass_posture() {
+    let contained = tool_contained_flags("codex");
+    assert!(!contained
+        .iter()
+        .any(|flag| flag == "--dangerously-bypass-approvals-and-sandbox"));
+    assert!(!contained.iter().any(|flag| flag == "--dangerously-bypass"));
+
+    let native = tool_bypass_flags("claude");
+    assert!(!native
+        .iter()
+        .any(|flag| flag == "--dangerously-bypass-approvals-and-sandbox"));
+    assert!(!native.iter().any(|flag| flag == "--dangerously-bypass"));
+
+    let bypass = tool_bypass_flags("codex");
+    assert_eq!(bypass, vec!["--dangerously-bypass-approvals-and-sandbox"]);
 }
 
 #[test]

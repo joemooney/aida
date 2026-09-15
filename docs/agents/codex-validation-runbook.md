@@ -420,8 +420,15 @@ aida agent new codex --spec <SPEC> --role implementer --bypass-sandbox
 `--bypass-sandbox` passes Codex's `--dangerously-bypass-approvals-and-sandbox` and is **not**
 the interactive default. Confirm the migrating team's expected posture: the default is a
 prompting/sandboxed Codex; the bypass is a single explicit opt-in, never a silently-baked
-default. Validate that a command your policy should block is actually blocked under the
-sandboxed (non-bypass) profile before trusting an unattended Codex drain.
+default. The middle tier is AIDA contained mode (`.aida/config.toml`
+`[contained] enable = true`), which launches Codex with exactly
+`--sandbox workspace-write --ask-for-approval never` and never with
+`--dangerously-bypass-approvals-and-sandbox`. Validate that a command your
+policy should block is actually blocked under the sandboxed (non-bypass)
+profile before trusting an unattended Codex drain. For standalone Codex use,
+the persistent equivalent in `~/.codex/config.toml` is
+`sandbox_mode = "workspace-write"`, `approval_policy = "never"`, and
+`[sandbox_workspace_write]` entries for network/writable roots.
 
 ### 9d — Capture gaps as follow-up specs, not loose notes
 

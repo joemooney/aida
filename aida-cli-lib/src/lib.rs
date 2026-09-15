@@ -22118,6 +22118,13 @@ fn tool_contained_flags(agent_type: &str) -> Vec<String> {
             flags.extend(session::claude_contained_flags());
             flags
         }
+        // trace:STORY-1124 | ai:codex
+        "codex" => vec![
+            "--sandbox".to_string(),
+            "workspace-write".to_string(),
+            "--ask-for-approval".to_string(),
+            "never".to_string(),
+        ],
         _ => Vec::new(),
     }
 }
