@@ -64310,30 +64310,32 @@ fn handle_identity_show(store_path: &std::path::Path, id: &str, json: bool) -> R
 }
 
 // STORY-673: compose the terse one-line requirement breakdown for default
-// `aida status`. Leads with OPEN work (what's actionable — every status that
-// isn't a terminal Completed/Rejected), then the closed tallies, then a pointer
-// to the per-status detail. Pure (no I/O) so the copy is unit-testable.
-// trace:STORY-673 | ai:claude
+// `aida status`. Leads with OPEN work (the same lifecycle statuses as `aida
+// list open`), then the closed tallies, then a pointer to the per-status
+// detail. Pure (no I/O) so the copy is unit-testable.
+// trace:STORY-673 trace:BUG-1155 | ai:claude+codex
 fn requirement_breakdown_summary_line(
     by_status: &std::collections::BTreeMap<String, usize>,
 ) -> String {
-    let is_terminal = |s: &str| {
-        let s = s.to_ascii_lowercase();
-        s == "completed" || s == "rejected"
+    let is_open_status = |s: &str| {
+        let Some(status) = aida_core::RequirementStatus::from_filter_str(s) else {
+            return false;
+        };
+        aida_core::RequirementStatus::open_statuses().contains(&status)
     };
     let completed = by_status.get("Completed").copied().unwrap_or(0);
     let rejected = by_status.get("Rejected").copied().unwrap_or(0);
 
-    // Open = everything that isn't a terminal state, with a compact per-status
-    // tail in deterministic (BTreeMap) order.
+    // Open = the positive `aida list open` lifecycle set, with a compact
+    // per-status tail in deterministic (BTreeMap) order.
     let open_total: usize = by_status
         .iter()
-        .filter(|(s, _)| !is_terminal(s))
+        .filter(|(s, _)| is_open_status(s))
         .map(|(_, n)| *n)
         .sum();
     let open_parts: Vec<String> = by_status
         .iter()
-        .filter(|(s, _)| !is_terminal(s))
+        .filter(|(s, _)| is_open_status(s))
         .map(|(s, n)| format!("{n} {}", s.to_ascii_lowercase()))
         .collect();
 
@@ -64509,12 +64511,14 @@ fn fast_status_counts<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) ->
     c
 }
 
-/// Read `(status, req_type)` for every non-archived row straight from the cache
-/// DB (read-only sqlite), then count via [`fast_status_counts`]. This is the
-/// same read-only cache `read_draft_inbox_depth` uses — NO `backend.load()`, no
-/// git spawn. Returns zeroed counts when the cache is absent/unreadable (a fresh
-/// `aida init` with no reads yet).
-// trace:STORY-707 | ai:claude
+/// Read `(status, req_type)` for every active row straight from the cache DB
+/// (read-only sqlite), then count via [`fast_status_counts`]. Active here means
+/// non-archived AND non-deferred, matching the default `aida list open` lens
+/// rather than counting the parked deferred shelf as headline open work. This is
+/// the same read-only cache `read_draft_inbox_depth` uses — NO `backend.load()`,
+/// no git spawn. Returns zeroed counts when the cache is absent/unreadable (a
+/// fresh `aida init` with no reads yet).
+// trace:STORY-707 trace:BUG-1155 | ai:claude+codex
 fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCounts {
     if !cache_path.exists() {
         return FastStatusCounts::default();
@@ -64526,11 +64530,15 @@ fn fast_status_counts_from_cache(cache_path: &std::path::Path) -> FastStatusCoun
         Ok(c) => c,
         Err(_) => return FastStatusCounts::default(),
     };
-    let mut stmt =
-        match conn.prepare("SELECT status, req_type FROM requirements_cache WHERE archived = 0") {
-            Ok(s) => s,
-            Err(_) => return FastStatusCounts::default(),
-        };
+    let mut stmt = match conn.prepare(
+        "SELECT status, req_type FROM requirements_cache
+             WHERE archived = 0
+               AND deferred = 0
+               AND tags_json NOT LIKE '%\"deferred:%'",
+    ) {
+        Ok(s) => s,
+        Err(_) => return FastStatusCounts::default(),
+    };
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     });

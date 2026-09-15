@@ -49,15 +49,20 @@ fn fast_status_counts_from_cache_reads_only_the_cache() {
                  id TEXT PRIMARY KEY NOT NULL,
                  status TEXT NOT NULL,
                  req_type TEXT NOT NULL,
-                 archived INTEGER NOT NULL DEFAULT 0
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 deferred INTEGER NOT NULL DEFAULT 0,
+                 tags_json TEXT NOT NULL DEFAULT '[]'
              );
-             INSERT INTO requirements_cache VALUES ('a','Draft','Story',0);
-             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0);
-             INSERT INTO requirements_cache VALUES ('c','Completed','Bug',0);
+             INSERT INTO requirements_cache VALUES ('a','Draft','Story',0,0,'[]');
+             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0,0,'[]');
+             INSERT INTO requirements_cache VALUES ('c','Completed','Bug',0,0,'[]');
              -- archived rows are excluded by the WHERE archived = 0 filter
-             INSERT INTO requirements_cache VALUES ('d','Draft','Story',1);
+             INSERT INTO requirements_cache VALUES ('d','Draft','Story',1,0,'[]');
              -- META is excluded by the pure counter
-             INSERT INTO requirements_cache VALUES ('e','Draft','Meta',0);",
+             INSERT INTO requirements_cache VALUES ('e','Draft','Meta',0,0,'[]');
+             -- deferred rows are excluded so status open matches list open
+             INSERT INTO requirements_cache VALUES ('f','Approved','Task',0,1,'[]');
+             INSERT INTO requirements_cache VALUES ('g','Planned','Task',0,0,'[\"deferred:later\"]');",
     )
     .unwrap();
     drop(conn);
@@ -95,10 +100,12 @@ fn collect_fast_status_snapshot_works_without_a_loadable_store() {
                  id TEXT PRIMARY KEY NOT NULL,
                  status TEXT NOT NULL,
                  req_type TEXT NOT NULL,
-                 archived INTEGER NOT NULL DEFAULT 0
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 deferred INTEGER NOT NULL DEFAULT 0,
+                 tags_json TEXT NOT NULL DEFAULT '[]'
              );
-             INSERT INTO requirements_cache VALUES ('a','Approved','Story',0);
-             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0);",
+             INSERT INTO requirements_cache VALUES ('a','Approved','Story',0,0,'[]');
+             INSERT INTO requirements_cache VALUES ('b','InProgress','Task',0,0,'[]');",
     )
     .unwrap();
     drop(conn);
@@ -110,4 +117,28 @@ fn collect_fast_status_snapshot_works_without_a_loadable_store() {
     assert_eq!(snap.counts.total, 2);
     assert_eq!(snap.counts.open, 2);
     assert_eq!(snap.counts.in_progress, 1);
+}
+
+#[test]
+fn requirement_summary_line_uses_list_open_statuses() {
+    let by_status = std::collections::BTreeMap::from([
+        ("Approved".to_string(), 2),
+        ("Done".to_string(), 3),
+        ("Superseded".to_string(), 5),
+        ("Completed".to_string(), 7),
+        ("Rejected".to_string(), 11),
+    ]);
+
+    let line = requirement_breakdown_summary_line(&by_status);
+
+    assert!(
+        line.starts_with("2 open (2 approved)"),
+        "summary must headline only the `aida list open` lifecycle statuses: {line}"
+    );
+    assert!(
+        !line.contains("done") && !line.contains("superseded"),
+        "closed-but-not-completed states must not be counted as open: {line}"
+    );
+    assert!(line.contains("7 completed"));
+    assert!(line.contains("11 rejected"));
 }
