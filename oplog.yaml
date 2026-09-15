@@ -68865,5 +68865,31 @@ operations:
   timestamp: 2026-09-15T13:16:05.247041580Z
   kind: !SetStatus
     status: Completed
-clock: 5399
+- id: 01a0a541-1a5c-7ec2-8977-0fd707161a8b
+  target_id: 01a0a541-164c-7be2-ac20-eba2d41f07ef
+  author: aida
+  node_id: '1'
+  lamport: 5400
+  timestamp: 2026-09-15T13:28:22.364928046Z
+  kind: !Create
+    title: 'Review PR-1844: [AI:codex] feat(scaffold): make MCP registration opt-in (STORY-1129)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a536`) for branch `story-1129`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1844>
+      - Branch: `story-1129` → `main`
+
+      ## Covers
+
+      - STORY-1129
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1844` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5400
 node_id: '1'
