@@ -151,9 +151,15 @@ fn ready_specs(root: &Path, max: usize) -> Result<Vec<String>> {
     ))
 }
 
-/// PURE: from `aida list --format json`, keep only IMPLEMENTABLE types (a
+/// PURE: from `aida list --format json`, keep only the READY SET and bound to
+/// `max`. A spec is ready when it is (1) an IMPLEMENTABLE type (a
 /// decision/epic/folder/meta/principle/vision/constraint/term/doc is never
-/// drained) and bound to `max`. Unit-tested directly.
+/// drained), (2) NOT fenced to a supervised execution_mode
+/// (drive/guided/operator/decide — those fence the *implementation*, not just
+/// the merge, so an unattended pass must never headless-drive them; unset/drain
+/// stay drainable), and (3) NOT keystone-tagged (defense-in-depth). Unit-tested
+/// directly.
+// trace:TASK-1231 | ai:claude
 pub(crate) fn select_ready_from_json(json: &str, max: usize) -> Vec<String> {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(json) else {
         return Vec::new();
@@ -192,11 +198,27 @@ pub(crate) fn select_ready_from_json(json: &str, max: usize) -> Vec<String> {
                         .collect()
                 })
                 .unwrap_or_default();
-            // Fence: a drainable type AND never a keystone. Keystones (an epic,
-            // or a keystone/architecture/security/supervised-marker tag) must
-            // never be headless-driven by an unattended pass — the BUG-1120
-            // class. Reuses the canonical presence::is_keystone_class detector.
+            // The groomed execution mode. The 4 SUPERVISED modes fence the
+            // implementation itself (drive = advisor drives; guided = decision
+            // dialog; operator/decide = operator's call) — an unattended pass
+            // must never headless-drive them. This is the LOAD-BEARING fence:
+            // it is what actually marks TASK-1230/TASK-1231 et al., and unlike
+            // the merge gate's `merge_requires_supervision` (which also holds
+            // for None), SELECTION keeps None + Drain so ungroomed/groomed
+            // drainable work still flows. trace:TASK-1231 | ai:claude
+            let mode = it
+                .get("execution_mode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase();
+            let mode_holds_for_supervision =
+                matches!(mode.as_str(), "drive" | "guided" | "operator" | "decide");
+            // Fence: a drainable type AND not a supervised mode AND never a
+            // keystone. The keystone-tag net (BUG-1120 class) stays as
+            // defense-in-depth behind the execution_mode fence.
             if is_drainable_type(ty)
+                && !mode_holds_for_supervision
                 && !crate::presence::is_keystone_class(ty, tags.iter().map(|s| s.as_str()))
             {
                 Some(id.to_string())

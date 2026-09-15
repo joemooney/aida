@@ -78,6 +78,31 @@ fn fences_keystone_tagged_work_specs() {
 }
 
 #[test]
+fn fences_supervised_execution_mode_even_without_a_keystone_tag() {
+    // The load-bearing fence: a spec fenced to a SUPERVISED execution_mode
+    // (drive/guided/operator/decide) must never be selected by an unattended
+    // pass — even when it carries NO keystone tag. This is the exact shape the
+    // tag-only fence missed: TASK-1230 (drive, tags=["batch:morning"]) and
+    // TASK-1231 (drive, tags=["autonomy cron ..."]) both slipped through.
+    // Unset + drain stay drainable. trace:TASK-1231 | ai:claude
+    let json = serde_json::json!([
+        { "spec_id": "TASK-DRIVE", "req_type": "Task", "tags": ["batch:morning"], "execution_mode": "drive" },
+        { "spec_id": "TASK-GUIDED", "req_type": "Task", "tags": [], "execution_mode": "guided" },
+        { "spec_id": "TASK-OPERATOR", "req_type": "Task", "tags": [], "execution_mode": "operator" },
+        { "spec_id": "TASK-DECIDE", "req_type": "Task", "tags": [], "execution_mode": "decide" },
+        { "spec_id": "TASK-DRAIN", "req_type": "Task", "tags": [], "execution_mode": "drain" },
+        { "spec_id": "TASK-UNSET", "req_type": "Task", "tags": [] }, // no mode = unset
+    ])
+    .to_string();
+    // Only the explicit `drain` and the unset (drainable-by-default) survive;
+    // all four supervised modes are fenced.
+    assert_eq!(
+        select_ready_from_json(&json, 10),
+        vec!["TASK-DRAIN".to_string(), "TASK-UNSET".to_string()]
+    );
+}
+
+#[test]
 fn empty_or_malformed_json_is_empty_not_a_panic() {
     assert!(select_ready_from_json("", 5).is_empty());
     assert!(select_ready_from_json("not json", 5).is_empty());
