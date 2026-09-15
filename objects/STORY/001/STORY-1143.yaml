@@ -1,0 +1,26 @@
+id: 01a0a4ed-e267-7381-9e30-2da7afe21909
+spec_id: STORY-1143
+agreed_id: STORY-1143
+title: 'Review PR-1840: [AI:codex] fix(status): align fast open count with list lens (BUG-1155)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a4dd`) for branch `bug-1155`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1840>
+  - Branch: `bug-1155` → `main`
+
+  ## Covers
+
+  - BUG-1155
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1840` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T11:57:28.551151719Z
+modified_at: 2026-09-15T11:57:28.551151719Z
+req_type: Story
