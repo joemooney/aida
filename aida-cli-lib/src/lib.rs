@@ -2334,6 +2334,8 @@ fn run() -> Result<()> {
         cli.server = std::env::var("AIDA_SERVER").ok();
     }
 
+    enforce_stakeholder_role_capabilities(&mut cli.command)?;
+
     // TASK-756: operator-presence TTY auto-flip. Any interactive aida
     // command (stdout+stdin are a TTY) means the operator is demonstrably
     // back — flip a stored `away` to `home`. Cheap (only writes when a flip
@@ -11630,6 +11632,155 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
     }
 }
 
+fn active_stakeholder_role() -> Option<String> {
+    std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .map(|role| canonical_role_name(role.trim()))
+        .filter(|role| role == "guest" || role == "requester")
+}
+
+fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
+    anyhow::anyhow!(
+        "AIDA_SESSION_ROLE={role} is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
+    )
+}
+
+fn parse_requester_add_type(raw: Option<&str>) -> Result<RequirementType> {
+    Ok(raw
+        .map(parse_requirement_type)
+        .transpose()?
+        .unwrap_or(RequirementType::ChangeRequest))
+}
+
+fn requester_add_type_allowed(req_type: &RequirementType) -> bool {
+    matches!(
+        req_type,
+        RequirementType::ChangeRequest | RequirementType::Bug | RequirementType::User
+    )
+}
+
+fn add_csv_tag(existing: &mut Option<String>, tag: &str) {
+    let mut tags: Vec<String> = existing
+        .as_deref()
+        .unwrap_or("")
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect();
+    if !tags.iter().any(|t| t.eq_ignore_ascii_case(tag)) {
+        tags.push(tag.to_string());
+    }
+    *existing = Some(tags.join(","));
+}
+
+/// STORY-1110: hard CLI role envelope for external stakeholder personas.
+/// `guest` is read-only. `requester` inherits read access plus one constrained
+/// intake write: `aida add` for change-request/bug/user, always Draft and tagged
+/// for advisor grooming. Everything else falls into the existing command/gate
+/// machinery as a refusal, so these roles cannot become build-loop seats by
+/// convention drift.
+fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
+    let Some(role) = active_stakeholder_role() else {
+        return Ok(());
+    };
+    match role.as_str() {
+        "guest" => {
+            if command_triggers_per_write_auto_push(command)
+                || stakeholder_command_is_build_loop(command)
+            {
+                return Err(stakeholder_refusal(
+                    "guest",
+                    stakeholder_action_label(command),
+                ));
+            }
+        }
+        "requester" => {
+            if let Command::Add {
+                status,
+                r#type,
+                tags,
+                queue,
+                batch,
+                r#for,
+                interactive,
+                ..
+            } = command
+            {
+                if *interactive {
+                    return Err(stakeholder_refusal("requester", "interactive add"));
+                }
+                if *queue || batch.is_some() || r#for.is_some() {
+                    return Err(stakeholder_refusal("requester", "queueing intake"));
+                }
+                let req_type = parse_requester_add_type(r#type.as_deref())?;
+                if !requester_add_type_allowed(&req_type) {
+                    return Err(stakeholder_refusal(
+                        "requester",
+                        "adding anything except change-request, bug, or user specs",
+                    ));
+                }
+                *status = Some("draft".to_string());
+                if r#type.is_none() {
+                    *r#type = Some("change-request".to_string());
+                }
+                add_csv_tag(tags, "intake:requester");
+                return Ok(());
+            }
+            if command_triggers_per_write_auto_push(command)
+                || stakeholder_command_is_build_loop(command)
+            {
+                return Err(stakeholder_refusal(
+                    "requester",
+                    stakeholder_action_label(command),
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn stakeholder_command_is_build_loop(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::Queue(QueueCommand::Add { .. })
+            | Command::Queue(QueueCommand::Work { .. })
+            | Command::Queue(QueueCommand::Done { .. })
+            | Command::Queue(QueueCommand::Advance { .. })
+            | Command::Queue(QueueCommand::Rework { .. })
+            | Command::Queue(QueueCommand::Integrate { .. })
+            | Command::Zen { .. }
+            | Command::Do { .. }
+            | Command::Ship { .. }
+            | Command::Integrate { .. }
+            | Command::Pr(_)
+            | Command::Db(DbCommand::MergeGate)
+    )
+}
+
+fn stakeholder_action_label(command: &Command) -> &'static str {
+    match command {
+        Command::Add { .. } => "adding requirements",
+        Command::Edit { .. } => "editing requirements",
+        Command::Queue(_) => "queue operations",
+        Command::Db(DbCommand::MergeGate) => "merge-gate writes",
+        Command::Db(_) => "database writes",
+        Command::Rel(_) => "relationship writes",
+        Command::Comment(_) => "comment writes",
+        Command::Type(_) => "type writes",
+        Command::Trace(_) => "trace writes",
+        Command::Findings { .. } => "finding writes",
+        Command::Questions { .. } => "question writes",
+        Command::Config(_) => "configuration writes",
+        Command::Zen { .. }
+        | Command::Do { .. }
+        | Command::Ship { .. }
+        | Command::Integrate { .. } => "build-loop execution",
+        _ => "writes",
+    }
+}
+
 /// String form of [`is_terminal_status`] — used by `aida list` / `aida
 /// history` to hide the archive by default (TASK-64). Case-insensitive;
 /// tolerates display vs storage casing. Companion to the enum version
@@ -18516,6 +18667,11 @@ pub(crate) fn canonical_role_name(raw: &str) -> String {
         // any casing to the lowercase canonical form so `--for Human` /
         // `--for HUMAN` route identically and surface together in the view.
         HUMAN_ROUTE.to_string()
+    } else if raw.eq_ignore_ascii_case("guest") || raw.eq_ignore_ascii_case("requester") {
+        // Stakeholder roles are identities, not build-loop seats. Canonicalize
+        // casing so the least-privilege gate applies uniformly from env, team
+        // roster, and queue target validation. trace:STORY-1110 | ai:codex
+        raw.to_ascii_lowercase()
     } else {
         raw.to_string()
     }

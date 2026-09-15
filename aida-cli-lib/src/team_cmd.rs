@@ -180,10 +180,11 @@ pub(crate) fn handle_team_command(store_path: &std::path::Path, json: bool) -> R
 /// admits the core roles.
 // trace:STORY-646 | ai:claude
 fn known_role_names() -> std::collections::BTreeSet<String> {
-    let mut names: std::collections::BTreeSet<String> = ["advisor", "implementer", HUMAN_ROUTE]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let mut names: std::collections::BTreeSet<String> =
+        ["advisor", "implementer", HUMAN_ROUTE, "guest", "requester"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
     if let Ok(root) = find_project_root() {
         if let Ok(roles) = list_roles(&root) {
             for r in roles {
