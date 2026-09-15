@@ -23,12 +23,12 @@ description: |-
   Acceptance:
   - After a claude/codex session launched via `aida agent new` (and via `aida role enter` + session) exits, its registry entry is classified NOT live and is reapable by `aida session reap` / doctor without a manual file delete, even though the launching shell is still alive.
   - No regression to multi-session PID-keyed registry IDs (STORY-432) or the interactive foreground launch.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:15:09.613688539Z
-modified_at: 2026-09-15T13:01:40.986562232Z
+modified_at: 2026-09-15T13:16:05.171081890Z
 req_type: Bug
 tags:
 - liveness session-reap role-enter papercut story:994
@@ -44,8 +44,24 @@ comments:
   created_at: 2026-09-15T12:52:25.723070484Z
   modified_at: 2026-09-15T12:52:25.723070484Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a535-daac-7c43-8f38-6759e8b829ff
+  author: aida-auto-bump
+  timestamp: 2026-09-15T13:16:05.164615492Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a535-dab3-7d40-9be7-75605a9fdb7e
+  timestamp: 2026-09-15T13:16:05.171080945Z
+  agent: aida
+  commit_sha: e2ffb15d4f078fb0861d1ebaf7d465a4e8ef92dd
+  summary: Completed via merge e2ffb15d
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T13:01:40.986562232Z
   implemented_by: joe
+  completed_at: 2026-09-15T13:16:05.164414564Z
+  completion_sha: e2ffb15d4f078fb0861d1ebaf7d465a4e8ef92dd
