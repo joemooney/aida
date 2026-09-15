@@ -4211,6 +4211,38 @@ fn test_ultraplan_copy_flag() {
     assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--json"]).is_err());
 }
 
+#[test]
+fn test_derisk_command_parses_spec() {
+    use crate::cli::{Cli, Command};
+    use clap::Parser;
+
+    let cli = Cli::try_parse_from(["aida", "derisk", "TASK-1235"]).unwrap();
+    match cli.command {
+        Command::Derisk { spec } => assert_eq!(spec, "TASK-1235"),
+        other => panic!("expected Derisk command, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_derisk_help_keeps_internal_tokens_out() {
+    use crate::cli::Cli;
+    use clap::CommandFactory;
+
+    let mut cli = Cli::command();
+    let derisk = cli
+        .get_subcommands_mut()
+        .find(|c| c.get_name() == "derisk")
+        .expect("derisk subcommand exists");
+    let help = derisk.render_long_help().to_string();
+
+    for internal in ["/aida-derisk", "execution_mode", "SPEC-ID", "<SPEC>"] {
+        assert!(
+            !help.contains(internal),
+            "derisk help must not expose internal token `{internal}`:\n{help}"
+        );
+    }
+}
+
 /// TASK-516: the `aida queue work` warn-decision fires exactly when the
 /// spec carries `plan-review:pending`, and stays silent otherwise.
 /// Fully isolated — feeds tag sets straight into the pure decision

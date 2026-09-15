@@ -3258,6 +3258,13 @@ fn run() -> Result<()> {
         return manual::run(command, &project_root);
     }
 
+    // `aida derisk` is a thin advisor-session launcher; it uses the shared
+    // agent-new machinery and does not need the shared storage handle.
+    // trace:TASK-1235 | ai:codex
+    if let Command::Derisk { spec } = &cli.command {
+        return handle_derisk_command(spec);
+    }
+
     // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
     // trace:TASK-113 | ai:claude
     if let Command::Ultraplan {
@@ -4380,6 +4387,7 @@ fn run() -> Result<()> {
         }
         Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
         Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
+        Command::Derisk { .. } => unreachable!("derisk is dispatched before storage init"),
         Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
         Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
         Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
@@ -71510,6 +71518,94 @@ fn guided_review_launch_request(spec: &str) -> GuidedReviewLaunchRequest {
         prompt: guided_review_prompt(spec),
         name: Some(format!("guided-review-{}", slugify(spec))),
         description: Some(format!("guided review for {spec}")),
+    }
+}
+
+fn derisk_prompt(spec: &str) -> String {
+    format!(
+        "Read your AIDA launch context first:\n\
+         cat \"$AIDA_AGENT_CONTEXT_FILE\"\n\
+         /aida-derisk {spec}\n\n\
+         You are the de-risk advisor for {spec}. Follow the /aida-derisk skill: \
+         read the spec and graph, classify decision/blast-radius risk, surface \
+         load-bearing forks to the operator, record decisions as ADRs, fold \
+         decisions and testable safety gates into acceptance, lint the result, \
+         and only write a new execution_mode after explicit operator confirmation. \
+         Do not implement the spec."
+    )
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DeriskLaunchRequest {
+    role: Option<String>,
+    spec: Option<String>,
+    prompt: String,
+    name: Option<String>,
+    description: Option<String>,
+}
+
+// trace:TASK-1235 | ai:codex
+fn derisk_launch_request(spec: &str) -> DeriskLaunchRequest {
+    DeriskLaunchRequest {
+        role: Some("advisor".to_string()),
+        // De-risking is an advisor disposition session, not an implementation
+        // claim. Keep the target in the prompt/name so the launcher does not
+        // acquire an implementer-style spec worktree or mutate status.
+        spec: None,
+        prompt: derisk_prompt(spec),
+        name: Some(format!("derisk-{}", slugify(spec))),
+        description: Some(format!("de-risk {spec}")),
+    }
+}
+
+/// `aida derisk <SPEC>` — vendor-aware launcher for the `/aida-derisk` skill.
+/// The Rust command is deliberately thin: it starts an advisor session seeded
+/// with the skill prompt and leaves all mode decisions inside the skill's
+/// explicit-confirmation workflow.
+// trace:TASK-1235 | ai:codex
+fn handle_derisk_command(spec: &str) -> Result<()> {
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        anyhow::bail!("aida derisk needs an interactive terminal");
+    }
+    let vendor = session::resolve_session_vendor();
+    let launch = derisk_launch_request(spec);
+    match vendor {
+        session::HeadlessVendor::Claude => agent_new_claude(
+            launch.role,
+            launch.spec,
+            false,
+            None,
+            None,
+            false,
+            AgentContextOptions::new(true, false),
+            true,
+            false,
+            AgentPromptOptions::new(Some(launch.prompt), false),
+            AgentResumeOptions::new(false, None, true, false),
+            AgentDefaultFlagOptions::new(true, Vec::new(), None),
+            launch.name,
+            launch.description,
+            false,
+        ),
+        session::HeadlessVendor::Codex => agent_new_codex(
+            launch.role,
+            launch.spec,
+            false,
+            None,
+            false,
+            AgentContextOptions::new(true, false),
+            true,
+            false,
+            AgentPromptOptions::new(Some(launch.prompt), false),
+            AgentResumeOptions::new(false, None, true, false),
+            AgentDefaultFlagOptions::new(true, Vec::new(), None),
+            launch.name,
+            launch.description,
+        ),
+        session::HeadlessVendor::Agy => anyhow::bail!(
+            "aida derisk does not run on agy; set the session vendor to claude or codex \
+             (AIDA_HEADLESS_VENDOR=claude|codex, or `[agents] vendor` in agents.toml)."
+        ),
     }
 }
 

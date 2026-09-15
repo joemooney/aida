@@ -179,6 +179,58 @@ fn guided_review_real_launch_plan_leaves_done_spec_and_leases_untouched() {
 }
 
 #[test]
+fn derisk_launch_carries_spec_only_in_prompt_metadata() {
+    let launch = derisk_launch_request("TASK-1235");
+
+    assert_eq!(launch.role.as_deref(), Some("advisor"));
+    assert!(
+        launch.spec.is_none(),
+        "derisk advisor shell must not request spec-scoped session_start semantics"
+    );
+    assert_eq!(launch.name.as_deref(), Some("derisk-task-1235"));
+    assert_eq!(launch.description.as_deref(), Some("de-risk TASK-1235"));
+    assert!(launch.prompt.contains("/aida-derisk TASK-1235"));
+    assert!(launch.prompt.contains("Do not implement the spec"));
+}
+
+#[test]
+fn derisk_real_launch_plan_leaves_target_spec_and_leases_untouched() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+    let storage = Storage::new(root.join(".aida-store"));
+    let mut req = Requirement::new("derisk fixture".into(), String::new());
+    req.spec_id = Some("TASK-1235".into());
+    req.status = RequirementStatus::Approved;
+    let mut store = aida_core::models::RequirementsStore::new();
+    store.requirements = vec![req];
+    storage.save(&store).unwrap();
+
+    let launch = derisk_launch_request("TASK-1235");
+    let plan = prepare_agent_launch(root, launch.role, launch.spec, "codex", launch.name).unwrap();
+
+    assert_eq!(plan.role.as_deref(), Some("advisor"));
+    assert!(
+        plan.current_spec.is_none(),
+        "derisk advisor shell should not own the target spec"
+    );
+    assert_eq!(plan.launch_cwd, root);
+    assert!(plan.lease_id.is_none());
+    assert!(
+        list_leases(root).is_empty(),
+        "derisk launch planning must not write a spec lease"
+    );
+    let after = storage.load().unwrap();
+    let status = after
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some("TASK-1235"))
+        .map(|r| r.status.clone());
+    assert_eq!(status, Some(RequirementStatus::Approved));
+}
+
+#[test]
 fn parses_agent_new_codex_flags() {
     let cli = Cli::try_parse_from([
         "aida",
