@@ -67772,5 +67772,29 @@ operations:
     req_type: Story
     status: Approved
     priority: High
-clock: 5333
+- id: 01a0a3c4-95b6-7f62-8f1e-0466e5eddeaf
+  target_id: 01a0a3c4-87ac-7c71-ae25-d67352d57bd6
+  author: aida
+  node_id: '1'
+  lamport: 5334
+  timestamp: 2026-09-15T06:32:44.726427864Z
+  kind: !Create
+    title: 'aida drain start + stop: complete the drain-noun lifecycle as a thin front-door over the existing engine'
+    description: |-
+      `aida drain` exists as a noun but only carries `status` (inspect the active drain). You cannot start or stop a drain through the same noun — you start it via the unmemorable `aida queue work --auto-complete --no-human=both` (or burndown run / do / autoprogress), and you stop it by Ctrl-C or killing the pid. Two concrete gaps: (1) discoverability — the real front door is a flag combo nobody remembers; (2) no graceful stop verb at all.
+
+      Proposal — complete the lifecycle as a THIN front-door (do NOT fork the drain engine):
+      - `aida drain start [selector] [--no-human[=both]] [--once] [--batch NAME] [--max-failures N] ...` — dispatches to the canonical engine (queue work --auto-complete / burndown run) with sane defaults (advisor-blessed ready set, or --batch, or --once for a single ready spec). Owns ONLY: project-resolution (reuse autoprogress::resolve_project — cd/wrong-store-proof), the single-drain lock (BUG-538: refuse if one is live; reuse drain_lock::probe_lock), and role. Prints the human contract before launching, like `aida do`.
+      - `aida drain stop [--now]` — graceful stop of the live drain: signal the orchestrator so the in-flight phase lands and no new spec is picked up (default), or --now to hard-stop; release the lock. Fills the 'no graceful stop' hole.
+      - `aida drain status` — already exists; unchanged.
+
+      Consolidation opportunity (design note, not mandated): `autoprogress` (TASK-1231) is essentially `aida drain start --once` with auto-pick + durable project/lock/role handling — it likely folds in as a mode/alias so the scheduled-loop heartbeat (presence-not-the-clock) calls `aida drain start --once` instead of raw queue work. Keep autoprogress working; alias rather than break.
+
+      Fork resolved by advisor recommendation (pending operator): thin wrapper routing to the existing engine, NOT a new drain implementation.
+
+      Acceptance: `aida drain start` launches the canonical auto-complete drain with the documented selectors/defaults, refuses cleanly when a drain is already live (BUG-538 lock), resolves the project correctly from any cwd, and sets the drain role; `aida drain stop` gracefully stops a live drain (in-flight phase lands, no new pickup) and releases the lock, with --now for hard-stop; `aida drain status` is unchanged; no second drain engine is introduced (start/stop delegate to the existing one); autoprogress continues to work (folded in or aliased, not broken).
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5334
 node_id: '1'
