@@ -22,12 +22,12 @@ description: |-
   - BACKUP GATE: the vendor file is always backed up before editing; a test asserts the .bak is written.
   - doctor --category permission-posture heal calls this to apply contained for a flagged full-access state.
   - set bypass requires the explicit tier + prints the nuclear warning; no other tier yields --dangerously-bypass (test).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:26:57.963597562Z
-modified_at: 2026-09-15T07:15:34.781720583Z
+modified_at: 2026-09-15T11:10:05.282201119Z
 req_type: Story
 tags:
 - agents permission-posture config sandbox security aida:config aida:doctor parent:EPIC-65 depends-on:phase-1
