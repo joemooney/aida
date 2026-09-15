@@ -1325,6 +1325,13 @@ pub(crate) fn handle_git_backend_command(
                     // trace:STORY-703 | ai:claude
                     #[serde(skip_serializing_if = "Option::is_none")]
                     deferred_until: Option<&'a str>,
+                    // TASK-1231: the groomed execution mode, so an unattended
+                    // selector (`aida autoprogress`) can fence the supervised
+                    // modes (drive/guided/operator/decide) it must never
+                    // headless-drive. Omitted (None) when ungroomed/unset —
+                    // unset stays drainable. trace:TASK-1231 | ai:claude
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    execution_mode: Option<&'a str>,
                 }
                 let out: Vec<ListJsonRow> = reqs
                     .iter()
@@ -1356,6 +1363,7 @@ pub(crate) fn handle_git_backend_command(
                             blocked,
                             assignee: r.assignee.as_deref(),
                             deferred_until: r.deferred_until.as_deref(),
+                            execution_mode: r.execution_mode.as_deref(),
                         }
                     })
                     .collect();

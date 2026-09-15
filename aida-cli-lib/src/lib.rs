@@ -52,6 +52,7 @@ mod dispatch_health_ps;
 // trace:TASK-1092 | ai:claude — [dispatch.routing] config loader (additive, not yet wired in).
 mod dispatch_routing_config;
 // trace:STORY-776 | ai:claude — pure decision logic for `aida do` mode dispatch.
+mod autoprogress;
 mod do_dispatch;
 mod doc_cmd;
 mod docs;
@@ -3423,6 +3424,20 @@ fn run() -> Result<()> {
     match &cli.command {
         Command::Away => return presence_cmd::handle_away_command(),
         Command::Home => return presence_cmd::handle_home_command(),
+        // trace:TASK-1231 | ai:claude
+        Command::Autoprogress {
+            project,
+            groom,
+            max,
+            dry_run,
+        } => {
+            return autoprogress::handle_autoprogress(autoprogress::AutoprogressOpts {
+                project: project.clone(),
+                groom: *groom,
+                max: max.unwrap_or(5),
+                dry_run: *dry_run,
+            })
+        }
         // TASK-851: `aida presence [away|home|status]` is the canonical surface;
         // bare `aida presence` shows status (back-compat). The top-level
         // `aida away` / `aida home` stay as hidden aliases above.
@@ -4323,6 +4338,10 @@ fn run() -> Result<()> {
         Command::Release { .. } => unreachable!("release is dispatched before storage init"),
         Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
         Command::Health { .. } => unreachable!("health is dispatched before storage init"),
+        // trace:TASK-1231 | ai:claude
+        Command::Autoprogress { .. } => {
+            unreachable!("autoprogress is dispatched before storage init")
+        }
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
         }
