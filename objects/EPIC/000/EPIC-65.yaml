@@ -1,0 +1,23 @@
+id: 01a0a3be-952f-72c0-b19f-ba7a6fa59574
+spec_id: EPIC-65
+agreed_id: EPIC-65
+title: 'Managed agent permission posture: see / set / check the sandbox+approval tier across global and local config'
+description: |-
+  Today the agent permission posture (codex/claude sandbox + approval) is hand-edited across three-to-four files with NO way to see or validate it: ~/.aida/agents.toml [agents] bypass (+ per-agent default_flags), the project .aida/agents.toml override, ~/.codex/config.toml (sandbox_mode/approval_policy/[sandbox_workspace_write]), and .aida/config.toml [contained] (Claude native). The 2026-09-14 session surfaced the failure mode: the operator was on FULL YOLO (--dangerously-bypass-approvals-and-sandbox, no sandbox at all) at home and unknowingly, while getting prompted at work, with nothing in codex config to explain either — because the state was implicit in a bypass=true knob and a set of shell aliases, invisible and unvalidated.
+
+  Goal: make the posture a first-class, visible, checkable, settable thing, reusing existing seams (aida config <group>, aida config menu, aida doctor --category check|heal) rather than a new subsystem. Deliver the 'contained' tier (workspace-write + network_access + writable_roots = prompt-free but sandboxed) as a NAMED, one-command posture with a global-vs-local scope choice, plus drift detection at init/scaffold/doctor time.
+
+  Empirically validated recipe (2026-09-14, see STORY-1124): codex --sandbox=workspace-write --ask-for-approval=never + ~/.codex/config.toml [sandbox_workspace_write] network_access=true writable_roots=[~/.cargo,~/.rustup,~/.aida] = git/cargo/network work, ~/.ssh and rest of HOME blocked. The per-agent [agents.codex] default_flags suppresses the global nuclear bypass for codex only.
+
+  Children: config permissions show/check (read-only, first slice); config permissions set + doctor heal (the writer, global-vs-local); init/scaffold integration. Pairs with STORY-1124 (named contained posture) and TASK-1232 (--noexec shows resolved posture).
+
+  Open design forks (operator sign-off): (a) default scope for 'set contained' — global (~/.codex + ~/.aida, covers plain codex + all projects) vs per-project (.codex/config.toml + project .aida/agents.toml, safer for mixed trust); (b) should AIDA write the vendor-owned ~/.codex/config.toml at all, or only the project-local .codex/config.toml + guide the user for the global one (the 2026-09-14 hand-edit hit a TOML table-ordering corruption — a tested merge-writer is the argument FOR AIDA owning it); (c) one aida config permissions command as the core with doctor+init calling into it (recommended) vs spreading logic across surfaces.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T06:26:11.375734789Z
+modified_at: 2026-09-15T06:26:11.375734789Z
+req_type: Epic
+tags:
+- agents permission-posture sandbox security config aida:config aida:doctor
