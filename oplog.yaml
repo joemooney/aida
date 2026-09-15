@@ -69117,5 +69117,29 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5409
+- id: 01a0a5a3-da61-7692-a3bc-5cba057ac254
+  target_id: 01a0a5a3-d40e-7d32-b540-6baf9eb0ca4a
+  author: aida
+  node_id: '1'
+  lamport: 5410
+  timestamp: 2026-09-15T15:16:14.049417629Z
+  kind: !Create
+    title: 'drive/supervised-merge fence inconsistent: some drive specs MERGE despite the ''auto-merge refused — merge requires human'' hold'
+    description: |-
+      Observed 2026-09-15 during a round of `aida queue work <spec> --auto-complete --no-human=both --force-claim` on execution_mode=drive specs. The BUG-727 SupervisedMerge fence is supposed to hold the merge for a human/advisor for any non-drain mode. It printed the expected hold ('<SPEC> is marked drive — auto-merge refused; merge requires human/advisor review', DRAIN-EXIT code=0) — but three drive specs MERGED ANYWAY:
+      - BUG-1156 (#1843), STORY-1130 (#1845), TASK-1233 (#1847) → merged to main (mergedBy joemooney = the drain's own git identity), no GitHub auto-merge set.
+      Meanwhile STORY-1131 (#1846, also drive, reviewer-approved, CI-green) correctly stayed OPEN/held, and STORY-1129 (#1844 CI-red) / STORY-1133 (#1848 RequestChanges) stayed open because they were blocked upstream.
+
+      So the fence is INCONSISTENT: a reviewer-approved drive spec sometimes merges (fence bypassed) and sometimes holds. This is a serious safety hole — drive/guided/operator exist precisely to keep a human at the merge for keystone/security/reliability work; a fence that only holds sometimes means keystone specs can merge unreviewed (here BUG-1156, a reap-correctness change, merged without the planned advisor reap-safety review — its logic happened to be sound, but that was luck, not the fence).
+
+      Likely area: the auto_complete merge phase / BUG-727 SupervisedMerge gate interaction with the --force-claim single-spec path or the open-PR recovery path — the hold escalation is emitted but a later merge step (or a subsequent spec's pass) still runs `gh pr merge` on the held PR.
+
+      Acceptance:
+      - A drive/guided/operator/decide spec is NEVER merged by any auto-complete path (single-spec, batch, force-claim, open-PR recovery, or a subsequent spec's pull/merge phase) — the merge waits for an explicit human/advisor `gh pr merge`.
+      - Regression test: an orchestrate run over a drive spec that is reviewer-approved + CI-green leaves the PR OPEN (SupervisedMerge escalation) and does NOT merge, across all the paths above.
+      - Audit the three paths (merge phase, open-PR recovery re-entry, subsequent-spec pull) for where a held PR can still get merged.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5410
 node_id: '1'
