@@ -3,19 +3,24 @@ spec_id: STORY-1124
 agreed_id: STORY-1124
 title: 'Codex ''contained-autonomous'' posture: prompt-free BUT sandboxed (workspace-write + approve-for-me), a middle tier between codex-defaults and --bypass-sandbox'
 description: |-
-  Today aida agent new codex has two postures: bare = codex's normal approval/sandbox (constant prompts) or --bypass-sandbox = --dangerously-bypass-approvals-and-sandbox (removes BOTH sandbox and approvals — the nuclear the operator wants to avoid). There is no MIDDLE tier.
+  Today aida agent new codex has two postures: bare = codex normal approval/sandbox (constant prompts) or --bypass-sandbox = --dangerously-bypass-approvals-and-sandbox (removes BOTH sandbox and approvals — the nuclear the operator wants to avoid). Add the safe MIDDLE tier: 'contained-autonomous' = prompt-free BUT sandboxed.
 
-  Codex supports the safe middle: --sandbox workspace-write (writes confined to the workspace, no unrestricted egress) + either --ask-for-approval on-failure/never OR --approve-for-me (auto-review approvals within the workspace-write sandbox). This is prompt-free BUT still sandboxed — dramatically safer than --dangerously-bypass (which drops the sandbox entirely).
+  DECIDED (ADR-31, via /aida-derisk 2026-09-15): contained = --sandbox workspace-write + --ask-for-approval never (NOT approve-for-me, NOT on-failure). Prompt-free with the workspace-write sandbox as the hard wall; no auto-escalation; headless-safe (never hangs on a prompt). Network/cargo/git work via the ~/.codex [sandbox_workspace_write] table (network_access=true, writable_roots=[~/.cargo,~/.rustup,~/.aida]), not via approval escalation. --bypass-sandbox stays the SEPARATE explicit nuclear opt-in.
 
-  Add a 'contained-autonomous' codex posture to the launcher, config-driven (agents.toml / .aida/config.toml), so aida agent new codex runs prompt-free-but-sandboxed without the operator hand-assembling --extra-flag chains, and WITHOUT the nuclear bypass. Surface the resolved posture in --noexec output. Also document setting ~/.codex/config.toml (sandbox_mode='workspace-write', approval_policy='on-failure') as the persistent per-user equivalent that covers non-AIDA codex use too.
+  Add the 'contained' codex posture to the launcher, config-driven (agents.toml / .aida/config.toml), so aida agent new codex runs prompt-free-but-sandboxed without hand-assembling flag chains and WITHOUT the nuclear bypass. Surface the resolved posture in --noexec. Document the ~/.codex/config.toml persistent equivalent (sandbox_mode='workspace-write', approval_policy='never', the sandbox table) for non-AIDA codex use.
 
-  Acceptance: a documented codex posture that is prompt-free but sandboxed; the launcher passes --sandbox workspace-write + the chosen approval policy; --bypass-sandbox stays the explicit nuclear opt-in; the resolved posture is visible via --noexec.
+  Acceptance (fork decided; safety is testable/CI-gated):
+  - A 'contained' codex posture is selectable via config; the launcher resolves it to EXACTLY: --sandbox workspace-write --ask-for-approval never (plus the sandbox table for network/writable-roots). approve-for-me and on-failure are NOT used.
+  - SAFETY GATE (test, CI-enforced): a unit test asserts the resolved contained argv CONTAINS --sandbox workspace-write AND --ask-for-approval never, and does NOT contain --dangerously-bypass-approvals-and-sandbox (nor --dangerously-bypass). A second test asserts the bypass posture is the ONLY posture that yields --dangerously-bypass, and only when explicitly selected.
+  - --bypass-sandbox remains the explicit nuclear opt-in, unchanged; contained never implies bypass.
+  - The resolved posture (tier + exact flags) is visible via --noexec (pairs with TASK-1232).
+  - SPEC-ID / internal tokens stay out of any user-facing --help / stdout (user-facing-text conventions).
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:18.096155572Z
-modified_at: 2026-09-15T06:21:24.293870017Z
+modified_at: 2026-09-15T07:11:42.325073478Z
 req_type: Story
 tags:
 - agents codex permission-posture sandbox security
