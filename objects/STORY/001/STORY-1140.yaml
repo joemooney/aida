@@ -1,0 +1,26 @@
+id: 01a0a4a1-efc2-7af0-b37a-8d96cbc0d9f4
+spec_id: STORY-1140
+agreed_id: STORY-1140
+title: 'Review PR-1837: [AI:codex] feat(agent): add contained Codex posture (STORY-1124)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a495`) for branch `story-1124`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1837>
+  - Branch: `story-1124` → `main`
+
+  ## Covers
+
+  - STORY-1124
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1837` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T10:34:31.234815157Z
+modified_at: 2026-09-15T10:34:31.234815157Z
+req_type: Story

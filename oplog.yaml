@@ -68525,5 +68525,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5374
+- id: 01a0a4a1-f881-7773-871b-443d46c2ae7d
+  target_id: 01a0a4a1-efc2-7af0-b37a-8d96cbc0d9f4
+  author: aida
+  node_id: '1'
+  lamport: 5375
+  timestamp: 2026-09-15T10:34:33.473456616Z
+  kind: !Create
+    title: 'Review PR-1837: [AI:codex] feat(agent): add contained Codex posture (STORY-1124)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a495`) for branch `story-1124`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1837>
+      - Branch: `story-1124` → `main`
+
+      ## Covers
+
+      - STORY-1124
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1837` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5375
 node_id: '1'
