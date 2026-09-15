@@ -19570,26 +19570,24 @@ fn collect_doctor_findings(
         }
     }
 
-    // STORY-496: reap dead-PID agent-registry entries. A record under
-    // `.aida/agents/` whose creator process is gone is confirmed multi-agent
-    // drift — the `aida status` "Active agents" headline counts these corpses,
-    // and no existing command cleans them up. Reap ONLY entries whose pid is
-    // not alive (conservative: a reused/returned pid is left alone, handled by
-    // the re-check at heal time). trace:STORY-496 | ai:claude
+    // STORY-496: reap stale agent-registry entries. A record under
+    // `.aida/agents/` whose creator process is gone, or whose role-enter shell
+    // no longer has a live descendant agent session, is confirmed multi-agent
+    // drift. trace:STORY-496 | ai:claude trace:BUG-1156 | ai:codex
     {
         let agent_ctx = agent_registry::AgentClassifyContext::new(now, 30, Vec::new());
         for view in agent_registry::list_agent_views(project_root, &agent_ctx) {
-            if !process_probe::pid_is_alive(view.pid) {
+            if view.status == agent_registry::AgentStatus::Stale {
                 push(DoctorFinding {
                     category: "dead-agents".to_string(),
                     id: format!("{}#{}", view.agent_type, view.pid),
                     summary: format!(
-                        "agent `{}` (pid {}) is dead — its registry entry under \
+                        "agent `{}` (pid {}) is stale — its registry entry under \
                          .aida/agents/ was never reaped",
                         view.agent_type, view.pid
                     ),
                     action: format!(
-                        "remove dead-agent registry entry for {}#{}",
+                        "remove stale-agent registry entry for {}#{}",
                         view.agent_type, view.pid
                     ),
                     safe_heal: true,

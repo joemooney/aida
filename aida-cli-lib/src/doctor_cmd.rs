@@ -2219,10 +2219,12 @@ fn heal_doctor_permission_posture(
     })
 }
 
-/// STORY-496: reap a dead-PID agent-registry entry. The finding id is
-/// `{agent_type}#{pid}`. Re-checks the pid is still dead before removing — a
-/// pid can be reused by an unrelated process between scan and heal, and we
-// must never reap a live agent. trace:STORY-496 | ai:claude
+/// STORY-496: reap a stale agent-registry entry. The finding id is
+/// `{agent_type}#{pid}`. Re-checks registry liveness before removing — a pid can
+/// be reused, and role-enter shell seats can go stale while the shell pid lives,
+/// so heal must share the status predicate.
+// trace:STORY-496 | ai:claude
+// trace:BUG-1156 | ai:codex
 fn heal_doctor_dead_agent(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
@@ -2236,13 +2238,15 @@ fn heal_doctor_dead_agent(
     let pid: u32 = pid_str
         .parse()
         .with_context(|| format!("bad pid in dead-agent id `{}`", finding.id))?;
-    if process_probe::pid_is_alive(pid) {
+    if agent_registry::agent_is_live(project_root, agent_type, pid) {
         return Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
             action: finding.action.clone(),
             status: "skipped".to_string(),
-            detail: Some(format!("pid {pid} is now alive — not reaping")),
+            detail: Some(format!(
+                "agent {agent_type}#{pid} is now live — not reaping"
+            )),
         });
     }
     let removed = agent_registry::remove_agent(project_root, agent_type, pid)?;

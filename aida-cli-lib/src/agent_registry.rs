@@ -418,7 +418,7 @@ pub(crate) fn live_agents_covering_cwd(project_root: &Path, cwd: &Path) -> usize
             let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) else {
                 continue;
             };
-            if !crate::process_probe::pid_is_alive(record.pid) {
+            if !registry_entry_is_live(project_root, &record) {
                 continue;
             }
             let wt = record
@@ -444,7 +444,7 @@ fn find_launcher_ancestor_entry(
 ) -> Option<(PathBuf, AgentRegistryEntry)> {
     load_entries(project_root).into_iter().find(|(_, entry)| {
         entry.source == "agent-launcher"
-            && crate::process_probe::pid_is_alive(entry.pid)
+            && registry_entry_is_live(project_root, entry)
             && pid_has_ancestor(child_pid, entry.pid)
     })
 }
@@ -712,7 +712,7 @@ pub(crate) fn generate_or_validate_name(
             }
             if let Ok(body) = std::fs::read_to_string(&path) {
                 if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
-                    if crate::process_probe::pid_is_alive(record.pid) {
+                    if registry_entry_is_live(project_root, &record) {
                         alive_agents.push(record);
                     }
                 }
@@ -811,7 +811,7 @@ pub(crate) fn resolve_brief_directories(
             }
             if let Ok(body) = std::fs::read_to_string(&path) {
                 if let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) {
-                    if crate::process_probe::pid_is_alive(record.pid) {
+                    if registry_entry_is_live(project_root, &record) {
                         alive_agents.push(record);
                     }
                 }
@@ -958,7 +958,7 @@ pub(crate) fn same_scope_conflict(
     load_entries(project_root)
         .into_iter()
         .map(|(_, entry)| entry)
-        .filter(|entry| crate::process_probe::pid_is_alive(entry.pid))
+        .filter(|entry| registry_entry_is_live(project_root, entry))
         .find(|entry| {
             entry
                 .role
@@ -1032,7 +1032,7 @@ pub(crate) fn gc_dead_agents(
     let now = Utc::now();
     let mut report = AgentGcReport::default();
     for (path, entry) in load_entries(project_root) {
-        if entry.ended_at.is_none() && crate::process_probe::pid_is_alive(entry.pid) {
+        if registry_entry_is_live(project_root, &entry) {
             continue;
         }
         let resumable = resumable_session_id(&entry);
@@ -1145,7 +1145,7 @@ fn resolve_target_entry(
     }
     let mut matches: Vec<(PathBuf, AgentRegistryEntry)> = load_entries(project_root)
         .into_iter()
-        .filter(|(_, e)| crate::process_probe::pid_is_alive(e.pid))
+        .filter(|(_, e)| registry_entry_is_live(project_root, e))
         .filter(|(_, e)| {
             let name_match = e
                 .name
@@ -1277,7 +1277,7 @@ pub(crate) fn ended_resumable_agent_views(
         .into_iter()
         .map(|(_, e)| e)
         .filter(|e| e.ended_at.is_some() && resumable_session_id(e).is_some())
-        .map(|e| view_for(e, ctx))
+        .map(|e| view_for(project_root, e, ctx))
         .collect();
     out.sort_by(|a, b| {
         b.ended_at
@@ -1356,7 +1356,7 @@ pub(crate) fn list_agent_views(
         let Ok(record) = toml::from_str::<AgentRegistryEntry>(&body) else {
             continue;
         };
-        out.push(view_for(record, ctx));
+        out.push(view_for(project_root, record, ctx));
     }
     out.sort_by(|a, b| {
         a.agent_type
@@ -1460,8 +1460,12 @@ fn write_entry(project_root: &Path, entry: &AgentRegistryEntry) -> Result<()> {
         .with_context(|| format!("writing agent registry entry {}", path.display()))
 }
 
-fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegistryView {
-    let pid_alive = crate::process_probe::pid_is_alive(entry.pid);
+fn view_for(
+    project_root: &Path,
+    entry: AgentRegistryEntry,
+    ctx: &AgentClassifyContext,
+) -> AgentRegistryView {
+    let pid_alive = registry_entry_is_live(project_root, &entry);
     let status = classify_status(&entry, pid_alive, ctx);
     let native_session_id = resumable_session_id(&entry);
     AgentRegistryView {
@@ -1489,6 +1493,50 @@ fn view_for(entry: AgentRegistryEntry, ctx: &AgentClassifyContext) -> AgentRegis
         ended_at: entry.ended_at,
         resumed_from: entry.resumed_from,
     }
+}
+
+// trace:BUG-1156 | ai:codex
+pub(crate) fn agent_is_live(project_root: &Path, agent_type: &str, pid: u32) -> bool {
+    let id = agent_id(&normalize_agent_type(agent_type.to_string()), pid);
+    let path = registry_path(project_root, &id);
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+        .is_some_and(|entry| registry_entry_is_live(project_root, &entry))
+}
+
+// trace:BUG-1156 | ai:codex
+fn registry_entry_is_live(project_root: &Path, entry: &AgentRegistryEntry) -> bool {
+    if entry.ended_at.is_some() || !crate::process_probe::pid_is_alive(entry.pid) {
+        return false;
+    }
+    if entry.source == "role-enter" {
+        return role_enter_has_live_session(project_root, entry);
+    }
+    true
+}
+
+// trace:BUG-1156 | ai:codex
+fn role_enter_has_live_session(project_root: &Path, role_entry: &AgentRegistryEntry) -> bool {
+    load_entries(project_root)
+        .into_iter()
+        .map(|(_, entry)| entry)
+        .any(|entry| {
+            entry.id != role_entry.id
+                && entry.source != "role-enter"
+                && entry.ended_at.is_none()
+                && crate::process_probe::pid_is_alive(entry.pid)
+                && role_entry
+                    .role
+                    .as_deref()
+                    .zip(entry.role.as_deref())
+                    .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b))
+                && covers(
+                    std::slice::from_ref(&role_entry.worktree_path),
+                    &entry.worktree_path,
+                )
+                && pid_has_ancestor(entry.pid, role_entry.pid)
+        })
 }
 
 // trace:STORY-791 | ai:codex
@@ -2241,6 +2289,54 @@ mod tests {
         );
         assert!(persisted.contains("terminator_uuid = \"role-term-994\""));
         assert!(persisted.contains("emulator = \"terminator\""));
+    }
+
+    // trace:BUG-1156 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn role_enter_shell_liveness_requires_live_descendant_session() {
+        let tmp = TempDir::new().unwrap();
+        let now = Utc::now();
+        let worktree = tmp.path().join("worktree");
+        std::fs::create_dir_all(&worktree).unwrap();
+
+        let shell_pid = std::process::id();
+        let mut role_entry = entry_with(shell_pid, now);
+        role_entry.id = agent_id("shell", shell_pid);
+        role_entry.agent_type = "shell".to_string();
+        role_entry.source = "role-enter".to_string();
+        role_entry.name = Some("role:implementer".to_string());
+        role_entry.worktree_path = worktree.clone();
+        write_entry(tmp.path(), &role_entry).unwrap();
+
+        let mut child = std::process::Command::new("sh")
+            .args(["-c", "sleep 30"])
+            .spawn()
+            .expect("spawn child session stand-in");
+        let child_pid = child.id();
+
+        let mut session_entry = entry_with(child_pid, now);
+        session_entry.id = agent_id("codex", child_pid);
+        session_entry.source = "session-start-hook".to_string();
+        session_entry.worktree_path = worktree;
+        write_entry(tmp.path(), &session_entry).unwrap();
+
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]));
+        let shell = views
+            .iter()
+            .find(|view| view.id == role_entry.id)
+            .expect("role-enter view");
+        assert_ne!(shell.status, AgentStatus::Stale);
+
+        child.kill().expect("kill child session stand-in");
+        child.wait().expect("reap child session stand-in");
+
+        let views = list_agent_views(tmp.path(), &ctx(now, 30, vec![]));
+        let shell = views
+            .iter()
+            .find(|view| view.id == role_entry.id)
+            .expect("role-enter view");
+        assert_eq!(shell.status, AgentStatus::Stale);
     }
 
     fn ctx(now: DateTime<Utc>, threshold_secs: u64, leases: Vec<PathBuf>) -> AgentClassifyContext {
