@@ -1734,8 +1734,14 @@ pub(crate) fn apply_terminal_title(
     let previous_title = current_native_title(terminal);
     match terminal.emulator.as_deref() {
         Some("tmux") => {
+            // BUG-1154: cosmetic best-effort title set — never let the child's
+            // stdout/stderr leak into the terminal (e.g. a usage/error banner
+            // from a tool-version mismatch). Same on wezterm/terminator below
+            // and on the restore path. trace:BUG-1154 | ai:claude
             let _ = std::process::Command::new("tmux")
                 .args(["rename-window", title])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
                 .status();
         }
         Some("wezterm") => {
@@ -1744,12 +1750,19 @@ pub(crate) fn apply_terminal_title(
             if let Some(pane) = terminal.wezterm_pane.as_deref() {
                 cmd.args(["--pane-id", pane]);
             }
-            let _ = cmd.status();
+            let _ = cmd
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
         }
         Some("terminator") => {
             if let Some(uuid) = terminal.terminator_uuid.as_deref() {
+                // A remotinator that lacks the `set_tab_title` verb prints its
+                // usage banner + "invalid choice" — swallow it. trace:BUG-1154
                 let _ = std::process::Command::new("remotinator")
                     .args(["set_tab_title", uuid, title])
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
                     .status();
             }
         }
@@ -1773,7 +1786,13 @@ pub(crate) fn restore_terminal_title(restore: TerminalTitleRestore) {
         return;
     };
     if let Some((program, args)) = native_restore_title_command(terminal, &restore.previous_title) {
-        let _ = std::process::Command::new(program).args(args).status();
+        // BUG-1154: best-effort title restore — suppress child output too.
+        // trace:BUG-1154 | ai:claude
+        let _ = std::process::Command::new(program)
+            .args(args)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
         return;
     }
     match terminal.emulator.as_deref() {
