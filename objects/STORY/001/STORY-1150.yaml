@@ -1,0 +1,27 @@
+id: 01a0a583-d6bf-7b61-b9a6-80ebab9fe370
+spec_id: STORY-1150
+agreed_id: STORY-1150
+title: 'Review PR-1847: [AI:codex] feat(init): offer contained permission posture setup (TASK-1233)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0a575`) for branch `task-1233`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1847>
+  - Branch: `task-1233` → `main`
+
+  ## Covers
+
+  - TASK-1233
+  - STORY-1130
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1847` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T14:41:15.967024174Z
+modified_at: 2026-09-15T14:41:15.967024174Z
+req_type: Story
