@@ -21,10 +21,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:09:10.040361417Z
-modified_at: 2026-09-15T07:54:59.624161523Z
+modified_at: 2026-09-15T08:03:31.319199786Z
 req_type: Bug
 tags:
 - ux status list open-lens consistency papercut
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a0a417-9bd6-72e1-ad27-94c484b95cdd
+  created_at: 2026-09-15T08:03:31.319195536Z
+  created_by: joe
 execution_mode: drain
 implementation_info:
   implemented: true
