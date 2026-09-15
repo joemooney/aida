@@ -1076,6 +1076,18 @@ pub(crate) fn queue_drain_pickup_policy(
     queue_fresh_pickup_policy(req, store, force_needs_attention)
 }
 
+// trace:TASK-1234 | ai:codex
+fn queued_supervised_mode(req: &aida_core::Requirement) -> Option<aida_core::ExecutionMode> {
+    match req.execution_mode {
+        Some(
+            mode @ (aida_core::ExecutionMode::Guided
+            | aida_core::ExecutionMode::Operator
+            | aida_core::ExecutionMode::Decide),
+        ) => Some(mode),
+        _ => None,
+    }
+}
+
 pub(crate) fn queue_list_json_requested(json_flag: bool, format: Option<OutputFormat>) -> bool {
     // trace:BUG-1149 | ai:codex
     json_flag || matches!(format, Some(OutputFormat::Json))
@@ -1949,8 +1961,21 @@ pub(crate) fn handle_queue_command(
                                         format!("  {}", format!("[queued by @{}]", owner).magenta())
                                     })
                                     .unwrap_or_default();
+                            let supervised_chip = req
+                                .and_then(queued_supervised_mode)
+                                .map(|mode| {
+                                    format!(
+                                        "  {}",
+                                        format!(
+                                            "[{} needs guided/operator session ({mode}); headless drain skips]",
+                                            crate::glyph(crate::glyphs::Glyph::FlowQueuedSupervised)
+                                        )
+                                        .yellow()
+                                    )
+                                })
+                                .unwrap_or_default();
                             println!(
-                                "  {} {}{}  {}  [{}]{}{}{}",
+                                "  {} {}{}  {}  [{}]{}{}{}{}",
                                 glyph.dimmed(),
                                 display_id_owned.bold(),
                                 pad,
@@ -1958,6 +1983,7 @@ pub(crate) fn handle_queue_command(
                                 status_badge,
                                 archived_chip,
                                 routed_chip,
+                                supervised_chip,
                                 tag_chip,
                             );
                         };
@@ -2097,6 +2123,19 @@ pub(crate) fn handle_queue_command(
                     // reconcile (unarchive or dequeue). trace:BUG-492
                     if req.map(|r| r.archived).unwrap_or(false) {
                         print!("  {}", "[ARCHIVED]".red().bold());
+                    }
+                    // TASK-1234: make queued-but-supervised work visually
+                    // distinct from ordinary drainable queue rows. This mirrors
+                    // the headless-drain skip policy but does not change pickup.
+                    if let Some(mode) = req.and_then(queued_supervised_mode) {
+                        print!(
+                            "  {}",
+                            format!(
+                                "[{} needs guided/operator session ({mode}); headless drain skips]",
+                                crate::glyph(crate::glyphs::Glyph::FlowQueuedSupervised)
+                            )
+                            .yellow()
+                        );
                     }
                     // An entry surfaced out of ANOTHER user's queue file is
                     // borrowed work — say whose queue it came from so it is

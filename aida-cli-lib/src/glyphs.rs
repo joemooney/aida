@@ -94,6 +94,10 @@ pub(crate) enum Glyph {
     FlowBlocked,
     /// Work-routing: present in a role queue, not yet started (↑). trace:TASK-835
     FlowQueued,
+    // trace:TASK-1234 | ai:codex
+    /// Work-routing: queued, but fenced to guided/operator/decide so a headless
+    /// drain skips it (⇈).
+    FlowQueuedSupervised,
     // trace:STORY-730 | ai:claude
     /// Paused / walked-away (⏸) — the "since you were away" morning-after banner
     /// marker on `aida status`.
@@ -152,6 +156,7 @@ impl Glyph {
             Glyph::FlowActive => "▶",
             Glyph::FlowBlocked => "⊘",
             Glyph::FlowQueued => "↑",
+            Glyph::FlowQueuedSupervised => "⇈",
             Glyph::Pause => "⏸",
             Glyph::Info => "ⓘ",
             Glyph::InfoAlt => "ℹ",
@@ -188,6 +193,7 @@ impl Glyph {
             Glyph::FlowActive => ">",
             Glyph::FlowBlocked => "x",
             Glyph::FlowQueued => "^",
+            Glyph::FlowQueuedSupervised => "^^",
             Glyph::Pause => "[paused]",
             Glyph::Info => "(i)",
             Glyph::InfoAlt => "i",
@@ -234,6 +240,7 @@ impl Glyph {
             Glyph::FlowActive => "flow_active",
             Glyph::FlowBlocked => "flow_blocked",
             Glyph::FlowQueued => "flow_queued",
+            Glyph::FlowQueuedSupervised => "flow_queued_supervised",
             Glyph::Pause => "pause",
             Glyph::Info => "info",
             Glyph::InfoAlt => "info_alt",
@@ -261,7 +268,7 @@ impl Glyph {
 
     /// Every variant, for iteration (name parsing, exhaustive tests).
     /// trace:STORY-629
-    pub(crate) const ALL: [Glyph; 28] = [
+    pub(crate) const ALL: [Glyph; 29] = [
         Glyph::Check,
         Glyph::Cross,
         Glyph::Pending,
@@ -283,6 +290,7 @@ impl Glyph {
         Glyph::FlowActive,
         Glyph::FlowBlocked,
         Glyph::FlowQueued,
+        Glyph::FlowQueuedSupervised,
         Glyph::Pause,
         Glyph::Info,
         Glyph::InfoAlt,
@@ -680,11 +688,13 @@ mod tests {
         assert_eq!(Glyph::FlowActive.unicode(), "▶");
         assert_eq!(Glyph::FlowBlocked.unicode(), "⊘");
         assert_eq!(Glyph::FlowQueued.unicode(), "↑");
+        assert_eq!(Glyph::FlowQueuedSupervised.unicode(), "⇈");
         // ASCII fallbacks are single-display-column-friendly.
         assert_eq!(Glyph::Done.ascii(), "[*]");
         assert_eq!(Glyph::FlowActive.ascii(), ">");
         assert_eq!(Glyph::FlowBlocked.ascii(), "x");
         assert_eq!(Glyph::FlowQueued.ascii(), "^");
+        assert_eq!(Glyph::FlowQueuedSupervised.ascii(), "^^");
     }
 
     /// TASK-1071: the info/notice entries must reproduce the historical raw

@@ -294,9 +294,9 @@ pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
 /// "where is this spec in the work pipeline RIGHT NOW", not "what state is it
 /// in".
 ///
-/// Priority when several apply: in-flight `▶` > blocked `⊘` > queued `↑` >
-/// idle (a single space, so the column stays aligned). Returns a `&'static str`
-/// (not a `char`) for a uniform single-display-column cell.
+/// Priority when several apply: in-flight `▶` > blocked `⊘` > queued-supervised
+/// `⇈` > queued `↑` > idle (a single space, so the column stays aligned).
+/// Returns a `&'static str` (not a `char`) for a uniform cell.
 ///
 /// - `▶` in-flight — a *live* session lease holds the spec (someone's on it
 ///   now; additive over the persistent `in-progress` status, which lingers
@@ -305,6 +305,8 @@ pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
 /// - `⊘` blocked — BlockedBy an incomplete spec (needs a graph walk, so the
 ///   caller only sets this behind `--blocked`).
 /// - `↑` queued — present in a role queue, not yet started.
+/// - `⇈` queued-supervised — queued but execution_mode guided/operator/decide,
+///   so a headless drain skips it. Display-only; pickup behavior is unchanged.
 ///
 /// trace:TASK-670 | ai:claude
 ///
@@ -313,13 +315,21 @@ pub(crate) fn status_cell_no_glyph(status: &str, width: usize) -> String {
 /// `[glyphs]` override applies here too. The default Unicode profile reproduces
 /// the historical literals (▶ / ⊘ / ↑) byte-for-byte; idle stays a bare space.
 /// trace:TASK-835 | ai:claude
-pub(crate) fn flow_glyph(in_flight: bool, blocked: bool, queued: bool) -> &'static str {
+// trace:TASK-1234 | ai:codex
+pub(crate) fn flow_glyph(
+    in_flight: bool,
+    blocked: bool,
+    queued: bool,
+    supervised: bool,
+) -> &'static str {
     use crate::glyphs::Glyph;
     let profile = crate::glyphs::active_profile(crate::find_project_root().ok().as_deref());
     if in_flight {
         Glyph::FlowActive.render(profile)
     } else if blocked {
         Glyph::FlowBlocked.render(profile)
+    } else if queued && supervised {
+        Glyph::FlowQueuedSupervised.render(profile)
     } else if queued {
         Glyph::FlowQueued.render(profile)
     } else {
@@ -478,31 +488,48 @@ mod tests {
         assert_eq!(wide, "◐ In Progress", "cell: {wide:?}");
     }
 
-    /// TASK-670: the work-routing glyph obeys the in-flight > blocked > queued
-    /// priority, and falls back to a single space (column stays aligned) when
-    /// nothing applies. trace:TASK-670 | ai:claude
+    /// TASK-670/TASK-1234: the work-routing glyph obeys the in-flight > blocked
+    /// > queued-supervised > queued priority, and falls back to a single space
+    /// (column stays aligned) when nothing applies.
     #[test]
     fn flow_glyph_priority_and_idle() {
         // Idle: no routing state.
-        assert_eq!(flow_glyph(false, false, false), " ");
+        assert_eq!(flow_glyph(false, false, false, false), " ");
         // Each state alone.
-        assert_eq!(flow_glyph(false, false, true), "↑", "queued");
-        assert_eq!(flow_glyph(false, true, false), "⊘", "blocked");
-        assert_eq!(flow_glyph(true, false, false), "▶", "in-flight");
+        assert_eq!(flow_glyph(false, false, true, false), "↑", "queued");
+        assert_eq!(
+            flow_glyph(false, false, true, true),
+            "⇈",
+            "queued supervised"
+        );
+        assert_eq!(flow_glyph(false, true, false, false), "⊘", "blocked");
+        assert_eq!(flow_glyph(true, false, false, false), "▶", "in-flight");
         // Priority: in-flight wins over everything.
-        assert_eq!(flow_glyph(true, true, true), "▶");
-        assert_eq!(flow_glyph(true, false, true), "▶");
-        // Blocked beats queued.
-        assert_eq!(flow_glyph(false, true, true), "⊘");
-        // Glyph is always a single display column.
+        assert_eq!(flow_glyph(true, true, true, true), "▶");
+        assert_eq!(flow_glyph(true, false, true, true), "▶");
+        // Blocked beats queued/supervised queued.
+        assert_eq!(flow_glyph(false, true, true, true), "⊘");
         for g in [
-            flow_glyph(false, false, false),
-            flow_glyph(false, false, true),
-            flow_glyph(false, true, false),
-            flow_glyph(true, false, false),
+            flow_glyph(false, false, false, false),
+            flow_glyph(false, false, true, false),
+            flow_glyph(false, true, false, false),
+            flow_glyph(true, false, false, false),
         ] {
             assert_eq!(g.chars().count(), 1, "flow glyph must be one column: {g:?}");
         }
+    }
+
+    #[test]
+    fn flow_glyph_profile_covers_supervised_queue() {
+        use crate::glyphs::{Glyph, GlyphProfile};
+        assert_eq!(
+            Glyph::FlowQueuedSupervised.render(GlyphProfile::Unicode),
+            "⇈"
+        );
+        assert_eq!(
+            Glyph::FlowQueuedSupervised.render(GlyphProfile::Ascii),
+            "^^"
+        );
     }
 
     // BUG-781: an accepted decision relabels to the terminal `Accepted`, and

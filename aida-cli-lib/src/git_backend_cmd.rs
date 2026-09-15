@@ -1657,17 +1657,30 @@ pub(crate) fn handle_git_backend_command(
                 // + divider so the ID column stays aligned. `render_status`
                 // drops the status glyph under --no-glyph for plain-text output.
                 // trace:TASK-670 | ai:claude
-                let flow_header = if show_flow { "  " } else { "" };
+                let flow_header = if show_flow
+                    && crate::glyphs::active_profile(crate::find_project_root().ok().as_deref())
+                        == crate::glyphs::GlyphProfile::Ascii
+                {
+                    "   "
+                } else if show_flow {
+                    "  "
+                } else {
+                    ""
+                };
                 let flow_width = flow_header.len();
                 let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
                     if !show_flow {
                         return String::new();
                     }
                     let (in_flight, blocked, queued) = row_routing(r);
-                    format!(
-                        "{} ",
-                        status_display::flow_glyph(in_flight, blocked, queued)
-                    )
+                    let supervised = r.execution_mode.as_deref().is_some_and(|m| {
+                        matches!(
+                            m.to_ascii_lowercase().as_str(),
+                            "guided" | "operator" | "decide"
+                        )
+                    });
+                    let glyph = status_display::flow_glyph(in_flight, blocked, queued, supervised);
+                    format!("{:<width$}", format!("{glyph} "), width = flow_width)
                 };
                 // BUG-781: the Status column renders the TYPE-AWARE label, so an
                 // accepted decision reads `☑ Accepted` (terminal) instead of the

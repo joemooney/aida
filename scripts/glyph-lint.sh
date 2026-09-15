@@ -34,7 +34,7 @@ SRC_DIR="aida-cli/src"
 # aida-cli/src/glyphs.rs — when you add a registry glyph whose literal could
 # show up inline, add the codepoint here so the guard covers it.
 # trace:TASK-1071 — info/notice glyphs (ⓘ ℹ ⦿ 📨) added so raw usages are flagged.
-GLYPHS='✓✗◯◐⚠▷▸↳✉•⏳🏠🚶🤖◉⊘↑▶ⓘℹ⦿📨'
+GLYPHS='✓✗◯◐⚠▷▸↳✉•⏳🏠🚶🤖◉⊘↑⇈▶ⓘℹ⦿📨'
 
 # Files exempt from the guard:
 #  - glyphs.rs        — the registry itself (defines the literals).
