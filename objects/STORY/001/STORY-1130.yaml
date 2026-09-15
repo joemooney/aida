@@ -15,12 +15,12 @@ description: |-
   Fork resolved by advisor recommendation (pending operator): thin wrapper routing to the existing engine, NOT a new drain implementation.
 
   Acceptance: `aida drain start` launches the canonical auto-complete drain with the documented selectors/defaults, refuses cleanly when a drain is already live (BUG-538 lock), resolves the project correctly from any cwd, and sets the drain role; `aida drain stop` gracefully stops a live drain (in-flight phase lands, no new pickup) and releases the lock, with --now for hard-stop; `aida drain status` is unchanged; no second drain engine is introduced (start/stop delegate to the existing one); autoprogress continues to work (folded in or aliased, not broken).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T06:32:41.132899640Z
-modified_at: 2026-09-15T15:06:29.109953165Z
+modified_at: 2026-09-15T15:16:46.211067263Z
 req_type: Story
 tags:
 - drain queue orchestrator ux discoverability aida:drain aida:queue
@@ -48,8 +48,24 @@ comments:
   created_at: 2026-09-15T12:52:30.665053007Z
   modified_at: 2026-09-15T12:52:30.665053007Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a5a4-57fc-71b0-bfe6-5e58a15f052d
+  author: aida-auto-bump
+  timestamp: 2026-09-15T15:16:46.204632327Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a5a4-5803-75d3-a1bf-06ed3691c3d9
+  timestamp: 2026-09-15T15:16:46.211065970Z
+  agent: aida
+  commit_sha: e4ee56a12123b7611276a32f671e5ee184709186
+  summary: Completed via merge e4ee56a1
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-15T13:42:19.808791835Z
   implemented_by: joe
+  completed_at: 2026-09-15T15:16:46.204477359Z
+  completion_sha: e4ee56a12123b7611276a32f671e5ee184709186
