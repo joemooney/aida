@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T07:02:27.966162658Z
-modified_at: 2026-09-15T14:56:58.116897151Z
+modified_at: 2026-09-15T15:06:25.518415537Z
 req_type: Story
 tags:
 - agents roles driver-vs-companion adr-3 architecture aida:agent
@@ -40,6 +40,10 @@ relationships:
 - rel_type: References
   target_id: 019e962e-71b5-7153-a856-b8d444389b34
   created_at: 2026-09-15T07:03:00.387891894Z
+  created_by: joe
+- rel_type: !Custom implemented-by
+  target_id: 01a0a59a-c9fc-7093-8fa9-3f1a10710e81
+  created_at: 2026-09-15T15:06:25.518411234Z
   created_by: joe
 comments:
 - id: 01a0a521-0597-7260-87c2-1f29be946568
