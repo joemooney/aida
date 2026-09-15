@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:09:10.040361417Z
-modified_at: 2026-09-15T11:39:12.469930414Z
+modified_at: 2026-09-15T11:49:42.809335605Z
 req_type: Bug
 tags:
 - ux status list open-lens consistency papercut
@@ -36,6 +36,12 @@ comments:
   content: 'REWORK (reviewer RequestChanges on PR #1832): the open-count fix handles deferred but ''status open still differs from list open when Done rows exist''. Extend the fix so status-open excludes/aligns Done rows exactly as the list open lens does. Add a test with Done rows present.'
   created_at: 2026-09-15T11:36:56.438895740Z
   modified_at: 2026-09-15T11:36:56.438895740Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0a4e6-c719-7a61-80e4-d8edef95cddf
+  author: joe
+  content: 'Addressed PR #1832 review finding: fast status now uses the list-open status set, excludes deferred cache rows including legacy deferred:* tags, and live check reports status open=14 matching list open count=14. Commit ae50f13f0.'
+  created_at: 2026-09-15T11:49:42.809335605Z
+  modified_at: 2026-09-15T11:49:42.809335605Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
