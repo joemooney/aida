@@ -1,0 +1,26 @@
+id: 01a0a528-7c24-7642-a2a5-af360653fccc
+spec_id: STORY-1146
+agreed_id: STORY-1146
+title: 'Review PR-1843: [AI:codex] fix(registry): require live descendant for role seats (BUG-1156)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a522`) for branch `bug-1156`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1843>
+  - Branch: `bug-1156` → `main`
+
+  ## Covers
+
+  - BUG-1156
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1843` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-15T13:01:28.996785417Z
+modified_at: 2026-09-15T13:01:28.996785417Z
+req_type: Story
