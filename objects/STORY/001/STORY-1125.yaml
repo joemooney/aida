@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T05:24:54.162451443Z
-modified_at: 2026-09-15T12:10:35.863044977Z
+modified_at: 2026-09-15T12:19:17.477746256Z
 req_type: Story
 tags:
 - release workflow meta-task aida:release
@@ -40,6 +40,12 @@ comments:
   content: 'REWORK (reviewer RequestChanges on PR #1836): release-prep is fenced in autoprogress/batch paths, but the BARE auto-complete head-pickup path can still select release-tagged work. Extend the fence to the bare queue-work head-pickup path too; add a test that head-pickup skips a release-tagged spec.'
   created_at: 2026-09-15T11:36:57.719864385Z
   modified_at: 2026-09-15T11:36:57.719864385Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0a501-db65-7332-8ed2-62b1c92eb905
+  author: joe
+  content: 'Addressed PR #1836 review finding in replacement PR #1841: auto-complete head candidates now carry tags and skip release/operator tagged tasks (using the same whitespace-splitting release tag predicate as drain pickup). Added regression coverage for a release-tagged approved queue head. Verification: cargo fmt --all -- --check; cargo test -p aida-cli-lib auto_complete_head -- --nocapture; cargo check -p aida-cli-lib. CI registered pending on PR #1841.'
+  created_at: 2026-09-15T12:19:17.477746256Z
+  modified_at: 2026-09-15T12:19:17.477746256Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
