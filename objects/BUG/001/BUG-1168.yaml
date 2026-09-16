@@ -40,7 +40,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T06:59:59.881633335Z
-modified_at: 2026-09-16T06:59:59.881633335Z
+modified_at: 2026-09-16T07:00:01.904265091Z
 req_type: Bug
 tags:
 - fast-follow:BUG-1167
@@ -48,3 +48,7 @@ tags:
 - merge-hold
 - parent:EPIC-68
 - severity:high
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-16T07:00:01.904265091Z
