@@ -22,12 +22,12 @@ description: |-
   Fix: statusline_cmd.rs:282 relabel inbox: -> drafts:; lib.rs:40944 add
   AND deferred = 0 and rename the fn (read_draft_backlog_depth). Test: seed N
   active + M deferred drafts; assert count == N and the label is not inbox:.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:23:14.628042243Z
-modified_at: 2026-09-16T15:59:45.531938128Z
+modified_at: 2026-09-16T16:10:21.082247313Z
 req_type: Bug
 tags:
 - aida:statusline
@@ -39,8 +39,24 @@ relationships:
   target_id: 01a0aaf1-dfec-75c1-a38d-59e1df4071ec
   created_at: 2026-09-16T15:59:39.566818007Z
   created_by: joe
+history:
+- id: 01a0aafb-c213-7601-b0e1-69671842bb64
+  author: aida-auto-bump
+  timestamp: 2026-09-16T16:10:21.075780485Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0aafb-c21a-7332-92eb-0bb2783ae604
+  timestamp: 2026-09-16T16:10:21.082246756Z
+  agent: aida
+  commit_sha: c97d281abd9130318350a9c3915a2de4dda3d9f9
+  summary: Completed via merge c97d281a
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T15:59:45.531938128Z
   implemented_by: joe
+  completed_at: 2026-09-16T16:10:21.075667313Z
+  completion_sha: c97d281abd9130318350a9c3915a2de4dda3d9f9
