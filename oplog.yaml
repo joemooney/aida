@@ -70948,5 +70948,31 @@ operations:
   timestamp: 2026-09-16T16:57:27.407637230Z
   kind: !SetStatus
     status: Completed
-clock: 5535
+- id: 01a0ab38-de30-75a2-b56f-a4e4244c319d
+  target_id: 01a0ab38-da21-7c32-8cb9-ceb0700d1c55
+  author: aida
+  node_id: '1'
+  lamport: 5536
+  timestamp: 2026-09-16T17:17:05.968835008Z
+  kind: !Create
+    title: 'Review PR-1870: [AI:codex] feat(audit): add proxy approval ledger (STORY-1173)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0ab28`) for branch `story-1173`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1870>
+      - Branch: `story-1173` → `main`
+
+      ## Covers
+
+      - STORY-1173
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1870` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5536
 node_id: '1'
