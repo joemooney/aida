@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:39:34.556868085Z
-modified_at: 2026-09-16T03:25:23.807909714Z
+modified_at: 2026-09-16T23:55:45.139625608Z
 req_type: Bug
 tags:
 - drain aida-store index-lock reliability concurrency
@@ -36,6 +36,12 @@ comments:
   created_at: 2026-09-16T02:11:33.917976234Z
   modified_at: 2026-09-16T02:11:33.917976234Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0aca5-d873-7560-b935-e20eb4e11adb
+  author: joe
+  content: Commit 5b5734b68 references this requirement
+  created_at: 2026-09-16T23:55:45.139625608Z
+  modified_at: 2026-09-16T23:55:45.139625608Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0a83f-6bd9-79e0-ab93-e0615c0b35e1
   author: aida-auto-bump
