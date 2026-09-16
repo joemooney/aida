@@ -1228,6 +1228,10 @@ pub(crate) trait PhaseDriver {
     fn merge_supervision_hold(&mut self) -> Option<String> {
         None
     }
+    /// Persist the supervised-merge hold before the orchestrator exits cleanly.
+    /// Default no-op keeps pure test drivers and non-store drivers unchanged.
+    // trace:BUG-1168 | ai:codex
+    fn record_merge_supervision_hold(&mut self, _reason: &str) {}
     /// Phase 5 — `aida pull` (auto-bumps Done → Completed).
     fn pull(&mut self) -> Result<(), PhaseFailure>;
     /// Phase 6 — `cargo build --release`.
@@ -3707,6 +3711,7 @@ pub(crate) fn orchestrate_with_resume(
         // escalation — exit `0`, no merge, the PR left mergeable for the
         // human/advisor, a batch drain advances. trace:BUG-727 | ai:claude
         if let Some(reason) = driver.merge_supervision_hold() {
+            driver.record_merge_supervision_hold(&reason);
             // trace:BUG-770 | ai:claude — the driver names the event root.
             let events_root = driver.events_root();
             return finish_escalated(
@@ -5624,6 +5629,10 @@ mod tests {
         /// gate fires before phase 4. `None` (default) keeps every
         /// pre-BUG-727 flow unchanged.
         merge_hold: Option<String>,
+        /// BUG-1168: reasons persisted before a supervised clean-exit. This
+        /// stands in for the real driver's `.aida/merge-holds/PR-N` write.
+        // trace:BUG-1168 | ai:codex
+        recorded_merge_holds: Vec<String>,
         /// BUG-879: PR resolved by the phase-1/2 handoff. `None` or `Some(0)`
         /// must fail before `run_reviewer` is called.
         // trace:BUG-879 | ai:codex
@@ -5678,6 +5687,7 @@ mod tests {
                 conflict_rebase_ok: false,
                 conflict_rebase_calls: 0,
                 merge_hold: None,
+                recorded_merge_holds: Vec::new(),
                 pr_number: Some(46),
                 reviewer_watchdog_failures: 0,
                 reviewer_cache_locked_failures: 0,
@@ -5982,6 +5992,10 @@ mod tests {
         // trace:BUG-727 | ai:claude
         fn merge_supervision_hold(&mut self) -> Option<String> {
             self.merge_hold.clone()
+        }
+        // trace:BUG-1168 | ai:codex
+        fn record_merge_supervision_hold(&mut self, reason: &str) {
+            self.recorded_merge_holds.push(reason.to_string());
         }
         fn pull(&mut self) -> Result<(), PhaseFailure> {
             self.record(Phase::Pull)
@@ -8006,6 +8020,11 @@ mod tests {
             escalation.reason.contains("auto-merge refused"),
             "{}",
             escalation.reason
+        );
+        assert_eq!(
+            driver.recorded_merge_holds,
+            vec![escalation.reason],
+            "supervised clean-exit must publish the durable merge fence"
         );
         // The pipeline stopped before phase 4 — merge / pull / build never ran.
         assert_eq!(
