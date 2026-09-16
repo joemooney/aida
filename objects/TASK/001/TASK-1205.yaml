@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T12:44:40.345435015Z
-modified_at: 2026-09-16T21:52:51.525741691Z
+modified_at: 2026-09-16T21:53:34.357216035Z
 req_type: Task
 tags:
 - ci
@@ -102,6 +102,20 @@ comments:
   content: Commit 7c8e91c53 references this requirement
   created_at: 2026-09-16T21:25:47.809370555Z
   modified_at: 2026-09-16T21:25:47.809370555Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ac35-fc95-7351-bc1a-e4a78b4c79ed
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    verdict: MERGED (proxy) — shipped via aida pr ship 1746
+    scope: proxy-merge of PR-1746 on Joe's behalf during the away-window
+    independent: yes — core PR (CI portability guards) is codex-authored; I did NOT implement it. My commits were mechanical only: rebase onto current main + regenerate the stale portability allowlist baseline (via the script's own --print-findings), both verified.
+    proxy: claude-opus-4.8, session 01FSF79sGFHdttbFjJAHicCd
+    authorized-by: joe (operator, away-window) — "I approve the merge" + "fix what you can", 2026-09-16 14:54 MST
+    gates cleared: required CI all SUCCESS (ubuntu/macos/windows Build + merge-hold-gate); MERGEABLE+CLEAN; advisor explicitly RELEASED the merge window after landing #1866 ("merge #1746 now"); no concurrent merger/drain. Two real reds fixed en route: (1) BUG-1176 drift-guard false-positive landmine (fixed+merged as #1872); (2) the PR's own portability ratchet failing on 12 pre-existing /tmp literals absent from a stale allowlist baseline — completed the baseline (169 entries), full-check + growth-check verified green.
+    timestamp: 2026-09-16 14:54 MST
+  created_at: 2026-09-16T21:53:34.357216035Z
+  modified_at: 2026-09-16T21:53:34.357216035Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0ac35-553f-7d93-954d-d61025494cd3
