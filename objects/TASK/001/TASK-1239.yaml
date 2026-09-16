@@ -16,7 +16,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:54:35.084636857Z
-modified_at: 2026-09-16T05:53:19.875766421Z
+modified_at: 2026-09-16T05:58:32.207705495Z
 req_type: Task
 tags:
 - roles agent-picker stakeholder guest requester ux aida:agent
+comments:
+- id: 01a0a8cb-a00f-7033-90bd-359ad23ce282
+  author: joe
+  content: Commit d3f6f30a6 references this requirement
+  created_at: 2026-09-16T05:58:32.207705495Z
+  modified_at: 2026-09-16T05:58:32.207705495Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
