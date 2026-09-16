@@ -70499,5 +70499,31 @@ operations:
   timestamp: 2026-09-16T07:46:27.778933542Z
   kind: !SetStatus
     status: Rejected
-clock: 5505
+- id: 01a0aace-f0d1-7bf2-bf79-1eaa5d5501ef
+  target_id: 01a0aace-ecb5-7d81-b1ee-cf0cc147a272
+  author: aida
+  node_id: '1'
+  lamport: 5506
+  timestamp: 2026-09-16T15:21:23.921704135Z
+  kind: !Create
+    title: 'Review PR-1864: BUG-1168: fence drive-mode merge holds'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0aac9`) for branch `bug-1168`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1864>
+      - Branch: `bug-1168` → `main`
+
+      ## Covers
+
+      - BUG-1168
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1864` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5506
 node_id: '1'
