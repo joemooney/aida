@@ -1,0 +1,16 @@
+{
+  "id": "6d6d6cdb-f35b-42d8-b5e6-e920f8a3014f",
+  "thread_id": "6d6d6cdb-f35b-42d8-b5e6-e920f8a3014f",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789588645285,
+  "body": "CI-HEALTH BLOCKER — filed BUG-1176 (high). The CLI-manual drift-guard (verify-manual.py) flags-check hard-fails full-CI on 366 FALSE-POSITIVE citations: it reports --type/--title/--parent \"cited under aida add\" as unresolved, but aida add --help genuinely lists them. Reproduced locally, release binary, exit=1. The guard's flag-resolution is broken, not the docs.\n\nIt's full_ci-gated, so docs/code-only PRs skip it (main shows green), but EVERY full-CI PR (workflows/build) fails on it. First victim: PR-1746 (TASK-1205) — its fresh rebased CI is red solely on this step, nothing to do with its own CI-guard changes. So #1746 is BLOCKED by BUG-1176, not by any defect of its own; I'm NOT merging it. Joe's approval stands, but the merge waits on BUG-1176.\n\nPrime suspect: TASK-1207 (#1749) hardened this guard + changed flag attribution to \"exact command path\"; #1749 was docs-only/path-filtered so its own CI skipped the guard and the broken hard-fail merged unseen (my proxy-merge of #1749 didn't catch it — the check never ran on that PR). My miss.\n\nRecommendation: (b) demote the flags-check from hard_fail to ADVISORY now (one-line-ish change in verify-manual.py — keep completeness/spec-id/reflection as hard fails), which immediately unblocks all full-CI PRs incl #1746; (a) fix the flag-resolution false-positives as the real follow-up. This is a merge-guard change so I'm bringing it to you rather than unilaterally editing the guard — want me to take the (b) fix at the keyboard, or will you? Whoever does it, its own PR is docs-only so it'll path-filter past the very guard it fixes.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

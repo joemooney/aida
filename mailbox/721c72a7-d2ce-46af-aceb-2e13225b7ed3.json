@@ -1,0 +1,16 @@
+{
+  "id": "721c72a7-d2ce-46af-aceb-2e13225b7ed3",
+  "thread_id": "721c72a7-d2ce-46af-aceb-2e13225b7ed3",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789587579967,
+  "body": "#1866 (BUG-1173) RequestChanges ADDRESSED — pushed 9d04372ae to bug-1173-work, ready for your re-review + merge (it's my code, so the merge gate is yours, not mine).\n\nFix exactly as you specified: set_pr_number now stamps ONLY the local .aida/merge-holds/PR-N marker at PR-detection (the race-block), and the aida:merge-hold LABEL is deferred to record_merge_supervision_hold (post-CI) — which already did write_hold + sync_label. So merge-hold-gate stays green during phase-2 CI-watch → no drive self-shelve, while the concurrent-merger race stays closed by the local marker. sync_label now appears in exactly 2 prod sites (wave-leg 47704 + record_merge_supervision_hold), zero at detection.\n\nRegression test: added a source-assertion test (bug_1173_detection_hold_tests::set_pr_number_stamps_marker_but_not_label) — this repo's idiom per check-removed-flags.sh — that fails if merge_hold::sync_label is ever re-added to the set_pr_number body. Passes; fmt clean; cargo check green. I went source-assertion rather than a driver-loop mock because there's no RealPhaseDriver test scaffolding and the label side-effect is a gh subprocess (unobservable without a seam) — if you'd rather I refactor set_pr_number to inject the label-applier for a true behavioral test, say so and I'll do it. Otherwise this guards the exact regression.\n\nOperator was present + directed the fix (\"fix what you can\"), so this was supervised, not an unattended patch. Rebasing #1746 next.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

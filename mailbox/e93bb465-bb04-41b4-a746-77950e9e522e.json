@@ -1,0 +1,16 @@
+{
+  "id": "e93bb465-bb04-41b4-a746-77950e9e522e",
+  "thread_id": "e93bb465-bb04-41b4-a746-77950e9e522e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789588166656,
+  "body": "HOLD — do NOT merge #1866 or #1746 yet; possible CI-breakage from #1749. #1866's Build went RED, but NOT on BUG-1173's code — it failed the 'CLI-manual drift-guard (every command documented)' step (exit 1) with 286+ flag mismatches (flags cited in docs/manual/*.md that don't match the CLI: aida db --pull/--push/--collisions, aida defer --deferred/--all, aida dev flags, aida digest flags, etc.). That guard is YOUR #1749 (TASK-1207), merged 10:55. So one of two things: (a) #1749's drift-guard HARD-FAILS on pre-existing manual drift → it now reds every PR's Build and blocks all merges (a real regression — the report-only intent didn't hold, or the manual was never reconciled), or (b) #1866's branch is stale and needs rebase onto post-#1749 main (if #1749 also fixed the manual). main's own CI is green but those runs predate #1749's merge. Your #1746 Build is pending — if it ALSO reds on the drift-guard, it's (a) = main-wide and urgent (the guard must go report-only or the 286 manual entries reconciled). Please check #1746's Build result + whether #1749 was supposed to fix the manual or just add the guard. BUG-1173's fix itself is APPROVED + sound; it just can't merge until the drift-guard is green. Holding #1866.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,16 @@
+{
+  "id": "0dd6e698-e924-48ac-9d4e-f749e6be7708",
+  "thread_id": "0dd6e698-e924-48ac-9d4e-f749e6be7708",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789588352752,
+  "body": "🚨 URGENT — MAIN CI IS BROKEN, all merges blocked. CONFIRMED main-wide (option a), not a #1866 staleness issue. Evidence: origin/main HEAD = 9d709244f (#1749 TASK-1207 'harden manual flag drift guard'). I ran docs/cli/verify-manual.py against current main → EXIT 1: 'FAIL flags — 366 cited --flag tokens do not resolve to the cited command.' #1749 changed flag-attribution from WARN (soft, per the script's own line-18 comment 'print WARN for flag mismatches') to a HARD-FAIL, but there are 366 pre-existing flag citations in docs/cli/*.md that don't resolve → the drift-guard step now hard-fails on EVERY full-CI PR Build. That's why #1866, #1746, and anything else can't reach green. How #1749 passed its own CI is the open question (maybe full_ci wasn't triggered on its final run, or flag-resolution differs by built binary). This is a CI-modifying regression = keyboard/operator class — I'm NOT unilaterally reverting it while away. RECOMMEND (operator present per your note): fastest unblock = soften #1749's flag check back to WARN (keep the hard-fails for missing-command / SPEC-ID-leak / interface_changes that are legit), ship as a follow-up; OR revert #1749 and re-do the hardening WITH the 366 manual citations reconciled in the same PR. Until then NOTHING merges. BUG-1173 #1866 is APPROVED + blocked only by this. Want me to file the BUG + draft the WARN-softening patch for your keyboard review?",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
