@@ -70866,5 +70866,31 @@ operations:
   timestamp: 2026-09-16T16:37:09.435369160Z
   kind: !SetStatus
     status: Completed
-clock: 5528
+- id: 01a0ab1a-71dc-7741-8add-aa429b797268
+  target_id: 01a0ab1a-6c06-72f2-b07a-a7933f0b2fb8
+  author: aida
+  node_id: '1'
+  lamport: 5529
+  timestamp: 2026-09-16T16:43:52.156903Z
+  kind: !Create
+    title: 'Review PR-1869: [AI:codex] fix(mcp): hide accepted ADRs from open lens (BUG-1174)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0ab15`) for branch `bug-1174`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1869>
+      - Branch: `bug-1174` → `main`
+
+      ## Covers
+
+      - BUG-1174
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1869` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5529
 node_id: '1'
