@@ -1588,6 +1588,24 @@ pub(crate) fn pr_ship_handler(
             base: retarget_base.clone(),
             title: None,
         };
+        // BUG-1167: `aida pr merge` / `pr ship` is an EXPLICIT human/advisor
+        // merge — the deliberate act that "merge requires human/advisor review"
+        // asks for. So it RELEASES any supervised merge-hold marker before
+        // merging (the chokepoint would otherwise refuse it). The automatic and
+        // concurrent paths — drain auto-merge, an integrate sweep, another
+        // session's merge_change — never clear, so they stay refused. This is
+        // the client-side release; the server-side required-check (ADR-37 layer
+        // 2) still governs a raw `gh pr merge`. trace:BUG-1167 | ai:claude
+        if let Some(reason) = crate::merge_hold::read_hold(&project_root, pr_number) {
+            eprintln!(
+                "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                pr_number,
+                reason,
+            );
+            let _ = crate::merge_hold::clear_hold(&project_root, pr_number);
+            crate::merge_hold::sync_label(&project_root, pr_number, false);
+        }
         let mut merge_sink = crate::network_retry::StderrSink;
         if let Err(e) = crate::forge::forge_for(&project_root).merge_change(
             &change_ref,

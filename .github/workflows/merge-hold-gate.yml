@@ -1,0 +1,40 @@
+name: merge-hold-gate
+
+# BUG-1167 / ADR-37 Layer 2 — the server-side, un-bypassable half.
+#
+# This check FAILS while a PR carries the `aida:merge-hold` label (which AIDA
+# applies to a supervised drive/guided/operator/decide/unset PR) and PASSES
+# otherwise. Made a *required* status check in branch protection, it blocks even
+# a raw / stale-binary / web-UI `gh pr merge` that never touches AIDA's client
+# chokepoint — closing the concurrent-merger hole regardless of which binary the
+# merger runs. A drain-mode PR is never labelled, so it passes in seconds and its
+# auto-merge is untouched (the granularity the branch-protection concern needs).
+# The job is deliberately trivial (label inspection only, no build) so it never
+# stalls a PR waiting on a required check.
+#
+# To enforce: Settings -> Branches -> protect `main` -> Require status checks ->
+# add `merge-hold-gate`, with "Do not allow bypassing" / enforce_admins ON so the
+# hold binds everyone; clearing the label (a human/advisor review, or
+# `aida merge-hold clear <pr>`) re-runs this and lets the merge proceed.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  merge-hold-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse while the supervised merge-hold label is present
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          if printf '%s' "$LABELS" | tr ',' '\n' | grep -qx 'aida:merge-hold'; then
+            echo "::error::This PR carries 'aida:merge-hold' — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Clear the hold (review it, then \`aida merge-hold clear <pr>\` or remove the label) to let the merge proceed."
+            exit 1
+          fi
+          echo "No supervised merge-hold label present — gate passes."
