@@ -1,0 +1,31 @@
+# AIDA merge-hold gate — GitLab CI analog of .github/workflows/merge-hold-gate.yml
+# (BUG-1167 / ADR-37 Layer 2, for GitLab). STORY-1165.
+#
+# Include this job in a GitLab project's `.gitlab-ci.yml`. It FAILS a
+# merge-request pipeline while the MR carries the `aida:merge-hold` label — which
+# AIDA applies to a supervised (drive/guided/operator/decide/unset) MR via
+# `merge_hold::sync_label` (glab mr update --label) — and passes otherwise.
+#
+# To make it un-bypassable (the point of Layer 2), turn on the project's
+# "Pipelines must succeed" merge check (Settings → Merge requests), so a labelled
+# MR cannot merge — not even a raw `glab mr merge` or a UI merge — until a
+# human/advisor clears the hold (removes the label, e.g. `aida merge-hold clear`).
+# An unlabelled (drain-mode) MR passes in seconds, so drain auto-merge is
+# preserved. The job is trivial (label inspection only, no build) so it never
+# stalls a pipeline.
+#
+# Include it, don't copy the body, so upstream fixes flow:
+#   include:
+#     - local: '.aida/gitlab-ci-merge-hold-gate.yml'   # scaffolded by `aida init` (STORY-1165 follow-up)
+
+aida-merge-hold-gate:
+  stage: test
+  rules:
+    - if: '$CI_MERGE_REQUEST_IID' # only on merge-request pipelines
+  script:
+    - |
+      if printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr ',' '\n' | grep -qx 'aida:merge-hold'; then
+        echo "This MR carries 'aida:merge-hold' — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Clear the hold (aida merge-hold clear <iid>, or remove the label after review) to let the merge proceed."
+        exit 1
+      fi
+      echo "No supervised merge-hold label present — gate passes."
