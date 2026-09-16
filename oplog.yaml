@@ -69757,5 +69757,31 @@ operations:
   timestamp: 2026-09-16T03:02:18.844447501Z
   kind: !SetStatus
     status: Completed
-clock: 5457
+- id: 01a0a838-b488-7462-8897-fa5a0ba0bfe8
+  target_id: 01a0a838-b077-7b62-b83f-f8552725b3b3
+  author: aida
+  node_id: '1'
+  lamport: 5458
+  timestamp: 2026-09-16T03:18:03.656309652Z
+  kind: !Create
+    title: 'Review PR-1856: [AI:codex] fix(store): recover stale git index locks (BUG-1164)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a82b`) for branch `bug-1164-2`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1856>
+      - Branch: `bug-1164-2` → `main`
+
+      ## Covers
+
+      - BUG-1164
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1856` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5458
 node_id: '1'
