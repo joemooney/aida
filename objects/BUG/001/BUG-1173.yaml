@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:42.826056329Z
-modified_at: 2026-09-16T16:02:57.332065286Z
+modified_at: 2026-09-16T19:39:21.642814145Z
 req_type: Bug
 tags:
 - supervised-merge merge-hold bug-1167 race concurrency reliability
@@ -35,4 +35,10 @@ comments:
     TEST: a supervised (drive/guided/operator/decide/unset) spec's PR carries the marker + aida:merge-hold label from PR-detection (assert the marker file exists before the merge phase, via a driver-level test); a drain-mode PR is never marked. Worktree /home/joe/ai/aida-bug1173 is set up off latest main (has BUG-1167/1168).
   created_at: 2026-09-16T15:50:57.454567688Z
   modified_at: 2026-09-16T15:50:57.454567688Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0abbb-1caa-7571-8070-08452dd8f86d
+  author: joe
+  content: Commit 9d709244f references this requirement
+  created_at: 2026-09-16T19:39:21.642814145Z
+  modified_at: 2026-09-16T19:39:21.642814145Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
