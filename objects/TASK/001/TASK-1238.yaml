@@ -3,12 +3,12 @@ spec_id: TASK-1238
 agreed_id: TASK-1238
 title: merge_hold::read_hold should fail CLOSED on a present-but-unreadable marker (distinguish NotFound from other IO errors)
 description: 'Fast-follow to BUG-1167 (#1857). read_hold uses read_to_string(hold_path).ok()? — so a marker file that EXISTS but is unreadable (permission/IO error) returns None → the chokepoint fail-OPENS (allows the merge). A present marker should HOLD regardless of readability (ADR-37: fail-closed on unresolvable). Fix: match on the error kind — NotFound → None (genuinely no hold); any other Err → Some(hold) (a present-but-unresolvable marker holds). Layer 2 (the GitHub label required-check) backstops this today (the label is still present → check fails), so it is a minor Layer-1 hardening, not a live hole. Add a test: an unreadable/erroring marker path resolves to a hold.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:40:58.162625052Z
-modified_at: 2026-09-16T04:58:16.552463370Z
+modified_at: 2026-09-16T15:29:56.063958950Z
 req_type: Task
 tags:
 - merge-hold fail-closed bug-1167 followup
@@ -17,3 +17,21 @@ relationships:
   target_id: 01a0a83f-1461-7451-973a-663af0055331
   created_at: 2026-09-16T04:41:03.578134793Z
   created_by: joe
+history:
+- id: 01a0aad6-c159-7033-9a19-2e98a427ac1d
+  author: aida-auto-bump
+  timestamp: 2026-09-16T15:29:56.057383757Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0aad6-c15f-7882-8e20-27fc9eaf679c
+  timestamp: 2026-09-16T15:29:56.063958030Z
+  agent: aida
+  commit_sha: c91fec8e0a8ced47a4a678ad78f2c8a4c90e7db1
+  summary: Completed via merge c91fec8e
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-16T15:29:56.057256358Z
+  completion_sha: c91fec8e0a8ced47a4a678ad78f2c8a4c90e7db1
