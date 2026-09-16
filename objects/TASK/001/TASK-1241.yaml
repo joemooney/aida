@@ -12,3 +12,7 @@ modified_at: 2026-09-16T06:01:36.582876288Z
 req_type: Task
 tags:
 - forge gitlab test live-validation parent:EPIC-68 aida:forge
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-16T06:01:44.624841561Z
