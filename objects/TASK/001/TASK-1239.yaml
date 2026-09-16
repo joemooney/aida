@@ -11,12 +11,12 @@ description: |-
   - The `aida agent new` picker shows guest + requester under a separate 'Stakeholder personas' heading, labeled non-build.
   - Selecting one launches an agent with AIDA_SESSION_ROLE=guest|requester (the existing gate applies — read-only / draft-intake).
   - They are visually distinct from and not mixed into the driver/build roles; they are never offered as queue-routable build seats.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:54:35.084636857Z
-modified_at: 2026-09-16T05:59:21.207150223Z
+modified_at: 2026-09-16T06:08:34.301263893Z
 req_type: Task
 tags:
 - roles agent-picker stakeholder guest requester ux aida:agent
@@ -33,3 +33,21 @@ comments:
   created_at: 2026-09-16T05:59:21.207150223Z
   modified_at: 2026-09-16T05:59:21.207150223Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a8d4-cff6-76f3-bbb7-33afab8db861
+  author: aida-auto-bump
+  timestamp: 2026-09-16T06:08:34.294756298Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0a8d4-cffd-76f3-8227-ff3fa7c303d6
+  timestamp: 2026-09-16T06:08:34.301262337Z
+  agent: aida
+  commit_sha: 71ada854fb4c070f223db50fd3232f9193ea4014
+  summary: Completed via merge 71ada854
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-16T06:08:34.294637305Z
+  completion_sha: 71ada854fb4c070f223db50fd3232f9193ea4014
