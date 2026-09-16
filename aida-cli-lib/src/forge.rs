@@ -1049,7 +1049,10 @@ impl GitHubForge {
     }
 
     fn gh(&self, args: &[&str]) -> Result<std::process::Output> {
-        Command::new("gh")
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        Command::new(&gh)
             .current_dir(&self.project_root)
             .args(args)
             .output()
@@ -1106,13 +1109,19 @@ impl Forge for GitHubForge {
     }
 
     fn change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
+        // STORY-516/STORY-1163: delegate to the battle-tested GitHub-only
+        // helper (BUG-74/79 gh resolution, BUG-257 transient classification).
+        // The public `detect_open_pr_for_branch` now dispatches through this
+        // trait, so GitHub must call the raw helper to avoid a loop while
+        // preserving the old argv/output shape. trace:STORY-1163 | ai:codex
+        //
         // STORY-516: delegate to the battle-tested `detect_open_pr_for_branch`
         // (BUG-74/79 gh resolution, BUG-257 transient classification) and adapt
         // its `PrLookup` to the forge-neutral `ChangeLookup` — no reimplementation
         // of the classification logic, so the orchestrator's phase-1 contract is
         // preserved exactly. trace:STORY-516 trace:BUG-257 | ai:claude
         Ok(change_lookup_from_pr_lookup(
-            crate::detect_open_pr_for_branch(&self.project_root, branch),
+            crate::detect_open_pr_for_branch_github(&self.project_root, branch),
             branch,
         ))
     }
@@ -1121,7 +1130,7 @@ impl Forge for GitHubForge {
         // STORY-516: delegate to detect_open_pr_for_spec (gh pr list --search).
         // The branch label is unknown from a spec search, so pass "". | ai:claude
         Ok(change_lookup_from_pr_lookup(
-            crate::detect_open_pr_for_spec(&self.project_root, spec),
+            crate::detect_open_pr_for_spec_github(&self.project_root, spec),
             "",
         ))
     }
@@ -1130,7 +1139,7 @@ impl Forge for GitHubForge {
         // STORY-516: delegate to detect_merged_pr_for_branch (gh pr list --state
         // merged). trace:STORY-516 | ai:claude
         Ok(change_lookup_from_pr_lookup(
-            crate::detect_merged_pr_for_branch(&self.project_root, branch),
+            crate::detect_merged_pr_for_branch_github(&self.project_root, branch),
             branch,
         ))
     }
@@ -1338,12 +1347,16 @@ impl Forge for GitHubForge {
     }
 
     fn ci_probe_for_branch(&self, branch: &str) -> Result<CiProbeResult> {
+        // STORY-1163: `probe_ci_state_for_branch` now dispatches through the
+        // Forge trait, so the GitHub provider calls the raw gh probe directly.
+        // trace:STORY-1163 | ai:codex
+        //
         // STORY-516: delegate to the proven `probe_ci_state_for_branch` (single
         // `gh pr list --json number,statusCheckRollup` call → PR number + rollup,
         // with the BUG-* NoSignal degradations) and adapt CiProbe → CiProbeResult.
         // No classification reimplementation. trace:STORY-516 | ai:claude
         Ok(ci_probe_result_from_ci_probe(
-            crate::probe_ci_state_for_branch(branch),
+            crate::probe_ci_state_for_branch_github(branch),
         ))
     }
 
@@ -1372,11 +1385,9 @@ impl Forge for GitHubForge {
         // TASK-1165: this forge already carries the project root, so pass it
         // down — the terminal `CiTerminal` emit must never re-derive a root
         // from the process cwd. trace:STORY-516 trace:TASK-1165 | ai:claude
-        Ok(ci_probe_result_from_ci_probe(crate::watch_ci_for_context(
-            Some(&self.project_root),
-            branch,
-            !interactive,
-        )))
+        Ok(ci_probe_result_from_ci_probe(
+            crate::watch_ci_for_context_github(Some(&self.project_root), branch, !interactive),
+        ))
     }
 
     fn merge_change(
@@ -1538,7 +1549,10 @@ impl GitLabForge {
     }
 
     fn glab(&self, args: &[&str]) -> Result<std::process::Output> {
-        Command::new("glab")
+        let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
+        })?;
+        Command::new(&glab)
             .current_dir(&self.project_root)
             .args(args)
             .output()
@@ -1561,7 +1575,10 @@ impl GitLabForge {
             args.push("-f".into());
             args.push(format!("{k}={v}"));
         }
-        Command::new("glab")
+        let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
+        })?;
+        Command::new(&glab)
             .current_dir(&self.project_root)
             .args(args.iter().map(String::as_str))
             .output()
