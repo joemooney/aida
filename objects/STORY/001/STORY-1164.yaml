@@ -3,12 +3,12 @@ spec_id: STORY-1164
 agreed_id: STORY-1164
 title: 'GitLab Slice 1: route the high-traffic keyboard paths through the Forge trait'
 description: 'Point the direct-gh keyboard-path sites at existing trait methods: queue recover''s gh pr create --fill -> open_change; release --after-pr merge -> merge_change; pr ship / reviewer open-PR lookup -> change_for_branch; aida review''s gh pr diff + metadata -> change_metadata. Proposed mode: drive. Acceptance: these paths run through forge_for()/the trait (no direct gh spawn); GitHub behaviour unchanged (tests green); a GitLab repo exercises the GitLabForge equivalents. Depends on Slice 0.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:33.163650404Z
-modified_at: 2026-09-16T16:25:35.069008773Z
+modified_at: 2026-09-16T16:37:01.272221121Z
 req_type: Story
 tags:
 - forge gitlab wiring slice-1 parent:EPIC-68 aida:forge
@@ -28,8 +28,24 @@ relationships:
   target_id: 01a0ab09-87d4-78f1-b391-a4512b4b0e16
   created_at: 2026-09-16T16:25:28.930882372Z
   created_by: joe
+history:
+- id: 01a0ab14-2cd1-72e0-91f0-6cf9aa27ab10
+  author: aida-auto-bump
+  timestamp: 2026-09-16T16:37:01.265509912Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ab14-2cd8-7473-8066-d72e40bc0aef
+  timestamp: 2026-09-16T16:37:01.272219816Z
+  agent: aida
+  commit_sha: 16b2f63a7483bdeec71736348abd421d7f94cfcc
+  summary: Completed via merge 16b2f63a
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T16:25:35.069008773Z
   implemented_by: joe
+  completed_at: 2026-09-16T16:37:01.265363687Z
+  completion_sha: 16b2f63a7483bdeec71736348abd421d7f94cfcc
