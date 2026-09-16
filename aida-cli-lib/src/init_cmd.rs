@@ -2219,6 +2219,15 @@ mod task_510_init_scaffold_task_tests {
         std::fs::set_permissions(path, perms).unwrap();
     }
 
+    #[cfg(unix)]
+    fn make_non_executable(path: &std::path::Path) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o644);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
     #[test]
     fn plan_template_scaffold_is_lazy_and_idempotent() {
         let tmp = TempDir::new().unwrap();
@@ -2252,24 +2261,57 @@ mod task_510_init_scaffold_task_tests {
         let first = hooks.join("00-first.sh");
         std::fs::write(
             &first,
-            "#!/bin/sh\nprintf '1:%s:%s:%s:%s:%s:%s\\n' \"$PWD\" \"$AIDA_INIT_PROJECT_ROOT\" \"$AIDA_INIT_PROJECT_NAME\" \"$AIDA_INIT_LANG\" \"$AIDA_INIT_REMOTE_URL\" \"$AIDA_INIT_FORGE\" >> order.txt\n",
+            "#!/bin/sh\nprintf '1:%s:%s:%s:%s:%s:%s\\n' \"$PWD\" \"$AIDA_INIT_PROJECT_ROOT\" \"$AIDA_INIT_PROJECT_NAME\" \"$AIDA_INIT_LANG\" \"$AIDA_INIT_REMOTE_URL\" \"$AIDA_INIT_FORGE\" >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n",
         )
         .unwrap();
         make_executable(&first);
 
         let second = hooks.join("10-second.sh");
-        std::fs::write(&second, "#!/bin/sh\nprintf '2\\n' >> order.txt\n").unwrap();
+        std::fs::write(
+            &second,
+            "#!/bin/sh\nprintf '2\\n' >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n",
+        )
+        .unwrap();
         make_executable(&second);
 
         let ignored = hooks.join("05-ignored.sh");
-        std::fs::write(&ignored, "#!/bin/sh\nprintf 'ignored\\n' >> order.txt\n").unwrap();
+        std::fs::write(
+            &ignored,
+            "#!/bin/sh\nprintf 'ignored\\n' >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n",
+        )
+        .unwrap();
+        make_non_executable(&ignored);
         let ignored_ext = hooks.join("06-ignored.txt");
         std::fs::write(
             &ignored_ext,
-            "#!/bin/sh\nprintf 'ignored\\n' >> order.txt\n",
+            "#!/bin/sh\nprintf 'ignored\\n' >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n",
         )
         .unwrap();
         make_executable(&ignored_ext);
+
+        // trace:BUG-1165 | ai:codex
+        // Keep this CI-flaky fixture hermetic: the hook set and mode bits must
+        // be fully determined before the runner starts filtering executable .sh files.
+        let mut fixture = std::fs::read_dir(&hooks)
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                (
+                    path.file_name().unwrap().to_string_lossy().into_owned(),
+                    is_executable_file(&path),
+                )
+            })
+            .collect::<Vec<_>>();
+        fixture.sort();
+        assert_eq!(
+            fixture,
+            vec![
+                ("00-first.sh".to_string(), true),
+                ("05-ignored.sh".to_string(), false),
+                ("06-ignored.txt".to_string(), true),
+                ("10-second.sh".to_string(), true),
+            ]
+        );
 
         let context = PostInitHookContext {
             project_root: root.clone(),
