@@ -732,39 +732,66 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
             "<name>".dimmed()
         );
         println!("Or install a starter set: {}", "aida role scaffold".cyan());
-        return Ok(());
+    } else {
+        println!("Roles for {}:", project_root.display());
+        for role in &roles {
+            let marker = if active.as_deref() == Some(&role.name) {
+                "*".green().to_string()
+            } else {
+                " ".to_string()
+            };
+            let scope = if role.global {
+                " [global]".dimmed().to_string()
+            } else {
+                String::new()
+            };
+            let last = humanize_relative(role.last_active_at);
+            let purpose = role
+                .purpose
+                .as_deref()
+                .map(|p| format!(" — {}", p))
+                .unwrap_or_default();
+            // TASK-586: `advisor` is the canonical name now (roles are
+            // canonicalized on load), so the bare name is the identity.
+            let display_name = role.name.clone();
+            println!(
+                "  {} {:<16}{} last active {}{}",
+                marker,
+                display_name.bold(),
+                scope,
+                last,
+                purpose
+            );
+        }
     }
-    println!("Roles for {}:", project_root.display());
-    for role in &roles {
-        let marker = if active.as_deref() == Some(&role.name) {
+    print_stakeholder_personas(active.as_deref());
+    Ok(())
+}
+
+fn print_stakeholder_personas(active: Option<&str>) {
+    // trace:TASK-1237 | ai:codex
+    // Stakeholder personas are programmatic AIDA_SESSION_ROLE gates, not role
+    // files or build-loop seats, so append them to role-list discovery without
+    // making them scaffolded/routable roles.
+    println!();
+    println!("Stakeholder personas:");
+    for (name, label) in [
+        ("guest", "least-privilege read-only; not a build seat"),
+        ("requester", "least-privilege read/intake; not a build seat"),
+    ] {
+        let marker = if active == Some(name) {
             "*".green().to_string()
         } else {
             " ".to_string()
         };
-        let scope = if role.global {
-            " [global]".dimmed().to_string()
-        } else {
-            String::new()
-        };
-        let last = humanize_relative(role.last_active_at);
-        let purpose = role
-            .purpose
-            .as_deref()
-            .map(|p| format!(" — {}", p))
-            .unwrap_or_default();
-        // TASK-586: `advisor` is the canonical name now (roles are
-        // canonicalized on load), so the bare name is the identity.
-        let display_name = role.name.clone();
         println!(
-            "  {} {:<16}{} last active {}{}",
+            "  {} {:<16} {} · become it via {}",
             marker,
-            display_name.bold(),
-            scope,
-            last,
-            purpose
+            name.bold(),
+            label,
+            format!("AIDA_SESSION_ROLE={name}").cyan()
         );
     }
-    Ok(())
 }
 
 fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Result<()> {
