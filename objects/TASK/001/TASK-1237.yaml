@@ -1,0 +1,19 @@
+id: 01a0a7a5-3bcb-7ba3-b9f2-48cff17bc729
+spec_id: TASK-1237
+agreed_id: TASK-1237
+title: Surface guest/requester stakeholder personas in 'aida role list' (they work via AIDA_SESSION_ROLE but are invisible)
+description: |-
+  STORY-1110 (slice 1) shipped guest/requester as programmatic least-privilege gates keyed on AIDA_SESSION_ROLE=guest|requester (permissions.rs) — verified working (guest reads, all writes refused; requester add-Draft only). But `aida role list` reads ~/.aida/roles/*.toml and no guest.toml/requester.toml exists, so the personas are INVISIBLE there — a user can't discover they exist (operator hit exactly this 2026-09-15: 'I thought we were adding guest and requestor roles'). Slice 1's acceptance explicitly deferred the discoverability surface ('Out of scope: curated /aida-intro surface').
+
+  Make the stakeholder personas discoverable without turning them into build-loop seats: either (a) have `aida role list` also print the recognized stakeholder personas (guest/requester) with a clear 'least-privilege · read/intake · not a build seat' label even without .toml files, or (b) scaffold read-only guest.toml/requester.toml marked non-routable. Do NOT make them queue-routable or singleton seats (preserve STORY-1110's gate). Pairs with the deferred /aida-intro surface.
+
+  Acceptance: `aida role list` shows guest + requester with a least-privilege/non-seat label and a one-line 'become it via AIDA_SESSION_ROLE=' hint; they remain non-routable as queue targets; the STORY-1110 gates are unchanged.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T00:36:58.955295216Z
+modified_at: 2026-09-16T00:36:58.955295216Z
+req_type: Task
+tags:
+- roles guest requester discoverability role-list stakeholder parent:EPIC-64 aida:role
