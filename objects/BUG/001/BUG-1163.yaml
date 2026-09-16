@@ -20,7 +20,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:16:12.430773274Z
-modified_at: 2026-09-15T15:16:12.430773274Z
+modified_at: 2026-09-16T00:33:04.554706517Z
 req_type: Bug
 tags:
 - drive execution-mode supervised-merge fence bug-727 reliability drain
+execution_mode: guided
