@@ -70379,5 +70379,47 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5499
+- id: 01a0a925-10ff-70f1-bed4-31c81465b6d2
+  target_id: 01a0a920-03eb-7d73-93b5-266cb535f249
+  author: aida
+  node_id: '1'
+  lamport: 5500
+  timestamp: 2026-09-16T07:36:13.823156832Z
+  kind: !SetDescription
+    description: |-
+      Auto-drafted by `aida queue work TASK-1240 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      reviewer verdict is RequestChanges — not Approved
+
+      Failure kind: `verdict:request-changes`
+
+      ## Recovery hint shown to the user
+
+      Address the review feedback, then push fixups: `aida queue rework TASK-1240 --work`
+
+      ## Recurrence
+
+      Attempts: 2
+      Latest recurrence: 2026-09-16T07:36:13.301015030+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 847839 ms
+        - phase 2 (ci): 484006 ms
+        - phase 3 (reviewer): 289331 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-1240","started_at":"2026-09-16T07:03:38.754811141+00:00","completed_at":"2026-09-16T07:30:41.989730185+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":847839},{"phase":2,"slug":"ci","elapsed_ms":484006},{"phase":3,"slug":"reviewer","elapsed_ms":289331}],"total_ms":1622231,"binary_sha":"56b6e3ff9"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+clock: 5500
 node_id: '1'
