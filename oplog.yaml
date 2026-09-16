@@ -69715,5 +69715,31 @@ operations:
   timestamp: 2026-09-16T02:35:18.389510816Z
   kind: !SetStatus
     status: Completed
-clock: 5454
+- id: 01a0a81e-74be-71f1-a740-1a386f42d7ab
+  target_id: 01a0a81e-70ab-71e0-8da5-f05eef0a0c15
+  author: aida
+  node_id: '1'
+  lamport: 5455
+  timestamp: 2026-09-16T02:49:23.390980375Z
+  kind: !Create
+    title: 'Review PR-1855: [AI:codex] feat(drain): add selector-scoped agent gates (STORY-1155)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a813`) for branch `story-1155`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1855>
+      - Branch: `story-1155` → `main`
+
+      ## Covers
+
+      - STORY-1155
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1855` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5455
 node_id: '1'
