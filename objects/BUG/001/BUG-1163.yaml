@@ -15,12 +15,12 @@ description: |-
   - A drive/guided/operator/decide spec is NEVER merged by any auto-complete path (single-spec, batch, force-claim, open-PR recovery, or a subsequent spec's pull/merge phase) — the merge waits for an explicit human/advisor `gh pr merge`.
   - Regression test: an orchestrate run over a drive spec that is reviewer-approved + CI-green leaves the PR OPEN (SupervisedMerge escalation) and does NOT merge, across all the paths above.
   - Audit the three paths (merge phase, open-PR recovery re-entry, subsequent-spec pull) for where a held PR can still get merged.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:16:12.430773274Z
-modified_at: 2026-09-16T00:40:41.149325224Z
+modified_at: 2026-09-16T00:59:09.085009441Z
 req_type: Bug
 tags:
 - drive execution-mode supervised-merge fence bug-727 reliability drain
