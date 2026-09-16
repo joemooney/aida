@@ -659,6 +659,10 @@ pub trait Forge {
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<Vec<String>>;
 
+    /// Print a change's diff to stdout using the provider-native CLI.
+    // trace:STORY-1164 | ai:codex
+    fn diff_change(&self, id: u64) -> Result<()>;
+
     /// STORY-621 Slice 2: the change's review verdict. GitHub reads
     /// `reviewDecision,latestReviews`; GitLab derives it from the approvals
     /// endpoint (approved → `Approved`, approvals outstanding →
@@ -1262,6 +1266,18 @@ impl Forge for GitHubForge {
             .collect())
     }
 
+    fn diff_change(&self, id: u64) -> Result<()> {
+        let id_str = id.to_string();
+        let out = self.gh(&["pr", "diff", &id_str])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr diff failed for #{id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        print!("{}", String::from_utf8_lossy(&out.stdout));
+        Ok(())
+    }
+
     // trace:TASK-963 | ai:claude
     fn change_reviews(
         &self,
@@ -1752,6 +1768,18 @@ impl Forge for GitLabForge {
             .with_context(|| format!("could not parse glab MR commits JSON for !{id}"))
     }
 
+    fn diff_change(&self, id: u64) -> Result<()> {
+        let id_str = id.to_string();
+        let out = self.glab(&["mr", "diff", &id_str])?;
+        anyhow::ensure!(
+            out.status.success(),
+            "glab mr diff failed for !{id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        print!("{}", String::from_utf8_lossy(&out.stdout));
+        Ok(())
+    }
+
     // trace:TASK-963 | ai:claude
     fn change_reviews(
         &self,
@@ -2024,6 +2052,10 @@ impl Forge for PureGitForge {
         _sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<Vec<String>> {
         anyhow::bail!("pure-git has no change commits to read (change {id})")
+    }
+
+    fn diff_change(&self, id: u64) -> Result<()> {
+        anyhow::bail!("pure-git has no forge change diff (change {id})")
     }
 
     // trace:TASK-963 | ai:claude

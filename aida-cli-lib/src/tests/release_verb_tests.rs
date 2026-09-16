@@ -1,25 +1,4 @@
-use super::{
-    build_after_pr_merge_args, build_after_pr_watch_args, preview_next_version,
-    resolve_release_bump,
-};
-
-#[test]
-fn after_pr_watch_argv_blocks_and_fails_fast() {
-    // TASK-693: --after-pr blocks on the PR's checks via
-    // `gh pr checks <N> --watch --fail-fast` before merging.
-    assert_eq!(
-        build_after_pr_watch_args(641),
-        vec!["pr", "checks", "641", "--watch", "--fail-fast"]
-    );
-}
-
-#[test]
-fn after_pr_merge_argv_squashes_and_deletes_branch() {
-    assert_eq!(
-        build_after_pr_merge_args(641),
-        vec!["pr", "merge", "641", "--squash", "--delete-branch"]
-    );
-}
+use super::{preview_next_version, resolve_release_bump};
 
 #[test]
 fn resolve_bump_defaults_to_patch() {

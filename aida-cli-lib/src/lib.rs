@@ -28311,6 +28311,14 @@ impl ReviewForge {
             Self::GitLab => "https://gitlab.com/gitlab-org/cli",
         }
     }
+
+    // trace:STORY-1164 | ai:codex
+    fn forge_kind(&self) -> crate::forge::ForgeKind {
+        match self {
+            Self::GitHub => crate::forge::ForgeKind::GitHub,
+            Self::GitLab => crate::forge::ForgeKind::GitLab,
+        }
+    }
 }
 
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
@@ -34532,6 +34540,32 @@ mod story1163_forge_dispatch_tests {
         assert!(logged.contains("api -X GET projects/:id/merge_requests"));
         assert!(logged.contains("-f source_branch=feature/x"));
         assert!(logged.contains("-f state=opened"));
+    }
+
+    #[test]
+    fn diff_change_dispatches_gitlab_to_glab() {
+        let project = gitlab_project();
+        let bin_dir = TempDir::new().unwrap();
+        let log = bin_dir.path().join("glab.log");
+        let glab = bin_dir.path().join("glab");
+        write_executable(
+            &glab,
+            &format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = \"--version\" ]; then echo glab fake; exit 0; fi\n\
+                 printf '%s\\n' \"$*\" >> '{}'\n\
+                 exit 0\n",
+                log.display()
+            ),
+        );
+        let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GLAB_BINARY", glab.to_str().unwrap());
+
+        crate::forge::forge_for_kind(project.path(), crate::forge::ForgeKind::GitLab)
+            .diff_change(7)
+            .expect("GitLab diff should dispatch through glab");
+
+        let logged = std::fs::read_to_string(log).unwrap();
+        assert!(logged.contains("mr diff 7"));
     }
 }
 
@@ -56820,35 +56854,71 @@ fn handle_release(
                     .filter(|p| is_aida_repo(p))
             })
         });
+        let merge_root = repo
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .ok_or_else(|| {
+                anyhow::anyhow!("could not resolve repository root for --after-pr merge")
+            })?;
+        let forge = crate::forge::forge_for(&merge_root);
+        let mut metadata_sink = crate::network_retry::NoopSink;
+        let metadata = forge.change_metadata(n, &mut metadata_sink).ok();
+        let change_ref = crate::forge::ChangeRef {
+            id: n,
+            url: String::new(),
+            branch: metadata
+                .as_ref()
+                .map(|m| m.head_ref.clone())
+                .unwrap_or_default(),
+            base: metadata
+                .as_ref()
+                .map(|m| m.base_ref.clone())
+                .unwrap_or_default(),
+            title: metadata.as_ref().map(|m| m.title.clone()),
+        };
+        let change_noun = crate::forge::resolve_forge_kind(&merge_root).change_noun();
 
         println!(
-            "{} waiting for PR #{n}'s checks…",
+            "{} waiting for {change_noun} #{n}'s checks…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
-        match std::process::Command::new("gh")
-            .args(build_after_pr_watch_args(n))
-            .status()
-        {
-            Ok(s) if s.success() => println!("  {} PR #{n} checks passed", crate::glyph(crate::glyphs::Glyph::Check).green()),
-            Ok(_) => anyhow::bail!(
-                "PR #{n}'s checks did not pass — not merging or releasing. Inspect with `gh pr checks {n}`, or fix + re-run."
+        match forge.watch_ci(&change_ref) {
+            Ok(crate::forge::CiState::Success | crate::forge::CiState::None) => println!(
+                "  {} {change_noun} #{n} checks passed",
+                crate::glyph(crate::glyphs::Glyph::Check).green()
             ),
-            Err(e) => anyhow::bail!("could not run `gh pr checks {n} --watch`: {e}"),
+            Ok(state) => anyhow::bail!(
+                "{change_noun} #{n}'s checks did not pass ({state:?}) — not merging or releasing."
+            ),
+            Err(e) => anyhow::bail!(
+                "could not watch {change_noun} #{n}'s checks via forge provider: {e:#}"
+            ),
         }
 
         println!(
-            "{} merging PR #{n}…",
+            "{} merging {change_noun} #{n}…",
             crate::glyph(crate::glyphs::Glyph::Arrow).cyan().bold()
         );
-        match std::process::Command::new("gh")
-            .args(build_after_pr_merge_args(n))
-            .status()
+        let merge_opts = crate::forge::MergeOptions {
+            method: crate::forge::MergeMethod::Squash,
+            squash_subject: None,
+            delete_branch: true,
+        };
+        let mut sink = crate::network_retry::StderrSink;
+        if let Err(e) =
+            crate::forge::forge_for(&merge_root).merge_change(&change_ref, &merge_opts, &mut sink)
         {
-            Ok(s) if s.success() => println!("  {} PR #{n} merged", crate::glyph(crate::glyphs::Glyph::Check).green()),
-            _ => anyhow::bail!(
-                "`gh pr merge {n} --squash --delete-branch` failed — merge it manually, then re-run `aida release` without --after-pr."
-            ),
+            let hint = crate::forge::resolve_forge_kind(&merge_root)
+                .merge_cmd(&n.to_string())
+                .unwrap_or_else(|| format!("merge change {n}"));
+            anyhow::bail!(
+                "`{hint}` failed ({e:#}) — merge it manually, then re-run `aida release` without --after-pr."
+            );
         }
+        println!(
+            "  {} {change_noun} #{n} merged",
+            crate::glyph(crate::glyphs::Glyph::Check).green()
+        );
 
         // Sync local main so release.sh tags the merged commit.
         if let Some(r) = &repo {
@@ -56874,31 +56944,6 @@ fn handle_release(
         std::env::set_var("AIDA_SKIP_XPLAT_CHECK", "1");
     }
     handle_dev_release(bump)
-}
-
-/// TASK-693: argv for blocking on a PR's checks (`gh pr checks <N> --watch
-/// --fail-fast`) — exits 0 once all pass, non-zero the moment one fails.
-/// trace:STORY-472 | ai:claude
-fn build_after_pr_watch_args(pr: u64) -> Vec<String> {
-    vec![
-        "pr".into(),
-        "checks".into(),
-        pr.to_string(),
-        "--watch".into(),
-        "--fail-fast".into(),
-    ]
-}
-
-/// TASK-693: argv to squash-merge a PR and delete its branch
-/// (`gh pr merge <N> --squash --delete-branch`). trace:STORY-472 | ai:claude
-fn build_after_pr_merge_args(pr: u64) -> Vec<String> {
-    vec![
-        "pr".into(),
-        "merge".into(),
-        pr.to_string(),
-        "--squash".into(),
-        "--delete-branch".into(),
-    ]
 }
 
 #[cfg(test)]
@@ -72359,11 +72404,16 @@ fn handle_review_spec(
     if no_agent {
         // AC: degrade-honest path — surface + recommended command, no agent.
         match pr_number {
-            Some(n) => println!(
-                "\n  {} review the diff yourself: {}",
-                "→".green(),
-                format!("gh pr diff {n}").cyan()
-            ),
+            Some(n) => {
+                let diff_cmd = forge
+                    .change_cmd_hint("diff", &n.to_string())
+                    .unwrap_or_else(|| format!("inspect change {n}"));
+                println!(
+                    "\n  {} review the diff yourself: {}",
+                    "→".green(),
+                    diff_cmd.cyan()
+                );
+            }
             None => println!(
                 "\n  {} no open {change_noun} to diff.",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
@@ -72545,13 +72595,19 @@ fn handle_review_spec(
     } else if choice == diff_label {
         match pr_number {
             Some(n) => {
-                println!("  {} {}", "→".green(), format!("gh pr diff {n}").cyan());
-                // trace:BUG-540 — gh has no global -C flag (unlike git); set the
-                // working dir via current_dir so the invocation matches the display.
-                let _ = std::process::Command::new("gh")
-                    .current_dir(project_root)
-                    .args(["pr", "diff", &n.to_string()])
-                    .status();
+                let diff_cmd = forge
+                    .change_cmd_hint("diff", &n.to_string())
+                    .unwrap_or_else(|| format!("inspect change {n}"));
+                println!("  {} {}", "→".green(), diff_cmd.cyan());
+                // Route the interactive diff opener through the Forge trait so
+                // GitLab review surfaces run `glab mr diff`, not `gh pr diff`.
+                // trace:STORY-1164 | ai:codex
+                if let Err(e) = crate::forge::forge_for_kind(project_root, forge).diff_change(n) {
+                    eprintln!(
+                        "  {} could not open {change_noun}-{n} diff ({e:#})",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
             }
             None => println!(
                 "  {} no open {change_noun} to diff.",
@@ -73140,61 +73196,14 @@ fn pr_base_head(
     forge: ReviewForge,
     n: u64,
 ) -> Result<(String, String)> {
-    // Use the forge CLI when available — it knows about fork PRs and
-    // returns the resolved branch names. Fall back to a pure-git
-    // approximation for environments without `gh`/`glab` (we fetch the
-    // standard server-side ref and pretend base = current branch's
-    // merge base with it; not perfect but better than failing).
-    let (cli, args): (&str, &[&str]) = match forge {
-        ReviewForge::GitHub => (
-            "gh",
-            &[
-                "pr",
-                "view",
-                "",
-                "--json",
-                "baseRefName,headRefName",
-                "-q",
-                ".baseRefName + \"\\t\" + .headRefName",
-            ],
-        ),
-        ReviewForge::GitLab => ("glab", &["mr", "view", "", "-F", "json"]),
-    };
-    // The CLI invocation needs the PR number injected — clone args and
-    // overwrite the empty placeholder.
-    let mut args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-    args_owned[2] = n.to_string();
-
-    // gh / glab don't take `-C <path>` like git does — set the cwd via
-    // `current_dir` so each tool runs against the right repo.
-    // trace:STORY-67 | ai:claude
-    let out = std::process::Command::new(cli)
-        .current_dir(project_root)
-        .args(&args_owned[..])
-        .output();
-
-    if let Ok(out) = out {
-        if out.status.success() {
-            match forge {
-                ReviewForge::GitHub => {
-                    let s = String::from_utf8_lossy(&out.stdout);
-                    let parts: Vec<&str> = s.trim().split('\t').collect();
-                    if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
-                        return Ok((parts[0].to_string(), parts[1].to_string()));
-                    }
-                }
-                ReviewForge::GitLab => {
-                    // Cheap parse: grep for the two fields rather than
-                    // depending on serde_json — avoids a fresh dep just
-                    // for this one path.
-                    let s = String::from_utf8_lossy(&out.stdout).into_owned();
-                    let base = json_string_field(&s, "target_branch");
-                    let head = json_string_field(&s, "source_branch");
-                    if let (Some(b), Some(h)) = (base, head) {
-                        return Ok((b, h));
-                    }
-                }
-            }
+    // STORY-1164: route the review-prompt metadata read through the Forge trait
+    // instead of hand-rolling `gh pr view` / `glab mr view` here. The provider
+    // owns CLI resolution, retry behavior, and GitLab's REST-shaped metadata.
+    if let Ok(m) = crate::forge::forge_for_kind(project_root, forge.forge_kind())
+        .change_metadata(n, &mut network_retry::NoopSink)
+    {
+        if !m.base_ref.is_empty() && !m.head_ref.is_empty() {
+            return Ok((m.base_ref, m.head_ref));
         }
     }
 
@@ -73207,7 +73216,7 @@ fn pr_base_head(
         "{} couldn't resolve PR base/head via {} — falling back to base=main, head={}-{}; \
          pass an explicit base via `git log <base>..<head>` if this is wrong.",
         "Note:".yellow().bold(),
-        cli,
+        forge.cli_name(),
         if matches!(forge, ReviewForge::GitHub) {
             "pr"
         } else {
@@ -73220,17 +73229,6 @@ fn pr_base_head(
         ReviewForge::GitLab => format!("mr-{}", n),
     };
     Ok(("main".to_string(), head))
-}
-
-/// Cheap "extract \"key\": \"value\"" JSON field grep. Only handles
-/// string values without escapes — fine for branch names but not a
-/// general parser. trace:STORY-67 | ai:claude
-fn json_string_field(s: &str, key: &str) -> Option<String> {
-    let needle = format!("\"{}\":\"", key);
-    let start = s.find(&needle)? + needle.len();
-    let rest = &s[start..];
-    let end = rest.find('"')?;
-    Some(rest[..end].to_string())
 }
 
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
