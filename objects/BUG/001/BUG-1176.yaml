@@ -1,0 +1,19 @@
+id: 01a0abcb-34d9-7613-a06c-0fda505073f8
+spec_id: BUG-1176
+agreed_id: BUG-1176
+title: verify-manual.py flags-check hard-fails full-CI on 366 false-positive flag citations — blocks every full-CI PR
+description: |-
+  The CLI-manual drift-guard step (docs/cli/verify-manual.py) hard-fails (exit 1) on "FAIL flags — 366 cited --flag token(s) do not resolve to the cited command or its parent command subtree". The failures are FALSE POSITIVES: e.g. it reports "--type cited under aida add", "--title cited under aida add", "--parent cited under aida add" as unresolved, but aida add --help genuinely lists --type, --title, --parent. Reproduced locally with the release binary: exit=1, same 366. So the guard's flag-resolution (help_flags/subtree_flags) is broken/incomplete, not the docs.
+
+  Blast radius: the step is gated on steps.changes.outputs.full_ci == 'true', so path-filtered PRs (docs/code-only) SKIP it and merge green — which is why main shows success. But ANY full-CI PR (touching .github/workflows/** or build files) RUNS it and fails. First victim: PR-1746 (TASK-1205, CI guards) — its fresh rebased CI is red solely on this step, nothing to do with its own changes.
+
+  Correlation: verify-manual.py was last hardened by TASK-1207 (#1749, "harden the manual flag drift guard / attribute cited flags to the exact command path"). #1749 was docs-only → path-filtered → its own CI skipped this guard, so the broken hard-fail merged unseen. NOT asserting exact causation without a diff, but the timing + the "exact command path" attribution change are the prime suspects for the false positives.
+
+  Fix options (needs advisor/operator call — it's a merge-guard): (a) fix the flag-resolution so valid flags resolve (real fix); (b) demote the flags-check from hard_fail to ADVISORY until (a) lands (immediate unblock, keeps completeness/spec-id/reflection hard checks); (c) revert TASK-1207's flags change. Recommend (b) now + (a) as follow-up. Until fixed, every full-CI PR is blocked.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T19:56:56.409754358Z
+modified_at: 2026-09-16T19:56:56.409754358Z
+req_type: Bug
