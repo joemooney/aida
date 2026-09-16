@@ -70263,5 +70263,49 @@ operations:
   timestamp: 2026-09-16T06:53:46.129798618Z
   kind: !SetStatus
     status: Completed
-clock: 5496
+- id: 01a0a903-e93f-76a2-b864-dba2a975401c
+  target_id: 01a0a903-e509-7101-b784-24ae3416f4cb
+  author: aida
+  node_id: '1'
+  lamport: 5497
+  timestamp: 2026-09-16T07:00:00.959172015Z
+  kind: !Create
+    title: drive-mode merge hold does not write the BUG-1167 fence marker (drive PRs leak-merge)
+    description: |-
+      Fast-follow to BUG-1167 / ADR-37. The supervised merge-hold fence is keyed off a
+      hold marker (.aida/merge-holds/PR-N + GitHub aida:merge-hold label). Both layers
+      (Layer 1 fail-closed check in forge::merge_change; Layer 2 merge-hold-gate.yml
+      required check) refuse a merge ONLY while that marker exists. The marker is
+      written by the drain merge-wave leg (merge_wave_pr -> write_hold + sync_label).
+      But a DRIVE execution_mode hold (auto_complete.rs ~2159, "the spec execution
+      mode holds the merge for a human/advisor") holds WITHOUT calling write_hold /
+      sync_label -- zero hits for those symbols in auto_complete.rs. So a drive-held
+      PR carries NO marker and NO label, both fence layers pass, and any concurrent
+      aida merge path (an integrator running aida pr merge / aida integrate, or another
+      drain wave leg) merges it before the advisor reviews.
+
+      LIVE RECURRENCE (2026-09-15): STORY-1163 (drive, forge-dispatch keystone) was
+      implemented+reviewed(APPROVED)+CI-green by a drain, which then held the merge.
+      A concurrent aida-merger (joemooney token, AIDA squash-message format) merged
+      PR #1861 at 23:37:51 -0700 -- ~50s BEFORE the drain printed its hold at
+      23:38:42. Same class as the TASK-1237 leak the fence was built to stop; the fix
+      closed it for wave holds but NOT for drive holds. No damage this instance (the
+      advisor had independently reviewed the diff and found it sound), but the
+      supervision gate was bypassed.
+
+      Required fix: the execution_mode hold branch in auto_complete.rs (~2159) must
+      call the same write_hold(pr, spec, reason) + sync_label(pr, true) the merge-wave
+      leg does, BEFORE returning -- ideally the marker is written as soon as the PR is
+      created for any non-drain spec, so the window between PR-open and hold is closed.
+      Single source of truth: any path that declines to auto-merge a PR writes the
+      hold marker first.
+
+      Test: a drive-mode spec drained with --auto-complete holds at merge AND
+      .aida/merge-holds/PR-N exists AND the PR carries aida:merge-hold.
+
+      Class: merge-path keystone -> keyboard/guided implementation, not headless drain.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5497
 node_id: '1'
