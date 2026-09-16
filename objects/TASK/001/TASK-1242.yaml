@@ -3,12 +3,12 @@ spec_id: TASK-1242
 agreed_id: TASK-1242
 title: 'GitLab: correct forge.rs ''~113'' -> ''~20-25'', note EPIC-35 completed-but-not, document glab auth'
 description: 'Cleanup: forge.rs header claims ''~113 direct gh sites'' — correct to the honest ~20-25 (per the gap-inventory doc). Note EPIC-35 is marked Completed but the wiring isn''t (fresh spec home = EPIC-68). Document ''glab auth login'' as the gh-auth equivalent for GitLab users; note the two separate GitLab code bodies (forge GitLabForge vs aida-core issue-tracker GitLabClient). Proposed mode: drain (docs/comment).'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T06:01:55.899609569Z
-modified_at: 2026-09-16T06:38:46.316226365Z
+modified_at: 2026-09-16T06:41:53.506271325Z
 req_type: Task
 tags:
 - forge gitlab docs cleanup parent:EPIC-68 aida:forge
@@ -17,3 +17,7 @@ relationships:
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-16T06:01:58.240756534Z
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-16T06:41:53.506271325Z
+  implemented_by: joe
