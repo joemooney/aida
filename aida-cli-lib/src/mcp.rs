@@ -1438,7 +1438,9 @@ impl<'a> McpServer<'a> {
             .filter(|r| {
                 if let Some(status) = status_filter {
                     // BUG-626: filter epics by their derived rollup status.
-                    if !mcp_filter_eq(&mcp_effective_status(&store, r).to_string(), status) {
+                    // BUG-1174: honor CLI status aliases such as `open` so
+                    // MCP's JSON query surface shares the same work lens.
+                    if !mcp_status_filter_matches(&mcp_effective_status(&store, r), status) {
                         return false;
                     }
                 }
@@ -1518,6 +1520,20 @@ impl<'a> McpServer<'a> {
                 // archived/deferred rows are hidden by default and surfaced only
                 // via the explicit filters. trace:BUG-591 | ai:claude
                 if !view.admits(r) {
+                    return false;
+                }
+                // BUG-1174: MCP's default active view and explicit
+                // `status: open` query are open-work lenses. An accepted ADR
+                // (`Decision` + `Approved`) is terminal in that lifecycle, so
+                // it must not inflate the implementable backlog. Explicit
+                // decision/status/archive/deferred/all queries keep the row
+                // reachable for audits, matching the CLI list lens.
+                if mcp_hides_accepted_decisions(status_filter, type_filter, view)
+                    && aida_core::lifecycle::is_accepted_decision(
+                        &r.req_type.to_string(),
+                        &mcp_effective_status(&store, r).to_string(),
+                    )
+                {
                     return false;
                 }
                 true
@@ -5593,6 +5609,37 @@ fn mcp_filter_eq(stored: &str, filter: &str) -> bool {
     normalize_mcp_filter_token(stored) == normalize_mcp_filter_token(filter)
 }
 
+// trace:BUG-1174 | ai:codex
+fn mcp_status_filter_matches(stored: &RequirementStatus, filter: &str) -> bool {
+    if let Some(statuses) = RequirementStatus::expand_filter_token(filter) {
+        return statuses.iter().any(|s| {
+            normalize_mcp_filter_token(stored.cache_key()) == normalize_mcp_filter_token(s)
+        });
+    }
+    mcp_filter_eq(&stored.to_string(), filter)
+}
+
+// trace:BUG-1174 | ai:codex
+fn mcp_hides_accepted_decisions(
+    status_filter: Option<&str>,
+    type_filter: Option<&str>,
+    view: ViewTierFilter,
+) -> bool {
+    if view != ViewTierFilter::ActiveOnly {
+        return false;
+    }
+    if type_filter
+        .map(|t| mcp_filter_eq("decision", t))
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    match status_filter {
+        None => true,
+        Some(status) => normalize_mcp_filter_token(status) == "open",
+    }
+}
+
 /// The status to surface for a requirement over MCP. For an EPIC this is the
 /// read-only rollup of its children (mirrors the CLI `effective_display_status`
 /// and the cache projection), so `list_requirements` / `show_requirement` agree
@@ -6333,7 +6380,7 @@ pub fn tool_descriptors() -> Value {
                         "type": "string",
                         "description": "Filter by the current status of the requirement.",
                         // trace:TASK-1176 | ai:claude — mirrors the CLI status set.
-                        "enum": ["draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected", "superseded"],
+                        "enum": ["open", "closed", "draft", "approved", "planned", "in-progress", "needs-attention", "done", "completed", "rejected", "superseded"],
                         "example": "in-progress"
                     },
                     "type": {
@@ -8871,6 +8918,87 @@ mod tests {
             .unwrap();
         assert!(priority_output.contains(&working_id), "{priority_output}");
         assert!(!priority_output.contains(&planned_id), "{priority_output}");
+    }
+
+    // trace:BUG-1174 | ai:codex
+    #[test]
+    fn mcp_open_lens_hides_accepted_decisions_but_keeps_explicit_queries() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+
+        let accepted_adr = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "Ratified ADR",
+                    "description": "accepted decision should be terminal",
+                    "type": "decision",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        let proposed_adr = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "Proposed ADR",
+                    "description": "draft decision is still open",
+                    "type": "decision",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+        let approved_task = added_spec_id(
+            &server
+                .tool_add_requirement(&json!({
+                    "title": "Approved task",
+                    "description": "approved task is still open work",
+                    "type": "task",
+                }))
+                .unwrap(),
+        )
+        .to_string();
+
+        force_status(&server, &accepted_adr, RequirementStatus::Approved);
+        force_status(&server, &approved_task, RequirementStatus::Approved);
+
+        let default = server.tool_list_requirements(&json!({})).unwrap();
+        assert!(
+            !default.contains(&accepted_adr),
+            "accepted ADR must not appear in default MCP open lens: {default}"
+        );
+        assert!(
+            default.contains(&proposed_adr),
+            "draft ADR remains open/proposed: {default}"
+        );
+        assert!(
+            default.contains(&approved_task),
+            "approved task remains open work: {default}"
+        );
+
+        let open = server
+            .tool_list_requirements(&json!({ "status": "open" }))
+            .unwrap();
+        assert!(
+            !open.contains(&accepted_adr),
+            "accepted ADR must not appear in MCP status=open lens: {open}"
+        );
+        assert!(open.contains(&proposed_adr), "{open}");
+        assert!(open.contains(&approved_task), "{open}");
+
+        let decision = server
+            .tool_list_requirements(&json!({ "type": "decision" }))
+            .unwrap();
+        assert!(
+            decision.contains(&accepted_adr),
+            "explicit decision type must surface accepted ADRs: {decision}"
+        );
+
+        let approved = server
+            .tool_list_requirements(&json!({ "status": "approved" }))
+            .unwrap();
+        assert!(
+            approved.contains(&accepted_adr),
+            "explicit approved status must surface accepted ADRs: {approved}"
+        );
     }
 
     // ===================================================================
