@@ -70035,5 +70035,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5475
+- id: 01a0a8cc-934f-7472-b5f2-2c5e33ed0575
+  target_id: 01a0a8cc-8e2b-7362-a394-6b3e346a4940
+  author: aida
+  node_id: '1'
+  lamport: 5476
+  timestamp: 2026-09-16T05:59:34.479326259Z
+  kind: !Create
+    title: 'GitLab Slice 1: route the high-traffic keyboard paths through the Forge trait'
+    description: 'Point the direct-gh keyboard-path sites at existing trait methods: queue recover''s gh pr create --fill -> open_change; release --after-pr merge -> merge_change; pr ship / reviewer open-PR lookup -> change_for_branch; aida review''s gh pr diff + metadata -> change_metadata. Proposed mode: drive. Acceptance: these paths run through forge_for()/the trait (no direct gh spawn); GitHub behaviour unchanged (tests green); a GitLab repo exercises the GitLabForge equivalents. Depends on Slice 0.'
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5476
 node_id: '1'
