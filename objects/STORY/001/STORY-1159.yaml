@@ -1,0 +1,14 @@
+id: 01a0a7f9-cee5-7e33-9c23-da226002d31c
+spec_id: STORY-1159
+agreed_id: STORY-1159
+title: Interactive 'explain this spec' conversation mode (beyond one-shot --plain)
+description: Follow-up to EPIC-67. Launch an interactive conversation to explore a spec's rationale (follow-up questions, deeper examples) beyond the one-shot --plain. Deferred until one-shot explanations prove insufficient.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T02:09:21.637021687Z
+modified_at: 2026-09-16T02:09:21.637021687Z
+req_type: Story
+tags:
+- accessibility plain-english conversation parent:EPIC-67 aida:why

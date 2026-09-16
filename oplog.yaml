@@ -69621,5 +69621,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5445
+- id: 01a0a7f9-d566-75e2-ab9c-3bb6e9f0b61f
+  target_id: 01a0a7f9-cee5-7e33-9c23-da226002d31c
+  author: aida
+  node_id: '1'
+  lamport: 5446
+  timestamp: 2026-09-16T02:09:23.302021259Z
+  kind: !Create
+    title: Interactive 'explain this spec' conversation mode (beyond one-shot --plain)
+    description: Follow-up to EPIC-67. Launch an interactive conversation to explore a spec's rationale (follow-up questions, deeper examples) beyond the one-shot --plain. Deferred until one-shot explanations prove insufficient.
+    req_type: Story
+    status: Draft
+    priority: Low
+clock: 5446
 node_id: '1'
