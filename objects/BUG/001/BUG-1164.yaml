@@ -20,7 +20,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:39:34.556868085Z
-modified_at: 2026-09-15T15:39:34.556868085Z
+modified_at: 2026-09-16T00:33:05.862239410Z
 req_type: Bug
 tags:
 - drain aida-store index-lock reliability concurrency
+execution_mode: guided
