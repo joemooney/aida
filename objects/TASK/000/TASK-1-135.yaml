@@ -1,5 +1,6 @@
 id: 01a0ab19-f1be-7133-a0a5-e9fd598c530f
 spec_id: TASK-1-135
+agreed_id: TASK-160
 title: Advisor heartbeat degenerated into token-repetition during idle mail ticks
 description: |-
   During quiet 'mail-check' heartbeat ticks with no work to do, the advisor agent's sampling degenerated into a stream of junk tokens (count / court / काही) while narrating "my count of the loop iterations" and "the current tick". It self-recovered and stopped; NO harm — the drain (BUG-1174) ran in separate child processes and never faltered (its headless log kept writing through the glitch, cargo fmt --check running 1s before I checked).

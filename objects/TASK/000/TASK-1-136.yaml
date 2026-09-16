@@ -1,5 +1,6 @@
 id: 01a0ab1b-3a9b-79b1-94b1-ab46d7b536ae
 spec_id: TASK-1-136
+agreed_id: TASK-159
 title: queue done leaves completed item visible in queue list
 description: |-
   During BUG-1174 pickup under AIDA_HEADLESS=1, queue completion produced contradictory readback.

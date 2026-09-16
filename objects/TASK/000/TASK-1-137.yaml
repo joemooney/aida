@@ -1,5 +1,6 @@
 id: 01a0ab41-f672-7e80-9be9-1a45b479e40b
 spec_id: TASK-1-137
+agreed_id: TASK-161
 title: Stale merge-hold markers after orchestrated merge + no user-facing merge-hold clear command
 description: |-
   Away-window heartbeat observation. PR-1868/1869/1870 (STORY-1164, BUG-1174, STORY-1173) all MERGED but left stale .aida/merge-holds/PR-<n> marker files behind — the orchestrated merge path did not clear them, so they surface as phantom 'held PRs' in awaiting/merge-hold checks (I removed them by hand this pass).
