@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T02:07:02.455009361Z
-modified_at: 2026-09-16T02:11:22.181428112Z
+modified_at: 2026-09-16T02:11:23.718148117Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,10 @@ tags:
 - ci
 - failure-2
 - failure-kind:ci-red
+comments:
+- id: 01a0a7fb-abc6-7ed3-a2bd-bed5636c0936
+  author: joe
+  content: 'Duplicate failure-record — rework tracked on parent BUG-1164 (phase-2 CI red on #1853). Rejecting.'
+  created_at: 2026-09-16T02:11:23.718148117Z
+  modified_at: 2026-09-16T02:11:23.718148117Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
