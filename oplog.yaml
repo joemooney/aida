@@ -69588,5 +69588,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Low
-clock: 5443
+- id: 01a0a7f9-97fe-7110-99b0-482b8cbf16f6
+  target_id: 01a0a7f9-91f6-7682-8630-ca32484ed180
+  author: aida
+  node_id: '1'
+  lamport: 5444
+  timestamp: 2026-09-16T02:09:07.582891573Z
+  kind: !Create
+    title: 'Full pipeline phase-list DSL: arbitrary gate insertion points (not just before-merge)'
+    description: Follow-up to EPIC-66. Promote the fixed before-merge insertion to a declarative ordered phase list ([pipeline] phases = [...]) so gates can sit anywhere (post-implementer, pre-CI, etc.). Deferred until the fixed before-merge insertion of v1 proves too rigid.
+    req_type: Story
+    status: Draft
+    priority: Low
+clock: 5444
 node_id: '1'
