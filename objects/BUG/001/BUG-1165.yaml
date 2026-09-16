@@ -3,12 +3,12 @@ spec_id: BUG-1165
 agreed_id: BUG-1165
 title: post_init_hooks_run_executable_sh_files_in_lexical_order_with_context is flaky on CI (passes on re-run, same SHA)
 description: 'STORY-1129''s PR #1844 failed CI on this test (init_cmd.rs assert ''Some(2)''), but it passes locally deterministically AND passed on a same-SHA CI re-run — so it is FLAKY, not the with_mcp regression it was first read as. The hook runner already sorts (init_cmd.rs run_post_init_hooks_from_dir: hooks.sort()), so ordering is deterministic; the flake is likely test hermeticity (the test''s hooks/temp dir picks up an env-dependent file set) or a CI-only timing/executable-bit difference. Make the test hermetic + deterministic (isolate its temp hooks dir; assert on a fixed set; ensure +x is set portably). Acceptance: the test passes deterministically on CI across repeated runs; no reliance on ambient scaffold files or readdir order.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:53:37.000235171Z
-modified_at: 2026-09-16T01:35:49.394478785Z
+modified_at: 2026-09-16T01:40:01.006224816Z
 req_type: Bug
 tags:
 - test flaky ci init post-init-hooks
@@ -17,8 +17,24 @@ relationships:
   target_id: 01a0a7db-066b-7713-a244-f4c96f78f1e9
   created_at: 2026-09-16T01:35:49.394473723Z
   created_by: joe
+history:
+- id: 01a0a7de-f167-7123-a0da-6bd2405be63e
+  author: aida-auto-bump
+  timestamp: 2026-09-16T01:40:00.999755488Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a7de-f16e-7021-a8f4-47735e77c585
+  timestamp: 2026-09-16T01:40:01.006223456Z
+  agent: aida
+  commit_sha: 49ae3227de6ebe9dc9ba7a1f554cb5c256fd19ec
+  summary: Completed via merge 49ae3227
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T01:28:12.233402551Z
   implemented_by: joe
+  completed_at: 2026-09-16T01:40:00.999648973Z
+  completion_sha: 49ae3227de6ebe9dc9ba7a1f554cb5c256fd19ec
