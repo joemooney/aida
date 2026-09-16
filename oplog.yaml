@@ -69900,5 +69900,13 @@ operations:
       - The Layer-2 required status check fails while marked, passes when unmarked; a raw 'gh pr merge' of a marked PR is blocked by GitHub; a drain-mode (unmarked) PR still auto-merges.
       - An advisor/human review that clears the hold removes the marker and the check passes.
       - No regression to drain-mode auto-merge throughput.
-clock: 5464
+- id: 01a0a869-4860-74c2-9e04-5f8b1bc7d637
+  target_id: 01a0a863-d03f-7022-9e2d-e63474471fe3
+  author: aida
+  node_id: '1'
+  lamport: 5465
+  timestamp: 2026-09-16T04:11:07.232600619Z
+  kind: !SetStatus
+    status: Superseded
+clock: 5465
 node_id: '1'

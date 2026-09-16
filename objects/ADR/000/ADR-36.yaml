@@ -17,12 +17,12 @@ description: |-
   IMMEDIATE stop-the-bleeding (before the build): find + stop the concurrent integrator/sweep; rebuild any session on a pre-#1850 binary; treat already-merged supervised PRs (STORY-1155/1158, BUG-1164, TASK-1237, BUG-1156, STORY-1130, TASK-1233) as UNREVIEWED — needing remedial review.
 
   Acceptance (binds BUG-1167): no merger (drain, integrate, sweep, another agent session, raw gh pr merge from a stale binary) merges a drive/guided/operator/decide/unset PR without the execution_mode check; two concurrent mergers on one green+approved drive PR both refuse; the required check passes for drain-mode PRs (auto-merge preserved). Supersedes the client-only hold as the enforcement model.
-status: Approved
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:05:08.799513844Z
-modified_at: 2026-09-16T04:05:28.725178573Z
+modified_at: 2026-09-16T04:11:07.148526961Z
 req_type: Decision
 tags:
 - supervised-merge substrate-gate branch-protection concurrency bug-1167 reliability decision
