@@ -17,12 +17,12 @@ description: |-
   - The Layer-2 required status check fails while marked, passes when unmarked; a raw 'gh pr merge' of a marked PR is blocked by GitHub; a drain-mode (unmarked) PR still auto-merges.
   - An advisor/human review that clears the hold removes the marker and the check passes.
   - No regression to drain-mode auto-merge throughput.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T03:25:01.409119446Z
-modified_at: 2026-09-16T04:16:00.323706637Z
+modified_at: 2026-09-16T04:34:39.572298946Z
 req_type: Bug
 tags:
 - drive supervised-merge fence concurrency substrate-gate integrator reliability
