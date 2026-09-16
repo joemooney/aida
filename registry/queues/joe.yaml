@@ -1,20 +1,4 @@
 - user_id: joe
-  requirement_id: 01a0aaf1-dfec-75c1-a38d-59e1df4071ec
-  position: 1000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a0aaec); covers 1 spec
-  added_at: 2026-09-16T15:59:40.583914370Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a0ab09-87d4-78f1-b391-a4512b4b0e16
-  position: 2000
-  added_by: joe
-  note: auto-queued by `aida pr` (01a0aaff); covers 1 spec
-  added_at: 2026-09-16T16:25:30.044965296Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a0ab1a-6c06-72f2-b07a-a7933f0b2fb8
   position: 3000
   added_by: joe
