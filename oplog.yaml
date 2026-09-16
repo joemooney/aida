@@ -69600,5 +69600,26 @@ operations:
     req_type: Story
     status: Draft
     priority: Low
-clock: 5444
+- id: 01a0a7f9-b61e-74a2-85d6-2ac9a8027734
+  target_id: 01a0a7f9-affa-76d1-b9b7-bfeb7f04d28e
+  author: aida
+  node_id: '1'
+  lamport: 5445
+  timestamp: 2026-09-16T02:09:15.294644416Z
+  kind: !Create
+    title: 'v1: aida why <spec> --plain — generate + cache a separate plain-English rationale + example layer'
+    description: |-
+      First slice of EPIC-67. Add a --plain mode to the existing aida why <spec>: assemble the spec + graph context + linked ADRs, generate a plain-English rationale + ONE concrete novice example, and CACHE it as a SEPARATE artifact linked to the spec (a doc via EPIC-24 'aida doc add --about <spec>', or docs/plain/<SPEC>.md). Regenerate only when the spec changes (tie a cache key to modified_at). The spec text itself is NEVER modified.
+
+      The plain layer is Tier 2: human-primary, agent-optional (surplus by default; referenceable on demand). Optionally the spec carries a one-line pointer to it.
+
+      Acceptance:
+      - aida why <spec> --plain prints a plain-English rationale + one concrete example a novice could follow; jargon is defined inline.
+      - The result is cached as a separate artifact linked to the spec; a second call with an unchanged spec serves the cache (no regeneration); a changed spec regenerates.
+      - The spec's own description/acceptance is unchanged (verified: no write to spec text).
+      - The plain layer does not enter an agent's default context (surplus), but is retrievable on demand.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5445
 node_id: '1'
