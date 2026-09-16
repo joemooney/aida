@@ -70757,5 +70757,32 @@ operations:
   timestamp: 2026-09-16T16:10:21.859320441Z
   kind: !SetStatus
     status: Completed
-clock: 5521
+- id: 01a0ab07-372f-7082-a054-e2da7f3633be
+  target_id: 01a0ab07-332f-7bc0-9c56-10307b5ced35
+  author: aida
+  node_id: '1'
+  lamport: 5522
+  timestamp: 2026-09-16T16:22:51.951189352Z
+  kind: !Create
+    title: '/aida-away: human-proxy authorization + auditable approval ledger'
+    description: |-
+      An authorization + audit primitive for when the operator hands their human-in-the-loop role to an AI proxy while away. Two halves.
+
+      (1) The MANDATE (input): the operator declares they are away and authorizes the proxy to decide / approve / merge within a stated scope. Entry point is a /aida-away skill invocation.
+
+      (2) The LEDGER (output): every decision the proxy makes under that mandate is recorded durably, attributed as a human-proxy approval, anchored to the exact decision point (a spec comment) and SEPARATELY SURFACEABLE, so the whole team or an independent QA auditor can review what was approved on the human's behalf, by whom, when, and why. This is git-blame for approvals: today the merge-hold clear is silent and ADRs capture design forks, not sign-offs.
+
+      Goal: forward progress while the operator is away WITHOUT losing the auditable record of human approval that guided/drive modes exist to protect. The independence rule holds: a proxy never reviews-and-merges code it implemented itself; high-blast-radius plus not-convinced-from-the-diff escalates to the real human.
+
+      Open design forks (settle in grooming):
+      1. Where the approval record lives: a marked spec comment (fingers the decision point) plus an aggregate surface, vs a first-class event/record, vs an ADR. Leaning: marked comment as source of truth + aggregate view. Not an ADR (pollutes the decision lens); no new daemon.
+      2. The mandate shape: a per-session /aida-away skill invocation with a stated scope, vs a durable revocable grant object in the store. Leaning: session skill for v1; each ledger entry cites the authorizing message.
+      3. Scope of authority: review+merge of NOT-self-implemented diffs; decide guided forks to ADRs; exclude high-blast-radius and escalate to the operator.
+      4. Separate surfacing: a dedicated read view (aida approvals / aida away log) that pulls all proxy-approval markers for team/QA audit, with --json and a time window.
+
+      Pairs with the proxy-reviewer independence rule and the merge-hold / supervised-merge machinery (ADR-37). Distinct from the drain: this is the SUPERVISED-merge audit trail, not the unattended path.
+    req_type: Epic
+    status: Draft
+    priority: Medium
+clock: 5522
 node_id: '1'
