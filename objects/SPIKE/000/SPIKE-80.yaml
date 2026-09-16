@@ -15,8 +15,28 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:58:59.492289939Z
-modified_at: 2026-09-16T04:58:59.492289939Z
+modified_at: 2026-09-16T05:03:24.821245176Z
 req_type: Spike
 tags:
 - forge gitlab github parity research epic-35 aida:forge
+comments:
+- id: 01a0a899-2895-7f61-8e94-8244c61ecae0
+  author: joe
+  content: |-
+    RESEARCH FINDINGS (agent-assisted, 2026-09-15) — GitLab is ~80% built already:
+
+    HEADLINE: A fully-implemented GitLabForge already exists (forge.rs:1529) — all ~16 Forge-trait methods via glab + `glab api` REST, ~25 unit tests, auto-detection (detect_forge_kind, forge.rs:729), factory (forge_for), and [forge] provider config scaffolded at init. The abstraction is genuinely forge-agnostic. The scary "~113 direct gh sites" is a ~5x OVERCOUNT — the honest runtime gap is ~20-25 gh spawns across ~18 functions (per docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md). This is WIRING, not a from-scratch build.
+
+    THE GAP: the Forge trait is invoked in only ~2 files; central helpers (probe_ci_state_for_branch lib.rs:32140, detect_open_pr_* / gh_pr_list_first, watch_ci_for_context) hardcode resolve_gh_binary. A Slice-0 dispatcher resolve_forge_cli (lib.rs:34356) EXISTS but is dead_code, 0 call sites.
+
+    HARDEST PIECE (genuinely GitHub-shaped, no GitLab equivalent yet): the BUG-1167/ADR-37 Layer-2 required-check. Layer 1 (forge::merge_change chokepoint) is forge-agnostic — works on GitLab already. Layer 2 (.github/workflows/merge-hold-gate.yml + branch-protection required check) is 100% GitHub Actions. GitLab needs a .gitlab-ci.yml job inspecting $CI_MERGE_REQUEST_LABELS + a merge-rule to be un-bypassable, AND the label-apply (merge_hold.rs:104 gh pr edit --add-label) forge-routed to glab mr update --label. AIDA ships no .gitlab-ci.yml at all.
+
+    BIGGEST RISK: GitLabForge has NEVER been live-validated — create/merge are fixture-tested only (code comments say "live-validated in slice 3, needs a PAT" — never done). First action MUST be a live round-trip against a real/self-hosted GitLab with a PAT before any wiring investment.
+
+    OTHER: two separate GitLab code bodies — the forge GitLabForge (glab) vs an older aida-core issue-tracker GitLabClient (reqwest, STORY-0321) — don't conflate. glab hybrid (shell glab for actions, glab api for reads) is right + already implemented. Review-semantics mismatch: GitLab approvals have no 'changes requested' state. EPIC-35 is marked Completed but isn't — remaining wiring needs a fresh spec home; forge.rs header's "~113" should be corrected to ~20-25.
+
+    SLICE PLAN: 0) wire the foundation (make central CI/PR helpers forge-aware via resolve_forge_cli — no GH behavior change); 1) route high-traffic keyboard paths (queue recover gh pr create, release --after-pr merge, pr ship lookup, aida review) through existing trait methods; 2) GitLab CI merge-hold gate + .gitlab-ci.yml scaffold at init + forge-route the label apply; 3) CI-watch + delegated-review check-runs abstraction (deepest — unblocks unattended drain on GitLab); 4) user-facing 'gh' wording derived from ForgeKind. Realistic: multi-week for one engineer, FRONT-LOADED by the live-validation pass.
+  created_at: 2026-09-16T05:03:24.821245176Z
+  modified_at: 2026-09-16T05:03:24.821245176Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 human_only: true
