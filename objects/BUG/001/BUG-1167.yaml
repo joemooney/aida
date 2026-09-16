@@ -17,13 +17,31 @@ description: |-
   - The Layer-2 required status check fails while marked, passes when unmarked; a raw 'gh pr merge' of a marked PR is blocked by GitHub; a drain-mode (unmarked) PR still auto-merges.
   - An advisor/human review that clears the hold removes the marker and the check passes.
   - No regression to drain-mode auto-merge throughput.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T03:25:01.409119446Z
-modified_at: 2026-09-16T04:34:39.572298946Z
+modified_at: 2026-09-16T04:42:40.986805527Z
 req_type: Bug
 tags:
 - drive supervised-merge fence concurrency substrate-gate integrator reliability
+history:
+- id: 01a0a886-2dd4-7913-90cd-fb9dddabff9a
+  author: aida-auto-bump
+  timestamp: 2026-09-16T04:42:40.980317340Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a886-2dda-7492-950f-4e89edd995e8
+  timestamp: 2026-09-16T04:42:40.986804216Z
+  agent: implementer
+  commit_sha: d3f6f30a6e593256509d7cdc9c0fdf0cefbccd67
+  summary: Completed via merge d3f6f30a
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-16T04:42:40.980200560Z
+  completion_sha: d3f6f30a6e593256509d7cdc9c0fdf0cefbccd67
