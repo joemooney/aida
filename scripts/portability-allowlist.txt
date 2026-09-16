@@ -1,0 +1,189 @@
+# Existing Rust test portability debt. Keep entries as exact
+# `path:trimmed source line` records and only remove lines as code becomes
+# portable. trace:TASK-1205 | ai:codex
+aida-cli-lib/src/advisor.rs:project_root: "/tmp/x".to_string(),
+aida-cli-lib/src/advisor.rs:project_root: "/tmp/x".to_string(),
+aida-cli-lib/src/advisor.rs:project_root: "/tmp/x".to_string(),
+aida-cli-lib/src/advisor.rs:project_root: "/tmp/x".to_string(),
+aida-cli-lib/src/advisor.rs:plan_fork(&PathBuf::from("/tmp/spec-x"), &cfg).is_none(),
+aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story"),
+aida-cli-lib/src/agent_registry.rs:let root = Path::new("/tmp/project");
+aida-cli-lib/src/agent_registry.rs:PathBuf::from("/tmp/project/.aida/agents/codex-123.toml")
+aida-cli-lib/src/agent_registry.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+aida-cli-lib/src/agent_registry.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+aida-cli-lib/src/agent_registry.rs:e.worktree_path = PathBuf::from("/tmp/aida-story/subdir");
+aida-cli-lib/src/agent_registry.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story-431"),
+aida-cli-lib/src/agent_registry.rs:line.ends_with(" /tmp/aida-story-431"),
+aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
+aida-cli-lib/src/agent_registry.rs:worktree_path = "/tmp/aida-story"
+aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story-528"),
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-harness"),
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(hint.contains("/tmp/wt-harness"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt"),
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-salvage"),
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(hint.contains("/tmp/wt-salvage"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(hint.contains("git -C /tmp/wt-salvage add -A"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(hint.contains("git -C /tmp/wt-salvage commit"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-noscope"),
+aida-cli-lib/src/dispatch_health_ps.rs:hint.contains("aida agent new claude --cwd /tmp/wt-noscope"),
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-stalled"),
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(hint.contains("/tmp/wt-stalled"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(!hint.contains("git -C /tmp/wt-stalled add"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-entered"),
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(hint.contains("/tmp/wt-entered"), "{hint}");
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-entered"),
+aida-cli-lib/src/dispatch_health_ps.rs:assert!(stalled.contains("cd /tmp/wt-entered"), "{stalled}");
+aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-entered"),
+aida-cli-lib/src/dispatch_health_ps.rs:salvageable.contains("git -C /tmp/wt-entered add -A"),
+aida-cli-lib/src/doctor_cmd.rs:Path::new("/tmp/scratch"),
+aida-cli-lib/src/headless_tee.rs:let line = r#"{"type":"system","subtype":"init","model":"claude-opus","cwd":"/tmp/work","session_id":"abc"}"#;
+aida-cli-lib/src/headless_tee.rs:assert!(o.lines[0].contains("/tmp/work"));
+aida-cli-lib/src/headless_tee.rs:r#"{{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}}"#
+aida-cli-lib/src/health_metrics.rs:const INIT: &str = r#"{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}"#;
+aida-cli-lib/src/init_cmd.rs:r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
+aida-cli-lib/src/mcp.rs:exe: PathBuf::from("/tmp/aida"),
+aida-cli-lib/src/mcp.rs:assert_eq!(plan.exe, PathBuf::from("/tmp/aida"));
+aida-cli-lib/src/mcp.rs:let dir = std::path::Path::new("/tmp/sessions");
+aida-cli-lib/src/mcp.rs:worktree_path = \"/tmp/wt-{scope}\"\n\
+aida-cli-lib/src/mcp.rs:working_directory = \"/tmp/wt-{name}\"\n\
+aida-cli-lib/src/network_retry.rs:let mut c = Command::new("sh");
+aida-cli-lib/src/pr_rebase.rs:let p = temp_worktree_path(Path::new("/tmp/proj"), 308);
+aida-cli-lib/src/pr_rebase.rs:assert_eq!(p, PathBuf::from("/tmp/proj/.aida/worktrees/pr-rebase-308"));
+aida-cli-lib/src/remote_create.rs:default_repo_name(Path::new("/tmp/my-project")),
+aida-cli-lib/src/session.rs:let fake = "/tmp/aida-fake-agent-task-1081";
+aida-cli-lib/src/status_cleanup.rs:path: "/tmp/foo".into(),
+aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-376".into(),
+aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),
+aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),
+aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/x".into(),
+aida-cli-lib/src/tests/agent_launcher_tests.rs:"/tmp/project",
+aida-cli-lib/src/tests/agent_launcher_tests.rs:assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+aida-cli-lib/src/tests/agent_launcher_tests.rs:"/tmp/project",
+aida-cli-lib/src/tests/agent_launcher_tests.rs:assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+aida-cli-lib/src/tests/agent_launcher_tests.rs:"/tmp/project",
+aida-cli-lib/src/tests/agent_launcher_tests.rs:assert_eq!(cwd.as_deref(), Some(std::path::Path::new("/tmp/project")));
+aida-cli-lib/src/tests/agent_launcher_tests.rs:worktree_path: std::path::PathBuf::from(format!("/tmp/{id}")),
+aida-cli-lib/src/tests/bug_574_spurious_exit_tests.rs:worktree_path: std::path::PathBuf::from("/tmp/aida-bug574"),
+aida-cli-lib/src/tests/bug_637_spec_claim_tests.rs:worktree_path: std::path::PathBuf::from(format!("/tmp/aida-{}", scope.to_lowercase())),
+aida-cli-lib/src/tests/bug_777_stale_lease_recovery_tests.rs:let mut child = match std::process::Command::new("/bin/sh")
+aida-cli-lib/src/tests/dispatch_health_tests.rs:worktree: std::path::PathBuf::from("/tmp/story-759"),
+aida-cli-lib/src/tests/dispatch_health_tests.rs:.contains("aida agent new codex --spec STORY-759 --cwd /tmp/story-759"),
+aida-cli-lib/src/tests/drain_reliability_wiring_tests.rs:std::path::PathBuf::from("/tmp/nonexistent"),
+aida-cli-lib/src/tests/fleet_state_hygiene_tests.rs:worktree_path: std::path::PathBuf::from("/tmp/aida-fixture"),
+aida-cli-lib/src/tests/fleet_state_hygiene_tests.rs:path: std::path::PathBuf::from(format!("/tmp/wt/{branch}")),
+aida-cli-lib/src/tests/forge_binary_resolution_tests.rs:let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GLAB_BINARY", "/tmp/fake-glab");
+aida-cli-lib/src/tests/forge_binary_resolution_tests.rs:assert_eq!(resolve_glab_binary(), Some(PathBuf::from("/tmp/fake-glab")));
+aida-cli-lib/src/tests/forge_binary_resolution_tests.rs:let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", "/tmp/fake-gh");
+aida-cli-lib/src/tests/forge_binary_resolution_tests.rs:Some(PathBuf::from("/tmp/fake-gh"))
+aida-cli-lib/src/tests/forge_binary_resolution_tests.rs:let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GLAB_BINARY", "/tmp/fake-glab");
+aida-cli-lib/src/tests/forge_binary_resolution_tests.rs:Some(PathBuf::from("/tmp/fake-glab"))
+aida-cli-lib/src/tests/fr_284_session_notify_tests.rs:let root = std::path::Path::new("/tmp/proj");
+aida-cli-lib/src/tests/fr_284_session_notify_tests.rs:assert!(p.starts_with("/tmp/proj/.aida/session-notices"));
+aida-cli-lib/src/tests/lease_covers_cwd_tests.rs:assert!(!lease_covers_cwd(&lease, Path::new("/tmp")));
+aida-cli-lib/src/tests/lease_covers_cwd_tests.rs:assert!(!lease_covers_cwd(&lease, Path::new("/tmp")));
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:worktree_path: std::path::PathBuf::from(format!("/tmp/{}", id)),
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:worktree_path = \"/tmp/{id}\"\nbranch = \"br\"\nstarted_at = \"2026-05-14T00:00:00Z\"\n\
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:owner = \"t\"\nworktree_path = \"/tmp/does-not-exist-479\"\nbranch = \"br\"\n\
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:owner = \"t\"\nworktree_path = \"/tmp/does-not-exist-479\"\nbranch = \"br\"\n\
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:lease("EPIC-1", "/tmp/wt-a", 100), // dead (per predicate below)
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:lease("EPIC-2", "/tmp/wt-a", 200), // live, on the target worktree
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:lease("EPIC-3", "/tmp/wt-b", 300), // live, but different worktree
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:worktree_occupant(std::path::Path::new("/tmp/wt-a"), &leases, is_live).expect("occupied");
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:assert!(worktree_occupant(std::path::Path::new("/tmp/wt-c"), &leases, is_live).is_none());
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:let only_dead = vec![lease("EPIC-9", "/tmp/wt-d", 100)];
+aida-cli-lib/src/tests/lease_enforcement_tests.rs:worktree_occupant(std::path::Path::new("/tmp/wt-d"), &only_dead, is_live).is_none(),
+aida-cli-lib/src/tests/questions_tests.rs:let root = std::path::Path::new("/tmp/aida-project");
+aida-cli-lib/src/tests/queue_work_resume_tests.rs:"id = \"{lease_id}\"\nbranch = \"{branch}\"\nworktree_path = \"/tmp/{lease_id}\"\n"
+aida-cli-lib/src/tests/queue_work_resume_tests.rs:std::path::PathBuf::from("/tmp/019e9999-cccc"),
+aida-cli-lib/src/tests/queue_work_tests.rs:worktree_path: std::path::PathBuf::from(format!("/tmp/wt-{}", id)),
+aida-cli-lib/src/tests/queue_work_tests.rs:let path = std::path::Path::new("/tmp/aida-story-993");
+aida-cli-lib/src/tests/queue_work_tests.rs:Some("/tmp/aida-story-993")
+aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:worktree_path = \"/tmp/{lease_id}\"\n\
+aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:std::path::PathBuf::from("/tmp/019e9999-cccc"),
+aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:assert_eq!(worktree, std::path::PathBuf::from("/tmp/019e9999-cccc"));
+aida-cli-lib/src/tests/scope_fallback_tests.rs:worktree_path: std::path::PathBuf::from("/tmp/x"),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e4df1af45", "TASK-419", "/tmp/wt-419", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e4df1e131", "TASK-420", "/tmp/wt-420", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:let leases = vec![lease("019e10260000", "EPIC-1", "/tmp/wt-1", None)];
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10260000", "TASK-489", "/tmp/wt-489", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10271111", "TASK-490", "/tmp/wt-490", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:let leases = vec![lease("019e10260000", "TASK-1", "/tmp/wt-1", None)];
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10260000", "TASK-489", "/tmp/wt-489a", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10271111", "TASK-489", "/tmp/wt-489b", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:let leases = vec![lease("019e10260000", "TASK-489", "/tmp/wt-489", None)];
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:let leases = vec![lease("019e10260000", "TASK-1", "/tmp/wt-1", None)];
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10260000", "TASK-489", "/tmp/wt-489", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e10271111", "STORY-86", "/tmp/wt-86", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:let leases = vec![lease("019e10260000", "TASK-489", "/tmp/wt-489", None)];
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:let mut l = lease("019e10260000", "TASK-489", "/tmp/wt-489", None);
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e4df1af45", "TASK-419", "/tmp/wt-419", None),
+aida-cli-lib/src/tests/session_end_resolution_tests.rs:lease("019e4df1e131", "TASK-420", "/tmp/wt-420", None),
+aida-cli-lib/src/tests/statusline_tests.rs:wt_divergence_segment(std::path::Path::new("/tmp/task-257"), "task-257"),
+aida-cli-lib/src/tests/statusline_tests.rs:worktree_path: std::path::PathBuf::from("/tmp/wt"),
+aida-cli-lib/src/tests/statusline_tests.rs:let body = render_session_env_file(std::path::Path::new("/tmp/aida/target"), None, None);
+aida-cli-lib/src/tests/statusline_tests.rs:assert!(body.contains("export CARGO_TARGET_DIR='/tmp/aida/target'"));
+aida-cli-lib/src/tests/statusline_tests.rs:let body = render_session_env_file(std::path::Path::new("/tmp/joe's repo/target"), None, None);
+aida-cli-lib/src/tests/statusline_tests.rs:assert!(body.contains("export CARGO_TARGET_DIR='/tmp/joe'\\''s repo/target'"));
+aida-cli-lib/src/tests/statusline_tests.rs:std::path::Path::new("/tmp/aida/target"),
+aida-cli-lib/src/tests/statusline_tests.rs:write_session_env_file(worktree, std::path::Path::new("/tmp/parent/target")).unwrap();
+aida-cli-lib/src/tests/statusline_tests.rs:assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
+aida-cli-lib/src/tests/statusline_tests.rs:let body = render_session_env_file(std::path::Path::new("/tmp/parent/target"), None, None);
+aida-cli-lib/src/tests/statusline_tests.rs:assert_eq!(pairs[0].1, "/tmp/parent/target");
+aida-cli-lib/src/tests/statusline_tests.rs:std::path::Path::new("/tmp/parent/target"),
+aida-cli-lib/src/tests/statusline_tests.rs:let body = render_session_env_file(std::path::Path::new("/tmp/joe's repo/target"), None, None);
+aida-cli-lib/src/tests/statusline_tests.rs:assert_eq!(pairs[0].1, "/tmp/joe's repo/target");
+aida-cli-lib/src/tests/statusline_tests.rs:worktree_path = "/tmp/wt"
+aida-cli-lib/src/tests/statusline_tests.rs:worktree_path = "/tmp/wt"
+aida-cli-lib/src/tests/story_284_store_sync_tests.rs:let msg = spec_id_collision_recovery_message(&[collision], std::path::Path::new("/tmp/s"));
+aida-cli-lib/src/tests/story_284_store_sync_tests.rs:assert!(msg.contains("cd /tmp/s"), "{msg}");
+aida-cli-lib/src/tests/story_363_handoff_tests.rs:std::path::Path::new("/tmp/parent"),
+aida-cli-lib/src/tests/story_423_asciinema_tests.rs:"/tmp/demo.cast",
+aida-cli-lib/src/tests/story_423_asciinema_tests.rs:Some(std::path::PathBuf::from("/tmp/demo.cast"))
+aida-cli-lib/src/tests/story_423_asciinema_tests.rs:"/tmp/demo.cast".to_string(),
+aida-cli-lib/src/tests/story_423_asciinema_tests.rs:let exe = std::path::Path::new("/tmp/aida dev/aida");
+aida-cli-lib/src/tests/story_423_asciinema_tests.rs:"'/tmp/aida dev/aida' comment add TASK-1 'with spaces and '\"'\"'quote'\"'\"''"
+aida-cli-lib/src/tests/task345_leases_json_tests.rs:worktree_path: std::path::PathBuf::from("/tmp/wt").join(scope),
+aida-cli-lib/src/tests/task_490_status_in_progress_tests.rs:worktree_path = \"/tmp/x\"\n\
+aida-cli-lib/src/tests/task_515_status_agent_lease_fallback_tests.rs:"export CARGO_TARGET_DIR='/tmp/target'\nexport AIDA_AGENT_TYPE='codex'\n",
+aida-cli-lib/src/tests/task_518_pr_to_spec_tests.rs:let root = std::path::Path::new("/tmp");
+aida-cli-lib/src/tests/task_518_pr_to_spec_tests.rs:let root = std::path::Path::new("/tmp");
+aida-cli-lib/src/tests/task_518_pr_to_spec_tests.rs:let root = std::path::Path::new("/tmp");
+aida-cli-lib/src/tests/task_518_pr_to_spec_tests.rs:let root = std::path::Path::new("/tmp");
+aida-cli-lib/src/tests/task_518_pr_to_spec_tests.rs:let root = std::path::Path::new("/tmp");
+aida-cli-lib/src/tests/worktree_handler_tests.rs:let line = enter_cd_line(std::path::Path::new("/tmp/o'brien/aida-epic1"));
+aida-cli-lib/src/tests/worktree_handler_tests.rs:assert_eq!(line, "cd '/tmp/o'\\''brien/aida-epic1'");
+aida-cli-lib/src/tests/worktree_handler_tests.rs:"export CARGO_TARGET_DIR='/tmp/aida/target'\n",
+aida-cli-lib/src/tests/worktree_handler_tests.rs:assert!(payload.contains("export CARGO_TARGET_DIR='/tmp/aida/target'\n"));
+aida-cli-lib/src/workflow_hints.rs:Ok(PathBuf::from("/tmp/fake-project"))
+aida-cli-lib/src/worktree.rs:let payload = exit_shell_payload(Path::new("/tmp/o'brien/aida"), &[]);
+aida-cli-lib/src/worktree.rs:assert!(payload.starts_with("cd '/tmp/o'\\''brien/aida'\n"));
+aida-cli-lib/src/worktree.rs:let porcelain = "worktree /tmp/does-not-exist-aida-epic54\nHEAD abc\n";
+aida-cli-lib/src/worktree.rs:Path::new("/tmp/does-not-exist-aida-epic54")
+aida-cli-lib/src/worktree.rs:Path::new("/tmp/does-not-exist-aida-epic99")
+aida-core/src/git_ops.rs:let path = Path::new("/tmp/aida-task-1");
+aida-core/src/git_ops.rs:"git -C /tmp/aida-task-1 submodule sync --recursive && git -C /tmp/aida-task-1 submodule update --init --recursive"
+aida-core/src/liveness.rs:let mut l = lease("FR-1", "/tmp/wt");
+aida-core/src/liveness.rs:worktree_path = "/tmp/wt"
+aida-core/src/scaffolding/aida_md.rs:let no_skills = Scaffolder::new(PathBuf::from("/tmp/aida-task125"), no_skills_cfg);
+aida-core/src/scaffolding/aida_md.rs:PathBuf::from("/tmp/aida-task125"),
+aida-core/src/scaffolding/claude_md.rs:std::path::PathBuf::from("/tmp/aida-story-255-test"),
+aida-core/src/scaffolding/codex_md.rs:std::path::PathBuf::from("/tmp/aida-task-0424-test"),
+aida-core/src/scaffolding/codex_md.rs:std::path::PathBuf::from("/tmp/aida-story-417-test"),
+aida-core/src/scaffolding/settings.rs:let scaffolder = Scaffolder::new(PathBuf::from("/tmp/aida-test-scaffold"), config);
+aida-core/src/worktree_pool.rs:path: PathBuf::from("/tmp/x"),
+aida-core/src/worktree_pool.rs:path: PathBuf::from("/tmp/x"),
+aida-core/src/worktree_pool.rs:path: PathBuf::from("/tmp/aida-pool-0"),
+aida-core/src/worktree_pool_adopt.rs:let e = entry_for_adoption("p-0".into(), PathBuf::from("/tmp/p0"), class, "adopted");
+aida-core/src/worktree_pool_adopt.rs:PathBuf::from("/tmp/p0"),
+aida-core/src/worktree_pool_destroy.rs:path: PathBuf::from(format!("/tmp/{name}")),
+aida-tui/src/intent.rs:"aida && touch /tmp/x",
+aida-tui/src/intent.rs:"aida > /tmp/x",
+aida-tui/src/intent.rs:"aida < /tmp/x",
+aida-tui/src/palette.rs:"run aida && touch /tmp/x",
+aida-tui/src/redesign/store.rs:let p = focus_marker_path(Path::new("/tmp/proj"));
+aida-tui/tests/launcher_intent.rs:&aida_tui::__test_only::Intent::Launch("rm -rf / && touch /tmp/x".to_string()),
