@@ -12,12 +12,12 @@ description: |-
   - The result is cached as a separate artifact linked to the spec; a second call with an unchanged spec serves the cache (no regeneration); a changed spec regenerates.
   - The spec's own description/acceptance is unchanged (verified: no write to spec text).
   - The plain layer does not enter an agent's default context (surplus), but is retrievable on demand.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T02:09:13.722208017Z
-modified_at: 2026-09-16T02:22:28.347374072Z
+modified_at: 2026-09-16T02:35:17.666251441Z
 req_type: Story
 tags:
 - accessibility plain-english why-plain doc parent:EPIC-67 aida:why
@@ -29,8 +29,24 @@ relationships:
   target_id: 01a0a805-603a-7311-8457-de8d74bb69c8
   created_at: 2026-09-16T02:22:21.118910191Z
   created_by: joe
+history:
+- id: 01a0a811-8d1b-7d70-bbb3-3c5e2078ef1d
+  author: aida-auto-bump
+  timestamp: 2026-09-16T02:35:17.659784285Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a811-8d22-7cc0-a0f9-0e106f957fda
+  timestamp: 2026-09-16T02:35:17.666249925Z
+  agent: aida
+  commit_sha: cc72a07ec441cdf1137ef599265d33508e30a38c
+  summary: Completed via merge cc72a07e
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T02:22:28.347374072Z
   implemented_by: joe
+  completed_at: 2026-09-16T02:35:17.659666069Z
+  completion_sha: cc72a07ec441cdf1137ef599265d33508e30a38c
