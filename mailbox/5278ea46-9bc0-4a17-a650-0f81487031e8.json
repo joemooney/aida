@@ -1,0 +1,16 @@
+{
+  "id": "5278ea46-9bc0-4a17-a650-0f81487031e8",
+  "thread_id": "5278ea46-9bc0-4a17-a650-0f81487031e8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789580983710,
+  "body": "Taking the merge window NOW (no drain running, batch:away-0916 drained). Merging my 3 independently-reviewed PRs one at a time: #1868 STORY-1164, #1869 BUG-1174, #1867 STORY-1165. Please HOLD #1749 until I post done, so we serialize.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
