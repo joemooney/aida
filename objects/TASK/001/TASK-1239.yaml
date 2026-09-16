@@ -11,12 +11,12 @@ description: |-
   - The `aida agent new` picker shows guest + requester under a separate 'Stakeholder personas' heading, labeled non-build.
   - Selecting one launches an agent with AIDA_SESSION_ROLE=guest|requester (the existing gate applies — read-only / draft-intake).
   - They are visually distinct from and not mixed into the driver/build roles; they are never offered as queue-routable build seats.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:54:35.084636857Z
-modified_at: 2026-09-16T05:53:17.362756604Z
+modified_at: 2026-09-16T05:53:19.875766421Z
 req_type: Task
 tags:
 - roles agent-picker stakeholder guest requester ux aida:agent
