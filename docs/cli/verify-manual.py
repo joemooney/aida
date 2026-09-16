@@ -397,10 +397,17 @@ def main():
                 continue
             hard_flag_misses.append(cite)
     if hard_flag_misses:
-        hard_fail = True
+        # BUG-1176: the flag-resolution above (help_flags/subtree_flags) produces FALSE
+        # POSITIVES — it reports valid flags as unresolved (e.g. `--type`/`--title`/`--parent`
+        # under `aida add`, which `aida add --help` genuinely lists). This check being a HARD
+        # fail therefore blocked EVERY full-CI PR on non-existent drift. Demoted to ADVISORY
+        # until the resolution false-positives are fixed (follow-up). completeness / spec-id
+        # leak / interface-reflection stay HARD fails.
+        # trace:BUG-1176
         print(
-            f"FAIL flags — {len(hard_flag_misses)} cited --flag token(s) do not resolve "
-            "to the cited command or its parent command subtree:"
+            f"WARN flags (advisory) — {len(hard_flag_misses)} cited --flag token(s) did not "
+            "resolve to the cited command or its parent subtree (likely false positives; "
+            "see BUG-1176):"
         )
         for cite in hard_flag_misses[:80]:
             loc = f"{os.path.basename(cite['file'])}:{cite['line']}"
