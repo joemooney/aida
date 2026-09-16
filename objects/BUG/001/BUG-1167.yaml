@@ -22,8 +22,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T03:25:01.409119446Z
-modified_at: 2026-09-16T04:09:08.272209084Z
+modified_at: 2026-09-16T04:09:09.780495366Z
 req_type: Bug
 tags:
 - drive supervised-merge fence concurrency substrate-gate integrator reliability
-execution_mode: guided
+execution_mode: drive
