@@ -10,12 +10,12 @@ description: |-
   - immediate aida queue next also printed BUG-1174 as the next implementer item, despite status Done.
 
   Expected: either completed queue items are actually removed from queue projections, or the success copy/readback clearly explains that terminal entries remain visible until a cleanup step.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T16:44:43.547306636Z
-modified_at: 2026-09-16T17:38:38.428782991Z
+modified_at: 2026-09-16T17:48:21.642989662Z
 req_type: Task
 tags:
 - aida:queue
@@ -30,6 +30,20 @@ relationships:
   target_id: 01a0ab4c-8229-7453-801d-e560d017fa49
   created_at: 2026-09-16T17:38:38.428777989Z
   created_by: joe
+history:
+- id: 01a0ab55-7d04-7562-bc42-debb89f07491
+  author: aida-auto-bump
+  timestamp: 2026-09-16T17:48:21.636408207Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ab55-7d0a-7143-ac97-c0c830a92079
+  timestamp: 2026-09-16T17:48:21.642988577Z
+  agent: aida
+  commit_sha: 5a2546fb742ec35d0ee7bc1525c3870142de070a
+  summary: Completed via merge 5a2546fb
 implementation_info:
   implemented: true
   test_coverage_notes: |-
@@ -39,4 +53,6 @@ implementation_info:
     cargo fmt --all -- --check
   implemented_at: 2026-09-16T17:28:46.508134171Z
   implemented_by: joe
+  completed_at: 2026-09-16T17:48:21.636299599Z
+  completion_sha: 5a2546fb742ec35d0ee7bc1525c3870142de070a
 interface_changes: {}
