@@ -22,12 +22,12 @@ description: |-
   Fix: statusline_cmd.rs:282 relabel inbox: -> drafts:; lib.rs:40944 add
   AND deferred = 0 and rename the fn (read_draft_backlog_depth). Test: seed N
   active + M deferred drafts; assert count == N and the label is not inbox:.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:23:14.628042243Z
-modified_at: 2026-09-16T15:53:02.820240632Z
+modified_at: 2026-09-16T15:53:55.577831435Z
 req_type: Bug
 tags:
 - aida:statusline
