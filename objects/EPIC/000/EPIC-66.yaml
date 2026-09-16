@@ -23,3 +23,7 @@ modified_at: 2026-09-16T02:08:10.799257121Z
 req_type: Epic
 tags:
 - pipeline quality-gate agent-gate drain reviewer customization aida:pipeline
+relationships:
+- rel_type: Parent
+  target_id: 01a0a7f9-56ff-7893-b1ac-e5184b3a8420
+  created_at: 2026-09-16T02:08:53.087056203Z
