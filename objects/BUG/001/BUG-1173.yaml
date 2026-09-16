@@ -13,7 +13,26 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:42.826056329Z
-modified_at: 2026-09-16T15:50:55.976002545Z
+modified_at: 2026-09-16T15:50:57.454567688Z
 req_type: Bug
 tags:
 - supervised-merge merge-hold bug-1167 race concurrency reliability
+comments:
+- id: 01a0aaea-00ae-7e11-88eb-175c07376a9f
+  author: joe
+  content: |-
+    IMPLEMENTATION PLAN (scoped 2026-09-16) — bounded but a 10+-site merge-machinery change; do as a careful keyboard pass + independent review, not a rushed patch:
+
+    ROOT: the merge-hold marker must exist the moment a supervised spec's PR becomes known (so any merger sees it before CI-green). Today it's written only at hold-DECISION time — BUG-1167's merge_wave_pr (lib.rs:47703) AND BUG-1168's record_merge_supervision_hold (lib.rs:~84585, driver merge-hold) — both too late; a concurrent/stale merger races the pre-hold window (STORY-1163 #1861 merged ~49s before its hold fired).
+
+    FIX (setter-centralization): the real auto-complete driver sets self.pr_number = Some(X) in ~10 places (lib.rs 83560, 83627, 83645, 83672, 83717, 83734, 83814, 83820, 83828, 83835 — covering fresh open_change creation AND recovery/detection re-attach). Add:
+      fn set_pr_number(&mut self, pr: u32) { self.pr_number = Some(pr); self.mark_hold_if_supervised(pr); }
+      fn mark_hold_if_supervised(&mut self, pr: u32) { if pr_ship::merge_requires_supervision(self.req.execution_mode) { let _ = merge_hold::write_hold(&self.project_root, pr, &pr_ship::supervision_mode_label(self.req.execution_mode)); merge_hold::sync_label(&self.project_root, pr, true); } }
+    (mirror record_merge_supervision_hold's mode-access at ~84582). Then route the 10 real-driver sites through set_pr_number.
+
+    CAUTION — scope precisely: (a) do NOT touch AutoQueueOutcome::with_pr (lib.rs:37342 — a different struct, no driver/mode) nor the auto_complete.rs mock/test drivers; (b) keep BUG-1168's record_merge_supervision_hold as a backstop; (c) a MISSED pr_number site = a residual race; a WRONG-struct edit = a compile/behavior break. This is supervision-fence self-modification → keyboard + independent review (per the operator's proxy-reviewer independence rule — I scoped it, so a separate agent reviews the implementation).
+
+    TEST: a supervised (drive/guided/operator/decide/unset) spec's PR carries the marker + aida:merge-hold label from PR-detection (assert the marker file exists before the merge phase, via a driver-level test); a drain-mode PR is never marked. Worktree /home/joe/ai/aida-bug1173 is set up off latest main (has BUG-1167/1168).
+  created_at: 2026-09-16T15:50:57.454567688Z
+  modified_at: 2026-09-16T15:50:57.454567688Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
