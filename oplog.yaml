@@ -70892,5 +70892,21 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5529
+- id: 01a0ab1b-7ef3-7dd3-b5d0-054518e6d2b4
+  target_id: 01a0ab1b-3a9b-79b1-94b1-ab46d7b536ae
+  author: aida
+  node_id: '1'
+  lamport: 5530
+  timestamp: 2026-09-16T16:45:01.043619394Z
+  kind: !SetDescription
+    description: |-
+      During BUG-1174 pickup under AIDA_HEADLESS=1, queue completion produced contradictory readback.
+
+      Observed:
+      - aida queue done BUG-1174 printed: marked done and removed from queue.
+      - immediate aida queue list still included BUG-1174 with status done and for_role implementer.
+      - immediate aida queue next also printed BUG-1174 as the next implementer item, despite status Done.
+
+      Expected: either completed queue items are actually removed from queue projections, or the success copy/readback clearly explains that terminal entries remain visible until a cleanup step.
+clock: 5530
 node_id: '1'

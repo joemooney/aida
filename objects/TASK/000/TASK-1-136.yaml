@@ -2,43 +2,20 @@ id: 01a0ab1b-3a9b-79b1-94b1-ab46d7b536ae
 spec_id: TASK-1-136
 title: queue done leaves completed item visible in queue list
 description: |-
-  During BUG-1174 pickup under AIDA_HEADLESS=1, ✓ BUG-1174 marked done and removed from queue.
-    (run `aida queue next` to see what's next)
-  next[2]{cmd,to}:
-    aida pull,completed
-    aida show BUG-1174,detail printed success: 'marked done and removed from queue.' Immediate readback contradicted that: count: 4
-  queue[4]{id,title,status,for_role}:
-    STORY-1175,"Review PR-1869: [AI:codex] fix(mcp): hide accepted ADRs from open lens (BUG-1174)",approved,reviewer
-    STORY-1165,"GitLab Slice 2: GitLab CI merge-hold gate (.gitlab-ci.yml) + init scaffold + forge-route the label apply",approved,implementer
-    STORY-1166,"GitLab Slice 3: abstract CI-watch + delegated-review check-runs behind the Forge trait",approved,implementer
-    BUG-1174,verify accepted ADRs drop from the open-work lens (not just default list),done,implementer
-  next[2]{cmd,to}:
-    aida queue work STORY-1175,in-progress
-    aida show STORY-1175,detail still included  with status  and for_role , while Next up:
-    BUG-1174: verify accepted ADRs drop from the open-work lens (not just default list)
-    Status: Done  ·  Priority: Low
-    Routed for: implementer
+  During BUG-1174 pickup under AIDA_HEADLESS=1, queue completion produced contradictory readback.
 
-  Description (first 10 lines):
-    BUG-781 (accepted-ADRs-drop-from-open-lens) appears to have a real leak: aida list
-    --all and the JSON open-work query surface ~29 ADRs with status=approved as if they
-    were open work. Per the intended lens (accepted/terminal ADR renders as Accepted and
-    drops from the default open list + the aida status open tally), an accepted ADR should
-    not inflate the open-unqueued backlog. Verify whether the default aida list already
-    excludes them (then this is only a --all artifact and can be closed) or whether the
-    open-work lens/tally still counts them (then fix the lens to treat approved ADR/
-    accepted as terminal). Low priority, hygiene.
+  Observed:
+  - aida queue done BUG-1174 printed: marked done and removed from queue.
+  - immediate aida queue list still included BUG-1174 with status done and for_role implementer.
+  - immediate aida queue next also printed BUG-1174 as the next implementer item, despite status Done.
 
-  Suggested commands:
-    aida show BUG-1174    full details
-    aida edit BUG-1174 --status in-progress     mark in-progress
-    aida queue done BUG-1174    when finished (marks complete + dequeues) also printed BUG-1174 as the next implementer item. Expected either actual removal from queue projections or copy that accurately says terminal queue entries remain visible until a cleanup step.
+  Expected: either completed queue items are actually removed from queue projections, or the success copy/readback clearly explains that terminal entries remain visible until a cleanup step.
 status: Draft
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T16:44:43.547306636Z
-modified_at: 2026-09-16T16:44:43.547306636Z
+modified_at: 2026-09-16T16:45:00.960501359Z
 req_type: Task
 tags:
 - aida:queue
