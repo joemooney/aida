@@ -15,10 +15,11 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T16:44:43.547306636Z
-modified_at: 2026-09-16T16:51:44.495320441Z
+modified_at: 2026-09-16T16:51:45.851927839Z
 req_type: Task
 tags:
 - aida:queue
+- batch:away-0916
 - from-advisor:BUG-1174
 - headless-drain
 - kind:observation
