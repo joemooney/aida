@@ -94,10 +94,19 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         branch,
         reason.map(|r| format!(" ({r})")).unwrap_or_default(),
     );
+    // TASK-1240: derive the create-command + change noun from the resolved
+    // forge so GitLab sessions see `glab mr create` and MR-N, not GitHub
+    // wording. trace:TASK-1240 | ai:claude
+    let forge = crate::forge::resolve_forge_kind(&project_root);
+    let noun = forge.change_noun();
+    let create_cmd = forge
+        .create_cmd()
+        .unwrap_or_else(|| "gh pr create".to_string());
     eprintln!(
-        "  {} when your gate passes: `gh pr create` (or `glab mr create`), then \
-         `aida queue work PR-N --role reviewer`",
-        "→".dimmed()
+        "  {} when your gate passes: `{}`, then `aida queue work {}-N --role reviewer`",
+        "→".dimmed(),
+        create_cmd,
+        noun,
     );
     Ok(())
 }
