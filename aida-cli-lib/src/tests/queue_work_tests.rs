@@ -555,6 +555,35 @@ fn leased_implementer_head_synthesizes_assignment_when_queue_shifted() {
 }
 
 #[test]
+fn leased_implementer_head_does_not_resurrect_done_assignment() {
+    let (_dir, storage) = queued_status_fixture(&[
+        ("STORY-1136", RequirementStatus::Done),
+        ("STORY-1137", RequirementStatus::Approved),
+    ]);
+    let store = storage.load().unwrap();
+    let queued: Vec<aida_core::QueueEntry> = storage
+        .queue_list("u", false)
+        .unwrap()
+        .into_iter()
+        .filter(|entry| {
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.id == entry.requirement_id)
+                .unwrap();
+            req.display_id() != "STORY-1136"
+        })
+        .collect();
+    let lease = implementer_lease("STORY-1136");
+
+    // trace:TASK-1-136 | ai:codex
+    assert!(
+        leased_implementer_queue_head(&queued, &store, "u", Some(&lease)).is_none(),
+        "a Done lease scope should not be synthesized as the queue head"
+    );
+}
+
+#[test]
 fn fresh_pickup_policy_status_table_is_shared_by_surfaces() {
     use RequirementStatus::*;
 
