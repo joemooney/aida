@@ -1,12 +1,14 @@
 use super::{
-    branch_commits_ahead_main, build_auto_punt_args, build_integrate_rebase_args,
-    build_phase3_auto_rebase_args, ensure_implementer_branch_pushed, find_orchestrated_lease,
-    head_commit_message, headless_log_is_zero_bytes, list_leases, orchestrator_phase_child_env,
-    orchestrator_pr_title_and_body, pushed_branch_commits_ahead_default, RealPhaseDriver,
+    agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
+    build_integrate_rebase_args, build_phase3_auto_rebase_args, ensure_implementer_branch_pushed,
+    find_orchestrated_lease, head_commit_message, headless_log_is_zero_bytes, list_leases,
+    orchestrator_phase_child_env, orchestrator_pr_title_and_body, parse_agent_gates_from_config,
+    pushed_branch_commits_ahead_default, AgentGateOnFail, RealPhaseDriver,
 };
 use crate::auto_complete::{FailureKind, Phase, PhaseDriver, PhaseFailure, PhaseReconcile};
 use aida_core::{
-    DatabaseBackend, FieldChange, HistoryEntry, Requirement, RequirementStatus, RequirementsStore,
+    DatabaseBackend, FieldChange, HistoryEntry, Requirement, RequirementStatus, RequirementType,
+    RequirementsStore,
 };
 use chrono::{DateTime, Utc};
 use std::process::Command;
@@ -353,6 +355,64 @@ fn reviewer_phase_child_env_sets_reviewer_role() {
     assert!(env
         .iter()
         .any(|(k, v)| *k == "AIDA_USER" && v == "pipeline-owner"));
+}
+
+#[test]
+fn agent_gate_config_parses_dotted_pipeline_gate_tables() {
+    let cfg: toml::Value = r#"
+[pipeline.gate.security-review]
+kind = "agent"
+role = "security-reviewer"
+applies_to = "tag:security"
+on_fail = "warn"
+
+[pipeline.gate.docs-review]
+kind = "agent"
+role = "docs-reviewer"
+applies_to = "type:doc"
+"#
+    .parse()
+    .unwrap();
+
+    let gates = parse_agent_gates_from_config(Some(&cfg));
+
+    assert_eq!(gates.len(), 2);
+    let docs = gates
+        .iter()
+        .find(|gate| gate.name == "docs-review")
+        .expect("docs gate");
+    assert_eq!(docs.role, "docs-reviewer");
+    assert_eq!(docs.on_fail, AgentGateOnFail::Shelve);
+    let security = gates
+        .iter()
+        .find(|gate| gate.name == "security-review")
+        .expect("security gate");
+    assert_eq!(security.role, "security-reviewer");
+    assert_eq!(security.on_fail, AgentGateOnFail::Warn);
+}
+
+#[test]
+fn agent_gate_selector_matches_type_or_tag_tokens() {
+    let cfg: toml::Value = r#"
+[pipeline.gate.security-review]
+kind = "agent"
+role = "security-reviewer"
+applies_to = "type:bug, tag:security"
+"#
+    .parse()
+    .unwrap();
+    let gate = parse_agent_gates_from_config(Some(&cfg))
+        .pop()
+        .expect("gate parses");
+    let mut req = Requirement::new("secure story".to_string(), String::new());
+    req.req_type = RequirementType::Story;
+
+    assert!(!agent_gate_matches_req(&gate, &req));
+    req.tags.insert("security".to_string());
+    assert!(agent_gate_matches_req(&gate, &req));
+    req.tags.clear();
+    req.req_type = RequirementType::Bug;
+    assert!(agent_gate_matches_req(&gate, &req));
 }
 
 #[test]
