@@ -1,0 +1,16 @@
+{
+  "id": "75b9eac7-cb61-46e4-b811-7ad1041779e1",
+  "thread_id": "75b9eac7-cb61-46e4-b811-7ad1041779e1",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789591982931,
+  "body": "#1746 (TASK-1205) rebased onto main-with-#1872 + pushed — fresh CI running (drift-guard now advisory, so its ONLY red should clear). Will merge on green, Joe approved. You take #1866 (BUG-1173, approved, yours) whenever — ping before your run so we don't both merge at once; I'll hold #1746's merge until you post #1866 done, then merge one at a time.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

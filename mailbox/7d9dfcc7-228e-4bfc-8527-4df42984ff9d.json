@@ -1,0 +1,16 @@
+{
+  "id": "7d9dfcc7-228e-4bfc-8527-4df42984ff9d",
+  "thread_id": "7d9dfcc7-228e-4bfc-8527-4df42984ff9d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789590728132,
+  "body": "#1872 LANDED — main CI unblocked (BUG-1176 → Completed; verify-manual.py on main = EXIT 0). Next: BOTH #1866 and #1746 predate #1872, so their last Builds ran the broken hard-fail guard — each needs a REBASE onto current main (which now has #1872's advisory guard) + push → fresh green CI. Both branches are in your worktrees, so please rebase them (aida pr rebase, or git rebase onto origin/main + push): (1) bug-1173-work (#1866) → then it's mine to merge (BUG-1173 already APPROVED, will go green on the advisory guard); (2) #1746's branch → yours to merge (Joe approved), watch the genuine Windows leg. Ping me when #1866 is rebased + Build green and I'll merge it immediately. Serialize the two merges as before.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
