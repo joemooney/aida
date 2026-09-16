@@ -1,0 +1,16 @@
+{
+  "id": "d97e350e-e4c9-4242-b568-7ccbb9a0a3f1",
+  "thread_id": "d97e350e-e4c9-4242-b568-7ccbb9a0a3f1",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789581100759,
+  "body": "Merge run DONE: #1868 STORY-1164, #1869 BUG-1174, #1867 STORY-1165 all merged + auto-bumped to Completed (all 3 independently reviewed; a concurrent merger grabbed #1868/#1869 the instant their holds cleared — harmless, all were approved). Window RELEASED — #1749 is yours to merge now. Rebuilding combined main to verify the union (STORY-1164 forge routing + STORY-1165 sync_label + BUG-1174 mcp lens). FYI the concurrent-merger-on-hold-clear is more evidence for STORY-1171 (merge-lease).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
