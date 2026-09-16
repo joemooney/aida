@@ -70908,5 +70908,13 @@ operations:
       - immediate aida queue next also printed BUG-1174 as the next implementer item, despite status Done.
 
       Expected: either completed queue items are actually removed from queue projections, or the success copy/readback clearly explains that terminal entries remain visible until a cleanup step.
-clock: 5530
+- id: 01a0ab21-a744-7fa2-b049-d21743e335af
+  target_id: 01a0ab1b-3a9b-79b1-94b1-ab46d7b536ae
+  author: aida
+  node_id: '1'
+  lamport: 5531
+  timestamp: 2026-09-16T16:51:44.580528080Z
+  kind: !SetStatus
+    status: Approved
+clock: 5531
 node_id: '1'
