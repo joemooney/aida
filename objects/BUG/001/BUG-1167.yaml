@@ -3,30 +3,26 @@ spec_id: BUG-1167
 agreed_id: BUG-1167
 title: Supervised-merge hold is bypassable by a CONCURRENT merger — the drain holds, but a separate integrator/agent merges the drive PR anyway (client-side hold, not a substrate gate)
 description: |-
-  Follow-on to BUG-1163 (#1850 fixed the drain's own wave-integration fail-open). Reproduced 2026-09-15 on a binary that CONTAINS the #1850 fix (cc72a07e, 52b6a011f is an ancestor):
+  The supervised-merge hold is bypassable by a CONCURRENT merger: the drain HELD its drive PRs correctly (log: 'auto-merge refused', no merge), yet STORY-1155/BUG-1164/TASK-1237 were each merged by a SEPARATE actor (joemooney, an integrator sweep / second agent session / stale-binary drain) ~1 min BEFORE the drain's hold fired. BUG-1163's #1850 fixed only the drain's own wave leg. A client-side hold cannot stop a concurrent merger — it needs a substrate gate.
 
-  The single-spec drain HELD its drive PRs correctly — goal-drain log shows for STORY-1155 (#1855) and BUG-1164 (#1856): 'auto-merge refused; merge requires human/advisor review', and NO merge line. Yet both PRs show MERGED (mergedBy joemooney), each ~1 min BEFORE the drain's hold fired. Same for TASK-1237 (#1852) and round-4's BUG-1156/STORY-1130/TASK-1233.
-
-  Root cause: the supervised-merge hold is a CLIENT-SIDE check in the merging process. A SEPARATE actor with merge rights — another `aida agent` session (the operator had several open), an integrator/burndown sweep, or a human running `gh pr merge` — merges a CI-green + reviewer-approved PR without consulting the spec's execution_mode. The drain's fence is correct; it just isn't the only merger. (The concurrent merger may also be on a STALE pre-#1850 binary, compounding it.)
-
-  This is a SUBSTRATE-AS-BOUNCER gap: an invariant enforced by convention in each merge path is not enforced. A drive/guided/operator spec that MUST have a human at the merge can be merged by any actor that doesn't check.
-
-  Impact: keystone/security/reliability work (BUG-1156 reap-correctness, STORY-1155 pipeline gate, STORY-1128-class posture) merges unreviewed whenever a concurrent merger races the hold. The de-risk/drive safety model is only as strong as its weakest merger.
-
-  Fix direction (needs the substrate, not another client check):
-  - Make the supervised-merge hold enforced at a chokepoint ALL mergers pass, or record a substrate 'merge-hold' marker on the PR/spec that every merge path (drain merge, `aida integrate`, burndown residual-sweep, `aida pr` verbs) checks and refuses — and ideally a server-side guard (branch-protection / required-approval) for the drive/guided/operator set so even a raw `gh pr merge` / stale-binary session cannot bypass it.
-  - Audit every code path that calls `gh pr merge` for the execution_mode check.
-  - Ensure all agent sessions run a binary with the fence fix (a stale-binary merger is a live hole).
+  DECIDED (ADR-37, operator-blessed): ONE substrate merge-hold marker, TWO enforcement layers.
+  - MARKER: a supervised spec (execution_mode drive/guided/operator/decide OR unset) stamps its PR with a merge-hold marker (GitHub label + .aida/merge-holds/PR-N record); a drain-mode PR is UNMARKED.
+  - LAYER 1 (client, fail-closed): every AIDA merge path (drain merge, aida integrate, burndown sweep, aida pr merge) checks the marker + refuses when present; fails closed on an unresolvable read.
+  - LAYER 2 (server): a GitHub required status check that stays FAILING while the marker is present (blocks raw/stale/UI merges) and PASSES for unmarked drain-mode PRs (preserves auto-merge).
+  - CLEARING: a human/advisor review removes the marker → check passes → merge allowed.
 
   Acceptance:
-  - With a drive/guided/operator spec whose PR is CI-green + reviewer-approved, NO merger — drain, integrate, burndown sweep, another agent session, or a raw gh pr merge from a stale binary — merges it without the execution_mode check; it waits for an explicit human/advisor merge.
-  - Regression/integration test: two concurrent mergers on one green+approved drive PR both refuse; the PR stays open.
+  - A supervised (drive/guided/operator/decide/unset) spec's PR is stamped with the merge-hold marker (label + .aida/merge-holds/PR-N); a drain-mode PR is not.
+  - Every AIDA merge path refuses to merge a marked PR (fail-closed on unresolvable), verified by test — INCLUDING a concurrent second merger (two mergers on one marked PR both refuse; PR stays open).
+  - The Layer-2 required status check fails while marked, passes when unmarked; a raw 'gh pr merge' of a marked PR is blocked by GitHub; a drain-mode (unmarked) PR still auto-merges.
+  - An advisor/human review that clears the hold removes the marker and the check passes.
+  - No regression to drain-mode auto-merge throughput.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T03:25:01.409119446Z
-modified_at: 2026-09-16T03:49:17.657676132Z
+modified_at: 2026-09-16T04:09:08.272209084Z
 req_type: Bug
 tags:
 - drive supervised-merge fence concurrency substrate-gate integrator reliability

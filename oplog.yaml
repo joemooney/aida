@@ -69878,5 +69878,27 @@ operations:
     req_type: Decision
     status: Approved
     priority: High
-clock: 5463
+- id: 01a0a867-7801-7771-bfaa-cd326c83716f
+  target_id: 01a0a83f-1461-7451-973a-663af0055331
+  author: aida
+  node_id: '1'
+  lamport: 5464
+  timestamp: 2026-09-16T04:09:08.353535456Z
+  kind: !SetDescription
+    description: |-
+      The supervised-merge hold is bypassable by a CONCURRENT merger: the drain HELD its drive PRs correctly (log: 'auto-merge refused', no merge), yet STORY-1155/BUG-1164/TASK-1237 were each merged by a SEPARATE actor (joemooney, an integrator sweep / second agent session / stale-binary drain) ~1 min BEFORE the drain's hold fired. BUG-1163's #1850 fixed only the drain's own wave leg. A client-side hold cannot stop a concurrent merger — it needs a substrate gate.
+
+      DECIDED (ADR-37, operator-blessed): ONE substrate merge-hold marker, TWO enforcement layers.
+      - MARKER: a supervised spec (execution_mode drive/guided/operator/decide OR unset) stamps its PR with a merge-hold marker (GitHub label + .aida/merge-holds/PR-N record); a drain-mode PR is UNMARKED.
+      - LAYER 1 (client, fail-closed): every AIDA merge path (drain merge, aida integrate, burndown sweep, aida pr merge) checks the marker + refuses when present; fails closed on an unresolvable read.
+      - LAYER 2 (server): a GitHub required status check that stays FAILING while the marker is present (blocks raw/stale/UI merges) and PASSES for unmarked drain-mode PRs (preserves auto-merge).
+      - CLEARING: a human/advisor review removes the marker → check passes → merge allowed.
+
+      Acceptance:
+      - A supervised (drive/guided/operator/decide/unset) spec's PR is stamped with the merge-hold marker (label + .aida/merge-holds/PR-N); a drain-mode PR is not.
+      - Every AIDA merge path refuses to merge a marked PR (fail-closed on unresolvable), verified by test — INCLUDING a concurrent second merger (two mergers on one marked PR both refuse; PR stays open).
+      - The Layer-2 required status check fails while marked, passes when unmarked; a raw 'gh pr merge' of a marked PR is blocked by GitHub; a drain-mode (unmarked) PR still auto-merges.
+      - An advisor/human review that clears the hold removes the marker and the check passes.
+      - No regression to drain-mode auto-merge throughput.
+clock: 5464
 node_id: '1'
