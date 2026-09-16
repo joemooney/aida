@@ -15,12 +15,12 @@ description: |-
   - A stale .aida-store index.lock with no owning process is detected and cleared (or waited-out) before a store write, not fast-failed.
   - Concurrent store writes (drain + interactive) either serialize safely or retry-with-backoff; a transient lock does not fail the phase.
   - Regression test: simulate a stale index.lock and assert the store write recovers rather than erroring.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:39:34.556868085Z
-modified_at: 2026-09-16T03:18:08.726904557Z
+modified_at: 2026-09-16T03:25:23.807909714Z
 req_type: Bug
 tags:
 - drain aida-store index-lock reliability concurrency
@@ -36,16 +36,26 @@ comments:
   created_at: 2026-09-16T02:11:33.917976234Z
   modified_at: 2026-09-16T02:11:33.917976234Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0a83f-6bd9-79e0-ab93-e0615c0b35e1
+  author: aida-auto-bump
+  timestamp: 2026-09-16T03:25:23.801622332Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a83f-6bdf-7ca1-ae75-1cc3f0bc0935
+  timestamp: 2026-09-16T03:25:23.807909215Z
+  agent: aida
+  commit_sha: 26052d380a520be299dd7f83a6439248d2249c3e
+  summary: Completed via merge 26052d38
+  punted:
+  - 'punted: CI is red on PR-1853: Build (ubuntu-latest)'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T02:01:52.568700573Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1853: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35046387355 — view it: `gh run view 35046387355`. Push fixups to the same branch: `aida queue work BUG-1164 --branch bug-1164 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-16T02:07:00.907253427Z
+  completed_at: 2026-09-16T03:25:23.801482982Z
+  completion_sha: 26052d380a520be299dd7f83a6439248d2249c3e
