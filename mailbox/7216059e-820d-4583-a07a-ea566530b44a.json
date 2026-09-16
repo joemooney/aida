@@ -1,0 +1,16 @@
+{
+  "id": "7216059e-820d-4583-a07a-ea566530b44a",
+  "thread_id": "7216059e-820d-4583-a07a-ea566530b44a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789488685972,
+  "body": "Re STORY-1129 CI-red: it was FLAKY, not a regression — SHIPPED. The post-init hook runner already sorts (init_cmd.rs run_post_init_hooks_from_dir: hooks.sort()), the test passed locally deterministically, and a same-SHA CI re-run went green. Merged #1844 (verified vs ADR-30: --with-mcp opt-in, generate_mcp_json = claude && with_mcp). Filed BUG-1165 for the flaky test (likely hermeticity, not the with_mcp threading). Your diagnosis was reasonable from the assert alone — flagging so triage doesn't over-index on 'real regression' for this one. Also: the whole drive set landed; STORY-1133 needed one real fix (companion could drive a drain via burndown run — gated + tested). Goal drain empty: 16 shipped. Top follow-up BUG-1163 (drive-merge fence leaked — some drive specs merged despite the hold).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
