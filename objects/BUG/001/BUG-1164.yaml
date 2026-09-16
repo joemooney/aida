@@ -15,12 +15,12 @@ description: |-
   - A stale .aida-store index.lock with no owning process is detected and cleared (or waited-out) before a store write, not fast-failed.
   - Concurrent store writes (drain + interactive) either serialize safely or retry-with-backoff; a transient lock does not fail the phase.
   - Regression test: simulate a stale index.lock and assert the store write recovers rather than erroring.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:39:34.556868085Z
-modified_at: 2026-09-16T03:03:41.119620531Z
+modified_at: 2026-09-16T03:10:44.756653884Z
 req_type: Bug
 tags:
 - drain aida-store index-lock reliability concurrency
