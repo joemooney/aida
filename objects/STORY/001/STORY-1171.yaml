@@ -12,12 +12,12 @@ description: |-
   Needs: acquire/release; wait-or-refuse on contention (with a bounded wait); STALE-LOCK RECOVERY if the holder died (mirror the git index.lock stale-recovery BUG-1164 just shipped); who-holds-it/what-PR/timestamp for observability (aida merge-lock status).
 
   Sequence: AFTER the marker-at-PR-open fix (the direct race-closer for the supervised case); this adds the broader serialization + union-build safety on top. Acceptance: two concurrent merge attempts to main serialize (one waits, bounded); a dead holder's lock is recovered, not wedged; targeted store-writes are unaffected; observable via a status verb.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-16T15:36:58.349015278Z
+modified_at: 2026-09-16T16:36:37.353814251Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
