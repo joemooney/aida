@@ -1,0 +1,25 @@
+id: 01a0a867-1c52-7610-9b99-e6b9f405df6e
+spec_id: ADR-37
+agreed_id: ADR-37
+title: 'BUG-1167 fix: one substrate merge-hold marker enforced at two layers (client fail-closed + server required-status-check)'
+description: |-
+  Operator-blessed 2026-09-15 (product-shaped). The supervised-merge hold must be a SUBSTRATE gate, not a per-path client convention — a client-side hold is bypassable by any concurrent merger (integrator sweep, second agent session, stale-binary drain, raw gh pr merge). BUG-1163's #1850 fixed only the drain's own wave leg.
+
+  Design — ONE marker, TWO enforcement layers:
+  - MARKER: a supervised spec (execution_mode in {drive,guided,operator,decide} OR unset) stamps its PR with a merge-hold marker = a GitHub label + a .aida/merge-holds/PR-N record. A drain-mode spec's PR is UNMARKED.
+  - LAYER 1 (client, fail-closed — same shape as BUG-1163): every AIDA merge path — the drain merge phase, aida integrate, burndown residual-sweep, aida pr merge — checks the marker and REFUSES when present (and fails closed on an unresolvable read). Closes the internal concurrent-merger hole.
+  - LAYER 2 (server): a GitHub required status check that stays FAILING while the marker is present, so GitHub blocks even a raw/stale/UI merge; it PASSES for unmarked (drain-mode) PRs, preserving the drain's auto-merge. This is what makes the hold un-bypassable.
+  - CLEARING THE HOLD: a human/advisor review removes the marker (label + record) → the required check passes → merge is allowed.
+
+  This dissolves both worries: A-alone leaks to raw/stale mergers (Layer 2 catches it); B-alone is coarse and would wedge drain-mode auto-merge (the marker makes branch protection granular — it only blocks marked/supervised PRs).
+
+  Immediate tourniquet (not the fix): find + stop any running integrator/sweep, and rebuild any agent session on a pre-#1850 binary.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T04:08:44.882150978Z
+modified_at: 2026-09-16T04:08:44.882150978Z
+req_type: Decision
+tags:
+- merge-hold supervised-merge fence substrate-gate bug-1167
