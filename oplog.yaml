@@ -69633,5 +69633,13 @@ operations:
     req_type: Story
     status: Draft
     priority: Low
-clock: 5446
+- id: 01a0a7fb-a616-75f2-bc36-9d1986303d0b
+  target_id: 01a0a7f7-af37-7202-ba3e-c7fb4e3bd296
+  author: aida
+  node_id: '1'
+  lamport: 5447
+  timestamp: 2026-09-16T02:11:22.262298332Z
+  kind: !SetStatus
+    status: Rejected
+clock: 5447
 node_id: '1'
