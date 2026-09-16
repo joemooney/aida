@@ -7816,6 +7816,21 @@ pub(crate) fn derive_queue_work_prompt(
     review_findings: Option<&str>,
 ) -> String {
     let role_lower = role.to_ascii_lowercase();
+    // Agent gates wear a custom role but must still produce a review verdict
+    // for the orchestrator, so they reuse the review skill with a tighter
+    // gate prompt. trace:STORY-1155 | ai:codex
+    if let Ok(gate_name) = std::env::var("AIDA_AGENT_GATE_NAME") {
+        if let Some((_, n)) = plan.review_target {
+            let gate_name = gate_name.trim();
+            let gate_role = std::env::var("AIDA_AGENT_GATE_ROLE").unwrap_or_else(|_| role.into());
+            return format!(
+                "/aida-review --pr {}\n\nAgent gate: {}\nGate role: {}\nTreat this as a required pre-merge quality gate. Write the verdict file named by AIDA_REVIEW_VERDICT_FILE.",
+                n,
+                if gate_name.is_empty() { "agent-gate" } else { gate_name },
+                gate_role.trim()
+            );
+        }
+    }
     if role_lower == "reviewer" {
         if let Some((_, n)) = plan.review_target {
             return format!("/aida-review --pr {}", n);

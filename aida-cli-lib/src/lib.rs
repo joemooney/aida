@@ -11250,6 +11250,58 @@ fn file_reviewer_verdict_unavailable_finding(
     Ok(())
 }
 
+fn file_agent_gate_warning_finding(
+    project_root: &std::path::Path,
+    spec: &str,
+    pr_number: u32,
+    gate: &AgentGateConfig,
+    verdict: auto_complete::Verdict,
+) -> anyhow::Result<()> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        anyhow::bail!("no distributed store found");
+    };
+    let dispenser = load_dispenser(&store_path)?;
+    let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+
+    let title = format!(
+        "Agent gate `{}` warned on {} for PR {}",
+        gate.name, spec, pr_number
+    );
+    let note = format!(
+        "The agent gate `{}` (role `{}`) returned {} for PR {}. \
+         The gate is configured with on_fail='warn', so the drain continued.",
+        gate.name,
+        gate.role,
+        verdict.label(),
+        pr_number
+    );
+    let mut req = aida_core::Requirement::new(title, note);
+    req.req_type = aida_core::RequirementType::Task;
+    req.status = aida_core::RequirementStatus::Draft;
+    req.owner = get_default_author();
+    req.tags.insert(format!("from-review:PR-{}", pr_number));
+    req.tags.insert(format!("from-advisor:{spec}"));
+    req.tags.insert("kind:AgentGateWarning".to_string());
+    req.tags.insert("severity:major".to_string());
+
+    let store = backend.update_atomically(|store| {
+        let type_prefix = store.get_type_prefix(&req.req_type);
+        store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
+    })?;
+    let written = store
+        .requirements
+        .last()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
+    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+
+    let display_id = written.spec_id.as_deref().unwrap_or("?");
+    record_role_activity(display_id, "findings-add");
+    Ok(())
+}
+
 fn read_review_mode(project_root: &std::path::Path) -> String {
     let path = project_root.join(".aida").join("config.toml");
     let Ok(content) = std::fs::read_to_string(&path) else {
@@ -81230,6 +81282,137 @@ enum Phase1PrResolve {
     Retry(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AgentGateOnFail {
+    Shelve,
+    Warn,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AgentGateConfig {
+    name: String,
+    role: String,
+    applies_to: String,
+    on_fail: AgentGateOnFail,
+}
+
+fn normalize_gate_token(s: &str) -> String {
+    s.trim()
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
+}
+
+fn sanitize_gate_file_token(s: &str) -> String {
+    let token: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let token = token.trim_matches('-');
+    if token.is_empty() {
+        "agent-gate".to_string()
+    } else {
+        token.to_string()
+    }
+}
+
+fn parse_agent_gates_from_config(value: Option<&toml::Value>) -> Vec<AgentGateConfig> {
+    let Some(gates) = value
+        .and_then(|v| v.get("pipeline"))
+        .and_then(|v| v.get("gate"))
+        .and_then(|v| v.as_table())
+    else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (name, gate) in gates {
+        let kind = gate
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim();
+        if !kind.eq_ignore_ascii_case("agent") {
+            continue;
+        }
+        let Some(role) = gate.get("role").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(applies_to) = gate.get("applies_to").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let on_fail = match gate
+            .get("on_fail")
+            .and_then(|v| v.as_str())
+            .unwrap_or("shelve")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "warn" => AgentGateOnFail::Warn,
+            _ => AgentGateOnFail::Shelve,
+        };
+        out.push(AgentGateConfig {
+            name: name.to_string(),
+            role: role.trim().to_string(),
+            applies_to: applies_to.trim().to_string(),
+            on_fail,
+        });
+    }
+    out
+}
+
+fn selector_tokens(selector: &str) -> impl Iterator<Item = &str> {
+    selector
+        .split(|c: char| c == ',' || c == '|' || c == '/' || c.is_whitespace())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+}
+
+fn agent_gate_matches_req(gate: &AgentGateConfig, req: &aida_core::Requirement) -> bool {
+    selector_tokens(&gate.applies_to).any(|token| {
+        if let Some(want) = token.strip_prefix("type:") {
+            normalize_gate_token(want) == normalize_gate_token(&req.req_type.to_string())
+                || normalize_gate_token(want) == normalize_gate_token(req.req_type.default_prefix())
+        } else if let Some(want) = token.strip_prefix("tag:") {
+            let want = want.trim();
+            req.tags.iter().any(|tag| tag.eq_ignore_ascii_case(want))
+        } else {
+            false
+        }
+    })
+}
+
+fn matching_agent_gates_for_spec(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> Vec<AgentGateConfig> {
+    let gates = parse_agent_gates_from_config(read_project_config_value(project_root).as_ref());
+    if gates.is_empty() {
+        return Vec::new();
+    }
+    let Some(store) = load_store_for_lookup(project_root) else {
+        return Vec::new();
+    };
+    let Some(req) = store
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some(spec))
+    else {
+        return Vec::new();
+    };
+    gates
+        .into_iter()
+        .filter(|gate| agent_gate_matches_req(gate, req))
+        .collect()
+}
+
 /// STORY-492: a `--resume-drain` re-entry context for [`run_auto_complete`] —
 /// the reconciled phase to re-enter at plus the branch + PR to seed into the
 /// driver (the skipped earlier phases would have discovered these). `None`
@@ -82419,6 +82602,174 @@ fn pushed_branch_commits_ahead_default(
         ))
     })?;
     parse_git_count(&ahead, "pushed-branch-ahead-default")
+}
+
+impl RealPhaseDriver {
+    fn run_one_agent_gate(
+        &mut self,
+        pr: u32,
+        gate: &AgentGateConfig,
+    ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+        let verdict_dir = self.project_root.join(".aida").join("review-verdicts");
+        std::fs::create_dir_all(&verdict_dir).map_err(|e| {
+            auto_complete::PhaseFailure::new(format!(
+                "could not create {}: {e}",
+                verdict_dir.display()
+            ))
+        })?;
+        let gate_token = sanitize_gate_file_token(&gate.name);
+        let verdict_path = verdict_dir.join(format!("PR-{pr}-{gate_token}.json"));
+        let _ = std::fs::remove_file(&verdict_path);
+
+        let gate_started_at = std::time::SystemTime::now();
+        let session_uuid = uuid::Uuid::now_v7().to_string();
+        let headless_vendor = session::resolve_headless_vendor(&self.project_root);
+        self.mark_drain_phase_session(
+            auto_complete::Phase::Reviewer,
+            &session_uuid,
+            headless_vendor,
+        );
+        let scope = format!("PR-{pr}");
+        release_dead_phase_predecessor_leases(
+            &self.project_root,
+            &scope,
+            auto_complete::Phase::Reviewer,
+        )?;
+
+        let mut cmd = std::process::Command::new(self.aida_exe());
+        cmd.current_dir(&self.project_root)
+            .args([
+                "queue",
+                "work",
+                &scope,
+                "--role",
+                &gate.role,
+                "--session-id",
+                &session_uuid,
+                "--no-pull",
+            ])
+            .env("AIDA_REVIEW_VERDICT_FILE", &verdict_path)
+            .env("AIDA_AGENT_GATE_NAME", &gate.name)
+            .env("AIDA_AGENT_GATE_ROLE", &gate.role)
+            .env("AIDA_AGENT_GATE_APPLIES_TO", &gate.applies_to);
+        for (key, value) in orchestrator_phase_child_env(
+            &self.run_token,
+            auto_complete::Phase::Reviewer,
+            self.variant,
+            &self.queue_user_id,
+        ) {
+            cmd.env(key, value);
+        }
+        cmd.env("AIDA_SESSION_ROLE", &gate.role);
+        if let Some(mode) = self.no_human {
+            cmd.env(orchestrator::NO_HUMAN_MODE_ENV, mode.slug());
+        }
+        if let Some(pm) = &self.permission_mode {
+            cmd.args(["--permission-mode", pm]);
+        }
+        if self.no_human.is_some() {
+            cmd.arg("--no-human");
+        }
+        if self.allow_stale_base {
+            cmd.arg("--allow-stale-base");
+        }
+
+        let sentinel = exit_signal::sentinel_path(&self.sessions_dir(), &session_uuid);
+        let mut watchdog = self.no_human.is_some().then(|| {
+            PhaseWatchdog::new_for_phase(
+                self.project_root.clone(),
+                session_uuid.clone(),
+                headless_vendor,
+                self.drain_tuning.no_progress,
+                self.drain_tuning.ceiling,
+                self.drain_tuning.idle_config(),
+                auto_complete::Phase::Reviewer,
+            )
+        });
+        let mut wd_closure = watchdog.as_mut().map(|w| move || w.check());
+        let wd_dyn: Option<&mut dyn FnMut() -> Option<String>> = wd_closure
+            .as_mut()
+            .map(|c| c as &mut dyn FnMut() -> Option<String>);
+        let outcome = exit_signal::spawn_and_wait_watched(
+            cmd,
+            &sentinel,
+            &self.exit_cfg,
+            wd_dyn,
+            self.no_human.is_some(),
+        )
+        .map_err(|e| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Spawn,
+                format!("could not launch agent gate `{}`: {e}", gate.name),
+            )
+        })?;
+        if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
+            return Err(auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Watchdog,
+                format!(
+                    "agent gate `{}` watchdog stopped the session — {reason}",
+                    gate.name
+                ),
+            ));
+        }
+        if let exit_signal::ExitOutcome::Natural(status) = &outcome {
+            if !status.success() {
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "agent gate `{}` session exited {}",
+                    gate.name,
+                    status
+                        .code()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "with a signal".to_string())
+                )));
+            }
+        } else if !self.json {
+            eprintln!(
+                "  {} agent gate `{}` signalled completion — session reaped",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                gate.name
+            );
+        }
+
+        let outcome = match read_verdict_file(&verdict_path) {
+            Ok(o) => o,
+            Err(primary_failure) => {
+                if let Some(o) = spec_verdict_fallback_for_phase3(
+                    &self.project_root,
+                    &self.spec,
+                    gate_started_at,
+                )
+                .or_else(|| {
+                    sibling_verdict_sweep_for_phase3(
+                        &self.project_root,
+                        pr,
+                        &self.spec,
+                        gate_started_at,
+                    )
+                }) {
+                    o
+                } else if self.no_human.is_some() {
+                    return Err(enrich_no_verdict_with_headless_diagnostic(
+                        primary_failure,
+                        &self.project_root,
+                        gate_started_at,
+                    ));
+                } else {
+                    return Err(primary_failure);
+                }
+            }
+        };
+        capture_review_calibration_for_spec(&self.project_root, &verdict_path, &self.spec);
+
+        if let Ok((gate_lease, _, _)) = self.discover_orchestrated_lease(&session_uuid) {
+            let _ = std::process::Command::new(self.aida_exe())
+                .current_dir(&self.project_root)
+                .args(["session", "end", &gate_lease, "--yes", "--skip-ci"])
+                .status();
+        }
+
+        Ok(outcome)
+    }
 }
 
 fn head_commit_message(project_root: &std::path::Path, rev: &str) -> Result<String> {
@@ -83787,6 +84138,82 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
 
         Ok(outcome)
+    }
+
+    fn run_agent_gates(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+        let gates = matching_agent_gates_for_spec(&self.project_root, &self.spec);
+        if gates.is_empty() {
+            return Ok(());
+        }
+        let pr = self.pr_number.ok_or_else(|| {
+            auto_complete::PhaseFailure::of(
+                auto_complete::FailureKind::Internal,
+                "internal: PR number not resolved before the agent-gate phase",
+            )
+        })?;
+
+        for gate in gates {
+            if !self.json {
+                eprintln!(
+                    "  {} running agent gate `{}` as role `{}` before merge",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    gate.name,
+                    gate.role,
+                );
+            }
+            let outcome = self.run_one_agent_gate(pr, &gate)?;
+            match outcome {
+                auto_complete::ReviewerOutcome::EscalatedToHuman { reason } => {
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::NoVerdict,
+                        format!(
+                            "agent gate `{}` escalated instead of producing a verdict: {reason}",
+                            gate.name
+                        ),
+                    ));
+                }
+                auto_complete::ReviewerOutcome::Verdict(auto_complete::Verdict::Approved) => {}
+                auto_complete::ReviewerOutcome::Verdict(verdict) => {
+                    let reason = format!(
+                        "agent gate `{}` verdict is {} — not Approved",
+                        gate.name,
+                        verdict.label()
+                    );
+                    if gate.on_fail == AgentGateOnFail::Warn {
+                        if let Err(e) = file_agent_gate_warning_finding(
+                            &self.project_root,
+                            &self.spec,
+                            pr,
+                            &gate,
+                            verdict,
+                        ) {
+                            eprintln!(
+                                "    {} could not file agent-gate warning finding: {}",
+                                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                                e
+                            );
+                        }
+                        eprintln!(
+                            "  {} {} — continuing because on_fail='warn'",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                            reason
+                        );
+                        continue;
+                    }
+                    let kind = match verdict {
+                        auto_complete::Verdict::RequestChanges => {
+                            auto_complete::FailureKind::VerdictRequestChanges
+                        }
+                        auto_complete::Verdict::Rejected => {
+                            auto_complete::FailureKind::VerdictReject
+                        }
+                        auto_complete::Verdict::Approved => auto_complete::FailureKind::Failed,
+                    };
+                    return Err(auto_complete::PhaseFailure::of(kind, reason));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {

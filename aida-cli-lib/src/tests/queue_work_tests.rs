@@ -714,6 +714,31 @@ fn prompt_reviewer_pr_passes_number() {
     );
 }
 
+#[test]
+fn prompt_agent_gate_reuses_review_verdict_skill_for_custom_role() {
+    let _guard = crate::test_env::env_lock();
+    let old_name = std::env::var("AIDA_AGENT_GATE_NAME").ok();
+    let old_role = std::env::var("AIDA_AGENT_GATE_ROLE").ok();
+    std::env::set_var("AIDA_AGENT_GATE_NAME", "security-review");
+    std::env::set_var("AIDA_AGENT_GATE_ROLE", "security-reviewer");
+    let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
+    let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
+
+    let prompt = derive_queue_work_prompt(&plan, "security-reviewer", false, false, None);
+
+    match old_name {
+        Some(v) => std::env::set_var("AIDA_AGENT_GATE_NAME", v),
+        None => std::env::remove_var("AIDA_AGENT_GATE_NAME"),
+    }
+    match old_role {
+        Some(v) => std::env::set_var("AIDA_AGENT_GATE_ROLE", v),
+        None => std::env::remove_var("AIDA_AGENT_GATE_ROLE"),
+    }
+    assert!(prompt.starts_with("/aida-review --pr 11"), "{prompt}");
+    assert!(prompt.contains("Agent gate: security-review"), "{prompt}");
+    assert!(prompt.contains("Gate role: security-reviewer"), "{prompt}");
+}
+
 /// Reviewer role + non-PR scope → bare `/aida-review`.
 #[test]
 fn prompt_reviewer_non_pr_is_bare() {
