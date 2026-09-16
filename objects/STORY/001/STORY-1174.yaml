@@ -1,0 +1,26 @@
+id: 01a0ab09-87d4-78f1-b391-a4512b4b0e16
+spec_id: STORY-1174
+agreed_id: STORY-1174
+title: 'Review PR-1868: [AI:codex] feat(forge): route review and release paths through forge trait (STORY-1164)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0aaff`) for branch `story-1164`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1868>
+  - Branch: `story-1164` → `main`
+
+  ## Covers
+
+  - STORY-1164
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1868` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T16:25:23.668001403Z
+modified_at: 2026-09-16T16:25:23.668001403Z
+req_type: Story
