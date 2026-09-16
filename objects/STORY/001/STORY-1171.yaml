@@ -17,7 +17,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-16T15:31:49.109057963Z
+modified_at: 2026-09-16T15:32:38.639022679Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
+comments:
+- id: 01a0aad9-3c6f-7f43-9685-caacdec68688
+  author: joe
+  content: |-
+    Operator refinement (2026-09-16): model the merge-lock as an OBJECT IN THE STORE, not a local file. This is the better form and there's prior art:
+
+    - A LOCAL file (.aida/merge-locks/main) only coordinates agents sharing that filesystem/clone. On one machine (today's reality) it works, but it's blind to a distributed fleet (multi-hub, agents on other clones/machines).
+    - A STORE OBJECT rides the aida-store's git sync → visible to EVERY agent after sync → fleet-wide merge coordination. This fits AIDA's core model: the substrate IS the coordination layer (specs, leases, briefs, mailbox already coordinate through it).
+
+    PRIOR ART — it's essentially a LEASE. AIDA already has session leases (owner, scope, worktree, timestamp, liveness/stale-detection, release). The merge-lock is a LEASE scoped to the target branch (scope = merge:<branch>, e.g. merge:main): acquire the merge-lease before merging, release after, stale-recover if the holder died. Reuse the existing lease acquire/release/stale-recovery/liveness machinery rather than invent a new lock primitive.
+
+    TRADEOFF: a store-object/lease acquire is a store-write + sync (a network round-trip), slower than a local file, and two agents racing to acquire need CAS/conflict-resolution — which is exactly what the store's oplog-CRDT / git conflict handling is for. That round-trip is the RIGHT cost for an infrequent, fleet-wide merge-coordination primitive.
+
+    RECOMMENDATION: target the lease-based store-object (fleet-correct + reuses machinery); a local-file lock is a valid single-machine v1 only if the distributed case is explicitly deferred. Update acceptance: the merge-lock is a substrate lease (scope merge:<branch>), acquired/released around the merge, stale-recovered on holder death, observable via aida session leases / a merge-lock status; two concurrent mergers (same or different clone, after sync) serialize.
+  created_at: 2026-09-16T15:32:38.639022679Z
+  modified_at: 2026-09-16T15:32:38.639022679Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
