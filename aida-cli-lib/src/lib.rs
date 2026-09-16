@@ -32182,12 +32182,7 @@ fn ci_probe_from_ci_probe_result(r: Result<crate::forge::CiProbeResult>) -> CiPr
 }
 
 pub(crate) fn ci_probe_via_forge(branch: &str) -> CiProbe {
-    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    ci_probe_with_forge(
-        &project_root,
-        crate::forge::resolve_forge_kind(&project_root),
-        branch,
-    )
+    probe_ci_state_for_branch(branch)
 }
 
 // trace:BUG-1037 | ai:codex
@@ -32217,12 +32212,7 @@ pub(crate) fn watch_ci_for_context_via_forge(
     branch: &str,
     no_human_active: bool,
 ) -> CiProbe {
-    watch_ci_for_context_with_forge(
-        project_root,
-        crate::forge::resolve_forge_kind(project_root),
-        branch,
-        no_human_active,
-    )
+    watch_ci_for_context(Some(project_root), branch, no_human_active)
 }
 
 // trace:BUG-1037 | ai:codex
@@ -32239,7 +32229,18 @@ pub(crate) fn watch_ci_for_context_with_forge(
 }
 
 pub(crate) fn probe_ci_state_for_branch(branch: &str) -> CiProbe {
-    let gh = match resolve_gh_binary() {
+    let project_root = find_project_root().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let forge_kind = crate::forge::resolve_forge_kind(&project_root);
+    ci_probe_from_ci_probe_result(
+        crate::forge::forge_for_kind(&project_root, forge_kind).ci_probe_for_branch(branch),
+    )
+}
+
+// STORY-1163: raw GitHub CI probe used by GitHubForge after the public helper
+// became forge-dispatched. The argv and parser stay byte-for-byte compatible
+// with the pre-dispatch helper. trace:STORY-1163 | ai:codex
+pub(crate) fn probe_ci_state_for_branch_github(branch: &str) -> CiProbe {
+    let gh = match resolve_forge_cli(crate::forge::ForgeKind::GitHub) {
         Some(p) => p,
         None => return CiProbe::NoSignal("gh not on PATH".to_string()),
     };
@@ -32492,7 +32493,7 @@ fn emit_ci_terminal(project_root: Option<&std::path::Path>, green: bool) {
 /// still re-arms on a rebase.
 // trace:TASK-968 | ai:claude
 fn ci_rollup_json_for_branch(branch: &str) -> String {
-    let Some(gh) = resolve_gh_binary() else {
+    let Some(gh) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
         return String::new();
     };
     let output = std::process::Command::new(&gh)
@@ -32554,6 +32555,25 @@ pub(crate) fn watch_ci_for_context(
     branch: &str,
     no_human_active: bool,
 ) -> CiProbe {
+    if let Some(project_root) = project_root {
+        let forge_kind = crate::forge::resolve_forge_kind(project_root);
+        return ci_probe_from_ci_probe_result(
+            crate::forge::forge_for_kind(project_root, forge_kind)
+                .stream_ci_for_branch(branch, !no_human_active),
+        );
+    }
+    watch_ci_for_context_github(project_root, branch, no_human_active)
+}
+
+// STORY-1163: raw GitHub watcher used by GitHubForge after the public helper
+// became forge-dispatched. Keeping the old implementation here preserves the
+// GitHub stream/poll behavior while allowing GitLab callers to route to glab.
+// trace:STORY-1163 | ai:codex
+pub(crate) fn watch_ci_for_context_github(
+    project_root: Option<&std::path::Path>,
+    branch: &str,
+    no_human_active: bool,
+) -> CiProbe {
     if should_stream_ci_watch(std::io::stdout().is_terminal(), no_human_active) {
         watch_ci_terminal(project_root, branch)
     } else {
@@ -32585,7 +32605,7 @@ mod task1165_events_root_tests;
 /// loop when `gh` is missing or no run id resolves. trace:TASK-233
 // trace:TASK-1165 | ai:claude
 fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> CiProbe {
-    let Some(gh) = resolve_gh_binary() else {
+    let Some(gh) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
         return wait_for_ci_terminal(project_root, branch);
     };
     // Resolve the latest workflow run id for this branch.
@@ -34449,8 +34469,7 @@ fn resolve_glab_binary() -> Option<std::path::PathBuf> {
 /// Forge-keyed CLI binary dispatch: GitHub → `gh`, GitLab → `glab`. `None`
 /// (pure-git) names no forge CLI. The foundation for routing the main.rs gh
 /// call sites through the configured forge. trace:STORY-621 | ai:claude
-#[allow(dead_code)] // wired into call sites in follow-on STORY-621 slices
-fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::path::PathBuf> {
+pub(crate) fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::path::PathBuf> {
     use crate::forge::ForgeKind;
     match kind {
         ForgeKind::GitHub => resolve_gh_binary(),
@@ -34462,6 +34481,59 @@ fn resolve_forge_cli(kind: crate::forge::ForgeKind) -> Option<std::path::PathBuf
 #[cfg(test)]
 #[path = "tests/forge_binary_resolution_tests.rs"]
 mod forge_binary_resolution_tests;
+
+#[cfg(all(test, unix))]
+mod story1163_forge_dispatch_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    fn write_executable(path: &std::path::Path, body: &str) {
+        std::fs::write(path, body).unwrap();
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    fn gitlab_project() -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        let aida = tmp.path().join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(aida.join("config.toml"), "[forge]\nprovider = \"gitlab\"\n").unwrap();
+        tmp
+    }
+
+    #[test]
+    fn detect_open_pr_for_branch_dispatches_gitlab_to_glab() {
+        let project = gitlab_project();
+        let bin_dir = TempDir::new().unwrap();
+        let log = bin_dir.path().join("glab.log");
+        let glab = bin_dir.path().join("glab");
+        write_executable(
+            &glab,
+            &format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = \"--version\" ]; then echo glab fake; exit 0; fi\n\
+                 printf '%s\\n' \"$*\" >> '{}'\n\
+                 printf '%s\\n' '[{{\"iid\":7,\"web_url\":\"https://gitlab.example.com/g/p/-/merge_requests/7\",\"source_branch\":\"feature/x\",\"target_branch\":\"main\",\"title\":\"GitLab MR\"}}]'\n",
+                log.display()
+            ),
+        );
+        let _g = crate::test_env::EnvVarGuard::set("AIDA_TEST_GLAB_BINARY", glab.to_str().unwrap());
+
+        let found = match detect_open_pr_for_branch(project.path(), "feature/x") {
+            PrLookup::Found(pr) => pr,
+            _ => panic!("expected GitLab MR lookup"),
+        };
+
+        assert_eq!(found.number, 7);
+        assert_eq!(found.head_branch.as_deref(), Some("feature/x"));
+        let logged = std::fs::read_to_string(log).unwrap();
+        assert!(logged.contains("api -X GET projects/:id/merge_requests"));
+        assert!(logged.contains("-f source_branch=feature/x"));
+        assert!(logged.contains("-f state=opened"));
+    }
+}
 
 /// True when `path` exists as a file and is executable by the current
 /// process. On Windows we just check existence (the PATHEXT-aware Rust
@@ -34525,7 +34597,7 @@ fn gh_spawn_error(gh_bin: &std::path::Path, cwd: &std::path::Path, e: &std::io::
 /// AIDA_DEBUG_GH=1 surfaces the binary search.
 /// trace:STORY-66 BUG-72 BUG-74 BUG-107 BUG-223 | ai:claude
 fn gh_pr_list_first(project_root: &std::path::Path, filter: &[&str]) -> PrLookup {
-    let gh_bin = match resolve_gh_binary() {
+    let gh_bin = match resolve_forge_cli(crate::forge::ForgeKind::GitHub) {
         Some(p) => p,
         None => return PrLookup::GhMissing,
     };
@@ -35093,17 +35165,38 @@ fn pr_lookup_from_change_lookup(c: crate::forge::ChangeLookup) -> PrLookup {
     }
 }
 
+// STORY-1163: inverse adapter for legacy callers that still consume
+// `ChangeLookup` while the central PR helper now dispatches by forge.
+// trace:STORY-1163 | ai:codex
+fn change_lookup_from_pr_lookup_for_branch(
+    p: PrLookup,
+    branch_hint: &str,
+) -> crate::forge::ChangeLookup {
+    match p {
+        PrLookup::Found(pr) => crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: pr.number,
+            url: pr.url,
+            branch: pr
+                .head_branch
+                .filter(|b| !b.is_empty())
+                .unwrap_or_else(|| branch_hint.to_string()),
+            base: String::new(),
+            title: Some(pr.title),
+        }),
+        PrLookup::NoOpenPr => crate::forge::ChangeLookup::NoChange,
+        PrLookup::GhMissing => crate::forge::ChangeLookup::CliMissing,
+        PrLookup::GhFailed(s) => crate::forge::ChangeLookup::CliFailed(s),
+        PrLookup::GhUnreachable(s) => crate::forge::ChangeLookup::Unreachable(s),
+    }
+}
+
 /// STORY-516: forge-routed spec-search open-PR lookup (BUG-223 fallback). GitHub
 /// delegates to `detect_open_pr_for_spec`. trace:STORY-516 | ai:claude
 pub(crate) fn detect_open_pr_for_spec_via_forge(
     project_root: &std::path::Path,
     spec: &str,
 ) -> PrLookup {
-    pr_lookup_from_change_lookup(
-        crate::forge::forge_for(project_root)
-            .change_for_spec(spec)
-            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
-    )
+    detect_open_pr_for_spec(project_root, spec)
 }
 
 /// STORY-516: forge-routed merged-PR-for-branch lookup. GitHub delegates to
@@ -35112,11 +35205,7 @@ pub(crate) fn detect_merged_pr_for_branch_via_forge(
     project_root: &std::path::Path,
     branch: &str,
 ) -> PrLookup {
-    pr_lookup_from_change_lookup(
-        crate::forge::forge_for(project_root)
-            .merged_change_for_branch(branch)
-            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
-    )
+    detect_merged_pr_for_branch(project_root, branch)
 }
 
 /// STORY-516: forge-routed branch lookup — the view-op entry point the call
@@ -35130,9 +35219,7 @@ pub(crate) fn change_lookup_for_branch(
     project_root: &std::path::Path,
     branch: &str,
 ) -> crate::forge::ChangeLookup {
-    crate::forge::forge_for(project_root)
-        .change_for_branch(branch)
-        .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}")))
+    change_lookup_from_pr_lookup_for_branch(detect_open_pr_for_branch(project_root, branch), branch)
 }
 
 // trace:BUG-876 | ai:codex
@@ -35150,6 +35237,21 @@ fn change_lookup_for_spec(
 /// missing / gh failed) instead of collapsing every case to `None`.
 /// trace:STORY-66 BUG-72 BUG-74 | ai:claude
 pub(crate) fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    let forge_kind = crate::forge::resolve_forge_kind(project_root);
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for_kind(project_root, forge_kind)
+            .change_for_branch(branch)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
+// STORY-1163: raw GitHub lookup used by GitHubForge after the public helper
+// became forge-dispatched. The `gh pr list` argv/parsing stay unchanged.
+// trace:STORY-1163 | ai:codex
+pub(crate) fn detect_open_pr_for_branch_github(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> PrLookup {
     gh_pr_list_first(project_root, &["--head", branch, "--state", "open"])
 }
 
@@ -35227,7 +35329,7 @@ fn open_pr_commit_headlines_reference_spec(
     pr: u64,
     spec: &str,
 ) -> bool {
-    let Some(gh_bin) = resolve_gh_binary() else {
+    let Some(gh_bin) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
         return false;
     };
     let out = std::process::Command::new(&gh_bin)
@@ -35260,7 +35362,7 @@ fn detect_open_pr_for_spec_by_head_or_commit(
     project_root: &std::path::Path,
     spec: &str,
 ) -> PrLookup {
-    let gh_bin = match resolve_gh_binary() {
+    let gh_bin = match resolve_forge_cli(crate::forge::ForgeKind::GitHub) {
         Some(p) => p,
         None => return PrLookup::GhMissing,
     };
@@ -35335,6 +35437,20 @@ fn detect_open_pr_for_spec_by_head_or_commit(
 /// trace:BUG-223 | ai:claude
 // trace:BUG-876 | ai:codex
 pub(crate) fn detect_open_pr_for_spec(project_root: &std::path::Path, spec: &str) -> PrLookup {
+    let forge_kind = crate::forge::resolve_forge_kind(project_root);
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for_kind(project_root, forge_kind)
+            .change_for_spec(spec)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
+// STORY-1163: raw GitHub spec lookup used by GitHubForge after the public helper
+// became forge-dispatched. trace:STORY-1163 | ai:codex
+pub(crate) fn detect_open_pr_for_spec_github(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> PrLookup {
     match gh_pr_list_first(project_root, &["--search", spec, "--state", "open"]) {
         PrLookup::NoOpenPr => detect_open_pr_for_spec_by_head_or_commit(project_root, spec),
         other => other,
@@ -35510,6 +35626,20 @@ fn local_commits_not_on_branch(worktree: &std::path::Path, branch: &str) -> u32 
 /// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
 /// only the first hit (most recent). trace:BUG-88 | ai:claude
 pub(crate) fn detect_merged_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> PrLookup {
+    let forge_kind = crate::forge::resolve_forge_kind(project_root);
+    pr_lookup_from_change_lookup(
+        crate::forge::forge_for_kind(project_root, forge_kind)
+            .merged_change_for_branch(branch)
+            .unwrap_or_else(|e| crate::forge::ChangeLookup::CliFailed(format!("{e:#}"))),
+    )
+}
+
+// STORY-1163: raw GitHub merged lookup used by GitHubForge after the public
+// helper became forge-dispatched. trace:STORY-1163 | ai:codex
+pub(crate) fn detect_merged_pr_for_branch_github(
     project_root: &std::path::Path,
     branch: &str,
 ) -> PrLookup {
