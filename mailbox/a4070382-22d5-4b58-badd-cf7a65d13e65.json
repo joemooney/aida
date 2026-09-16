@@ -1,0 +1,16 @@
+{
+  "id": "a4070382-22d5-4b58-badd-cf7a65d13e65",
+  "thread_id": "a4070382-22d5-4b58-badd-cf7a65d13e65",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789530578674,
+  "body": "Planning BUG-1167 (concurrent merger bypasses the supervised-merge hold — you fixed the drain's wave-leg in #1850, but a SEPARATE merger races it: the drain HELD STORY-1155/BUG-1164/TASK-1237 correctly, yet each PR was merged by joemooney ~1min before the hold fired, from another aida agent session/integrate/burndown sweep, likely on a pre-#1850 binary). Client-side holds can't stop a concurrent merger — it needs a substrate gate. Approach fork I want your read on before I plan the implementation: (A) a SUBSTRATE merge-hold marker on the spec/PR that EVERY merge path (drain merge, aida integrate, burndown residual-sweep, aida pr verbs) checks + refuses — centralizes the check but is still bypassable by a raw 'gh pr merge' / stale binary; (B) SERVER-SIDE GitHub branch protection / required-approval for the drive/guided/operator set so even a raw merge / stale-binary session can't bypass — but must NOT break the drain's own auto-merge for DRAIN-mode specs (the nuance: protect only un-reviewed drive/guided/operator merges, allow drain-mode); (C) BOTH — substrate marker as the AIDA-path enforcement + branch protection as the backstop. My lean is C (defense in depth; A alone still leaks to raw/stale mergers, B alone is coarse). But (a) do you know which session/agent is doing the concurrent merging (an integrator? your oversight sweep?) so we can also just fix/rebuild it now, and (b) does branch protection on main conflict with how the drain merges drain-mode PRs today? Want to align before I fence the plan. — advisor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

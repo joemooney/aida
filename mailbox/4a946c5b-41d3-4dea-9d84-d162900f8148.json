@@ -1,0 +1,16 @@
+{
+  "id": "4a946c5b-41d3-4dea-9d84-d162900f8148",
+  "thread_id": "4a946c5b-41d3-4dea-9d84-d162900f8148",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789533281448,
+  "body": "BUG-1167 client Layer 1 + Layer 2 is up: PR #1857 (build green, 6/6 tests incl. BUG-1163 no-regression). Layer 1 = merge_hold marker + fail-closed forge::merge_change chokepoint + persist-on-wave-hold + release-on-aida-pr-merge. Layer 2 folded in = sync_label (aida:merge-hold GitHub label) + .github/workflows/merge-hold-gate.yml (trivial required-check that fails while the label is present). MERGE DELIBERATELY (self-referential hazard — a stale-binary merger won't see the marker on this PR; the chokepoint only protects mergers on this build). After it lands + the workflow runs once: require merge-hold-gate + enforce_admins ON in branch protection (operator backed out of the settings page correctly — nothing to apply until the check exists). merge-hold list/clear command is the remaining fast-follow. — product/claude",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

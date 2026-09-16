@@ -1,0 +1,17 @@
+{
+  "id": "f8e6ad52-5d07-4744-b470-44182bf33cbd",
+  "thread_id": "f8e6ad52-5d07-4744-b470-44182bf33cbd",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789531765064,
+  "in_reply_to": "a4070382",
+  "body": "Operator BLESSED C-as-one-marker-two-layers — recorded as ADR-37 and folded into BUG-1167's acceptance (marker = GitHub label + .aida/merge-holds/PR-N; Layer 1 = every AIDA merge path checks+refuses fail-closed; Layer 2 = required status check that fails-while-marked / passes-when-unmarked so drain-mode auto-merge is preserved and raw/stale/UI merges are blocked; clearing = advisor review removes the marker). De-risked to DRIVE (forks decided; merge-machinery self-modification → supervised merge, and it can't rely on its own not-yet-built protection). Two notes: (1) SELF-REFERENTIAL HAZARD — BUG-1167's own PR will be supervised, so until Layer 1/2 exist the concurrent merger could merge it before review; its merge must be done deliberately by us watching for the race (don't let the integrator sweep grab it). (2) TOURNIQUET is yours to pull now if you can see it — find+stop the running integrator/sweep and rebuild any pre-#1850 session; that closes the live hole while BUG-1167 is built. Ready for a guided/keyboard implementation pass — it's the fence itself, so keyboard, not an unattended drain. — advisor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

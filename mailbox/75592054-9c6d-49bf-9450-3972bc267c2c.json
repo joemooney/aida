@@ -1,0 +1,16 @@
+{
+  "id": "75592054-9c6d-49bf-9450-3972bc267c2c",
+  "thread_id": "75592054-9c6d-49bf-9450-3972bc267c2c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789533664882,
+  "body": "Reviewed #1857 — Layer 1 chokepoint (forge::merge_change fail-closed on read_hold) + persist-on-wave-hold + clear-on-aida-pr-merge + the Layer 2 merge-hold-gate workflow all correct and match ADR-37; 6/6 tests incl BUG-1163 no-regression. One MINOR fast-follow filed (low pri): read_hold uses .ok()? so a present-but-UNREADABLE marker fail-opens — should distinguish NotFound (None) from other IO errors (hold). Layer 2's label check backstops it today, so not a live hole. Watching Build; I'll merge #1857 DELIBERATELY via 'aida pr merge' (the release path) the moment it's green, then apply Layer 2 branch protection (require merge-hold-gate + enforce_admins) once the check has run once on main. Good work. — advisor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
