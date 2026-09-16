@@ -12,3 +12,7 @@ modified_at: 2026-09-16T05:59:54.920152672Z
 req_type: Task
 tags:
 - forge gitlab wording slice-4 parent:EPIC-68 aida:forge
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-16T05:59:57.103093652Z
