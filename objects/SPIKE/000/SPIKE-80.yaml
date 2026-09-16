@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:58:59.492289939Z
-modified_at: 2026-09-16T05:03:24.821245176Z
+modified_at: 2026-09-16T05:54:47.873210804Z
 req_type: Spike
 tags:
 - forge gitlab github parity research epic-35 aida:forge
@@ -38,5 +38,23 @@ comments:
     SLICE PLAN: 0) wire the foundation (make central CI/PR helpers forge-aware via resolve_forge_cli — no GH behavior change); 1) route high-traffic keyboard paths (queue recover gh pr create, release --after-pr merge, pr ship lookup, aida review) through existing trait methods; 2) GitLab CI merge-hold gate + .gitlab-ci.yml scaffold at init + forge-route the label apply; 3) CI-watch + delegated-review check-runs abstraction (deepest — unblocks unattended drain on GitLab); 4) user-facing 'gh' wording derived from ForgeKind. Realistic: multi-week for one engineer, FRONT-LOADED by the live-validation pass.
   created_at: 2026-09-16T05:03:24.821245176Z
   modified_at: 2026-09-16T05:03:24.821245176Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0a8c8-33c1-77c0-9ff4-7f253b36c0cc
+  author: joe
+  content: |-
+    LIVE VALIDATION PASSED (2026-09-15) — against operator's self-hosted GitLab 18.8.10 (gitlab.joemooney.com, docker), glab 1.36.0 authed as root. This retires the research's #1 risk ("GitLabForge create/merge never live-validated").
+
+    Ran GitLabForge's EXACT operations end-to-end on a throwaway project (root/aida-forge-validation-*, id=9):
+    - open_change → `glab mr create --source-branch --target-branch main --title --yes` → MR !1 created ✓
+    - change_status → `glab api projects/9/merge_requests/1` → returns state/merge_status/detailed_merge_status/sha/squash_commit_sha/merged_by — the exact fields GitLabForge's parsers expect ✓ (detailed_merge_status goes preparing→mergeable/can_be_merged, the not-yet-computed→ready transition)
+    - merge_change → `glab mr merge 1 --squash --remove-source-branch --yes` → ✓ Merged; state=merged, merged_by=root, squash_commit_sha set, source branch removed ✓
+
+    Coupling noted: glab resolves the project from the CWD git remote (a `glab mr merge` from the wrong dir hit the wrong project — 404). GitLabForge handles this correctly via current_dir(project_root); it's a real constraint, not a bug.
+
+    STILL UNTESTED (need more setup, map to slices): CI status/watch (needs a .gitlab-ci.yml pipeline — none on the test project); the merge-hold Layer-2 GitLab gate (doesn't exist yet — Slice 2, the .gitlab-ci.yml on $CI_MERGE_REQUEST_LABELS); approvals/change_reviews (needs an MR with approval rules). Also the merge showed "No pipeline running" — with no CI, the merge didn't gate on a pipeline.
+
+    VERDICT: the 80%-built GitLabForge's core PR/MR lifecycle WORKS against a real GitLab. GitLab-first-class is now a tractable wiring+slice job (front-loaded validation done), not a gamble. Next: codify as an in-crate #[ignore] live integration test pointed at gitlab.joemooney.com + start Slice 0 (wire resolve_forge_cli). Throwaway project id=9 left in place for the codified test (delete when done).
+  created_at: 2026-09-16T05:54:47.873210804Z
+  modified_at: 2026-09-16T05:54:47.873210804Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 human_only: true
