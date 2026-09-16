@@ -69425,5 +69425,31 @@ operations:
   timestamp: 2026-09-16T01:40:01.084908191Z
   kind: !SetStatus
     status: Completed
-clock: 5436
+- id: 01a0a7ec-07f0-7631-8394-c097ca65dec8
+  target_id: 01a0a7ec-040d-7903-bd71-43ce8db49bfe
+  author: aida
+  node_id: '1'
+  lamport: 5437
+  timestamp: 2026-09-16T01:54:18.736338243Z
+  kind: !Create
+    title: 'Review PR-1852: [AI:codex] fix(roles): surface stakeholder personas in role list (TASK-1237)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a7e1`) for branch `task-1237`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1852>
+      - Branch: `task-1237` → `main`
+
+      ## Covers
+
+      - TASK-1237
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1852` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5437
 node_id: '1'
