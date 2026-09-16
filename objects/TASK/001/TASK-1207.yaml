@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-11T14:45:02.441681831Z
-modified_at: 2026-09-13T22:16:18.627412567Z
+modified_at: 2026-09-16T16:35:58.709823999Z
 req_type: Task
 tags:
 - ci
@@ -45,6 +45,22 @@ comments:
   created_at: 2026-09-11T21:51:28.990670393Z
   modified_at: 2026-09-11T21:51:28.990670393Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0ab13-3875-7252-a844-ae28d7a1ebd7
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    verdict: CONFIRMED (merits) — NOT-YET-MERGEABLE (stale CI); merge HELD
+    scope: independent proxy review of PR-1749 against TASK-1207 acceptance
+    independent: yes — codex authored PR-1749; I did NOT implement it (independence rule satisfied)
+    proxy: claude-opus-4.8, session 01FSF79sGFHdttbFjJAHicCd
+    authorized-by: joe (operator) — "review both and record the ledger verdicts", 2026-09-16 09:36 MST
+    reviewed: full diff (gh pr diff 1749) — 8x docs/cli/*.md + docs/cli/verify-manual.py
+    reasoning: The diff does exactly what the acceptance asks — attribute each cited --flag to its exact command path (e.g. --deferred to "aida list --deferred", --until to "aida defer --until") AND harden the guard script (verify-manual.py) that checks them. It is docs + one python script only, zero Rust. The failing "Build (ubuntu-latest)" check therefore CANNOT be attributable to this change (a docs/python edit cannot fail a Rust compile); the run is from 2026-09-12 on a base 105 commits behind current main, and its log shows the BUG-103 rustup-cache infra flake. The red is stale, not a defect in the change.
+    merge: HELD — (1) an autonomous drain is live (STORY-1164) and out-of-band merges risk the concurrent-merger race (BUG-1173); (2) branch is 105 commits behind main and must rebase. Clear-to-merge PENDING rebase onto current main + a fresh CI run whose docs/guard job is green. Low risk once green.
+    timestamp: 2026-09-16 09:36 MST
+  created_at: 2026-09-16T16:35:58.709823999Z
+  modified_at: 2026-09-16T16:35:58.709823999Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 deferred: true
 deferred_at: 2026-09-12T06:08:53.126196602Z
 deferred_until: guided session with operator — headless drain repeatedly ci-reds; needs a supervised fix, not headless retry (2026-09-11)
