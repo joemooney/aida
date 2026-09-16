@@ -1,0 +1,36 @@
+id: 01a0aad0-a144-72e1-ac60-7a6bce2a7981
+spec_id: BUG-1171
+agreed_id: BUG-1171
+title: statusline inbox:N mislabels draft-spec backlog (incl deferred) as mail inbox
+description: |-
+  The Claude Code statusline renders `inbox:N` (statusline_cmd.rs:282) next to the
+  mail indicators, so a user reads it as unread mail. But it is NOT mail:
+  inbox_depth = read_draft_inbox_depth (lib.rs:40944) runs
+  SELECT COUNT(*) FROM requirements_cache WHERE archived = 0 AND LOWER(status)='draft'
+  — the count of DRAFT REQUIREMENTS. Observed live: statusline showed inbox:21
+  while aida status showed mail_unread: 0 and the inbox peek said no unread mail.
+
+  Two facets:
+  1. LABEL: `inbox:` collides with the mailbox mental model. The internal name is
+     draft inbox (the intake/grooming backlog). Relabel the statusline token to an
+     unambiguous name (drafts:/intake:/groom:) so it never reads as mail.
+  2. COUNT: the query counts deferred drafts too. Of the 21 counted, 17 were
+     deferred. STORY-584 hides deferred from default views; an attention badge
+     should mirror that. Add AND deferred = 0 to the WHERE so the count matches the
+     default-list lens (active draft backlog was 4, not 21).
+
+  Fix: statusline_cmd.rs:282 relabel inbox: -> drafts:; lib.rs:40944 add
+  AND deferred = 0 and rename the fn (read_draft_backlog_depth). Test: seed N
+  active + M deferred drafts; assert count == N and the label is not inbox:.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T15:23:14.628042243Z
+modified_at: 2026-09-16T15:23:14.628042243Z
+req_type: Bug
+tags:
+- aida:statusline
+- papercut
+- statusline
+- ux
