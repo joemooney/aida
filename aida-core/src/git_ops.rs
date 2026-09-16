@@ -13,6 +13,8 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 /// Result of a git command execution.
 #[derive(Debug)]
@@ -35,6 +37,10 @@ pub struct GitResult {
 /// child session's own stale `aida` can't inherit it.
 // trace:BUG-766 | ai:claude
 fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
+    run_git_once(cwd, args)
+}
+
+fn run_git_once(cwd: &Path, args: &[&str]) -> Result<GitResult> {
     let output = Command::new("git")
         .current_dir(cwd)
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
@@ -47,6 +53,113 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
     })
+}
+
+fn git_with_index_lock_recovery(cwd: &Path, args: &[&str]) -> Result<GitResult> {
+    let delays = [
+        Duration::from_millis(100),
+        Duration::from_millis(250),
+        Duration::from_millis(500),
+        Duration::from_secs(1),
+        Duration::from_secs(2),
+        Duration::from_secs(3),
+    ];
+
+    for attempt in 0..=delays.len() {
+        let result = run_git_once(cwd, args)?;
+        if result.success || !looks_like_index_lock_failure(&result.stderr) {
+            return Ok(result);
+        }
+
+        // trace:BUG-1164 | ai:codex
+        // A transient Git index lock should not wedge an unattended drain.
+        // First give the owning writer a short chance to finish; only after
+        // repeated failures do we remove a lock that has no visible Git owner.
+        if attempt >= 2 {
+            let _ = clear_stale_index_lock(cwd);
+        }
+
+        if let Some(delay) = delays.get(attempt) {
+            thread::sleep(*delay);
+        } else {
+            return Ok(result);
+        }
+    }
+
+    unreachable!("bounded retry loop always returns");
+}
+
+fn looks_like_index_lock_failure(stderr: &str) -> bool {
+    stderr.contains("index.lock")
+        && (stderr.contains("Unable to create") || stderr.contains("File exists"))
+}
+
+fn clear_stale_index_lock(repo: &Path) -> Result<bool> {
+    let Some(lock_path) = resolve_git_path(repo, "index.lock")? else {
+        return Ok(false);
+    };
+    if !lock_path.exists() || git_process_may_own_repo_lock(repo) {
+        return Ok(false);
+    }
+    std::fs::remove_file(&lock_path)
+        .with_context(|| format!("remove stale git index lock {}", lock_path.display()))?;
+    Ok(true)
+}
+
+fn resolve_git_path(repo: &Path, path: &str) -> Result<Option<PathBuf>> {
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args(["rev-parse", "--git-path", path])
+        .output()
+        .with_context(|| format!("resolve git path {path} in {}", repo.display()))?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    let resolved = PathBuf::from(raw);
+    Ok(Some(if resolved.is_absolute() {
+        resolved
+    } else {
+        repo.join(resolved)
+    }))
+}
+
+#[cfg(target_os = "linux")]
+fn git_process_may_own_repo_lock(repo: &Path) -> bool {
+    let Ok(repo) = repo.canonicalize() else {
+        return true;
+    };
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return true;
+    };
+
+    for entry in entries.flatten() {
+        let pid = entry.file_name();
+        let pid = pid.to_string_lossy();
+        if pid.parse::<u32>().is_err() || pid == std::process::id().to_string() {
+            continue;
+        }
+        let proc_dir = entry.path();
+        let comm = std::fs::read_to_string(proc_dir.join("comm")).unwrap_or_default();
+        if comm.trim() != "git" {
+            continue;
+        }
+        let Ok(cwd) = std::fs::read_link(proc_dir.join("cwd")) else {
+            continue;
+        };
+        if cwd == repo || cwd.starts_with(&repo) {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(not(target_os = "linux"))]
+fn git_process_may_own_repo_lock(_repo: &Path) -> bool {
+    true
 }
 
 /// Check if a directory is a git repository.
@@ -142,7 +255,7 @@ pub fn init(path: &Path) -> Result<()> {
 pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
     let mut args = vec!["add"];
     args.extend(paths);
-    let result = git(repo, &args)?;
+    let result = git_with_index_lock_recovery(repo, &args)?;
     if !result.success {
         anyhow::bail!("git add failed: {}", result.stderr);
     }
@@ -151,7 +264,7 @@ pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
 
 /// Stage all changes (tracked and untracked) in a subdirectory.
 pub fn add_all(repo: &Path, subdir: &str) -> Result<()> {
-    let result = git(repo, &["add", "-A", subdir])?;
+    let result = git_with_index_lock_recovery(repo, &["add", "-A", subdir])?;
     if !result.success {
         anyhow::bail!("git add -A {} failed: {}", subdir, result.stderr);
     }
@@ -180,7 +293,7 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let redact = commit_redaction_args(public_email.as_deref());
     let mut argv: Vec<&str> = redact.iter().map(String::as_str).collect();
     argv.extend_from_slice(&["commit", "-m", message]);
-    let result = git(repo, &argv)?;
+    let result = git_with_index_lock_recovery(repo, &argv)?;
     if result.success {
         Ok(true)
     } else if result.stdout.contains("nothing to commit")
@@ -3256,6 +3369,30 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    // trace:BUG-1164 | ai:codex
+    #[test]
+    fn git_add_recovers_from_stale_index_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "main"]);
+
+        std::fs::write(repo.join("tracked.txt"), "ready\n").unwrap();
+        let lock_path = resolve_git_path(&repo, "index.lock")
+            .unwrap()
+            .expect("git repo should resolve index.lock");
+        std::fs::write(&lock_path, b"stale lock from dead writer").unwrap();
+
+        add(&repo, &["tracked.txt"]).expect("stale index.lock should be cleared and retried");
+
+        assert!(
+            !lock_path.exists(),
+            "stale index.lock should be removed after recovery"
+        );
+        let status = run_git(&repo, &["status", "--short"]);
+        assert_eq!(status, "A  tracked.txt");
     }
 
     #[test]
