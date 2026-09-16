@@ -1907,28 +1907,39 @@ fn finish_success(
 }
 
 // trace:TASK-1155 trace:ADR-11 | ai:codex
-fn render_through_ci_checkpoint(spec: &str, pr_number: Option<u32>) -> String {
+fn render_through_ci_checkpoint(
+    spec: &str,
+    pr_number: Option<u32>,
+    forge: crate::forge::ForgeKind,
+) -> String {
+    let noun = forge.change_noun();
     let pr = pr_number
-        .map(|n| format!("PR-{n}"))
-        .unwrap_or_else(|| "PR-N".to_string());
+        .map(|n| format!("{noun}-{n}"))
+        .unwrap_or_else(|| format!("{noun}-N"));
     let review_cmd = if let Some(n) = pr_number {
-        format!("aida queue work PR-{n} --for reviewer")
+        format!("aida queue work {noun}-{n} --for reviewer")
     } else {
-        "aida queue work PR-N --for reviewer".to_string()
+        format!("aida queue work {noun}-N --for reviewer")
     };
     // The spec's worktree still holds the PR branch here, so a suggested
     // `--delete-branch` is guaranteed to fail its local-cleanup step — and an
     // `&&` chain then silently drops the `aida pull` auto-bump leg. Suggest a
     // `;` chain with no branch delete; worktree cleanup owns branch deletion.
-    // trace:BUG-758 | ai:claude
+    // trace:BUG-758 trace:TASK-1240 | ai:claude+codex
     let merge_cmd = if let Some(n) = pr_number {
-        format!("gh pr merge {n} --squash; aida pull")
+        forge
+            .change_cmd_hint("merge", &format!("{n} --squash"))
+            .map(|cmd| format!("{cmd}; aida pull"))
+            .unwrap_or_else(|| format!("merge the {noun}; aida pull"))
     } else {
-        "gh pr merge <N> --squash; aida pull".to_string()
+        forge
+            .change_cmd_hint("merge", "<N> --squash")
+            .map(|cmd| format!("{cmd}; aida pull"))
+            .unwrap_or_else(|| format!("merge the {noun}; aida pull"))
     };
     format!(
-        "{spec} PR checkpoint\n\
-         PR: {pr}\n\
+        "{spec} {noun} checkpoint\n\
+         {noun}: {pr}\n\
          CI: green\n\
          Review: routed to reviewer queue\n\
          Next: {review_cmd}\n\
@@ -1981,7 +1992,10 @@ fn finish_through_ci_success(
             credited.bold(),
             fmt_duration(elapsed)
         );
-        eprintln!("{}", render_through_ci_checkpoint(credited, ctx.pr_number));
+        eprintln!(
+            "{}",
+            render_through_ci_checkpoint(credited, ctx.pr_number, ctx.forge)
+        );
     }
     OrchestrationResult {
         exit_code: 0,
@@ -2209,15 +2223,27 @@ fn finish_inconclusive(
     durations: Vec<(Phase, u128)>,
     reason: &str,
     retry_hint: Option<&str>,
+    forge: crate::forge::ForgeKind,
 ) -> OrchestrationResult {
     let elapsed = start.elapsed().as_millis();
     // BUG-266: per-leg recovery hint. `None` preserves BUG-257's GH-API
     // wording (the only inconclusive case at the time it shipped); BUG-266's
     // Anthropic-API path passes a `aida queue work <spec> --resume <session>`
     // hint that recovers the exact session the API outage interrupted.
-    let default_hint = "transient — retry once the GH API is reachable: \
-                        `gh api /rate_limit` then re-run `aida queue work --auto-complete`";
-    let hint_line = retry_hint.unwrap_or(default_hint);
+    let default_hint = match forge {
+        crate::forge::ForgeKind::GitHub => "transient — retry once the GH API is reachable: \
+                        `gh api /rate_limit` then re-run `aida queue work --auto-complete`"
+            .to_string(),
+        crate::forge::ForgeKind::GitLab => "transient — retry once the GitLab API is reachable: \
+                        `glab api user` then re-run `aida queue work --auto-complete`"
+            .to_string(),
+        crate::forge::ForgeKind::None => {
+            "transient — retry once the forge or network is reachable: \
+                        re-run `aida queue work --auto-complete`"
+                .to_string()
+        }
+    };
+    let hint_line = retry_hint.unwrap_or(default_hint.as_str());
     if json {
         println!(
             "{}",
@@ -2383,6 +2409,7 @@ fn finish_held(
     durations: Vec<(Phase, u128)>,
     reason: Option<&str>,
     branch: &str,
+    forge: crate::forge::ForgeKind,
 ) -> OrchestrationResult {
     let elapsed = start.elapsed().as_millis();
     let summary = match reason {
@@ -2391,8 +2418,13 @@ fn finish_held(
     };
     // The recovery hint matches the deliberate-hold state: open the PR when the
     // gate is satisfied, then hand it to the reviewer. NOT "run /aida-pr".
-    let hint_line = "ready for review when you are — run your gate, then \
-         `gh pr create` (or `glab mr create`) and `aida queue work PR-N --role reviewer`";
+    let noun = forge.change_noun();
+    let create = forge
+        .create_cmd()
+        .unwrap_or_else(|| "open a change request".to_string());
+    let hint_line = format!(
+        "ready for review when you are — run your gate, then `{create}` and `aida queue work {noun}-N --role reviewer`"
+    );
     if json {
         println!(
             "{}",
@@ -2402,7 +2434,7 @@ fn finish_held(
                 spec,
                 elapsed,
                 Some(0),
-                &[("reason", summary.as_str()), ("hint", hint_line)],
+                &[("reason", summary.as_str()), ("hint", hint_line.as_str())],
             )
         );
         println!(
@@ -2952,6 +2984,7 @@ fn resume_after_advisor(
                     durations.to_vec(),
                     &reason,
                     retry_hint.as_deref(),
+                    driver.hint_context().forge,
                 )))
             }
         }
@@ -2966,6 +2999,7 @@ fn resume_after_advisor(
                 durations.to_vec(),
                 reason.as_deref(),
                 &branch,
+                driver.hint_context().forge,
             )))
         }
     }
@@ -3362,6 +3396,7 @@ pub(crate) fn orchestrate_with_resume(
                         durations,
                         &reason,
                         retry_hint.as_deref(),
+                        driver.hint_context().forge,
                     );
                 }
                 // BUG-250: the implementer deliberately held the PR (branch pushed, PR
@@ -3372,7 +3407,15 @@ pub(crate) fn orchestrate_with_resume(
                 // trace:BUG-250
                 Ok(ImplementerOutcome::Held { reason, branch }) => {
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
-                    return finish_held(spec, json, &start, durations, reason.as_deref(), &branch);
+                    return finish_held(
+                        spec,
+                        json,
+                        &start,
+                        durations,
+                        reason.as_deref(),
+                        &branch,
+                        driver.hint_context().forge,
+                    );
                 }
             }
             break;
@@ -8737,7 +8780,8 @@ mod tests {
     // trace:TASK-1155 trace:ADR-11 | ai:codex
     #[test]
     fn through_ci_checkpoint_names_pr_ci_review_and_merge_next_steps() {
-        let rendered = render_through_ci_checkpoint("TASK-1155", Some(123));
+        let rendered =
+            render_through_ci_checkpoint("TASK-1155", Some(123), crate::forge::ForgeKind::GitHub);
         assert!(rendered.contains("TASK-1155 PR checkpoint"));
         assert!(rendered.contains("PR: PR-123"));
         assert!(rendered.contains("CI: green"));
@@ -8748,6 +8792,14 @@ mod tests {
         assert!(rendered.contains("After review: gh pr merge 123 --squash; aida pull"));
         assert!(!rendered.contains("--delete-branch"));
         assert!(!rendered.contains("&& aida pull"));
+
+        let gitlab =
+            render_through_ci_checkpoint("TASK-1155", Some(123), crate::forge::ForgeKind::GitLab);
+        assert!(gitlab.contains("TASK-1155 MR checkpoint"));
+        assert!(gitlab.contains("MR: MR-123"));
+        assert!(gitlab.contains("Next: aida queue work MR-123 --for reviewer"));
+        assert!(gitlab.contains("After review: glab mr merge 123 --squash; aida pull"));
+        assert!(!gitlab.contains("gh pr"));
     }
 
     #[test]

@@ -4948,8 +4948,16 @@ impl<'a> McpServer<'a> {
         let spec = args.get("spec").and_then(|v| v.as_str());
         let pr = args.get("pr").and_then(|v| v.as_u64());
         let queue_empty = args.get("queue_empty").and_then(|v| v.as_str());
-        let clauses = crate::goal_cmd::build_goal_clauses(batch, epic, spec, pr, queue_empty)
-            .map_err(|e| e.to_string())?;
+        let forge = crate::forge::resolve_forge_kind(&self.project_root);
+        let clauses = crate::goal_cmd::build_goal_clauses_for_forge(
+            batch,
+            epic,
+            spec,
+            pr,
+            queue_empty,
+            forge,
+        )
+        .map_err(|e| e.to_string())?;
         let condition = crate::goal_cmd::assemble_goal_condition(&clauses);
         let mut out = format!("/goal {}\n\nverify each clause:", condition);
         for c in &clauses {
@@ -12291,6 +12299,14 @@ mod tests {
     #[test]
     fn goal_derive_composes_clauses_and_requires_an_axis() {
         let dir = tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        crate::forge::write_forge_config_provider(dir.path(), crate::forge::ForgeKind::GitHub)
+            .unwrap();
         let server = mk_git_server(dir.path());
         let out = server
             .tool_goal_derive(&json!({ "spec": "STORY-7", "pr": 42 }))
@@ -12302,6 +12318,26 @@ mod tests {
         // No axis → error.
         let err = server.tool_goal_derive(&json!({})).unwrap_err();
         assert!(err.contains("no condition flags"), "err: {err}");
+    }
+
+    #[test]
+    fn goal_derive_uses_gitlab_forge_vocabulary() {
+        let dir = tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        crate::forge::write_forge_config_provider(dir.path(), crate::forge::ForgeKind::GitLab)
+            .unwrap();
+        let server = mk_git_server(dir.path());
+        let out = server
+            .tool_goal_derive(&json!({ "spec": "STORY-7", "pr": 42 }))
+            .unwrap();
+        assert!(out.contains("MR #42 is merged"), "out: {out}");
+        assert!(out.contains("glab mr view 42"), "out: {out}");
+        assert!(!out.contains("gh pr"), "out: {out}");
     }
 
     #[test]

@@ -12,6 +12,7 @@ use colored::Colorize;
 
 use crate::copy_to_clipboard;
 use crate::deep_link;
+use crate::forge::ForgeKind;
 
 // ────────────────────────────────────────────────────────────────────
 // TASK-242: `aida goal` — derive machine-checkable completion conditions
@@ -28,14 +29,16 @@ pub(crate) struct GoalClause {
 
 /// Build the ordered list of `GoalClause`s from the `aida goal` flags.
 /// Pure — no store/IO — so the condition vocabulary is unit-testable.
-/// Bails when no condition flag is given.
-// trace:TASK-242 | ai:claude
-pub(crate) fn build_goal_clauses(
+/// Bails when no condition flag is given. Project-aware callers pass the
+/// resolved forge so GitLab `/goal --pr` clauses say MR/glab rather than PR/gh.
+// trace:TASK-242 trace:TASK-1240 | ai:claude+codex
+pub(crate) fn build_goal_clauses_for_forge(
     batch: Option<&str>,
     epic: Option<&str>,
     spec: Option<&str>,
     pr: Option<u64>,
     queue_empty: Option<&str>,
+    forge: ForgeKind,
 ) -> Result<Vec<GoalClause>> {
     let mut clauses: Vec<GoalClause> = Vec::new();
 
@@ -65,12 +68,14 @@ pub(crate) fn build_goal_clauses(
         });
     }
     if let Some(n) = pr {
+        let noun = forge.change_noun();
+        let verify = forge
+            .change_cmd_hint("view", &format!("{n} --json state --jq .state"))
+            .map(|cmd| format!("`{cmd}` prints `MERGED`"))
+            .unwrap_or_else(|| format!("the {noun} #{n} is merged in the forge"));
         clauses.push(GoalClause {
-            description: format!("PR #{} is merged", n),
-            verify: format!(
-                "`gh pr view {} --json state --jq .state` prints `MERGED`",
-                n
-            ),
+            description: format!("{noun} #{n} is merged"),
+            verify,
         });
     }
     if let Some(role) = queue_empty {
@@ -120,7 +125,10 @@ pub(crate) fn handle_goal_command(
     invoke: bool,
     as_deep_link: bool,
 ) -> Result<()> {
-    let clauses = build_goal_clauses(batch, epic, spec, pr, queue_empty)?;
+    let forge = crate::forge::resolve_forge_kind(
+        &std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    );
+    let clauses = build_goal_clauses_for_forge(batch, epic, spec, pr, queue_empty, forge)?;
     let condition = assemble_goal_condition(&clauses);
     let goal_line = format!("/goal {}", condition);
 
@@ -194,42 +202,110 @@ pub(crate) fn handle_goal_command(
 
 #[cfg(test)]
 mod goal_command_tests {
-    use super::{assemble_goal_condition, build_goal_clauses};
+    use super::{assemble_goal_condition, build_goal_clauses_for_forge};
+    use crate::forge::ForgeKind;
 
     #[test]
     fn batch_clause_strips_prefix_and_emits_verify() {
-        let c = build_goal_clauses(Some("batch:plan-tooling"), None, None, None, None).unwrap();
+        let c = build_goal_clauses_for_forge(
+            Some("batch:plan-tooling"),
+            None,
+            None,
+            None,
+            None,
+            ForgeKind::GitHub,
+        )
+        .unwrap();
         assert_eq!(c.len(), 1);
         assert!(c[0].description.contains("`batch:plan-tooling`"));
         assert!(c[0].verify.contains("aida list --tags batch:plan-tooling"));
         // Bare name (no prefix) behaves identically.
-        let c2 = build_goal_clauses(Some("plan-tooling"), None, None, None, None).unwrap();
+        let c2 = build_goal_clauses_for_forge(
+            Some("plan-tooling"),
+            None,
+            None,
+            None,
+            None,
+            ForgeKind::GitHub,
+        )
+        .unwrap();
         assert_eq!(c2[0].verify, c[0].verify);
     }
 
     #[test]
     fn epic_spec_pr_clauses() {
-        let c = build_goal_clauses(None, Some("EPIC-23"), None, None, None).unwrap();
+        let c = build_goal_clauses_for_forge(
+            None,
+            Some("EPIC-23"),
+            None,
+            None,
+            None,
+            ForgeKind::GitHub,
+        )
+        .unwrap();
         assert!(c[0].verify.contains("aida list --parent EPIC-23"));
 
-        let c = build_goal_clauses(None, None, Some("TASK-9"), None, None).unwrap();
+        let c =
+            build_goal_clauses_for_forge(None, None, Some("TASK-9"), None, None, ForgeKind::GitHub)
+                .unwrap();
         assert!(c[0].verify.contains("aida show TASK-9"));
 
-        let c = build_goal_clauses(None, None, None, Some(42), None).unwrap();
+        let c = build_goal_clauses_for_forge(None, None, None, Some(42), None, ForgeKind::GitHub)
+            .unwrap();
         assert!(c[0].verify.contains("gh pr view 42"));
     }
 
     #[test]
+    fn pr_clause_uses_active_forge_vocabulary() {
+        let github =
+            build_goal_clauses_for_forge(None, None, None, Some(42), None, ForgeKind::GitHub)
+                .unwrap();
+        assert_eq!(github[0].description, "PR #42 is merged");
+        assert!(github[0].verify.contains("gh pr view 42"));
+
+        let gitlab =
+            build_goal_clauses_for_forge(None, None, None, Some(42), None, ForgeKind::GitLab)
+                .unwrap();
+        assert_eq!(gitlab[0].description, "MR #42 is merged");
+        assert!(gitlab[0].verify.contains("glab mr view 42"));
+        assert!(!gitlab[0].verify.contains("gh pr"));
+    }
+
+    #[test]
     fn queue_empty_clause_strips_role_prefix() {
-        let c = build_goal_clauses(None, None, None, None, Some("role:implementer")).unwrap();
+        let c = build_goal_clauses_for_forge(
+            None,
+            None,
+            None,
+            None,
+            Some("role:implementer"),
+            ForgeKind::GitHub,
+        )
+        .unwrap();
         assert!(c[0].verify.contains("aida queue list --for implementer"));
-        let c2 = build_goal_clauses(None, None, None, None, Some("implementer")).unwrap();
+        let c2 = build_goal_clauses_for_forge(
+            None,
+            None,
+            None,
+            None,
+            Some("implementer"),
+            ForgeKind::GitHub,
+        )
+        .unwrap();
         assert_eq!(c2[0].verify, c[0].verify);
     }
 
     #[test]
     fn multiple_flags_compose_with_and() {
-        let clauses = build_goal_clauses(Some("lifecycle"), None, None, Some(30), None).unwrap();
+        let clauses = build_goal_clauses_for_forge(
+            Some("lifecycle"),
+            None,
+            None,
+            Some(30),
+            None,
+            ForgeKind::GitHub,
+        )
+        .unwrap();
         assert_eq!(clauses.len(), 2);
         let condition = assemble_goal_condition(&clauses);
         assert!(condition.contains(" AND "));
@@ -239,6 +315,8 @@ mod goal_command_tests {
 
     #[test]
     fn no_flags_is_an_error() {
-        assert!(build_goal_clauses(None, None, None, None, None).is_err());
+        assert!(
+            build_goal_clauses_for_forge(None, None, None, None, None, ForgeKind::GitHub).is_err()
+        );
     }
 }
