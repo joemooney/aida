@@ -70784,5 +70784,29 @@ operations:
     req_type: Epic
     status: Draft
     priority: Medium
-clock: 5522
+- id: 01a0ab07-5655-78f0-863f-df4d7b871a3c
+  target_id: 01a0ab07-50ca-7532-b17a-7024b68feadb
+  author: aida
+  node_id: '1'
+  lamport: 5523
+  timestamp: 2026-09-16T16:22:59.925936063Z
+  kind: !Create
+    title: 'Proxy-approval ledger: comment-anchored, marked, separately surfaceable'
+    description: |-
+      Smallest valuable slice of the /aida-away epic: the proxy-approval LEDGER.
+
+      When the proxy approves an action on the operator's behalf (a merge, a cleared merge-hold, or a guided fork decision), record a durable ledger entry capturing: the decision, the reasoning/verdict, the proxy identity + session, the authorizing human, whether the review was independent of implementation, and a local timestamp. Anchor it as a spec comment carrying a stable [aida:proxy-approval] marker so it both fingers the decision point in aida show and is aggregatable into one audit surface.
+
+      Acceptance:
+      - A proxy-approval on a spec writes a comment with a stable [aida:proxy-approval] marker plus structured fields: decision, verdict/reasoning, proxy, session, authorized-by, independent (yes/no), timestamp-local.
+      - The entry is visible in aida show at the decision point.
+      - A single read command lists all proxy-approval entries across specs (aida approvals / aida away log) with --json and a time window; separately surfaceable for team/QA audit.
+      - The independent field is REQUIRED and defaults to absent/failing; never silently 'independent'.
+      - Comment is the git-canonical source of truth; no new daemon.
+
+      Non-goals for this slice: the durable revocable grant object (fork 2), automated emission from the merge chokepoint (a follow-up once the record shape is proven). v1 may emit the comment via the /aida-away skill / by hand.
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5523
 node_id: '1'
