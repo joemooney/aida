@@ -35,12 +35,12 @@ description: |-
   .aida/merge-holds/PR-N exists AND the PR carries aida:merge-hold.
 
   Class: merge-path keystone -> keyboard/guided implementation, not headless drain.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T06:59:59.881633335Z
-modified_at: 2026-09-16T15:21:28.023170604Z
+modified_at: 2026-09-16T15:21:34.906945606Z
 req_type: Bug
 tags:
 - fast-follow:BUG-1167
@@ -57,3 +57,7 @@ relationships:
   created_at: 2026-09-16T15:21:28.023162912Z
   created_by: joe
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-16T15:21:34.906945606Z
+  implemented_by: joe
