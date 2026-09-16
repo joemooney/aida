@@ -70707,5 +70707,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 5517
+- id: 01a0aaf1-e44e-73e2-87ad-b9bc63777f2e
+  target_id: 01a0aaf1-dfec-75c1-a38d-59e1df4071ec
+  author: aida
+  node_id: '1'
+  lamport: 5518
+  timestamp: 2026-09-16T15:59:34.478394514Z
+  kind: !Create
+    title: 'Review PR-1865: [AI:codex] fix(statusline): label draft backlog accurately (BUG-1171)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0aaec`) for branch `bug-1171`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1865>
+      - Branch: `bug-1171` → `main`
+
+      ## Covers
+
+      - BUG-1171
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1865` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5518
 node_id: '1'
