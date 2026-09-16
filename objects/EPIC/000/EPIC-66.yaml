@@ -1,0 +1,25 @@
+id: 01a0a7f8-ba2f-7793-939e-39704de6dacc
+spec_id: EPIC-66
+agreed_id: EPIC-66
+title: 'Customizable quality-gate pipeline: declarative, agent-gates, per-type/tag selectors'
+description: |-
+  Today the drain pipeline is a FIXED enum (Phase { Implementer, Ci, Reviewer, Merge, Pull, Build }, auto_complete.rs:315) with only SUBTRACTIVE customization (lifecycle:no-ci-wait / no-review / no-build skip tags). There is no way to ADD a quality gate. This epic lets teams insert their own gates (security scan, independent test, best-practices) without forking the engine.
+
+  Design (operator forks resolved 2026-09-15):
+  - DECLARATIVE: a [pipeline] block in .aida/config.toml (project) / ~/.aida/config.toml (machine). Start simple, grow — v1 is a minimal gate block, not a full DSL, but declarative from day one.
+  - AGENT-GATES FIRST: a gate dispatches an agent (role + the spec's acceptance + a gate prompt) that emits a TRACEABLE verdict/finding linked to the requirement. Reuses the existing reviewer -> verdict (.aida/review-verdicts/) -> shelve (NeedsAttention) -> merge-gate machinery — a custom gate is 'another reviewer seat with a role + prompt + selector'. Command/script gates (semgrep etc.) are a deferred follow-up flavor.
+  - PER-TYPE/TAG SELECTORS: applies_to = 'tag:security OR type:bug' — the tailoring knob.
+  - STRICTNESS: hard-shelve default (fail -> NeedsAttention, like a reviewer RequestChanges); per-gate on_fail='warn' for advisory nudges that file a finding but do not block.
+
+  Differentiator vs Jenkins/GH-Actions pipeline-as-code: the gate is an agent reasoning against THIS requirement's acceptance and emitting a graph-linked verdict, not a dumb script. It inherits the fail-closed verdict safety hardened in BUG-1163.
+
+  Children: v1 minimal selector-scoped agent-review gate before merge (approved); command/script gates + full pipeline phase-list DSL (deferred with revisit triggers).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T02:08:10.799257121Z
+modified_at: 2026-09-16T02:08:10.799257121Z
+req_type: Epic
+tags:
+- pipeline quality-gate agent-gate drain reviewer customization aida:pipeline
