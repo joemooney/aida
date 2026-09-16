@@ -11,12 +11,12 @@ description: |-
   excludes them (then this is only a --all artifact and can be closed) or whether the
   open-work lens/tally still counts them (then fix the lens to treat approved ADR/
   accepted as terminal). Low priority, hygiene.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:53:17.509790440Z
-modified_at: 2026-09-16T15:53:17.509790440Z
+modified_at: 2026-09-16T16:38:03.110583780Z
 req_type: Bug
 tags:
 - adr
