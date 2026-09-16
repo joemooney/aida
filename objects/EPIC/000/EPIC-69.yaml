@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T16:22:50.927871368Z
-modified_at: 2026-09-16T16:22:50.927871368Z
+modified_at: 2026-09-16T16:23:29.367294212Z
 req_type: Epic
 tags:
 - audit
@@ -35,3 +35,13 @@ relationships:
 - rel_type: Parent
   target_id: 01a0ab07-50ca-7532-b17a-7024b68feadb
   created_at: 2026-09-16T16:23:00.776670218Z
+comments:
+- id: 01a0ab07-c957-7c11-9a9c-905c9fef5bc3
+  author: joe
+  content: |-
+    Prior-art composition (design note for grooming): `aida away` already exists as the operator-PRESENCE primitive (STORY-561 / TASK-748..783 — home/away state + TTL that the autonomy ladder keys on). So the MANDATE half of this epic partly exists. Recommendation: /aida-away does NOT reinvent presence — it COMPOSES with the existing away state (proxy authorization + scope layered on top of "operator is away"), and the genuinely-new build here is the LEDGER (STORY-1173) + the proxy authorization semantics + a separate audit surface. Fork 2 ("mandate: session skill vs durable grant") reframes to "how much does the proxy grant extend the existing presence record vs stand as its own object."
+
+    Independence rule (load-bearing, carried from the proxy-reviewer memory): a proxy never reviews-and-merges code it implemented itself; high-blast-radius + not-convinced-from-the-diff escalates to the real human. The ledger's `independent` field defaults to absent/failing, never silently true — that is what makes the audit trustworthy.
+  created_at: 2026-09-16T16:23:29.367294212Z
+  modified_at: 2026-09-16T16:23:29.367294212Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
