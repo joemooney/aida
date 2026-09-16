@@ -337,16 +337,16 @@ use aida_core::{
 };
 
 use crate::cli::{
-    AdvisorCommand, AgentCommand, AgentNewCommand, BacklogCommand, BlockCommand, BriefCommand,
-    CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DepsCommand, DevCommand,
-    DrainCommand, FindingsCommand, FocusCommand, GitHubCommand, GitLabCommand, GlyphCommand,
-    GraphCommand, HeadlessCommand, HistoryCommand, IdentityCommand, JiraCommand, LoadCommand,
-    McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand, OutputFormat, PlanCommand,
-    PrCommand, PuntsCommand, QuestionsCommand, QueueCommand, RelationshipCommand, ReleaseCommand,
-    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
-    SessionCommand, SessionManifestCommand, SkillCommand, SoloAction, SpecCommand, StackCommand,
-    TeamCommand, TerminalCommand, TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand,
-    WorktreeCommand, WorktreePoolCommand, ZenCommand,
+    AdvisorCommand, AgentCommand, AgentNewCommand, ApprovalCommand, BacklogCommand, BlockCommand,
+    BriefCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
+    DepsCommand, DevCommand, DrainCommand, FindingsCommand, FocusCommand, GitHubCommand,
+    GitLabCommand, GlyphCommand, GraphCommand, HeadlessCommand, HistoryCommand, IdentityCommand,
+    JiraCommand, LoadCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
+    OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
+    RelationshipCommand, ReleaseCommand, ReviewCommand, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand, SkillCommand,
+    SoloAction, SpecCommand, StackCommand, TeamCommand, TerminalCommand, TraceCommand,
+    UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand, WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4016,6 +4016,14 @@ fn run() -> Result<()> {
             // Legacy SQLite show_requirement always prints comments inline,
             // so the --comments flag is a no-op here. Git backend honors it.
             show_requirement(&storage, id)?;
+        }
+        Command::Approvals { .. } => {
+            // trace:STORY-1173 | ai:codex
+            anyhow::bail!(
+                "aida approvals requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
         }
         Command::Graph {
             id: graph_id,
