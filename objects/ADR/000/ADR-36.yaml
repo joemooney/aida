@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T04:05:08.799513844Z
-modified_at: 2026-09-16T04:11:07.148526961Z
+modified_at: 2026-09-16T04:11:08.186538705Z
 req_type: Decision
 tags:
 - supervised-merge substrate-gate branch-protection concurrency bug-1167 reliability decision
@@ -34,4 +34,8 @@ relationships:
 - rel_type: References
   target_id: 01a0a5a3-d40e-7d32-b540-6baf9eb0ca4a
   created_at: 2026-09-16T04:05:28.725173449Z
+  created_by: joe
+- rel_type: SupersededBy
+  target_id: 01a0a867-1c52-7610-9b99-e6b9f405df6e
+  created_at: 2026-09-16T04:11:08.186531651Z
   created_by: joe
