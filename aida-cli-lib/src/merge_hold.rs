@@ -42,14 +42,28 @@ pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io:
 
 /// The hold reason if `pr` is under a supervised merge-hold, else `None`.
 /// The merge chokepoint refuses whenever this is `Some`.
+///
+/// TASK-1238: fails CLOSED on a present-but-unreadable marker. `NotFound` is the
+/// only "no hold" answer; ANY other read error (permissions, a directory in its
+/// place, a transient IO fault) means a marker may be there but we can't confirm
+/// it isn't — so we HOLD. The prior `.ok()?` collapsed every error to `None`,
+/// which would let a merge through when the marker was present but unreadable —
+/// the exact fail-open class this whole marker exists to prevent.
 pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
-    let body = std::fs::read_to_string(hold_path(project_root, pr)).ok()?;
-    let reason = body.trim();
-    Some(if reason.is_empty() {
-        format!("PR-{pr} is under a supervised merge-hold")
-    } else {
-        reason.to_string()
-    })
+    match std::fs::read_to_string(hold_path(project_root, pr)) {
+        Ok(body) => {
+            let reason = body.trim();
+            Some(if reason.is_empty() {
+                format!("PR-{pr} is under a supervised merge-hold")
+            } else {
+                reason.to_string()
+            })
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => Some(format!(
+            "PR-{pr} merge-hold marker present but unreadable — held for safety"
+        )),
+    }
 }
 
 /// Clear the hold — an explicit human/advisor review. Idempotent: clearing a
@@ -146,6 +160,22 @@ mod tests {
         assert!(
             read_hold(root, 7).is_some(),
             "a marker with a blank reason must still hold"
+        );
+    }
+
+    #[test]
+    fn present_but_unreadable_marker_holds_fail_closed() {
+        // TASK-1238: a marker that EXISTS but can't be read as a file must HOLD,
+        // not merge. Simulate it by putting a directory where the marker file
+        // would be — `read_to_string` then errors with something other than
+        // NotFound. The old `.ok()?` returned None here (fail-open → merge); the
+        // fix must return Some.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(hold_path(root, 99)).unwrap();
+        assert!(
+            read_hold(root, 99).is_some(),
+            "a present-but-unreadable marker must HOLD (fail closed), never merge"
         );
     }
 
