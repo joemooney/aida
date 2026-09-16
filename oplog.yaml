@@ -70179,5 +70179,31 @@ operations:
   timestamp: 2026-09-16T06:14:53.898767533Z
   kind: !SetStatus
     status: Approved
-clock: 5490
+- id: 01a0a8e4-8d85-79e3-b246-dffd72a92bd2
+  target_id: 01a0a8e4-898a-7cb2-92e9-daf58949f1df
+  author: aida
+  node_id: '1'
+  lamport: 5491
+  timestamp: 2026-09-16T06:25:45.861072801Z
+  kind: !Create
+    title: 'Review PR-1861: [STORY-1163] Dispatch central forge helpers by provider'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a8dc`) for branch `story-1163`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1861>
+      - Branch: `story-1163` → `main`
+
+      ## Covers
+
+      - STORY-1163
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1861` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5491
 node_id: '1'
