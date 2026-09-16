@@ -1,0 +1,23 @@
+id: 01a0ac97-67b1-7921-8256-2adbade5c045
+spec_id: ADR-38
+agreed_id: ADR-38
+title: 'Merge-lease design: local per-branch lockfile, bounded-wait-then-refuse, wraps check→merge→pull'
+description: |-
+  Accepted 2026-09-16 (operator, guided). Design for STORY-1171 (branch merge-serialization lock / merge-lease).
+
+  Decision 1 — SCOPE: a LOCAL lockfile at the MAIN clone's .aida/merge-locks/<branch> (e.g. main). Same-machine mergers all resolve merges to the main worktree, so they share it. This serializes the races actually observed 2026-09-16 (advisor session + product session + drain subprocess, all one machine). Cross-MACHINE fleet serialization is a documented future extension (would need a store-committed or forge-side lock); NOT built now (smallest valuable slice; the observed race is same-machine).
+
+  Decision 2 — CONTENTION: bounded-wait-then-refuse. A second merger polls for the lock up to a configurable timeout (default ~2-3 min), acquires the moment it frees, and refuses with guidance if it times out. Mirrors how we hand-serialized today. NOT fail-fast (would shelve drains on contention) and NOT block-forever (a missed-stale holder would hang everything).
+
+  Decision 3 — CRITICAL SECTION: wraps check → merge → pull. Held across supervision-check + merge + pull/auto-bump so each merger re-verifies against the just-updated main — delivers the union-build safety (per-PR green != union build). Held seconds to ~a minute, NOT the whole drain.
+
+  Derived (from Decision 1): STALE-LOCK RECOVERY uses PID + hostname liveness (kill -0 works same-host) with a TTL fallback (age > max => stale), mirroring the git index.lock stale-recovery (BUG-1164). The lockfile records holder pid + hostname + PR/spec + timestamp for observability (aida merge-lock status).
+
+  Complements, does not replace: the per-PR merge-hold marker (BUG-1167) and Layer-2 branch protection GATE a PR; this SERIALIZES mergers. Distinct from git index.lock (which correctly does not block targeted store-writes).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T23:39:58.769887083Z
+modified_at: 2026-09-16T23:39:58.769887083Z
+req_type: Decision
