@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:39:34.556868085Z
-modified_at: 2026-09-16T02:01:52.568700573Z
+modified_at: 2026-09-16T02:07:00.907253427Z
 req_type: Bug
 tags:
 - drain aida-store index-lock reliability concurrency
@@ -29,3 +29,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-16T02:01:52.568700573Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1853: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 35046387355 — view it: `gh run view 35046387355`. Push fixups to the same branch: `aida queue work BUG-1164 --branch bug-1164 --steal`'
+  shelved_by: advisor
+  shelved_at: 2026-09-16T02:07:00.907253427Z
