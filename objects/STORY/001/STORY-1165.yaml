@@ -12,3 +12,7 @@ modified_at: 2026-09-16T05:59:40.966184989Z
 req_type: Story
 tags:
 - forge gitlab ci merge-hold slice-2 parent:EPIC-68 aida:forge security
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-16T05:59:43.202350603Z
