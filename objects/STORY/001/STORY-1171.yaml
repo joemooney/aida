@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-16T15:32:38.639022679Z
+modified_at: 2026-09-16T15:36:58.349015278Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
@@ -37,4 +37,29 @@ comments:
     RECOMMENDATION: target the lease-based store-object (fleet-correct + reuses machinery); a local-file lock is a valid single-machine v1 only if the distributed case is explicitly deferred. Update acceptance: the merge-lock is a substrate lease (scope merge:<branch>), acquired/released around the merge, stale-recovered on holder death, observable via aida session leases / a merge-lock status; two concurrent mergers (same or different clone, after sync) serialize.
   created_at: 2026-09-16T15:32:38.639022679Z
   modified_at: 2026-09-16T15:32:38.639022679Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0aadd-32ed-7f00-912b-7711ffe19438
+  author: joe
+  content: |-
+    TIGHTENED ACCEPTANCE (binding scope — supersedes the looser wording above):
+
+    SCOPE: the merge-lock guards ONE thing — the check-then-merge CRITICAL SECTION into a code branch, keyed `merge:<branch>` (e.g. merge:main). The critical section is the whole multi-step sequence: CHECK (CI green? reviewed? supervision-hold?) -> MERGE (gh pr merge into <branch>) -> PULL (update local <branch>). It is a lease held ONLY for that sequence's duration (acquire before the check, release after the pull), NOT the drain's duration.
+
+    EXPLICITLY OUT OF SCOPE (must NOT acquire, wait on, or be blocked by the merge-lock):
+    - aida-store spec writes — aida add / edit / comment / status-change. These live in a SEPARATE worktree/index (.aida-store/, orphan branch) from the code main branch, are single-step-atomic (BUG-634 targeted, BUG-1164 stale-recovery), and MUST stay fast + lock-free. The drain's own status transitions (in-progress/done/completed) are also these writes and also stay unblocked.
+    - feature-branch commits/pushes (each PR's own branch), and all reads.
+
+    WHY a lock here but not for spec writes: a spec write is single-step (git index.lock makes it atomic); a merge is multi-step and the race is BETWEEN the check and the merge across agents (BUG-1167). index.lock cannot span that sequence; the merge-lease can.
+
+    ACCEPTANCE:
+    1. Two agents attempting check-then-merge into the same branch SERIALIZE — one acquires merge:<branch>, the other waits (bounded) or refuses; no overlapping check-then-merge.
+    2. While merge:main is held, aida add/edit/comment/status-change PROCEED IMMEDIATELY (proven by a test: an issue-update during a held merge-lease succeeds without waiting). This is the load-bearing non-interference guarantee.
+    3. The lease is held only across check->merge->pull, then released; it is never held for the whole drain.
+    4. A dead holder's merge-lease is stale-recovered (mirror BUG-1164), not wedged.
+    5. Observable: owner + branch + PR + timestamp via aida session leases / an aida merge-lock status verb.
+    6. Implemented as a substrate lease (scope merge:<branch>) → fleet-wide after store sync; a single-machine local-file v1 is acceptable ONLY if the distributed case is explicitly deferred with a revisit trigger.
+
+    Closes the three concurrent-merge harms: (a) supervision-hold bypass (BUG-1167), (b) union-build breakage (per-PR green != combined main), (c) merge computed against stale main.
+  created_at: 2026-09-16T15:36:58.349015278Z
+  modified_at: 2026-09-16T15:36:58.349015278Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
