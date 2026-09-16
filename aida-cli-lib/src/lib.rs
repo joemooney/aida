@@ -156,6 +156,7 @@ mod manual;
 mod mcp;
 mod mcp_translate;
 mod memories_cmd;
+mod merge_hold;
 mod metrics;
 mod metrics_cmd;
 mod network_retry;
@@ -47464,6 +47465,12 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
     // by bypassing the upstream gate. It reuses the same fail-closed resolver,
     // so an unresolvable mode holds here too. trace:BUG-1163 | ai:claude
     if let Some(label) = wave_pr_supervision_label(project_root, &pr.spec) {
+        // BUG-1167: persist the hold as a substrate marker so a CONCURRENT
+        // merger (an integrate sweep, another agent session, a stale-binary
+        // drain) also refuses at the merge_change chokepoint — not just this
+        // in-process guard, which was the BUG-1167 gap. trace:BUG-1167 | ai:claude
+        let _ = crate::merge_hold::write_hold(project_root, pr.number, &label);
+        crate::merge_hold::sync_label(project_root, pr.number, true);
         eprintln!(
             "  {} refusing to auto-merge PR-{} ({}) — {}",
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),

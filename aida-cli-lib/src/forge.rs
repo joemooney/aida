@@ -1398,6 +1398,23 @@ impl Forge for GitHubForge {
         // On a non-zero exit we return Err carrying gh's stderr (the merge_change
         // contract), so the caller keeps its activity-log + recovery-hint + bail.
         // trace:STORY-516 trace:BUG-286 | ai:claude
+        //
+        // BUG-1167: the substrate merge-hold chokepoint. EVERY AIDA merge —
+        // `aida pr merge`, the drain's wave/orchestrator phase, an integrator
+        // sweep — funnels through here, so a single fail-closed check refuses a
+        // supervised PR that any of them (or a stale-binary concurrent merger)
+        // would otherwise race the client-side hold to merge. The marker is
+        // cleared only by an explicit human/advisor review (`aida merge-hold
+        // clear <pr>`). A drain-mode PR is never marked, so its auto-merge is
+        // untouched. trace:BUG-1167 | ai:claude
+        if let Some(reason) = crate::merge_hold::read_hold(&self.project_root, c.id) {
+            anyhow::bail!(
+                "refusing to merge PR-{}: supervised merge-hold — {reason}. A human/advisor \
+                 must review, then clear the hold (`aida merge-hold clear {}`) before merging.",
+                c.id,
+                c.id
+            );
+        }
         let args: Vec<String> = match opts.method {
             MergeMethod::Squash => {
                 crate::pr_ship::merge_args(c.id, opts.delete_branch, opts.squash_subject.as_deref())
