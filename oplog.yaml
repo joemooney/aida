@@ -69829,5 +69829,31 @@ operations:
   timestamp: 2026-09-16T03:25:23.889516991Z
   kind: !SetStatus
     status: Completed
-clock: 5461
+- id: 01a0a863-d619-74e1-b59f-fb3eee1c9022
+  target_id: 01a0a863-d03f-7022-9e2d-e63474471fe3
+  author: aida
+  node_id: '1'
+  lamport: 5462
+  timestamp: 2026-09-16T04:05:10.297365508Z
+  kind: !Create
+    title: 'BUG-1167: supervised-merge hold = ONE substrate merge-hold marker enforced at TWO layers (client fail-closed + server required-check)'
+    description: |-
+      Decision (operator, 2026-09-15) for BUG-1167 (supervised-merge hold bypassable by a concurrent merger). Chose fork C, UNIFIED as one marker at two enforcement layers (not two separate mechanisms).
+
+      Problem: the supervised hold (fail-closed within the drain since BUG-1163/#1850) is a CLIENT-SIDE check in the merging process. A separate actor with merge rights — an integrator seat/sweep, another aida agent session, or a raw/stale-binary gh pr merge — merges a CI-green + reviewer-approved PR without consulting execution_mode. Evidence: STORY-1155 #1855 and BUG-1164 #1856 (both drive) merged ~1 min BEFORE the drain's hold escalated. Keystone/security work merges unreviewed whenever a concurrent merger races the hold.
+
+      DECISION — one substrate merge-hold marker, two layers:
+      - MARKER: a supervised spec (drive/guided/operator/decide/unset) stamps its PR with a merge-hold marker — a PR label (e.g. aida:merge-hold) + a .aida/merge-holds/PR-N record. Cleared only by an explicit human/advisor review/merge.
+      - LAYER 1 (client, fail-closed): EVERY AIDA merge path — drain merge, aida integrate, burndown residual sweep, aida pr merge — checks the marker and refuses (same shape as BUG-1163). Closes the internal concurrent-merger hole (integrator seat/sweep).
+      - LAYER 2 (server): a GitHub required status check that stays failing while the marker is present, so GitHub blocks even a raw/stale/UI merge. It PASSES for unmarked (drain-mode) PRs, so drain-mode auto-merge is preserved (answers the branch-protection-vs-drain-mode concern: blanket protection would break drain-mode; the marker makes it granular per-PR).
+
+      Resolves the two fork objections: A-alone leaks to a raw/stale merger (Layer 2 catches it); B-alone is coarse and breaks drain-mode (the marker makes it granular).
+
+      IMMEDIATE stop-the-bleeding (before the build): find + stop the concurrent integrator/sweep; rebuild any session on a pre-#1850 binary; treat already-merged supervised PRs (STORY-1155/1158, BUG-1164, TASK-1237, BUG-1156, STORY-1130, TASK-1233) as UNREVIEWED — needing remedial review.
+
+      Acceptance (binds BUG-1167): no merger (drain, integrate, sweep, another agent session, raw gh pr merge from a stale binary) merges a drive/guided/operator/decide/unset PR without the execution_mode check; two concurrent mergers on one green+approved drive PR both refuse; the required check passes for drain-mode PRs (auto-merge preserved). Supersedes the client-only hold as the enforcement model.
+    req_type: Decision
+    status: Approved
+    priority: High
+clock: 5462
 node_id: '1'
