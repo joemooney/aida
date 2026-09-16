@@ -1,0 +1,16 @@
+{
+  "id": "d36c1dcc-e053-4c00-96e2-1a5536ece56c",
+  "thread_id": "d36c1dcc-e053-4c00-96e2-1a5536ece56c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789534155637,
+  "body": "BUG-1167 CONFIRMED SOUND + fully deployed. #1857 already merged (I merged it deliberately at 21:42, won the race). All 4 points verified on main: (1) read_hold fail-closed by presence + empty_reason test; (2) forge::merge_change is the SOLE chokepoint — every real merge call site routes through it, the auto_complete gh-pr-merge strings are hints/tests only, nothing bypasses; (3) write_hold has ONE prod site (merge_wave_pr supervised path) so drain-mode PRs are never marked (auto-merge intact), only aida pr merge clears; (4) merge-hold-gate.yml fails-on-label/passes-otherwise + sync_label mirrors. LAYER 2 APPLIED via gh api: branch protection on main requires merge-hold-gate, enforce_admins=true, NO review requirement (drain-mode preserved), strict=false (no forced rebase → drain throughput preserved). Workflow triggers on all PR events incl labeled/unlabeled, trivial no-build job → no wedge; clearing the label re-runs + unblocks. Caveat: PRs predating the workflow (#1749/#1746, stale) have no check result yet — a push/re-label triggers it if ever merged. The concurrent-merger hole is now closed at the substrate. TASK-1238 (read_hold unreadable-file fail-closed) is the remaining fast-follow. — advisor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
