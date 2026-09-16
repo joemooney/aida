@@ -104,28 +104,106 @@ pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
 // trace:BUG-1167 | ai:claude
 pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
 
-/// Best-effort mirror of the marker state to the GitHub `aida:merge-hold` label,
-/// so Layer 2 can enforce server-side. Failures are swallowed: the file marker
-/// is the source of truth; the label is a convenience mirror and its absence
-/// only weakens Layer 2, never the client chokepoint.
-// trace:BUG-1167 | ai:claude
+/// Best-effort mirror of the marker state to the `aida:merge-hold` label on the
+/// change (PR/MR), so Layer 2 can enforce server-side. Failures are swallowed:
+/// the file marker is the source of truth; the label is a convenience mirror and
+/// its absence only weakens Layer 2, never the client chokepoint.
+///
+/// STORY-1165: forge-routed. GitHub → `gh pr edit --add-label/--remove-label`;
+/// GitLab → `glab mr update --label/--unlabel`; pure-git → no-op (no forge to
+/// label). This is what lets the GitLab merge-hold-gate CI job (the Layer-2
+/// analog of merge-hold-gate.yml) see the label on an MR.
+// trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)
 pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) {
-    let flag = if held {
-        "--add-label"
-    } else {
-        "--remove-label"
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let Some((cli, args)) = sync_label_command(kind, pr, held) else {
+        // pure-git has no forge to carry a label; the file marker still holds.
+        return;
     };
-    let _ = std::process::Command::new("gh")
+    let _ = std::process::Command::new(cli)
         .current_dir(project_root)
-        .args(["pr", "edit", &pr.to_string(), flag, HOLD_LABEL])
+        .args(&args)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status();
 }
 
+/// The CLI + argv for mirroring the merge-hold label on a change, per forge —
+/// kept pure so the routing is unit-testable. `None` = no forge to label
+/// (pure-git).
+// trace:STORY-1165 | ai:claude
+fn sync_label_command(
+    kind: crate::forge::ForgeKind,
+    pr: u64,
+    held: bool,
+) -> Option<(&'static str, Vec<String>)> {
+    use crate::forge::ForgeKind;
+    match kind {
+        ForgeKind::GitHub => {
+            let flag = if held {
+                "--add-label"
+            } else {
+                "--remove-label"
+            };
+            Some((
+                "gh",
+                vec![
+                    "pr".into(),
+                    "edit".into(),
+                    pr.to_string(),
+                    flag.into(),
+                    HOLD_LABEL.into(),
+                ],
+            ))
+        }
+        ForgeKind::GitLab => {
+            let flag = if held { "--label" } else { "--unlabel" };
+            Some((
+                "glab",
+                vec![
+                    "mr".into(),
+                    "update".into(),
+                    pr.to_string(),
+                    flag.into(),
+                    HOLD_LABEL.into(),
+                ],
+            ))
+        }
+        ForgeKind::None => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // STORY-1165: the label mirror must route to the right forge CLI — gh for
+    // GitHub, glab for GitLab (mr update --label/--unlabel), nothing for pure-git.
+    #[test]
+    fn sync_label_command_routes_per_forge() {
+        use crate::forge::ForgeKind;
+        let (cli, args) = sync_label_command(ForgeKind::GitHub, 42, true).unwrap();
+        assert_eq!(cli, "gh");
+        assert!(
+            args.contains(&"--add-label".to_string()) && args.contains(&HOLD_LABEL.to_string())
+        );
+
+        let (cli, args) = sync_label_command(ForgeKind::GitLab, 42, true).unwrap();
+        assert_eq!(cli, "glab");
+        assert!(args.contains(&"mr".to_string()) && args.contains(&"update".to_string()));
+        assert!(args.contains(&"--label".to_string()) && args.contains(&HOLD_LABEL.to_string()));
+
+        let (_, args) = sync_label_command(ForgeKind::GitLab, 42, false).unwrap();
+        assert!(
+            args.contains(&"--unlabel".to_string()),
+            "unheld → remove the label"
+        );
+
+        assert!(
+            sync_label_command(ForgeKind::None, 42, true).is_none(),
+            "pure-git has no forge to label"
+        );
+    }
 
     #[test]
     fn write_read_clear_round_trip() {
