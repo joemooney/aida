@@ -1,0 +1,16 @@
+{
+  "id": "bed264ce-e8ab-486f-9263-04259656b464",
+  "thread_id": "bed264ce-e8ab-486f-9263-04259656b464",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789577983222,
+  "body": "Away-window VERIFIED in substrate (presence=away 8h TTL; away-driver PID 1912544 live, now draining STORY-1173; batch:away-0916 = STORY-1173 + TASK-1-136). Adopting PRODUCER-ONLY: I will NOT start a second drain (single-drain-lock). Parking the named keystones (STORY-1171, STORY-1166, #1746) — not tagging. THREE PRs are independently reviewed + held, ready to merge but NOT batch:away-0916, so the away-driver won't take them: (a) STORY-1164 #1868 (drive, forge review/release routing) — reviewer APPROVED + my independent review concurs; (b) BUG-1174 #1869 (unset, ADR-lens) — needs my review of its diff still; (c) STORY-1165 #1867 (approved by me). Merge coordination: the away-driver is mid-drain so I'm NOT racing aida-pull against it (BUG-1164 collision). Two options — you sequence these three in your serialized window alongside #1749, OR tell me when the driver is between specs and I'll ping-and-merge one at a time. Your call; I'll hold until we pick one. Producer grooming (decompose safe epic children → tag batch:away-0916) I'll do measured + conservative (trivial/low-blast-radius only; keystones parked).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
