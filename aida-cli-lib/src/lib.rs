@@ -47240,27 +47240,103 @@ fn integrate_wave_prs(
 
 /// TASK-1169: the BUG-727 supervised-merge gate for one wave spec — `Some(label)`
 /// when its `execution_mode` makes the merge supervised (anything but `drain`,
-/// or unset). A spec the store can't resolve is treated as NOT supervised, the
-/// same tolerance the orchestrator's `merge_supervision_hold` uses, so a missing
-/// store never wedges the leg.
-// trace:TASK-1169 | ai:claude
+/// or unset).
+///
+/// BUG-1163: this gate FAILS CLOSED. When the spec's mode cannot be resolved —
+/// the store is unreadable (e.g. a concurrent de-risk/groom store write, the
+/// failure mode that leaked BUG-1156/STORY-1130/TASK-1233 to merge) or the spec
+/// is absent — we return a hold label, NOT `None`. A supervision fence that
+/// treats "can't tell" as "not supervised" would merge a drive/guided/operator
+/// PR unreviewed; the safe direction is to HOLD (the PR is left open for a human
+/// and merges on a later readable pass — never wedged, only conservatively
+/// parked). The dangerous direction — merging supervised work unreviewed — is
+/// exactly what this bug was.
+// trace:BUG-1163 | ai:claude (supersedes the TASK-1169 fail-open tolerance)
 fn wave_pr_supervision_label(project_root: &std::path::Path, spec: &str) -> Option<String> {
-    let store = load_store_for_lookup(project_root)?;
     let want = spec.to_ascii_uppercase();
-    let req = store.requirements.iter().find(|r| {
-        r.spec_id
-            .as_deref()
-            .map(|s| s.eq_ignore_ascii_case(&want))
-            .unwrap_or(false)
-            || r.agreed_id
-                .as_deref()
-                .map(|s| s.eq_ignore_ascii_case(&want))
-                .unwrap_or(false)
-    })?;
-    if pr_ship::merge_requires_supervision(req.execution_mode) {
-        Some(pr_ship::supervision_mode_label(req.execution_mode))
-    } else {
-        None
+    // `Some(mode)` ONLY when the spec's row was actually read from the store;
+    // `None` means unresolvable — store unreadable (a concurrent write) OR spec
+    // absent — and the fail-closed helper turns that into a hold.
+    let resolved = load_store_for_lookup(project_root).and_then(|store| {
+        store
+            .requirements
+            .iter()
+            .find(|r| {
+                r.spec_id
+                    .as_deref()
+                    .map(|s| s.eq_ignore_ascii_case(&want))
+                    .unwrap_or(false)
+                    || r.agreed_id
+                        .as_deref()
+                        .map(|s| s.eq_ignore_ascii_case(&want))
+                        .unwrap_or(false)
+            })
+            .map(|r| r.execution_mode)
+    });
+    supervision_hold_label(spec, resolved)
+}
+
+/// BUG-1163: the fail-closed supervision decision, split from store I/O so the
+/// safety property is unit-testable. `resolved` is `Some(mode)` only when the
+/// spec's row was read from the store (`mode` may itself be `None` = unset);
+/// `None` means the mode was unresolvable (store unreadable OR spec absent) and
+/// MUST hold — a supervision fence never merges on "can't tell", because the
+/// dangerous direction is merging drive/guided/operator work unreviewed, while a
+/// false hold only leaves a PR open for a human.
+// trace:BUG-1163 | ai:claude
+fn supervision_hold_label(
+    spec: &str,
+    resolved: Option<Option<aida_core::ExecutionMode>>,
+) -> Option<String> {
+    match resolved {
+        None => Some(format!(
+            "merge supervision unresolved for {spec} — held for safety"
+        )),
+        Some(mode) if pr_ship::merge_requires_supervision(mode) => {
+            Some(pr_ship::supervision_mode_label(mode))
+        }
+        Some(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod bug_1163_supervision_fail_closed_tests {
+    use super::*;
+    use aida_core::ExecutionMode;
+
+    // BUG-1163: an unresolvable mode — store unreadable (a concurrent write) OR
+    // the spec absent — MUST hold. This is the exact leak: three drive specs
+    // merged because the resolver failed open on a concurrent-write read.
+    #[test]
+    fn unresolved_mode_holds_fail_closed() {
+        assert!(
+            supervision_hold_label("BUG-9999", None).is_some(),
+            "unresolvable mode must HOLD (fail closed), never merge"
+        );
+    }
+
+    // Every non-drain mode (incl. unset) holds; only drain merges.
+    #[test]
+    fn resolved_modes_gate_correctly() {
+        for m in [
+            ExecutionMode::Drive,
+            ExecutionMode::Guided,
+            ExecutionMode::Operator,
+            ExecutionMode::Decide,
+        ] {
+            assert!(
+                supervision_hold_label("X", Some(Some(m))).is_some(),
+                "{m:?} must hold"
+            );
+        }
+        assert!(
+            supervision_hold_label("X", Some(None)).is_some(),
+            "unset mode is supervised — must hold"
+        );
+        assert!(
+            supervision_hold_label("X", Some(Some(ExecutionMode::Drain))).is_none(),
+            "drain is the only mode that auto-merges"
+        );
     }
 }
 
@@ -47329,6 +47405,22 @@ fn local_verdict_blocks_merge(project_root: &std::path::Path, pr_number: u64) ->
 /// (BUG-758). Returns whether the merge itself succeeded.
 // trace:TASK-1169 | ai:claude
 fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> bool {
+    // BUG-1163: the merge-EXECUTION chokepoint self-guards. Even though the wave
+    // loop already gates on `wave_pr_supervision_label` via `wave_pr_action`,
+    // this second check at the point the merge actually runs means no caller
+    // (a future wave path, a refactor, a re-entry) can merge a supervised spec
+    // by bypassing the upstream gate. It reuses the same fail-closed resolver,
+    // so an unresolvable mode holds here too. trace:BUG-1163 | ai:claude
+    if let Some(label) = wave_pr_supervision_label(project_root, &pr.spec) {
+        eprintln!(
+            "  {} refusing to auto-merge PR-{} ({}) — {}",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            pr.number,
+            pr.spec,
+            label,
+        );
+        return false;
+    }
     let mut sink = network_retry::StderrSink;
     let change_ref = forge::ChangeRef {
         id: pr.number,
