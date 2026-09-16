@@ -9134,6 +9134,15 @@ pub enum Command {
     /// Agent-tool fan-outs take generic `harness-worktree` leases (shown by
     /// session/worktree, spec unknown).
     // trace:STORY-696 | ai:claude
+    /// Show active branch merge-leases: who is merging to which target branch
+    /// right now, with holder host / pid / age. Read-only; reads
+    /// `.aida/merge-locks/`. The serialization primitive that stops two mergers
+    /// racing to the same branch.
+    MergeLock {
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
     Ps {
         /// Machine-readable JSON output: `{ sessions: [...], orphaned: [...] }`.
         // trace:STORY-696
