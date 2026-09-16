@@ -3,12 +3,12 @@ spec_id: TASK-1241
 agreed_id: TASK-1241
 title: 'GitLab: codify the live MR round-trip as an in-crate #[ignore] integration test vs gitlab.joemooney.com'
 description: "Capture tonight's manual validation (open_change -> change_status -> merge_change, squash + remove-source-branch) as an in-crate #[ignore] integration test that constructs GitLabForge and runs the round-trip against a real GitLab (gated on GITLAB_HOST/glab auth env). A permanent regression guard for the GitLabForge lifecycle. Proposed mode: drive (I'll drive it while GitLab is warm). Acceptance: \nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4859 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 943 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 548 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s creates+reads+merges an MR on the configured GitLab and asserts state=merged + source-branch removed; skips cleanly without creds."
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T06:01:36.582876288Z
-modified_at: 2026-09-16T06:08:28.776203566Z
+modified_at: 2026-09-16T15:29:56.776695929Z
 req_type: Task
 tags:
 - forge gitlab test live-validation parent:EPIC-68 aida:forge
@@ -16,3 +16,21 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-16T06:01:44.624841561Z
+history:
+- id: 01a0aad6-c422-76f2-bdd5-447b3e31d384
+  author: aida-auto-bump
+  timestamp: 2026-09-16T15:29:56.770049160Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0aad6-c428-7683-890f-864c0eb63fb0
+  timestamp: 2026-09-16T15:29:56.776694979Z
+  agent: aida
+  commit_sha: efff4a546d73e9089797b7c8148e1a41f966a53a
+  summary: Completed via merge efff4a54
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-16T15:29:56.057256358Z
+  completion_sha: efff4a546d73e9089797b7c8148e1a41f966a53a
