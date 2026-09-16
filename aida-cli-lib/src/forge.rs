@@ -3,7 +3,8 @@
 //! AIDA's git-canonical *store* is already forge-agnostic — the orphan
 //! `aida-store` branch rides whatever `origin` is. The *collaboration
 //! lifecycle* (PR/MR open → CI/pipeline wait → review → merge → linkage),
-//! however, was hard-wired to GitHub via ~113 `gh`-CLI invocation sites. This
+//! however, was hard-wired to GitHub. The 2026-06-14 gap inventory narrowed the
+//! honest runtime gap to ~20-25 direct `gh` spawns across ~18 functions. This
 //! module introduces the [`Forge`] trait those sites route through so GitLab
 //! (Merge Requests + GitLab CI) — and a forge-less `pure-git` mode — become
 //! first-class alongside GitHub.
@@ -11,12 +12,16 @@
 //! Slice 1 (this) lands the trait, the forge-neutral data types, the three
 //! providers ([`GitHubForge`], [`GitLabForge`], [`PureGitForge`]), the
 //! `[forge]` config section + origin-host auto-detection, and the
-//! [`forge_for`] factory. The ~113 call sites are migrated behind the trait in
-//! follow-on commits — GitHub behavior is preserved byte-for-byte (the GitHub
-//! provider issues the exact `gh` argv the call sites issue today).
+//! [`forge_for`] factory. EPIC-35 is marked Completed, but only the abstraction
+//! and some routes shipped; the remaining GitLab parity wiring now lives under
+//! EPIC-68. The residual direct-`gh` call sites are migrated behind the trait
+//! in follow-on commits — GitHub behavior is preserved byte-for-byte (the
+//! GitHub provider issues the exact `gh` argv the call sites issue today).
 //!
 //! Design + verified inventory: `docs/plans/2026-06-04-forge-provider.md`
-//! (SPIKE-49, master-approved 2026-06-04). trace:EPIC-35 trace:SPIKE-49 | ai:claude
+//! (SPIKE-49, master-approved 2026-06-04) and
+//! `docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md`.
+//! trace:EPIC-35 trace:SPIKE-49 trace:TASK-1242 | ai:claude+codex
 #![allow(dead_code)] // Providers/trait are wired into call sites in follow-on slice-1 commits.
 
 use anyhow::{Context, Result};
