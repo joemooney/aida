@@ -8,12 +8,12 @@ description: |-
   Fix: stamp the merge-hold marker (+ mirror the label) the MOMENT a supervised (drive/guided/operator/decide/unset) spec's PR is OPENED — not at merge-hold-decision time. Then any merger sees it from creation, and merge-hold-gate fails from the first check. This is the PR-open write I deferred when building BUG-1167 (the drain only wrote it at wave-hold time).
 
   Acceptance: a supervised spec's PR carries the marker + aida:merge-hold label from creation; a concurrent merge attempt in the pre-hold window refuses (client chokepoint) AND is blocked server-side (merge-hold-gate fails); drain-mode PRs remain unmarked (auto-merge intact); clearing on explicit human/advisor review still works. Refs ADR-37, BUG-1167.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:42.826056329Z
-modified_at: 2026-09-16T15:50:57.454567688Z
+modified_at: 2026-09-16T16:02:57.332065286Z
 req_type: Bug
 tags:
 - supervised-merge merge-hold bug-1167 race concurrency reliability
