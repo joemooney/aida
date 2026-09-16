@@ -1,0 +1,22 @@
+id: 01a0a891-134c-7dc3-b835-f93c72b3136a
+spec_id: TASK-1239
+agreed_id: TASK-1239
+title: 'aida agent new picker: offer stakeholder personas (guest/requester) in a separate labeled sub-section'
+description: |-
+  Operator (2026-09-15): after TASK-1237 surfaced guest/requester in `aida role list` (a separate 'Stakeholder personas:' section), the `aida agent new` role PICKER still lists only the build roles (AGENT_ROLES + list_roles files) — so a stakeholder agent can only be launched via AIDA_SESSION_ROLE=, not picked. Add them to the picker (pick_role_with_header, lib.rs) in a SEPARATE, clearly-labeled sub-section mirroring role list's 'Stakeholder personas' — launchable but never confused with a driver seat (label 'least-privilege · read-only/intake · not a build seat').
+
+  Pairs with STORY-1133 (the picker already offers 'launch as companion' when a driver seat is taken) and TASK-1236 (picker live-driver/single-instance annotations) — the picker converges into one launch surface: driver roles (with companion fallback when taken) + stakeholder personas.
+
+  Acceptance:
+  - The `aida agent new` picker shows guest + requester under a separate 'Stakeholder personas' heading, labeled non-build.
+  - Selecting one launches an agent with AIDA_SESSION_ROLE=guest|requester (the existing gate applies — read-only / draft-intake).
+  - They are visually distinct from and not mixed into the driver/build roles; they are never offered as queue-routable build seats.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T04:54:35.084636857Z
+modified_at: 2026-09-16T04:54:35.084636857Z
+req_type: Task
+tags:
+- roles agent-picker stakeholder guest requester ux aida:agent
