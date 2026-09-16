@@ -1,0 +1,26 @@
+id: 01a0a7f9-56ff-7893-b1ac-e5184b3a8420
+spec_id: STORY-1155
+agreed_id: STORY-1155
+title: 'v1: selector-scoped agent-review gate inserted before merge (reuses the reviewer/verdict/shelve machinery)'
+description: |-
+  First slice of EPIC-66. Add a minimal declarative agent-review gate to the drain pipeline, reusing the existing reviewer -> verdict -> shelve -> merge-gate flow.
+
+  Config: [pipeline.gate.<name>] in .aida/config.toml with kind='agent', role=<role>, applies_to=<selector> (type:X / tag:Y, OR-composable), on_fail='shelve'|'warn'. For each drainable spec, the drain evaluates the selectors; each matching agent-gate runs as an additional reviewer-style phase before merge (spawn the agent with the role + the spec's acceptance + a gate prompt), producing a verdict file (.aida/review-verdicts/). on_fail='shelve' parks NeedsAttention (hard gate); 'warn' files a finding and continues. A non-matching spec skips the gate.
+
+  Scope v1: agent gates only (command/script gates deferred); selectors support type: and tag:; insertion point fixed at before-merge. Inherits the BUG-1163 fail-closed verdict safety.
+
+  Acceptance:
+  - A project can declare an agent-gate (e.g. security-review, role=security-reviewer, applies_to='tag:security') in .aida/config.toml.
+  - A matching spec's drain runs the gate before merge; a fail (on_fail=shelve) parks it NeedsAttention and does NOT merge; a pass (verdict Approved) lets merge proceed exactly like the built-in reviewer.
+  - on_fail=warn files a finding and continues.
+  - A non-matching spec skips the gate; the gate's verdict is traceable to the spec.
+  - The built-in phases are unchanged when no [pipeline.gate.*] is declared.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T02:08:50.943418830Z
+modified_at: 2026-09-16T02:08:50.943418830Z
+req_type: Story
+tags:
+- pipeline quality-gate agent-gate reviewer parent:EPIC-66 aida:pipeline
