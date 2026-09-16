@@ -621,35 +621,65 @@ pub fn format_activity_event(
 /// actionable rather than leaving the user to guess the next move.
 /// Pulled out so the hint text is contract-pinned by tests (mirrors
 /// `pr_rebase::manual_recipe`).
-pub fn recovery_hint(step: &ShipStep, pr_number: Option<u64>) -> String {
+pub fn recovery_hint(
+    step: &ShipStep,
+    pr_number: Option<u64>,
+    forge: crate::forge::ForgeKind,
+) -> String {
     let n = pr_number
         .map(|n| n.to_string())
         .unwrap_or_else(|| "<N>".to_string());
+    let noun = forge.change_noun();
     match step {
         ShipStep::ResolvePr { create_if_needed } => {
             if *create_if_needed {
-                "Inspect the branch with `gh pr list --head <branch>` or run `gh pr create` \
-                 manually to debug the create failure."
-                    .to_string()
+                let create = forge
+                    .create_cmd()
+                    .unwrap_or_else(|| "create a change request".to_string());
+                let list = forge
+                    .change_cmd_hint("list", "--head <branch>")
+                    .unwrap_or_else(|| "inspect the branch in your forge".to_string());
+                format!(
+                    "Inspect the branch with `{list}` or run `{create}` manually to debug the create failure."
+                )
             } else {
-                "Verify the PR number with `gh pr view <N>` and that it targets this repo."
-                    .to_string()
+                let view = forge
+                    .change_cmd_hint("view", "<N>")
+                    .unwrap_or_else(|| format!("inspect the {noun} in your forge"));
+                format!("Verify the {noun} number with `{view}` and that it targets this repo.")
             }
         }
-        ShipStep::WatchCi => format!(
-            "CI failed or was cancelled. Inspect with `gh pr checks {n}` or \
-             `gh run list --branch <branch>`, fix, push, and re-run `aida pr ship`."
-        ),
+        ShipStep::WatchCi => {
+            let ci = forge
+                .ci_watch_cmd(&n)
+                .unwrap_or_else(|| "inspect CI in your forge".to_string());
+            let fallback = match forge {
+                crate::forge::ForgeKind::GitHub => {
+                    " or `gh run list --branch <branch>`".to_string()
+                }
+                crate::forge::ForgeKind::GitLab => {
+                    " or `glab ci list --branch <branch>`".to_string()
+                }
+                crate::forge::ForgeKind::None => String::new(),
+            };
+            format!(
+                "CI failed or was cancelled. Inspect with `{ci}`{fallback}, fix, push, and re-run `aida pr ship`."
+            )
+        }
         // The by-hand retry suggestion carries no --delete-branch: a live
         // worktree may still hold the branch, and the refused local delete
         // reads as a merge failure (branch deletion belongs to worktree
         // cleanup). `;` keeps the auto-bump pull from being dropped.
-        // trace:BUG-758 | ai:claude
-        ShipStep::Merge { .. } => format!(
-            "Merge step failed (may be transient — the retry wrapper already \
-             tried). Re-run `gh pr merge {n} --squash; aida pull` once the \
-             cause is resolved."
-        ),
+        // trace:BUG-758 trace:TASK-1240 | ai:claude+codex
+        ShipStep::Merge { .. } => {
+            let merge = forge
+                .change_cmd_hint("merge", &format!("{n} --squash"))
+                .map(|cmd| format!("{cmd}; aida pull"))
+                .unwrap_or_else(|| format!("merge the {noun}; aida pull"));
+            format!(
+                "Merge step failed (may be transient — the retry wrapper already tried). Re-run `{merge}` once the cause is resolved."
+            )
+        }
         ShipStep::Pull => "`aida pull` failed. Run it from the main worktree directly to \
              see the underlying git/store error; the merge already landed, \
              so the auto-bump can be replayed via `aida db reconcile-status`."
@@ -1549,14 +1579,29 @@ mod tests {
                 delete_branch: true,
             },
             Some(458),
+            crate::forge::ForgeKind::GitHub,
         );
         assert!(h.contains("458"), "{h}");
         assert!(h.contains("gh pr merge"), "{h}");
     }
 
     #[test]
+    fn recovery_hint_uses_gitlab_merge_vocabulary() {
+        let h = recovery_hint(
+            &ShipStep::Merge {
+                delete_branch: true,
+            },
+            Some(458),
+            crate::forge::ForgeKind::GitLab,
+        );
+        assert!(h.contains("458"), "{h}");
+        assert!(h.contains("glab mr merge"), "{h}");
+        assert!(!h.contains("gh pr"), "{h}");
+    }
+
+    #[test]
     fn recovery_hint_pull_mentions_reconcile() {
-        let h = recovery_hint(&ShipStep::Pull, Some(1));
+        let h = recovery_hint(&ShipStep::Pull, Some(1), crate::forge::ForgeKind::GitHub);
         assert!(h.contains("aida db reconcile-status"), "{h}");
     }
 

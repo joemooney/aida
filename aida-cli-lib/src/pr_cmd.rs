@@ -94,10 +94,19 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         branch,
         reason.map(|r| format!(" ({r})")).unwrap_or_default(),
     );
+    // TASK-1240: derive the create-command + change noun from the resolved
+    // forge so GitLab sessions see `glab mr create` and MR-N, not GitHub
+    // wording. trace:TASK-1240 | ai:claude
+    let forge = crate::forge::resolve_forge_kind(&project_root);
+    let noun = forge.change_noun();
+    let create_cmd = forge
+        .create_cmd()
+        .unwrap_or_else(|| "gh pr create".to_string());
     eprintln!(
-        "  {} when your gate passes: `gh pr create` (or `glab mr create`), then \
-         `aida queue work PR-N --role reviewer`",
-        "→".dimmed()
+        "  {} when your gate passes: `{}`, then `aida queue work {}-N --role reviewer`",
+        "→".dimmed(),
+        create_cmd,
+        noun,
     );
     Ok(())
 }
@@ -1068,6 +1077,7 @@ pub(crate) fn pr_ship_handler(
     // main worktree (where `.aida-store` lives and `aida pull` must
     // run) may be a different path; we resolve it explicitly.
     let project_root = find_project_root()?;
+    let forge_kind = crate::forge::resolve_forge_kind(&project_root);
     let main_worktree = main_worktree_root_from(&project_root);
 
     let branch = current_git_branch(&project_root)?;
@@ -1312,11 +1322,7 @@ pub(crate) fn pr_ship_handler(
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if dry_run {
-        let plan = format_dry_run_plan(
-            &opts,
-            &steps,
-            crate::forge::resolve_forge_kind(&project_root),
-        );
+        let plan = format_dry_run_plan(&opts, &steps, forge_kind);
         print!("{}", plan);
         eprintln!(
             "  → PR target: {}",
@@ -1519,7 +1525,7 @@ pub(crate) fn pr_ship_handler(
                 &ShipStep::WatchCi,
                 &StepOutcome::Failed(detail),
             );
-            let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number));
+            let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number), forge_kind);
             eprintln!(
                 "{} CI failed for PR-{}",
                 crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
@@ -1639,7 +1645,11 @@ pub(crate) fn pr_ship_handler(
                     &ShipStep::Merge { delete_branch },
                     &StepOutcome::Failed(stderr_text.clone()),
                 );
-                let hint = recovery_hint(&ShipStep::Merge { delete_branch }, Some(pr_number));
+                let hint = recovery_hint(
+                    &ShipStep::Merge { delete_branch },
+                    Some(pr_number),
+                    forge_kind,
+                );
                 eprintln!(
                     "{} merge failed: {}",
                     crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
@@ -1741,7 +1751,7 @@ pub(crate) fn pr_ship_handler(
                     &ShipStep::Pull,
                     &StepOutcome::Failed(e.to_string()),
                 );
-                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
+                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number), forge_kind);
                 eprintln!(
                     "{} could not prepare main worktree for `aida pull` — the merge already landed, so this is a sync issue, not a merge issue.",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
@@ -1759,7 +1769,7 @@ pub(crate) fn pr_ship_handler(
                     &ShipStep::Pull,
                     &StepOutcome::Failed(format!("exit {}", pull_status)),
                 );
-                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number));
+                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number), forge_kind);
                 eprintln!(
                     "{} `aida pull` failed — the merge already landed, so this \
                      is a sync issue, not a merge issue.",
@@ -1841,7 +1851,7 @@ pub(crate) fn pr_ship_handler(
                             &ShipStep::EndLease,
                             &StepOutcome::Failed(format!("exit {}", end_status)),
                         );
-                        let hint = recovery_hint(&ShipStep::EndLease, Some(pr_number));
+                        let hint = recovery_hint(&ShipStep::EndLease, Some(pr_number), forge_kind);
                         eprintln!(
                             "{} session end failed",
                             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
