@@ -8,12 +8,12 @@ description: |-
   Make the stakeholder personas discoverable without turning them into build-loop seats: either (a) have `aida role list` also print the recognized stakeholder personas (guest/requester) with a clear 'least-privilege · read/intake · not a build seat' label even without .toml files, or (b) scaffold read-only guest.toml/requester.toml marked non-routable. Do NOT make them queue-routable or singleton seats (preserve STORY-1110's gate). Pairs with the deferred /aida-intro surface.
 
   Acceptance: `aida role list` shows guest + requester with a least-privilege/non-seat label and a one-line 'become it via AIDA_SESSION_ROLE=' hint; they remain non-routable as queue targets; the STORY-1110 gates are unchanged.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T00:36:58.955295216Z
-modified_at: 2026-09-16T01:54:23.718449383Z
+modified_at: 2026-09-16T02:35:18.319122102Z
 req_type: Task
 tags:
 - roles guest requester discoverability role-list stakeholder parent:EPIC-64 aida:role
@@ -25,8 +25,24 @@ relationships:
   target_id: 01a0a7ec-040d-7903-bd71-43ce8db49bfe
   created_at: 2026-09-16T01:54:23.718444971Z
   created_by: joe
+history:
+- id: 01a0a811-8fa8-7fd1-a041-ee5fa34b5684
+  author: aida-auto-bump
+  timestamp: 2026-09-16T02:35:18.312546514Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a811-8faf-74f2-b356-2e00ccf8e0bd
+  timestamp: 2026-09-16T02:35:18.319120915Z
+  agent: aida
+  commit_sha: a0d290abf82fe9eb103e5b902269de1a90c7e432
+  summary: Completed via merge a0d290ab
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T01:47:05.715926433Z
   implemented_by: joe
+  completed_at: 2026-09-16T02:35:17.659666069Z
+  completion_sha: a0d290abf82fe9eb103e5b902269de1a90c7e432
