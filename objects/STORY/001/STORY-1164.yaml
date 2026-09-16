@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:33.163650404Z
-modified_at: 2026-09-16T16:14:35.262258726Z
+modified_at: 2026-09-16T16:15:07.858616246Z
 req_type: Story
 tags:
 - forge gitlab wiring slice-1 parent:EPIC-68 aida:forge
