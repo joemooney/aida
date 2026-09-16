@@ -9849,6 +9849,11 @@ pub enum Command {
         /// `file[:line]` (why does this code exist?) — a `file:line` resolves the
         /// nearest code→spec trace comment to the spec's intent (code↔decision).
         id: String,
+        /// Print the cached plain-English rationale layer for this spec,
+        /// regenerating `docs/plain/<SPEC>.md` only when the spec changed.
+        // trace:STORY-1158 | ai:codex
+        #[clap(long)]
+        plain: bool,
         /// Machine-readable JSON.
         #[clap(long)]
         json: bool,

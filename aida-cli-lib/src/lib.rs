@@ -2821,8 +2821,8 @@ fn run() -> Result<()> {
 
     // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
     // dispatch early, no shared storage handle needed. trace:STORY-547
-    if let Command::Why { id, json } = &cli.command {
-        return handle_why(id, *json);
+    if let Command::Why { id, plain, json } = &cli.command {
+        return handle_why(id, *plain, *json);
     }
 
     // STORY-694: `aida status <spec>` is the per-spec liveness view — it reads
@@ -51662,11 +51662,14 @@ fn handle_why_code(arg: &str, json: bool) -> Result<()> {
 #[path = "tests/why_code_tests.rs"]
 mod why_code_tests;
 
-fn handle_why(id: &str, json: bool) -> Result<()> {
+fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
     // STORY-754: `aida why <file>[:<line>]` answers "why does this CODE exist?"
     // from the nearest trace comment — AIDA's code↔decision edge. A bare SPEC-ID
     // keeps the existing spec-liveness explanation. trace:STORY-754 | ai:claude
     if looks_like_code_arg(id) {
+        if plain {
+            anyhow::bail!("`aida why --plain` is only available for SPEC-IDs, not code locations.");
+        }
         return handle_why_code(id, json);
     }
     let project_root =
@@ -51697,6 +51700,13 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         .clone()
         .or_else(|| req.spec_id.clone())
         .unwrap_or_else(|| req.id.to_string());
+
+    // STORY-1158: `aida why <spec> --plain` is a Tier-2 surplus layer: it
+    // materializes a separate markdown artifact under docs/plain keyed to the
+    // spec's modified_at, and never writes back to the spec object itself.
+    if plain {
+        return handle_why_plain(&project_root, &store, req, &disp, json);
+    }
 
     // BUG-503: an archived (shelved) spec is excluded from the open set, so it
     // would otherwise fall through to the jargon "not in the open set" error.
@@ -52014,6 +52024,264 @@ fn handle_why(id: &str, json: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+const PLAIN_WHY_CACHE_PREFIX: &str = "<!-- aida-plain";
+
+fn plain_why_cache_path(project_root: &std::path::Path, disp: &str) -> std::path::PathBuf {
+    project_root
+        .join("docs")
+        .join("plain")
+        .join(format!("{disp}.md"))
+}
+
+fn plain_why_cache_is_fresh(raw: &str, source_modified_at: &str) -> bool {
+    raw.lines()
+        .next()
+        .map(|line| {
+            line.contains(PLAIN_WHY_CACHE_PREFIX)
+                && line.contains(&format!("source_modified_at=\"{source_modified_at}\""))
+        })
+        .unwrap_or(false)
+}
+
+fn plain_why_first_sentence(text: &str) -> String {
+    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let compact = compact.trim();
+    if compact.is_empty() {
+        return "No detailed description is recorded yet.".to_string();
+    }
+    for sep in [". ", "! ", "? "] {
+        if let Some(idx) = compact.find(sep) {
+            return compact[..idx + 1].to_string();
+        }
+    }
+    compact.chars().take(260).collect()
+}
+
+fn plain_why_acceptance_lines(description: &str) -> Vec<String> {
+    let mut in_acceptance = false;
+    let mut out = Vec::new();
+    for line in description.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("## ") && in_acceptance {
+            break;
+        }
+        if trimmed.eq_ignore_ascii_case("Acceptance:")
+            || trimmed.eq_ignore_ascii_case("## Acceptance")
+            || trimmed.eq_ignore_ascii_case("### Acceptance")
+        {
+            in_acceptance = true;
+            continue;
+        }
+        if in_acceptance {
+            let item = trimmed
+                .trim_start_matches("- ")
+                .trim_start_matches("* ")
+                .trim();
+            if !item.is_empty() {
+                out.push(item.to_string());
+            }
+        }
+    }
+    out
+}
+
+fn plain_why_neighbors(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::Requirement,
+) -> Vec<String> {
+    let mut rows = Vec::new();
+    for rel in &req.relationships {
+        if let Some(target) = store.requirements.iter().find(|r| r.id == rel.target_id) {
+            let rel_label = match rel.rel_type {
+                aida_core::RelationshipType::Child => "child of".to_string(),
+                aida_core::RelationshipType::Parent => "parent of".to_string(),
+                _ => rel.rel_type.to_string(),
+            };
+            rows.push(format!(
+                "{}: {} — {} ({:?})",
+                rel_label,
+                target.display_id(),
+                target.title,
+                target.status
+            ));
+        }
+    }
+    rows.sort();
+    rows.dedup();
+    rows
+}
+
+fn plain_why_linked_adrs(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::Requirement,
+) -> Vec<String> {
+    req.relationships
+        .iter()
+        .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
+        .filter(|target| {
+            let id = target.display_id();
+            id.starts_with("ADR-")
+                || matches!(target.req_type, aida_core::RequirementType::Decision)
+        })
+        .map(|target| format!("{} — {}", target.display_id(), target.title))
+        .collect()
+}
+
+fn render_plain_why(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::Requirement,
+    disp: &str,
+    generated_at: &str,
+) -> String {
+    let source_modified_at = req.modified_at.to_rfc3339();
+    let status = format!("{:?}", req.status);
+    let summary = plain_why_first_sentence(&req.description);
+    let acceptance = plain_why_acceptance_lines(&req.description);
+    let neighbors = plain_why_neighbors(store, req);
+    let adrs = plain_why_linked_adrs(store, req);
+    let first_acceptance = acceptance
+        .first()
+        .map(|s| s.trim_end_matches(['.', '!', '?']).to_string())
+        .unwrap_or_else(|| "the behavior described by the spec works end to end".to_string());
+
+    let mut out = String::new();
+    out.push_str(&format!(
+        "{PLAIN_WHY_CACHE_PREFIX} spec=\"{disp}\" source_modified_at=\"{source_modified_at}\" generated_at=\"{generated_at}\" -->\n"
+    ));
+    out.push_str(&format!("# Plain-English Why: {disp}\n\n"));
+    out.push_str(&format!("## Rationale\n\n{summary}\n\n"));
+    out.push_str(
+        "In plain terms: this work exists so someone can understand the reason for the spec without first knowing AIDA's internal vocabulary. ",
+    );
+    out.push_str("It keeps the formal spec unchanged, then adds a separate explanation layer that a human can ask for when the terse contract is not enough.\n\n");
+    out.push_str("## Jargon In Plain English\n\n");
+    out.push_str("- Spec: the tracked requirement or work item.\n");
+    out.push_str("- Graph context: the nearby parent, child, blocker, and reference links that explain how this work fits with other work.\n");
+    out.push_str("- Cache: a saved copy that is reused until the spec changes.\n");
+    out.push_str("- Surplus context: useful background that is available on demand but not loaded into every agent prompt by default.\n\n");
+    out.push_str("## Concrete Novice Example\n\n");
+    out.push_str(&format!(
+        "Imagine a new contributor runs `aida why {disp} --plain` before touching code. They should learn that the current goal is: {first_acceptance}. They can then inspect the linked context below, make the change, and know that this explanatory note will be reused until the spec is edited again.\n\n"
+    ));
+    out.push_str("## Spec Snapshot\n\n");
+    out.push_str(&format!("- Title: {}\n", req.title));
+    out.push_str(&format!("- Status: {status}\n"));
+    out.push_str(&format!("- Type: {:?}\n", req.req_type));
+    out.push_str(&format!("- Source modified_at: {source_modified_at}\n\n"));
+
+    if !acceptance.is_empty() {
+        out.push_str("## Acceptance In Everyday Words\n\n");
+        for item in acceptance.iter().take(6) {
+            out.push_str(&format!("- {item}\n"));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Graph Context\n\n");
+    if neighbors.is_empty() {
+        out.push_str("- No immediate relationships are recorded on this spec.\n\n");
+    } else {
+        for row in neighbors {
+            out.push_str(&format!("- {row}\n"));
+        }
+        out.push('\n');
+    }
+
+    out.push_str("## Linked Decisions\n\n");
+    if adrs.is_empty() {
+        out.push_str("- No linked ADR/decision records were found in the immediate graph.\n");
+    } else {
+        for adr in adrs {
+            out.push_str(&format!("- {adr}\n"));
+        }
+    }
+    out
+}
+
+fn handle_why_plain(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::Requirement,
+    disp: &str,
+    json: bool,
+) -> Result<()> {
+    let cache_path = plain_why_cache_path(project_root, disp);
+    let source_modified_at = req.modified_at.to_rfc3339();
+    let cached = std::fs::read_to_string(&cache_path).ok();
+    let (body, cache_status) = match cached {
+        Some(raw) if plain_why_cache_is_fresh(&raw, &source_modified_at) => (raw, "hit"),
+        _ => {
+            let generated_at = chrono::Utc::now().to_rfc3339();
+            let body = render_plain_why(store, req, disp, &generated_at);
+            if let Some(parent) = cache_path.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("creating {}", parent.display()))?;
+            }
+            std::fs::write(&cache_path, &body)
+                .with_context(|| format!("writing {}", cache_path.display()))?;
+            (body, "regenerated")
+        }
+    };
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "spec": disp,
+                "plain_artifact": cache_path,
+                "cache": cache_status,
+                "source_modified_at": source_modified_at,
+                "content": body,
+            }))?
+        );
+    } else {
+        println!("{body}");
+        println!();
+        println!(
+            "Plain layer: {} ({cache_status}; separate surplus artifact)",
+            cache_path.display()
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod why_plain_tests {
+    use super::*;
+
+    fn sample_req() -> aida_core::Requirement {
+        let mut req = aida_core::Requirement::new(
+            "Plain why".to_string(),
+            "Make specs easier to understand.\n\nAcceptance:\n- Print a plain rationale.\n- Cache separately.".to_string(),
+        );
+        req.agreed_id = Some("STORY-1158".to_string());
+        req
+    }
+
+    #[test]
+    fn plain_cache_key_uses_source_modified_at() {
+        let req = sample_req();
+        let ts = req.modified_at.to_rfc3339();
+        let raw = format!(
+            "<!-- aida-plain spec=\"STORY-1158\" source_modified_at=\"{ts}\" generated_at=\"now\" -->\nbody"
+        );
+        assert!(plain_why_cache_is_fresh(&raw, &ts));
+        assert!(!plain_why_cache_is_fresh(&raw, "2026-01-01T00:00:00+00:00"));
+    }
+
+    #[test]
+    fn plain_render_is_separate_markdown_with_example() {
+        let req = sample_req();
+        let mut store = aida_core::RequirementsStore::new();
+        store.requirements.push(req.clone());
+        let body = render_plain_why(&store, &req, "STORY-1158", "2026-09-15T00:00:00Z");
+        assert!(body.contains("Plain-English Why: STORY-1158"));
+        assert!(body.contains("Concrete Novice Example"));
+        assert!(body.contains("Print a plain rationale"));
+        assert!(body.contains("source_modified_at="));
+    }
 }
 
 // BUG-677: `SpecLiveness` + `classify_spec_liveness` (the operator's "is a LIVE
