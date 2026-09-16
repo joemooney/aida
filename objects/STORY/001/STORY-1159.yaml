@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T02:09:21.637021687Z
-modified_at: 2026-09-16T02:09:21.637021687Z
+modified_at: 2026-09-16T02:09:43.012494591Z
 req_type: Story
 tags:
 - accessibility plain-english conversation parent:EPIC-67 aida:why
@@ -16,3 +16,6 @@ relationships:
 - rel_type: Child
   target_id: 01a0a7f8-cbb1-77c1-9387-cfe0540e5139
   created_at: 2026-09-16T02:09:24.352988321Z
+deferred: true
+deferred_at: 2026-09-16T02:09:43.012494591Z
+deferred_until: one-shot --plain (STORY-1158) explanations prove insufficient
