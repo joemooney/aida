@@ -3,12 +3,12 @@ spec_id: STORY-1163
 agreed_id: STORY-1163
 title: 'GitLab Slice 0: wire the forge dispatcher into the central CI/PR helpers (GitHub-neutral)'
 description: 'Make the gh-hardcoded central helpers forge-aware. resolve_forge_cli (lib.rs:34356) exists but is dead_code, 0 call sites. Route probe_ci_state_for_branch (lib.rs:32140), detect_open_pr_*/gh_pr_list_first, watch_ci_for_context through resolve_forge_cli + the Forge trait instead of hardcoding resolve_gh_binary. Proposed mode: drive. Acceptance: the central helpers dispatch via ForgeKind; GitHub behaviour is byte-identical (existing tests green, no gh-output regressions); resolve_forge_cli has real call sites; a GitLab repo routes these helpers to glab. No new gh spawns added.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:25.906345424Z
-modified_at: 2026-09-16T06:14:59.252133251Z
+modified_at: 2026-09-16T06:16:11.756977559Z
 req_type: Story
 tags:
 - forge gitlab wiring slice-0 parent:EPIC-68 aida:forge
