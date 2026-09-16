@@ -10,12 +10,12 @@ description: |-
   - immediate aida queue next also printed BUG-1174 as the next implementer item, despite status Done.
 
   Expected: either completed queue items are actually removed from queue projections, or the success copy/readback clearly explains that terminal entries remain visible until a cleanup step.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T16:44:43.547306636Z
-modified_at: 2026-09-16T17:23:10.332125468Z
+modified_at: 2026-09-16T17:28:46.508134171Z
 req_type: Task
 tags:
 - aida:queue
@@ -25,3 +25,7 @@ tags:
 - kind:observation
 - linked:BUG-1174
 - severity:minor
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-16T17:28:46.508134171Z
+  implemented_by: joe
