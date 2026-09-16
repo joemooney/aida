@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-16T23:40:07.084844203Z
+modified_at: 2026-09-16T23:55:46.598171192Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
@@ -62,5 +62,11 @@ comments:
     Closes the three concurrent-merge harms: (a) supervision-hold bypass (BUG-1167), (b) union-build breakage (per-PR green != combined main), (c) merge computed against stale main.
   created_at: 2026-09-16T15:36:58.349015278Z
   modified_at: 2026-09-16T15:36:58.349015278Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0aca5-de26-7a01-b6ce-b53230416579
+  author: joe
+  content: Commit 5b5734b68 references this requirement
+  created_at: 2026-09-16T23:55:46.598171192Z
+  modified_at: 2026-09-16T23:55:46.598171192Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
