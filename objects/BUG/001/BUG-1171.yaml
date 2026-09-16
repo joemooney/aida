@@ -27,11 +27,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:23:14.628042243Z
-modified_at: 2026-09-16T15:54:24.803563745Z
+modified_at: 2026-09-16T15:59:39.566823277Z
 req_type: Bug
 tags:
 - aida:statusline
 - papercut
 - statusline
 - ux
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a0aaf1-dfec-75c1-a38d-59e1df4071ec
+  created_at: 2026-09-16T15:59:39.566818007Z
+  created_by: joe
 execution_mode: drain
