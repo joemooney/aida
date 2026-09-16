@@ -69383,5 +69383,31 @@ operations:
   timestamp: 2026-09-16T01:19:55.750897267Z
   kind: !SetStatus
     status: Approved
-clock: 5433
+- id: 01a0a7db-0a4e-7392-8244-83bf4811aba1
+  target_id: 01a0a7db-066b-7713-a244-f4c96f78f1e9
+  author: aida
+  node_id: '1'
+  lamport: 5434
+  timestamp: 2026-09-16T01:35:45.230447028Z
+  kind: !Create
+    title: 'Review PR-1851: [AI:codex] test(init): harden post-init hook fixture (BUG-1165)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0a7cd`) for branch `bug-1165`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1851>
+      - Branch: `bug-1165` → `main`
+
+      ## Covers
+
+      - BUG-1165
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1851` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5434
 node_id: '1'
