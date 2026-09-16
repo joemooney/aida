@@ -4544,7 +4544,16 @@ pub(crate) fn handle_queue_command(
                     }
                 }
             })?;
-            storage.queue_remove(&user_id, &req_id)?;
+            let done_remove_role = std::env::var("AIDA_SESSION_ROLE")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| canonical_role_name(&s));
+            queue_role_fallback::remove_visible_queue_entry(
+                storage,
+                &user_id,
+                &req_id,
+                done_remove_role.as_deref(),
+            )?;
             // BUG-65: queue done bypasses Command::Edit (sets status via
             // update_atomically directly), so the role activity log used
             // to miss it entirely — leaving statusline @SPEC stuck on the
@@ -6665,6 +6674,21 @@ pub(crate) fn leased_implementer_queue_head(
         .requirements
         .iter()
         .find(|r| spec_matches(r, &lease.scope))?;
+    // A lease can outlive the moment `queue done` flips the spec to Done. Do
+    // not synthesize that finished scope as the next fresh assignment.
+    // trace:TASK-1-136 | ai:codex
+    if req.archived
+        || req.deferred
+        || matches!(
+            req.status,
+            RequirementStatus::Done
+                | RequirementStatus::Completed
+                | RequirementStatus::Rejected
+                | RequirementStatus::Superseded
+        )
+    {
+        return None;
+    }
     if let Some(entry) = entries.iter().find(|e| e.requirement_id == req.id) {
         return Some(entry.clone());
     }

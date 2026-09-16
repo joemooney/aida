@@ -20,7 +20,7 @@
 // trace:BUG-89 (stored keys untouched) trace:TASK-951 (canonical_user_id fold)
 
 use aida_core::node::canonical_user_id;
-use aida_core::QueueEntry;
+use aida_core::{QueueEntry, Storage};
 use anyhow::Result;
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -274,6 +274,30 @@ pub(crate) fn queued_by_other_users<S: QueueFiles + ?Sized>(
     });
     out.dedup();
     out
+}
+
+/// Remove the queue row the active role-fallback view would surface for this
+/// spec.
+///
+/// `queue done` can operate on work routed by a coordinator into a role queue
+/// owned by a different queue identity. Reading already widens through
+/// `queue_list_with_role_fallback`; completion must remove from the same owner,
+/// or the just-finished item remains visible on the next poll.
+// trace:TASK-1-136 | ai:codex
+pub(crate) fn remove_visible_queue_entry(
+    storage: &Storage,
+    user_id: &str,
+    requirement_id: &Uuid,
+    role: Option<&str>,
+) -> Result<()> {
+    let entries =
+        queue_list_with_role_fallback(storage, user_id, role, /* include_completed */ true)?;
+    let Some(entry) = entries.iter().find(|e| e.requirement_id == *requirement_id) else {
+        // Preserve the old idempotent behavior: completing an already-dequeued
+        // spec should not fail just because no queue row remains.
+        return storage.queue_remove(user_id, requirement_id);
+    };
+    storage.queue_remove_for_role(&entry.user_id, requirement_id, entry.for_role.as_deref())
 }
 
 /// Build the honest "it's queued, just not in YOUR file" diagnostic.

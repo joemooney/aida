@@ -247,6 +247,47 @@ fn queue_work_resolves_a_peer_routed_entry() {
     assert_eq!(plan.entries[0].spec_id, "TASK-7746");
 }
 
+/// TASK-1-136: completing a role-routed item from the role holder's session must
+/// remove the row from the queue identity that owns it, not just from the local
+/// shell user's empty queue file.
+#[test]
+fn remove_visible_queue_entry_dequeues_peer_routed_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let spec = seed_spec(&root, "TASK-1136");
+    let storage = Storage::new(&root);
+    storage
+        .queue_add(entry_for(
+            "role:implementer",
+            spec,
+            Some("implementer"),
+            1000,
+        ))
+        .unwrap();
+
+    queue_role_fallback::remove_visible_queue_entry(&storage, "joe", &spec, Some("implementer"))
+        .unwrap();
+
+    assert!(
+        storage
+            .queue_list("role:implementer", true)
+            .unwrap()
+            .is_empty(),
+        "completion must remove the foreign routed row"
+    );
+    assert!(
+        queue_role_fallback::queue_list_with_role_fallback(
+            &storage,
+            "joe",
+            Some("implementer"),
+            true,
+        )
+        .unwrap()
+        .is_empty(),
+        "the role-fallback readback must no longer surface the completed item"
+    );
+}
+
 /// The secondary bug: when a spec is queued by SOMEONE ELSE, say so — don't
 /// blame a lost lease. Here the caller wears a different role, so the fallback
 /// doesn't surface it and we fall through to the diagnostic.
