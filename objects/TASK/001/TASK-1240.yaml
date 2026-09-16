@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:54.920152672Z
-modified_at: 2026-09-16T07:36:12.035962377Z
+modified_at: 2026-09-16T07:36:17.316347895Z
 req_type: Task
 tags:
 - forge gitlab wording slice-4 parent:EPIC-68 aida:forge
@@ -34,6 +34,12 @@ comments:
   content: 'Reviewer RequestChanges (PR #1863): pr_cmd.rs:98 still prints hardcoded gh pr create and aida queue work PR-N --role reviewer in the deliberate-hold recovery hint. Derive that message from ForgeKind so GitLab sessions show glab mr create and MR-N vocabulary. Re-drive with this targeted fix.'
   created_at: 2026-09-16T07:31:35.284974342Z
   modified_at: 2026-09-16T07:31:35.284974342Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a0a925-1ea4-7981-a3e0-ab2513f977c8
+  author: joe
+  content: Commit 56b6e3ff9 references this requirement
+  created_at: 2026-09-16T07:36:17.316347895Z
+  modified_at: 2026-09-16T07:36:17.316347895Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drain
 implementation_info:
