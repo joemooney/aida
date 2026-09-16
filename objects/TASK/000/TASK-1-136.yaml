@@ -15,7 +15,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T16:44:43.547306636Z
-modified_at: 2026-09-16T17:28:49.104984402Z
+modified_at: 2026-09-16T17:28:51.975432197Z
 req_type: Task
 tags:
 - aida:queue
@@ -27,6 +27,11 @@ tags:
 - severity:minor
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo test -p aida-cli-lib bug_774_queue_role_fallback_tests -- --nocapture
+    cargo test -p aida-cli-lib leased_implementer_head -- --nocapture
+    cargo test -p aida-cli-lib queue_done -- --nocapture
+    cargo fmt --all -- --check
   implemented_at: 2026-09-16T17:28:46.508134171Z
   implemented_by: joe
 interface_changes: {}
