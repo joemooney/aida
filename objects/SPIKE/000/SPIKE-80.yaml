@@ -1,0 +1,22 @@
+id: 01a0a895-1c24-7d83-abc5-90d4e3fcba86
+spec_id: SPIKE-80
+agreed_id: SPIKE-80
+title: GitLab as a first-class forge, at parity with GitHub
+description: |-
+  Operator (2026-09-15): make GitLab first-class like GitHub. Research spike to scope it.
+
+  AIDA is coupled to GitHub via the `gh` CLI. There is a forge abstraction (aida-cli-lib/src/forge.rs — a Forge trait + a GhForge impl that shells gh), but EPIC-35 is 'PLUMBED not WIRED' — ~113 direct gh call sites still bypass the trait. There's an existing GitLab integration module (aida-core/src/integrations/gitlab/) and multi-hub/gitlab-mirror support. Tonight's merge-hold-gate (BUG-1167 Layer 2) is a GitHub-Actions required check — GitLab needs a CI equivalent.
+
+  Research (agent-assisted, findings to be folded in): (1) the Forge trait as-is + whether any GitLab impl exists; (2) the coupling map — count + subsystems of direct-gh sites; (3) existing GitLab code inventory; (4) the GitHub->GitLab concept mapping (PR<->MR, merge, labels, required-status-check/branch-protection, CI status, reviews) with the hard parts; (5) glab CLI vs GitLab REST API for the impl; (6) a staged slice plan (smallest-first: forge auto-detect + a GitLab impl of the core trait methods, routing the highest-traffic gh sites through the trait) + risks.
+
+  Outcome: a slice plan + an EPIC with sized stories, or a decision on effort/sequencing. NOT a green-light to implement — scope first.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T04:58:59.492289939Z
+modified_at: 2026-09-16T04:58:59.492289939Z
+req_type: Spike
+tags:
+- forge gitlab github parity research epic-35 aida:forge
+human_only: true
