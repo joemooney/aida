@@ -13,6 +13,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 /// Result of a git command execution.
 #[derive(Debug)]
@@ -140,9 +141,10 @@ pub fn init(path: &Path) -> Result<()> {
 
 /// Stage specific files.
 pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
+    ensure_index_lock_clear_for_write(repo, 10, 100)?;
     let mut args = vec!["add"];
     args.extend(paths);
-    let result = git(repo, &args)?;
+    let result = git_with_index_lock_retry(repo, &args)?;
     if !result.success {
         anyhow::bail!("git add failed: {}", result.stderr);
     }
@@ -151,11 +153,39 @@ pub fn add(repo: &Path, paths: &[&str]) -> Result<()> {
 
 /// Stage all changes (tracked and untracked) in a subdirectory.
 pub fn add_all(repo: &Path, subdir: &str) -> Result<()> {
-    let result = git(repo, &["add", "-A", subdir])?;
+    ensure_index_lock_clear_for_write(repo, 10, 100)?;
+    let result = git_with_index_lock_retry(repo, &["add", "-A", subdir])?;
     if !result.success {
         anyhow::bail!("git add -A {} failed: {}", subdir, result.stderr);
     }
     Ok(())
+}
+
+// Store writes are often unattended drain steps. A leftover per-worktree
+// `index.lock` from a crashed or collided writer should not wedge every later
+// spec in the drain. trace:BUG-1164 | ai:codex
+fn git_with_index_lock_retry(repo: &Path, args: &[&str]) -> Result<GitResult> {
+    let mut result = git(repo, args)?;
+    if result.success || !looks_like_index_lock_failure(&result.stderr) {
+        return Ok(result);
+    }
+
+    for _ in 0..5 {
+        ensure_index_lock_clear_for_write(repo, 5, 100)?;
+        std::thread::sleep(Duration::from_millis(100));
+        result = git(repo, args)?;
+        if result.success || !looks_like_index_lock_failure(&result.stderr) {
+            break;
+        }
+    }
+    Ok(result)
+}
+
+fn looks_like_index_lock_failure(stderr: &str) -> bool {
+    stderr.contains("index.lock")
+        && (stderr.contains("File exists")
+            || stderr.contains("Unable to create")
+            || stderr.contains("Another git process seems to be running"))
 }
 
 /// TASK-1122: the `-c` overrides that AUTHOR a store commit with the public
@@ -920,21 +950,30 @@ pub fn has_changes(repo: &Path) -> Result<bool> {
 /// gate on its own; `git pull` itself remains the source of truth.
 // trace:BUG-691 | ai:claude
 pub fn index_lock_present(repo: &Path) -> bool {
+    index_lock_path(repo).is_some_and(|path| path.exists())
+}
+
+/// Resolve the actual per-worktree index lock path for `repo`.
+///
+/// A linked worktree's lock is not `<worktree>/.git/index.lock`; git stores it
+/// under the common dir (`.git/worktrees/<name>/index.lock`). Resolving through
+/// git keeps cleanup aimed at the same file git itself will try to create.
+// trace:BUG-1164 | ai:codex
+pub fn index_lock_path(repo: &Path) -> Option<PathBuf> {
     let result = match git(repo, &["rev-parse", "--git-path", "index.lock"]) {
         Ok(r) if r.success => r,
-        _ => return false,
+        _ => return None,
     };
     let rel = result.stdout.trim();
     if rel.is_empty() {
-        return false;
+        return None;
     }
     let path = Path::new(rel);
-    let full = if path.is_absolute() {
+    Some(if path.is_absolute() {
         path.to_path_buf()
     } else {
         repo.join(path)
-    };
-    full.exists()
+    })
 }
 
 /// Wait briefly for a transiently-held `.git/index.lock` to clear.
@@ -957,6 +996,101 @@ pub fn wait_for_index_lock_clear(repo: &Path, attempts: u32, interval_ms: u64) -
         }
     }
     !index_lock_present(repo)
+}
+
+/// Wait for a transient git index lock, then clear it if no live git process
+/// appears to own this store worktree.
+///
+/// Git's index lock file does not carry an owner PID, so this is intentionally
+/// conservative: we give active writers a short grace period, then probe the
+/// process table for live `git` commands whose cwd or argv points at `repo` or
+/// the resolved lock path. Only when no owner is visible do we remove the lock.
+// trace:BUG-1164 | ai:codex
+pub fn ensure_index_lock_clear_for_write(
+    repo: &Path,
+    attempts: u32,
+    interval_ms: u64,
+) -> Result<bool> {
+    let Some(lock_path) = index_lock_path(repo) else {
+        return Ok(true);
+    };
+    let attempts = attempts.max(1);
+    for i in 0..attempts {
+        if !lock_path.exists() {
+            return Ok(true);
+        }
+        if i + 1 < attempts {
+            std::thread::sleep(Duration::from_millis(interval_ms));
+        }
+    }
+    if !lock_path.exists() {
+        return Ok(true);
+    }
+    if git_process_likely_owns_index_lock(repo, &lock_path) {
+        return Ok(false);
+    }
+    match std::fs::remove_file(&lock_path) {
+        Ok(()) => Ok(true),
+        Err(e) if !lock_path.exists() => Ok(true),
+        Err(e) => Err(e).with_context(|| {
+            format!(
+                "remove stale git index lock {} for {}",
+                lock_path.display(),
+                repo.display()
+            )
+        }),
+    }
+}
+
+#[cfg(feature = "native")]
+fn git_process_likely_owns_index_lock(repo: &Path, lock_path: &Path) -> bool {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, System};
+
+    let repo = repo.canonicalize().unwrap_or_else(|_| repo.to_path_buf());
+    let lock_path = lock_path
+        .canonicalize()
+        .unwrap_or_else(|_| lock_path.to_path_buf());
+    let repo_s = repo.to_string_lossy();
+    let lock_s = lock_path.to_string_lossy();
+    let Some(store_name) = repo.file_name().and_then(|s| s.to_str()) else {
+        return false;
+    };
+
+    let sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(
+            ProcessRefreshKind::new()
+                .with_cwd(sysinfo::UpdateKind::Always)
+                .with_cmd(sysinfo::UpdateKind::Always),
+        ),
+    );
+    for proc in sys.processes().values() {
+        if proc.thread_kind().is_some() {
+            continue;
+        }
+        let name = proc.name().to_ascii_lowercase();
+        let cmd = proc.cmd().join(" ");
+        if !name.contains("git") && !cmd.contains("git") {
+            continue;
+        }
+        if proc.cwd().is_some_and(|cwd| {
+            let cwd = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+            cwd == repo || cwd.starts_with(&repo)
+        }) {
+            return true;
+        }
+        if cmd.contains(repo_s.as_ref())
+            || cmd.contains(lock_s.as_ref())
+            || cmd.contains(store_name)
+        {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(not(feature = "native"))]
+fn git_process_likely_owns_index_lock(_repo: &Path, _lock_path: &Path) -> bool {
+    true
 }
 
 /// The commit SHA at the top of the stash stack (`refs/stash`), if any.
@@ -3531,6 +3665,90 @@ mod tests {
         std::fs::remove_file(repo.join(".git/index.lock")).unwrap();
         assert!(!index_lock_present(&repo));
         assert!(wait_for_index_lock_clear(&repo, 3, 5));
+    }
+
+    // BUG-1164: unattended drains must recover from an abandoned store
+    // `index.lock` before staging, instead of failing every later spec.
+    // trace:BUG-1164 | ai:codex
+    #[test]
+    fn test_stale_index_lock_is_removed_before_store_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("f.txt"), "initial").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+
+        let lock = index_lock_path(&repo).expect("lock path");
+        std::fs::write(&lock, "").unwrap();
+        assert!(lock.exists());
+
+        assert!(ensure_index_lock_clear_for_write(&repo, 1, 1).unwrap());
+        assert!(!lock.exists(), "stale lock should be cleared");
+    }
+
+    // BUG-1164: the `git add` wrapper itself performs the stale-lock recovery,
+    // so all callers using the shared helper inherit the drain resilience.
+    // trace:BUG-1164 | ai:codex
+    #[test]
+    fn test_add_recovers_abandoned_index_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("test-repo");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("f.txt"), "initial").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+
+        std::fs::write(repo.join("f.txt"), "changed").unwrap();
+        let lock = index_lock_path(&repo).expect("lock path");
+        std::fs::write(&lock, "").unwrap();
+
+        add(&repo, &["f.txt"]).unwrap();
+        assert!(!lock.exists(), "add should remove abandoned lock");
+        commit(&repo, "changed").unwrap();
+        assert!(!has_changes(&repo).unwrap());
+    }
+
+    // BUG-1164: linked worktree locks live under the common git dir
+    // (`.git/worktrees/<name>/index.lock`), which is exactly where the
+    // distributed `.aida-store` worktree can wedge.
+    // trace:BUG-1164 | ai:codex
+    #[test]
+    fn test_add_recovers_linked_worktree_index_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("main");
+        let linked = dir.path().join("linked-store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test User", "test@example.com").unwrap();
+        std::fs::write(repo.join("f.txt"), "initial").unwrap();
+        add(&repo, &["f.txt"]).unwrap();
+        commit(&repo, "initial").unwrap();
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "linked-store",
+                linked.to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+
+        let lock = index_lock_path(&linked).expect("linked lock path");
+        assert!(
+            !lock.starts_with(&linked),
+            "linked worktree lock should resolve through the common git dir"
+        );
+        std::fs::write(linked.join("f.txt"), "changed").unwrap();
+        std::fs::write(&lock, "").unwrap();
+
+        add(&linked, &["f.txt"]).unwrap();
+        assert!(!lock.exists(), "linked stale lock should be cleared");
+        commit(&linked, "changed").unwrap();
+        assert!(!has_changes(&linked).unwrap());
     }
 
     // BUG-691: a simulated update failure that stranded an autostash must be

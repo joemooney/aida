@@ -333,11 +333,9 @@ impl GitBackend {
         for p in paths {
             // `git add -A <path>` so a removed file is staged as a deletion
             // (plain `git add` only handles add/modify).
-            let _ = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&self.root)
-                .args(["add", "-A", p])
-                .output();
+            // Route through the shared git helper so targeted store writes get
+            // the same stale-index-lock recovery as bulk saves. trace:BUG-1164 | ai:codex
+            let _ = crate::git_ops::add_all(&self.root, p);
         }
         // Always include oplog.yaml when present — every targeted op records
         // an op and we want it captured in the same commit.
