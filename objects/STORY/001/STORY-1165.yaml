@@ -3,12 +3,12 @@ spec_id: STORY-1165
 agreed_id: STORY-1165
 title: 'GitLab Slice 2: GitLab CI merge-hold gate (.gitlab-ci.yml) + init scaffold + forge-route the label apply'
 description: 'The Layer-2 analog of BUG-1167''s merge-hold-gate.yml, for GitLab. Add a .gitlab-ci.yml job that inspects $CI_MERGE_REQUEST_LABELS and FAILS while aida:merge-hold is present; document the GitLab merge-check / approval-rule to make it un-bypassable. Scaffold a starter .gitlab-ci.yml at aida init for GitLab projects (init only scaffolds GitHub Actions today). Forge-route merge_hold::sync_label (merge_hold.rs gh pr edit --add-label) to glab mr update --label. Proposed mode: guided (net-new, security-adjacent, needs live validation vs a GitLab pipeline). Acceptance: a labelled MR''s pipeline fails the gate + can''t merge; an unlabelled MR passes; the label apply works on GitLab; init scaffolds the job for GitLab repos. Validate live on gitlab.joemooney.com.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:40.966184989Z
-modified_at: 2026-09-16T06:14:58.602359888Z
+modified_at: 2026-09-16T17:51:12.562541724Z
 req_type: Story
 tags:
 - forge gitlab ci merge-hold slice-2 parent:EPIC-68 aida:forge security
@@ -24,4 +24,22 @@ relationships:
   target_id: 01a0a8cc-71d2-77d2-9148-cb16b0ff82c2
   created_at: 2026-09-16T06:14:58.602354217Z
   created_by: joe
+history:
+- id: 01a0ab58-18ac-7a82-a78e-6f3edddc23af
+  author: aida-auto-bump
+  timestamp: 2026-09-16T17:51:12.556160675Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0ab58-18b2-7630-9caf-a3a195b2b895
+  timestamp: 2026-09-16T17:51:12.562541008Z
+  agent: aida
+  commit_sha: 773de2cfe55411e1f5b59b8873d8f5b70761afd5
+  summary: Completed via merge 773de2cf
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-16T17:51:12.556026831Z
+  completion_sha: 773de2cfe55411e1f5b59b8873d8f5b70761afd5
