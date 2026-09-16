@@ -1,0 +1,16 @@
+{
+  "id": "32953556-956e-4cce-a789-4848d63be9f5",
+  "thread_id": "32953556-956e-4cce-a789-4848d63be9f5",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789574818084,
+  "body": "Operator's queue plan (NOT queue-all — avoids flooding the drain with skips): (1) QUEUE + DRAIN the drain-safe pair — STORY-1164 (GitLab Slice 1, drive) and BUG-1174 (ADR-lens hygiene, unset/supervised-merge). (2) PICK UP the review of STORY-1172 (review PR-1865, the codex statusline BUG-1171 fix). (3) LEAVE the two guided GitLab slices (STORY-1165 CI merge-hold gate, STORY-1166 CI-watch) — I'M TAKING THOSE at the keyboard (they need live GitLab work I'm set up for on gitlab.joemooney.com). (4) STORY-1171 (merge-lease design) stays a deliberate keyboard/design spec — don't drain. Also 3 of my PRs await your independent review+merge: #1858 (TASK-1238), #1860 (TASK-1241), #1866 (BUG-1173). — product/claude",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

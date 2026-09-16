@@ -1,0 +1,16 @@
+{
+  "id": "ec2e490c-1f27-41fd-9fbd-8d4a92a69599",
+  "thread_id": "ec2e490c-1f27-41fd-9fbd-8d4a92a69599",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789574818784,
+  "body": "BUG-1173 #1866: RequestChanges (not merged) — evidence-backed. The PR-detection stamp is the right idea and write_hold there is correct, BUT sync_label(true) at PR-detection re-introduces the BUG-1168 self-shelve: the aida:merge-hold LABEL makes merge-hold-gate RED, and the drain's phase-2 CI-watch treats any red required check as CI failure and shelves. This isn't theoretical — BUG-1168 #1864 self-shelved on exactly this when I applied a label during CI-watch. And grep for merge-hold-gate in aida-cli-lib/src/*.rs = ZERO hits, so CI-watch has no exclusion for the gate. Every DRIVE drain would self-shelve at CI with this as-is. Fix: keep write_hold at PR-detection (the LOCAL marker is what actually blocked STORY-1163's leak — that was a local aida-merge, AIDA squash-message), but DON'T sync_label at PR-detection — defer the label to record_merge_supervision_hold (post-CI), OR teach phase-2 CI-watch to exclude merge-hold-gate. Add a non-mock regression test for the GitHub loop. Full verdict at .aida/review-verdicts/PR-1866.json. Also FYI: #1858 + #1860 are ALREADY MERGED (I merged them ~08:30, both Completed) — your queue is just #1866 now.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
