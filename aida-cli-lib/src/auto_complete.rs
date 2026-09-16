@@ -1208,6 +1208,13 @@ pub(crate) trait PhaseDriver {
     /// `merge: escalated-to-human` rather than auto-deciding the merge
     /// (STORY-306).
     fn run_reviewer(&mut self) -> Result<ReviewerOutcome, PhaseFailure>;
+    /// Optional selector-scoped agent gates that run after the built-in
+    /// reviewer and before merge. Default no-op keeps test drivers and
+    /// alternate drivers unchanged.
+    // trace:STORY-1155 | ai:codex
+    fn run_agent_gates(&mut self) -> Result<(), PhaseFailure> {
+        Ok(())
+    }
     /// Phase 4 — merge the PR.
     fn merge(&mut self) -> Result<(), PhaseFailure>;
     /// The supervised-merge hold — `Some(reason)` when the spec's
@@ -3624,6 +3631,12 @@ pub(crate) fn orchestrate_with_resume(
         durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
         emit_done(Phase::Reviewer, spec, json, start.elapsed().as_millis());
     }
+
+    if let Err(f) = driver.run_agent_gates() {
+        let f = failure_with_retry_attempt(driver, &f, 0);
+        return resolve_phase_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
+    }
+
     // Latent-defect guard (review finding): mirror the <=2/<=4/<=5 caps so a
     // future variant with last_phase()==3 (e.g. a "through-reviewer" mode)
     // stops here instead of falling through to merge. No current variant
