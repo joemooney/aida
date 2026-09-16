@@ -15,12 +15,12 @@ description: |-
   - on_fail=warn files a finding and continues.
   - A non-matching spec skips the gate; the gate's verdict is traceable to the spec.
   - The built-in phases are unchanged when no [pipeline.gate.*] is declared.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T02:08:50.943418830Z
-modified_at: 2026-09-16T02:49:53.133121114Z
+modified_at: 2026-09-16T03:02:18.024181580Z
 req_type: Story
 tags:
 - pipeline quality-gate agent-gate reviewer parent:EPIC-66 aida:pipeline
@@ -32,8 +32,25 @@ relationships:
   target_id: 01a0a81e-70ab-71e0-8da5-f05eef0a0c15
   created_at: 2026-09-16T02:49:27.669072663Z
   created_by: joe
+history:
+- id: 01a0a82a-46a1-7a12-97ba-e2a05153d106
+  author: aida-auto-bump
+  timestamp: 2026-09-16T03:02:18.017595938Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0a82a-46a8-7c53-b3e9-2904ea716735
+  timestamp: 2026-09-16T03:02:18.024179957Z
+  agent: aida
+  commit_sha: 39534859131cfb6467ef4cec5d83bfde6e239481
+  summary: 'STORY-1155 acceptance passes: selector-scoped agent gates parse, match type/tag selectors, run after the built-in reviewer and before merge, and CI/focused tests are green.'
+  review_verdict: approved
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-16T02:49:33.700798099Z
   implemented_by: joe
+  completed_at: 2026-09-16T03:02:18.017441533Z
+  completion_sha: 39534859131cfb6467ef4cec5d83bfde6e239481
