@@ -10,12 +10,12 @@ description: |-
   Correlation: verify-manual.py was last hardened by TASK-1207 (#1749, "harden the manual flag drift guard / attribute cited flags to the exact command path"). #1749 was docs-only → path-filtered → its own CI skipped this guard, so the broken hard-fail merged unseen. NOT asserting exact causation without a diff, but the timing + the "exact command path" attribution change are the prime suspects for the false positives.
 
   Fix options (needs advisor/operator call — it's a merge-guard): (a) fix the flag-resolution so valid flags resolve (real fix); (b) demote the flags-check from hard_fail to ADVISORY until (a) lands (immediate unblock, keeps completeness/spec-id/reflection hard checks); (c) revert TASK-1207's flags change. Recommend (b) now + (a) as follow-up. Until fixed, every full-CI PR is blocked.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T19:56:56.409754358Z
-modified_at: 2026-09-16T20:24:35.882217360Z
+modified_at: 2026-09-16T20:31:38.790810472Z
 req_type: Bug
 comments:
 - id: 01a0abe4-872a-70b2-973d-070871c0f73d
@@ -24,3 +24,21 @@ comments:
   created_at: 2026-09-16T20:24:35.882217360Z
   modified_at: 2026-09-16T20:24:35.882217360Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0abea-fb20-73b3-b2f0-cb5db0828221
+  author: aida-auto-bump
+  timestamp: 2026-09-16T20:31:38.784404774Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0abea-fb26-7551-9800-c60c01ab2bb5
+  timestamp: 2026-09-16T20:31:38.790809726Z
+  agent: aida
+  commit_sha: e55654bab4ce02b5dd35c975e937d407eb1df2df
+  summary: Completed via merge e55654ba
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-16T20:31:38.784252657Z
+  completion_sha: e55654bab4ce02b5dd35c975e937d407eb1df2df
