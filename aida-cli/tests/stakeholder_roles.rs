@@ -91,6 +91,32 @@ fn guest_refuses_write_commands() {
 }
 
 #[test]
+fn role_list_surfaces_stakeholder_personas_without_role_files() {
+    let (_base, repo, home) = init_repo();
+
+    let list = aida(&repo, &home)
+        .args(["role", "list"])
+        .output()
+        .expect("run role list");
+    assert!(
+        list.status.success(),
+        "role list failed:\nstdout={}\nstderr={}",
+        String::from_utf8_lossy(&list.stdout),
+        String::from_utf8_lossy(&list.stderr)
+    );
+    let out = String::from_utf8_lossy(&list.stdout);
+
+    // trace:TASK-1237 | ai:codex
+    assert!(out.contains("Stakeholder personas:"), "{out}");
+    assert!(out.contains("guest"), "{out}");
+    assert!(out.contains("requester"), "{out}");
+    assert!(out.contains("least-privilege"), "{out}");
+    assert!(out.contains("not a build seat"), "{out}");
+    assert!(out.contains("AIDA_SESSION_ROLE=guest"), "{out}");
+    assert!(out.contains("AIDA_SESSION_ROLE=requester"), "{out}");
+}
+
+#[test]
 fn companion_refuses_to_drive_a_drain_via_burndown_run() {
     // STORY-1133 (reviewer gap): a companion is a NON-authoritative instance of
     // a driver role — it may read/converse/draft/advise but must NEVER drive a
