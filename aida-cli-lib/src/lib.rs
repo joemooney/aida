@@ -84575,6 +84575,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
     }
 
+    // BUG-1168: a DRIVE/supervised execution-mode hold must publish the same
+    // fence as the merge-wave hold, otherwise concurrent merge paths see no
+    // `.aida/merge-holds/PR-N` marker and can merge before advisor review.
+    // trace:BUG-1168 | ai:codex
+    fn record_merge_supervision_hold(&mut self, reason: &str) {
+        if let Some(pr) = self.pr_number {
+            let pr = u64::from(pr);
+            let _ = crate::merge_hold::write_hold(&self.project_root, pr, reason);
+            crate::merge_hold::sync_label(&self.project_root, pr, true);
+        }
+    }
+
     fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Pull);
         let mut status = std::process::Command::new(self.aida_exe())
