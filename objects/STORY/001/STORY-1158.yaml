@@ -12,12 +12,12 @@ description: |-
   - The result is cached as a separate artifact linked to the spec; a second call with an unchanged spec serves the cache (no regeneration); a changed spec regenerates.
   - The spec's own description/acceptance is unchanged (verified: no write to spec text).
   - The plain layer does not enter an agent's default context (surplus), but is retrievable on demand.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T02:09:13.722208017Z
-modified_at: 2026-09-16T02:11:27.226359660Z
+modified_at: 2026-09-16T02:11:59.324080175Z
 req_type: Story
 tags:
 - accessibility plain-english why-plain doc parent:EPIC-67 aida:why
