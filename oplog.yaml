@@ -70059,5 +70059,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5477
+- id: 01a0a8cc-cb78-7bb2-86e3-e7c078104207
+  target_id: 01a0a8cc-c668-7f92-89f5-b28237d337ed
+  author: aida
+  node_id: '1'
+  lamport: 5478
+  timestamp: 2026-09-16T05:59:48.856114983Z
+  kind: !Create
+    title: 'GitLab Slice 3: abstract CI-watch + delegated-review check-runs behind the Forge trait'
+    description: 'The deepest gap — unblocks unattended --auto-complete on GitLab. Route wait_for_pr_checks_to_register / watch_ci_terminal through ci_probe_for_branch/watch_ci/stream_ci_for_branch (implemented on GitLabForge), and abstract the reviewer''s gh api .../check-runs severity tally behind a forge method (GitLab .../statuses has a different shape). Proposed mode: guided (deepest, drain-critical). Acceptance: a headless drain on a GitLab repo watches CI + tallies review verdicts via the trait, no direct gh; GitHub unchanged. Validate live. Depends on Slice 0/1.'
+    req_type: Story
+    status: Draft
+    priority: Medium
+clock: 5478
 node_id: '1'
