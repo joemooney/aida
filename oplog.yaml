@@ -69576,5 +69576,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5442
+- id: 01a0a7f9-74f4-7231-8971-50c898caef26
+  target_id: 01a0a7f9-6fad-7781-82ee-44967b0ad80e
+  author: aida
+  node_id: '1'
+  lamport: 5443
+  timestamp: 2026-09-16T02:08:58.612977748Z
+  kind: !Create
+    title: 'Command/script quality gates (semgrep, custom test scripts): a non-agent gate flavor'
+    description: 'Follow-up to EPIC-66 v1. Add kind=''command'' gates alongside agent gates: run a shell command, gate on exit code (or a verdict file), same selector + on_fail semantics. Covers non-agent scanners (semgrep, a compliance script, a custom test). Deferred until an operator needs a non-agent scanner or agent-gate v1 has shipped.'
+    req_type: Story
+    status: Draft
+    priority: Low
+clock: 5443
 node_id: '1'

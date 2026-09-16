@@ -1,0 +1,14 @@
+id: 01a0a7f9-6fad-7781-82ee-44967b0ad80e
+spec_id: STORY-1156
+agreed_id: STORY-1156
+title: 'Command/script quality gates (semgrep, custom test scripts): a non-agent gate flavor'
+description: 'Follow-up to EPIC-66 v1. Add kind=''command'' gates alongside agent gates: run a shell command, gate on exit code (or a verdict file), same selector + on_fail semantics. Covers non-agent scanners (semgrep, a compliance script, a custom test). Deferred until an operator needs a non-agent scanner or agent-gate v1 has shipped.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T02:08:57.261960639Z
+modified_at: 2026-09-16T02:08:57.261960639Z
+req_type: Story
+tags:
+- pipeline quality-gate command-gate parent:EPIC-66 aida:pipeline
