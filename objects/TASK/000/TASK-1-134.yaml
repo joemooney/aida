@@ -1,0 +1,27 @@
+id: 01a0a7ca-2227-7ba0-99e1-ec70ff5cf18b
+spec_id: TASK-1-134
+title: Contained agent-permission posture drifts back to full-access on its own (not writer-caused)
+description: |-
+  Observation (2026-09-15, verified during STORY-1128 functional test): a contained posture set by hand at ~00:50 had reverted to FULL ACCESS by ~18:12 with no explicit user action.
+
+  Evidence (pre-writer backup ~/.codex/config.toml.verify-bak):
+  - sandbox_mode flipped workspace-write → "danger-full-access" (nuclear)
+  - approval_policy = "never" SURVIVED (partial drift, not a wholesale reset)
+  - [sandbox_workspace_write] table (network_access + writable_roots) had VANISHED
+  - ~/.aida/agents.toml: [agents] bypass true / contained false, codex default_flags = ["--dangerously-bypass-approvals-and-sandbox"] (my contained flags gone)
+
+  Suspected causes (unconfirmed): (a) codex actively rewrites ~/.codex/config.toml (model migrations, trust_level, plugin state) and may reset sandbox_mode; (b) a scaffold-refresh / drain re-scaffolded ~/.aida/agents.toml to the template default (bypass=true); (c) the STORY-1124 contained-knob merge + rebuild. ~/.aida/agents.toml carries no scaffold marker in its head, so a marker-based refresh-overwrite is not obviously the cause. These are per-machine runtime files (not git-tracked), so no blame trail.
+
+  Why it matters: EPIC-65's contained posture is only useful if it STAYS. If codex (or a refresh) silently reverts it to full-access, a user believing they're sandboxed is not — the exact "substrate lies" failure. `aida config permissions set contained` re-applies correctly (verified), but a re-apply that gets clobbered again is whack-a-mole.
+
+  Promote to a bug (EPIC-65) on recurrence: if the posture drifts back to full-access again after a clean `set contained`, that confirms an active reverter and warrants a durability fix (e.g. detect+warn in `config permissions show`, or a periodic re-assert). trace:EPIC-65
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-16T01:17:17.223576217Z
+modified_at: 2026-09-16T01:17:17.223576217Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
