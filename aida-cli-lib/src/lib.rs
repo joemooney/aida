@@ -18661,10 +18661,16 @@ fn pick_role_with_header(
         })
         .collect();
 
-    let labels: Vec<String> = rows
+    let role_labels: Vec<String> = rows
         .iter()
         .map(|r| format_role_picker_option(r, picker_terminal_width()))
         .collect();
+    let role_names: Vec<String> = roles.iter().map(|r| r.name.clone()).collect();
+
+    // TASK-1239: append the stakeholder personas (guest/requester) as a
+    // separate, clearly-labeled sub-section — launchable, but visually distinct
+    // from and never mixed into the driver/build seats.
+    let (labels, targets) = assemble_role_picker_items(role_labels, &role_names, active.as_deref());
 
     let mut select = inquire::Select::new(header, labels).with_help_message(
         "Use arrow keys to move, type to filter, Enter to select, Esc to cancel",
@@ -18676,12 +18682,107 @@ fn pick_role_with_header(
 
     match select.raw_prompt() {
         // raw_prompt returns the picked ListOption, whose index maps straight
-        // back to the role list (labels are built in role order).
-        Ok(choice) => Ok(Some(roles[choice.index].name.clone())),
+        // back to the targets list (roles first, then the stakeholder section).
+        Ok(choice) => match targets.get(choice.index) {
+            Some(RolePickTarget::Role(name)) | Some(RolePickTarget::Persona(name)) => {
+                Ok(Some(name.clone()))
+            }
+            // The section heading is not a real selection → treat as cancel.
+            Some(RolePickTarget::Divider) | None => Ok(None),
+        },
         // Esc / Ctrl-C cancel → Ok(None), matching the old q/blank behavior.
         Err(inquire::InquireError::OperationCanceled)
         | Err(inquire::InquireError::OperationInterrupted) => Ok(None),
         Err(e) => Err(anyhow::anyhow!("role picker failed: {e}")),
+    }
+}
+
+/// TASK-1239: one entry in the `aida agent new` role picker — a build/driver
+/// role, a stakeholder persona, or the non-selectable section heading.
+// trace:TASK-1239 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RolePickTarget {
+    Role(String),
+    Persona(String),
+    Divider,
+}
+
+/// TASK-1239: append the stakeholder personas (guest/requester) to the role
+/// picker as a SEPARATE, clearly-labeled sub-section, mirroring `aida role
+/// list`'s "Stakeholder personas" block. Personas are programmatic
+/// AIDA_SESSION_ROLE gates (STORY-1110), NOT role files or queue-routable build
+/// seats — so they land after all driver roles, under a heading, each tagged
+/// "not a build seat". Pure so the section layout is testable without the
+/// interactive picker. Returns aligned (labels, targets); the divider index maps
+/// to no selection.
+// trace:TASK-1239 | ai:claude
+fn assemble_role_picker_items(
+    role_labels: Vec<String>,
+    role_names: &[String],
+    active: Option<&str>,
+) -> (Vec<String>, Vec<RolePickTarget>) {
+    let mut labels = role_labels;
+    let mut targets: Vec<RolePickTarget> = role_names
+        .iter()
+        .map(|n| RolePickTarget::Role(n.clone()))
+        .collect();
+
+    labels.push("  ── Stakeholder personas · least-privilege · not a build seat ──".to_string());
+    targets.push(RolePickTarget::Divider);
+
+    for (name, blurb) in [
+        ("guest", "least-privilege read-only; not a build seat"),
+        ("requester", "least-privilege read/intake; not a build seat"),
+    ] {
+        let marker = if active == Some(name) { "*" } else { " " };
+        labels.push(format!("{marker} {name} — {blurb}"));
+        targets.push(RolePickTarget::Persona(name.to_string()));
+    }
+
+    (labels, targets)
+}
+
+#[cfg(test)]
+mod task_1239_picker_tests {
+    use super::*;
+
+    #[test]
+    fn stakeholder_personas_append_as_a_separate_labeled_section() {
+        // Two build/driver roles come first; guest + requester follow under a
+        // divider heading, each tagged "not a build seat". trace:TASK-1239
+        let role_labels = vec!["  advisor".to_string(), "  implementer".to_string()];
+        let role_names = vec!["advisor".to_string(), "implementer".to_string()];
+        let (labels, targets) = assemble_role_picker_items(role_labels, &role_names, None);
+
+        // Build roles stay first and map to Role targets.
+        assert_eq!(targets[0], RolePickTarget::Role("advisor".to_string()));
+        assert_eq!(targets[1], RolePickTarget::Role("implementer".to_string()));
+
+        // Then a non-selectable section heading.
+        assert_eq!(targets[2], RolePickTarget::Divider);
+        assert!(labels[2].contains("Stakeholder personas"), "{}", labels[2]);
+        assert!(labels[2].contains("not a build seat"), "{}", labels[2]);
+
+        // Then the two personas, launchable, visually tagged non-build.
+        assert_eq!(targets[3], RolePickTarget::Persona("guest".to_string()));
+        assert_eq!(targets[4], RolePickTarget::Persona("requester".to_string()));
+        assert!(labels[3].contains("guest") && labels[3].contains("not a build seat"));
+        assert!(labels[4].contains("requester") && labels[4].contains("not a build seat"));
+
+        // The personas are appended, never mixed into the driver roles.
+        assert_eq!(labels.len(), 5);
+        assert_eq!(targets.len(), 5);
+    }
+
+    #[test]
+    fn active_stakeholder_persona_is_marked() {
+        let (labels, _) = assemble_role_picker_items(
+            vec!["  advisor".to_string()],
+            &["advisor".to_string()],
+            Some("guest"),
+        );
+        // guest is index 2 (role, divider, guest) and carries the active `*`.
+        assert!(labels[2].starts_with("*"), "{}", labels[2]);
     }
 }
 
