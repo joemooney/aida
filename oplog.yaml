@@ -71097,5 +71097,13 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 5544
+- id: 01a0abcd-8aab-7870-93e4-59ef5e6a357e
+  target_id: 01a0abc7-8524-7c90-b21f-68219fbf0b2c
+  author: aida
+  node_id: '1'
+  lamport: 5545
+  timestamp: 2026-09-16T19:59:29.451992525Z
+  kind: !SetStatus
+    status: Rejected
+clock: 5545
 node_id: '1'
