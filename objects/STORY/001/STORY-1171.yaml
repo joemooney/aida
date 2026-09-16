@@ -1,0 +1,23 @@
+id: 01a0aad8-7af5-7492-81e1-196d76b5da10
+spec_id: STORY-1171
+agreed_id: STORY-1171
+title: 'Branch merge-serialization lock: one agent merges to a target branch at a time (coordination primitive)'
+description: |-
+  Operator idea (2026-09-16). A per-target-branch MERGE-LOCK: an agent ACQUIRES a lock (.aida/merge-locks/<branch>, e.g. main) before merging to that branch, holds it through the check-then-merge, and releases after — so no two mergers race to the same branch. Explicitly DISTINCT from two things it must NOT be confused with: (a) git's transient per-commit index.lock, which correctly does NOT block targeted single-spec store-writes (aida add/comment/edit stay fast + concurrent with drains — BUG-634 + BUG-1164 auto-recovery); (b) the per-PR merge-hold marker (BUG-1167), which gates one PR. The merge-lock is coordination across MERGERS, per target branch.
+
+  Value: (1) makes the supervision-check + merge ATOMIC — closes the concurrent-merger race at the coordination layer (complements the BUG-1167 marker + Layer-2 branch protection, which GATE but do not SERIALIZE — two green PRs can still merge concurrently today); (2) UNION-BUILD safety — serialized merges let each merge re-verify against the just-updated main (per-PR green != union builds); (3) a general merge-coordination primitive for a multi-agent fleet.
+
+  Held ONLY for the merge operation (seconds to ~a minute), NOT the whole drain — targeted store-writes and other agents' non-merge work stay unblocked. This is the ONE case where an extended-duration serialization lock is warranted, exactly because the RACE is between the check and the merge.
+
+  Needs: acquire/release; wait-or-refuse on contention (with a bounded wait); STALE-LOCK RECOVERY if the holder died (mirror the git index.lock stale-recovery BUG-1164 just shipped); who-holds-it/what-PR/timestamp for observability (aida merge-lock status).
+
+  Sequence: AFTER the marker-at-PR-open fix (the direct race-closer for the supervised case); this adds the broader serialization + union-build safety on top. Acceptance: two concurrent merge attempts to main serialize (one waits, bounded); a dead holder's lock is recovered, not wedged; targeted store-writes are unaffected; observable via a status verb.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T15:31:49.109057963Z
+modified_at: 2026-09-16T15:31:49.109057963Z
+req_type: Story
+tags:
+- merge-lock serialization concurrency forge reliability bug-1167
