@@ -1,0 +1,14 @@
+id: 01a0a8cc-e328-7b91-a30e-24640345e2dc
+spec_id: TASK-1240
+agreed_id: TASK-1240
+title: 'GitLab Slice 4: derive user-facing ''gh'' wording from ForgeKind vocabulary'
+description: 'The ~40 ''gh pr merge''/''gh api'' hint strings + /goal --pr clause wording should derive from ForgeKind::cli_name()/change_noun()/merge_cmd() (methods exist) so a GitLab user never reads ''gh''. Proposed mode: drain. Acceptance: hints/wording reflect the active forge; a GitLab session shows glab/MR vocabulary.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T05:59:54.920152672Z
+modified_at: 2026-09-16T05:59:54.920152672Z
+req_type: Task
+tags:
+- forge gitlab wording slice-4 parent:EPIC-68 aida:forge

@@ -70071,5 +70071,17 @@ operations:
     req_type: Story
     status: Draft
     priority: Medium
-clock: 5478
+- id: 01a0a8cc-e838-7962-83d3-ce7ffd6894db
+  target_id: 01a0a8cc-e328-7b91-a30e-24640345e2dc
+  author: aida
+  node_id: '1'
+  lamport: 5479
+  timestamp: 2026-09-16T05:59:56.216537490Z
+  kind: !Create
+    title: 'GitLab Slice 4: derive user-facing ''gh'' wording from ForgeKind vocabulary'
+    description: 'The ~40 ''gh pr merge''/''gh api'' hint strings + /goal --pr clause wording should derive from ForgeKind::cli_name()/change_noun()/merge_cmd() (methods exist) so a GitLab user never reads ''gh''. Proposed mode: drain. Acceptance: hints/wording reflect the active forge; a GitLab session shows glab/MR vocabulary.'
+    req_type: Task
+    status: Draft
+    priority: Low
+clock: 5479
 node_id: '1'
