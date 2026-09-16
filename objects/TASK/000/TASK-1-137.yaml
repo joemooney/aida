@@ -1,0 +1,20 @@
+id: 01a0ab41-f672-7e80-9be9-1a45b479e40b
+spec_id: TASK-1-137
+title: Stale merge-hold markers after orchestrated merge + no user-facing merge-hold clear command
+description: |-
+  Away-window heartbeat observation. PR-1868/1869/1870 (STORY-1164, BUG-1174, STORY-1173) all MERGED but left stale .aida/merge-holds/PR-<n> marker files behind — the orchestrated merge path did not clear them, so they surface as phantom 'held PRs' in awaiting/merge-hold checks (I removed them by hand this pass).
+
+  Separately: there is NO user-facing `aida merge-hold clear|list` command — `aida merge-hold --help` falls back to top-level usage — even though the module docs AND the GitLab CI gate template (aida-core/templates/gitlab-ci-merge-hold-gate.yml) both instruct `aida merge-hold clear <pr>` as the human release path. So an operator can only clear a stale/false marker by rm-ing the file.
+
+  Two fixes: (1) clear the hold marker (+ the aida:merge-hold label) whenever a PR merges through ANY AIDA merge path (orchestrated drain merge, aida pr ship), not only a hypothetical `aida pr merge`; (2) ship the `aida merge-hold list|clear <pr>` surface the docs/CI templates already reference. Related: BUG-1167, STORY-1165, STORY-1173.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-16T17:27:02.002537886Z
+modified_at: 2026-09-16T17:27:02.002537886Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
