@@ -71041,5 +71041,42 @@ operations:
   timestamp: 2026-09-16T17:53:34.569682554Z
   kind: !SetStatus
     status: Completed
-clock: 5542
+- id: 01a0abc7-8afd-7843-bb74-c781bf30f1bb
+  target_id: 01a0abc7-8524-7c90-b21f-68219fbf0b2c
+  author: aida
+  node_id: '1'
+  lamport: 5543
+  timestamp: 2026-09-16T19:52:56.317063278Z
+  kind: !Create
+    title: 'main CI broken: #1749 hardened flag drift-guard to hard-fail on 366 pre-existing manual mismatches (blocks all merges)'
+    description: |-
+      REGRESSION from #1749 (TASK-1207, merged 2026-09-16 10:55, main HEAD 9d709244f):
+      the CLI-manual drift-guard now HARD-FAILS on flag-attribution mismatches that
+      were previously WARN-only, but the docs/cli/*.md manual has 366 pre-existing
+      flag citations that do not resolve to their cited command. Result: the
+      `CLI-manual drift-guard` step in .github/workflows/ci.yml (runs
+      docs/cli/verify-manual.py) exits 1 on EVERY full-CI PR Build → all merges
+      blocked.
+
+      Verified: `PATH=target/release python3 docs/cli/verify-manual.py` on current
+      main → EXIT 1, "FAIL flags — 366 cited --flag token(s) do not resolve to the
+      cited command or its parent command subtree" (e.g. 10-storage.md:35 --pull/--push
+      under `aida db`, 02-specs.md:243 --deferred/--all under `aida defer`, 11-dev.md
+      --grpc-port/--web-port under `aida dev`, 08-reporting.md --since/--include-next
+      under `aida digest`). The script's own line-18 comment still says "print WARN for
+      flag mismatches (soft)", so the hardening contradicts the documented intent and
+      was shipped without reconciling the 366 existing citations.
+
+      Impact: HIGH — blocks all PR merges (BUG-1173 #1866, TASK-1205 #1746, and any
+      future PR). Class: CI-modifying → keyboard/operator fix.
+
+      Fix options: (a) soften flag-attribution back to WARN (keep the legitimate
+      hard-fails: missing-command entry, SPEC-ID leak, interface_changes delta); OR
+      (b) reconcile the 366 manual flag citations so they resolve, in the same PR that
+      hardens the check. Also: investigate how #1749 passed its own CI (full_ci
+      trigger scoping, or binary-version-dependent flag resolution).
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5543
 node_id: '1'
