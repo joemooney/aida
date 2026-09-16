@@ -1,0 +1,26 @@
+id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+spec_id: EPIC-68
+agreed_id: EPIC-68
+title: GitLab first-class forge (parity with GitHub) — wiring + validation, not a from-scratch build
+description: |-
+  Make GitLab a first-class forge like GitHub. Research (SPIKE-80) + a LIVE VALIDATION against the operator's self-hosted gitlab.joemooney.com (GitLab 18.8.10, glab 1.36) established: a fully-implemented GitLabForge already exists (forge.rs:1529, all trait methods via glab + glab api, ~25 unit tests), and its core PR/MR lifecycle (open_change -> change_status -> merge_change, squash + remove-source-branch) WORKS live. The gap is WIRING (~20-25 direct-gh runtime spawns bypass the Forge trait — the "~113" figure is a ~5x overcount), a GitLab CI equivalent of the merge-hold required-check, and codifying the validation. This is a tractable multi-week wiring/slice job, front-loaded validation DONE.
+
+  Slices (child stories carry acceptance + a proposed execution_mode for advisor disposition):
+  - Slice 0 (drive): wire the dead-code resolve_forge_cli dispatcher into the central helpers (probe_ci_state_for_branch, detect_open_pr_*/gh_pr_list_first, watch_ci_for_context) — GitHub-behavior-neutral; unblocks everything.
+  - Slice 1 (drive): route the high-traffic keyboard paths (queue recover gh pr create, release --after-pr merge, pr ship lookup, aida review) through existing trait methods.
+  - Slice 2 (guided): GitLab CI merge-hold gate — .gitlab-ci.yml on $CI_MERGE_REQUEST_LABELS (the Layer-2 analog of merge-hold-gate.yml) + scaffold at init + forge-route the label apply (merge_hold.rs gh pr edit --add-label -> glab mr update --label). Net-new, security-adjacent.
+  - Slice 3 (guided): CI-watch + delegated-review abstraction (watch_ci/check-runs through the trait; GitLab .../statuses shape differs) — unblocks unattended --auto-complete on GitLab.
+  - Slice 4 (drain): derive user-facing 'gh' wording from ForgeKind vocabulary methods.
+  - Live-test (drive): codify tonight's round-trip as an in-crate #[ignore] live integration test vs gitlab.joemooney.com.
+  - Cleanup (drain): correct forge.rs "~113" -> "~20-25"; note EPIC-35 completed-but-not; document glab auth as the gh-auth equivalent.
+
+  Reference: SPIKE-80 (research + validation), docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md, forge.rs (GitLabForge). Risks recorded on SPIKE-80: glab-version output coupling, review-semantics mismatch (GitLab has no changes-requested), the required-check half is genuinely GitHub-shaped.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T05:58:41.121982551Z
+modified_at: 2026-09-16T05:58:41.121982551Z
+req_type: Epic
+tags:
+- forge gitlab github parity epic-35 aida:forge
