@@ -5070,6 +5070,25 @@ mod bug_755_residual_tests {
     use super::*;
     use std::collections::HashMap;
 
+    // BUG-1163: a supervised (drive/guided/operator/decide/unresolved) wave PR
+    // must HOLD even when reviewer-approved and CI-green — the exact invariant
+    // that leaked (BUG-1156/STORY-1130/TASK-1233 merged despite the hold while
+    // STORY-1131, same mode, correctly held). trace:BUG-1163 | ai:claude
+    #[test]
+    fn wave_pr_action_holds_supervised_even_when_approved_and_green() {
+        let action = wave_pr_action(&WavePrFacts {
+            supervision_label: Some("drive".to_string()),
+            wait_expired: None,
+            ci: crate::integrate::CiState::Passing,
+            request_changes: false,
+            mergeable: crate::integrate::MergeableState::Mergeable,
+        });
+        assert!(
+            matches!(action, WavePrAction::Hold(_)),
+            "supervised + approved + green must Hold, never Merge; got {action:?}"
+        );
+    }
+
     fn facts(status: &str, tags: &[&str]) -> WaveSpecFacts {
         WaveSpecFacts {
             status_norm: status.to_string(),
