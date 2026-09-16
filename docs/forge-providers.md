@@ -1,16 +1,21 @@
 # Forge providers — GitHub, GitLab, and pure-git
 
-*Last updated: 2026-06-06*
+*Last updated: 2026-09-15*
 
-AIDA's PR/MR + CI lifecycle is **forge-agnostic**. The same `aida queue work
---auto-complete` drain that opens a GitHub PR, watches CI, merges, and
-auto-bumps the spec to `Completed` works against a GitLab project (where the
-change request is a *Merge Request*) and against a plain git remote that has no
-forge CLI at all. This is EPIC-35 — the forge-provider abstraction.
+AIDA's PR/MR + CI lifecycle is becoming **forge-agnostic**. The target is that
+the same `aida queue work --auto-complete` drain that opens a GitHub PR,
+watches CI, merges, and auto-bumps the spec to `Completed` also works against a
+GitLab project (where the change request is a *Merge Request*) and against a
+plain git remote that has no forge CLI at all. EPIC-35 shipped the
+forge-provider abstraction; EPIC-68 is the current home for the remaining
+GitLab parity wiring.
 
 The orphan `aida-store` branch was already forge-agnostic (it rides whatever
-`origin` is). EPIC-35 extends that to the *lifecycle* operations that used to
-shell out to `gh` unconditionally.
+`origin` is). The forge-provider work extends that toward the *lifecycle*
+operations that used to shell out to `gh` unconditionally. The first inventory
+described this as roughly 113 direct GitHub sites; the dated gap inventory later
+narrowed the runtime wiring gap to roughly 20-25 direct `gh` spawns across
+about 18 functions.
 
 ---
 
@@ -99,7 +104,7 @@ for GitLab and `gh pr list` for GitHub.
 ## End-to-end GitLab drain
 
 On a GitLab project (`[forge] provider = "gitlab"`, with `glab` installed and
-authenticated), the full autonomous drain works the same as GitHub:
+authenticated), the intended full autonomous drain mirrors GitHub:
 
 ```bash
 aida queue work --auto-complete
@@ -107,9 +112,14 @@ aida queue work --auto-complete
 
 per-spec lifecycle: implementer → CI → reviewer → **MR opened** (`glab mr
 create`) → MR merged (`glab mr merge --squash --remove-source-branch`) → `aida
-pull` auto-bumps the spec to `Completed`. CI status comes from `glab ci
-status` / `glab ci list` (STORY-510), and the open/status/merge operations from
-`glab mr …` (STORY-509).
+pull` auto-bumps the spec to `Completed`.
+
+EPIC-35 is marked `Completed`, but that status is historical overclaim: it
+landed the `Forge` trait, providers, and several routed paths, while the
+remaining GitLab wiring is tracked under EPIC-68. The two relevant GitLab code
+bodies are separate: `aida-cli-lib/src/forge.rs` contains `GitLabForge` for the
+PR/MR + CI lifecycle, while `aida-core/src/integrations/gitlab/client.rs`
+contains `GitLabClient` for the GitLab Issues integration.
 
 **Live-GitLab end-to-end validation is a manual step.** The CI here is
 Linux-only and has no GitLab credentials, so the e2e drain (MR
@@ -121,6 +131,8 @@ subprocess-level `glab` wiring is exercised manually.
 ### Manual validation checklist (GitLab)
 
 1. `glab auth status` — confirm `glab` is installed and logged in.
+   If it is not, run `glab auth login` and authenticate against the target
+   GitLab host.
 2. Clone/create a GitLab project; `aida init` → confirm
    `Detected forge: GitLab` and `provider = "gitlab"` in `.aida/config.toml`.
 3. File a small spec: `aida add --title "…" --status approved`.
@@ -138,6 +150,7 @@ subprocess-level `glab` wiring is exercised manually.
 - `docs/git-verb-surface.md` — the two-leg git-mirror verbs (`fetch`/`pull`/`push`/`rebase`).
 - `docs/autonomous-drain.md` — the `--auto-complete` drain lifecycle.
 - `docs/plans/2026-06-04-forge-provider.md` — the SPIKE-49 design + the `Forge` trait surface.
-- `aida-cli/src/forge.rs` — `ForgeKind`, the `Forge` trait, `GitHubForge` / `GitLabForge` / `PureGitForge`.
+- `docs/plans/2026-06-14-epic35-gh-forge-gap-inventory.md` — the dated direct-`gh` wiring inventory.
+- `aida-cli-lib/src/forge.rs` — `ForgeKind`, the `Forge` trait, `GitHubForge` / `GitLabForge` / `PureGitForge`.
 
-<!-- trace:STORY-511 trace:EPIC-35 | ai:claude -->
+<!-- trace:STORY-511 trace:EPIC-35 trace:TASK-1242 | ai:claude+codex -->

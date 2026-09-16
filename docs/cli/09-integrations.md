@@ -81,7 +81,7 @@ These three follow the **same shape**: a `config` step to wire credentials, a `t
 - `gitlab poll [start|stop|status]` with `--interval <secs>` (default 300) — `poll` is a background watcher; the positional action picks lifecycle (default `status`), and `--interval` trades freshness against API load. 300s is a sane default; tighten it only if you genuinely need near-real-time.
 - `gitlab refresh [ID]` with `--force` — refresh one item or all; `--force` overrides the "recently checked, skip it" throttle when you *know* something changed and don't want to wait.
 
-**Gotchas.** Polling is a *background* process — remember to `poll stop` it; a forgotten poller keeps hitting the GitLab API. The label mapping (`labels`) is what makes AIDA tags and GitLab labels line up; mismatched mappings are the usual "why didn't this label come across?"
+**Gotchas.** Polling is a *background* process — remember to `poll stop` it; a forgotten poller keeps hitting the GitLab API. For the GitLab forge/MR lifecycle, `glab auth login` is the GitLab equivalent of `gh auth login`; use `glab auth status` to confirm the CLI is authenticated to the same host as the project. The label mapping (`labels`) is what makes AIDA tags and GitLab labels line up; mismatched mappings are the usual "why didn't this label come across?" <!-- trace:TASK-1242 | ai:codex -->
 
 **Chains with** — `config` → `test` → `poll start`, then `status`/`refresh` to inspect.
 
