@@ -1,5 +1,6 @@
 id: 01a0a7ca-2227-7ba0-99e1-ec70ff5cf18b
 spec_id: TASK-1-134
+agreed_id: TASK-158
 title: Contained agent-permission posture drifts back to full-access on its own (not writer-caused)
 description: |-
   Observation (2026-09-15, verified during STORY-1128 functional test): a contained posture set by hand at ~00:50 had reverted to FULL ACCESS by ~18:12 with no explicit user action.
