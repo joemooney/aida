@@ -69791,5 +69791,35 @@ operations:
   timestamp: 2026-09-16T03:20:32.029635114Z
   kind: !SetStatus
     status: Completed
-clock: 5459
+- id: 01a0a83f-1897-7c70-a892-b01041ab0084
+  target_id: 01a0a83f-1461-7451-973a-663af0055331
+  author: aida
+  node_id: '1'
+  lamport: 5460
+  timestamp: 2026-09-16T03:25:02.487886771Z
+  kind: !Create
+    title: Supervised-merge hold is bypassable by a CONCURRENT merger — the drain holds, but a separate integrator/agent merges the drive PR anyway (client-side hold, not a substrate gate)
+    description: |-
+      Follow-on to BUG-1163 (#1850 fixed the drain's own wave-integration fail-open). Reproduced 2026-09-15 on a binary that CONTAINS the #1850 fix (cc72a07e, 52b6a011f is an ancestor):
+
+      The single-spec drain HELD its drive PRs correctly — goal-drain log shows for STORY-1155 (#1855) and BUG-1164 (#1856): 'auto-merge refused; merge requires human/advisor review', and NO merge line. Yet both PRs show MERGED (mergedBy joemooney), each ~1 min BEFORE the drain's hold fired. Same for TASK-1237 (#1852) and round-4's BUG-1156/STORY-1130/TASK-1233.
+
+      Root cause: the supervised-merge hold is a CLIENT-SIDE check in the merging process. A SEPARATE actor with merge rights — another `aida agent` session (the operator had several open), an integrator/burndown sweep, or a human running `gh pr merge` — merges a CI-green + reviewer-approved PR without consulting the spec's execution_mode. The drain's fence is correct; it just isn't the only merger. (The concurrent merger may also be on a STALE pre-#1850 binary, compounding it.)
+
+      This is a SUBSTRATE-AS-BOUNCER gap: an invariant enforced by convention in each merge path is not enforced. A drive/guided/operator spec that MUST have a human at the merge can be merged by any actor that doesn't check.
+
+      Impact: keystone/security/reliability work (BUG-1156 reap-correctness, STORY-1155 pipeline gate, STORY-1128-class posture) merges unreviewed whenever a concurrent merger races the hold. The de-risk/drive safety model is only as strong as its weakest merger.
+
+      Fix direction (needs the substrate, not another client check):
+      - Make the supervised-merge hold enforced at a chokepoint ALL mergers pass, or record a substrate 'merge-hold' marker on the PR/spec that every merge path (drain merge, `aida integrate`, burndown residual-sweep, `aida pr` verbs) checks and refuses — and ideally a server-side guard (branch-protection / required-approval) for the drive/guided/operator set so even a raw `gh pr merge` / stale-binary session cannot bypass it.
+      - Audit every code path that calls `gh pr merge` for the execution_mode check.
+      - Ensure all agent sessions run a binary with the fence fix (a stale-binary merger is a live hole).
+
+      Acceptance:
+      - With a drive/guided/operator spec whose PR is CI-green + reviewer-approved, NO merger — drain, integrate, burndown sweep, another agent session, or a raw gh pr merge from a stale binary — merges it without the execution_mode check; it waits for an explicit human/advisor merge.
+      - Regression/integration test: two concurrent mergers on one green+approved drive PR both refuse; the PR stays open.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5460
 node_id: '1'
