@@ -1,0 +1,27 @@
+id: 01a0a7f8-cbb1-77c1-9387-cfe0540e5139
+spec_id: EPIC-67
+agreed_id: EPIC-67
+title: 'Plain-English spec accessibility: a separate parallel layer, never a dilution of the spec'
+description: |-
+  Operator pain (2026-09-15): as AIDA grows, spec/task text gets jargon-dense and the why/motivation is not accessible to a novice/operator. Operator constraint: DO NOT compromise the spec for the human — its precision is a FEATURE for the LLM agent (the machine-readable contract). Two audiences, EQUAL STAKE, SEPARATE LAYERS.
+
+  PRINCIPLE — two audiences, separate layers, equal stake:
+  - Tier 1 (agent default): the precise spec (description + acceptance) — untouched, dense, jargon-OK.
+  - Tier 2 (on-demand, both audiences): a parallel plain-English layer (rationale + novice examples) — human-primary, agent-OPTIONAL. Surplus by default (no agent context bloat, no spec dilution), but referenceable when the agent hits ambiguity and wants the why + examples.
+
+  EXPLICITLY DROPPED (operator veto): a spec-simplifying lint. No lint rewrites spec text. (Possible later: an optional COVERAGE check 'does this spec have a plain companion?', never a simplification.)
+
+  Design: v1 = aida why <spec> --plain (a new mode on the existing why verb) assembles spec + graph + linked ADRs -> plain rationale + one concrete novice example -> cached as a SEPARATE artifact (a doc, EPIC-24 'aida doc add --about <spec>', or docs/plain/<SPEC>.md), regenerated only on spec change. The spec may carry a one-line pointer to the plain layer so the agent knows the fallback exists without loading it. Conversation/interactive mode is deferred.
+
+  Reuses existing homes (the why verb, the doc/EPIC-24 living-docs surface), so it is a lean build, not a subsystem. Passes the anti-bloat test (does it make the quiet depth stronger when someone digs in? yes) and defends the Trojan-horse thesis (simple surface, depth accessible through use). It is the operator's own recurring friction — dogfooding.
+
+  Children: v1 why --plain + separate cached plain layer (approved); conversation mode (deferred).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T02:08:15.281234988Z
+modified_at: 2026-09-16T02:08:15.281234988Z
+req_type: Epic
+tags:
+- accessibility plain-english spec-explainer dual-audience docs aida:why
