@@ -81678,6 +81678,23 @@ struct ResumeEntry {
 }
 
 impl RealPhaseDriver {
+    /// Set the PR number AND, if the spec is supervised, stamp the merge-hold
+    /// marker the MOMENT the PR becomes known (fresh creation or recovery/detect)
+    /// — not at the later hold-decision. Closes the BUG-1167 residual race where a
+    /// concurrent/stale merger merged in the window between "PR goes green" and
+    /// the drain's hold firing (STORY-1163 #1861 merged ~49s before its hold).
+    /// record_merge_supervision_hold stays as the merge-time backstop; this is the
+    /// early stamp every pr_number-set path funnels through.
+    // trace:BUG-1173 | ai:claude
+    fn set_pr_number(&mut self, pr: u32) {
+        self.pr_number = Some(pr);
+        if let Some(reason) = auto_complete::PhaseDriver::merge_supervision_hold(self) {
+            let pr = u64::from(pr);
+            let _ = crate::merge_hold::write_hold(&self.project_root, pr, &reason);
+            crate::merge_hold::sync_label(&self.project_root, pr, true);
+        }
+    }
+
     // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -83571,7 +83588,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // instead of shepherding a merged PR through CI/review/merge or
                 // spinning the open-PR verify. trace:BUG-709 | ai:claude
                 Phase1PrResolve::AlreadyMerged(pr) => {
-                    self.pr_number = Some(pr.number as u32);
+                    self.set_pr_number(pr.number as u32);
                     // BUG-711: the implementer already merged, so phases 2-5
                     // (which include phase 2's session-end) will be skipped —
                     // tear the implementer session down HERE so the lease + pool
@@ -83638,7 +83655,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 pr
                             );
                         }
-                        self.pr_number = Some(pr as u32);
+                        self.set_pr_number(pr as u32);
                         break Some(OpenPrInfo {
                             number: pr,
                             title: String::new(),
@@ -83656,7 +83673,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         match pr {
             Some(pr) => {
-                self.pr_number = Some(pr.number as u32);
+                self.set_pr_number(pr.number as u32);
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
@@ -83683,7 +83700,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                             pr
                         );
                     }
-                    self.pr_number = Some(pr as u32);
+                    self.set_pr_number(pr as u32);
                     return Ok(auto_complete::ImplementerOutcome::PrOpened);
                 }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
@@ -83728,7 +83745,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 pr
             );
         }
-        self.pr_number = Some(pr as u32);
+        self.set_pr_number(pr as u32);
         self.pr_number
     }
 
@@ -83745,7 +83762,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             Ok(crate::forge::ChangeLookup::Found(pr)) => pr,
             _ => return None,
         };
-        self.pr_number = Some(pr.id as u32);
+        self.set_pr_number(pr.id as u32);
         if !pr.branch.is_empty() {
             self.branch = Some(pr.branch.clone());
         } else if let Some(head) = pr_head_branch(&self.project_root, pr.id) {
@@ -83825,13 +83842,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
         match probe {
             CiProbe::Green { pr_number } => {
-                self.pr_number = Some(pr_number);
+                self.set_pr_number(pr_number);
             }
             CiProbe::Red {
                 pr_number,
                 failed_summary,
             } => {
-                self.pr_number = Some(pr_number);
+                self.set_pr_number(pr_number);
                 self.ci_run_id = latest_run_id_for_branch(&branch);
                 return Err(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::CiRed,
@@ -83839,14 +83856,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 ));
             }
             CiProbe::PrNoChecks { pr_number } => {
-                self.pr_number = Some(pr_number);
+                self.set_pr_number(pr_number);
                 eprintln!(
                     "  {} PR-{pr_number} has no CI checks — nothing to gate on.",
                     crate::glyph(crate::glyphs::Glyph::Info).cyan()
                 );
             }
             CiProbe::InProgress { pr_number } => {
-                self.pr_number = Some(pr_number);
+                self.set_pr_number(pr_number);
                 if !self.lifecycle_skip.no_ci_wait {
                     return Err(auto_complete::PhaseFailure::of(
                         auto_complete::FailureKind::CiTimeout,
@@ -85238,7 +85255,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             };
         match pr {
             Some(pr) => {
-                self.pr_number = Some(pr.number as u32);
+                self.set_pr_number(pr.number as u32);
                 if let Some(head) = pr_head_branch(&self.project_root, pr.number) {
                     self.branch = Some(head);
                 }
