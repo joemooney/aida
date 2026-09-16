@@ -784,6 +784,43 @@ fn normalize_usage_mode<'a>(
 }
 
 #[cfg(test)]
+mod bug_1173_detection_hold_tests {
+    // BUG-1173 regression guard (source assertion — this repo's idiom for "don't re-add X",
+    // cf. check-removed-flags.sh). PR-detection (`set_pr_number`) must stamp the LOCAL
+    // merge-hold marker (which blocks the concurrent-merger race) but must NOT sync the
+    // aida:merge-hold LABEL: applying the label at detection reddens the merge-hold-gate
+    // required check while phase-2 CI-watch runs, which the drain reads as a CI failure and
+    // self-shelves every DRIVE drain (the BUG-1168 #1864 interaction; CI-watch has no gate
+    // exclusion). The label is applied post-CI by record_merge_supervision_hold.
+    // trace:BUG-1173 | ai:claude
+    #[test]
+    fn set_pr_number_stamps_marker_but_not_label() {
+        let src = include_str!("lib.rs");
+        // build the needle from split pieces so this test's own source cannot self-match
+        // (the test module sits before the real function in the file).
+        let needle = concat!("fn set_pr_number", "(&mut self, pr: u32) {");
+        let start = src.find(needle).expect("set_pr_number present");
+        // bound the body at the next 4-space-indented method so we read ONLY set_pr_number.
+        let after = &src[start + 38..];
+        let end = after
+            .find("    fn ")
+            .map(|e| start + 38 + e)
+            .unwrap_or(src.len());
+        let body = &src[start..end];
+        assert!(
+            body.contains("merge_hold::write_hold"),
+            "set_pr_number must stamp the local merge-hold marker at PR-detection"
+        );
+        assert!(
+            !body.contains("merge_hold::sync_label"),
+            "BUG-1173 regression: set_pr_number must NOT sync the aida:merge-hold LABEL at \
+             PR-detection — it reddens merge-hold-gate during CI-watch and self-shelves DRIVE \
+             drains. Apply the label post-CI in record_merge_supervision_hold instead."
+        );
+    }
+}
+
+#[cfg(test)]
 mod story_1028_mode_alias_tests {
     use super::*;
 
@@ -81691,7 +81728,15 @@ impl RealPhaseDriver {
         if let Some(reason) = auto_complete::PhaseDriver::merge_supervision_hold(self) {
             let pr = u64::from(pr);
             let _ = crate::merge_hold::write_hold(&self.project_root, pr, &reason);
-            crate::merge_hold::sync_label(&self.project_root, pr, true);
+            // BUG-1173: stamp ONLY the local marker at PR-detection — do NOT sync the
+            // aida:merge-hold LABEL here. The local `.aida/merge-holds/PR-N` marker is what
+            // blocks the concurrent-merger race (the residual close); the label is a Layer-2
+            // convenience. Applying the label at PR-detection reddens the merge-hold-gate
+            // required check while phase-2 CI-watch runs, which the drain reads as a CI failure
+            // and self-shelves every DRIVE drain (the BUG-1168 #1864 interaction; CI-watch has
+            // no exclusion for the gate). The label is applied post-CI by
+            // record_merge_supervision_hold, Layer-2's real enforcement point.
+            // trace:BUG-1173 | ai:claude
         }
     }
 
