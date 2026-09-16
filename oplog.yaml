@@ -70982,5 +70982,32 @@ operations:
   timestamp: 2026-09-16T17:21:30.177414244Z
   kind: !SetStatus
     status: Completed
-clock: 5537
+- id: 01a0ab4c-863d-7603-a820-9d5b11ecd240
+  target_id: 01a0ab4c-8229-7453-801d-e560d017fa49
+  author: aida
+  node_id: '1'
+  lamport: 5538
+  timestamp: 2026-09-16T17:38:34.173741552Z
+  kind: !Create
+    title: 'Review PR-1871: [AI:codex] fix(queue): dequeue routed done items (TASK-1-136)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0ab3e`) for branch `task-1-136`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1871>
+      - Branch: `task-1-136` → `main`
+
+      ## Covers
+
+      - TASK-1-136
+      - BUG-1174
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1871` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5538
 node_id: '1'
