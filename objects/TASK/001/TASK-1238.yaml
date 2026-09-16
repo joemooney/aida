@@ -1,0 +1,14 @@
+id: 01a0a884-9c32-7093-8d27-f3f07f19522b
+spec_id: TASK-1238
+agreed_id: TASK-1238
+title: merge_hold::read_hold should fail CLOSED on a present-but-unreadable marker (distinguish NotFound from other IO errors)
+description: 'Fast-follow to BUG-1167 (#1857). read_hold uses read_to_string(hold_path).ok()? — so a marker file that EXISTS but is unreadable (permission/IO error) returns None → the chokepoint fail-OPENS (allows the merge). A present marker should HOLD regardless of readability (ADR-37: fail-closed on unresolvable). Fix: match on the error kind — NotFound → None (genuinely no hold); any other Err → Some(hold) (a present-but-unresolvable marker holds). Layer 2 (the GitHub label required-check) backstops this today (the label is still present → check fails), so it is a minor Layer-1 hardening, not a live hole. Add a test: an unreadable/erroring marker path resolves to a hold.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-16T04:40:58.162625052Z
+modified_at: 2026-09-16T04:40:58.162625052Z
+req_type: Task
+tags:
+- merge-hold fail-closed bug-1167 followup
