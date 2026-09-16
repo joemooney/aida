@@ -5,9 +5,278 @@
 
 #![allow(clippy::too_many_arguments)]
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use serde::Serialize;
 
 use crate::*;
+
+const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct ProxyApprovalEntry {
+    spec_id: String,
+    title: String,
+    comment_id: String,
+    comment_author: String,
+    created_at: String,
+    decision: String,
+    verdict: String,
+    proxy: String,
+    session: String,
+    authorized_by: String,
+    independent: String,
+    timestamp_local: String,
+}
+
+fn add_proxy_approval(
+    backend: &aida_core::CachedGitBackend,
+    spec: &str,
+    decision: &str,
+    verdict: &str,
+    proxy: Option<&str>,
+    session: Option<&str>,
+    authorized_by: &str,
+    independent: crate::cli::ProxyApprovalIndependent,
+) -> Result<()> {
+    // trace:STORY-1173 | ai:codex
+    let mut req = backend
+        .get_requirement_by_spec_id(spec)?
+        .ok_or_else(|| not_found::requirement_not_found(spec, None))?;
+    let decision = required_approval_field("decision", decision)?;
+    let verdict = required_approval_field("verdict", verdict)?;
+    let authorized_by = required_approval_field("authorized-by", authorized_by)?;
+    let proxy = proxy
+        .map(|p| required_approval_field("proxy", p))
+        .transpose()?
+        .unwrap_or_else(get_default_author);
+    let session = session
+        .map(|s| required_approval_field("session", s))
+        .transpose()?
+        .or_else(resolve_current_session_id)
+        .unwrap_or_else(|| "unknown".to_string());
+    let independent = match independent {
+        crate::cli::ProxyApprovalIndependent::Yes => "yes",
+        crate::cli::ProxyApprovalIndependent::No => "no",
+    };
+    let now = chrono::Utc::now();
+    let timestamp_local = now
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d %H:%M:%S %Z")
+        .to_string();
+    let body = format!(
+        "{PROXY_APPROVAL_MARKER}\n\
+         decision: {decision}\n\
+         verdict: {verdict}\n\
+         proxy: {proxy}\n\
+         session: {session}\n\
+         authorized-by: {authorized_by}\n\
+         independent: {independent}\n\
+         timestamp-local: {timestamp_local}"
+    );
+    let comment = aida_core::Comment {
+        id: Uuid::now_v7(),
+        content: body,
+        author: proxy.clone(),
+        created_at: now,
+        modified_at: now,
+        parent_id: None,
+        replies: Vec::new(),
+        reactions: Vec::new(),
+        session_id: Some(session.clone()),
+    };
+    req.comments.push(comment);
+    req.modified_at = now;
+    backend.update_requirement(&req)?;
+    println!(
+        "Proxy approval recorded on {}",
+        req.spec_id.as_deref().unwrap_or(spec)
+    );
+    Ok(())
+}
+
+fn list_proxy_approvals(
+    backend: &aida_core::CachedGitBackend,
+    since: Option<&str>,
+    until: Option<&str>,
+    json: bool,
+) -> Result<()> {
+    // trace:STORY-1173 | ai:codex
+    let since = since.map(parse_since_arg).transpose()?;
+    let until = until.map(parse_since_arg).transpose()?;
+    let store = backend.load()?;
+    let mut entries = Vec::new();
+    for req in &store.requirements {
+        let spec_id = req.display_id();
+        collect_proxy_approval_entries(
+            &mut entries,
+            &spec_id,
+            &req.title,
+            &req.comments,
+            since,
+            until,
+        );
+    }
+    entries.sort_by(|a, b| {
+        a.created_at
+            .cmp(&b.created_at)
+            .then(a.spec_id.cmp(&b.spec_id))
+    });
+    if json {
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+        return Ok(());
+    }
+    if entries.is_empty() {
+        println!("No proxy approvals found");
+        return Ok(());
+    }
+    print_proxy_approval_entries(&entries, true);
+    Ok(())
+}
+
+fn print_proxy_approval_entries(entries: &[ProxyApprovalEntry], include_spec: bool) {
+    // trace:STORY-1173 | ai:codex
+    println!("{}", "Proxy approvals".green().bold());
+    for entry in entries {
+        if include_spec {
+            println!(
+                "{} {} {}",
+                entry.created_at.dimmed(),
+                entry.spec_id.cyan().bold(),
+                entry.decision.bold()
+            );
+        } else {
+            println!("{} {}", entry.created_at.dimmed(), entry.decision.bold());
+        }
+        println!("  verdict: {}", entry.verdict);
+        println!(
+            "  proxy: {}  session: {}  authorized-by: {}  independent: {}",
+            entry.proxy, entry.session, entry.authorized_by, entry.independent
+        );
+        println!(
+            "  comment: {}  timestamp-local: {}",
+            entry.comment_id, entry.timestamp_local
+        );
+    }
+}
+
+fn collect_proxy_approval_entries(
+    out: &mut Vec<ProxyApprovalEntry>,
+    spec_id: &str,
+    title: &str,
+    comments: &[aida_core::Comment],
+    since: Option<chrono::DateTime<chrono::Utc>>,
+    until: Option<chrono::DateTime<chrono::Utc>>,
+) {
+    for comment in comments {
+        let in_window = since.map(|s| comment.created_at >= s).unwrap_or(true)
+            && until.map(|u| comment.created_at < u).unwrap_or(true);
+        if in_window {
+            if let Some(entry) = parse_proxy_approval_comment(spec_id, title, comment) {
+                out.push(entry);
+            }
+        }
+        collect_proxy_approval_entries(out, spec_id, title, &comment.replies, since, until);
+    }
+}
+
+fn parse_proxy_approval_comment(
+    spec_id: &str,
+    title: &str,
+    comment: &aida_core::Comment,
+) -> Option<ProxyApprovalEntry> {
+    if !comment
+        .content
+        .lines()
+        .any(|line| line.trim() == PROXY_APPROVAL_MARKER)
+    {
+        return None;
+    }
+    let field = |name: &str| approval_field(&comment.content, name);
+    let independent = field("independent")?;
+    if !matches!(independent.as_str(), "yes" | "no") {
+        return None;
+    }
+    Some(ProxyApprovalEntry {
+        spec_id: spec_id.to_string(),
+        title: title.to_string(),
+        comment_id: comment.id.to_string(),
+        comment_author: comment.author.clone(),
+        created_at: comment.created_at.to_rfc3339(),
+        decision: field("decision")?,
+        verdict: field("verdict").or_else(|| field("reasoning"))?,
+        proxy: field("proxy")?,
+        session: field("session")?,
+        authorized_by: field("authorized-by")?,
+        independent,
+        timestamp_local: field("timestamp-local")?,
+    })
+}
+
+fn approval_field(content: &str, name: &str) -> Option<String> {
+    let prefix = format!("{name}:");
+    content.lines().find_map(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix(&prefix)
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(ToString::to_string)
+    })
+}
+
+fn required_approval_field(name: &str, value: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("{name} is required for proxy approval entries");
+    }
+    Ok(trimmed.to_string())
+}
+
+#[cfg(test)]
+mod proxy_approval_tests {
+    use super::*;
+
+    fn approval_comment(content: &str) -> aida_core::Comment {
+        aida_core::Comment::new("ai:codex".to_string(), content.to_string())
+    }
+
+    #[test]
+    fn parses_marked_proxy_approval_comment() {
+        let comment = approval_comment(
+            "[aida:proxy-approval]\n\
+             decision: merge\n\
+             verdict: approved after independent review\n\
+             proxy: ai:codex\n\
+             session: sess-123\n\
+             authorized-by: joe\n\
+             independent: yes\n\
+             timestamp-local: 2026-09-16 10:10:00 MST",
+        );
+
+        let entry = parse_proxy_approval_comment("STORY-1173", "Proxy ledger", &comment)
+            .expect("marked approval should parse");
+
+        assert_eq!(entry.spec_id, "STORY-1173");
+        assert_eq!(entry.decision, "merge");
+        assert_eq!(entry.independent, "yes");
+        assert_eq!(entry.authorized_by, "joe");
+    }
+
+    #[test]
+    fn rejects_marked_proxy_approval_without_independent_field() {
+        let comment = approval_comment(
+            "[aida:proxy-approval]\n\
+             decision: merge\n\
+             verdict: approved\n\
+             proxy: ai:codex\n\
+             session: sess-123\n\
+             authorized-by: joe\n\
+             timestamp-local: 2026-09-16 10:10:00 MST",
+        );
+
+        assert!(parse_proxy_approval_comment("STORY-1173", "Proxy ledger", &comment).is_none());
+    }
+}
 
 pub(crate) fn handle_git_backend_command(
     store_path: &std::path::Path,
@@ -3413,6 +3682,22 @@ pub(crate) fn handle_git_backend_command(
                     if !req.comments.is_empty() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
                     }
+                    {
+                        // trace:STORY-1173 | ai:codex
+                        let mut approval_entries = Vec::new();
+                        collect_proxy_approval_entries(
+                            &mut approval_entries,
+                            &req.display_id(),
+                            &req.title,
+                            &req.comments,
+                            None,
+                            None,
+                        );
+                        if !approval_entries.is_empty() {
+                            println!();
+                            print_proxy_approval_entries(&approval_entries, false);
+                        }
+                    }
                     // STORY-81: surface the auto-stamped completion
                     // context (who/when/source-tool/optional summary)
                     // when `aida queue done` populated it. Skips when
@@ -3620,6 +3905,44 @@ pub(crate) fn handle_git_backend_command(
                     // keeping script gating + usage telemetry honest (was a
                     // print-and-exit-0). trace:BUG-600 | ai:claude
                     return Err(not_found::requirement_not_found(id, Some(store_path)));
+                }
+            }
+        }
+        Command::Approvals {
+            since,
+            until,
+            json,
+            command,
+        } => {
+            // trace:STORY-1173 | ai:codex
+            match command {
+                Some(ApprovalCommand::Add {
+                    spec,
+                    decision,
+                    verdict,
+                    proxy,
+                    session,
+                    authorized_by,
+                    independent,
+                }) => {
+                    return add_proxy_approval(
+                        &backend,
+                        spec,
+                        decision,
+                        verdict,
+                        proxy.as_deref(),
+                        session.as_deref(),
+                        authorized_by,
+                        *independent,
+                    );
+                }
+                None => {
+                    return list_proxy_approvals(
+                        &backend,
+                        since.as_deref(),
+                        until.as_deref(),
+                        *json || output_format_is_json(),
+                    );
                 }
             }
         }

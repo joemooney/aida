@@ -42,6 +42,47 @@ pub enum InitFootprint {
     MemoryLane,
 }
 
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProxyApprovalIndependent {
+    /// The proxy review was independent of the implementation.
+    Yes,
+    /// The proxy review was not independent of the implementation.
+    No,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ApprovalCommand {
+    /// Write a proxy-approval ledger entry as a marked spec comment.
+    Add {
+        /// Requirement ID (UUID or SPEC-ID)
+        spec: String,
+
+        /// Decision being approved, e.g. merge, clear-merge-hold, fork-choice.
+        #[clap(long)]
+        decision: String,
+
+        /// Verdict or reasoning behind the proxy approval.
+        #[clap(long, visible_alias = "reasoning")]
+        verdict: String,
+
+        /// Proxy identity. Defaults to AIDA_AUTHOR / USER.
+        #[clap(long)]
+        proxy: Option<String>,
+
+        /// Proxy session id. Defaults to the current AIDA session when known.
+        #[clap(long)]
+        session: Option<String>,
+
+        /// Human whose standing authorization allows this proxy approval.
+        #[clap(long = "authorized-by")]
+        authorized_by: String,
+
+        /// Whether the proxy review was independent of implementation. Required.
+        #[clap(long, value_enum)]
+        independent: ProxyApprovalIndependent,
+    },
+}
+
 #[derive(Parser, Debug)]
 #[clap(
     author,
@@ -8298,6 +8339,31 @@ pub enum Command {
         // trace:STORY-632 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long, conflicts_with_all = ["tree", "card"])]
         json: bool,
+    },
+
+    /// List or write proxy-approval ledger comments.
+    ///
+    /// A proxy approval is stored as an ordinary spec comment carrying the
+    /// stable `[aida:proxy-approval]` marker plus structured fields, so the
+    /// spec comment remains the git-canonical audit source.
+    // trace:STORY-1173 | ai:codex
+    Approvals {
+        /// Only entries at or after this time. Accepts RFC3339 or relative
+        /// windows like `7d`, `12h`, `45m`.
+        #[clap(long)]
+        since: Option<String>,
+
+        /// Only entries before this time. Accepts RFC3339 or relative windows.
+        #[clap(long)]
+        until: Option<String>,
+
+        /// Emit ledger entries as JSON.
+        #[clap(long)]
+        json: bool,
+
+        /// Optional writer command. With no subcommand, lists approvals.
+        #[clap(subcommand)]
+        command: Option<ApprovalCommand>,
     },
 
     /// Query the cross-spec relationship graph from a root spec. The default
