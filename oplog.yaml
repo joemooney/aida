@@ -69332,5 +69332,24 @@ operations:
     req_type: Task
     status: Draft
     priority: Low
-clock: 5428
+- id: 01a0a7ac-69d5-7f23-a27b-74cb6a934e49
+  target_id: 01a0a7ac-61fc-7670-9609-d0f0eb65a053
+  author: aida
+  node_id: '1'
+  lamport: 5429
+  timestamp: 2026-09-16T00:44:49.493374249Z
+  kind: !Create
+    title: 'BUG-1163 fix: centralize the supervised-merge fence at the merge-execution chokepoint (keep early escalation)'
+    description: |-
+      Guided-implement decision (operator, 2026-09-15) for BUG-1163 (drive/supervised-merge fence leaks — some drive PRs merged despite the hold).
+
+      Root cause: merge_requires_supervision is consulted in the orchestrator's EARLY per-spec decision (wave_pr_supervision_label, lib.rs:47260) which prints the hold + escalates + exits — but the actual `gh pr merge` is EXECUTED in multiple unfenced sites (forge.rs:1403 forge merge, pr_cmd.rs pr-merge, open-PR recovery re-entry recover_missing_review_pr, wave/batch, subsequent-spec pull). A path that runs merge without re-checking the fence merged BUG-1156/STORY-1130/TASK-1233 while STORY-1131 happened to hit the fenced path.
+
+      DECISION: defense-in-depth. (1) KEEP the early escalation (good operator UX — the hold surfaces up front). (2) ADD the fence at the single merge-EXECUTION chokepoint: the fn that runs merge_args → gh pr merge must receive the spec's execution_mode and REFUSE (emit SupervisedMerge escalation) when merge_requires_supervision(mode). Every auto-complete merge path routes through that chokepoint, so a drive/guided/operator/decide/unset spec is UNMERGEABLE by any auto path by construction. Rejected: patch-one-path (whack-a-mole; the acceptance lists 5 paths) and centralize-only (loses the early hold UX).
+
+      Safety gate (acceptance): regression test — orchestrate a reviewer-approved + CI-green drive spec across the paths → PR stays OPEN, no merge. Keystone reliability fix → guided/keyboard, not headless (it repairs the fence that governs headless).
+    req_type: Decision
+    status: Approved
+    priority: High
+clock: 5429
 node_id: '1'
