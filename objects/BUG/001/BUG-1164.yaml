@@ -20,10 +20,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-15T15:39:34.556868085Z
-modified_at: 2026-09-16T02:11:32.540745508Z
+modified_at: 2026-09-16T02:11:33.917976234Z
 req_type: Bug
 tags:
 - drain aida-store index-lock reliability concurrency
+comments:
+- id: 01a0a7fb-d39d-7911-bbb3-123287a2f47e
+  author: joe
+  content: 'REWORK: prior attempt (#1853, closed) went CI-red (Build ubuntu-latest). Re-implement the stale-lock recovery cleanly and ensure fmt --check + clippy + tests are green before finishing. Drive mode — held for advisor merge.'
+  created_at: 2026-09-16T02:11:33.917976234Z
+  modified_at: 2026-09-16T02:11:33.917976234Z
+  session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
 execution_mode: drive
 implementation_info:
   implemented: true
