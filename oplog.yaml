@@ -69665,5 +69665,31 @@ operations:
   timestamp: 2026-09-16T02:11:32.621424760Z
   kind: !SetStatus
     status: Approved
-clock: 5450
+- id: 01a0a805-912d-75f1-99fa-cc0ca016f305
+  target_id: 01a0a805-603a-7311-8457-de8d74bb69c8
+  author: aida
+  node_id: '1'
+  lamport: 5451
+  timestamp: 2026-09-16T02:22:12.269465913Z
+  kind: !Create
+    title: 'Review PR-1854: [AI:codex] feat(why): add plain rationale cache (STORY-1158)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0a7fc`) for branch `story-1158`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1854>
+      - Branch: `story-1158` → `main`
+
+      ## Covers
+
+      - STORY-1158
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1854` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5451
 node_id: '1'
