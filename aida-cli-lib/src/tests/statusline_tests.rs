@@ -1,7 +1,7 @@
 use super::*;
 use crate::statusline_cmd::{
-    derive_session_branch_suffix, sess_anchor_annotation, sess_label_with_suffix,
-    wt_divergence_segment,
+    derive_session_branch_suffix, draft_backlog_statusline_segment, sess_anchor_annotation,
+    sess_label_with_suffix, wt_divergence_segment,
 };
 
 /// TASK-244: matching shell + session role — no warning, plain
@@ -223,6 +223,48 @@ fn freshness_label_mapping() {
     assert_eq!(CacheFreshness::Behind.label(), Some("behind"));
     assert_eq!(CacheFreshness::Unknown.label(), Some("?"));
     assert_eq!(CacheFreshness::NoStore.label(), None);
+}
+
+/// BUG-1171: the advisor draft badge is not mailbox mail. It must use an
+/// unambiguous draft-backlog label so it cannot be read as unread inbox mail.
+// trace:BUG-1171 | ai:codex
+#[test]
+fn draft_backlog_statusline_segment_uses_drafts_label() {
+    assert_eq!(
+        draft_backlog_statusline_segment(4).as_deref(),
+        Some("drafts:4")
+    );
+    let rendered = draft_backlog_statusline_segment(4).unwrap();
+    assert!(!rendered.starts_with("inbox:"), "got: {rendered}");
+    assert_eq!(draft_backlog_statusline_segment(0), None);
+}
+
+/// BUG-1171: deferred drafts are parked outside the default advisor triage
+/// lens, so the statusline attention badge counts only active draft backlog.
+// trace:BUG-1171 | ai:codex
+#[test]
+fn read_draft_backlog_depth_excludes_deferred_drafts() {
+    let dir = tempfile::tempdir().unwrap();
+    let cache_path = dir.path().join("cache.db");
+    let conn = rusqlite::Connection::open(&cache_path).unwrap();
+    conn.execute_batch(
+        "CREATE TABLE requirements_cache (
+                 id TEXT PRIMARY KEY NOT NULL,
+                 status TEXT NOT NULL,
+                 req_type TEXT NOT NULL,
+                 archived INTEGER NOT NULL DEFAULT 0,
+                 deferred INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO requirements_cache VALUES ('active-1','Draft','Story',0,0);
+             INSERT INTO requirements_cache VALUES ('active-2','draft','Bug',0,0);
+             INSERT INTO requirements_cache VALUES ('deferred-1','Draft','Task',0,1);
+             INSERT INTO requirements_cache VALUES ('archived-1','Draft','Story',1,0);
+             INSERT INTO requirements_cache VALUES ('approved-1','Approved','Story',0,0);",
+    )
+    .unwrap();
+    drop(conn);
+
+    assert_eq!(read_draft_backlog_depth(&cache_path), 2);
 }
 
 // ── derive_session_branch_suffix ──

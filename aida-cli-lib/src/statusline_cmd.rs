@@ -273,13 +273,15 @@ pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> 
         parts.push(format!("q:{}", queue_depth));
     }
     // TASK-648 (ADR-3): the advisor seat owns intake triage, so its statusline
-    // surfaces the draft-inbox depth (untriaged drafts to disposition). Only
+    // surfaces the active draft backlog (untriaged drafts to disposition). Only
     // for the advisor — other roles don't clear this queue — and only when
-    // non-empty, so a clear inbox stays quiet. trace:TASK-648 | ai:claude
+    // non-empty, so a clear backlog stays quiet.
+    // trace:TASK-648 | ai:claude
+    // trace:BUG-1171 | ai:codex
     if effective_role_name == "advisor" {
-        let inbox_depth = read_draft_inbox_depth(&cache_path);
-        if inbox_depth > 0 {
-            parts.push(format!("inbox:{}", inbox_depth).cyan().to_string());
+        let draft_backlog_depth = read_draft_backlog_depth(&cache_path);
+        if let Some(segment) = draft_backlog_statusline_segment(draft_backlog_depth) {
+            parts.push(segment.cyan().to_string());
         }
     }
     // STORY-539: surface URGENT unread mailbox messages so an out-of-band
@@ -410,6 +412,10 @@ pub(crate) fn handle_statusline_command(color: &str, title: bool) -> Result<()> 
         println!("{line}");
     }
     Ok(())
+}
+
+pub(crate) fn draft_backlog_statusline_segment(depth: usize) -> Option<String> {
+    (depth > 0).then(|| format!("drafts:{}", depth))
 }
 
 /// Wrap a status line in an OSC 2 set-window-title escape sequence

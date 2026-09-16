@@ -227,11 +227,11 @@ fn codex_setup_disables_terminal_title_and_recommends_tmux_status_right() {
 /// AIDA segment lands in the terminal title bar / tmux window name.
 #[test]
 fn osc_title_wraps_in_set_window_title_escape() {
-    let out = osc_terminal_title("aida \u{3b1}\u{3b9}\u{3b4}\u{3b1} role:advisor q:4 inbox:43");
+    let out = osc_terminal_title("aida \u{3b1}\u{3b9}\u{3b4}\u{3b1} role:advisor q:4 drafts:43");
     assert!(out.starts_with("\x1b]2;"), "must open with OSC 2: {out:?}");
     assert!(out.ends_with('\x07'), "must terminate with BEL: {out:?}");
     // The payload survives intact between the markers.
-    assert!(out.contains("role:advisor q:4 inbox:43"));
+    assert!(out.contains("role:advisor q:4 drafts:43"));
     // No trailing newline — a prompt hook updates only the title.
     assert!(!out.ends_with('\n'));
 }

@@ -40936,12 +40936,14 @@ fn apply_color_mode(mode: &str) {
 /// budget holds even when the orphan store has hundreds of objects.
 /// Returns `None` if the file is missing or unreadable.
 /// trace:FR-1-041 | ai:claude
-/// TASK-648 (ADR-3): non-archived draft count from the cache, read-only and
-/// fast (same SQLite-without-Cache::open pattern as the statusline freshness
-/// probe — no migration, no write lock on the prompt hot path). The advisor's
-/// statusline shows this as the draft-inbox depth to triage. Returns 0 when
-/// the cache is absent or unreadable rather than erroring the prompt.
-fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
+/// TASK-648 (ADR-3): non-archived, non-deferred draft count from the cache,
+/// read-only and fast (same SQLite-without-Cache::open pattern as the
+/// statusline freshness probe — no migration, no write lock on the prompt hot
+/// path). The advisor's statusline shows this as the active draft backlog to
+/// triage. Returns 0 when the cache is absent or unreadable rather than
+/// erroring the prompt.
+// trace:BUG-1171 | ai:codex
+fn read_draft_backlog_depth(cache_path: &std::path::Path) -> usize {
     if !cache_path.exists() {
         return 0;
     }
@@ -40952,13 +40954,19 @@ fn read_draft_inbox_depth(cache_path: &std::path::Path) -> usize {
         Ok(c) => c,
         Err(_) => return 0,
     };
-    conn.query_row(
-        "SELECT COUNT(*) FROM requirements_cache WHERE archived = 0 AND LOWER(status) = 'draft'",
-        [],
-        |row| row.get::<_, i64>(0),
-    )
-    .map(|n| n.max(0) as usize)
-    .unwrap_or(0)
+    let has_deferred_column = conn
+        .prepare("SELECT deferred FROM requirements_cache LIMIT 0")
+        .is_ok();
+    let sql = if has_deferred_column {
+        "SELECT COUNT(*) FROM requirements_cache \
+         WHERE archived = 0 AND LOWER(status) = 'draft' AND deferred = 0"
+    } else {
+        "SELECT COUNT(*) FROM requirements_cache \
+         WHERE archived = 0 AND LOWER(status) = 'draft'"
+    };
+    conn.query_row(sql, [], |row| row.get::<_, i64>(0))
+        .map(|n| n.max(0) as usize)
+        .unwrap_or(0)
 }
 
 /// Count URGENT unread mailbox messages for the current shell user, for the
@@ -65774,7 +65782,7 @@ fn fast_status_counts_with_defer<'a>(
 
 /// Read `(status, req_type)` for every non-archived row straight from the cache
 /// DB (read-only sqlite), then count via [`fast_status_counts`]. This is the
-/// same read-only cache `read_draft_inbox_depth` uses — NO `backend.load()`, no
+/// same read-only cache `read_draft_backlog_depth` uses — NO `backend.load()`, no
 /// git spawn. Returns zeroed counts when the cache is absent/unreadable (a fresh
 /// `aida init` with no reads yet).
 // trace:STORY-707 | ai:claude
