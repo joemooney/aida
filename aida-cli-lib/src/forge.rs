@@ -2769,6 +2769,180 @@ pub(crate) fn default_branch_of(project_root: &Path) -> String {
 mod tests {
     use super::*;
 
+    // TASK-1241 / SPIKE-80: live round-trip of GitLabForge against a REAL GitLab.
+    // #[ignore] — run explicitly:
+    //   AIDA_GITLAB_LIVE_HOST=gitlab.joemooney.com \
+    //     cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
+    // Requires glab authed to that host with project-create rights. Skips (passes)
+    // when the env var is unset, so it never runs in normal CI. Creates a throwaway
+    // project, opens an MR via GitLabForge::open_change, reads it via change_status,
+    // squash-merges via merge_change, asserts Merged, and deletes the project (even
+    // on panic). Codifies the manual validation that retired SPIKE-80's #1 risk.
+    // trace:TASK-1241 | ai:claude
+    #[test]
+    #[ignore]
+    fn gitlab_live_mr_round_trip() {
+        let host = match std::env::var("AIDA_GITLAB_LIVE_HOST") {
+            Ok(h) if !h.is_empty() => h,
+            _ => {
+                eprintln!(
+                    "skip: set AIDA_GITLAB_LIVE_HOST (a glab-authed host) to run the live GitLab round-trip"
+                );
+                return;
+            }
+        };
+        let glab_api = |args: &[&str]| -> std::process::Output {
+            std::process::Command::new("glab")
+                .env("GITLAB_HOST", &host)
+                .args(args)
+                .output()
+                .expect("glab must be installed")
+        };
+
+        // 1) create a throwaway project
+        let name = format!(
+            "aida-forge-live-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        );
+        let created = glab_api(&[
+            "api",
+            "-X",
+            "POST",
+            "projects",
+            "-f",
+            &format!("name={name}"),
+            "-f",
+            "visibility=private",
+            "-f",
+            "initialize_with_readme=true",
+        ]);
+        assert!(
+            created.status.success(),
+            "project create failed: {}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        let proj: serde_json::Value = serde_json::from_slice(&created.stdout).unwrap();
+        let pid = proj["id"].as_u64().expect("project id");
+        let http = proj["http_url_to_repo"]
+            .as_str()
+            .expect("http_url_to_repo")
+            .to_string();
+
+        // delete the project even if an assertion panics
+        struct Cleanup {
+            pid: u64,
+            host: String,
+        }
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::process::Command::new("glab")
+                    .env("GITLAB_HOST", &self.host)
+                    .args(["api", "-X", "DELETE", &format!("projects/{}", self.pid)])
+                    .output();
+            }
+        }
+        let _cleanup = Cleanup {
+            pid,
+            host: host.clone(),
+        };
+
+        // 2) clone, branch, change, push — a real implementer branch
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        let git = |dir: &std::path::Path, args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .current_dir(dir)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        let clone = std::process::Command::new("git")
+            .args(["clone", &http, repo.to_str().unwrap()])
+            .output()
+            .unwrap();
+        assert!(
+            clone.status.success(),
+            "clone failed: {}",
+            String::from_utf8_lossy(&clone.stderr)
+        );
+        git(&repo, &["checkout", "-b", "live-round-trip"]);
+        std::fs::write(repo.join("probe.txt"), "live forge round-trip").unwrap();
+        git(&repo, &["add", "-A"]);
+        git(
+            &repo,
+            &[
+                "-c",
+                "user.email=aida-test@example.com",
+                "-c",
+                "user.name=aida-test",
+                "commit",
+                "-m",
+                "live round-trip probe",
+            ],
+        );
+        git(&repo, &["push", "-u", "origin", "live-round-trip"]);
+
+        // 3) the GitLabForge round-trip — glab detects the host from the remote
+        let forge = GitLabForge::new(&repo);
+        let cr = forge
+            .open_change(OpenChange {
+                branch: "live-round-trip".into(),
+                base: "main".into(),
+                title: "TASK-1241 live round-trip".into(),
+                body: "GitLabForge live integration test".into(),
+                draft: false,
+            })
+            .expect("open_change must succeed against a real GitLab");
+        assert!(cr.id > 0, "MR iid must be set");
+
+        // poll for mergeability (GitLab computes it async)
+        let mut status = forge
+            .change_status(&cr)
+            .expect("change_status must succeed");
+        for _ in 0..10 {
+            if status.mergeable {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            status = forge.change_status(&cr).expect("change_status");
+        }
+        assert_eq!(
+            status.state,
+            ChangeState::Open,
+            "MR should be open pre-merge"
+        );
+
+        // merge_change — the never-live-validated path
+        let mut sink = crate::network_retry::StderrSink;
+        forge
+            .merge_change(
+                &cr,
+                &MergeOptions {
+                    method: MergeMethod::Squash,
+                    squash_subject: None,
+                    delete_branch: true,
+                },
+                &mut sink,
+            )
+            .expect("merge_change must succeed against a real GitLab");
+
+        let after = forge.change_status(&cr).expect("change_status after merge");
+        assert_eq!(
+            after.state,
+            ChangeState::Merged,
+            "MR must read Merged after merge_change"
+        );
+    }
+
     /// STORY-516: PrLookup → ChangeLookup is a 1:1 state map that preserves the
     /// BUG-257 transient-vs-definitive distinction; Found carries number/url/title.
     #[test]
