@@ -71729,5 +71729,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5592
+- id: 01a0ae55-1708-7b10-8c9c-a045024e6048
+  target_id: 01a0ae55-1318-7ea3-b5b7-9ab73c4a6600
+  author: aida
+  node_id: '1'
+  lamport: 5593
+  timestamp: 2026-09-17T07:46:47.176188581Z
+  kind: !Create
+    title: 'Review PR-1882: [AI:codex] fix(planning): stop pointing users at phantom ultraplan command (BUG-1177)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0ae45`) for branch `bug-1177`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1882>
+      - Branch: `bug-1177` → `main`
+
+      ## Covers
+
+      - BUG-1177
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1882` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5593
 node_id: '1'
