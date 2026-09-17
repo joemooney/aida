@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-17T01:03:48.852022239Z
+modified_at: 2026-09-17T02:04:20.511552248Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
@@ -74,6 +74,12 @@ comments:
   content: Commit 5b5734b68 references this requirement
   created_at: 2026-09-17T00:53:52.779927165Z
   modified_at: 2026-09-17T00:53:52.779927165Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ad1b-929f-7931-aa2f-64ffcbe25573
+  author: joe
+  content: 'Completed reflects SLICE 1 only (the merge_lock primitive + aida merge-lock status verb + ADR-38, #1873). The story''s acceptance (''two concurrent merges serialize'') needs SLICE 2 — the hot-path wiring — tracked as the follow-up task just filed. The lock is not yet live (acquire-side dead-code-gated) until slice 2 lands.'
+  created_at: 2026-09-17T02:04:20.511552248Z
+  modified_at: 2026-09-17T02:04:20.511552248Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0ace4-286d-72a0-886c-eca7d510bb65
