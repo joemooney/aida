@@ -8966,6 +8966,7 @@ mod tests {
     }
 
     // TASK-1244: merge-phase lease contention gets its own recovery hint.
+    // trace:TASK-1244.AC1 | ai:claude
     #[test]
     fn merge_lease_conflict_hint_names_merge_lock_and_pr_ship() {
         let ctx = HintContext {
