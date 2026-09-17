@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:59:59.382279085Z
-modified_at: 2026-09-17T13:39:21.382748051Z
+modified_at: 2026-09-17T13:39:59.800630393Z
 req_type: Bug
 tags:
 - contained
@@ -36,6 +36,20 @@ comments:
   created_at: 2026-09-17T06:04:56.688845395Z
   modified_at: 2026-09-17T06:04:56.688845395Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0af98-76b8-7441-8f56-9eef45cb15f5
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1879 fix(config): pre-allow GitHub/GitLab/crates egress for contained launches
+    verdict: APPROVE + merged (workaround slice only — BUG-1178 itself, dontAsk on interactive launches, stays open/keyboard)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product session; reviewer = this advisor)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN, no live merge-lease or merge-hold
+    reasoning: config-only (.aida/config.toml [contained] allowed_hosts); the reader contained_allowed_hosts (aida-cli-lib/src/session.rs) already exists and is opt-in; host set is exactly what gh/git/cargo/npm/Claude need; default-deny for everything else preserved.
+    merged: 2026-09-17 06:41 -07:00 via aida pr ship 1879 (squash) + aida pull → main 4896a0412
+  created_at: 2026-09-17T13:39:59.800630393Z
+  modified_at: 2026-09-17T13:39:59.800630393Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0af97-e0a0-7793-be1c-618079010617
   author: aida-auto-bump
