@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T06:36:13.886662196Z
+modified_at: 2026-09-17T06:36:15.518936900Z
 req_type: Task
 tags:
 - afk
@@ -39,6 +39,16 @@ comments:
   created_at: 2026-09-17T06:22:44.262614278Z
   modified_at: 2026-09-17T06:22:44.262614278Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ae14-8434-7060-ae5d-752539902671
+  author: joe
+  content: |-
+    REWORK (overnight oversight triage, 23:36) — the drain's codex reviewer returned RequestChanges on PR-1880 (verdict: .aida/review-verdicts/PR-1880.json). One concrete regression to fix, then re-run:
+
+    FINDING: aida-cli-lib/src/lib.rs parse_trace_id_token (~line 21004) now includes '.' in the token scan. A legacy BARE trace followed by punctuation — e.g. `trace:TASK-673.` at the end of a sentence, or `trace:TASK-673,` — used to parse as TASK-673 because the old scanner stopped at '.'; now split_once('.') sees an EMPTY suffix and returns None. That silently drops real trace links for aida why / the trace graph / doctor.
+
+    FIX: preserve bare-ID tokenization when the character after the ID is punctuation or the suffix is empty/non-criterion (treat only a suffix matching a real criterion label — `A1`, `AC3`, `ac1a2b3` (6-hex) — as a criterion; anything else means the '.' is punctuation and the token is the bare ID). Add a regression test for the punctuation cases (`trace:TASK-673.`, `trace:TASK-673,`, `trace:TASK-673 | ai:claude`) asserting they parse as the bare id, alongside the existing byte-identical bare-id and .A1/.ac1a2b3 cases. Push the fixup on the existing task-1246 branch (PR-1880). Everything else in the PR was independently spot-checked clean.
+  created_at: 2026-09-17T06:36:15.284432438Z
+  modified_at: 2026-09-17T06:36:15.284432438Z
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T06:19:54.184460585Z
