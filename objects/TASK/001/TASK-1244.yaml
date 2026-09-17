@@ -6,12 +6,12 @@ description: |-
   Follow-up to TASK-1243 (which wired the merge-lease into pr_ship's check→merge→pull — the primary human/proxy path + the observed advisor-vs-me race). This extends it so the DRAIN's merge phase also acquires the same per-branch lease, serializing drain-merge vs pr-ship-merge.
 
   Two decisions this needs (why it's separate): (1) the drain's merge() and pull() are SEPARATE PhaseDriver methods, so spanning check→merge→pull needs an Option<MergeLease> FIELD on RealPhaseDriver (acquire in merge(), drop after pull()) rather than a local RAII guard — or accept merge-scoped width in the drain; (2) FailureKind has no clean 'merge contention' variant — a WouldBlock after the bounded wait should map to a shelvable NeedsAttention (a stuck merger), which may want a new variant. Wire in RealPhaseDriver::merge (lib.rs), keyed via merge_lock::resolve_target_branch(&self.project_root) so it shares pr_ship's lease. Low priority: drain-vs-pr-ship concurrent merge was never observed (we serialized by hand); the pr-ship-vs-pr-ship race that WAS observed is already covered by TASK-1243.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:20:53.023861336Z
-modified_at: 2026-09-17T15:57:08.719303709Z
+modified_at: 2026-09-17T16:04:48.728845621Z
 req_type: Task
 tags:
 - follow-up-task-1243
@@ -22,3 +22,7 @@ relationships:
   target_id: 01a0b015-c209-7b32-b180-dac27c9c0f28
   created_at: 2026-09-17T15:56:54.399748152Z
 execution_mode: guided
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-17T16:04:48.728845621Z
+  implemented_by: joe
