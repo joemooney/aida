@@ -72985,5 +72985,22 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 5683
+- id: 01a0b08f-4878-7a92-b4c9-824176e313cb
+  target_id: 01a0b08f-4471-7ad0-9904-a437087affa9
+  author: aida
+  node_id: '1'
+  lamport: 5684
+  timestamp: 2026-09-17T18:09:35.352821096Z
+  kind: !Create
+    title: 'Windows: review_phase_sets_the_review_envelope_unconditionally fails — include_str!(lib.rs) source-shape needle assumes LF but the Windows checkout is CRLF'
+    description: |-
+      Cross-platform (nightly) matrix on PR #1898 (2026-09-17, run 35255112427, job 105316720037, windows-latest): test bug_1186_reviewer_seat_tests::review_phase_sets_the_review_envelope_unconditionally (added by #1886 / BUG-1186) panics at aida-cli-lib/src/tests/bug_1186_reviewer_seat_tests.rs:96 — the `src.contains(unconditional)` assert, whose needle is concat!("        cmd.env(\"AIDA_FROM_PR_REVIEW\"", ", \"1\")\n"). The Windows runner checks out with CRLF (core.autocrlf), so include_str!("../lib.rs") carries \r\n and the LF-terminated needle never matches. The sibling source-shape guard in task_1244_drain_merge_lease_tests (#1890) avoids the trailing newline in its needles and passes.
+
+      Fix: make the needle line-ending-agnostic — drop the trailing "\n" from the needle (match up to the closing paren) or normalize src with .replace("\r\n", "\n") before the contains checks; apply the same normalization to any other include_str!-based source-shape guard that embeds "\n" (grep for include_str!("../lib.rs") / include_str!("lib.rs") in tests). Consider a shared test helper source_lf() so the next guard does not repeat this.
+
+      Acceptance: the test passes on windows-latest in the Cross-platform workflow and on Linux; no other include_str! guard embeds a raw "\n" needle without normalization.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5684
 node_id: '1'
