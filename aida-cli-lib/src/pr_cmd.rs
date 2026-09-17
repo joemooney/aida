@@ -3421,7 +3421,11 @@ mod pr_ship_environment_tests {
         .unwrap();
 
         let hold_root = pr_ship_hold_root(&sibling);
-        assert_eq!(hold_root, tmp.path());
+        // trace:BUG-1192 | ai:codex
+        assert_eq!(
+            hold_root.canonicalize().unwrap(),
+            tmp.path().canonicalize().unwrap()
+        );
         assert!(
             crate::merge_hold::read_hold(&hold_root, 1188)
                 .unwrap()
