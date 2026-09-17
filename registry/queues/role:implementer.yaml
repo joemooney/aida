@@ -7,14 +7,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0afe4-69de-7bd0-ae4d-d5fcf9f974c8
-  position: 100000
-  added_by: role:implementer
-  note: 'drive: docs/tui/README.md seam rule + CLAUDE.md pointer; migrate POLLED aida subprocess reads in aida-tui to in-process aida-core (keypress one-shots may stay, justify inline); CI guard: cargo check -p aida-tui standalone + assert no aida-cli-lib dep'
-  added_at: 2026-09-17T16:38:27.871892374Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b06a-82ab-7933-84bb-95974f1e8ceb
   position: 102000
   added_by: role:implementer
