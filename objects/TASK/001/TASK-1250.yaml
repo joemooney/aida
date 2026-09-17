@@ -11,8 +11,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:51:40.467786658Z
-modified_at: 2026-09-17T08:20:16.832893222Z
+modified_at: 2026-09-17T08:20:17.956669925Z
 req_type: Task
 tags:
 - from-advisor:general papercut aida:mailbox:send
+comments:
+- id: 01a0ae73-c5a4-7623-8dc1-179595a2e572
+  author: joe
+  content: 'Oversight 01:21: queued as tonight''s last drain item (mode drain — small self-contained CLI papercut, auto-merge after the drain''s reviewer). Launch order on the single lock: TASK-1251 (running) → BUG-1177 re-drive → this. Motivation is live: the positional-body shell trap mangled three mailbox sends tonight.'
+  created_at: 2026-09-17T08:20:17.956669925Z
+  modified_at: 2026-09-17T08:20:17.956669925Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
