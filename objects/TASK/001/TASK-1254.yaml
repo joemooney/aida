@@ -1,0 +1,18 @@
+id: 01a0b043-be32-7cd0-be62-ab46fb21d252
+spec_id: TASK-1254
+agreed_id: TASK-1254
+title: 'Live GitLab drain validation: headless --auto-complete on the self-hosted mirror once glab is authenticated and the project has a pipeline'
+description: 'Follow-up to STORY-1166 (ADR-43 chose mocked validation now, live later). Preconditions on the dev machine: glab auth login --hostname gitlab.joemooney.com; a .gitlab-ci.yml on the mirror project (the scaffolded gitlab-ci-merge-hold-gate.yml include plus a trivial build job). Then: run one spec through aida queue work <SPEC> --auto-complete --no-human=both on a GitLab-configured checkout and confirm (1) the registration wait routes through Forge::checks_registered (glab pipelines), (2) the CI phase watches via the trait with no direct gh, (3) the BUG-1180 per-check refinement reads GitLab jobs, (4) [review] mode = delegated logs the not-supported note and runs the standard reviewer, (5) the merge-hold-gate CI job on GitLab blocks a supervised MR until the label is removed. Operator-present (keystone): needs credentials and a real pipeline.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T16:47:04.754202553Z
+modified_at: 2026-09-17T16:47:04.754202553Z
+req_type: Task
+tags:
+- forge
+- gitlab
+- keystone
+- parent:EPIC-68
+- validation
