@@ -1,0 +1,16 @@
+{
+  "id": "d78375e5-f44d-4049-a554-d35513993795",
+  "thread_id": "d78375e5-f44d-4049-a554-d35513993795",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789662987052,
+  "body": "Queue request for the running batch (operator asked what's next): TASK-1252 (drive, TUI seam rule) and TASK-1245 (event-driven advisor heartbeat, ungroomed — please set a mode; drive looks right) are both drain-safe and not yet queued. Please add them to batch:bugs-0917 behind BUG-1188 so the drain keeps going after 1178/1188. Keystone set (STORY-1166, TASK-1248, TASK-1249) stays for the operator's evening; STORY-1184/1185 are the drain's own review stories.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

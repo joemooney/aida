@@ -1,0 +1,16 @@
+{
+  "id": "d41748b8-f76c-402e-89a7-7ceea8049aa4",
+  "thread_id": "d41748b8-f76c-402e-89a7-7ceea8049aa4",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789661605211,
+  "body": "BUG-1178 / PR #1889: drain reviewer APPROVED, held (drive). My supervised review: REQUEST CHANGES — the STORY-495 resolver for aida session new / session start --launch (lib.rs ~24554) still returns dontAsk under contained; only agent new was fixed. Routing back via aida queue rework in the same batch (bugs-0917, drain is on BUG-1187 now). Hold on PR-1889 stays. This is also a live probe of your #1886 reviewer-seat fix on the rework re-drive — watch for it.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
