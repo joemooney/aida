@@ -8469,6 +8469,11 @@ pub enum Command {
         /// Requirement ID (UUID or SPEC-ID) the diff implements.
         spec: String,
 
+        /// Confirm candidates from a file (e.g. a `reconstitute` probe's
+        /// divergence output) instead of running the harvest agent.
+        #[clap(long, value_name = "FILE")]
+        from: Option<std::path::PathBuf>,
+
         /// Harvest a PR's diff (`gh pr diff`) instead of the current branch.
         #[clap(long)]
         pr: Option<u64>,
@@ -8488,6 +8493,24 @@ pub enum Command {
         /// Emit the run summary as JSON.
         #[clap(long)]
         json: bool,
+    },
+
+    /// Probe whether a spec could be rebuilt from the store alone: a headless
+    /// agent regenerates its tests from store context only, a second pass
+    /// matches them against the real traced tests, divergences become harvest
+    /// candidates. The score is a heuristic; the divergence report is the product.
+    // trace:TASK-1248 | ai:claude
+    Reconstitute {
+        /// Requirement ID (UUID or SPEC-ID) to probe.
+        spec: String,
+
+        /// Emit the report as JSON.
+        #[clap(long)]
+        json: bool,
+
+        /// Print the probe brief and exit without launching anything.
+        #[clap(long)]
+        dry_run: bool,
     },
 
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.

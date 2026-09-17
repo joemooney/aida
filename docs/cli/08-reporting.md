@@ -188,12 +188,33 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 - PR source — harvest a PR's diff instead of the current branch, for post-merge or review-time harvesting.
 - Base ref — compare against something other than the default branch when the branch stacks.
 - Accept-all — headless runs have no checklist; opt in to every filtered candidate explicitly (the filter still applies).
+- From file — confirm a ready candidate set (a `reconstitute` probe's divergence output) instead of running the agent; same filter, same checklist, same ledger.
 - Dry run — print the agent brief without launching anything.
 - JSON — machine summary of the run.
 
 **Gotchas.** The filter is configured under `[harvest]` in `.aida/config.toml` (`min_confidence` 0.7, `skip_conventional`, `deny_keywords`, `allow_keywords`); start strict and loosen on evidence. Harvest is advisory — it never blocks a merge. An empty candidate list is a valid, good answer.
 
 **Chains with** — `aida harvest <ID> --pr <N>` after review, then `aida criteria <ID>` to see the new criterion as untested, then a traced test for it.
+
+---
+
+### `aida reconstitute`
+
+**One line** — measure whether a spec could be rebuilt from the store alone, and turn the gaps into harvest candidates.
+
+**Mental model.** `reconstitute` is the round-trip verifier of the reconstitution loop. A headless probe agent gets *store-only* context — the spec, its linked decisions, `[aida:sem]` micro-decisions, graph context and the *names* of the symbols its trace comments point at — and no source at all (it runs in an empty scratch directory outside the project and is told not to read anything). It regenerates the tests the criteria imply; a second pass judges, per criterion, whether each real traced test has a regenerated counterpart (matched / partial / missing, with a reason). The per-criterion divergence lines are the product. The score — matched real traced tests over all of them — is a heuristic trend line and is always labelled so. Real tests the store could not reproduce are written as harvest candidates; confirm them with `aida harvest <ID> --from <file>`. The probe never writes to the spec.
+
+**Reach for it when** — a spec has traced tests (`aida criteria` shows them) and you want to know how much of what the code guarantees actually lives in the store, or you want a trend line across releases.
+
+**Don't reach for it when** — the spec has no traced tests yet (trace tests to criteria first; the score would be 0/0), or you want a coverage audit of what is recorded (that is `aida criteria`).
+
+**Key options (rationale only).**
+- JSON — the full report (matches, untested criteria, unanchored tests, candidates file) for scripts and trend tracking.
+- Dry run — print the probe brief; useful to confirm it carries no source before spending an agent run.
+
+**Gotchas.** Two headless agent runs per probe (regenerate, then judge). Judging is agent-based, so treat the score as a heuristic and read the reasons. Isolation is by construction of the brief plus an empty working directory, not a sandbox: a tool-using agent that ignores its instructions could still look around, so the guard is the brief (a test pins that it carries no test source).
+
+**Chains with** — `aida criteria <ID>` first, then `aida reconstitute <ID>`, then `aida harvest <ID> --from <candidates-file>` to land what the store was missing, then trace the new criteria from tests.
 
 ---
 
