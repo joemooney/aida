@@ -22,12 +22,12 @@ description: |-
   - Existing aida-tui tests green; no user-visible behavior change.
 
   Mode: drive (supervised merge) — it touches the TUI poll loop; not for an unattended drain.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:02:57.246736455Z
-modified_at: 2026-09-17T17:50:07.022628765Z
+modified_at: 2026-09-17T18:08:35.118231960Z
 req_type: Task
 tags:
 - architecture
@@ -44,8 +44,24 @@ relationships:
   target_id: 01a0b07d-57ad-7783-bfc8-249ff38300a3
   created_at: 2026-09-17T17:50:07.022624234Z
   created_by: joe
+history:
+- id: 01a0b08e-5d27-79b1-a0fc-4de60d1cc60d
+  author: aida-auto-bump
+  timestamp: 2026-09-17T18:08:35.111623745Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b08e-5d2e-7a10-8118-7e3e1788f97d
+  timestamp: 2026-09-17T18:08:35.118231377Z
+  agent: aida
+  commit_sha: b075e4f7def9625c77c9781e14c462a8b7925005
+  summary: Completed via merge b075e4f7
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T17:49:59.326565073Z
   implemented_by: joe
+  completed_at: 2026-09-17T18:08:35.111493359Z
+  completion_sha: b075e4f7def9625c77c9781e14c462a8b7925005
