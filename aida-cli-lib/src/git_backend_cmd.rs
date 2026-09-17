@@ -3112,6 +3112,29 @@ pub(crate) fn handle_git_backend_command(
             let project_root = find_project_root()?;
             criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
         }
+        Command::Harvest {
+            spec,
+            pr,
+            base,
+            yes_all,
+            dry_run,
+            json,
+        } => {
+            let store = backend.load()?;
+            let project_root = find_project_root()?;
+            crate::harvest::handle_harvest_command(
+                &project_root,
+                &store,
+                spec,
+                crate::harvest::HarvestOptions {
+                    pr: *pr,
+                    base: base.clone(),
+                    yes_all: *yes_all,
+                    dry_run: *dry_run,
+                    json: *json,
+                },
+            )?;
+        }
         Command::Show {
             id,
             comments,
