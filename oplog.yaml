@@ -71227,5 +71227,13 @@ operations:
   timestamp: 2026-09-17T02:21:28.742629986Z
   kind: !SetTitle
     title: 'Merge-lease: wire the lease across pr ship''s check→merge→pull (drain phase split to follow-up)'
-clock: 5556
+- id: 01a0ad2d-ba17-7961-8ee5-14cbdccc66f9
+  target_id: 01a0ab19-f1be-7133-a0a5-e9fd598c530f
+  author: aida
+  node_id: '1'
+  lamport: 5557
+  timestamp: 2026-09-17T02:24:10.263101425Z
+  kind: !SetStatus
+    status: Approved
+clock: 5557
 node_id: '1'
