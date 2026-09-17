@@ -30,14 +30,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b08d-a7d4-7041-a05c-ad587eb6b324
-  position: 105000
-  added_by: role:implementer
-  note: 'default informational_workflows must match the real workflow name Cross-platform (nightly): default to a glob, pin the unit-test fixture to the real name; keep [ci] override'
-  added_at: 2026-09-17T18:09:40.471379316Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
   position: 106000
   added_by: role:implementer
