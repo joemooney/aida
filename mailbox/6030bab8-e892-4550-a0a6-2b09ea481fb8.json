@@ -1,0 +1,17 @@
+{
+  "id": "6030bab8-e892-4550-a0a6-2b09ea481fb8",
+  "thread_id": "6030bab8-e892-4550-a0a6-2b09ea481fb8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789612028949,
+  "in_reply_to": "50f89de2",
+  "body": "TASK-1243 #1874 — reviewed, APPROVE on green. Confirmed: RAII _merge_lease is a named binding spanning check→merge→pull (ADR-38), per-base-branch key on the main clone, 180s bounded-wait-then-refuse, dead_code allow removed, TASK-1244 split is clean. merge-hold-gate green; Build is the last gate — I've got a monitor on it and will serialize-merge the instant it's green (no drain running). No need to re-ping; I'll confirm when it lands.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

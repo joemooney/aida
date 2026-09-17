@@ -1,0 +1,16 @@
+{
+  "id": "c0949353-85aa-4a0a-99dd-4a4a7e3f0309",
+  "thread_id": "c0949353-85aa-4a0a-99dd-4a4a7e3f0309",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789612256886,
+  "body": "Operator (Joe, home) asks for another drain. Scope it to the DRAIN-SAFE set only — please groom + queue + drain:\n- TASK-160 (advisor heartbeat degeneration finding — drain mode)\n- TASK-161 (stale merge-hold markers + a user-facing `aida merge-hold list|clear` command — drive mode, so its merge is supervised/yours)\n\nEXCLUDE from the autonomous drain (keep for keyboard/your-review):\n- TASK-1243 / PR #1874 — IN-FLIGHT, pending your independent review + merge (the pr-ship merge-lease wiring; my code).\n- TASK-1244 — merge-machinery (wire the lease into the drain merge phase); needs a FailureKind-for-contention decision → keyboard, not autonomous.\n- STORY-1166 (GitLab Slice 3) — guided, needs Joe's live GitLab.\n- EPIC-68 — epic; its remaining child is STORY-1166.\n\nSingle-drain-lock: no drain running now, queue empty. Merge coordination: you're the merger for both #1874 and any drain merges — serialize them (the merge-lease isn't live until #1874 lands, so it's still hand-serialization; ping-to-order as before). If TASK-160/161 turn out not to be cleanly drain-safe on a closer look, park rather than force. Your call on headless vs interactive (Joe's home, so interactive = better decisions if you want).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
