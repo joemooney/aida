@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
-  position: 106000
-  added_by: role:implementer
-  note: 'test-only: canonicalize both sides of the hold_root assert (macOS /var → /private/var); verify by dispatching gh workflow run cross-platform.yml on the branch'
-  added_at: 2026-09-17T18:10:21.420571546Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b08f-4471-7ad0-9904-a437087affa9
   position: 107000
   added_by: role:implementer
