@@ -22,12 +22,12 @@ description: |-
   - Existing aida-tui tests green; no user-visible behavior change.
 
   Mode: drive (supervised merge) — it touches the TUI poll loop; not for an unattended drain.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:02:57.246736455Z
-modified_at: 2026-09-17T16:38:26.406219778Z
+modified_at: 2026-09-17T17:43:52.202205329Z
 req_type: Task
 tags:
 - architecture
