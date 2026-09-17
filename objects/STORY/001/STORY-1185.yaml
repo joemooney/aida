@@ -1,0 +1,26 @@
+id: 01a0b030-8dac-72e1-8c63-0d6e1b99e2b5
+spec_id: STORY-1185
+agreed_id: STORY-1185
+title: 'Review PR-1891: [AI:codex] fix(awaiting): filter shipped unshipped-work branches (BUG-1187)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b023`) for branch `bug-1187`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1891>
+  - Branch: `bug-1187` → `main`
+
+  ## Covers
+
+  - BUG-1187
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1891` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T16:26:07.148837793Z
+modified_at: 2026-09-17T16:26:07.148837793Z
+req_type: Story

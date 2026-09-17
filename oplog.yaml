@@ -72514,5 +72514,31 @@ operations:
 
       ## Acceptance
       - AC1. When the drain merge phase shelves a PR because the merge-lease is held, the recovery hint must tell the operator both how to inspect the current holder with `aida merge-lock` and how to resume after release with `aida pr ship <PR>` using the affected PR number.
-clock: 5648
+- id: 01a0b030-9386-7262-9900-ce2f0c11ceaa
+  target_id: 01a0b030-8dac-72e1-8c63-0d6e1b99e2b5
+  author: aida
+  node_id: '1'
+  lamport: 5649
+  timestamp: 2026-09-17T16:26:08.646633023Z
+  kind: !Create
+    title: 'Review PR-1891: [AI:codex] fix(awaiting): filter shipped unshipped-work branches (BUG-1187)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b023`) for branch `bug-1187`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1891>
+      - Branch: `bug-1187` → `main`
+
+      ## Covers
+
+      - BUG-1187
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1891` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5649
 node_id: '1'
