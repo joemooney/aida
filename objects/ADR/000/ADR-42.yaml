@@ -1,0 +1,25 @@
+id: 01a0b015-df18-7990-b151-b90579a7a31e
+spec_id: ADR-42
+agreed_id: ADR-42
+title: 'aida harvest v1: opt-in checklist confirm, per-kind landing (AC line / [aida:sem] comment / draft ADR), strict 0.7 filter'
+description: |-
+  Accepted 2026-09-17 (operator, guided, answered async while at work) for TASK-1247 (STORY-1178 slice 2, aida harvest).
+
+  1. CONFIRM UX = ONE CHECKLIST, OPT-IN. At a TTY, all filtered candidates are listed numbered with kind, confidence and rationale; the operator types the numbers to ACCEPT and the default is none. Headless requires --yes-all or --dry-run. Skipped candidates are always recorded in the [aida:harvest] ledger comment. Rejected: opt-out (slop risk) and per-candidate y/n/e (tedious past ~5).
+
+  2. LANDING PER KIND. A confirmed criterion is appended as a real labeled line to the spec's ## Acceptance section (targeted single-spec write) so aida criteria sees it on the next run; a confirmed SEM micro-decision is an [aida:sem] marked comment (STORY-1173 ledger pattern, no schema change); a confirmed ADR candidate becomes a Draft decision spec linked to the source spec with references. Rejected: comments-only (harvested criteria never join the traced set) and ADR-as-comment-only (accepted as a fallback if minting proves noisy).
+
+  3. FILTER DEFAULTS ([harvest] config): min_confidence = 0.7, skip_conventional = true, deny-list on (formatting, naming, logging, obvious error paths). The agent rates each candidate observable + non-obvious with a confidence; below threshold or deny-listed is filtered and ledgered as skipped. Start strict; loosen on evidence.
+
+  Invariants carried from the plan: advisory only (never blocks), headless agent via spawn_claude_headless/compose_headless_command (no new launcher), every run writes the ledger comment.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T15:56:58.520355641Z
+modified_at: 2026-09-17T15:56:58.520355641Z
+req_type: Decision
+tags:
+- harvest
+- parent:TASK-1247
+- reconstitution
