@@ -22769,11 +22769,11 @@ fn tool_bypass_flags(agent_type: &str) -> Vec<String> {
     }
 }
 
-// trace:STORY-567 | ai:codex
+// trace:BUG-1178 | ai:codex
 fn tool_contained_flags(agent_type: &str) -> Vec<String> {
     match agent_type {
         "claude" => {
-            let mut flags = vec!["--permission-mode".to_string(), "dontAsk".to_string()];
+            let mut flags = Vec::new();
             flags.extend(session::claude_contained_flags());
             flags
         }
@@ -22786,6 +22786,24 @@ fn tool_contained_flags(agent_type: &str) -> Vec<String> {
         ],
         _ => Vec::new(),
     }
+}
+
+// trace:BUG-1178 | ai:codex
+fn claude_args_request_dontask(args: &[String]) -> bool {
+    args.windows(2)
+        .any(|w| w[0] == "--permission-mode" && w[1] == "dontAsk")
+}
+
+// trace:BUG-1178 | ai:codex
+fn guard_interactive_claude_dontask(agent_type: &str, args: &[String]) -> Result<()> {
+    if agent_type == "claude" && claude_args_request_dontask(args) {
+        anyhow::bail!(
+            "refusing to launch interactive Claude with --permission-mode dontAsk; \
+             use contained mode without dontAsk for a promptable TTY, or run a headless drain \
+             when no human can answer permission prompts"
+        );
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23494,6 +23512,7 @@ fn agent_new_with_config(
         flag_options,
         explicit_permission,
     )?;
+    guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
     // launch lands on the native posture (no `--permission-mode` in the argv).
@@ -23678,6 +23697,7 @@ fn agent_new_bg_dispatch(
         flag_options,
         explicit_permission,
     )?;
+    guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
     // launch lands on the native posture (no `--permission-mode` in the argv).
