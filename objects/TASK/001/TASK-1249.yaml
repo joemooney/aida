@@ -22,3 +22,6 @@ relationships:
   target_id: 01a0adb3-f2a8-7861-87bd-ef92e199bb19
   created_at: 2026-09-17T04:51:19.752827295Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
+  created_at: 2026-09-17T04:51:21.422395044Z
