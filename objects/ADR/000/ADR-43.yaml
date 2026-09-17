@@ -1,0 +1,23 @@
+id: 01a0b03e-2365-7522-b4e7-aa3da806acf2
+spec_id: ADR-43
+agreed_id: ADR-43
+title: 'GitLab slice 3: CI watch/register/per-check rows behind the Forge trait; mocked validation now, live follow-up; delegated mode skips on GitLab'
+description: |-
+  Accepted 2026-09-17 (operator, guided, async fork round) for STORY-1166 (GitLab slice 3).
+
+  1. SCOPE = CI watch + register + per-check rows. wait_for_pr_checks_to_register, wait_for_ci_terminal and the BUG-1180 ci_gate per-check refinement route through Forge trait methods (GitHub: gh pr checks --json; GitLab: glab pipeline jobs). The delegated-review check-runs severity tally stays GitHub-only this slice. Rejected: abstracting the tally now (GitLab commit-statuses shape differs enough to be the riskiest part) and the minimal two-site version (would leave the gate-aware watch GitHub-only).
+
+  2. VALIDATION = unit/mocked now, live as a follow-up TASK. Trait-level tests with a fake forge (CI states, registration timing, per-check rows); the GitHub path is pinned unchanged by source-shape guards. A live headless drain on GitLab is filed as a follow-up once glab is authenticated to the self-hosted mirror and the mirror project has CI. Rationale: glab on the dev machine is authenticated to gitlab.com only and the mirror has no pipeline yet.
+
+  3. DELEGATED MODE ON GITLAB = explicit skip. [review] mode = delegated on a GitLab project logs 'delegated review not supported on this forge' and runs the standard headless reviewer; never a silent NoVerdict, never a shelve.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T16:40:57.445489064Z
+modified_at: 2026-09-17T16:40:57.445489064Z
+req_type: Decision
+tags:
+- forge
+- gitlab
+- parent:STORY-1166
