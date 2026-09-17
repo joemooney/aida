@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T09:16:56.446633142Z
+modified_at: 2026-09-17T09:22:08.882164242Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -66,6 +66,12 @@ comments:
   content: 'Codex rework 2026-09-17: addressed reviewer RequestChanges by sweeping remaining stale slash-command references. Proof: rg -n ''/ultraplan'' CLAUDE.md docs/cli docs/first-project.md docs/agents/cross-agent-onboarding.md aida-core/templates aida-cli-lib/src now returns no matches. Verification passed: cargo fmt --all -- --check; cargo test -p aida-cli-lib ultraplan -- --nocapture (30 passed); python3 docs/cli/verify-manual.py (completeness/spec-id/reflection/flags all OK). Pushed fixup commit 5944332a6 to PR-1882 on GitHub; GitLab mirror rejected the force update and may need mirror drift cleanup separately.'
   created_at: 2026-09-17T09:16:56.446633142Z
   modified_at: 2026-09-17T09:16:56.446633142Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0aeac-6572-7a13-bbec-de3fd1baeefc
+  author: joe
+  content: 'Codex headless wait-state 2026-09-17: PR-1882 is updated to 5944332a6 and local verification is green, but remote CI is still running. Current GitHub rollup: merge-hold-gate SUCCESS; Build (ubuntu-latest) IN_PROGRESS on run 35204250630/job 105146054051; PR mergeStateStatus UNSTABLE only because the Build job is pending. Per headless waiting rule, stopping instead of continuing as an unbounded CI watcher.'
+  created_at: 2026-09-17T09:22:08.882164242Z
+  modified_at: 2026-09-17T09:22:08.882164242Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
