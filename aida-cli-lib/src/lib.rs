@@ -32899,7 +32899,10 @@ pub(crate) fn wait_for_ci_terminal(
         let base_tip = default_ref
             .as_deref()
             .and_then(|r| git_rev_parse_quiet(git_root, r));
-        let rollup = ci_rollup_json_for_branch(branch);
+        // STORY-1166: the idle-progress fingerprint source is forge-routed —
+        // GitHub check rollup, GitLab pipelines listing; pure-git has none.
+        // trace:STORY-1166 | ai:claude
+        let rollup = crate::forge::forge_for(git_root).ci_progress_snapshot(branch);
         let fingerprint = ci_progress_fingerprint(&rollup, base_tip.as_deref());
         let progressed = match &last_fingerprint {
             // The first observation is the baseline, not progress.
@@ -84627,12 +84630,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // and shelve CiRed only for a REAL failing check. GitHub only;
                 // other forges keep the coarse verdict.
                 // trace:BUG-1180 | ai:claude
-                if self.lifecycle_forge == crate::forge::ForgeKind::GitHub {
+                {
                     let hold_present =
                         merge_hold::read_hold(&self.project_root, pr_number as u64).is_some();
-                    match ci_gate::refine_red_via_gh(
+                    let refine_change = crate::forge::ChangeRef {
+                        id: pr_number as u64,
+                        url: String::new(),
+                        branch: branch.clone(),
+                        base: String::new(),
+                        title: None,
+                    };
+                    match ci_gate::refine_red(
                         &self.project_root,
-                        pr_number as u64,
+                        self.lifecycle_forge().as_ref(),
+                        &refine_change,
                         hold_present,
                         std::time::Duration::from_secs(20 * 60),
                         std::time::Duration::from_secs(15),
@@ -84667,7 +84678,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 ),
                             ));
                         }
-                        Err(_) => {} // gh unavailable — fall through to the coarse verdict
+                        Err(_) => {} // no per-check rows on this forge — coarse verdict
                     }
                 }
                 self.ci_run_id = latest_run_id_for_branch(&branch);
@@ -84853,7 +84864,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         }
 
         let mode = read_review_mode(&self.project_root);
-        if mode == "delegated" {
+        // STORY-1166 / ADR-43: delegated (check-run tally) review is a GitHub
+        // capability. On any other forge, say so and run the standard
+        // reviewer — never a silent NoVerdict, never a shelve.
+        // trace:STORY-1166 | ai:claude
+        let delegated_supported = self.lifecycle_forge().supports_delegated_review();
+        if mode == "delegated" && !delegated_supported {
+            eprintln!(
+                "  {} review mode 'delegated' is not supported on this forge ({}) — running the standard reviewer instead",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                self.lifecycle_forge.change_noun()
+            );
+        }
+        if mode == "delegated" && delegated_supported {
             eprintln!(
                 "  {} Review mode set to 'delegated' — triggering remote review on PR {}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),

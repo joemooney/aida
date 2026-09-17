@@ -266,57 +266,57 @@ pub(crate) fn parse_check_rows(json: &str) -> Option<Vec<CheckRow>> {
     )
 }
 
-fn gh_checks_json(project_root: &Path, pr: u64, extra: &[&str]) -> anyhow::Result<String> {
-    let mut cmd = std::process::Command::new("gh");
-    cmd.current_dir(project_root)
-        .args(["pr", "checks", &pr.to_string()])
-        .args(extra)
-        .args(["--json", "name,bucket,workflow"]);
-    let out = crate::pr_cmd::command_output_retrying_etxtbsy(&mut cmd)?;
-    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if stdout.starts_with('[') {
-        return Ok(stdout);
+/// STORY-1166: wait until the forge has registered CI checks for `change`
+/// (a freshly pushed PR whose workflows have not started yet), bounded by
+/// `timeout`. `NoCi` returns immediately — nothing to wait on.
+// trace:STORY-1166 | ai:claude
+pub(crate) fn wait_for_checks_to_register(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> anyhow::Result<()> {
+    use crate::forge::CheckRegistration;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match forge.checks_registered(change)? {
+            CheckRegistration::Registered | CheckRegistration::NoCi => return Ok(()),
+            CheckRegistration::NotYet => {}
+        }
+        if Instant::now() >= deadline {
+            anyhow::bail!(
+                "No CI checks registered within {}s for {}-{} — verify CI is configured for this project on {}",
+                timeout.as_secs(),
+                forge.kind().change_noun().to_ascii_uppercase(),
+                change.id,
+                forge.cli_name()
+            );
+        }
+        std::thread::sleep(poll_interval);
     }
-    anyhow::bail!(
-        "`gh pr checks {pr} --json` produced no JSON: {}",
-        String::from_utf8_lossy(&out.stderr).trim()
-    )
 }
 
-/// The PR's check rows via `gh`.
-pub(crate) fn fetch_check_rows(project_root: &Path, pr: u64) -> anyhow::Result<Vec<CheckRow>> {
-    let json = gh_checks_json(project_root, pr, &[])?;
-    parse_check_rows(&json)
-        .ok_or_else(|| anyhow::anyhow!("could not parse `gh pr checks {pr} --json`"))
-}
-
-/// Names of the branch-protection-required checks (`gh pr checks --required`);
-/// empty on any failure — which only ever makes the classification stricter.
-pub(crate) fn fetch_required_names(project_root: &Path, pr: u64) -> Vec<String> {
-    gh_checks_json(project_root, pr, &["--required"])
-        .ok()
-        .and_then(|j| parse_check_rows(&j))
-        .map(|rows| rows.into_iter().map(|r| r.name).collect())
-        .unwrap_or_default()
-}
-
-/// Refine a coarse "CI failed" verdict for `pr`: classify every row, and — when
-/// nothing real is red yet but relevant checks are still pending (the coarse
-/// watcher returned on the first red) — keep polling until they settle or
-/// `settle_timeout` elapses. A timeout leaves the still-pending names in
-/// `pending`; the caller decides (pr ship bails, the drain shelves CiTimeout).
-pub(crate) fn refine_red_via_gh(
+/// Refine a coarse "CI failed" verdict for `change`: classify every row the
+/// forge reports, and — when nothing real is red yet but relevant checks are
+/// still pending (the coarse watcher returned on the first red) — keep polling
+/// until they settle or `settle_timeout` elapses. A timeout leaves the
+/// still-pending names in `pending`; the caller decides (pr ship bails, the
+/// drain shelves CiTimeout). `Err` means the forge exposes no per-check rows
+/// (pure-git) or the read failed — callers keep the coarse verdict.
+// trace:STORY-1166 | ai:claude (forge-routed; was gh-only under BUG-1180)
+pub(crate) fn refine_red(
     project_root: &Path,
-    pr: u64,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
     hold_marker_present: bool,
     settle_timeout: Duration,
     poll_interval: Duration,
 ) -> anyhow::Result<RedRefinement> {
     let cfg = read_ci_gate_config(project_root);
-    let required = fetch_required_names(project_root, pr);
+    let required = forge.required_check_names(change);
     let deadline = Instant::now() + settle_timeout;
     loop {
-        let rows = fetch_check_rows(project_root, pr)?;
+        let rows = forge.check_rows(change)?;
         let r = classify_red(&rows, &required, &cfg, hold_marker_present);
         if r.is_real() || !r.has_pending() || Instant::now() >= deadline {
             return Ok(r);
@@ -326,18 +326,22 @@ pub(crate) fn refine_red_via_gh(
 }
 
 /// After the hold is released (label removed → the gate workflow re-runs),
-/// wait for `merge-hold-gate` to report green before merging. A PR with no
-/// such check (no Layer 2) returns immediately. `Ok(false)` = still not green
-/// at the deadline.
+/// wait for `merge-hold-gate` to report green before merging. A change with no
+/// such check (no Layer 2, or a forge with no per-check rows) returns
+/// immediately. `Ok(false)` = still not green at the deadline.
+// trace:STORY-1166 | ai:claude (forge-routed)
 pub(crate) fn wait_hold_gate_green(
-    project_root: &Path,
-    pr: u64,
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
     timeout: Duration,
     poll_interval: Duration,
 ) -> anyhow::Result<bool> {
     let deadline = Instant::now() + timeout;
     loop {
-        let rows = fetch_check_rows(project_root, pr)?;
+        let rows = match forge.check_rows(change) {
+            Ok(rows) => rows,
+            Err(_) => return Ok(true), // no per-check rows on this forge — nothing to wait on
+        };
         match hold_gate_state(&rows) {
             HoldGateState::Absent | HoldGateState::Green => return Ok(true),
             HoldGateState::NotGreen => {}
@@ -520,6 +524,184 @@ mod tests {
         assert!(wild_match("*macos*", "Build (macos-latest)"));
         assert!(!wild_match("Build (windows*", "Build (ubuntu-latest)"));
         assert!(!wild_match("CI", "CI-nightly"));
+    }
+
+    // STORY-1166: the register-wait and the red refinement are driven purely
+    // through the Forge trait — a fake forge with no `gh`/`glab` proves it.
+    struct FakeForge {
+        registrations: std::cell::RefCell<Vec<crate::forge::CheckRegistration>>,
+        rows: Option<Vec<CheckRow>>,
+        required: Vec<String>,
+    }
+    impl crate::forge::Forge for FakeForge {
+        fn change_metadata(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> anyhow::Result<crate::forge::ChangeMetadata> {
+            unimplemented!()
+        }
+        fn change_commit_headlines(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> anyhow::Result<Vec<String>> {
+            unimplemented!()
+        }
+        fn change_reviews(
+            &self,
+            _: u64,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> anyhow::Result<crate::forge::ChangeReviews> {
+            unimplemented!()
+        }
+        fn merge_change(
+            &self,
+            _: &crate::forge::ChangeRef,
+            _: &crate::forge::MergeOptions,
+            _: &mut dyn crate::network_retry::RetrySink,
+        ) -> anyhow::Result<crate::forge::MergeResult> {
+            unimplemented!()
+        }
+        fn kind(&self) -> crate::forge::ForgeKind {
+            crate::forge::ForgeKind::GitHub
+        }
+        fn open_change(
+            &self,
+            _: crate::forge::OpenChange,
+        ) -> anyhow::Result<crate::forge::ChangeRef> {
+            unimplemented!()
+        }
+        fn change_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::ChangeLookup> {
+            unimplemented!()
+        }
+        fn change_for_spec(&self, _: &str) -> anyhow::Result<crate::forge::ChangeLookup> {
+            unimplemented!()
+        }
+        fn merged_change_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::ChangeLookup> {
+            unimplemented!()
+        }
+        fn change_status(
+            &self,
+            _: &crate::forge::ChangeRef,
+        ) -> anyhow::Result<crate::forge::ChangeStatus> {
+            unimplemented!()
+        }
+        fn diff_change(&self, _: u64) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        fn ci_status(&self, _: crate::forge::CiTarget) -> anyhow::Result<crate::forge::CiStatus> {
+            unimplemented!()
+        }
+        fn ci_probe_for_branch(&self, _: &str) -> anyhow::Result<crate::forge::CiProbeResult> {
+            unimplemented!()
+        }
+        fn watch_ci(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<crate::forge::CiState> {
+            unimplemented!()
+        }
+        fn stream_ci_for_branch(
+            &self,
+            _: &str,
+            _: bool,
+        ) -> anyhow::Result<crate::forge::CiProbeResult> {
+            unimplemented!()
+        }
+        fn comment(&self, _: &crate::forge::ChangeRef, _: &str) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        fn checkout_change(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<()> {
+            unimplemented!()
+        }
+        fn list_changes(
+            &self,
+            _: crate::forge::ChangeFilter,
+        ) -> anyhow::Result<Vec<crate::forge::ChangeRef>> {
+            unimplemented!()
+        }
+        fn checks_registered(
+            &self,
+            _: &crate::forge::ChangeRef,
+        ) -> anyhow::Result<crate::forge::CheckRegistration> {
+            let mut v = self.registrations.borrow_mut();
+            Ok(if v.len() > 1 { v.remove(0) } else { v[0] })
+        }
+        fn check_rows(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<Vec<CheckRow>> {
+            self.rows
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("no rows on this forge"))
+        }
+        fn required_check_names(&self, _: &crate::forge::ChangeRef) -> Vec<String> {
+            self.required.clone()
+        }
+    }
+    fn change() -> crate::forge::ChangeRef {
+        crate::forge::ChangeRef {
+            id: 42,
+            url: String::new(),
+            branch: "feature".into(),
+            base: String::new(),
+            title: None,
+        }
+    }
+    fn fake(regs: &[crate::forge::CheckRegistration], rows: Option<Vec<CheckRow>>) -> FakeForge {
+        FakeForge {
+            registrations: std::cell::RefCell::new(regs.to_vec()),
+            rows,
+            required: vec![HOLD_GATE_CHECK.into()],
+        }
+    }
+
+    #[test]
+    fn register_wait_is_forge_driven() {
+        use crate::forge::CheckRegistration as R;
+        let ms = Duration::from_millis(1);
+        let f = fake(&[R::NotYet, R::NotYet, R::Registered], None);
+        wait_for_checks_to_register(&f, &change(), Duration::from_secs(5), ms).unwrap();
+        let f = fake(&[R::NoCi], None);
+        wait_for_checks_to_register(&f, &change(), Duration::from_secs(5), ms).unwrap();
+        let f = fake(&[R::NotYet], None);
+        let err =
+            wait_for_checks_to_register(&f, &change(), Duration::from_millis(5), ms).unwrap_err();
+        assert!(err.to_string().contains("PR-42"), "{err}");
+    }
+
+    #[test]
+    fn red_refinement_is_forge_driven_and_keeps_coarse_verdict_without_rows() {
+        use crate::forge::CheckRegistration as R;
+        let dir = tempfile::tempdir().unwrap();
+        let ms = Duration::from_millis(1);
+        let f = fake(
+            &[R::Registered],
+            Some(vec![
+                CheckRow {
+                    name: "Build (ubuntu-latest)".into(),
+                    workflow: "CI".into(),
+                    bucket: "pass".into(),
+                },
+                CheckRow {
+                    name: HOLD_GATE_CHECK.into(),
+                    workflow: "merge-hold-gate".into(),
+                    bucket: "fail".into(),
+                },
+            ]),
+        );
+        let r = refine_red(dir.path(), &f, &change(), true, Duration::from_secs(1), ms).unwrap();
+        assert!(!r.is_real() && r.hold_gate_is_the_hold);
+        assert!(!wait_hold_gate_green(&f, &change(), Duration::from_millis(3), ms).unwrap());
+        // No rows (the pure-git default) → Err, callers keep the coarse verdict;
+        // and the hold-gate wait has nothing to wait on.
+        let f = fake(&[R::Registered], None);
+        assert!(refine_red(dir.path(), &f, &change(), true, Duration::from_secs(1), ms).is_err());
+        assert!(wait_hold_gate_green(&f, &change(), Duration::from_millis(3), ms).unwrap());
+    }
+
+    /// Source-shape guard: this module never shells out to a forge CLI itself.
+    #[test]
+    fn ci_gate_has_no_direct_forge_cli_calls() {
+        let src = include_str!("ci_gate.rs");
+        let body = &src[..src.find("#[cfg(test)]").unwrap()];
+        assert!(!body.contains(concat!("Command::new(\"g", "h\")")));
+        assert!(!body.contains(concat!("Command::new(\"gl", "ab\")")));
     }
 
     #[test]
