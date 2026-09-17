@@ -1584,6 +1584,7 @@ fn first_nonempty_line(s: &str) -> Option<String> {
 /// hold is cleared before suspending so the popup is gone while the child owns
 /// the terminal; the cockpit repaints from scratch on return.
 // trace:STORY-744 | ai:claude
+// trace:TASK-1252 | ai:codex — mutation-style interactive CLI path.
 fn clarify_and_reoffer(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     st: &mut RedesignState,
@@ -1672,9 +1673,12 @@ impl DriveGateVerdict {
 /// `aida zen <id> --json` and parsing the verdict. Returns `Ok(verdict)` on a
 /// clean probe, or `Err(message)` when the probe could not be run or parsed —
 /// the caller then refuses to launch (an unverifiable gate must not report a
-/// false "drive launched"). Synchronous: the probe is a fast local store read +
-/// pure classification (no LLM, no network), like the `show` / `why` reads.
+/// false "drive launched"). Synchronous: the probe is a fast,
+/// keypress-triggered one-shot gate check (no LLM, no network), not a
+/// poll-cadence read. It stays on the CLI side because the gate must match the
+/// exact `zen` command that will launch the drive.
 // trace:STORY-744 | ai:claude
+// trace:TASK-1252 | ai:codex
 fn probe_drive_gate(id: &str) -> std::result::Result<DriveGateVerdict, String> {
     let exe = crate::app::aida_exe();
     let mut cmd = Command::new(&exe);
@@ -1740,10 +1744,12 @@ fn groom_args() -> [&'static str; 1] {
 /// `(stdout_or_error, title)` for the verb modal. Captures stdout (colour codes
 /// auto-disable on a non-TTY pipe, so the modal text is plain). A non-zero exit
 /// or spawn failure yields an error body rather than a panic, so the cockpit
-/// always shows *something*. Carries advisor authority for provenance (and so
-/// any future gating on the read path isn't surprised); the propose pass itself
-/// performs no writes.
+/// always shows *something*. This is a keypress-triggered one-shot read, not a
+/// poll-cadence read; it remains a subprocess because the advisor disposition
+/// planner lives in the CLI and the propose pass itself performs no writes.
+/// Carries advisor authority for provenance.
 // trace:STORY-703 | ai:claude
+// trace:TASK-1252 | ai:codex
 fn run_groom_propose() -> (String, String) {
     let title = "groom — proposed dispositions (propose-only, nothing applied)".to_string();
     let exe = crate::app::aida_exe();
@@ -1814,21 +1820,27 @@ fn archive_status(archived: &[String], failed: &[String]) -> String {
     parts.join(" · ")
 }
 
-/// Shell out for the `why` verb and return `(stdout_or_error, title)`.
+/// Shell out for the `why` / `status` one-shot read verbs and return
+/// `(stdout_or_error, title)`.
 ///
-/// `why` is the ONE remaining read-style shell-out in this module:
-/// `aida why <id>`. Its state classifier lives in `aida-cli/burndown.rs` (not
-/// in `aida-core`), so making it in-process is a separate task —
-/// TODO(why in-process). `show` and the scope lists are now in-process via
-// [`SpecStore`] and never reach here. trace:STORY-693 | ai:claude
+/// These are explicitly keypress-triggered one-shots, not poll-cadence reads.
+/// `why`'s classifier lives in `aida-cli/burndown.rs`, and `status` uses the
+/// CLI's full operator-facing prose projection. Making either in-process would
+/// require moving that shared presentation/classification logic into
+/// `aida-core`; until then, the hot paths (`show`, scope lists, queue, mail,
+/// row liveness, refresh) stay in-process via [`SpecStore`] / `aida-core`.
+// trace:STORY-693 | ai:claude
+// trace:TASK-1252 | ai:codex
 fn run_item_verb(verb: Verb, id: &str) -> (String, String) {
     let title = format!("{id} — {}", verb.label());
     // `why` and `status` shell out to the matching `aida` subcommand; any other
     // verb is a defensive no-op (item-level `show` is intercepted upstream and
-    // served in-process). `status` reuses the per-spec liveness probe wholesale
-    // (STORY-694's `aida status <spec>`): queued / In-Progress / live / STALE +
-    // session / pid / started / elapsed — no reimplementation here.
+    // served in-process). `status` uses the CLI's full prose projection:
+    // queued / In-Progress / live / STALE + session / pid / started / elapsed.
+    // The poll-cadence row glyph stays in-process via `aida-core`; this is only
+    // a focused modal read.
     // trace:TASK-953 | ai:claude
+    // trace:TASK-1252 | ai:codex
     let subcommand = match verb {
         Verb::Why => "why",
         Verb::Status => "status",
@@ -2867,10 +2879,10 @@ fn render_bottom(f: &mut Frame, area: Rect, st: &RedesignState, theme: &Theme) {
         };
 
         // Leading per-row liveness glyph (TASK-978): ● live / ⚠ stale / ◦ idle,
-        // sourced from `aida ps --json` (the cached `st.liveness` probe), so an
+        // sourced from the cached in-process `st.liveness` probe, so an
         // operator watching a drive sees at a glance which targets are live vs
         // orphaned/stale. Rides the structural style over the cursor highlight
-        // (contrast), else its own semantic colour. trace:TASK-978 | ai:claude
+        // (contrast), else its own semantic colour. trace:TASK-978 trace:TASK-1252
         let live = st.liveness.for_id(&item.id);
         let live_glyph = list_row::liveness_glyph(live, mode);
         let live_style = if cursor_active {

@@ -450,17 +450,23 @@ pub enum Verb {
     // trace:TASK-949
     Reject,
     Archive,
-    /// Open scope: `aida show <id> --no-git` on the focused item → modal.
+    /// Open scope: show the focused item from the in-process [`SpecStore`]
+    /// read path (no `aida show` subprocess).
     Show,
-    /// Open scope: `aida why <id>` on the focused item → modal.
+    /// Open scope: `aida why <id>` on the focused item → modal. This is a
+    /// keypress-triggered one-shot read, not a poll-cadence read; it may shell
+    /// out until the `why` classifier moves from the CLI into `aida-core`.
+    // trace:TASK-1252 | ai:codex
     Why,
     /// Open scope: `aida status <id>` on the focused item → modal. The per-spec
     /// LIVE work-state lens — queued / In-Progress / live ● / STALE ⚠ plus the
-    /// backing session / pid / started / elapsed. Reuses the STORY-694 per-spec
-    /// liveness probe wholesale (shells out to `aida status <spec>`); distinct
-    /// from `show` (content) and `why` (still-open reason). An item-level read
-    /// verb, so role-agnostic (any role).
+    /// backing session / pid / started / elapsed. This modal is a keypress
+    /// one-shot read through `aida status <spec>` for the CLI's full prose
+    /// projection; the poll-cadence row glyph uses `aida-core` in-process.
+    /// Distinct from `show` (content) and `why` (still-open reason). An
+    /// item-level read verb, so role-agnostic (any role).
     // trace:TASK-953 | ai:claude
+    // trace:TASK-1252 | ai:codex
     Status,
     /// Open scope, Draft-only: route the selected drafts to the advisor
     // queue via `aida queue add --for advisor`. trace:STORY-690
@@ -1311,10 +1317,10 @@ pub struct RedesignState {
     /// live working this row?" signal (TASK-978). The cached verdict map +
     /// probe-time live in [`super::liveness::LivenessProbe`]; the parent module
     /// refreshes it on a poll cadence (`refresh_if_due`, gated by a TTL so the
-    /// `aida ps --json` shell-out never fires per-frame), and the render path
-    /// reads it with `liveness.for_id`. Empty (everything Idle) until the first
-    /// probe lands.
+    /// liveness probe never fires per-frame), and the render path reads it with
+    /// `liveness.for_id`. Empty (everything Idle) until the first probe lands.
     // trace:TASK-978 | ai:claude
+    // trace:TASK-1252 | ai:codex
     pub liveness: super::liveness::LivenessProbe,
     /// Live drain progress for the cockpit's optional drain panel. `None`
     /// keeps the panel absent entirely when no PID-corroborated drain is live.
