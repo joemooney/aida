@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:51:07.232306515Z
-modified_at: 2026-09-17T18:24:55.994564231Z
+modified_at: 2026-09-17T18:26:08.127477389Z
 req_type: Task
 tags:
 - epic-66
@@ -32,6 +32,21 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b03e-561e-7233-abe7-727a7d572b8b
   created_at: 2026-09-17T16:41:12.173784396Z
+comments:
+- id: 01a0b09e-6e7f-7c20-8c85-ce8002d443c9
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1897 [AI:claude] feat(drain): advisory harvest step between review gates and merge, propose-only (TASK-1249)
+    verdict: APPROVE + merged (guided spec; ADR-45 accepted by the advisor 11:26)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1897.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN after #1895, merge-lease taken
+    reasoning: ADR-45 decisions 1-3 land: PhaseDriver::run_harvest_gate (default no-op) invoked right after run_agent_gates and before merge, returns () so it can never fail a run; RealPhaseDriver honours lifecycle:no-harvest and [harvest] gate=off and logs-and-continues on any error; propose_only writes the [aida:harvest] ledger (mode: propose-only), a candidates file and an advisor brief (surfaces in aida awaiting) — nothing lands unattended, confirmation is aida harvest <SPEC> --from <file>. Mock pins exactly-once on a full run and zero when the review shelves. Nit (HarvestGate doc-comment misattribution) in TASK-1255. STORY-1178 slices 1-4 are now all on main.
+    merged: 2026-09-17 11:37 -07:00 → main 6bda9f2e21
+  created_at: 2026-09-17T18:26:08.127477389Z
+  modified_at: 2026-09-17T18:26:08.127477389Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b09d-54b3-75c0-87c9-71f16564d331
   author: aida-auto-bump
