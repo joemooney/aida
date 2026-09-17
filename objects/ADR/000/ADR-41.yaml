@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:56:51.081404228Z
-modified_at: 2026-09-17T15:56:54.399748152Z
+modified_at: 2026-09-17T15:57:06.342922371Z
 req_type: Decision
 tags:
 - merge-lease
@@ -28,3 +28,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0ad2a-b79f-78a0-a810-bfad8a4caa94
   created_at: 2026-09-17T15:56:54.399748152Z
+- rel_type: References
+  target_id: 01a0ad2a-b79f-78a0-a810-bfad8a4caa94
+  created_at: 2026-09-17T15:57:06.342917187Z
+  created_by: joe
