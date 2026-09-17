@@ -73034,5 +73034,29 @@ operations:
   timestamp: 2026-09-17T18:10:18.462114947Z
   kind: !RemoveTag
     tag: follow-up:BUG-1188
-clock: 5688
+- id: 01a0b08f-f686-7b52-bb0a-7e724e39dd23
+  target_id: 01a0b08f-4471-7ad0-9904-a437087affa9
+  author: aida
+  node_id: '1'
+  lamport: 5689
+  timestamp: 2026-09-17T18:10:19.910796950Z
+  kind: !AddTag
+    tag: batch:bugs-0917
+- id: 01a0b08f-f71c-77e3-8a28-fa72c80125d5
+  target_id: 01a0b08f-4471-7ad0-9904-a437087affa9
+  author: aida
+  node_id: '1'
+  lamport: 5690
+  timestamp: 2026-09-17T18:10:20.060721483Z
+  kind: !RemoveTag
+    tag: follow-up:BUG-1186
+- id: 01a0b08f-f7ac-71d3-96ea-fb612084fd11
+  target_id: 01a0b08f-4471-7ad0-9904-a437087affa9
+  author: aida
+  node_id: '1'
+  lamport: 5691
+  timestamp: 2026-09-17T18:10:20.204276828Z
+  kind: !RemoveTag
+    tag: windows
+clock: 5691
 node_id: '1'
