@@ -3,12 +3,12 @@ spec_id: TASK-1246
 agreed_id: TASK-1246
 title: '[AFK] Slice 1 (tracer bullet): criteria IDs + trace:SPEC.ACn on tests + aida criteria gap report'
 description: 'Vertical slice 1 of STORY-1178 — proves the pipeline end-to-end. Parse a spec''s ## Acceptance into stable criterion IDs (<SPEC>.<label>; explicit labels win, ac<6-hex> content-hash for unlabeled). Extend parse_trace_id_token to accept the .ACn suffix (bare ids must parse byte-identically — regression test). Scan Rust #[test] fns for trace:SPEC.ACn (reuse doctor_validate_trace_comments'' file walk). New aida criteria <spec> [--json] surface: AC → tracing tests + the two gap classes (untested ACs; tests tracing to no/unknown AC = the harvest gap). Demo: run on STORY-1171 vs its merge_lock tests. Manual entries for the new command (drift-guard completeness). See docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T06:46:46.754405642Z
+modified_at: 2026-09-17T07:03:23.724880985Z
 req_type: Task
 tags:
 - afk
@@ -49,15 +49,25 @@ comments:
     FIX: preserve bare-ID tokenization when the character after the ID is punctuation or the suffix is empty/non-criterion (treat only a suffix matching a real criterion label — `A1`, `AC3`, `ac1a2b3` (6-hex) — as a criterion; anything else means the '.' is punctuation and the token is the bare ID). Add a regression test for the punctuation cases (`trace:TASK-673.`, `trace:TASK-673,`, `trace:TASK-673 | ai:claude`) asserting they parse as the bare id, alongside the existing byte-identical bare-id and .A1/.ac1a2b3 cases. Push the fixup on the existing task-1246 branch (PR-1880). Everything else in the PR was independently spot-checked clean.
   created_at: 2026-09-17T06:36:15.284432438Z
   modified_at: 2026-09-17T06:36:15.284432438Z
+history:
+- id: 01a0ae2d-5d46-7051-a172-be54025e12fc
+  author: aida-auto-bump
+  timestamp: 2026-09-17T07:03:23.718245623Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ae2d-5d4c-7e81-8546-27e96a0a4176
+  timestamp: 2026-09-17T07:03:23.724880112Z
+  agent: aida
+  commit_sha: ff731e951da5b285bd7a910195616e756469b006
+  summary: Completed via merge ff731e95
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T06:19:54.184460585Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1246 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-17T06:33:41.695408414Z
+  completed_at: 2026-09-17T07:03:23.718066840Z
+  completion_sha: ff731e951da5b285bd7a910195616e756469b006
