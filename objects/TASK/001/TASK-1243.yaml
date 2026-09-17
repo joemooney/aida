@@ -11,12 +11,12 @@ description: |-
   - Pick ONE acquisition level (caller, not forge::merge_change) to avoid self-deadlock.
 
   Keyboard/guided, NOT an autonomous drain — it modifies hot merge paths (a wrong wire breaks all merges). Remove the #[allow(dead_code)] once acquire is called. Acceptance test: two concurrent pr-ship merges to main serialize (one waits, bounded); the drain merge and a pr ship serialize against each other.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:04:14.473016752Z
-modified_at: 2026-09-17T02:04:14.473016752Z
+modified_at: 2026-09-17T02:10:54.486866214Z
 req_type: Task
 tags:
 - keyboard
