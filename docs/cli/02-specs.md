@@ -34,7 +34,7 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 
 **Gotchas.** There is no undo. If you deleted something with inbound edges, run `aida rel list --dangling` afterward (and `aida doctor verify-relationships --repair`) to clean up the tombstones it left behind.
 
-**Chains with** — almost nothing by design; it's a terminal act. The graceful alternatives — `archive`, `rel --type duplicate`, `edit --status rejected` — are what you usually want instead.
+**Chains with** — almost nothing by design; it's a terminal act. The graceful alternatives — `archive`, `rel add --type duplicate`, `edit --status rejected` — are what you usually want instead.
 
 ---
 

@@ -142,7 +142,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Reach for it when** — you need to *demonstrate* that the autonomy machinery is working: a case study, a release-notes paragraph, a "look what the drains did this month" writeup.
 
-**Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida usage drains --pattern`/`--failures`/`--health`, the diagnostic side. `metrics` summarizes the win; `usage` dissects the failure.
+**Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida drain status` and the phase logs, the diagnostic side. `metrics` summarizes the win; drain inspection dissects the failure.
 
 **Key options (rationale only).**
 - `--markdown` — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
@@ -166,7 +166,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 **Don't reach for it when** — you want general source trace rot across all files (that's `aida trace check` / `aida doctor validate-trace-comments`), or when the project is not Rust-test-backed. This first slice scans Rust tests only.
 
 **Key options (rationale only).**
-- `--json` — emit the same AC-to-test map and gap lists for scripts or gates.
+- JSON output — emit the same AC-to-test map and gap lists for scripts or gates when that surface is available.
 
 **Gotchas.** Explicit labels in `## Acceptance` are the most stable IDs (`A1.`, `AC3:`, etc.). Unlabeled criteria get content-hash IDs, which are stable across reorder but change when the criterion text changes; label important criteria when tests will trace them for a long time.
 

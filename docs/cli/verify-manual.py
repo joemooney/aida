@@ -14,9 +14,8 @@ Checks against the live binary + the spec graph:
      reflection asks "is every spec's documented change actually IN the docs?". Drift here
      is a spec that moved a surface without the manual following.
 
-Exit non-zero on a completeness omission OR an unreflected surface-changing delta (hard);
-print WARN for flag mismatches (soft, since some `--flag` mentions are cross-references to
-other commands).
+Exit non-zero on a completeness omission, an unreflected surface-changing delta, or a
+flag mismatch.
 
 # trace:TASK-795
 # trace:TASK-796
@@ -76,6 +75,22 @@ def help_flags(cmd_path):
     return set(re.findall(r"--[a-z][a-z0-9-]*", help_text(cmd_path)))
 
 
+@functools.lru_cache(maxsize=None)
+def command_path_exists(cmd_path):
+    text = help_text(cmd_path)
+    if not text:
+        return False
+    return bool(
+        re.search(
+            r"^Usage:\s+aida\s+"
+            + re.escape(cmd_path)
+            + r"(?:\s|$|\[|<)",
+            text,
+            re.M,
+        )
+    )
+
+
 def help_all_commands():
     out = subprocess.run(["aida", "help-all"], capture_output=True, text=True).stdout
     cmds = []
@@ -91,7 +106,8 @@ def help_all_commands():
 def help_command_paths():
     """Return full command paths from `aida help commands`.
 
-    This is the live clap-derived tree available today. Once STORY-1027's
+    This is the live clap-derived tree available today, plus subcommands
+    discovered recursively from each command's `--help`. Once STORY-1027's
     `aida commands --json --flags` lands, this can become one structured call.
     """
     out = subprocess.run(
@@ -99,9 +115,27 @@ def help_command_paths():
     ).stdout
     paths = set()
     for line in out.splitlines():
-        m = re.match(r"^\s+aida\s+([a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*)*)\s{2,}", line)
+        m = re.match(r"^\s*aida\s+([a-z][a-z0-9-]*(?:\s+[a-z][a-z0-9-]*)*)\s{2,}", line)
         if m:
             paths.add(tuple(m.group(1).split()))
+    paths.update((cmd,) for cmd in help_all_commands())
+
+    queue = list(paths)
+    seen = set()
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        text = help_text(" ".join(path))
+        for line in text.splitlines():
+            m = re.match(r"^\s{2}([a-z][a-z0-9-]*)\s{2,}", line)
+            if not m:
+                continue
+            child = (*path, m.group(1))
+            if child not in paths and command_path_exists(" ".join(child)):
+                paths.add(child)
+                queue.append(child)
     return paths
 
 
@@ -123,17 +157,63 @@ def command_path_from_snippet(snippet, command_paths):
         words.append(clean)
     for n in range(len(words), 0, -1):
         cand = tuple(words[:n])
-        if cand in command_paths:
-            return " ".join(cand)
+        path = " ".join(cand)
+        if cand in command_paths or command_path_exists(path):
+            return path
     return None
 
 
+def command_snippet_variants(snippet, current_command):
+    snippet = snippet.strip()
+    if snippet.startswith("--") or snippet.startswith("<"):
+        return []
+    variants = []
+    if snippet.startswith("aida "):
+        variants.append(snippet)
+    else:
+        first = snippet.split()[0] if snippet.split() else ""
+        current_child = f"{current_command} {first}" if current_command and first else ""
+        if current_child and command_path_exists(current_child):
+            variants.append(f"aida {current_command} {snippet}")
+            variants.append(f"aida {snippet}")
+        else:
+            variants.append(f"aida {snippet}")
+            if current_command and not snippet.startswith(f"{current_command} "):
+                variants.append(f"aida {current_command} {snippet}")
+    return variants
+
+
 def subtree_flags(top, command_paths):
-    flags = set()
+    flags = set(help_flags(top))
     for path in command_paths:
         if path and path[0] == top:
             flags.update(help_flags(" ".join(path)))
     return flags
+
+
+def flag_accuracy_misses(documented, command_paths):
+    """Return citations whose flags do not resolve to their command subtree."""
+    # trace:TASK-1251 | ai:codex
+    misses = []
+    subtree_cache = {}
+    for cmd, citations in sorted(documented.items()):
+        if not citations:
+            continue
+        subtree_cache.setdefault(cmd, subtree_flags(cmd, command_paths))
+        seen = set()
+        for cite in citations:
+            fl = cite["flag"]
+            path = cite["path"] or cmd
+            key = (fl, path, cite["file"], cite["line"])
+            if key in seen:
+                continue
+            seen.add(key)
+            if cite["path"] and fl in help_flags(path):
+                continue
+            if fl in subtree_cache[cmd]:
+                continue
+            misses.append(cite)
+    return misses
 
 
 def parse_chapters(files):
@@ -160,25 +240,43 @@ def parse_chapters(files):
                 if not cur:
                     continue
                 consumed = set()
+                snippets = []
                 for cm in AIDA_CMD_RE.finditer(line):
-                    snippet = cm.group(0)
-                    path = command_path_from_snippet(snippet, command_paths)
+                    snippets.append((cm.start(), cm.group(0), None))
+                for bm in re.finditer(r"`([^`]+)`", line):
+                    if re.match(r"(?:git|cargo|python3?|bash|gh|glab)\b", bm.group(1)):
+                        for fm in re.finditer(r"--[a-z][a-z0-9-]*", bm.group(1)):
+                            consumed.add((bm.start(1) + fm.start(), fm.group(0)))
+                        continue
+                    for snippet in command_snippet_variants(bm.group(1), cur):
+                        path = command_path_from_snippet(snippet, command_paths)
+                        if path:
+                            snippets.append((bm.start(1), snippet, path))
+                            break
+                for start, snippet, resolved_path in snippets:
+                    path = resolved_path or command_path_from_snippet(snippet, command_paths)
                     if not path:
                         continue
-                    for fm in re.finditer(r"--[a-z][a-z0-9-]*", snippet):
+                    offset = snippet.find("--")
+                    if offset < 0:
+                        continue
+                    for fm in re.finditer(r"--[a-z][a-z0-9-]*", snippet[offset:]):
+                        flag = fm.group(0)
                         documented[cur].append(
                             {
-                                "flag": fm.group(0),
+                                "flag": flag,
                                 "path": path,
                                 "parent": cur,
                                 "file": f,
                                 "line": line_no,
                             }
                         )
-                        consumed.add((cm.start() + fm.start(), fm.group(0)))
+                        line_flag = line.find(flag, start)
+                        if line_flag >= 0:
+                            consumed.add((line_flag, flag))
                 for fm in FLAG_RE.finditer(line):
                     flag = fm.group(1)
-                    if (fm.start(), flag) in consumed:
+                    if (fm.start(1), flag) in consumed:
                         continue
                     documented[cur].append(
                         {
@@ -376,38 +474,13 @@ def main():
 
     # 2. flag accuracy
     # trace:TASK-1207 | ai:codex
-    hard_flag_misses = []
     command_paths = help_command_paths()
-    subtree_cache = {}
-    for cmd, citations in sorted(documented.items()):
-        if not citations:
-            continue
-        subtree_cache.setdefault(cmd, subtree_flags(cmd, command_paths))
-        seen = set()
-        for cite in citations:
-            fl = cite["flag"]
-            path = cite["path"] or cmd
-            key = (fl, path, cite["file"], cite["line"])
-            if key in seen:
-                continue
-            seen.add(key)
-            if cite["path"] and fl in help_flags(path):
-                continue
-            if fl in subtree_cache[cmd]:
-                continue
-            hard_flag_misses.append(cite)
+    hard_flag_misses = flag_accuracy_misses(documented, command_paths)
     if hard_flag_misses:
-        # BUG-1176: the flag-resolution above (help_flags/subtree_flags) produces FALSE
-        # POSITIVES — it reports valid flags as unresolved (e.g. `--type`/`--title`/`--parent`
-        # under `aida add`, which `aida add --help` genuinely lists). This check being a HARD
-        # fail therefore blocked EVERY full-CI PR on non-existent drift. Demoted to ADVISORY
-        # until the resolution false-positives are fixed (follow-up). completeness / spec-id
-        # leak / interface-reflection stay HARD fails.
-        # trace:BUG-1176
+        hard_fail = True
         print(
-            f"WARN flags (advisory) — {len(hard_flag_misses)} cited --flag token(s) did not "
-            "resolve to the cited command or its parent subtree (likely false positives; "
-            "see BUG-1176):"
+            f"FAIL flags — {len(hard_flag_misses)} cited --flag token(s) did not "
+            "resolve to the cited command or its parent/child command subtree:"
         )
         for cite in hard_flag_misses[:80]:
             loc = f"{os.path.basename(cite['file'])}:{cite['line']}"
