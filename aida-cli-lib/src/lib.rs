@@ -7278,6 +7278,94 @@ fn questions_remedy(
     }
 }
 
+/// BUG-1186: the PR head SHA as the forge reports it right now, or `None` on
+/// any forge fault. Used both to anchor the reviewer prompt (BUG-868) and as
+/// the pre/post pair for the post-review integrity guard.
+// trace:BUG-1186 | ai:claude
+fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Option<String> {
+    let mut sink = crate::network_retry::NoopSink;
+    driver
+        .lifecycle_forge()
+        .change_metadata(pr as u64, &mut sink)
+        .ok()
+        .map(|m| m.head_sha)
+        .filter(|s| !s.trim().is_empty())
+}
+
+/// BUG-1186: `Some(message)` when the PR head moved between the pre- and
+/// post-review probes — the reviewer seat wrote to the branch under review.
+/// Pure so the decision is unit-testable; SHA comparison is whitespace- and
+/// case-insensitive (forges differ in casing).
+// trace:BUG-1186 | ai:claude
+fn reviewer_wrote_message(pr: u32, pre: &str, post: &str) -> Option<String> {
+    let pre = pre.trim().to_ascii_lowercase();
+    let post = post.trim().to_ascii_lowercase();
+    if pre.is_empty() || post.is_empty() || pre == post {
+        return None;
+    }
+    let short = |s: &str| s.chars().take(9).collect::<String>();
+    Some(format!(
+        "the reviewer pushed to PR-{pr} during the review (head {} → {}) — a reviewer must \
+         verdict, not implement; the CI the drain watched no longer covers this head",
+        short(&pre),
+        short(&post),
+    ))
+}
+
+/// BUG-1186 / ADR-40: substrate-as-bouncer for the Done transition. The
+/// implementer opened (or was handed) PR-{pr}; if it exited without `aida
+/// queue done` the spec is still In Progress, and the review phase's `queue
+/// work PR-N` would then see an in-flight spec carrying a rework reason — the
+/// seat swap BUG-1186 reproduced. The orchestrator asserts Done itself rather
+/// than relying on the agent remembering. Best-effort: a store fault prints a
+/// note and the drive continues (the review envelope is the second guard).
+// trace:BUG-1186 | ai:claude
+fn ensure_spec_done_after_pr(project_root: &std::path::Path, spec: &str, pr: u32, json: bool) {
+    let flipped = (|| -> anyhow::Result<bool> {
+        let Some(store_path) = detect_distributed_store_from(project_root) else {
+            return Ok(false);
+        };
+        let dispenser = load_dispenser(&store_path)?;
+        let inner = aida_core::GitBackend::new(&store_path)?.with_dispenser(dispenser);
+        let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+        let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
+        let Some(mut req) = backend.get_requirement_by_spec_id(spec)? else {
+            return Ok(false);
+        };
+        if !matches!(req.status, aida_core::RequirementStatus::InProgress) {
+            return Ok(false);
+        }
+        req.status = aida_core::RequirementStatus::Done;
+        backend.update_requirement(&req)?;
+        Ok(true)
+    })();
+    match flipped {
+        Ok(true) => {
+            if !json {
+                eprintln!(
+                    "  {} {} was still In Progress after PR-{} opened — marked Done (the \
+                     implementer skipped `aida queue done`)",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    spec,
+                    pr,
+                );
+            }
+        }
+        Ok(false) => {}
+        Err(e) => {
+            if !json {
+                eprintln!(
+                    "  {} could not assert {} Done after PR-{} ({e}) — the review envelope \
+                     still forces the reviewer seat",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    spec,
+                    pr,
+                );
+            }
+        }
+    }
+}
+
 // trace:TASK-1075 | ai:codex
 fn questions_remedy_log_path(project_root: &std::path::Path, spec: &str) -> std::path::PathBuf {
     let safe: String = spec
@@ -30849,6 +30937,9 @@ fn verdict_tip_relation(
 }
 
 #[cfg(test)]
+#[path = "tests/bug_1186_reviewer_seat_tests.rs"]
+mod bug_1186_reviewer_seat_tests;
+#[cfg(test)]
 #[path = "tests/bug_775_commits_ahead_tests.rs"]
 mod bug_775_commits_ahead_tests;
 
@@ -36162,14 +36253,20 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
     })
 }
 
-/// Detect whether a `Review PR-<n>:` story already exists in the local
+/// Detect whether an OPEN `Review PR-<n>:` story already exists in the local
 /// store, so calling `aida session end` twice on the same branch doesn't
 /// create duplicate queue entries. trace:STORY-66 | ai:claude
+///
+/// BUG-1186: a review story consumed by an earlier round (Done / Completed /
+/// Rejected / Superseded) does NOT count — a rework re-drive needs a fresh,
+/// pickable review story, or `queue work PR-N` finds nothing to review and
+/// falls through to the backing spec as an implementer pickup.
+// trace:BUG-1186 | ai:claude
 fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64) -> bool {
     let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     let Ok(out) = std::process::Command::new(&aida)
         .current_dir(project_root)
-        .args(["list", "--type", "story"])
+        .args(["list", "--type", "story", "--format", "json"])
         .output()
     else {
         return false;
@@ -36177,10 +36274,40 @@ fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64
     if !out.status.success() {
         return false;
     }
-    let needle = format!("Review PR-{}:", pr_number);
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .any(|line| line.contains(&needle))
+    review_story_round_is_open(&String::from_utf8_lossy(&out.stdout), pr_number)
+}
+
+/// BUG-1186: does `aida list --type story --format json` output carry a
+/// `Review PR-<n>:` story whose round is still open (not Done / Completed /
+/// Rejected / Superseded)? Pure so the round semantics are unit-testable.
+// trace:BUG-1186 | ai:claude
+fn review_story_round_is_open(list_json: &str, pr_number: u64) -> bool {
+    let needle = format!("review pr-{}:", pr_number);
+    let Ok(rows) = serde_json::from_str::<Vec<serde_json::Value>>(list_json) else {
+        return false;
+    };
+    rows.iter().any(|row| {
+        let title = row
+            .get("title")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .trim_start()
+            .to_ascii_lowercase();
+        if !title.starts_with(&needle) {
+            return false;
+        }
+        let status = row
+            .get("status")
+            .and_then(|s| s.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase()
+            .replace([' ', '-', '_'], "");
+        !matches!(
+            status.as_str(),
+            "done" | "completed" | "rejected" | "superseded" | "released"
+        )
+    })
 }
 
 /// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
@@ -83992,6 +84119,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         match pr {
             Some(pr) => {
                 self.set_pr_number(pr.number as u32);
+                ensure_spec_done_after_pr(
+                    &self.project_root,
+                    &self.spec,
+                    pr.number as u32,
+                    self.json,
+                );
                 Ok(auto_complete::ImplementerOutcome::PrOpened)
             }
             None => {
@@ -84019,6 +84152,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         );
                     }
                     self.set_pr_number(pr as u32);
+                    ensure_spec_done_after_pr(&self.project_root, &self.spec, pr as u32, self.json);
                     return Ok(auto_complete::ImplementerOutcome::PrOpened);
                 }
                 if let Some(reason) = self.auto_punt_text_question(&worktree_path, &session_uuid) {
@@ -84534,19 +84668,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &scope,
             auto_complete::Phase::Reviewer,
         )?;
-        let from_pr_head_sha = if self.from_pr {
-            // BUG-868: prompt text must anchor the from-PR review to the PR head
-            // that the orchestrator is about to gate. This is advisory context,
-            // so a transient forge failure does not block the existing review.
-            let mut sink = crate::network_retry::NoopSink;
-            self.lifecycle_forge()
-                .change_metadata(pr as u64, &mut sink)
-                .ok()
-                .map(|m| m.head_sha)
-                .filter(|s| !s.trim().is_empty())
-        } else {
-            None
-        };
+        // BUG-868: prompt text anchors the review to the PR head the
+        // orchestrator is about to gate. BUG-1186: captured for EVERY review
+        // phase (not only `--from-pr`) — it is also the pre-review head the
+        // post-review integrity guard below compares against. Advisory on the
+        // prompt side, so a transient forge failure does not block the review.
+        // trace:BUG-1186 | ai:claude
+        let pre_review_head_sha = pr_head_sha_best_effort(self, pr);
         let mut cmd = std::process::Command::new(self.aida_exe());
         cmd.current_dir(&self.project_root)
             .args([
@@ -84569,12 +84697,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         ) {
             cmd.env(key, value);
         }
-        if self.from_pr {
-            cmd.env("AIDA_FROM_PR_REVIEW", "1")
-                .env("AIDA_FROM_PR_NUMBER", pr.to_string());
-            if let Some(head_sha) = from_pr_head_sha {
-                cmd.env("AIDA_FROM_PR_HEAD_SHA", head_sha);
-            }
+        // BUG-1186 / ADR-40: the review envelope is ALWAYS set, not only for a
+        // `--from-pr` drive. `queue work PR-N` honors it by refusing to fall
+        // back to an implementer pickup of the backing spec when no pickable
+        // review story is queued — the seat swap that executed a rework reason
+        // as an implementer and pushed to the PR under review.
+        // trace:BUG-1186 | ai:claude
+        cmd.env("AIDA_FROM_PR_REVIEW", "1")
+            .env("AIDA_FROM_PR_NUMBER", pr.to_string());
+        if let Some(head_sha) = pre_review_head_sha.as_deref() {
+            cmd.env("AIDA_FROM_PR_HEAD_SHA", head_sha);
         }
         // TASK-306: `--no-human` scope for the child statusline. The reviewer runs headless
         // under `--no-human` (so usually no statusline renders), but a plain
@@ -84722,6 +84854,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 .current_dir(&self.project_root)
                 .args(["session", "end", &reviewer_lease, "--yes", "--skip-ci"])
                 .status();
+        }
+
+        // BUG-1186 / ADR-40: post-review integrity guard. A reviewer that moved
+        // the PR head modified the code it was asked to judge — an independence
+        // breach. Shelve with a typed cause instead of merging reviewer-authored
+        // commits under the drain's own approval (or retrying, which would
+        // launder them). Best-effort on the forge side: if either SHA is
+        // unavailable the guard cannot fire and the verdict stands.
+        // trace:BUG-1186 | ai:claude
+        if let (Some(pre), Some(post)) = (
+            pre_review_head_sha.as_deref(),
+            pr_head_sha_best_effort(self, pr),
+        ) {
+            if let Some(msg) = reviewer_wrote_message(pr, pre, &post) {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::ReviewerWrote,
+                    msg,
+                ));
+            }
         }
 
         Ok(outcome)

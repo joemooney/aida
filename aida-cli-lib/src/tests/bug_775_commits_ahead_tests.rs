@@ -649,6 +649,10 @@ fn from_pr_reviewer_prompt_names_contract_and_done_is_expected() {
     );
     assert!(suffix.contains("Done is expected"), "{suffix}");
     assert!(suffix.contains("do not run `aida queue done`"), "{suffix}");
+    // BUG-1186: the envelope now travels with EVERY drain review, so the seat
+    // rule must be explicit — a rework note is not the reviewer's instruction.
+    assert!(suffix.contains("you never implement"), "{suffix}");
+    assert!(suffix.contains("no pushes to the PR branch"), "{suffix}");
 
     let mut prompt = "/aida-review --pr 42".to_string();
     crate::queue_cmd::append_reviewer_prompt_suffixes(&mut prompt);
