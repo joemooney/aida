@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T06:19:54.184460585Z
+modified_at: 2026-09-17T06:22:44.262614278Z
 req_type: Task
 tags:
 - afk
@@ -32,6 +32,13 @@ relationships:
   target_id: 01a0ae05-5c48-7a61-bcd7-1ed856811786
   created_at: 2026-09-17T06:19:48.088566874Z
   created_by: joe
+comments:
+- id: 01a0ae08-2426-73a0-bb07-866ab9c55d89
+  author: joe
+  content: '[oversight] Independent landmine spot-check of PR-1880 (codex) by the product/oversight session, 23:22, while the drain''s own reviewer phase runs — NOT a merge gate, the drain gates its own merge. All three plan risks cleared: (1) parse_trace_id_token extended for the criterion suffix with the bare-id byte-identical regression assertion added to its existing test in doctor_cmd.rs (+ .A1 and .ac1a2b3→AC1A2B3 cases); (2) the Criteria variant sits after Graph''s closing brace with its own doc block (the #1873 doc-splitting regression avoided); (3) docs/cli/08-reporting.md entry present for the drift-guard. Plan''s named tests implemented (labeled_and_unlabeled_criteria_get_stable_ids, gap_report_flags_untested_ac_and_unanchored_test, rust_test_scan_finds_traced_tests_only). No new crate dependency. git_backend_cmd.rs ripple not hand-inspected — covered by CI.'
+  created_at: 2026-09-17T06:22:44.262614278Z
+  modified_at: 2026-09-17T06:22:44.262614278Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T06:19:54.184460585Z
