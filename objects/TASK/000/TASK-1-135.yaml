@@ -8,12 +8,12 @@ description: |-
   Signal: an agent idling in a self-counted poll loop is exactly the failure mode "presence is not the clock" warns about. The heartbeat should be substrate/cron-driven and wake the advisor only on a real awaiting signal (mail arrived, PR mergeable, drain event, findings non-empty), never an agent narrating idle ticks it counts itself. Free-form narration of an empty loop is what degenerated.
 
   Fix candidates: (1) a cron/event heartbeat that wakes the advisor only when 'aida awaiting' is non-empty, rather than a continuous agent-driven poll; (2) if an idle poll loop must exist, cap its iterations and have it emit a fixed one-line status, not free-form prose that can repetition-degenerate. Pairs with the presence-not-the-clock and substrate-first mandates.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T16:43:19.358221630Z
-modified_at: 2026-09-17T02:24:11.731955800Z
+modified_at: 2026-09-17T04:26:45.284434713Z
 req_type: Task
 tags:
 - from-advisor:general
