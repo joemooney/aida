@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:57:54.453824115Z
-modified_at: 2026-09-17T07:20:42.207545906Z
+modified_at: 2026-09-17T07:26:51.859015843Z
 req_type: Task
 tags:
 - afk
@@ -24,6 +24,26 @@ tags:
 - cli-docs
 - drain-safe
 - follow-up:BUG-1176
+comments:
+- id: 01a0ae42-d9d3-7c10-8ef3-5f43018b52d2
+  author: joe
+  content: |-
+    [oversight review — PR-1881, 00:27] Independent pre-merge check by the oversight session (this spec is supervised; I release + ship on approve). Ran the BRANCH's verify-manual.py in a real worktree of task-1251 against the release binary: exit 1 — OK completeness, OK spec-ids, OK reflection, but "FAIL flags — 23 cited --flag token(s) did not resolve". Verdict: NOT YET — the resolution fix WORKS (366 false positives → 0 false positives), but the PR re-arms hard-fail while 23 GENUINE drift citations remain, so it will fail its own CI and, if merged, re-block every full-CI PR (the BUG-1176 landmine). Acceptance requires "only genuine drift, each fixed in the same PR" — these are all real drift from STORY-1028 (mode flags promoted to subcommands; the old flags are hidden aliases at best), so the fix is to update the citations to the canonical subcommand form:
+
+    - docs/cli/08-reporting.md:117,121,127,131  `--auto-complete` under aida usage → `aida usage drains`
+    - docs/cli/08-reporting.md:120                `--unused` under aida usage → `aida usage unused`
+    - docs/cli/08-reporting.md:120,126            `--errors` under aida usage → `aida usage errors`
+    - docs/cli/08-reporting.md:121,127,131        `--health` under aida usage → the current health surface (`aida usage --health` if it is a real flag on the top-level, else `aida usage drains --health`; check --help)
+    - docs/cli/08-reporting.md:52,56,59,64        `--events` under aida history → `aida history events`
+    - docs/cli/11-dev.md:39,41,46,51              `--check` under aida release → `aida release check`
+    - docs/cli/11-dev.md:47                       `--patch` / `--minor` / `--major` under aida release → `aida release patch|minor|major`
+    - docs/cli/02-specs.md:117                    `--impact` under aida graph → `aida graph impact`
+    - docs/cli/02-specs.md:122                    `--tree` under aida graph → `aida graph tree`
+
+    Then re-run: verify-manual.py must print "OK flags" and exit 0 with hard-fail on. Note the binary caveat is NOT the cause (none of the 23 involve the new aida criteria command). Rework reason for the re-drive.
+  created_at: 2026-09-17T07:26:51.859015843Z
+  modified_at: 2026-09-17T07:26:51.859015843Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T07:20:42.207545906Z
