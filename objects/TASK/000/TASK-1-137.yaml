@@ -8,12 +8,12 @@ description: |-
   Separately: there is NO user-facing `aida merge-hold clear|list` command — `aida merge-hold --help` falls back to top-level usage — even though the module docs AND the GitLab CI gate template (aida-core/templates/gitlab-ci-merge-hold-gate.yml) both instruct `aida merge-hold clear <pr>` as the human release path. So an operator can only clear a stale/false marker by rm-ing the file.
 
   Two fixes: (1) clear the hold marker (+ the aida:merge-hold label) whenever a PR merges through ANY AIDA merge path (orchestrated drain merge, aida pr ship), not only a hypothetical `aida pr merge`; (2) ship the `aida merge-hold list|clear <pr>` surface the docs/CI templates already reference. Related: BUG-1167, STORY-1165, STORY-1173.
-status: Done
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T17:27:02.002537886Z
-modified_at: 2026-09-17T05:01:44.061786403Z
+modified_at: 2026-09-17T05:11:30.102492210Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -52,4 +52,22 @@ comments:
   created_at: 2026-09-17T05:01:44.061786403Z
   modified_at: 2026-09-17T05:01:44.061786403Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+history:
+- id: 01a0adc6-ec30-7783-aa7a-9f9289818698
+  author: aida-auto-bump
+  timestamp: 2026-09-17T05:11:30.096054413Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0adc6-ec36-7a61-b13e-66975f26ca10
+  timestamp: 2026-09-17T05:11:30.102491318Z
+  agent: implementer
+  commit_sha: f3232031d40dbaacb31d9d30c63a3b8dd5a0952e
+  summary: Completed via merge f3232031
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-17T05:11:30.046669623Z
+  completion_sha: f3232031d40dbaacb31d9d30c63a3b8dd5a0952e
