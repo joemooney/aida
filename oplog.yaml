@@ -72816,5 +72816,31 @@ operations:
   timestamp: 2026-09-17T17:24:35.893200597Z
   kind: !SetStatus
     status: Completed
-clock: 5674
+- id: 01a0b06a-9a16-7f03-b80f-91c0adb96f99
+  target_id: 01a0b06a-82ab-7933-84bb-95974f1e8ceb
+  author: aida
+  node_id: '1'
+  lamport: 5675
+  timestamp: 2026-09-17T17:29:31.414757563Z
+  kind: !Create
+    title: 'Review PR-1896: [AI:codex] fix(advisor): wake heartbeat from awaiting surface (TASK-1245)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b062`) for branch `task-1245`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1896>
+      - Branch: `task-1245` → `main`
+
+      ## Covers
+
+      - TASK-1245
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1896` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5675
 node_id: '1'
