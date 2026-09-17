@@ -8,12 +8,12 @@ description: |-
   Fix: make the needle line-ending-agnostic — drop the trailing "\n" from the needle (match up to the closing paren) or normalize src with .replace("\r\n", "\n") before the contains checks; apply the same normalization to any other include_str!-based source-shape guard that embeds "\n" (grep for include_str!("../lib.rs") / include_str!("lib.rs") in tests). Consider a shared test helper source_lf() so the next guard does not repeat this.
 
   Acceptance: the test passes on windows-latest in the Cross-platform workflow and on Linux; no other include_str! guard embeds a raw "\n" needle without normalization.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:09:34.321830724Z
-modified_at: 2026-09-17T19:40:15.655290816Z
+modified_at: 2026-09-17T19:48:48.069188859Z
 req_type: Bug
 tags:
 - batch:bugs-0917
@@ -25,16 +25,26 @@ relationships:
   target_id: 01a0b0e1-f13a-7413-9b06-8a9da9f662db
   created_at: 2026-09-17T19:39:58.895704017Z
   created_by: joe
+history:
+- id: 01a0b0ea-1d3e-74a0-99d8-fa47581972de
+  author: aida-auto-bump
+  timestamp: 2026-09-17T19:48:48.062751679Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b0ea-1d45-7043-933d-9b9b76fb9a66
+  timestamp: 2026-09-17T19:48:48.069188228Z
+  agent: aida
+  commit_sha: f082aca3376183ab199f0f0c77901e4e299c6d1d
+  summary: Completed via merge f082aca3
+  punted:
+  - 'punted: the reviewer session exited 1 (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T19:29:51.539289278Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: tool-exit
-  detail: the reviewer session exited 1 (attempt 2/2)
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1193 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-17T19:40:15.655290816Z
+  completed_at: 2026-09-17T19:48:48.062623800Z
+  completion_sha: f082aca3376183ab199f0f0c77901e4e299c6d1d
