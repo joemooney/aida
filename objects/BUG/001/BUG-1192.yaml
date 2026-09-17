@@ -8,12 +8,12 @@ description: |-
   Fix: compare canonicalized paths in the test (std::fs::canonicalize on both sides), or canonicalize tmp.path() once when building the fixture — the repo already has this pattern in other worktree tests (grep canonicalize in pr_cmd.rs / worktree tests). Do NOT change main_worktree_root_from's behaviour for this.
 
   Acceptance: the test passes on macos-latest in the Cross-platform workflow (dispatch it via gh workflow run cross-platform.yml on the PR branch, or confirm on the next nightly) and still passes on Linux.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:09:29.056531417Z
-modified_at: 2026-09-17T18:10:18.097340924Z
+modified_at: 2026-09-17T18:43:51.037712472Z
 req_type: Bug
 tags:
 - batch:bugs-0917
