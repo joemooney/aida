@@ -135,6 +135,56 @@ fn role_addressed_mail_does_not_inflate_the_operator_mail_count() {
     assert_eq!(report.mail.shared_scope.as_deref(), Some("advisor"));
 }
 
+// TASK-1245: the event-driven advisor heartbeat constructs an advisor status
+// context even when launched from an operator/plain env. The awaiting mail
+// surface must therefore honor ctx.role, not only AIDA_SESSION_ROLE, or
+// advisor-addressed mail can fail to wake the heartbeat. trace:TASK-1245
+#[test]
+fn ctx_role_includes_shared_role_mail_when_env_role_is_absent() {
+    let dir = tempdir().unwrap();
+    let backend = open_backend(dir.path());
+
+    let msg = aida_core::mailbox::Message {
+        id: "m-advisor-context-role".to_string(),
+        thread_id: "t-advisor-context-role".to_string(),
+        from: "implementer".to_string(),
+        to: aida_core::mailbox::Recipient::Agent("advisor".to_string()),
+        timestamp: 1_000,
+        in_reply_to: None,
+        body: "advisor wake-up".to_string(),
+        urgent: false,
+        intent: aida_core::mailbox::Intent::Fyi,
+        retracted: false,
+        deleted: false,
+        archived: false,
+    };
+    crate::mailbox_store::write_message(dir.path(), &msg).unwrap();
+
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_USER", "operator-under-test"),
+        ("AIDA_SESSION_ROLE", ""),
+        ("AIDA_AGENT_TYPE", ""),
+    ]);
+    let ctx = empty_user_ctx(Some("advisor"));
+    let report = collect_awaiting_report(dir.path(), &backend, &ctx, true);
+
+    assert_eq!(
+        report.mail.unread, 0,
+        "advisor shared inbox mail must stay out of the operator's own count"
+    );
+    assert_eq!(
+        report.mail.shared_unread, 1,
+        "ctx.role=advisor must include advisor-addressed mail even with no env role"
+    );
+    let line = report
+        .compact_line()
+        .expect("advisor shared mail must wake the compact awaiting line");
+    assert!(
+        line.contains("shared mail"),
+        "compact line should name the shared mail channel: {line}"
+    );
+}
+
 // A spec parked in NeedsAttention surfaces as an escalation line —
 // the implementer→advisor→human cascade landing in front of the
 // operator without them having to grep `aida list --status`.

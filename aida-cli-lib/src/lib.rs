@@ -65754,8 +65754,10 @@ fn collect_awaiting_report(
         let watermarks = mailbox_store::read_all_watermarks(project_root).unwrap_or_default();
         let operator = current_user_id(None);
         let mut shared: Vec<String> = Vec::new();
-        if let Some(raw) = std::env::var("AIDA_SESSION_ROLE")
-            .ok()
+        if let Some(raw) = ctx
+            .role
+            .clone()
+            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
             .filter(|s| !s.trim().is_empty())
         {
             let (role, _is_default) = resolve_effective_role(Some(raw.as_str()));
