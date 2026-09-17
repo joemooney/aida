@@ -72968,5 +72968,22 @@ operations:
   timestamp: 2026-09-17T18:08:35.886783443Z
   kind: !SetStatus
     status: Completed
-clock: 5682
+- id: 01a0b08f-362b-7712-93c1-ffc595ce4492
+  target_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
+  author: aida
+  node_id: '1'
+  lamport: 5683
+  timestamp: 2026-09-17T18:09:30.667289112Z
+  kind: !Create
+    title: 'macOS: pr_ship_reads_merge_hold_from_main_worktree_when_run_from_sibling fails — tempdir path vs canonicalized main_worktree_root (/var vs /private/var)'
+    description: |-
+      Cross-platform (nightly) matrix on PR #1898 (2026-09-17, run 35255112427, job 105316720364, macos-latest): test pr_cmd::pr_ship_environment_tests::pr_ship_reads_merge_hold_from_main_worktree_when_run_from_sibling (added by #1893 / BUG-1188) panics at aida-cli-lib/src/pr_cmd.rs:3431 — the assert_eq!(hold_root, tmp.path()). On macOS tempfile::tempdir() lives under /var/folders/... which is a symlink to /private/var/...; main_worktree_root_from resolves through git (git worktree list / rev-parse), which returns the canonical /private/var path, so the two differ by the symlink prefix. Linux passes because /tmp is not a symlink.
+
+      Fix: compare canonicalized paths in the test (std::fs::canonicalize on both sides), or canonicalize tmp.path() once when building the fixture — the repo already has this pattern in other worktree tests (grep canonicalize in pr_cmd.rs / worktree tests). Do NOT change main_worktree_root_from's behaviour for this.
+
+      Acceptance: the test passes on macos-latest in the Cross-platform workflow (dispatch it via gh workflow run cross-platform.yml on the PR branch, or confirm on the next nightly) and still passes on Linux.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5683
 node_id: '1'
