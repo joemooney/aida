@@ -10,12 +10,12 @@ description: |-
   Root cause: the BUG-1167 client-side release was placed inside the merge step, after the CI watch; Layer 2 (the label → required check) was added alongside, and the ordering interaction was missed. Same family as the BUG-1173 self-shelve (CI-watch has no notion that merge-hold-gate red == "held", not "failed").
 
   Fix (pick one, prefer the first): (a) in pr_ship_handler, perform the hold release (clear_hold + sync_label(false)) BEFORE the CI watch when a marker exists for the PR, then watch CI (the gate re-runs green on the unlabeled event); (b) teach the pr-ship CI watch to treat merge-hold-gate as non-blocking when a local marker exists (it is about to be released); (c) both. Add a regression test: a PR with a marker + red gate ships (release → gate green → merge). Also make the abort message say "this PR is under a supervised merge-hold — run `aida merge-hold clear <pr>` or let pr ship release it" instead of "CI failed", so the operator isn't misled into debugging CI.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T07:02:32.031793455Z
-modified_at: 2026-09-17T14:59:34.617410543Z
+modified_at: 2026-09-17T15:09:17.772725710Z
 req_type: Bug
 tags:
 - bug-1167
@@ -31,7 +31,23 @@ comments:
   created_at: 2026-09-17T08:49:15.260749362Z
   modified_at: 2026-09-17T08:49:15.260749362Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0afea-3844-7593-804e-e08c2a2d88a9
+  author: aida-auto-bump
+  timestamp: 2026-09-17T15:09:17.764676382Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0afea-384c-7870-99df-cf7783c371cb
+  timestamp: 2026-09-17T15:09:17.772723779Z
+  agent: aida
+  commit_sha: 1013e696903f228c6b54dc5990b7b7f83ed24ca5
+  summary: Completed via merge 1013e696
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T14:59:34.617410543Z
   implemented_by: joe
+  completed_at: 2026-09-17T15:09:17.764491490Z
+  completion_sha: 1013e696903f228c6b54dc5990b7b7f83ed24ca5
