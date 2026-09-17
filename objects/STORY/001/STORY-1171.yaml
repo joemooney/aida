@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-16T23:55:46.598171192Z
+modified_at: 2026-09-17T00:53:52.779927165Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
@@ -68,5 +68,11 @@ comments:
   content: Commit 5b5734b68 references this requirement
   created_at: 2026-09-16T23:55:46.598171192Z
   modified_at: 2026-09-16T23:55:46.598171192Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0acdb-100b-7320-91b0-262ebda0c8fb
+  author: joe
+  content: Commit 5b5734b68 references this requirement
+  created_at: 2026-09-17T00:53:52.779927165Z
+  modified_at: 2026-09-17T00:53:52.779927165Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
