@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:57.940417560Z
-modified_at: 2026-09-17T18:23:24.703229847Z
+modified_at: 2026-09-17T18:24:26.399820846Z
 req_type: Task
 tags:
 - hitl
@@ -27,6 +27,21 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b03e-3bcd-7f41-a90f-5c3d9ea2c313
   created_at: 2026-09-17T16:41:06.149041056Z
+comments:
+- id: 01a0b09c-e11f-73a2-b6e3-c573d849ddbf
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1895 [AI:claude] feat(reconstitute): aida reconstitute — store-only round-trip probe, slice 3 (TASK-1248) + BUG-1189 fix
+    verdict: APPROVE + merged (guided spec; ADR-44 accepted by the advisor 11:26)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1895.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN after #1894, merge-lease taken
+    reasoning: ADR-44 decisions 1-3 land: store-only brief (spec, decisions, [aida:sem], graph tree, symbol names only) pinned by probe_prompt_contains_no_test_source; probe runs in an empty scratch dir under ~/.aida/reconstitute/ outside any project; agent-judged per-test match, score clamped + labelled heuristic; divergences become harvest candidates (round-trip through parse_candidates) confirmed via the new aida harvest --from <file> through the unchanged filter/checklist/ledger; the probe never writes the spec. BUG-1189: criteria scanner attaches trace markers on the comment/attribute lines directly above #[test] and clears on a blank/non-comment line (above / inside / leak cases tested). Follow-up nits (scratch-dir GC) in TASK-1255.
+    merged: 2026-09-17 11:34 -07:00 → main 2153bcd470
+  created_at: 2026-09-17T18:24:26.399820846Z
+  modified_at: 2026-09-17T18:24:26.399820846Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b09b-f018-7592-a8e1-f5fdec6ae21e
   author: aida-auto-bump
