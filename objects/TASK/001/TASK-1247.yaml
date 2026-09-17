@@ -3,12 +3,12 @@ spec_id: TASK-1247
 agreed_id: TASK-1247
 title: '[HITL] Slice 2: aida harvest <spec> [--diff] — standalone harvest gate (agent + selectivity filter + confirm-checklist + [aida:harvest] ledger)'
 description: 'Vertical slice 2 of STORY-1178. New aida harvest: build a prompt from the diff + the spec''s criteria/ADRs, run a headless agent via spawn_claude_headless/compose_headless_command (no new launcher), parse structured candidates, apply the selectivity filter (observable AND non-obvious; conventional dropped; configurable [harvest] section, strict default), present a confirm-checklist (TTY) / --yes-all (headless), write confirmed items as a new AC / an [aida:sem] marked comment (STORY-1173 ledger pattern, no schema change) / an ADR stub, and append an [aida:harvest] ledger comment recording ran/confirmed/SKIPPED (never silently dropped). ADVISORY only. Standalone first so value lands before the EPIC-66 pipeline. HITL: the filter + confirm UX are design forks. See the plan.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:46.568914923Z
-modified_at: 2026-09-17T16:39:09.825582851Z
+modified_at: 2026-09-17T17:07:46.041396788Z
 req_type: Task
 tags:
 - harvest-gate
@@ -38,7 +38,23 @@ comments:
   created_at: 2026-09-17T16:39:09.825582851Z
   modified_at: 2026-09-17T16:39:09.825582851Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0b056-aef2-7fd3-80d1-59e383b3fea4
+  author: aida-auto-bump
+  timestamp: 2026-09-17T17:07:46.034709506Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b056-aef9-72a1-b849-18e4ca3d820d
+  timestamp: 2026-09-17T17:07:46.041396119Z
+  agent: aida
+  commit_sha: f23fbb437c8aa72fc60d52b24bb0855e07a04894
+  summary: Completed via merge f23fbb43
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T16:27:03.609268659Z
   implemented_by: joe
+  completed_at: 2026-09-17T17:07:46.034569300Z
+  completion_sha: f23fbb437c8aa72fc60d52b24bb0855e07a04894
