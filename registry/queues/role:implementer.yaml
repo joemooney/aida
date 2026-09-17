@@ -35,3 +35,11 @@
   added_at: 2026-09-17T15:48:48.757713524Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0afec-c1ec-7ca3-b47e-9e135c6dbfd1
+  position: 94000
+  added_by: role:implementer
+  note: 'detector fix in collect_unshipped_work_items: status map over ALL lenses; MERGED PRs exclude a branch + real pr_state lookup; commits_ahead via branch_unshipped_patch_count_default (patch equivalence). 4 regression tests per acceptance. Verify: aida awaiting on this repo lists none of the sampled merged branches'
+  added_at: 2026-09-17T15:48:52.848184167Z
+  for_role: implementer
+  added_by_machine: imac
