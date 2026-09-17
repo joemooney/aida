@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:28:48.134219025Z
-modified_at: 2026-09-17T17:44:21.936647793Z
+modified_at: 2026-09-17T17:44:23.279317671Z
 req_type: Task
 tags:
 - batch:bugs-0917
@@ -29,6 +29,16 @@ comments:
   content: '[rework] PR #1896 RequestChanges (drain reviewer, verified by the advisor against lib.rs:65757): collect_awaiting_report derives the MAIL scope from std::env AIDA_SESSION_ROLE and ignores ctx.role, so advisor_awaiting_line''s UserStatusContext{role: Some("advisor")} does not make advisor-addressed mail part of compact_line() when aida advisor watch is launched from a plain/operator/reviewer shell — a mail-arrived condition would not wake the heartbeat (acceptance: wake when aida awaiting is non-empty, mail included). Fix in the SAME PR (push fixups to the #1896 head branch): in collect_awaiting_report, resolve the mail-scope role as ctx.role first, falling back to AIDA_SESSION_ROLE only when ctx.role is None; add a test that a ctx role=advisor with an unread advisor-addressed message yields a non-empty compact_line() while the process env role is unset/operator. Keep the removal of the timer wake. Finish with aida queue done TASK-1245.'
   created_at: 2026-09-17T17:44:21.696960657Z
   modified_at: 2026-09-17T17:44:21.696960657Z
+- id: 01a0b078-34fd-7090-97c9-a2befcddfc86
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1896):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1245 regression: advisor_awaiting_line builds a UserStatusContext with role=advisor, but collect_awaiting_report ignores ctx.role for mail and instead reads AIDA_SESSION_ROLE. If advisor watch is launched from a plain/operator/reviewer environment, unread mail addressed to the advisor shared inbox is not part of compact_line(), so a mail-arrived condition may not wake the heartbeat as required. Use the supplied context role or otherwise ensure the advisor inbox is included in the awaiting surface.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-17T17:44:23.037593668Z
+  modified_at: 2026-09-17T17:44:23.037593668Z
 execution_mode: drive
 implementation_info:
   implemented: true
