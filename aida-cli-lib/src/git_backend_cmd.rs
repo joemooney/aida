@@ -3112,8 +3112,26 @@ pub(crate) fn handle_git_backend_command(
             let project_root = find_project_root()?;
             criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
         }
+        Command::Reconstitute {
+            spec,
+            json,
+            dry_run,
+        } => {
+            let store = backend.load()?;
+            let project_root = find_project_root()?;
+            crate::reconstitute::handle_reconstitute_command(
+                &project_root,
+                &store,
+                spec,
+                crate::reconstitute::ReconstituteOptions {
+                    json: *json,
+                    dry_run: *dry_run,
+                },
+            )?;
+        }
         Command::Harvest {
             spec,
+            from,
             pr,
             base,
             yes_all,
@@ -3127,6 +3145,7 @@ pub(crate) fn handle_git_backend_command(
                 &store,
                 spec,
                 crate::harvest::HarvestOptions {
+                    from: from.clone(),
                     pr: *pr,
                     base: base.clone(),
                     yes_all: *yes_all,

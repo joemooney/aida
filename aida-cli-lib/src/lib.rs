@@ -166,6 +166,7 @@ mod metrics_cmd;
 mod network_retry;
 mod node_cmd;
 mod not_found;
+mod reconstitute;
 // trace:STORY-1029 | ai:codex — rule-gated operator notifications.
 mod notify;
 // ADR-7/ADR-9 guardrail registry — consumed only by its own tests (the
@@ -4211,8 +4212,27 @@ fn run() -> Result<()> {
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
             criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
         }
+        Command::Reconstitute {
+            spec,
+            json,
+            dry_run,
+        } => {
+            let store = storage.load()?;
+            let project_root = find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+            reconstitute::handle_reconstitute_command(
+                &project_root,
+                &store,
+                spec,
+                reconstitute::ReconstituteOptions {
+                    json: *json,
+                    dry_run: *dry_run,
+                },
+            )?;
+        }
         Command::Harvest {
             spec,
+            from,
             pr,
             base,
             yes_all,
@@ -4227,6 +4247,7 @@ fn run() -> Result<()> {
                 &store,
                 spec,
                 harvest::HarvestOptions {
+                    from: from.clone(),
                     pr: *pr,
                     base: base.clone(),
                     yes_all: *yes_all,

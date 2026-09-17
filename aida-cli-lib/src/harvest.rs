@@ -447,6 +447,9 @@ pub(crate) fn build_harvest_prompt(
 /// Flags the handler resolves from the clap subcommand.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct HarvestOptions {
+    // TASK-1248: confirm candidates from a file (a `reconstitute` probe's
+    /// divergence output) instead of running the harvest agent.
+    pub(crate) from: Option<PathBuf>,
     pub(crate) pr: Option<u64>,
     pub(crate) base: Option<String>,
     pub(crate) yes_all: bool,
@@ -552,12 +555,30 @@ pub(crate) fn handle_harvest_command(
         .ok_or_else(|| anyhow::anyhow!("requirement not found: {spec}"))?;
     let display = req.display_id();
 
-    let (diff, source) = collect_diff(project_root, &opts)?;
-    if diff.trim().is_empty() {
-        anyhow::bail!(
-            "nothing to harvest: the diff for {source} is empty (pass --pr <N> or --base <ref>)"
-        );
-    }
+    // TASK-1248 / ADR-44: a probe's divergence file is a ready candidate set —
+    // no diff and no agent run, only the filter + the opt-in checklist.
+    // trace:TASK-1248 | ai:claude
+    let from_file = opts.from.clone();
+    let (diff, source) = match &from_file {
+        Some(f) => (
+            String::new(),
+            format!(
+                "file:{}",
+                f.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("candidates")
+            ),
+        ),
+        None => {
+            let (diff, source) = collect_diff(project_root, &opts)?;
+            if diff.trim().is_empty() {
+                anyhow::bail!(
+                    "nothing to harvest: the diff for {source} is empty (pass --pr <N> or --base <ref>)"
+                );
+            }
+            (diff, source)
+        }
+    };
 
     let cfg = read_harvest_config(&project_root.join(".aida").join("config.toml"));
     let existing = crate::criteria::parse_acceptance_criteria(&display, &req.description);
@@ -608,7 +629,12 @@ pub(crate) fn handle_harvest_command(
     );
 
     let vendor = crate::session::resolve_headless_vendor(project_root);
-    if opts.dry_run {
+    if let Some(f) = &from_file {
+        if opts.dry_run {
+            println!("dry run — would confirm candidates from {}", f.display());
+            return Ok(());
+        }
+    } else if opts.dry_run {
         println!(
             "dry run — not launching {} (would harvest {} for {}).\n\n{prompt}",
             vendor.as_str(),
@@ -623,46 +649,51 @@ pub(crate) fn handle_harvest_command(
         );
     }
 
-    eprintln!(
-        "  {} harvesting {} from {} with a headless {} agent…",
-        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-        display,
-        source,
-        vendor.as_str()
-    );
-    let log_path = project_root
-        .join(".aida")
-        .join("headless-logs")
-        .join(format!(
-            "harvest-{}-{}.jsonl",
-            display.to_ascii_lowercase(),
-            chrono::Utc::now().format("%Y%m%d-%H%M%S")
-        ));
-    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
-        .with_label(format!("harvest-{}", display.to_ascii_lowercase()));
-    let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
-    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
-    let status =
-        crate::session::spawn_vendor_headless(vendor, &prompt, &run_id, &log_path, &tee, false);
-    match previous_role {
-        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
-        None => std::env::remove_var("AIDA_SESSION_ROLE"),
-    }
-    let status = status?;
-    if !status.success() {
-        anyhow::bail!(
-            "the harvest agent exited with {} — see {}",
-            status.code().unwrap_or(1),
-            log_path.display()
+    let raw = if let Some(f) = &from_file {
+        std::fs::read_to_string(f)
+            .with_context(|| format!("could not read candidates file {}", f.display()))?
+    } else {
+        eprintln!(
+            "  {} harvesting {} from {} with a headless {} agent…",
+            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+            display,
+            source,
+            vendor.as_str()
         );
-    }
-    let raw = std::fs::read_to_string(&out_path).with_context(|| {
-        format!(
-            "the harvest agent wrote no output file at {} — see {}",
-            out_path.display(),
-            log_path.display()
-        )
-    })?;
+        let log_path = project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!(
+                "harvest-{}-{}.jsonl",
+                display.to_ascii_lowercase(),
+                chrono::Utc::now().format("%Y%m%d-%H%M%S")
+            ));
+        let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+            .with_label(format!("harvest-{}", display.to_ascii_lowercase()));
+        let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
+        std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+        let status =
+            crate::session::spawn_vendor_headless(vendor, &prompt, &run_id, &log_path, &tee, false);
+        match previous_role {
+            Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
+            None => std::env::remove_var("AIDA_SESSION_ROLE"),
+        }
+        let status = status?;
+        if !status.success() {
+            anyhow::bail!(
+                "the harvest agent exited with {} — see {}",
+                status.code().unwrap_or(1),
+                log_path.display()
+            );
+        }
+        std::fs::read_to_string(&out_path).with_context(|| {
+            format!(
+                "the harvest agent wrote no output file at {} — see {}",
+                out_path.display(),
+                log_path.display()
+            )
+        })?
+    };
     let candidates = parse_candidates(&raw)?;
     let total = candidates.len();
     let (kept, skipped) = filter_candidates(candidates, &cfg);

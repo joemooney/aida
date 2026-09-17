@@ -294,6 +294,93 @@ pub(crate) fn scan_rust_tests_for_criteria(root: &Path, spec: &str) -> Result<Ve
     Ok(tests)
 }
 
+// TASK-1248: the source of one fn starting at `start_line` (1-based) in
+/// `path`, cut by brace balance. Used to show the matching agent the real
+/// traced test; empty when the file/line cannot be read.
+// trace:TASK-1248 | ai:claude
+pub(crate) fn extract_fn_source(path: &Path, start_line: usize) -> String {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return String::new();
+    };
+    let mut out = String::new();
+    let mut depth: isize = 0;
+    let mut started = false;
+    for (idx, line) in content.lines().enumerate() {
+        if idx + 1 < start_line {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+        depth += brace_delta(line);
+        if brace_delta(line) != 0 || line.contains('{') {
+            started = true;
+        }
+        if started && depth <= 0 {
+            break;
+        }
+    }
+    out
+}
+
+// TASK-1248: names of the fns/structs/enums whose `trace:<spec>` comment sits
+/// directly above them (non-test source only) — the "public surface" the
+/// reconstitution probe is allowed to know about without seeing code.
+// trace:TASK-1248 | ai:claude
+pub(crate) fn symbols_traced_to_spec(root: &Path, spec: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    collect_rust_files(root, &mut files);
+    let needle = format!("trace:{}", spec.to_ascii_uppercase());
+    let mut out = std::collections::BTreeSet::new();
+    for path in files {
+        if path.components().any(|c| c.as_os_str() == "tests") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let lines: Vec<&str> = content.lines().collect();
+        for (i, line) in lines.iter().enumerate() {
+            if !line.to_ascii_uppercase().contains(&needle) {
+                continue;
+            }
+            for cand in lines.iter().skip(i + 1).take(4) {
+                let t = cand.trim_start();
+                if t.starts_with("//") || t.starts_with("#[") {
+                    continue;
+                }
+                if let Some(name) = item_name(t) {
+                    out.insert(name);
+                }
+                break;
+            }
+        }
+    }
+    out.into_iter().collect()
+}
+
+fn item_name(trimmed: &str) -> Option<String> {
+    let t = trimmed
+        .trim_start_matches("pub(crate) ")
+        .trim_start_matches("pub ")
+        .trim_start_matches("async ");
+    let (kind, rest) = if let Some(r) = t.strip_prefix("fn ") {
+        ("fn", r)
+    } else if let Some(r) = t.strip_prefix("struct ") {
+        ("struct", r)
+    } else if let Some(r) = t.strip_prefix("enum ") {
+        ("enum", r)
+    } else if let Some(r) = t.strip_prefix("const ") {
+        ("const", r)
+    } else {
+        return None;
+    };
+    let name: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    (!name.is_empty()).then(|| format!("{kind} {name}"))
+}
+
 fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
@@ -318,6 +405,12 @@ fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
 fn scan_rust_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> Vec<TracedTest> {
     let mut out = Vec::new();
     let mut pending_test = false;
+    // BUG-1189: criterion markers on the comment/attribute lines immediately
+    // ABOVE a test fn belong to that fn (the repo convention puts `// trace:`
+    // above the item). A blank line or non-comment code between them breaks
+    // the attachment so a stray marker never leaks onto the next fn.
+    // trace:BUG-1189 | ai:claude
+    let mut pending_traces: Vec<String> = Vec::new();
     let mut current: Option<(String, usize, usize, Vec<String>)> = None;
     for (idx, line) in content.lines().enumerate() {
         let line_no = idx + 1;
@@ -325,12 +418,21 @@ fn scan_rust_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> V
         if trimmed.starts_with("#[test]") || trimmed.starts_with("#[tokio::test") {
             pending_test = true;
         }
-        if current.is_none() && pending_test {
-            if let Some(name) = rust_fn_name(trimmed) {
-                let depth = brace_delta(line).max(0) as usize;
-                current = Some((name, line_no, depth, traces_in_line(line, spec)));
-                pending_test = false;
-                continue;
+        if current.is_none() {
+            if pending_test {
+                if let Some(name) = rust_fn_name(trimmed) {
+                    let depth = brace_delta(line).max(0) as usize;
+                    let mut traces = std::mem::take(&mut pending_traces);
+                    traces.extend(traces_in_line(line, spec));
+                    current = Some((name, line_no, depth, traces));
+                    pending_test = false;
+                    continue;
+                }
+            }
+            if trimmed.starts_with("//") || trimmed.starts_with("#[") {
+                pending_traces.extend(traces_in_line(line, spec));
+            } else if !pending_test {
+                pending_traces.clear();
             }
         }
         if let Some((name, start, depth, traces)) = current.as_mut() {
@@ -448,6 +550,33 @@ fn print_gap(label: &str, ids: &[String]) {
 
 #[cfg(test)]
 mod tests {
+    // BUG-1189: a criterion marker on the comment line ABOVE #[test] attaches to
+    // that test (the repo convention); in-body markers keep working; a marker
+    // separated by unrelated code does not leak onto the next fn.
+    #[test]
+    fn trace_above_test_attribute_attributes_to_that_test() {
+        let src = "// trace:T-1.AC1 | ai:claude\n#[test]\nfn above() {\n    assert!(true);\n}\n\n#[test]\nfn inside() {\n    // trace:T-1.AC2 | ai:claude\n    assert!(true);\n}\n\n// trace:T-1.AC3 | ai:claude\nfn helper() {}\n\n#[test]\nfn unrelated() {\n    assert!(true);\n}\n";
+        let tests = super::scan_rust_test_file(
+            std::path::Path::new("/r"),
+            std::path::Path::new("/r/x.rs"),
+            src,
+            "T-1",
+        );
+        let by_name: std::collections::BTreeMap<_, _> = tests
+            .iter()
+            .map(|t| (t.name.as_str(), t.traces.clone()))
+            .collect();
+        assert_eq!(
+            by_name.get("above").cloned(),
+            Some(vec!["T-1.AC1".to_string()])
+        );
+        assert_eq!(
+            by_name.get("inside").cloned(),
+            Some(vec!["T-1.AC2".to_string()])
+        );
+        assert!(by_name.get("unrelated").is_none(), "{by_name:?}");
+    }
+
     use super::*;
 
     #[test]
