@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:57:54.453824115Z
-modified_at: 2026-09-17T07:30:29.146883568Z
+modified_at: 2026-09-17T07:30:30.969999676Z
 req_type: Task
 tags:
 - afk
@@ -44,6 +44,11 @@ comments:
   created_at: 2026-09-17T07:26:51.859015843Z
   modified_at: 2026-09-17T07:26:51.859015843Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ae46-30cf-7272-9202-019d891eb4b3
+  author: joe
+  content: 'REWORK (oversight, 00:30) — PR-1881 failed its own CI on the re-armed drift-guard: ''FAIL flags — 23 cited --flag token(s) did not resolve''. The resolution fix is CORRECT (366 false positives → 0); the 23 remaining are GENUINE manual drift from STORY-1028 (mode flags promoted to subcommands) and the acceptance requires each fixed in the same PR before hard-fail is re-armed. The exact 23 with their canonical replacements are in the [oversight review — PR-1881] comment on this spec — apply those doc edits on the existing task-1251 branch (PR-1881), re-run docs/cli/verify-manual.py and confirm it prints ''OK flags'' and exits 0 with hard-fail ON, then push the fixup. Do not weaken the check back to advisory.'
+  created_at: 2026-09-17T07:30:30.735445223Z
+  modified_at: 2026-09-17T07:30:30.735445223Z
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T07:20:42.207545906Z
