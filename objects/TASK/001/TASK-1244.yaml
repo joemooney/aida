@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:20:53.023861336Z
-modified_at: 2026-09-17T16:24:56.078488373Z
+modified_at: 2026-09-17T16:24:58.826613050Z
 req_type: Task
 tags:
 - follow-up-task-1243
@@ -24,6 +24,21 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b015-c209-7b32-b180-dac27c9c0f28
   created_at: 2026-09-17T15:56:54.399748152Z
+comments:
+- id: 01a0b02f-82ca-7000-88a1-fa17947d9392
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1890
+    agent: codex
+    ran-at: 2026-09-17 09:24 -07:00
+    confirmed: 1
+    declined: 0
+    skipped: 0
+    + AC TASK-1244.AC1 — When the drain merge phase shelves a PR because the merge-lease is held, the recovery hint must tell the operator both how to inspect the current holder with `aida merge-lock` and how to resume after release with `aida pr ship <PR>` using the affected PR number.
+  created_at: 2026-09-17T16:24:58.826613050Z
+  modified_at: 2026-09-17T16:24:58.826613050Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
 implementation_info:
   implemented: true
