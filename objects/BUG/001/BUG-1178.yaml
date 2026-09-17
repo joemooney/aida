@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:59:59.382279085Z
-modified_at: 2026-09-17T17:24:35.808575478Z
+modified_at: 2026-09-17T17:26:01.852327817Z
 req_type: Bug
 tags:
 - batch:bugs-0917
@@ -79,6 +79,20 @@ comments:
   content: '[rework] PR #1889 RequestChanges by the advisor gate: the STORY-495 interactive resolver for aida session new / session start --launch (lib.rs ~24554, fn near read_agents_bypass_from_file) still returns mode dontAsk under contained (and the sandbox arm below it). Fix in the SAME PR (push fixups to branch pr-1889''s head branch bug-1178-*): contained interactive → mode None + contained flags; dontAsk only for headless; extend guard_interactive_claude_dontask to that path; add the mirror test. Finish with aida queue done BUG-1178.'
   created_at: 2026-09-17T16:13:33.504875828Z
   modified_at: 2026-09-17T16:13:33.504875828Z
+- id: 01a0b067-677c-7a32-87a0-da9447f69d43
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1889 [AI:codex] fix(launcher): keep contained TTY launches promptable (BUG-1178) — round 2 (fixup c6c590608 after my RequestChanges)
+    verdict: APPROVE + merged (drive-mode advisor gate)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless; drain reviewer passed the code at c6c5906 and escalated only because Build was pending; advisor gate = this review)
+    gates: Build (ubuntu-latest) SUCCESS; merge-hold-gate red-as-the-hold, released at merge and re-ran green; MERGEABLE; merge-lease taken (drain live on TASK-1245)
+    reasoning: round 1 fixed aida agent new only. The fixup makes the STORY-495 resolver (resolve_interactive_launch_mode → _for_root, root-injectable) return mode None for BOTH the contained arm and the sandbox arm, so aida session new / session start --launch are promptable inside the sandbox too; headless paths keep their own dontAsk (spawn_claude_headless/resume, drain phases). config permissions show renders per launch kind; interactive dontAsk is refused with guidance. The rework re-drive also exercised the #1886 reviewer-seat fix cleanly (reviewer reviewed, wrote a verdict, pushed nothing).
+    merged: 2026-09-17 10:25 -07:00 → main e356186ce; spec auto-bumped Completed
+  created_at: 2026-09-17T17:26:01.852327817Z
+  modified_at: 2026-09-17T17:26:01.852327817Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0af97-e0a0-7793-be1c-618079010617
   author: aida-auto-bump
