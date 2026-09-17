@@ -10,12 +10,12 @@ description: |-
   2. VALIDATION = unit/mocked now, live as a follow-up TASK. Trait-level tests with a fake forge (CI states, registration timing, per-check rows); the GitHub path is pinned unchanged by source-shape guards. A live headless drain on GitLab is filed as a follow-up once glab is authenticated to the self-hosted mirror and the mirror project has CI. Rationale: glab on the dev machine is authenticated to gitlab.com only and the mirror has no pipeline yet.
 
   3. DELEGATED MODE ON GITLAB = explicit skip. [review] mode = delegated on a GitLab project logs 'delegated review not supported on this forge' and runs the standard headless reviewer; never a silent NoVerdict, never a shelve.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:40:57.445489064Z
-modified_at: 2026-09-17T16:41:16.904913047Z
+modified_at: 2026-09-17T18:21:13.844461489Z
 req_type: Decision
 tags:
 - forge
