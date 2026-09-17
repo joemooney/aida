@@ -18,10 +18,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:48:25.230554922Z
-modified_at: 2026-09-17T15:48:25.230554922Z
+modified_at: 2026-09-17T15:48:53.665376680Z
 req_type: Bug
 tags:
+- batch:bugs-0917
 - follow-up:BUG-1180
 - merge-hold
 - pr-ship
 - worktree
+execution_mode: drive
