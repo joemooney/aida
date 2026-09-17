@@ -71506,5 +71506,25 @@ operations:
   timestamp: 2026-09-17T05:57:23.332132850Z
   kind: !RemoveTag
     tag: severity:minor
-clock: 5580
+- id: 01a0adf1-6a2b-7e61-8cee-e497969b5c91
+  target_id: 01a0adf1-6895-7772-b7ed-5d7af07c073f
+  author: aida
+  node_id: '1'
+  lamport: 5581
+  timestamp: 2026-09-17T05:57:54.859171660Z
+  kind: !Create
+    title: 'verify-manual.py: fix flag-resolution false positives so the flags-check can return to hard-fail'
+    description: |-
+      Follow-up to BUG-1176 (Completed), which demoted the docs/cli/verify-manual.py flags-check to ADVISORY because it reported 366 false positives (e.g. --type cited under aida add, --title under aida add) that do resolve when the resolution walks the command's real clap subtree.
+
+      Fix the flag-resolution logic so cited --flag tokens resolve against the cited command AND its parent/child command subtree the way aida --help-all actually lays them out (global flags, inherited flags, and subcommand flags), then re-run the check: the false-positive count must drop to zero on the current manual, any remaining hits must be REAL drift (fix the manual entry or the check), and the step flips back from advisory to hard-fail in CI.
+
+      Acceptance:
+      - verify-manual.py flags-check reports 0 hits on main (or only genuine drift, each fixed in the same PR).
+      - The CI step is hard-fail again (exit non-zero on drift).
+      - A unit/fixture test pins at least three previously-false-positive citations (--type / --title under aida add, one inherited global flag) as resolving.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 5581
 node_id: '1'
