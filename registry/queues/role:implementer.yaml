@@ -33,3 +33,11 @@
   added_at: 2026-09-16T16:58:30.968695346Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0adb7-ed0a-7a13-93fb-8acef016ed0d
+  position: 83000
+  added_by: role:implementer
+  note: 'drain-safe: recognize a NEW-file convention in aida plan verify (see spec); keep ERROR for missing existing files; --fix must not rewrite new paths'
+  added_at: 2026-09-17T05:57:24.913230442Z
+  for_role: implementer
+  added_by_machine: imac
