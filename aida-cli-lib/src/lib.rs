@@ -24645,6 +24645,16 @@ fn resolve_interactive_launch_mode(
     flag: Option<&str>,
     sandbox: bool,
 ) -> Result<ResolvedClaudeLaunch> {
+    let root = find_main_worktree_root().ok();
+    resolve_interactive_launch_mode_for_root(flag, sandbox, root.as_deref())
+}
+
+// trace:BUG-1178 | ai:codex
+fn resolve_interactive_launch_mode_for_root(
+    flag: Option<&str>,
+    sandbox: bool,
+    root: Option<&std::path::Path>,
+) -> Result<ResolvedClaudeLaunch> {
     if sandbox && flag.filter(|s| !s.is_empty()).is_some() {
         anyhow::bail!(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
@@ -24656,9 +24666,9 @@ fn resolve_interactive_launch_mode(
             contained: false,
         });
     }
-    if let Ok(root) = find_main_worktree_root() {
-        let bypass = load_agents_bypass(&root).unwrap_or(false);
-        let contained = sandbox || load_agents_contained(&root).unwrap_or(false);
+    if let Some(root) = root {
+        let bypass = load_agents_bypass(root).unwrap_or(false);
+        let contained = sandbox || load_agents_contained(root).unwrap_or(false);
         if bypass && contained {
             anyhow::bail!(
                 "[agents] bypass and [agents] contained are mutually exclusive launch postures"
@@ -24666,7 +24676,7 @@ fn resolve_interactive_launch_mode(
         }
         if contained {
             return Ok(ResolvedClaudeLaunch {
-                mode: Some("dontAsk".to_string()),
+                mode: None,
                 contained: true,
             });
         }
@@ -24678,11 +24688,7 @@ fn resolve_interactive_launch_mode(
         }
     }
     Ok(ResolvedClaudeLaunch {
-        mode: if sandbox {
-            Some("dontAsk".to_string())
-        } else {
-            None
-        },
+        mode: None,
         contained: sandbox,
     })
 }

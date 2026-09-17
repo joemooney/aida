@@ -589,6 +589,48 @@ fn interactive_claude_dontask_guard_refuses_unpromptable_mode() {
     assert!(guard_interactive_claude_dontask("claude", &tool_contained_flags("claude")).is_ok());
 }
 
+// trace:BUG-1178 | ai:codex
+#[test]
+fn contained_config_interactive_claude_resolves_promptable_sandbox() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\ncontained = true\n",
+    )
+    .unwrap();
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+    let resolved = resolve_interactive_launch_mode_for_root(None, false, Some(&project)).unwrap();
+    assert_eq!(
+        resolved,
+        ResolvedClaudeLaunch {
+            mode: None,
+            contained: true
+        }
+    );
+}
+
+// trace:BUG-1178 | ai:codex
+#[test]
+fn sandbox_flag_interactive_claude_resolves_promptable_sandbox() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+
+    let resolved = resolve_interactive_launch_mode_for_root(None, true, Some(&project)).unwrap();
+    assert_eq!(
+        resolved,
+        ResolvedClaudeLaunch {
+            mode: None,
+            contained: true
+        }
+    );
+}
+
 // trace:STORY-1124 | ai:codex
 #[test]
 fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {
