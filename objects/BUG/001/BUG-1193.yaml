@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:09:34.321830724Z
-modified_at: 2026-09-17T19:48:48.069188859Z
+modified_at: 2026-09-17T19:50:40.977539198Z
 req_type: Bug
 tags:
 - batch:bugs-0917
@@ -25,6 +25,21 @@ relationships:
   target_id: 01a0b0e1-f13a-7413-9b06-8a9da9f662db
   created_at: 2026-09-17T19:39:58.895704017Z
   created_by: joe
+comments:
+- id: 01a0b0eb-d651-7ab3-a2db-5c42858a7788
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1901 [AI:codex] fix(tests): normalize review envelope source guard (BUG-1193)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless; the drain's reviewer phase never ran — shelved by the BUG-1195 guard false-negative — so this advisor reviewed the diff directly)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN, no drain running, no lease/hold held
+    reasoning: one-line test-only change — include_str!("../lib.rs").replace("\r\n", "\n") before the source-shape asserts, so the LF needle matches a CRLF Windows checkout. Swept the other include_str! source-shape guards on main: none embeds a raw newline needle, so the acceptance sweep item is satisfied with no further change.
+    merged: 2026-09-17 13:05 -07:00 → main f082aca337; spec auto-bumped Completed
+  created_at: 2026-09-17T19:50:40.977539198Z
+  modified_at: 2026-09-17T19:50:40.977539198Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b0ea-1d3e-74a0-99d8-fa47581972de
   author: aida-auto-bump
