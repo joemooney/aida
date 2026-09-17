@@ -85395,6 +85395,69 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         Ok(())
     }
 
+    // TASK-1249 / ADR-45: advisory harvest between the review gates and merge.
+    // Propose-only: ledger comment + candidates file + a brief for the advisor;
+    // never lands anything, never fails the run. `[harvest] gate = "off"` or
+    // `lifecycle:no-harvest` skips it.
+    // trace:TASK-1249 | ai:claude
+    fn run_harvest_gate(&mut self) {
+        if self.lifecycle_skip.no_harvest {
+            if !self.json {
+                eprintln!("  {} harvest skipped per lifecycle tag", "↷".cyan());
+            }
+            return;
+        }
+        let cfg =
+            harvest::read_harvest_config(&self.project_root.join(".aida").join("config.toml"));
+        if cfg.gate == harvest::HarvestGate::Off {
+            return;
+        }
+        let Some(pr) = self.pr_number else {
+            return;
+        };
+        let Some(store) = load_store_for_lookup(&self.project_root) else {
+            return;
+        };
+        if !self.json {
+            eprintln!(
+                "  {} advisory harvest of PR-{pr} for {} (propose-only)…",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                self.spec
+            );
+        }
+        match harvest::propose_only(&self.project_root, &store, &self.spec, pr as u64) {
+            Ok(s) => {
+                if !self.json {
+                    match &s.file {
+                        Some(f) => eprintln!(
+                            "  {} harvest proposed {} of {} candidate(s) ({} filtered) — confirm later: `aida harvest {} --from {}`",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            s.proposed,
+                            s.candidates,
+                            s.skipped,
+                            self.spec,
+                            f.display()
+                        ),
+                        None => eprintln!(
+                            "  {} harvest found nothing to propose ({} candidate(s), {} filtered) — ledgered",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            s.candidates,
+                            s.skipped
+                        ),
+                    }
+                }
+            }
+            Err(e) => {
+                if !self.json {
+                    eprintln!(
+                        "  {} advisory harvest did not complete ({e:#}) — continuing to merge",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
+            }
+        }
+    }
+
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Merge);
         let pr = self.pr_number.ok_or_else(|| {

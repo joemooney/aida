@@ -106,6 +106,9 @@ pub(crate) struct LifecycleSkip {
     pub(crate) no_ci_wait: bool,
     pub(crate) no_review: bool,
     pub(crate) no_build: bool,
+    // TASK-1249: `lifecycle:no-harvest` skips the advisory harvest step
+    // between the review gates and merge (never a phase, never blocking).
+    pub(crate) no_harvest: bool,
     // TASK-907: this spec is on the fasttrack express tier (`batch:express`).
     // Express runs the full gate; the skip fields above are forced off when
     // this is true. Tracked so the orchestrator banner can announce the tier.
@@ -124,6 +127,8 @@ impl LifecycleSkip {
                 "lifecycle:no-ci-wait" => skip.no_ci_wait = true,
                 "lifecycle:no-review" => skip.no_review = true,
                 "lifecycle:no-build" => skip.no_build = true,
+                // trace:TASK-1249 | ai:claude
+                "lifecycle:no-harvest" => skip.no_harvest = true,
                 "lifecycle:trivial" => {
                     skip.no_ci_wait = true;
                     skip.no_review = true;
@@ -149,7 +154,7 @@ impl LifecycleSkip {
     }
 
     pub(crate) fn is_empty(self) -> bool {
-        !self.no_ci_wait && !self.no_review && !self.no_build
+        !self.no_ci_wait && !self.no_review && !self.no_build && !self.no_harvest
     }
 
     /// TASK-525: the active short-circuit tokens (`no-ci-wait`, `no-review`,
@@ -167,6 +172,9 @@ impl LifecycleSkip {
         if self.no_build {
             v.push("no-build".to_string());
         }
+        if self.no_harvest {
+            v.push("no-harvest".to_string());
+        }
         v
     }
 }
@@ -179,6 +187,7 @@ pub(crate) const RECOGNIZED_LIFECYCLE_TAGS: &[&str] = &[
     "lifecycle:no-ci-wait",
     "lifecycle:no-review",
     "lifecycle:no-build",
+    "lifecycle:no-harvest",
     "lifecycle:trivial",
 ];
 
@@ -1223,6 +1232,12 @@ pub(crate) trait PhaseDriver {
     fn run_agent_gates(&mut self) -> Result<(), PhaseFailure> {
         Ok(())
     }
+    // TASK-1249 / ADR-45: the ADVISORY harvest step, run after the agent
+    /// gates and before merge. Never a phase, never a failure: it proposes
+    /// (ledger comment + candidates file + a brief for the advisor) and the
+    /// drain continues whatever happens. Default: no-op.
+    // trace:TASK-1249 | ai:claude
+    fn run_harvest_gate(&mut self) {}
     /// Phase 4 — merge the PR.
     fn merge(&mut self) -> Result<(), PhaseFailure>;
     /// The supervised-merge hold — `Some(reason)` when the spec's
@@ -3705,6 +3720,10 @@ pub(crate) fn orchestrate_with_resume(
         let f = failure_with_retry_attempt(driver, &f, 0);
         return resolve_phase_failure(driver, Phase::Reviewer, spec, json, &start, &f, durations);
     }
+    // TASK-1249 / ADR-45: advisory harvest between the gates and merge —
+    // propose-only, cannot fail the run.
+    // trace:TASK-1249 | ai:claude
+    driver.run_harvest_gate();
 
     // Latent-defect guard (review finding): mirror the <=2/<=4/<=5 caps so a
     // future variant with last_phase()==3 (e.g. a "through-reviewer" mode)
@@ -5638,6 +5657,8 @@ mod tests {
         /// TASK-975: every `(attempt, budget)` pair `attempt_ci_fix` was
         /// called with, so the tests pin the bounded-loop accounting.
         ci_fix_calls: Vec<(usize, usize)>,
+        // TASK-1249: how many times the advisory harvest step ran.
+        harvest_gate_calls: usize,
         /// TASK-975: how many times `merge` fails with a conflict-shaped
         /// `PhaseFailure` before succeeding (decrements per call).
         merge_conflicts: usize,
@@ -5717,6 +5738,7 @@ mod tests {
                 transient_retry_events: Vec::new(),
                 recover_review_pr: None,
                 phase1_pr_recovery: None,
+                harvest_gate_calls: 0,
             }
         }
 
@@ -5933,6 +5955,9 @@ mod tests {
     }
 
     impl PhaseDriver for MockPhaseDriver {
+        fn run_harvest_gate(&mut self) {
+            self.harvest_gate_calls += 1;
+        }
         fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure> {
             // BUG-657: the orchestrator must skip phase 1 entirely for a
             // terminal target — if it reached here, the no-op guard failed.
@@ -6168,6 +6193,7 @@ mod tests {
                 no_ci_wait: true,
                 no_review: true,
                 no_build: true,
+                no_harvest: false,
                 express: false,
             }
         );
@@ -6271,12 +6297,44 @@ mod tests {
             no_ci_wait: true,
             no_review: true,
             no_build: false,
+            no_harvest: false,
             express: false,
         };
         assert_eq!(
             skip.banner_summary().as_deref(),
             Some("skipping CI wait + reviewer")
         );
+    }
+
+    // TASK-1249: the advisory harvest step runs exactly once per full run,
+    // after the reviewer and before merge, and a shelved review never reaches it.
+    #[test]
+    fn harvest_gate_runs_once_between_review_and_merge() {
+        let mut driver = MockPhaseDriver::all_ok();
+        let r = orchestrate(
+            &mut driver,
+            "TASK-1249",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(r.exit_code, 0);
+        assert_eq!(driver.harvest_gate_calls, 1);
+        let mut shelved = MockPhaseDriver::all_ok();
+        shelved.verdict = Verdict::RequestChanges;
+        let _ = orchestrate(
+            &mut shelved,
+            "TASK-1249",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(
+            shelved.harvest_gate_calls, 0,
+            "a failed review never reaches the harvest step"
+        );
+        assert!(LifecycleSkip::from_tags(["lifecycle:no-harvest"]).no_harvest);
+        assert!(!is_unrecognized_lifecycle_tag("lifecycle:no-harvest"));
     }
 
     #[test]

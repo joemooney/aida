@@ -35,8 +35,19 @@ pub(crate) const SEM_MARKER: &str = "[aida:sem]";
 
 /// `[harvest]` config — the calibration surface for the selectivity filter.
 /// Strict by default (anti-slop); loosen on evidence.
+// TASK-1249 / ADR-45: whether the drain runs the advisory harvest step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HarvestGate {
+    /// Run after the review gates, propose-only (default).
+    Advisory,
+    /// Skip the step in drains.
+    Off,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct HarvestConfig {
+    /// `[harvest] gate = "advisory" | "off"`.
+    pub(crate) gate: HarvestGate,
     /// Candidates rated below this confidence are skipped.
     pub(crate) min_confidence: f64,
     /// Skip candidates the agent itself marks as conventional/obvious.
@@ -51,6 +62,7 @@ pub(crate) struct HarvestConfig {
 impl Default for HarvestConfig {
     fn default() -> Self {
         Self {
+            gate: HarvestGate::Advisory,
             min_confidence: 0.7,
             skip_conventional: true,
             deny_keywords: [
@@ -89,6 +101,12 @@ pub(crate) fn read_harvest_config(config_path: &Path) -> HarvestConfig {
     let Some(table) = value.get("harvest") else {
         return cfg;
     };
+    if let Some(v) = table.get("gate").and_then(|v| v.as_str()) {
+        cfg.gate = match v.trim().to_ascii_lowercase().as_str() {
+            "off" | "false" | "no" | "disabled" => HarvestGate::Off,
+            _ => HarvestGate::Advisory,
+        };
+    }
     if let Some(v) = table.get("min_confidence").and_then(|v| v.as_float()) {
         cfg.min_confidence = v.clamp(0.0, 1.0);
     }
@@ -442,6 +460,238 @@ pub(crate) fn build_harvest_prompt(
     }
     p.push_str("```\n");
     p
+}
+
+// TASK-1249: the `[aida:harvest]` ledger for an UNATTENDED (drain) run —
+/// nothing lands; kept candidates are proposed via a file for a human /
+/// advisor to confirm with `aida harvest <SPEC> --from <file>`.
+// trace:TASK-1249 | ai:claude
+pub(crate) fn ledger_comment_body_proposed(
+    source: &str,
+    vendor: &str,
+    proposed: &[Candidate],
+    skipped: &[(Candidate, SkipReason)],
+    file: Option<&Path>,
+) -> String {
+    let mut s = format!(
+        "{HARVEST_MARKER}\nsource: {source}\nagent: {vendor}\nran-at: {}\nmode: propose-only (drain)\nproposed: {}\nskipped: {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M %Z"),
+        proposed.len(),
+        skipped.len()
+    );
+    if let Some(f) = file {
+        s.push_str(&format!("candidates-file: {}\n", f.display()));
+    }
+    for c in proposed {
+        s.push_str(&format!(
+            "? {} ({:.2}) — {}\n",
+            c.kind.label(),
+            c.confidence,
+            c.text.trim()
+        ));
+    }
+    for (c, r) in skipped {
+        s.push_str(&format!(
+            "- {} skipped ({}) — {}\n",
+            c.kind.label(),
+            r.describe(),
+            c.text.trim()
+        ));
+    }
+    s
+}
+
+// TASK-1249: outcome of an unattended, propose-only harvest.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ProposeSummary {
+    pub(crate) candidates: usize,
+    pub(crate) proposed: usize,
+    pub(crate) skipped: usize,
+    pub(crate) file: Option<PathBuf>,
+}
+
+// TASK-1249 / ADR-45: the drain's advisory harvest. Runs the agent + filter
+/// on the PR diff, writes the ledger comment and — when anything survives
+/// the filter — a candidates file plus a brief for the advisor (surfaced by
+/// `aida awaiting`). NEVER edits the contract: confirmation is a later,
+/// human/advisor `aida harvest <SPEC> --from <file>`.
+// trace:TASK-1249 | ai:claude
+pub(crate) fn propose_only(
+    project_root: &Path,
+    store: &aida_core::RequirementsStore,
+    spec: &str,
+    pr: u64,
+) -> Result<ProposeSummary> {
+    let req = store
+        .get_requirement_by_spec_id(spec)
+        .or_else(|| {
+            store.requirements.iter().find(|r| {
+                r.agreed_id
+                    .as_deref()
+                    .is_some_and(|id| id.eq_ignore_ascii_case(spec))
+            })
+        })
+        .ok_or_else(|| anyhow::anyhow!("requirement not found: {spec}"))?;
+    let display = req.display_id();
+    let opts = HarvestOptions {
+        pr: Some(pr),
+        ..HarvestOptions::default()
+    };
+    let (diff, source) = collect_diff(project_root, &opts)?;
+    if diff.trim().is_empty() {
+        anyhow::bail!("PR-{pr} has an empty diff — nothing to harvest");
+    }
+    let cfg = read_harvest_config(&project_root.join(".aida").join("config.toml"));
+    let ctx = spec_context(store, req, &display);
+    let run_id = uuid::Uuid::now_v7().to_string();
+    let harvest_dir = project_root.join(".aida").join("harvest");
+    std::fs::create_dir_all(&harvest_dir)?;
+    let out_path = harvest_dir.join(format!("{}-{run_id}.json", display.to_ascii_lowercase()));
+    let prompt = build_harvest_prompt(
+        &display,
+        &req.title,
+        &req.description,
+        &ctx.existing,
+        &ctx.linked_decisions,
+        &ctx.prior_sems,
+        &diff,
+        &cfg,
+        &out_path,
+    );
+    let vendor = crate::session::resolve_headless_vendor(project_root);
+    let raw = run_harvest_agent(project_root, &display, &prompt, &run_id, &out_path)?;
+    let candidates = parse_candidates(&raw)?;
+    let total = candidates.len();
+    let (kept, skipped) = filter_candidates(candidates, &cfg);
+    let file = if kept.is_empty() {
+        None
+    } else {
+        let f = harvest_dir.join(format!(
+            "{}-drain-{run_id}.json",
+            display.to_ascii_lowercase()
+        ));
+        std::fs::write(
+            &f,
+            serde_json::to_string_pretty(&serde_json::json!({ "candidates": kept }))?,
+        )?;
+        Some(f)
+    };
+    let ledger =
+        ledger_comment_body_proposed(&source, vendor.as_str(), &kept, &skipped, file.as_deref());
+    run_aida(
+        project_root,
+        &["comment", "add", &display, &ledger, "--author", "harvest"],
+    )?;
+    if let Some(f) = &file {
+        // Surface in `aida awaiting` (unacked briefs) — best-effort.
+        let note = format!(
+            "drain harvest proposed {} candidate(s) from {source} — confirm with: aida harvest {display} --from {}",
+            kept.len(),
+            f.display()
+        );
+        let _ = run_aida(
+            project_root,
+            &["brief", "advisor", &display, "--note", &note],
+        );
+    }
+    Ok(ProposeSummary {
+        candidates: total,
+        proposed: kept.len(),
+        skipped: skipped.len(),
+        file,
+    })
+}
+
+/// The spec-side context the harvest brief carries besides the diff.
+struct SpecContext {
+    existing: Vec<String>,
+    linked_decisions: Vec<String>,
+    prior_sems: Vec<String>,
+}
+
+fn spec_context(
+    store: &aida_core::RequirementsStore,
+    req: &aida_core::Requirement,
+    display: &str,
+) -> SpecContext {
+    let existing = crate::criteria::parse_acceptance_criteria(display, &req.description)
+        .iter()
+        .map(|c| format!("{}: {}", c.label, c.text))
+        .collect();
+    let linked_decisions: Vec<String> = req
+        .relationships
+        .iter()
+        .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
+        .chain(store.requirements.iter().filter(|r| {
+            r.req_type == aida_core::RequirementType::Decision
+                && r.relationships.iter().any(|rel| rel.target_id == req.id)
+        }))
+        .filter(|r| r.req_type == aida_core::RequirementType::Decision)
+        .map(|r| format!("{}: {}", r.display_id(), r.title))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let prior_sems = req
+        .comments
+        .iter()
+        .filter(|c| c.content.trim_start().starts_with(SEM_MARKER))
+        .filter_map(|c| {
+            c.content
+                .lines()
+                .find_map(|l| l.strip_prefix("decision:"))
+                .map(|d| d.trim().to_string())
+        })
+        .collect();
+    SpecContext {
+        existing,
+        linked_decisions,
+        prior_sems,
+    }
+}
+
+/// Launch the harvest agent through the existing headless launcher and read
+/// back the JSON it wrote to `out_path`.
+fn run_harvest_agent(
+    project_root: &Path,
+    display: &str,
+    prompt: &str,
+    run_id: &str,
+    out_path: &Path,
+) -> Result<String> {
+    let vendor = crate::session::resolve_headless_vendor(project_root);
+    let log_path = project_root
+        .join(".aida")
+        .join("headless-logs")
+        .join(format!(
+            "harvest-{}-{}.jsonl",
+            display.to_ascii_lowercase(),
+            chrono::Utc::now().format("%Y%m%d-%H%M%S")
+        ));
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("harvest-{}", display.to_ascii_lowercase()));
+    let previous_role = std::env::var_os("AIDA_SESSION_ROLE");
+    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    let status =
+        crate::session::spawn_vendor_headless(vendor, prompt, run_id, &log_path, &tee, false);
+    match previous_role {
+        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
+        None => std::env::remove_var("AIDA_SESSION_ROLE"),
+    }
+    let status = status?;
+    if !status.success() {
+        anyhow::bail!(
+            "the harvest agent exited with {} — see {}",
+            status.code().unwrap_or(1),
+            log_path.display()
+        );
+    }
+    std::fs::read_to_string(out_path).with_context(|| {
+        format!(
+            "the harvest agent wrote no output file at {} — see {}",
+            out_path.display(),
+            log_path.display()
+        )
+    })
 }
 
 /// Flags the handler resolves from the clap subcommand.
@@ -911,6 +1161,39 @@ mod tests {
             kept.len(),
             2,
             "allow-list overrides deny; skip_conventional=false keeps agent-flagged"
+        );
+    }
+
+    // TASK-1249: the drain gate and the propose-only ledger.
+    #[test]
+    fn drain_gate_config_and_propose_only_ledger() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.toml");
+        assert_eq!(
+            read_harvest_config(&p).gate,
+            HarvestGate::Advisory,
+            "advisory by default"
+        );
+        std::fs::write(&p, "[harvest]\ngate = \"off\"\n").unwrap();
+        assert_eq!(read_harvest_config(&p).gate, HarvestGate::Off);
+        std::fs::write(&p, "[harvest]\ngate = \"advisory\"\n").unwrap();
+        assert_eq!(read_harvest_config(&p).gate, HarvestGate::Advisory);
+        let proposed = vec![cand(CandidateKind::Ac, "a real one", 0.9, false)];
+        let skipped = vec![(
+            cand(CandidateKind::Sem, "meh", 0.2, false),
+            SkipReason::LowConfidence,
+        )];
+        let f = std::path::Path::new("harvest/t-1-drain-x.json");
+        let body = ledger_comment_body_proposed("PR-9", "codex", &proposed, &skipped, Some(f));
+        assert!(body.starts_with(HARVEST_MARKER));
+        assert!(body.contains("mode: propose-only (drain)"));
+        assert!(body.contains("proposed: 1") && body.contains("skipped: 1"));
+        assert!(body.contains("candidates-file: harvest/t-1-drain-x.json"));
+        assert!(body.contains("? AC (0.90) — a real one"));
+        assert!(body.contains("- SEM skipped (below min_confidence) — meh"));
+        assert!(
+            !body.contains("confirmed:"),
+            "nothing lands in propose-only"
         );
     }
 
