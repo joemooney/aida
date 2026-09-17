@@ -1048,6 +1048,52 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
 
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]
+/// Resolve the PR's base (target) branch for the merge-lease key, falling back
+/// to `main`. A per-target-branch lease serializes only mergers heading to the
+/// same branch.
+// trace:STORY-1171 | ai:claude
+fn pr_ship_target_branch(pr: u64) -> String {
+    std::process::Command::new("gh")
+        .args([
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "baseRefName",
+            "-q",
+            ".baseRefName",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "main".to_string())
+}
+
+/// Acquire the branch merge-lease for this ship, or REFUSE (Err) if a live merger
+/// outlasts the bounded wait. The returned guard releases on drop.
+// trace:STORY-1171 | ai:claude
+fn acquire_merge_lease(
+    main_worktree: &std::path::Path,
+    pr: u64,
+) -> Result<crate::merge_lock::MergeLease> {
+    let target = pr_ship_target_branch(pr);
+    crate::merge_lock::acquire(
+        main_worktree,
+        &target,
+        Some(pr),
+        "aida pr ship",
+        crate::merge_lock::DEFAULT_WAIT,
+    )
+    .map_err(|e| {
+        anyhow::anyhow!(
+            "another merger holds the '{target}' merge-lease: {e} \
+             (a concurrent merge is in progress — retry once it releases, or run `aida merge-lock`)"
+        )
+    })
+}
+
 pub(crate) fn pr_ship_handler(
     n: Option<u64>,
     no_pull: bool,
@@ -1553,6 +1599,12 @@ pub(crate) fn pr_ship_handler(
     // log for the merge step was already recorded as Skipped above, and the
     // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
     let mut merged_this_run = false;
+    // STORY-1171 / TASK-1243: hold the branch merge-lease across check→merge→pull
+    // (ADR-38) so no two same-machine mergers race to this branch. Keyed on the
+    // PR's base branch, held on the MAIN clone (all mergers resolve here), and
+    // released when this handler returns. Bounded-wait-then-refuse on contention.
+    // trace:STORY-1171 | ai:claude
+    let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
     if !already_merged {
         if branch_in_sibling {
             eprintln!(

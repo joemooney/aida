@@ -22,7 +22,6 @@
 // exercised by the tests below and lands wired into the merge paths (pr ship +
 // drain, spanning check→merge→pull) in the STORY-1171 follow-up; `status()` is
 // live now via `aida merge-lock`. Allow dead_code until the wiring lands.
-#![allow(dead_code)]
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
