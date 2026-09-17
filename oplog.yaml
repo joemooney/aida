@@ -71298,5 +71298,17 @@ operations:
   timestamp: 2026-09-17T04:28:46.459320123Z
   kind: !SetStatus
     status: Done
-clock: 5562
+- id: 01a0ad9f-deed-7722-b178-a8fc057191ae
+  target_id: 01a0ad9f-d486-7dc2-8497-637136635b10
+  author: aida
+  node_id: '1'
+  lamport: 5563
+  timestamp: 2026-09-17T04:28:50.797162437Z
+  kind: !Create
+    title: Substrate/event-driven advisor heartbeat (wake only when aida awaiting is non-empty)
+    description: 'Follow-up to TASK-160. The drain-safe slice (a quiet-tick output contract in the aida-read-mail skill) shipped; this is the larger, non-drain-safe candidate: make the advisor heartbeat substrate/event-driven rather than a continuous agent-driven poll. Wake the advisor only when aida awaiting is non-empty (mail arrived, PR mergeable, drain event, findings non-empty), instead of a /loop that fires the agent every N minutes to narrate mostly-empty ticks. Pairs with the presence-is-not-the-clock and substrate-first mandates. Keyboard/keystone-adjacent (changes the loop/heartbeat invocation layer), so NOT drain-safe: implement supervised.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5563
 node_id: '1'
