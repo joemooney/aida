@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T07:29:38.171999086Z
-modified_at: 2026-09-17T08:19:14.968224657Z
+modified_at: 2026-09-17T08:19:16.159557842Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,10 @@ tags:
 - ci
 - failure-2
 - failure-kind:ci-red
+comments:
+- id: 01a0ae72-d43f-77a1-9f60-74e15a7cc1ee
+  author: joe
+  content: 'Rejected as a duplicate record, 01:19 (oversight): the drain auto-drafted this on TASK-1251''s CI-red. Root cause was triaged — the re-armed drift-guard correctly found 23 genuine STORY-1028 drift citations — and the fix list + rework are on TASK-1251 (re-drive running). Not a separate bug.'
+  created_at: 2026-09-17T08:19:16.159557842Z
+  modified_at: 2026-09-17T08:19:16.159557842Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
