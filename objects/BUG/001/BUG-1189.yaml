@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:58:16.265440526Z
-modified_at: 2026-09-17T18:26:11.520215057Z
+modified_at: 2026-09-17T18:26:13.705945924Z
 req_type: Bug
 tags:
 - criteria
@@ -18,3 +18,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T16:58:18.526629940Z
+comments:
+- id: 01a0b09e-8449-7890-bd91-b86d8ca45c43
+  author: joe
+  content: 'Fixed on main by #1895 (merged 2026-09-17 11:34 → 2153bcd470, trailer named TASK-1248 only, so the auto-bump missed this spec). aida criteria now attaches a trace marker on the comment/attribute line above #[test] to that test; verified TASK-1244.AC1 reads traced. Status set Completed by the driver-advisor.'
+  created_at: 2026-09-17T18:26:13.705945924Z
+  modified_at: 2026-09-17T18:26:13.705945924Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
