@@ -94,6 +94,33 @@ trace:STORY-975
 
 ### Pipelining
 
+### Which red checks gate a merge (`[ci]`)
+
+A PR's checks collapse to one coarse pass/fail for the drain's CI phase and for
+`aida pr ship`. Two reds are *not* failures and are re-classified before the
+drain shelves `ci-red` or `pr ship` aborts:
+
+- **The supervised merge-hold itself.** `merge-hold-gate` is designed to be red
+  while `.aida/merge-holds/PR-<n>` exists. `aida pr ship` keeps the hold through
+  the CI watch, releases it at the merge step, waits (up to 180s) for the gate
+  to re-run green, then merges. A red gate with **no** local marker is a
+  lingering label — `aida merge-hold clear <n>` re-syncs it.
+- **Informational checks.** A red check is ignored only when it is *not* a
+  branch-protection-required check **and** matches the allow-list below.
+  Everything else red is a real failure, so a repo with no branch protection
+  keeps "any red fails".
+
+```toml
+[ci]
+informational_workflows = ["Cross-platform"]   # default: the path-filtered Windows/macOS matrix
+informational_checks = []                      # e.g. ["Build (windows*"] — `*` wildcards, case-insensitive
+```
+
+`informational_workflows` matches the *workflow* name (the Windows/macOS jobs
+share PR CI's `Build (…)` job name, so the workflow is the discriminator);
+`informational_checks` matches the check name. An explicit `[]` disables that
+list. GitHub only (`gh pr checks --json`); other forges keep the coarse verdict.
+
 Batch and `nextN` drains have a small in-flight window:
 
 ```toml
