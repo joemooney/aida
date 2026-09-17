@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:20:53.023861336Z
-modified_at: 2026-09-17T16:36:57.246446904Z
+modified_at: 2026-09-17T16:38:06.414125811Z
 req_type: Task
 tags:
 - follow-up-task-1243
@@ -39,6 +39,21 @@ comments:
   created_at: 2026-09-17T16:24:58.826613050Z
   modified_at: 2026-09-17T16:24:58.826613050Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b03b-874e-7612-8671-0d8f601c88ac
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1890 [AI:claude] feat(drain): drain merge phase + wave merges take the per-branch merge-lease (TASK-1244)
+    verdict: APPROVE + merged (guided spec; ADR-41 accepted by the advisor 09:34)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1890.json)
+    gates: Build (ubuntu-latest) SUCCESS (pr ship waited), merge-hold-gate SUCCESS, MERGEABLE, merge-lease taken for the merge (first lease-vs-drain serialization: the bugs-0917 drain was live on BUG-1187)
+    reasoning: ADR-41 decisions 1-3 land verbatim — merge-scoped RAII guard in RealPhaseDriver::merge; WouldBlock → shelvable lease-conflict, other IO → plain failure; merge_wave_pr takes the same lease and skips on contention; key = pr_ship_target_branch (main fallback); lease root = main_worktree_root_from (the pattern BUG-1188 should copy). Source-shape guard pins acquire-before-merge_change in both paths.
+    note: pr ship refused at first ("will not self-merge inside an orchestrated drive") because a drain was running; merged with AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 — the guard's over-breadth is filed as TASK-1253.
+    merged: 2026-09-17 09:36 -07:00 → main 179e0961f
+  created_at: 2026-09-17T16:38:06.414125811Z
+  modified_at: 2026-09-17T16:38:06.414125811Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b03a-7917-7a20-86ce-50fbce608162
   author: aida-auto-bump
