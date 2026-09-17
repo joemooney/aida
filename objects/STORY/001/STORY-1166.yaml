@@ -3,12 +3,12 @@ spec_id: STORY-1166
 agreed_id: STORY-1166
 title: 'GitLab Slice 3: abstract CI-watch + delegated-review check-runs behind the Forge trait'
 description: 'The deepest gap — unblocks unattended --auto-complete on GitLab. Route wait_for_pr_checks_to_register / watch_ci_terminal through ci_probe_for_branch/watch_ci/stream_ci_for_branch (implemented on GitLabForge), and abstract the reviewer''s gh api .../check-runs severity tally behind a forge method (GitLab .../statuses has a different shape). Proposed mode: guided (deepest, drain-critical). Acceptance: a headless drain on a GitLab repo watches CI + tallies review verdicts via the trait, no direct gh; GitHub unchanged. Validate live. Depends on Slice 0/1.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:47.560507247Z
-modified_at: 2026-09-17T16:55:53.027850194Z
+modified_at: 2026-09-17T18:21:54.692923373Z
 req_type: Story
 tags:
 - forge gitlab ci-watch review slice-3 parent:EPIC-68 aida:forge
@@ -27,8 +27,24 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b03e-2365-7522-b4e7-aa3da806acf2
   created_at: 2026-09-17T16:40:59.258169421Z
+history:
+- id: 01a0b09a-907e-7653-ba0e-5b85a99e5848
+  author: aida-auto-bump
+  timestamp: 2026-09-17T18:21:54.686433875Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b09a-9084-7443-b8bc-9607c939d2a1
+  timestamp: 2026-09-17T18:21:54.692922721Z
+  agent: aida
+  commit_sha: cc11e2e45ddcf5d0d964c352c23c63a36742a23d
+  summary: Completed via merge cc11e2e4
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T16:55:53.027850194Z
   implemented_by: joe
+  completed_at: 2026-09-17T18:21:54.686313772Z
+  completion_sha: cc11e2e45ddcf5d0d964c352c23c63a36742a23d
