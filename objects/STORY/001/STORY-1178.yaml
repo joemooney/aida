@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T19:50:24.916011112Z
+modified_at: 2026-09-17T19:50:27.702745450Z
 req_type: Story
 tags:
 - acceptance-criteria
@@ -131,4 +131,10 @@ comments:
       - Store-side reverse index spec → implementing files/tests (EPIC-70 mechanism 6) → EPIC-70
   created_at: 2026-09-17T19:50:25.181168710Z
   modified_at: 2026-09-17T19:50:25.181168710Z
+- id: 01a0b0eb-a276-72f2-8e0a-264e95e5e9ac
+  author: joe
+  content: 'Completed 2026-09-17 by the driver-advisor: all four vertical slices are merged to main — TASK-1246 (#1880, aida criteria), TASK-1247 (#1892, aida harvest), TASK-1248 (#1895, aida reconstitute + BUG-1189), TASK-1249 (#1897, advisory harvest in the drain) — with ADR-42/44/45 accepted. Acceptance A1-A3, B1-B4, C1-C4 are covered by the slices'' proxy ledgers; the reconstitution score is live (aida reconstitute TASK-1244 → 1/1 heuristic in dogfood). Story status is not an epic rollup, so set by hand.'
+  created_at: 2026-09-17T19:50:27.702745450Z
+  modified_at: 2026-09-17T19:50:27.702745450Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
