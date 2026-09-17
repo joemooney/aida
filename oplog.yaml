@@ -71407,5 +71407,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 5569
+- id: 01a0adb4-7012-7610-b426-e2c0e28246e4
+  target_id: 01a0adb4-4360-74c2-b892-35d43d6c7192
+  author: aida
+  node_id: '1'
+  lamport: 5570
+  timestamp: 2026-09-17T04:51:18.674568354Z
+  kind: !Create
+    title: '[HITL] Slice 4: wire the harvest gate into the EPIC-66 drain pipeline as an advisory Phase::Harvest'
+    description: Vertical slice 4 of STORY-1178 — pipeline integration. Add an advisory Phase::Harvest between review and merge in the EPIC-66 gate pipeline (auto_complete.rs), gated by [harvest] gate = advisory | off (default advisory, never blocking in v1). DEPENDS on the STORY-1156/1157 gate plumbing (keystone, unbuilt) — may wait on EPIC-66; slices 1–3 deliver full standalone value without this. Keystone/merge-adjacent → keyboard. See the plan.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5570
 node_id: '1'
