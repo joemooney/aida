@@ -9,12 +9,12 @@ description: |
 
   ## Acceptance
   - AC1. When the drain merge phase shelves a PR because the merge-lease is held, the recovery hint must tell the operator both how to inspect the current holder with `aida merge-lock` and how to resume after release with `aida pr ship <PR>` using the affected PR number.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:20:53.023861336Z
-modified_at: 2026-09-17T16:24:58.826613050Z
+modified_at: 2026-09-17T16:36:57.246446904Z
 req_type: Task
 tags:
 - follow-up-task-1243
@@ -39,8 +39,24 @@ comments:
   created_at: 2026-09-17T16:24:58.826613050Z
   modified_at: 2026-09-17T16:24:58.826613050Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b03a-7917-7a20-86ce-50fbce608162
+  author: aida-auto-bump
+  timestamp: 2026-09-17T16:36:57.239585126Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b03a-791e-75f2-8af6-769ce342ceee
+  timestamp: 2026-09-17T16:36:57.246445559Z
+  agent: aida
+  commit_sha: 179e0961f5a69dd3b9210a427025d0f060cc1426
+  summary: Completed via merge 179e0961
 execution_mode: guided
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T16:04:48.728845621Z
   implemented_by: joe
+  completed_at: 2026-09-17T16:36:57.239447668Z
+  completion_sha: 179e0961f5a69dd3b9210a427025d0f060cc1426
