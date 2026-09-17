@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T04:51:32.426027653Z
+modified_at: 2026-09-17T04:51:34.777956349Z
 req_type: Story
 tags:
 - acceptance-criteria
@@ -73,5 +73,11 @@ comments:
   content: 'Risks: slice 4 depends on EPIC-66 gate plumbing (STORY-1156/1157, unbuilt) — slices 1–3 are standalone so value lands regardless. parse_trace_id_token is load-bearing (aida why, doctor, trace graph) — extend with a bare-id byte-identical regression test. Command-enum placement: put new variants AFTER an existing variant''s closing brace (the #1873 regression). Harvest selectivity = slop risk; the probe is the honest check. Plan: docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md'
   created_at: 2026-09-17T04:51:30.606369334Z
   modified_at: 2026-09-17T04:51:30.606369334Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0adb4-aef9-7f13-9925-a2d754a7a58e
+  author: joe
+  content: Planning complete (vertical slices TASK-1246 → TASK-1247 → TASK-1248 → TASK-1249; TASK-1246 is the tracer bullet). Ready for implementation — dispatch TASK-1246 (AFK) to a drain or guided; TASK-1247/TASK-1248/TASK-1249 are HITL.
+  created_at: 2026-09-17T04:51:34.777956349Z
+  modified_at: 2026-09-17T04:51:34.777956349Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
