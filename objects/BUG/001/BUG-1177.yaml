@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T09:12:31.832548108Z
+modified_at: 2026-09-17T09:12:32.946863112Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -64,6 +64,11 @@ comments:
 execution_mode: drain
 implementation_info:
   implemented: true
+  test_coverage_notes: |-
+    cargo fmt --all -- --check
+    cargo test -p aida-cli-lib ultraplan -- --nocapture
+    python3 docs/cli/verify-manual.py
+    GitHub CI PR-1882 clean: Build (ubuntu-latest) SUCCESS; merge-hold-gate SUCCESS
   implemented_at: 2026-09-17T07:37:40.876213508Z
   implemented_by: joe
 failure_reason:
