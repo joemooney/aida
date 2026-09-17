@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T19:49:41.732308335Z
+modified_at: 2026-09-17T19:50:24.916011112Z
 req_type: Story
 tags:
 - acceptance-criteria
@@ -121,4 +121,14 @@ comments:
   created_at: 2026-09-17T15:50:13.574620450Z
   modified_at: 2026-09-17T15:50:13.574620450Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b0eb-989d-72e3-a376-fe1b1a9ca489
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
+    filed 4 task(s): TASK-1256, TASK-1257, TASK-1258, TASK-1259
+    skipped 2 pointer-to-existing-spec:
+      - Schema/API-contract capture as store artifacts (EPIC-70 mechanism 5) → EPIC-70
+      - Store-side reverse index spec → implementing files/tests (EPIC-70 mechanism 6) → EPIC-70
+  created_at: 2026-09-17T19:50:25.181168710Z
+  modified_at: 2026-09-17T19:50:25.181168710Z
 execution_mode: guided
