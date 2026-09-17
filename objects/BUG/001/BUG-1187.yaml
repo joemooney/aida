@@ -1,0 +1,32 @@
+id: 01a0afec-c1ec-7ca3-b47e-9e135c6dbfd1
+spec_id: BUG-1187
+agreed_id: BUG-1187
+title: 'session reap / awaiting: ''Unshipped work detected (230)'' is almost entirely false — completed specs, merged PRs and squash-merged branches are not excluded'
+description: |-
+  Observed 2026-09-17 08:09: aida session reap printed "Unshipped work detected (230)" listing branches such as task-330-session-id-on-comments (1679 commits ahead, 77d), pr-100 (347 ahead), docs-story-1178-plan (1 ahead, 10h), task-1205 (2 ahead), each with a recovery hint "aida pr ship <branch>". Every sampled item is already shipped: PR-1877 (docs-story-1178-plan), PR-1746 (task-1205) and PR-100 (bug-231 / pr-100) are MERGED on GitHub; TASK-330, TASK-101, BUG-231, TASK-1205 are Completed in the store; git cherry origin/main docs-story-1178-plan reports the patch as already on main. The 200+ old branches all share merge-base 00bfecfca (2026-03-08) with main and are ~2271 commits behind it, so their "commits ahead" are the pre-rewrite history, not work.
+
+  Root cause (collect_unshipped_work_items in aida-cli-lib/src/lib.rs, consumed by session_reap + awaiting_you):
+  1. The status exclusion never fires: status_by_spec is built from requirement_summaries → list_summaries(ListFilter::default()), which is the default OPEN lens and therefore omits Completed/Rejected/Superseded rows — exactly the statuses the filter is meant to skip. A Completed spec is never in the map.
+  2. Only OPEN PRs exclude a branch (collect_open_prs); a MERGED PR (the squash case, i.e. every normal AIDA merge) does not, and pr_state is hardcoded to "absent" instead of being looked up.
+  3. "commits ahead" is a raw rev-list count (branch_ahead_of) instead of the patch-equivalence count that already exists (branch_unshipped_patch_count_default → git diff --quiet + git cherry), so a squash-merged branch always looks ahead, and a branch whose base was rewritten out of main looks ahead by thousands.
+
+  Effect: the coordination inbox (aida awaiting / aida status "Awaiting you") and reap shout 230 false recoveries, each offering a pr ship that would re-open already-merged work; the real signal (a genuinely unshipped branch) is buried. TASK-1222 (deliberate cruft sweep) is the CLEANUP of the dead branches; this bug is the DETECTOR being wrong regardless of cleanup.
+
+  Acceptance:
+  - status_by_spec covers every spec (all lenses, incl. Completed/Rejected/Superseded and archived), so a branch whose spec is terminal is excluded.
+  - A branch whose forge PR is MERGED is excluded (squash case), and pr_state reports open/merged/absent from a real lookup (no_forge keeps "unknown").
+  - commits_ahead uses patch equivalence (branch_unshipped_patch_count_default); a branch whose tree equals main or whose patches all cherry as "-" is not unshipped; a branch whose merge-base is more than N commits behind main with zero patch-unique commits is not unshipped.
+  - Regression tests: (a) Completed spec + ahead branch → not listed; (b) merged-PR branch → not listed; (c) squash-merged branch (cherry all "-") → not listed; (d) genuinely unshipped branch (cherry "+", open spec, no PR) → listed with the pr ship hint.
+  - On this repo, aida session reap / aida awaiting list zero of the sampled branches above.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T15:12:04.076397889Z
+modified_at: 2026-09-17T15:12:04.076397889Z
+req_type: Bug
+tags:
+- aida:awaiting
+- aida:session:reap
+- coordination-inbox
+- false-positive
