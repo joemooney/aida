@@ -45,3 +45,11 @@
   added_at: 2026-09-17T18:10:21.420571546Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b08f-4471-7ad0-9904-a437087affa9
+  position: 107000
+  added_by: role:implementer
+  note: 'test-only: make include_str! source-shape needles line-ending agnostic (normalize CRLF or drop trailing newline); sweep other include_str! guards; verify via gh workflow run cross-platform.yml on the branch'
+  added_at: 2026-09-17T18:10:22.233330846Z
+  for_role: implementer
+  added_by_machine: imac
