@@ -7,14 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0adaf-a82c-73e2-a6df-4f7b8a98d52b
-  position: 84000
-  added_by: role:implementer
-  note: 'drain-safe docs+CLI fix: re-point every /ultraplan mention at /aida-plan; aida ultraplan prints a REAL next step; keep /aida-import-plan. No rename in this slice.'
-  added_at: 2026-09-17T05:57:25.721653944Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ae05-5c48-7a61-bcd7-1ed856811786
   position: 87000
   added_by: role:implementer
@@ -27,5 +19,12 @@
   position: 88000
   added_by: role:implementer
   added_at: 2026-09-17T07:04:51.757690220Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0adaf-a82c-73e2-a6df-4f7b8a98d52b
+  position: 89000
+  added_by: role:implementer
+  added_at: 2026-09-17T07:29:46.716035511Z
   for_role: implementer
   added_by_machine: imac
