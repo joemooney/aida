@@ -121,6 +121,26 @@ share PR CI's `Build (…)` job name, so the workflow is the discriminator);
 `informational_checks` matches the check name. An explicit `[]` disables that
 list. GitHub only (`gh pr checks --json`); other forges keep the coarse verdict.
 
+### Advisory harvest in the drain (`[harvest] gate`)
+
+After the review gates pass and before the merge, the drain runs `aida harvest`
+in **propose-only** mode on the PR diff: the agent proposes the observable,
+non-obvious facts the change established, the `[harvest]` filter applies, and
+whatever survives is written to `.aida/harvest/<spec>-drain-<id>.json` with an
+`[aida:harvest]` ledger comment on the spec and a brief for the advisor (so it
+shows in `aida awaiting`). Nothing lands on the spec unattended — a human or
+the advisor confirms later with `aida harvest <SPEC> --from <file>`. The step
+is never a phase and never fails the run: an agent error is logged and the
+drain merges as usual.
+
+```toml
+[harvest]
+gate = "advisory"   # default; "off" disables the step in drains
+```
+
+Per spec, the `lifecycle:no-harvest` tag skips it (the other short-circuit tags
+do not imply it; `lifecycle:trivial` still harvests).
+
 Batch and `nextN` drains have a small in-flight window:
 
 ```toml
