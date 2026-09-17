@@ -71660,5 +71660,13 @@ operations:
   timestamp: 2026-09-17T07:03:24.811939762Z
   kind: !SetStatus
     status: Rejected
-clock: 5588
+- id: 01a0ae2e-9178-7332-8802-d0d6a205c133
+  target_id: 01a0adb7-ed0a-7a13-93fb-8acef016ed0d
+  author: aida
+  node_id: '1'
+  lamport: 5589
+  timestamp: 2026-09-17T07:04:42.616631515Z
+  kind: !AddTag
+    tag: batch:away-0916
+clock: 5589
 node_id: '1'
