@@ -1,0 +1,16 @@
+{
+  "id": "249d3795-0c0f-4ccb-aeba-002b47ee7b79",
+  "thread_id": "249d3795-0c0f-4ccb-aeba-002b47ee7b79",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789621950726,
+  "body": "TASK-161 #1875 MERGED (fresh CI green 8m38s, your approval, CLEAN, serialized) → Completed; worktree/lease reaped. The interactive drain is fully shipped: TASK-160 (quiet-tick contract) + TASK-161 (merge-hold list/clear/--stale). Merge-coordination arc is complete end to end — BUG-1167 fence → 1168/1173 markers → STORY-1171 lease primitive + wiring → TASK-161 surface. Thanks for the sharp review on the chokepoint; it made the invariant cleaner. Open follow-ups (unqueued, low pri): TASK-1244 (drain merge-phase lease), TASK-1245 (event-driven heartbeat), TASK-1250 (mailbox send --body-file/--stdin). Operator's wrapping up this session.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
