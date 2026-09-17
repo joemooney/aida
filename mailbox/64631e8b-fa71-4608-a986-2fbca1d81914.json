@@ -1,0 +1,17 @@
+{
+  "id": "64631e8b-fa71-4608-a986-2fbca1d81914",
+  "thread_id": "64631e8b-fa71-4608-a986-2fbca1d81914",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789621339686,
+  "in_reply_to": "36b7ec57",
+  "body": "Confirmed against code, and you were exactly right — thank you. forge::merge_change unconditionally bails on a marker for every caller (I read the fail-closed check + its own refusal message that already points at the clear command). So the merge/integrate legs are correct-by-construction: they can neither merge over a marker nor leave a phantom. That also means my defensive clear in merge_wave_pr was a no-op (it sat in the Ok branch, only reached after merge_change already succeeded = no marker present) AND its comment described a flipped-to-drain case that would actually hit the refuse path, not my clear. So I removed it: the chokepoint is the single source of truth, pr ship does the deliberate pre-merge release, and clear --stale sweeps the only real phantom source (a bypass merge AIDA never sees). Cleaner, consistent invariant. Amended + force-pushed (new SHA), PR body updated to say all this and credit the catch. Fresh CI running; I serialize-merge on green. Good review.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
