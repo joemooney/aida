@@ -71684,5 +71684,50 @@ operations:
   timestamp: 2026-09-17T07:04:45.362713130Z
   kind: !AddTag
     tag: batch:away-0916
-clock: 5591
+- id: 01a0ae45-690f-7cc3-801d-99d36edbd146
+  target_id: 01a0ae45-637c-7620-989a-476ccc1af369
+  author: aida
+  node_id: '1'
+  lamport: 5592
+  timestamp: 2026-09-17T07:29:39.599671364Z
+  kind: !Create
+    title: 'auto-complete failure: phase 2 (ci) on TASK-1251'
+    description: |
+      Auto-drafted by `aida queue work TASK-1251 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+      ## Failure
+
+      CI is red on PR-1881: Build (ubuntu-latest)
+
+      Failure kind: `ci-red`
+
+      ## Recovery hint shown to the user
+
+      CI failed on run 35194110003 — view it: `gh run view 35194110003`. Push fixups to the same branch: `aida queue work TASK-1251 --branch task-1251 --steal`
+
+      ## Recurrence
+
+      Attempts: 1
+      Latest recurrence: 2026-09-17T07:29:37.374048361+00:00
+
+      ## Phase durations
+
+        - phase 1 (implementer): 1037442 ms
+        - phase 2 (ci): 444471 ms
+
+      ## Telemetry entry
+
+      The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+      ```json
+      {"spec_id":"TASK-1251","started_at":"2026-09-17T07:04:54.301064270+00:00","completed_at":"2026-09-17T07:29:37.374048361+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"ci-red","failure_message":"CI is red on PR-1881: Build (ubuntu-latest)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":1037442},{"phase":2,"slug":"ci","elapsed_ms":444471}],"total_ms":1482492,"binary_sha":"043f4622f"}
+      ```
+
+      ## Recurse-fix
+
+      Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 5592
 node_id: '1'
