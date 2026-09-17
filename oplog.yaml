@@ -73201,5 +73201,31 @@ operations:
   timestamp: 2026-09-17T18:41:26.871132431Z
   kind: !SetStatus
     status: Completed
-clock: 5705
+- id: 01a0b0b7-f51a-7072-ac46-f6a3eb1ac1d1
+  target_id: 01a0b0b7-e8f4-71e1-85ff-3bd4a776231f
+  author: aida
+  node_id: '1'
+  lamport: 5706
+  timestamp: 2026-09-17T18:54:00.986687193Z
+  kind: !Create
+    title: 'Review PR-1900: [AI:codex] test(pr): canonicalize merge hold root assertion (BUG-1192)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b0ae`) for branch `bug-1192`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1900>
+      - Branch: `bug-1192` → `main`
+
+      ## Covers
+
+      - BUG-1192
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1900` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5706
 node_id: '1'
