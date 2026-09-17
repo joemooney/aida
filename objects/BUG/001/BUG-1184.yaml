@@ -8,12 +8,12 @@ description: |-
   Root cause: `pid_alive` is `#[cfg(unix)]` (libc::kill probe); the `#[cfg(not(unix))]` fallback deliberately returns `true` ("cannot probe → assume alive, only the TTL backstop reclaims"). The test writes a holder on OUR host with pid 999999999 and expects an IMMEDIATE dead-pid reclaim — a branch that is unreachable on Windows by design, so acquire waits its 200ms bound, returns WouldBlock, and the unwrap panics.
 
   Fix (small, drain-safe): gate that test `#[cfg(unix)]` (its premise is the unix pid probe), and add a `#[cfg(not(unix))]` sibling asserting the documented Windows behavior — a same-host holder with a bogus pid is NOT reclaimed by pid (stays live, WouldBlock within the bound) but IS reclaimed via the TTL path (reuse stale_ttl_expired_is_reclaimed_any_host's shape). The other 4 merge_lock tests are platform-neutral. Verify: cargo test -p aida-cli-lib --lib merge_lock green on Linux; the cross-platform matrix (workflow_dispatch) green on Windows. Author of the original test = the product/oversight session; do NOT let that session merge the fix (independence) — drain reviewer + advisor gate it.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T08:49:07.056470442Z
-modified_at: 2026-09-17T10:05:24.345292806Z
+modified_at: 2026-09-17T10:05:30.543966576Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -28,3 +28,7 @@ relationships:
   created_at: 2026-09-17T10:05:24.345285311Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-17T10:05:30.543966576Z
+  implemented_by: joe
