@@ -27,11 +27,11 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **Reach for it when** — you're authoring, checking, or lifecycle-managing a plan file. Each subcommand has its own entry below; reach for the *subcommand*, not the bare `aida plan`.
 
-**Don't reach for it when** — you want to *generate* the plan's prose. That's not `aida plan` — it's `aida ultraplan` (assemble the prompt) handed to the `/ultraplan` agent. `aida plan` operates *on* plan files; it doesn't write their narrative for you.
+**Don't reach for it when** — you want to *generate* the plan's prose. That's not `aida plan` — use `aida ultraplan` to assemble the prompt, then hand that prompt to `/aida-plan`, a Plan agent, a multi-agent workflow, or a human reviewer. `aida plan` operates *on* plan files; it doesn't write their narrative for you.
 
 **Gotchas.** A plan file is recognized as "belonging to" a spec by its `Specs:` header line listing the SPEC-ID (that's how `promote` / `fan-out` find a spec's plan). If `promote` says a spec has no plan, check that header line first — the file existing isn't enough.
 
-**Chains with** — `aida ultraplan` (generate) → save under `docs/plans/` → `aida plan verify` (lint) → `aida plan promote` (Approved → Planned) → `aida queue work` rides the plan.
+**Chains with** — `aida ultraplan` (assemble prompt) → `/aida-plan` or another planner authors the plan → save under `docs/plans/` → `aida plan verify` (lint) → `aida plan promote` (Approved → Planned) → `aida queue work` rides the plan.
 
 ---
 
@@ -141,9 +141,9 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **One line** — reconstruct a `docs/plans/` file from a PR that skipped the local plan file.
 
-**Mental model.** Some plans get authored in the web `/ultraplan` flow and land a PR *directly*, never writing a local plan file. `plan capture` reconciles those back into AIDA's plan-archival convention: it reads the PR's title, body, commit log, and changed files (`gh pr view` + `gh pr diff`), fills the 11-section template, and writes `docs/plans/<date>-<slug>-from-pr-<N>.md`. It's the "I shipped without the file, now make the file" cleanup — idempotent, and shaped to pass `aida plan verify`.
+**Mental model.** Some plans get authored in an external planning flow and land a PR *directly*, never writing a local plan file. `plan capture` reconciles those back into AIDA's plan-archival convention: it reads the PR's title, body, commit log, and changed files (`gh pr view` + `gh pr diff`), fills the 11-section template, and writes `docs/plans/<date>-<slug>-from-pr-<N>.md`. It's the "I shipped without the file, now make the file" cleanup — idempotent, and shaped to pass `aida plan verify`.
 
-**Reach for it when** — a PR shipped from a web-authored plan and you want the plan archived under `docs/plans/` like every other plan (so the convention holds and the history is complete).
+**Reach for it when** — a PR shipped from an externally-authored plan and you want the plan archived under `docs/plans/` like every other plan (so the convention holds and the history is complete).
 
 **Don't reach for it when** — you authored the plan locally already (you have the file — capture would just regenerate a thinner version from the PR); or the work was small enough to never warrant a plan (don't manufacture a plan file for a one-line fix just to satisfy the convention).
 
@@ -152,7 +152,7 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **Gotchas.** It needs `gh` on PATH and authenticated — the whole input is the PR via `gh`. And it synthesizes *from the PR*, so the reconstructed plan is only as rich as the PR description and commit log; a terse PR yields a terse plan.
 
-**Chains with** — runs after a web-authored PR merges → `plan capture <PR>` → `aida plan verify` confirms it (it's shaped to pass).
+**Chains with** — runs after an externally-authored plan PR merges → `plan capture <PR>` → `aida plan verify` confirms it (it's shaped to pass).
 
 ---
 
@@ -160,9 +160,9 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **One line** — assemble a rich, fully-contextualized planning prompt for a spec.
 
-**Mental model.** This is the command that *makes the plan worth writing*. A terse spec ("add retry to the pull command") becomes a bad plan because the planning agent lacks context. `ultraplan` gathers everything that context lives in — the spec's description, its `## Acceptance` criteria, related-spec context, the spec's enrichment comments, the AIDA 11-section plan-template structure, and the trace-graph reusable helpers — into **one prompt** you hand to the `/ultraplan` agent. It turns a terse ask into a fully-contextualized brief, and copies it to the clipboard by default (paste straight into the agent).
+**Mental model.** This is the command that *makes the plan worth writing*. A terse spec ("add retry to the pull command") becomes a bad plan because the planning agent lacks context. `ultraplan` gathers everything that context lives in — the spec's description, its `## Acceptance` criteria, related-spec context, the spec's enrichment comments, the AIDA 11-section plan-template structure, and the trace-graph reusable helpers — into **one prompt** you hand to `/aida-plan`, a Plan agent, a multi-agent workflow, or a human reviewer. It turns a terse ask into a fully-contextualized brief, and copies it to the clipboard by default.
 
-**Reach for it when** — you're about to plan any non-trivial spec. This is *step one* of planning: assemble the prompt, hand it to `/ultraplan`, save the result under `docs/plans/`.
+**Reach for it when** — you're about to plan any non-trivial spec. This is *step one* of planning: assemble the prompt, hand it to a real planner, save the result under `docs/plans/`.
 
 **Don't reach for it when** — the work doesn't need a plan at all (see "When to plan vs. just implement" — don't manufacture a planning ceremony for a trivial change); or you want to operate on an *existing* plan file (that's the `aida plan` subcommands).
 
@@ -173,7 +173,7 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **Gotchas.** Default behavior is *clipboard*, which silently no-ops in a headless context with no clipboard tool — but it falls back to stdout there, so you're not left empty-handed. If you're scripting, just use `--stdout` / `--json` and don't rely on the clipboard.
 
-**Chains with** — `aida ultraplan <spec>` → paste into `/ultraplan` → save the output → `aida import-plan` (or save under `docs/plans/` directly) → `aida plan verify` → `aida plan promote`.
+**Chains with** — `aida ultraplan <spec>` → run `/aida-plan <SPEC>` or hand the prompt to another planner → save the output → `aida import-plan` (or save under `docs/plans/` directly) → `aida plan verify` → `aida plan promote`.
 
 ---
 
@@ -181,9 +181,9 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **One line** — land a saved plan file into AIDA conventions and pin it to its spec.
 
-**Mental model.** `/ultraplan` (or any external generator) hands you a plan as a loose markdown file. `import-plan` is the **landing pad**: it archives the file under `docs/plans/YYYY-MM-DD-<slug>.md` and pins it to its SPEC with a comment, so the plan is discoverable from the spec and lives in the standard place. It's the round-trip partner to `ultraplan` — `ultraplan` sends the prompt out, `import-plan` brings the answer back in.
+**Mental model.** `/aida-plan`, a Plan agent, a multi-agent workflow, or any external generator may hand you a plan as a loose markdown file. `import-plan` is the **landing pad**: it archives the file under `docs/plans/YYYY-MM-DD-<slug>.md` and pins it to its SPEC with a comment, so the plan is discoverable from the spec and lives in the standard place. It's the round-trip partner to `ultraplan` — `ultraplan` sends the prompt out, `import-plan` brings the answer back in.
 
-**Reach for it when** — `/ultraplan` (or a web flow) gave you a plan file and you want it archived + linked the right way without hand-placing it. This is the canonical "save plan to file" → "into AIDA" step.
+**Reach for it when** — `/aida-plan` or another real planning flow gave you a plan file and you want it archived + linked the right way without hand-placing it. This is the canonical "save plan to file" → "into AIDA" step.
 
 **Don't reach for it when** — the plan was authored *directly into a PR* with no file (that's `aida plan capture`, which reconstructs the file from the PR instead). `import-plan` expects an actual file in hand.
 

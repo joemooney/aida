@@ -726,7 +726,7 @@ pub struct ScaffoldConfig {
     pub include_aida_search_skill: bool,
     /// Include aida-standup skill for daily standup generation
     pub include_aida_standup_skill: bool,
-    /// Include aida-import-plan skill for importing saved /ultraplan output
+    /// Include aida-import-plan skill for importing saved planner output
     pub include_aida_import_plan_skill: bool,
     /// Include aida-digest skill for advisor-curated narrative work reports.
     /// trace:STORY-252
@@ -1758,7 +1758,7 @@ aida show <SPEC-ID>
                 let artifact = self.create_artifact(
                     path.clone(),
                     self.generate_aida_import_plan_skill(),
-                    "Skill for importing saved /ultraplan plan files into AIDA".to_string(),
+                    "Skill for importing saved planner output files into AIDA".to_string(),
                     false,
                 );
 
@@ -2762,7 +2762,7 @@ aida show <SPEC-ID>
             (
                 "commands/aida-import-plan.md",
                 "aida-import-plan",
-                "Import a saved /ultraplan plan file into AIDA conventions",
+                "Import a saved planner output file into AIDA conventions",
             ),
             // trace:STORY-252
             (

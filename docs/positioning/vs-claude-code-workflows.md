@@ -130,7 +130,7 @@ Subagents spawned inside a Workflow inherit the session's MCP connections — so
 **2. AIDA → Workflow (AIDA delegates a phase).**
 AIDA can use a Workflow as the *implementation* of a phase that benefits from fan-out:
 - the **reviewer phase** → a workflow that spawns N adversarial reviewers and verifies findings before voting;
-- the **planning phase** → a judge-panel workflow drafting from several angles (this is conceptually what `aida ultraplan` already feeds `/ultraplan`);
+- the **planning phase** → a judge-panel workflow drafting from several angles (this is conceptually what `aida ultraplan` already feeds as a generic planner prompt);
 - the **drain itself** → SPIKE-32 (`aida show SPIKE-32`) compiles a spec's drain into a *saved* `workflow.js` artifact that Claude Code's runtime replays.
 
 ---

@@ -1,10 +1,9 @@
 ---
-description: "Turn a free-floating plan file (e.g. saved from `/ultraplan`'s teleport-back) into first-class AIDA state."
+description: "Turn a free-floating planner output file into first-class AIDA state."
 ---
 # Import a Saved Plan into AIDA
 
-Turn a free-floating plan file (e.g. saved from `/ultraplan`'s teleport-back)
-into first-class AIDA state.
+Turn a free-floating planner output file into first-class AIDA state.
 
 ## Instructions
 
@@ -20,4 +19,5 @@ Follow the workflow in `.claude/skills/aida-import-plan/SKILL.md`:
 Flags: `--queue` (queue for implementer), `--auto-anchor` (auto-fix drifted
 refs), `--dry-run` (report only, no side effects).
 
-Use after a `/ultraplan` session saves a plan to a loose local file.
+Use after `/aida-plan`, a Plan agent, a multi-agent workflow, or another
+planner saves a plan to a loose local file. trace:BUG-1177

@@ -51,7 +51,7 @@ The drain's rate-limiter is **your decision bandwidth**, not drain throughput (B
 
 - **do-now / recent:** SPIKE-50 (ECC deep-dive — other agents already producing it).
 - **defer (Claude-Code research batch, likely partly OBE):** SPIKE-14/15/18/19/20/21/22/23 — research dumps from the 2026-05-29 overlap analysis; revisit when a feature actually needs them.
-- **defer (real but not urgent):** SPIKE-47 (trace-coverage def — feeds EPIC-34), SPIKE-48 (sandbox store), SPIKE-40 (aida-channel MCP), SPIKE-38 (review GH Action), SPIKE-13 (budget dispatch), SPIKE-8 (/ultraplan quality), SPIKE-42 (rewind compose), SPIKE-12 (pack-scale).
+- **defer (real but not urgent):** SPIKE-47 (trace-coverage def — feeds EPIC-34), SPIKE-48 (sandbox store), SPIKE-40 (aida-channel MCP), SPIKE-38 (review GH Action), SPIKE-13 (budget dispatch), SPIKE-8 (Ultraplan quality), SPIKE-42 (rewind compose), SPIKE-12 (pack-scale).
 
 > Spike default: **defer unless it gates an active epic.** Only SPIKE-47 (→ EPIC-34) and SPIKE-50 (competitive, in-flight) are arguably do-soon.
 

@@ -11668,12 +11668,14 @@ pub enum Command {
         command: String,
     },
 
-    /// Assemble a rich, structured planning prompt for a SPEC and hand it
-    /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
-    /// related-spec context, the spec's enrichment comments, the AIDA
-    /// plan-template structure, and the trace-graph reusable helpers into
-    /// one prompt — turning a terse ask into a fully-contextualised
-    /// brief. Copies to the clipboard by default.
+    /// Assemble a rich, structured planning prompt for a SPEC. Pulls the
+    /// spec's description, acceptance criteria, related-spec context, the
+    /// spec's enrichment comments, the AIDA plan-template structure, and
+    /// the trace-graph reusable helpers into one prompt — turning a terse
+    /// ask into a fully-contextualised brief for `/aida-plan`, a Plan
+    /// agent, a multi-agent workflow, or a human reviewer. Copies to the
+    /// clipboard by default.
+    // trace:BUG-1177 | ai:codex
     // trace:TASK-113 TASK-247 | ai:claude
     Ultraplan {
         /// SPEC-ID (or UUID) to assemble the planning prompt for.
@@ -11716,8 +11718,7 @@ pub enum Command {
     // trace:TASK-516 | ai:claude
     #[clap(name = "import-plan")]
     ImportPlan {
-        /// The saved plan markdown file to import (e.g. the file
-        /// `/ultraplan` wrote when you chose "save plan to file").
+        /// The saved plan markdown file to import.
         file: String,
 
         /// SPEC-ID this plan targets. If omitted, AIDA tries to detect it
@@ -12249,8 +12250,8 @@ pub enum PlanCommand {
     },
 
     /// Synthesize a `docs/plans/` file from a merged/open PR's description
-    /// and commit log. For plans authored via the web `/ultraplan` flow
-    /// that land a PR directly without ever writing a local plan file —
+    /// and commit log. For externally authored planning flows that land a
+    /// PR directly without ever writing a local plan file —
     /// this reconciles them back into AIDA's plan-archival convention.
     /// Reads `gh pr view <PR> --json title,body,commits,number` plus
     /// `gh pr diff <PR> --name-only`, fills the 11-section template, and

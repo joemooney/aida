@@ -100,7 +100,7 @@ AIDA lives in **git**, not in any one vendor's cloud.
 
 - A vendor could add a requirement tracker — but it would be **theirs**, locking you to **one** agent.
 - AIDA is **vendor-neutral by construction**: one substrate, read by Claude *and* Codex *and* the next tool.
-- Anthropic's primitives (`/goal`, `/ultraplan`, MCP) are deliberately **horizontal**. AIDA is **vertical depth on horizontal ground** — and their getting better makes AIDA better.
+- Anthropic's primitives (`/goal`, MCP, cloud planner workflows) are deliberately **horizontal**. AIDA is **vertical depth on horizontal ground** — and their getting better makes AIDA better.
 
 > The durable wedge is **multi-vendor interop on a substrate you own.** That's the part a single-vendor tool can't ship without giving up its own lock-in.
 

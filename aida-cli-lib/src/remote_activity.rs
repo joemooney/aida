@@ -2,7 +2,7 @@
 //!
 //! STORY-452 (Phase-1, Option A — inference only). AIDA's local agent registry
 //! (`.aida/agents/*.toml`, STORY-431) and session leases only see processes on
-//! THIS machine. Cloud `/ultraplan` sessions and cross-machine sibling agents
+//! THIS machine. Cloud planner sessions and cross-machine sibling agents
 //! execute work and push commits but never appear locally, so the operator
 //! becomes the manual aggregator of multi-source work.
 //!

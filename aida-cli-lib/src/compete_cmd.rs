@@ -9,7 +9,7 @@
 use crate::*;
 
 /// Assemble the implementer brief a compete arm hands to a vendor: the rich
-/// spec context (reusing the `/ultraplan` assembly) wrapped in compete-specific
+/// spec context (reusing the AIDA planning-prompt assembly) wrapped in compete-specific
 /// marching orders — implement, build+test, commit on the CURRENT branch, no
 /// PR. The vendor runs headless in its own worktree, so "current branch" is the
 /// per-vendor branch we already checked out for it.

@@ -1,4 +1,4 @@
-# Spike: `/ultraplan` output quality — local vs web vs no-plan
+# Spike: `Ultraplan` output quality — local vs web vs no-plan
 
 **Spec:** SPIKE-8 · **Date:** 2026-06-07 · **Status:** Done · **Mirrors:** SPIKE-7 (`2026-05-16-claude-headless.md`)
 
@@ -10,7 +10,7 @@ experiment.**
 Three findings dominate, and only the first is the core-hypothesis answer the spike originally
 asked for:
 
-1. **On well-specified AIDA specs, `/ultraplan`'s marginal value is structurally low — by design of
+1. **On well-specified AIDA specs, `Ultraplan`'s marginal value is structurally low — by design of
    AIDA's own discipline.** The candidate specs carry a `## Proposed shape`, a `## Acceptance`, and a
    `## Composes with` block. The spec *is already the plan*. Planning's value is inversely
    proportional to spec-specification quality, and AIDA actively pushes specs toward high
@@ -21,7 +21,7 @@ asked for:
    evidence-backed defaults to **TASK-304** (`[ultraplan] mode` cadence) and **TASK-305** (web-plan
    archival). *Both shipped Completed on 2026-06-05* — with reasoned, defensible defaults, no
    blocking evidence required. The marginal value of producing that evidence now has collapsed.
-3. **Condition C (web `/ultraplan`) cannot be run headless at all.** `/ultraplan` requires a
+3. **Condition C (web `Ultraplan`) cannot be run headless at all.** `Ultraplan` requires a
    claude.ai "Accept" click before remote execution — it is inherently interactive (SPIKE-7 Q4
    established the same about `AskUserQuestion`; TASK-304's own description codifies it). A fully
    autonomous A/B/C drain — the spike's whole "cheap overnight budget" premise — *structurally cannot
@@ -60,7 +60,7 @@ collected data.
 The spec's "Why now":
 
 > - TASK-304 needs evidence-backed defaults for its `mode = "suggested"` heuristic threshold
-> - TASK-305 is worth building only if web `/ultraplan` is empirically valuable
+> - TASK-305 is worth building only if web `Ultraplan` is empirically valuable
 
 Both consumers have **already shipped**:
 
@@ -87,7 +87,7 @@ dependency-injection function signature, and a five-bullet `## Acceptance`. Cond
 not "implement with no plan" — it is "implement against a spec that already *is* a plan." That is the
 intended steady state of an AIDA project.
 
-### B — local `/ultraplan` (`aida ultraplan SPEC` → `/aida-import-plan` → `aida queue work`)
+### B — local `Ultraplan` (`aida ultraplan SPEC` → `/aida-import-plan` → `aida queue work`)
 
 `aida ultraplan` does **not** produce a plan — it assembles a *planning prompt*. The real output for
 TASK-500 (reproduced below) front-loads four things the no-plan implementer would otherwise discover
@@ -107,7 +107,7 @@ already names its reuse target inline (TASK-500 literally says "sibling to exist
 `queue_done_precheck_error`"), even item 2 is mostly redundant. **B's value scales with how
 under-specified the spec is.**
 
-### C — web `/ultraplan` (assemble prompt → claude.ai Accept → remote end-to-end)
+### C — web `Ultraplan` (assemble prompt → claude.ai Accept → remote end-to-end)
 
 Same assembled prompt as B, executed remotely, lands a PR directly. Two hard properties:
 
@@ -128,7 +128,7 @@ and the `## Plan structure` 11-section scaffold. It is a high-quality *context b
 ceiling, however, is bounded by the spec it reads from — it cannot add design insight the spec and the
 trace graph don't already contain; it organizes and front-loads what exists.
 
-That is the honest shape of local `/ultraplan`'s value: **a context-assembly and structure-enforcement
+That is the honest shape of local `Ultraplan`'s value: **a context-assembly and structure-enforcement
 tool, not an independent reasoning step.** For an under-specified spec it converts a thin ticket into a
 plannable brief — real value. For a spec that already carries its design (the AIDA-healthy case) it is
 mostly reformatting.
@@ -139,7 +139,7 @@ The spike's "chunky enough that planning *could* matter" selection criterion is 
 "similar complexity, low-stakes, AIDA-tracked" criterion. AIDA-tracked specs that pass review-for-queue
 tend to be well-specified — that is what the discipline produces. So:
 
-> The conditions under which `/ultraplan` most plausibly helps (thin, under-specified specs) are the
+> The conditions under which `Ultraplan` most plausibly helps (thin, under-specified specs) are the
 > conditions AIDA's own spec discipline works to eliminate.
 
 This means a 2–3 spec sweep over well-formed AIDA specs would most likely show **A ≈ B ≈ C** with
@@ -152,27 +152,27 @@ spec — but that violates AIDA discipline and tests a case the project actively
 
 - **TASK-304 (`mode` default):** Keep the shipped **`on-demand`** default. This spike does not justify
   changing it. `suggested` should remain opt-in. **Refinement (cheap, concrete):** the
-  `acceptance-bullets>8` threshold is a complexity proxy, but the real predictor of `/ultraplan` value
+  `acceptance-bullets>8` threshold is a complexity proxy, but the real predictor of `Ultraplan` value
   is *specification thinness*, not bullet count — a spec with 9 detailed acceptance bullets and a
   Proposed-shape block needs planning *less* than a 2-bullet spec with no design. Consider a threshold
   that fires on **thin** specs (no `## Proposed shape` / short body) rather than **chunky** ones. Filed
   as a followup TASK rather than reopening the Completed TASK-304.
 - **TASK-305 (web-plan archival):** Already shipped (`aida plan capture`, Option B). This spike gives
-  no reason to revisit it. The one thing it confirms: web `/ultraplan` cannot participate in
+  no reason to revisit it. The one thing it confirms: web `Ultraplan` cannot participate in
   autonomous drains, so `aida plan capture` (manual, post-PR) is the *right* shape — an automatic hook
   would have nothing to hook into during a `--no-human` run.
 
 ## Verdict on the hypothesis
 
-> "`/ultraplan` produces planning-grade output that yields measurably better implementations than
+> "`Ultraplan` produces planning-grade output that yields measurably better implementations than
 > direct `aida queue work`."
 
 **Not empirically confirmed or refuted in this session — and structurally unlikely to be confirmable
-on well-specified AIDA specs.** The directional read: `/ultraplan` is a *context-assembly* aid whose
+on well-specified AIDA specs.** The directional read: `Ultraplan` is a *context-assembly* aid whose
 value is real on thin specs and marginal on well-formed ones; AIDA discipline pushes specs toward the
 well-formed end, shrinking the win. Combined with the OBE finding (both consumers shipped) and the
 C-cannot-run-headless finding, the recommendation is the spec's own welcomed negative branch:
-**simplify — keep `/ultraplan` as the opt-in `on-demand` aid it already is; do not invest in the full
+**simplify — keep `Ultraplan` as the opt-in `on-demand` aid it already is; do not invest in the full
 comparison harness or the 6–9 PR sweep.**
 
 ## Cleanup discipline
@@ -193,12 +193,12 @@ for a real implementer to pick up normally.
 
 ## Related
 
-- **SPIKE-7** (`2026-05-16-claude-headless.md`) — established that interactive gates (`/ultraplan`'s
+- **SPIKE-7** (`2026-05-16-claude-headless.md`) — established that interactive gates (`Ultraplan`'s
   Accept, `AskUserQuestion`) become clean no-ops / blockers headless; this spike inherits that to
   conclude C is un-runnable in autonomous drain.
 - **TASK-304** — `[ultraplan] mode` cadence config (Completed 2026-06-05); this spike validates its
   shipped defaults and proposes a threshold refinement.
-- **TASK-305** — web `/ultraplan` plan archival via `aida plan capture` (Completed 2026-06-05);
+- **TASK-305** — web `Ultraplan` plan archival via `aida plan capture` (Completed 2026-06-05);
   confirmed as the right shape given C's interactivity.
 - **`feedback_pushback_on_overengineering.md`** — SPIKE-first-before-integrating is the canonical
   "evidence before scope" application; here the evidence says *don't* scope further.

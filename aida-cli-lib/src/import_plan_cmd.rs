@@ -1,8 +1,8 @@
 //! `aida import-plan` command cluster (TASK-114 / TASK-516).
 //!
-//! `/aida-import-plan <FILE>` lands a saved plan (e.g. from `/ultraplan`'s
-//! teleport-back) under `docs/plans/YYYY-MM-DD-<slug>.md`, pins it to its
-//! SPEC with a comment, and optionally requests master review. Extracted
+//! `/aida-import-plan <FILE>` lands any saved plan under
+//! `docs/plans/YYYY-MM-DD-<slug>.md`, pins it to its SPEC with a comment,
+//! and optionally requests master review. Extracted
 //! verbatim from `main.rs` (SPIKE-78); no behavior change. Shared helpers
 //! (`find_main_worktree_root`, `get_default_author`, `slugify_str`,
 //! `resolve_current_session_id`, the `plan_review_warning` decision + the

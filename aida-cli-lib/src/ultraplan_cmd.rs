@@ -1,10 +1,10 @@
 //! `aida ultraplan` command cluster (TASK-113 / TASK-247 / TASK-304 /
 //! TASK-514 / TASK-517).
 //!
-//! `handle_ultraplan_command` assembles the rich `/ultraplan` planning prompt
-//! from a spec's context — description + `## Acceptance` + trace-graph helpers +
-//! reserved namespaces + the 11-section plan structure — and delivers it via
-//! clipboard (default), `--stdout`, or `--json`. The private helpers render the
+//! `handle_ultraplan_command` assembles a rich planner prompt from a spec's
+//! context — description + `## Acceptance` + trace-graph helpers + reserved
+//! namespaces + the 11-section plan structure — and delivers it via clipboard
+//! (default), `--stdout`, or `--json`. The private helpers render the
 //! machine-readable JSON value (`ultraplan_json_value`) and the clipboard
 //! success message (`ultraplan_copy_success_message`). The heavier prompt
 //! assembly (`assemble_ultraplan_prompt`, `build_reusable_helpers_section`,
@@ -40,9 +40,10 @@ fn ultraplan_json_value(
 }
 
 // trace:TASK-514 | ai:antigravity
+// trace:BUG-1177 | ai:codex
 pub(crate) fn ultraplan_copy_success_message(display: &str, token_estimate: usize) -> String {
     format!(
-        "assembled /ultraplan prompt for {} (~{} tokens) — copied to clipboard (use --stdout to print, --json for machine consumption)",
+        "assembled planner prompt for {} (~{} tokens) — copied to clipboard (use --stdout to print, --json for machine consumption)",
         display,
         token_estimate
     )
@@ -130,9 +131,10 @@ pub(crate) fn handle_ultraplan_command(
         );
         println!(
             "  {}",
-            "paste it into a Claude Code session, prefixed with /ultraplan".dimmed()
+            "next: run `/aida-plan <SPEC>` in Claude Code, or hand this prompt to any planner"
+                .dimmed()
         );
-        // TASK-305: the web /ultraplan flow lands a PR directly without
+        // TASK-305: external planner flows may land a PR directly without
         // writing a local plan file. Nudge the user to reconcile it back
         // into docs/plans/ once that PR lands.
         println!(
@@ -187,5 +189,7 @@ mod tests {
         assert!(msg.contains("use --stdout to print"));
         assert!(msg.contains("TASK-514"));
         assert!(msg.contains("2655"));
+        assert!(msg.contains("assembled planner prompt"));
+        assert!(!msg.contains("slash-command prompt"));
     }
 }

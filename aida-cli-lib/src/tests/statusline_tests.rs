@@ -2360,7 +2360,7 @@ fn extract_spec_ids_from_commit_subject() {
         vec!["BUG-83".to_string()]
     );
 
-    // BUG-270: a leading `SPEC-ID:` prefix (web /ultraplan / hand-authored
+    // BUG-270: a leading `SPEC-ID:` prefix (external planner / hand-authored
     // squash shape) is recognized — STORY-439 was stranded at Approved
     // after PR-270 merged with exactly this subject.
     let msg = "STORY-439: three-way complexity calibration substrate (#270)\n";
@@ -4315,7 +4315,7 @@ fn ultraplan_prompt_includes_comments() {
     assert!(!without.contains("design fork"));
 }
 
-/// TASK-517: `/ultraplan` includes project-reserved namespaces so plans
+/// TASK-517: `aida ultraplan` includes project-reserved namespaces so plans
 /// avoid colliding with generated or convention-owned paths.
 #[test]
 fn ultraplan_prompt_includes_reserved_namespaces() {

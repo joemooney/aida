@@ -363,7 +363,7 @@ Patterns 1 and 2 are about *one item's lifecycle*; patterns 4 and 5 are about *h
 
 A natural question when working through the implementer → reviewer → fixup loop: why end the Claude session at each role boundary? Couldn't a single Claude session switch roles in place — `/aida-end-implementer` then `/aida-start-reviewer` — preserving the conversation history across transitions?
 
-**No.** Role boundaries are session boundaries by design. The reason is the same insight that makes [/ultraplan's three-explorer plus one-critic architecture](positioning/vs-ultraplan.md) work: a critic agent that shares context with the agents whose work it's reviewing is doing self-review with extra steps. Anchoring bias propagates through shared context.
+**No.** Role boundaries are session boundaries by design. The reason is the same insight that makes [Ultraplan's three-explorer plus one-critic architecture](positioning/vs-ultraplan.md) work: a critic agent that shares context with the agents whose work it's reviewing is doing self-review with extra steps. Anchoring bias propagates through shared context.
 
 Apply that to AIDA: if the same Claude session handles both implementer work and reviewer work, the reviewer agent has the implementer's mental model already in its context window. It's reviewing from inside the implementer's reasoning, not from cold. The separate-session boundary is what *enforces* independent review.
 
@@ -421,7 +421,7 @@ The cold-restart tax is real. Every role transition pays it: the new role's Clau
 - **TASK-112** (resume claude session) eliminates the tax for the same-role-after-detour case
 - **TUI** (future) would surface the cluster context at the moment of pickup
 
-For genuinely different roles, cold-start is part of the cost of independent review. That's the trade: anchoring-bias protection in exchange for a fresh context each time. The /ultraplan parallel: paying for three explorer agents in parallel is worth it because what you get back is genuine diversity, not paraphrased sameness. Same logic; same trade.
+For genuinely different roles, cold-start is part of the cost of independent review. That's the trade: anchoring-bias protection in exchange for a fresh context each time. The Ultraplan parallel: paying for three explorer agents in parallel is worth it because what you get back is genuine diversity, not paraphrased sameness. Same logic; same trade.
 
 ---
 

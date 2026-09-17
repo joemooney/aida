@@ -3,7 +3,7 @@
 **Last updated**: 2026-05-22  
 **Ecosystem Cadence**: Quarterly Scan / Signal-Triggered
 
-As Anthropic, OpenAI, and other platform providers ship increasingly capable **horizontal primitives**—such as autonomous loops (`/goal`), multi-agent planners (`/ultraplan`), and native terminal interfaces—newcomers in the AI developer tooling space face a crucial question: *Why does AIDA exist?*
+As Anthropic, OpenAI, and other platform providers ship increasingly capable **horizontal primitives**—such as autonomous loops (`/goal`), multi-agent planners, and native terminal interfaces—newcomers in the AI developer tooling space face a crucial question: *Why does AIDA exist?*
 
 This document codifies AIDA's strategic positioning and maps its **defensible niche** in a rapidly consolidating landscape.
 
@@ -25,7 +25,7 @@ graph TD
 
     subgraph "Anthropic Horizontal Substrate (Workflow-Agnostic)"
         E["Claude Code Runtime"] --> F["/goal Autonomous Loop"]
-        F --> G["/ultraplan Planner"]
+        F --> G["Planner Workflows"]
         G --> H["Model Context Protocol (MCP)"]
     end
 
@@ -40,7 +40,7 @@ The composition is symbiotic, not competitive:
 |---|---|---|
 | **`Claude Code` / Runtime** | **Worktree-Isolated Sessions** | Prevents concurrent write conflicts and keeps main workspace clean. |
 | **`/goal` (Autonomous Loop)** | **Precise Spec Vocabularies** | Translates ambiguous prompts into machine-checkable conditions. |
-| **`/ultraplan` (Cloud Planner)** | **Git-Versioned Persistence** | Saves, links, and verifies plans directly in the codebase. |
+| **Cloud planners** | **Git-Versioned Persistence** | Saves, links, and verifies plans directly in the codebase. |
 | **`MCP` (Context Protocol)** | **Requirements Graph Server** | Feeds structured dependency schemas directly to LLM context. |
 
 ---

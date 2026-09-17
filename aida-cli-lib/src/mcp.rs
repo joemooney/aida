@@ -7767,7 +7767,7 @@ fn workflow_tool_descriptors() -> Value {
         },
         {
             "name": "ultraplan_assemble",
-            "description": "Assemble the rich `/ultraplan` prompt for a spec from its description, acceptance criteria, graph context, reusable-helper section, and the 11-section plan structure. Read-only mirror of `aida ultraplan <spec> --stdout` — it returns the assembled prompt text; copying to the clipboard or opening a deep link stays CLI-only.",
+            "description": "Assemble a rich planner prompt for a spec from its description, acceptance criteria, graph context, reusable-helper section, and the 11-section plan structure. Read-only mirror of `aida ultraplan <spec> --stdout` — it returns the assembled prompt text; copying to the clipboard or opening a deep link stays CLI-only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -7777,7 +7777,7 @@ fn workflow_tool_descriptors() -> Value {
                 "required": ["spec"]
             },
             "outputSchema": text_envelope_output_schema(
-                "the assembled `/ultraplan` prompt text, followed by any assembly `Warning:` lines (e.g. a spec with no description). On an unknown spec, or when ultraplan is disabled for the project, the envelope sets `isError: true`."
+                "the assembled planning prompt text, followed by any assembly `Warning:` lines (e.g. a spec with no description). On an unknown spec, or when ultraplan is disabled for the project, the envelope sets `isError: true`."
             )
         },
         {
