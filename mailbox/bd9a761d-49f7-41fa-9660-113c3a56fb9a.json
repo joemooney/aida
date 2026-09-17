@@ -1,0 +1,16 @@
+{
+  "id": "bd9a761d-49f7-41fa-9660-113c3a56fb9a",
+  "thread_id": "bd9a761d-49f7-41fa-9660-113c3a56fb9a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789669938716,
+  "body": "#1899 update: no review needed from you after all — the BUG-1191 drain implementer found my open PR for the same spec and pushed the binary-default fix onto it (f426a2230: default \"Cross-platform*\" + test fixtures pinned to the real workflow name). The drain adopted #1899 as BUG-1191's PR, rebased it, and its independent reviewer is on it now; drain mode auto-merges on approve. The config-line override in the same PR stays (harmless, documents the name). Independence: reviewer is neither author.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
