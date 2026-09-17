@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:51:07.232306515Z
-modified_at: 2026-09-17T04:51:19.752833440Z
+modified_at: 2026-09-17T04:51:27.458909713Z
 req_type: Task
 tags:
 - epic-66
@@ -25,3 +25,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T04:51:21.422395044Z
+- rel_type: BlockedBy
+  target_id: 01a0a7f9-6fad-7781-82ee-44967b0ad80e
+  created_at: 2026-09-17T04:51:27.458901520Z
+  created_by: joe
