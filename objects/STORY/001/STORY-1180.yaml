@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T07:46:46.168591015Z
-modified_at: 2026-09-17T09:39:10.821015173Z
+modified_at: 2026-09-17T09:39:11.632221421Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
@@ -35,6 +35,12 @@ comments:
   content: 'Auto-completed: PR #1882 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
   created_at: 2026-09-17T09:39:03.046168095Z
   modified_at: 2026-09-17T09:39:03.046168095Z
+- id: 01a0aebc-0090-7ad0-883a-b627d7cbcc75
+  author: joe
+  content: 'Closed by oversight 02:39: PR-1882 merged (BUG-1177 Completed). Auto-filed review story''s acceptance (''completed once the PR is merged'') met; the review itself is ledgered on BUG-1177.'
+  created_at: 2026-09-17T09:39:11.632221421Z
+  modified_at: 2026-09-17T09:39:11.632221421Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0aebb-df06-7f10-8a74-384c5b945b52
   author: aida-auto-bump
