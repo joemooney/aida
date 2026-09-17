@@ -71383,5 +71383,17 @@ operations:
     req_type: Task
     status: Approved
     priority: High
-clock: 5567
+- id: 01a0adb3-fe37-7742-8393-3a8784b701b2
+  target_id: 01a0adb3-f2a8-7861-87bd-ef92e199bb19
+  author: aida
+  node_id: '1'
+  lamport: 5568
+  timestamp: 2026-09-17T04:50:49.527206649Z
+  kind: !Create
+    title: '[HITL] Slice 2: aida harvest <spec> [--diff] — standalone harvest gate (agent + selectivity filter + confirm-checklist + [aida:harvest] ledger)'
+    description: 'Vertical slice 2 of STORY-1178. New aida harvest: build a prompt from the diff + the spec''s criteria/ADRs, run a headless agent via spawn_claude_headless/compose_headless_command (no new launcher), parse structured candidates, apply the selectivity filter (observable AND non-obvious; conventional dropped; configurable [harvest] section, strict default), present a confirm-checklist (TTY) / --yes-all (headless), write confirmed items as a new AC / an [aida:sem] marked comment (STORY-1173 ledger pattern, no schema change) / an ADR stub, and append an [aida:harvest] ledger comment recording ran/confirmed/SKIPPED (never silently dropped). ADVISORY only. Standalone first so value lands before the EPIC-66 pipeline. HITL: the filter + confirm UX are design forks. See the plan.'
+    req_type: Task
+    status: Approved
+    priority: High
+clock: 5568
 node_id: '1'
