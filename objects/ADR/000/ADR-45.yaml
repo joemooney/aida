@@ -12,12 +12,12 @@ description: |-
   2. UNATTENDED CONFIRMATION = propose-only. The drain runs the harvest agent and filter, writes the [aida:harvest] ledger comment and a candidates file, and surfaces a one-line pointer in aida awaiting; a human/advisor confirms later with aida harvest <SPEC> --from <file>. An unattended run never edits the contract. Rejected: --yes-all inside the drain.
 
   3. GATING = [harvest] gate = "advisory" (default) | "off"; lifecycle:no-harvest skips per spec. Agent failures and timeouts are logged, never shelve the spec.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:41:10.430670277Z
-modified_at: 2026-09-17T16:41:19.124513430Z
+modified_at: 2026-09-17T18:21:27.604029901Z
 req_type: Decision
 tags:
 - harvest
