@@ -157,6 +157,7 @@ mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
+mod merge_lock;
 mod metrics;
 mod metrics_cmd;
 mod network_retry;
@@ -2905,6 +2906,13 @@ fn run() -> Result<()> {
         return handle_ps(*json, *all);
     }
 
+    // `aida merge-lock` shows active branch merge-leases (STORY-1171). Read-only
+    // (reads `.aida/merge-locks/`), needs no store handle — dispatch early like
+    // `aida ps`. trace:STORY-1171 | ai:claude
+    if let Command::MergeLock { json } = &cli.command {
+        return handle_merge_lock_status(*json);
+    }
+
     // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
     // spec / drain id to the ONE log file that work streams into and tails it.
     // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
@@ -4421,6 +4429,9 @@ fn run() -> Result<()> {
         Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
         // trace:STORY-696
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
+        Command::MergeLock { .. } => {
+            unreachable!("merge-lock is dispatched before storage init")
+        }
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         // trace:TASK-1034
         Command::Integrate { .. } => {
@@ -27893,6 +27904,48 @@ fn slugify(s: &str) -> String {
 /// Walk up from cwd looking for a .git directory — the project root. We
 /// don't use git_ops::is_git_repo here because we need the *path*, not
 /// just a yes/no.
+// trace:STORY-1171 | ai:claude
+fn handle_merge_lock_status(json: bool) -> Result<()> {
+    let root = find_project_root()?;
+    let leases = merge_lock::status(&root);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if json {
+        let items: Vec<String> = leases
+            .iter()
+            .map(|(b, h)| {
+                let pr = h.pr.map(|p| p.to_string()).unwrap_or_else(|| "null".to_string());
+                format!(
+                    "{{\"branch\":{b:?},\"pr\":{pr},\"host\":{:?},\"pid\":{},\"acquired_at\":{},\"age_secs\":{},\"note\":{:?}}}",
+                    h.host, h.pid, h.acquired_at, now.saturating_sub(h.acquired_at), h.note
+                )
+            })
+            .collect();
+        println!("{{\"merge_locks\":[{}]}}", items.join(","));
+        return Ok(());
+    }
+    if leases.is_empty() {
+        println!("No active merge-leases.");
+        return Ok(());
+    }
+    println!("Active merge-leases:");
+    for (branch, h) in leases {
+        let pr =
+            h.pr.map(|p| p.to_string())
+                .unwrap_or_else(|| "-".to_string());
+        println!(
+            "  {branch}  pr={pr}  host={}  pid={}  age={}s  {}",
+            h.host,
+            h.pid,
+            now.saturating_sub(h.acquired_at),
+            h.note
+        );
+    }
+    Ok(())
+}
+
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {
     let mut cur = std::env::current_dir()?;
     loop {
