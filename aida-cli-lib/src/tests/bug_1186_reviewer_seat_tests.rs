@@ -83,7 +83,8 @@ fn review_envelope_targets_pr_requires_truthy_flag_and_matching_number() {
 /// it. The needle is split so this file cannot match its own literal.
 #[test]
 fn review_phase_sets_the_review_envelope_unconditionally() {
-    let src = include_str!("../lib.rs");
+    // trace:BUG-1193 | ai:codex
+    let src = include_str!("../lib.rs").replace("\r\n", "\n");
     let gated = concat!(
         "if self.from_pr {\n            cmd.env(\"AIDA_FROM_PR_REVIEW\"",
         ", \"1\")"
