@@ -389,6 +389,32 @@ pub fn merge_args(pr_number: u64, delete_branch: bool, subject: Option<&str>) ->
 /// "checks ran and failed" so `aida pr ship` does not bail during the
 /// small GitHub Actions registration window after a push.
 // trace:BUG-344 | ai:codex
+/// STORY-1166: classify one `gh pr checks <n>` invocation into the forge-
+/// neutral registration state. `Err` = gh failed for a reason other than
+/// "no checks yet". Shared by `GitHubForge::checks_registered` and the
+/// fake-gh test harness so the two cannot drift.
+// trace:STORY-1166 | ai:claude
+pub(crate) fn classify_gh_pr_checks_registration(
+    pr: u64,
+    stdout: &str,
+    stderr: &str,
+    success: bool,
+) -> anyhow::Result<crate::forge::CheckRegistration> {
+    if gh_pr_checks_output_has_registered_checks(stdout, stderr) {
+        return Ok(crate::forge::CheckRegistration::Registered);
+    }
+    if !success
+        && !gh_pr_checks_output_is_unregistered(stdout, stderr)
+        && (!stdout.trim().is_empty() || !stderr.trim().is_empty())
+    {
+        anyhow::bail!(
+            "`gh pr checks {pr}` failed before CI registration could be inspected: {}",
+            stderr.trim()
+        );
+    }
+    Ok(crate::forge::CheckRegistration::NotYet)
+}
+
 pub fn gh_pr_checks_output_has_registered_checks(stdout: &str, stderr: &str) -> bool {
     let combined = format!("{stdout}\n{stderr}");
     let trimmed = combined.trim();

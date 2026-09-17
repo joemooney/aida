@@ -1549,7 +1549,6 @@ pub(crate) fn pr_ship_handler(
         );
     } else {
         eprintln!("  step 2: watching CI for PR-{}", pr_number);
-        wait_for_pr_checks_to_register(&project_root, pr_number)?;
         // STORY-516: route the blocking CI watch through the Forge trait (streams
         // live; GitHub `gh pr checks <N> --watch`). trace:STORY-516 | ai:claude
         let watch_change = crate::forge::ChangeRef {
@@ -1559,20 +1558,29 @@ pub(crate) fn pr_ship_handler(
             base: String::new(),
             title: None,
         };
-        let ci_result = crate::forge::forge_for(&project_root).watch_ci(&watch_change);
+        let forge = crate::forge::forge_for(&project_root);
+        // STORY-1166: the registration wait is forge-routed too (gh pr checks /
+        // glab pipelines); pure-git has no CI and returns immediately.
+        // trace:STORY-1166 | ai:claude
+        crate::ci_gate::wait_for_checks_to_register(
+            forge.as_ref(),
+            &watch_change,
+            std::time::Duration::from_secs(60),
+            std::time::Duration::from_secs(10),
+        )?;
+        let ci_result = forge.watch_ci(&watch_change);
         let mut ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
         // BUG-1180 / ADR-39: a coarse "failed" may be the supervised merge-hold
         // gate itself (this command releases it at step 3) or an informational
         // matrix job. Re-read the rows and abort only on a REAL red check.
         // trace:BUG-1180 | ai:claude
         let mut red_detail: Option<String> = None;
-        if matches!(ci_result, Ok(crate::forge::CiState::Failed))
-            && forge_kind == crate::forge::ForgeKind::GitHub
-        {
+        if matches!(ci_result, Ok(crate::forge::CiState::Failed)) {
             let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
-            match crate::ci_gate::refine_red_via_gh(
+            match crate::ci_gate::refine_red(
                 &hold_root,
-                pr_number,
+                forge.as_ref(),
+                &watch_change,
                 hold_present,
                 std::time::Duration::from_secs(20 * 60),
                 std::time::Duration::from_secs(15),
@@ -1600,7 +1608,7 @@ pub(crate) fn pr_ship_handler(
                         r.describe(pr_number)
                     ))
                 }
-                Err(_) => {} // gh unavailable — keep the coarse verdict
+                Err(_) => {} // no per-check rows on this forge — keep the coarse verdict
             }
         }
         if ci_failed {
@@ -1715,10 +1723,10 @@ pub(crate) fn pr_ship_handler(
             // squash-merge below would be refused by branch protection until it
             // reports green, so wait for it (bounded) before merging.
             // trace:BUG-1180 | ai:claude
-            if forge_kind == crate::forge::ForgeKind::GitHub {
+            {
                 match crate::ci_gate::wait_hold_gate_green(
-                    &hold_root,
-                    pr_number,
+                    crate::forge::forge_for(&hold_root).as_ref(),
+                    &change_ref,
                     std::time::Duration::from_secs(180),
                     std::time::Duration::from_secs(10),
                 ) {
@@ -2506,20 +2514,11 @@ pub(crate) fn command_output_retrying_etxtbsy(
     }
 }
 
-pub(crate) fn wait_for_pr_checks_to_register(
-    project_root: &std::path::Path,
-    pr_number: u64,
-) -> Result<()> {
-    wait_for_pr_checks_to_register_with_gh(
-        project_root,
-        pr_number,
-        std::ffi::OsStr::new("gh"),
-        std::time::Duration::from_secs(60),
-        std::time::Duration::from_secs(10),
-    )
-}
-
 // trace:BUG-344 | ai:codex
+/// STORY-1166: test harness — the production path is `Forge::checks_registered`
+/// (GitHub impl) driven by `ci_gate::wait_for_checks_to_register`; this keeps
+/// the fake-`gh` tests over the shared classifier so the two cannot drift.
+#[cfg(test)]
 pub(crate) fn wait_for_pr_checks_to_register_with_gh(
     project_root: &std::path::Path,
     pr_number: u64,
@@ -2538,20 +2537,14 @@ pub(crate) fn wait_for_pr_checks_to_register_with_gh(
             .args(["pr", "checks", &pr]);
         let out = command_output_retrying_etxtbsy(&mut command)
             .with_context(|| format!("could not invoke `gh pr checks {pr_number}`"))?;
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        if pr_ship::gh_pr_checks_output_has_registered_checks(&stdout, &stderr) {
-            return Ok(());
-        }
-        if !out.status.success()
-            && !pr_ship::gh_pr_checks_output_is_unregistered(&stdout, &stderr)
-            && (!stdout.trim().is_empty() || !stderr.trim().is_empty())
+        if pr_ship::classify_gh_pr_checks_registration(
+            pr_number,
+            &String::from_utf8_lossy(&out.stdout),
+            &String::from_utf8_lossy(&out.stderr),
+            out.status.success(),
+        )? == crate::forge::CheckRegistration::Registered
         {
-            anyhow::bail!(
-                "`gh pr checks {}` failed before CI registration could be inspected: {}",
-                pr_number,
-                stderr.trim()
-            );
+            return Ok(());
         }
         if std::time::Instant::now() >= deadline {
             anyhow::bail!(

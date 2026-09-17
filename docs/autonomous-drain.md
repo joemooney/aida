@@ -119,7 +119,10 @@ informational_checks = []                      # e.g. ["Build (windows*"] — `*
 `informational_workflows` matches the *workflow* name (the Windows/macOS jobs
 share PR CI's `Build (…)` job name, so the workflow is the discriminator);
 `informational_checks` matches the check name. An explicit `[]` disables that
-list. GitHub only (`gh pr checks --json`); other forges keep the coarse verdict.
+list. The rows come from the forge: GitHub `gh pr checks --json` (with the
+branch-protection required set), GitLab the newest pipeline's jobs (no
+required-check concept, so only the allow-list applies); pure-git has no rows
+and keeps the coarse verdict.
 
 Batch and `nextN` drains have a small in-flight window:
 

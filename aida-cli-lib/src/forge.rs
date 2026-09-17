@@ -483,6 +483,18 @@ pub struct ChangeReviews {
     pub approver: Option<String>,
 }
 
+/// STORY-1166: has the forge registered any CI check for a change yet? The
+/// orchestrator waits on `NotYet` (a freshly pushed PR whose workflows have
+/// not started), proceeds on `Registered`, and skips the wait on `NoCi`
+/// (pure-git / a project with no pipeline).
+// trace:STORY-1166 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckRegistration {
+    Registered,
+    NotYet,
+    NoCi,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiState {
     /// No CI configured / no forge — drain treats like `lifecycle:no-ci-wait`.
@@ -699,6 +711,40 @@ pub trait Forge {
     /// `gh pr checks --watch`). `interactive` is the negation of headless mode.
     /// trace:STORY-516 | ai:claude
     fn stream_ci_for_branch(&self, branch: &str, interactive: bool) -> Result<CiProbeResult>;
+    /// STORY-1166: has the forge registered any CI check for `change` yet?
+    /// Default: no CI on this forge — the register-wait is skipped.
+    // trace:STORY-1166 | ai:claude
+    fn checks_registered(&self, _change: &ChangeRef) -> Result<CheckRegistration> {
+        Ok(CheckRegistration::NoCi)
+    }
+    /// STORY-1166: the per-check rows for `change` (BUG-1180's gate-aware
+    /// classification reads these). Default: `Err` — the forge exposes no
+    /// per-check rows, so callers keep the coarse `watch_ci` verdict.
+    // trace:STORY-1166 | ai:claude
+    fn check_rows(&self, _change: &ChangeRef) -> Result<Vec<crate::ci_gate::CheckRow>> {
+        anyhow::bail!("this forge exposes no per-check CI rows")
+    }
+    /// STORY-1166: names of the branch-protection-required checks; empty when
+    /// the forge has no such concept (GitLab gates on the whole pipeline).
+    // trace:STORY-1166 | ai:claude
+    fn required_check_names(&self, _change: &ChangeRef) -> Vec<String> {
+        Vec::new()
+    }
+    /// STORY-1166: an opaque snapshot of CI progress for `branch`, fed to the
+    /// idle-timeout fingerprint — it only has to CHANGE while CI makes
+    /// progress. Default: empty (no progress signal; the absolute ceiling
+    /// still bounds the wait).
+    // trace:STORY-1166 | ai:claude
+    fn ci_progress_snapshot(&self, _branch: &str) -> String {
+        String::new()
+    }
+    /// STORY-1166: does this forge support delegated (check-run tally) review?
+    /// Default: no — `[review] mode = delegated` falls back to the standard
+    /// reviewer with a visible note, never a silent NoVerdict.
+    // trace:STORY-1166 | ai:claude
+    fn supports_delegated_review(&self) -> bool {
+        false
+    }
 
     /// `gh pr merge` / `glab mr merge` / pure-git git merge.
     ///
@@ -1070,6 +1116,43 @@ impl GitHubForge {
 }
 
 impl Forge for GitHubForge {
+    // trace:STORY-1166 | ai:claude
+    fn checks_registered(&self, change: &ChangeRef) -> Result<CheckRegistration> {
+        let pr = change.id.to_string();
+        let mut command = Command::new("gh");
+        command
+            .current_dir(&self.project_root)
+            .args(["pr", "checks", &pr]);
+        let out = crate::pr_cmd::command_output_retrying_etxtbsy(&mut command)
+            .with_context(|| format!("could not invoke `gh pr checks {pr}`"))?;
+        crate::pr_ship::classify_gh_pr_checks_registration(
+            change.id,
+            &String::from_utf8_lossy(&out.stdout),
+            &String::from_utf8_lossy(&out.stderr),
+            out.status.success(),
+        )
+    }
+    // trace:STORY-1166 | ai:claude
+    fn check_rows(&self, change: &ChangeRef) -> Result<Vec<crate::ci_gate::CheckRow>> {
+        let json = gh_pr_checks_json(&self.project_root, change.id, &[])?;
+        crate::ci_gate::parse_check_rows(&json)
+            .ok_or_else(|| anyhow::anyhow!("could not parse `gh pr checks {} --json`", change.id))
+    }
+    // trace:STORY-1166 | ai:claude
+    fn required_check_names(&self, change: &ChangeRef) -> Vec<String> {
+        gh_pr_checks_json(&self.project_root, change.id, &["--required"])
+            .ok()
+            .and_then(|j| crate::ci_gate::parse_check_rows(&j))
+            .map(|rows| rows.into_iter().map(|r| r.name).collect())
+            .unwrap_or_default()
+    }
+    // trace:STORY-1166 | ai:claude
+    fn ci_progress_snapshot(&self, branch: &str) -> String {
+        crate::ci_rollup_json_for_branch(branch)
+    }
+    fn supports_delegated_review(&self) -> bool {
+        true
+    }
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitHub
     }
@@ -1619,6 +1702,64 @@ impl GitLabForge {
 }
 
 impl Forge for GitLabForge {
+    // trace:STORY-1166 | ai:claude
+    fn checks_registered(&self, change: &ChangeRef) -> Result<CheckRegistration> {
+        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &change.branch)])?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "`glab api projects/:id/pipelines` failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(registration_from_glab_pipelines(&String::from_utf8_lossy(
+            &out.stdout,
+        )))
+    }
+    // trace:STORY-1166 | ai:claude
+    fn check_rows(&self, change: &ChangeRef) -> Result<Vec<crate::ci_gate::CheckRow>> {
+        let out = self.glab_api_get("projects/:id/pipelines", &[("ref", &change.branch)])?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "`glab api projects/:id/pipelines` failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        let body = String::from_utf8_lossy(&out.stdout);
+        let arr: Vec<serde_json::Value> =
+            serde_json::from_str(body.trim()).context("could not parse glab pipelines JSON")?;
+        let Some(pipeline) = newest_glab_pipeline(&arr) else {
+            return Ok(Vec::new());
+        };
+        let id = pipeline
+            .get("id")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| anyhow::anyhow!("newest GitLab pipeline has no id"))?;
+        let workflow = pipeline
+            .get("name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("gitlab-ci")
+            .to_string();
+        let jobs = self.glab_api_get(&format!("projects/:id/pipelines/{id}/jobs"), &[])?;
+        if !jobs.status.success() {
+            anyhow::bail!(
+                "`glab api projects/:id/pipelines/{id}/jobs` failed: {}",
+                String::from_utf8_lossy(&jobs.stderr).trim()
+            );
+        }
+        Ok(check_rows_from_glab_jobs(
+            &String::from_utf8_lossy(&jobs.stdout),
+            &workflow,
+        ))
+    }
+    // trace:STORY-1166 | ai:claude
+    fn ci_progress_snapshot(&self, branch: &str) -> String {
+        self.glab_api_get("projects/:id/pipelines", &[("ref", branch)])
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default()
+    }
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
     }
@@ -2570,6 +2711,72 @@ fn glab_ci_state_from_status(status: &str) -> CiState {
 /// Pick the newest pipeline object from a `glab api pipelines` REST array — the one
 /// with the highest `id` (GitLab pipeline ids are monotonic; `created_at` is a
 /// tie-breaker only when ids are absent). trace:STORY-510 | ai:claude
+/// STORY-1166: `gh pr checks <n> [--required] --json name,bucket,workflow`
+/// as raw JSON. `gh` exits non-zero when a check failed or is pending but
+/// still prints the rows, so the exit status is ignored when stdout is JSON.
+// trace:STORY-1166 | ai:claude
+pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) -> Result<String> {
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(project_root)
+        .args(["pr", "checks", &pr.to_string()])
+        .args(extra)
+        .args(["--json", "name,bucket,workflow"]);
+    let out = crate::pr_cmd::command_output_retrying_etxtbsy(&mut cmd)?;
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if stdout.starts_with('[') {
+        return Ok(stdout);
+    }
+    anyhow::bail!(
+        "`gh pr checks {pr} --json` produced no JSON: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    )
+}
+
+/// STORY-1166: registration state from a GitLab pipelines listing for a ref:
+/// an empty (or unparsable) list means no pipeline has started yet.
+// trace:STORY-1166 | ai:claude
+pub(crate) fn registration_from_glab_pipelines(body: &str) -> CheckRegistration {
+    match serde_json::from_str::<serde_json::Value>(body.trim()) {
+        Ok(serde_json::Value::Array(a)) if !a.is_empty() => CheckRegistration::Registered,
+        _ => CheckRegistration::NotYet,
+    }
+}
+
+/// STORY-1166: map GitLab pipeline jobs to the forge-neutral per-check rows.
+/// Job status → gh bucket: success→pass, failed→fail, canceled→cancel,
+/// skipped/manual→skipping, everything else (created/pending/running/…)→pending.
+// trace:STORY-1166 | ai:claude
+pub(crate) fn check_rows_from_glab_jobs(
+    body: &str,
+    workflow: &str,
+) -> Vec<crate::ci_gate::CheckRow> {
+    let Ok(serde_json::Value::Array(jobs)) = serde_json::from_str::<serde_json::Value>(body.trim())
+    else {
+        return Vec::new();
+    };
+    jobs.iter()
+        .map(|j| {
+            let status = j.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            let bucket = match status {
+                "success" => "pass",
+                "failed" => "fail",
+                "canceled" | "cancelled" => "cancel",
+                "skipped" | "manual" => "skipping",
+                _ => "pending",
+            };
+            crate::ci_gate::CheckRow {
+                name: j
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                workflow: workflow.to_string(),
+                bucket: bucket.to_string(),
+            }
+        })
+        .collect()
+}
+
 fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value> {
     arr.iter().max_by(|a, b| {
         let ai = a.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -3834,6 +4041,47 @@ mod tests {
         // Unknown / empty → None.
         assert_eq!(glab_ci_state_from_status(""), CiState::None);
         assert_eq!(glab_ci_state_from_status("weird"), CiState::None);
+    }
+
+    #[test]
+    // STORY-1166: GitLab registration + per-check row mapping are pure.
+    #[test]
+    fn glab_registration_and_job_rows_map_to_forge_neutral_shapes() {
+        assert_eq!(
+            registration_from_glab_pipelines("[]"),
+            CheckRegistration::NotYet
+        );
+        assert_eq!(
+            registration_from_glab_pipelines(""),
+            CheckRegistration::NotYet
+        );
+        assert_eq!(
+            registration_from_glab_pipelines("garbage"),
+            CheckRegistration::NotYet
+        );
+        assert_eq!(
+            registration_from_glab_pipelines(r#"[{"id":7,"status":"running"}]"#),
+            CheckRegistration::Registered
+        );
+        let jobs = r#"[{"name":"build","status":"success"},{"name":"merge-hold-gate","status":"failed"},
+            {"name":"lint","status":"running"},{"name":"deploy","status":"manual"},{"name":"old","status":"canceled"}]"#;
+        let rows = check_rows_from_glab_jobs(jobs, "gitlab-ci");
+        let buckets: Vec<(&str, &str)> = rows
+            .iter()
+            .map(|r| (r.name.as_str(), r.bucket.as_str()))
+            .collect();
+        assert_eq!(
+            buckets,
+            vec![
+                ("build", "pass"),
+                ("merge-hold-gate", "fail"),
+                ("lint", "pending"),
+                ("deploy", "skipping"),
+                ("old", "cancel")
+            ]
+        );
+        assert!(rows.iter().all(|r| r.workflow == "gitlab-ci"));
+        assert!(check_rows_from_glab_jobs("nope", "x").is_empty());
     }
 
     #[test]
