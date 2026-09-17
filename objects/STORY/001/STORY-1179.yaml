@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T06:19:42.024600827Z
-modified_at: 2026-09-17T08:19:12.407934699Z
+modified_at: 2026-09-17T08:19:14.050361338Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0adb3-c8ec-78d2-b7a6-634633d8306f
   created_at: 2026-09-17T06:19:47.149403426Z
   created_by: joe
+comments:
+- id: 01a0ae72-cc02-7d61-bbd0-d3180729b50e
+  author: joe
+  content: 'Closed by oversight 01:19: PR-1880 merged 00:03 (TASK-1246 Completed); the drain''s codex reviewer approved on the second pass + independent proxy review + supervised-hold release are ledgered on TASK-1246. This auto-filed review story''s acceptance (''completed once the PR is merged'') is met.'
+  created_at: 2026-09-17T08:19:14.050361338Z
+  modified_at: 2026-09-17T08:19:14.050361338Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
