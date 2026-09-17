@@ -71219,5 +71219,13 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 5555
+- id: 01a0ad2b-4326-7b50-a38e-264178bd109f
+  target_id: 01a0ad1b-7b09-7341-85e7-64e0adca68f3
+  author: aida
+  node_id: '1'
+  lamport: 5556
+  timestamp: 2026-09-17T02:21:28.742629986Z
+  kind: !SetTitle
+    title: 'Merge-lease: wire the lease across pr ship''s check→merge→pull (drain phase split to follow-up)'
+clock: 5556
 node_id: '1'

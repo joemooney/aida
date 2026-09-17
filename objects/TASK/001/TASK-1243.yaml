@@ -1,7 +1,7 @@
 id: 01a0ad1b-7b09-7341-85e7-64e0adca68f3
 spec_id: TASK-1243
 agreed_id: TASK-1243
-title: 'Merge-lease slice 2: wire the lease around check→merge→pull in pr ship + drain merge phase'
+title: 'Merge-lease: wire the lease across pr ship''s check→merge→pull (drain phase split to follow-up)'
 description: |-
   Follow-up to STORY-1171 slice 1 (#1873, the merge_lock primitive + aida merge-lock status, ADR-38). Slice 1 landed the tested primitive but is wired NOWHERE (acquire-side is #[allow(dead_code)]). This slice wires it so the acceptance ('two concurrent merges to main serialize; one waits, bounded') actually holds.
 
@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:04:14.473016752Z
-modified_at: 2026-09-17T02:10:54.486866214Z
+modified_at: 2026-09-17T02:21:28.660861053Z
 req_type: Task
 tags:
 - keyboard
