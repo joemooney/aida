@@ -290,9 +290,11 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn stale_dead_pid_same_host_is_reclaimed() {
         // trace:STORY-1171.acf58627 | ai:codex
+        // trace:BUG-1184 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
@@ -313,6 +315,50 @@ mod tests {
             start.elapsed() < Duration::from_millis(150),
             "dead-pid steal is immediate"
         );
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn same_host_bogus_pid_waits_until_ttl_on_non_unix() {
+        // trace:BUG-1184 | ai:codex
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(locks_dir(root)).unwrap();
+        // Non-Unix cannot probe pids, so a fresh same-host holder is treated
+        // as live even when the pid is bogus.
+        let h = Holder {
+            host: crate::coordination::hostname(),
+            pid: 999_999_999,
+            pr: Some(9),
+            note: "fresh bogus pid".into(),
+            acquired_at: now_secs(),
+            ttl_secs: DEFAULT_TTL_SECS,
+        };
+        std::fs::write(lock_path(root, "main"), serialize(&h)).unwrap();
+
+        let err = acquire(
+            root,
+            "main",
+            Some(10),
+            "blocked",
+            Duration::from_millis(200),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+
+        let mut expired = h;
+        expired.note = "expired bogus pid".into();
+        expired.acquired_at = now_secs().saturating_sub(10_000);
+        expired.ttl_secs = 600;
+        std::fs::write(lock_path(root, "main"), serialize(&expired)).unwrap();
+        let _g = acquire(
+            root,
+            "main",
+            Some(11),
+            "ttl steal",
+            Duration::from_millis(200),
+        )
+        .unwrap();
     }
 
     #[test]
