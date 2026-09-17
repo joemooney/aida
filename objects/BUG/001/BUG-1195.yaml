@@ -1,0 +1,37 @@
+id: 01a0b0e9-8e9a-7500-805c-50ab0b86853d
+spec_id: BUG-1195
+agreed_id: BUG-1195
+title: 'Drain review phase shelves a spec as tool-exit: the BUG-1186 envelope guard says ''no pickable review story is queued'' while the auto-filed Review PR-N story IS queued, pickable and title-matching'
+description: |-
+  Observed 2026-09-17 12:40 on the bugs-0917 batch, member BUG-1193 (PR #1901). Phase 2 auto-filed STORY-1191 "Review PR-1901: …" → reviewer queue (log: "✓ filed STORY-1191 (covers BUG-1193) → reviewer queue (PR #1901)"). Phase 3 then ran `aida queue work PR-1901` with the BUG-1186 envelope (AIDA_FROM_PR_REVIEW=1, AIDA_FROM_PR_NUMBER=1901) and bailed: "review envelope is set for PR-1901 but no pickable review story is queued — refusing to fall back to an implementer pickup of the backing spec". Retried once (attempt 2/2), same error, spec shelved as tool-exit. The two previous members (BUG-1191 → PR-1899 → STORY-1189, BUG-1192 → PR-1900 → STORY-1190) reviewed fine minutes earlier on the same binary and the same drain.
+
+  REPRO (deterministic, current binary c5c9ceb8, after the drain ended):
+    AIDA_FROM_PR_REVIEW=1 AIDA_FROM_PR_NUMBER=1901 aida queue work PR-1901 --user role:implementer --role implementer --dry-run
+    → the same error.
+  Yet every input the lookup uses checks out:
+    - aida queue list --user role:implementer --for reviewer → STORY-1191 approved, for_role reviewer (also visible under joe / default / role:reviewer).
+    - review_title_matches: title starts with "Review PR-1901:" (case-insensitive prefix, exact number).
+    - queue_fresh_pickup_policy / pickability: aida why STORY-1191 → actionable (not deferred/archived/Done/terminal/blocked); `aida queue work STORY-1191 --dry-run` resolves to scope PR-1901 with a pr-1901 worktree.
+    - Full store load works (aida criteria STORY-1191 succeeds), so the silent `let Ok(store) = storage.load() else { return false }` is probably not the culprit — but queued_review_story_for_pr (lib.rs, fn queued_review_story_for_pr) swallows BOTH storage.queue_list and storage.load errors as `false`, which then reads as "no story" to the guard and turns any transient read failure into a shelve.
+
+  Suspects to instrument (do not guess): (1) queue_list(user_id) under the drain's `--user role:implementer` vs how the entry was keyed when the worktree session's `aida session end` (session 01a0b0c6, user joe?) filed it — the entry's user/role key; (2) e.requirement_id vs r.id equality after the "auto-queue: aida add failed for PR #1901 (see warning above)" retry — was a second story/entry created with a UUID that is not in the loaded store? (3) whether `storage.load()` in that code path is the cache-backed projection that had not yet observed the worktree's write (cache HEAD behind the store) — note `aida cache verify` found 7 status drifts at the same time.
+
+  Fix: make queued_review_story_for_pr return Result and have the guard distinguish "no story" from "lookup failed" (a lookup failure must NOT bail into the guard; log and fall back to the normal review-story pickup or retry after a cache refresh); add a debug line naming which of (entry found / title match / pickability) failed; and add a regression test that a story filed by a sibling-worktree session under a different user id is found by the drain's user id.
+
+  Acceptance:
+  - The repro command above resolves PR-1901 to the reviewer route (or the test-equivalent fixture) with no bail.
+  - A lookup failure is logged with its cause and never shelves the spec as tool-exit; a genuine no-story case still bails as today.
+  - Regression test covering the sibling-worktree-filed story + the drain user id.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T19:48:11.546163776Z
+modified_at: 2026-09-17T19:48:11.546163776Z
+req_type: Bug
+tags:
+- drain
+- follow-up:BUG-1186
+- queue
+- repro
+- reviewer
