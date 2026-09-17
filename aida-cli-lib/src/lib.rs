@@ -64019,6 +64019,69 @@ fn collect_all_pr_head_branches(
     set
 }
 
+#[derive(Debug, Clone, Default)]
+struct PrHeadStateSnapshot {
+    by_branch: std::collections::HashMap<String, String>,
+}
+
+// trace:BUG-1187 | ai:codex
+fn collect_pr_head_states(project_root: &std::path::Path) -> PrHeadStateSnapshot {
+    if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
+        return PrHeadStateSnapshot::default();
+    }
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return PrHeadStateSnapshot::default(),
+    };
+    let out = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "1000",
+            "--json",
+            "headRefName,state",
+        ])
+        .output();
+    let Ok(out) = out else {
+        return PrHeadStateSnapshot::default();
+    };
+    if !out.status.success() {
+        return PrHeadStateSnapshot::default();
+    }
+    parse_pr_head_state_snapshot(&String::from_utf8_lossy(&out.stdout))
+}
+
+// trace:BUG-1187 | ai:codex
+fn parse_pr_head_state_snapshot(json: &str) -> PrHeadStateSnapshot {
+    let parsed: serde_json::Value = match serde_json::from_str(json.trim()) {
+        Ok(v) => v,
+        Err(_) => return PrHeadStateSnapshot::default(),
+    };
+    let mut by_branch = std::collections::HashMap::new();
+    for pr in parsed.as_array().cloned().unwrap_or_default() {
+        let Some(head) = pr.get("headRefName").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if head.is_empty() {
+            continue;
+        }
+        let state = pr
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if state.is_empty() {
+            continue;
+        }
+        by_branch.insert(head.to_string(), state);
+    }
+    PrHeadStateSnapshot { by_branch }
+}
+
 /// Roll up `statusCheckRollup` into one of `pass`, `fail`, `pending`, or
 /// `?`. Counts FAILURE/CANCELLED/TIMED_OUT/ACTION_REQUIRED as fail,
 /// IN_PROGRESS/QUEUED/PENDING as pending; SUCCESS only when every check
@@ -64283,6 +64346,44 @@ struct UnshippedBranchCandidate {
     has_local: bool,
 }
 
+// trace:BUG-1187 | ai:codex
+fn all_requirement_summaries(project_root: &std::path::Path) -> Vec<aida_core::RequirementSummary> {
+    let Some(store_path) = detect_distributed_store_from(project_root) else {
+        return Vec::new();
+    };
+    let Ok(dispenser) = load_dispenser(&store_path) else {
+        return Vec::new();
+    };
+    let Ok(inner) = aida_core::GitBackend::new(&store_path).map(|b| b.with_dispenser(dispenser))
+    else {
+        return Vec::new();
+    };
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let Ok(backend) = aida_core::CachedGitBackend::with_inner(inner, &cache_path) else {
+        return Vec::new();
+    };
+    backend
+        .list_summaries(&aida_core::ListFilter {
+            archive: aida_core::ArchiveFilter::Both,
+            defer: aida_core::DeferFilter::Both,
+            ..Default::default()
+        })
+        .unwrap_or_default()
+}
+
+// trace:BUG-1187 | ai:codex
+fn insert_summary_statuses(
+    status_by_spec: &mut std::collections::HashMap<String, String>,
+    summaries: &[aida_core::RequirementSummary],
+) {
+    for s in summaries {
+        let Some(id) = s.agreed_id.clone().or_else(|| s.spec_id.clone()) else {
+            continue;
+        };
+        status_by_spec.insert(id.to_ascii_uppercase(), s.status.to_ascii_lowercase());
+    }
+}
+
 // trace:STORY-1043 | ai:codex
 fn collect_unshipped_work_items(
     project_root: &std::path::Path,
@@ -64295,12 +64396,11 @@ fn collect_unshipped_work_items(
     };
 
     let mut status_by_spec = std::collections::HashMap::new();
-    for s in summaries {
-        let Some(id) = s.agreed_id.clone().or_else(|| s.spec_id.clone()) else {
-            continue;
-        };
-        status_by_spec.insert(id.to_ascii_uppercase(), s.status.to_ascii_lowercase());
-    }
+    insert_summary_statuses(&mut status_by_spec, summaries);
+    insert_summary_statuses(
+        &mut status_by_spec,
+        &all_requirement_summaries(project_root),
+    );
 
     let live = process_probe::probe_live_claude_sessions();
     let now = chrono::Utc::now();
@@ -64331,14 +64431,10 @@ fn collect_unshipped_work_items(
         .collect();
     branches.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let open_pr_branches: std::collections::HashSet<String> = if no_forge {
-        std::collections::HashSet::new()
+    let pr_head_states = if no_forge {
+        PrHeadStateSnapshot::default()
     } else {
-        collect_open_prs(project_root)
-            .by_branch
-            .keys()
-            .cloned()
-            .collect()
+        collect_pr_head_states(project_root)
     };
 
     let mut candidates = Vec::new();
@@ -64353,13 +64449,15 @@ fn collect_unshipped_work_items(
         ) {
             continue;
         }
-        if !no_forge && open_pr_branches.contains(&short_branch) {
+        if matches!(
+            pr_head_states
+                .by_branch
+                .get(&short_branch)
+                .map(String::as_str),
+            Some("open" | "merged")
+        ) {
             continue;
         }
-        let commits_ahead = match branch_ahead_of(project_root, &refname, &default_ref) {
-            Some(n) if n > 0 => n,
-            _ => continue,
-        };
         let Some(spec_id) = work_spec_id_from_branch(&short_branch)
             .or_else(|| first_spec_id_in_branch_commits(project_root, &default_ref, &refname))
         else {
@@ -64376,6 +64474,10 @@ fn collect_unshipped_work_items(
         {
             continue;
         }
+        let commits_ahead = match branch_unshipped_patch_count_default(project_root, &refname) {
+            Some(n) if n > 0 => n,
+            _ => continue,
+        };
         if !seen.insert(display_branch.clone()) {
             continue;
         }
@@ -64403,7 +64505,16 @@ fn collect_unshipped_work_items(
             let pr_state = if no_forge {
                 "unknown".to_string()
             } else {
-                "absent".to_string()
+                match pr_head_states
+                    .by_branch
+                    .get(&c.local_branch)
+                    .map(String::as_str)
+                {
+                    Some("open") => "open",
+                    Some("merged") => "merged",
+                    _ => "absent",
+                }
+                .to_string()
             };
             let recovery = if c.has_local {
                 format!("aida pr ship {}", c.branch)
@@ -64574,6 +64685,36 @@ mod story_1043_unshipped_work_tests {
         git(root, &["checkout", "main"]);
     }
 
+    fn init_repo(root: &std::path::Path) {
+        git(root, &["init"]);
+        git(root, &["checkout", "-b", "main"]);
+        git(root, &["config", "user.email", "codex@example.test"]);
+        git(root, &["config", "user.name", "Codex"]);
+        git(
+            root,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/example/aida-fixture.git",
+            ],
+        );
+        commit_file(root, "README.md", "fixture", "chore: init");
+    }
+
+    fn executable_fake_gh(root: &std::path::Path, body: &str) -> std::path::PathBuf {
+        let fake_gh = root.join("fake-gh");
+        std::fs::write(&fake_gh, body).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&fake_gh, perms).unwrap();
+        }
+        fake_gh
+    }
+
     fn summary(spec_id: &str, status: &str) -> aida_core::RequirementSummary {
         aida_core::RequirementSummary {
             id: uuid::Uuid::new_v4(),
@@ -64654,20 +64795,7 @@ mod story_1043_unshipped_work_tests {
     fn detector_lists_unshipped_work_and_skips_live_terminal_and_open_pr_branches() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        git(root, &["init"]);
-        git(root, &["checkout", "-b", "main"]);
-        git(root, &["config", "user.email", "codex@example.test"]);
-        git(root, &["config", "user.name", "Codex"]);
-        git(
-            root,
-            &[
-                "remote",
-                "add",
-                "origin",
-                "https://github.com/example/aida-fixture.git",
-            ],
-        );
-        commit_file(root, "README.md", "fixture", "chore: init");
+        init_repo(root);
 
         branch_with_commit(root, "story-1043-unshipped", "STORY-1043");
         branch_with_commit(root, "story-1044-live", "STORY-1044");
@@ -64685,25 +64813,16 @@ mod story_1043_unshipped_work_tests {
         git(root, &["branch", "-D", "story-1047-remote"]);
         write_live_lease(root, "STORY-1044", "story-1044-live");
 
-        let fake_gh = root.join("fake-gh");
-        std::fs::write(
-            &fake_gh,
+        let fake_gh = executable_fake_gh(
+            root,
             r#"#!/usr/bin/env bash
 if [[ "$*" == *"pr list"* ]]; then
-  printf '[{"number":46,"title":"open","headRefName":"story-1046-open-pr","statusCheckRollup":[],"mergeable":"MERGEABLE","reviewDecision":""}]'
+  printf '[{"number":46,"title":"open","headRefName":"story-1046-open-pr","state":"OPEN","statusCheckRollup":[],"mergeable":"MERGEABLE","reviewDecision":""}]'
   exit 0
 fi
 exit 1
 "#,
-        )
-        .unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&fake_gh).unwrap().permissions();
-            perms.set_mode(0o755);
-            std::fs::set_permissions(&fake_gh, perms).unwrap();
-        }
+        );
 
         let _env = crate::test_env::EnvVarsGuard::set(&[(
             "AIDA_TEST_GH_BINARY",
@@ -64742,6 +64861,86 @@ exit 1
         assert_eq!(
             remote.recovery,
             "git switch -c story-1047-remote origin/story-1047-remote && aida pr ship story-1047-remote"
+        );
+    }
+
+    #[cfg_attr(
+        windows,
+        ignore = "fake-gh harness is a bash script; gh cannot be stubbed via shebang on Windows"
+    )]
+    #[test]
+    fn detector_skips_merged_pr_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+        branch_with_commit(root, "story-1187-merged-pr", "STORY-1187");
+
+        let fake_gh = executable_fake_gh(
+            root,
+            r#"#!/usr/bin/env bash
+if [[ "$*" == *"pr list"* ]]; then
+  printf '[{"number":1877,"title":"merged","headRefName":"story-1187-merged-pr","state":"MERGED","statusCheckRollup":[],"mergeable":"UNKNOWN","reviewDecision":""}]'
+  exit 0
+fi
+exit 1
+"#,
+        );
+
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            "AIDA_TEST_GH_BINARY",
+            fake_gh.to_str().unwrap(),
+        )]);
+        let rows = collect_unshipped_work_items(
+            root,
+            &[summary("STORY-1187", "InProgress")],
+            false,
+            false,
+        );
+
+        assert!(
+            rows.iter().all(|row| row.branch != "story-1187-merged-pr"),
+            "merged PR heads must not be reported as unshipped: {rows:?}"
+        );
+    }
+
+    #[test]
+    fn detector_skips_patch_equivalent_squash_merged_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_repo(root);
+
+        git(root, &["checkout", "-b", "story-1187-squash", "main"]);
+        commit_file(
+            root,
+            "squash.txt",
+            "same patch\n",
+            "[AI:codex] feat: branch work (STORY-1187)",
+        );
+        git(root, &["checkout", "main"]);
+        commit_file(
+            root,
+            "squash.txt",
+            "same patch\n",
+            "[AI:codex] feat: landed equivalent patch (STORY-1187)",
+        );
+
+        assert_eq!(
+            branch_ahead_of(root, "story-1187-squash", "main"),
+            Some(1),
+            "raw rev-list still sees the old branch as ahead"
+        );
+        assert_eq!(
+            branch_unshipped_patch_count_default(root, "story-1187-squash"),
+            Some(0),
+            "patch-equivalence count must see it as shipped"
+        );
+
+        let rows =
+            collect_unshipped_work_items(root, &[summary("STORY-1187", "InProgress")], true, false);
+
+        assert!(
+            rows.iter().all(|row| row.branch != "story-1187-squash"),
+            "patch-equivalent branches must not be reported as unshipped: {rows:?}"
         );
     }
 }
