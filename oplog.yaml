@@ -72500,5 +72500,19 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5647
+- id: 01a0b02f-7861-73f0-aef1-c1e48074b30f
+  target_id: 01a0ad2a-b79f-78a0-a810-bfad8a4caa94
+  author: aida
+  node_id: '1'
+  lamport: 5648
+  timestamp: 2026-09-17T16:24:56.161669255Z
+  kind: !SetDescription
+    description: |
+      Follow-up to TASK-1243 (which wired the merge-lease into pr_ship's check→merge→pull — the primary human/proxy path + the observed advisor-vs-me race). This extends it so the DRAIN's merge phase also acquires the same per-branch lease, serializing drain-merge vs pr-ship-merge.
+
+      Two decisions this needs (why it's separate): (1) the drain's merge() and pull() are SEPARATE PhaseDriver methods, so spanning check→merge→pull needs an Option<MergeLease> FIELD on RealPhaseDriver (acquire in merge(), drop after pull()) rather than a local RAII guard — or accept merge-scoped width in the drain; (2) FailureKind has no clean 'merge contention' variant — a WouldBlock after the bounded wait should map to a shelvable NeedsAttention (a stuck merger), which may want a new variant. Wire in RealPhaseDriver::merge (lib.rs), keyed via merge_lock::resolve_target_branch(&self.project_root) so it shares pr_ship's lease. Low priority: drain-vs-pr-ship concurrent merge was never observed (we serialized by hand); the pr-ship-vs-pr-ship race that WAS observed is already covered by TASK-1243.
+
+      ## Acceptance
+      - AC1. When the drain merge phase shelves a PR because the merge-lease is held, the recovery hint must tell the operator both how to inspect the current holder with `aida merge-lock` and how to resume after release with `aida pr ship <PR>` using the affected PR number.
+clock: 5648
 node_id: '1'
