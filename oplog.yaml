@@ -71318,5 +71318,41 @@ operations:
   timestamp: 2026-09-17T04:30:54.703957154Z
   kind: !SetStatus
     status: Completed
-clock: 5564
+- id: 01a0ada5-677c-7c52-b62e-f574c05c3d05
+  target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
+  author: aida
+  node_id: '1'
+  lamport: 5565
+  timestamp: 2026-09-17T04:34:53.436935500Z
+  kind: !Create
+    title: 'Reconstitution loop v1: ID''d acceptance criteria ↔ test tracing + harvest gate + scoped reconstitution probe'
+    description: |-
+      ## Why
+      EPIC-70: the aida-store is today a lossy ONE-WAY summary of the code (spec → code), so it cannot reconstitute the system. v1 makes the flow two-way and MEASURABLE: link acceptance criteria to tests (so the harvest gap is visible), harvest implementation decisions back into the store (an agent gate, human confirms a checklist), and verify with a scoped reconstitution probe (regenerate a slice's tests from the store alone; diff; score). Operator framing: AIDA as a compiler — the store is the source; the probe is the round-trip test. Scoped to a slice's TESTS, not whole-system regeneration.
+
+      ## Scope (three parts that form one loop)
+      A. Criteria tracing (foundation). B. Harvest gate (the two-way flow). C. Reconstitution probe (the verifier + the trending confidence number).
+
+      ## Acceptance
+      A1. A spec's acceptance criteria are enumerable as stable IDs (SPEC-ID.AC1, .AC2, ...) derived from its Acceptance section (or a structured criteria field) without breaking existing prose descriptions; renumbering is stable across edits (IDs anchor to criterion identity, not position).
+      A2. A test may carry trace:SPEC-ID.ACn. aida reports, per spec: criteria with no tracing test (UNTESTED semantics) and tests tracing to no/unknown criterion (the HARVEST GAP — a semantic decision the spec does not state).
+      A3. A coverage surface (aida criteria <spec>, --json) lists AC → tracing tests plus both gap classes; the two gap counts are the headline.
+      B1. A harvest gate runs at PR/merge time as an EPIC-66 pipeline gate and is also invocable standalone on a diff (aida harvest <spec> [--diff <ref>]). It reads the diff + the spec's criteria/ADRs and emits a harvest report: candidate semantic decisions the implementation made that the spec does not state.
+      B2. Selectivity (anti-slop): each candidate is kept only if it is OBSERVABLE (a user or test could tell the difference) AND NON-OBVIOUS (not derivable from convention); conventional/derivable decisions are not surfaced. The filter is configurable under a config section, with a safe default.
+      B3. Each kept candidate is proposed as ONE of: a new acceptance criterion on the spec, a SEM-N micro-decision record attached to the spec (a record type below ADR, near-zero ceremony), or an ADR stub — presented as a confirm-checklist. The human confirms/edits in bulk; confirmed items are written to the store; skipped items are recorded as skipped (never silently dropped).
+      B4. v1 is ADVISORY: the gate never blocks a merge on its own, but it records that the harvest ran and what was confirmed/skipped, auditably (ledger-style, cf. the proxy-approval ledger).
+      C1. Reconstitution probe: given ONLY store content for a scoped spec/slice (its criteria + linked ADRs/SEM decisions + graph context, NO code), an agent regenerates the test suite for that slice.
+      C2. The regenerated tests are diffed against the real traced tests for that slice; a divergence report lists (i) criteria whose regenerated test is missing or disagrees, and (ii) real tests not reproducible from the store.
+      C3. A single reconstitution score per slice (fraction of real traced tests reproducible from the store) is emitted (--json) and recordable over time — the trending confidence number.
+      C4. The divergence report feeds the harvest gate: each non-reproducible real test becomes a harvest candidate (closes the loop).
+
+      ## Non-goals (v1)
+      Schema/API-contract capture; the store-side reverse index (spec → implementing files); a reconstitutable lifecycle flag; whole-system code regeneration (probe is tests-only, slice-scoped); making the gate blocking.
+
+      ## Existing seams to build on (not from scratch)
+      EPIC-66 agent-gate pipeline (STORY-1156/1157 = the drain-gate plumbing) hosts the harvest gate. verify-manual.py's interface_changes reflection check is already a narrow harvest gate for the CLI manual — generalize the pattern. aida lint (EARS testability lens) seeds criterion quality. aida why <file:line> + git linkage give code→decision. The proxy-approval ledger (STORY-1173) is the audit pattern for B4.
+    req_type: Story
+    status: Approved
+    priority: High
+clock: 5565
 node_id: '1'
