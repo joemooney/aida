@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T15:50:13.574620450Z
+modified_at: 2026-09-17T16:58:18.526629940Z
 req_type: Story
 tags:
 - acceptance-criteria
@@ -61,6 +61,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0adb4-4360-74c2-b892-35d43d6c7192
   created_at: 2026-09-17T04:51:21.422395044Z
+- rel_type: Parent
+  target_id: 01a0b04d-fd49-7af1-8b30-35a46deb6df2
+  created_at: 2026-09-17T16:58:18.526629940Z
 comments:
 - id: 01a0adb4-9811-7440-a76a-2a2c2e7548b7
   author: joe
