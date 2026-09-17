@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:02:57.246736455Z
-modified_at: 2026-09-17T18:08:35.118231960Z
+modified_at: 2026-09-17T18:10:14.388103714Z
 req_type: Task
 tags:
 - architecture
@@ -44,6 +44,21 @@ relationships:
   target_id: 01a0b07d-57ad-7783-bfc8-249ff38300a3
   created_at: 2026-09-17T17:50:07.022624234Z
   created_by: joe
+comments:
+- id: 01a0b08f-e0f4-7422-98ee-41fc73f221c7
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1898 [AI:codex] docs(tui): guard the TUI seam rule (TASK-1252)
+    verdict: APPROVE + merged (drive-mode advisor gate)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless; drain reviewer APPROVED at .aida/review-verdicts/PR-1898.json; advisor gate = this review)
+    gates: Build (ubuntu-latest) SUCCESS; merge-hold-gate red-as-the-hold, released at merge; Cross-platform (nightly) macOS/Windows reds classified informational (after the [ci] glob workaround — see BUG-1191) and are pre-existing debt from today's #1893/#1886 merges, filed as BUG-1192/BUG-1193; merge-lease taken
+    reasoning: seam rule written into docs/tui/README.md + CLAUDE.md pointer; scripts/check-tui-seam.sh wired into CI (standalone cargo check -p aida-tui --all-targets, direct-dep check via cargo metadata, cargo tree check for any aida-cli-lib edge); the polled liveness read was already in-process via aida-core::liveness — stale comments claiming an aida ps --json shell-out corrected; remaining shell-outs (why/status/groom/zen) annotated inline as keypress one-shots with the reason, per acceptance.
+    merged: 2026-09-17 11:05 -07:00 → main b075e4f7de
+  created_at: 2026-09-17T18:10:14.388103714Z
+  modified_at: 2026-09-17T18:10:14.388103714Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b08e-5d27-79b1-a0fc-4de60d1cc60d
   author: aida-auto-bump
