@@ -6810,7 +6810,7 @@ pub fn tool_descriptors() -> Value {
         },
         {
             "name": "send_message",
-            "description": "Send an inter-agent peer message into the mailbox local layer, mirroring `aida mailbox send`. Distinct from briefs (operator→agent work) and directives (top-down control): this is agent↔agent conversation. Address a single agent via `to`, or set `broadcast: true` to reach every agent.",
+            "description": "Send an inter-agent peer message into the mailbox local layer, mirroring `aida mailbox send`. Distinct from briefs (operator→agent work) and directives (top-down control): this is agent↔agent conversation. Address a single agent via `to`, or set `broadcast: true` to reach every agent. MCP callers pass `body` as structured JSON; CLI callers with rich text can use `--body-file` or `--stdin` to avoid shell expansion.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

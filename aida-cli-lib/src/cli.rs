@@ -2745,8 +2745,17 @@ pub enum MailboxCommand {
         #[clap(long, conflicts_with = "to")]
         broadcast: bool,
 
-        /// The message body.
-        body: String,
+        /// The message body. For rich multi-line text, prefer --body-file or --stdin so the shell
+        /// cannot expand backticks or `$()` before AIDA receives the text.
+        body: Option<String>,
+
+        /// Read the message body from a file instead of a shell argument.
+        #[clap(long, value_name = "PATH")]
+        body_file: Option<PathBuf>,
+
+        /// Read the message body from stdin instead of a shell argument.
+        #[clap(long)]
+        stdin: bool,
 
         /// Attach to an existing thread (default: start a new thread).
         #[clap(long)]

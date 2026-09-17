@@ -162,12 +162,13 @@ So registration is what turns "a stranger handles the punt" into "your advisor, 
 
 **Mental model.** Where a *brief* is operator→agent assignment, the **mailbox** is agent↔agent *conversation* — threaded messages addressed to a peer (or broadcast to all), with an inbox, threads, retract/delete, and a git-canonical sync. It's the channel a fleet uses to say "I'm taking the auth specs, you take storage" or "heads up, my PR touches your file." Two layers: a fast *local* layer for the working session, and `aida mailbox sync` which digests that local layer into the durable orphan-branch store so messages are replayable and shareable across clones. The operator views (`list` / `inbox --all`) give a fleet-wide read without being a participant.
 
-**Reach for it when** — agents coordinating directly: `aida mailbox send --to codex "..."` (or `--broadcast`), `aida mailbox inbox` to read (which marks it seen), `aida mailbox thread` to see a full conversation. The operator's `aida mailbox list` for "who has mail waiting, who has unread/urgent."
+**Reach for it when** — agents coordinating directly: `aida mailbox send "..." --to codex` (or `--broadcast`), `aida mailbox inbox` to read (which marks it seen), `aida mailbox thread` to see a full conversation. The operator's `aida mailbox list` for "who has mail waiting, who has unread/urgent."
 
 **Don't reach for it when** — you're *assigning* work rather than discussing it — that's `aida brief` (one-directional, with `aida brief --notify` for urgency). And don't expect a message to survive a fresh clone until you `aida mailbox sync` — the local layer is per-clone until digested into the store.
 
 **Key options (rationale only).**
 - `send --to` vs `--broadcast` — single recipient or everyone; mutually the two addressing modes (omit `--to` and pass `--broadcast` to reach all).
+- `send <BODY>` vs `--body-file <path>` vs `--stdin` — exactly one body source. Prefer `--body-file` or `--stdin` for rich multi-line agent notes so the shell cannot expand backticks or `$()` before AIDA receives the message.
 - `send --thread` / `--in-reply-to` — attach to an existing conversation rather than starting a new thread; how a back-and-forth stays grouped.
 - `send --urgent` — surface out-of-band (statusline nag) instead of sitting unseen in a chronological inbox. Lightweight: normal-vs-urgent only, the same interrupt/no-interrupt choice `brief --notify` makes.
 - `send --from` — override the sender id (default is this shell's agent/user identity); for when you're sending on another identity's behalf.
