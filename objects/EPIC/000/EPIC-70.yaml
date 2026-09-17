@@ -1,0 +1,38 @@
+id: 01a0ad9a-fc48-73a3-9c9f-513df7692acb
+spec_id: EPIC-70
+agreed_id: EPIC-70
+title: 'AIDA as a compiler: make the store sufficient to reconstitute the system (harvest gate + acceptance-criteria↔test tracing + reconstitution probe)'
+description: |-
+  Operator thought-experiment (2026-09-16): build a system with AIDA, throw away the repo except the aida-store, rebuild from the store alone. Current confidence for a conventional todo app ~80%, dominated by capture discipline. Goal: raise it meaningfully WITHOUT burdening the creative process — good-enough functional reconstitution of requirements + semantics, not an identical system. Framing: AIDA as a COMPILER — the store is the source, code is the target, and the rebuild test is "recompile from source".
+
+  DIAGNOSIS: the flow is one-way (spec → code). Implementation makes many semantic decisions (ordering rules, error codes, validation limits, soft vs hard delete, timezone handling, empty-state behavior) that never flow BACK into the store, so the store is a lossy summary of the code, not its source. Every mechanism below makes the flow two-way without making a human write more.
+
+  CORE INSIGHT: the test suite is the executable half of the spec; acceptance criteria are the human-readable half. Link them first-class and the harvest gap becomes visible and measurable.
+
+  MECHANISMS (leverage order, smallest valuable slices):
+  1. Structured, ID'd acceptance criteria (SPEC-ID.AC1, .AC2 ...) + tests carry trace:SPEC-ID.ACn. Then: criterion-with-no-test = untested semantics; TEST-WITH-NO-CRITERION = a semantic decision the spec doesn't know about (the harvest gap, made concrete). Rebuild = criteria → regenerate tests → implement until green. Foundational, nearly free.
+  2. The HARVEST GATE: an agent gate at PR/merge time (an EPIC-66 pipeline gate) whose only job is to read the diff, extract every behavioral decision, check each against the spec's criteria + ADRs, and emit a harvest report — proposed criterion additions / lightweight decision records / ADR stubs + gaps. The human CONFIRMS A CHECKLIST, never authors prose. Burden shifts from human-writes-up-front to agent-harvests-after. Must be SELECTIVE (anti-slop): elevate only decisions that are observable (a user/test could tell) AND non-obvious (not derivable by convention). The filter is the calibration surface.
+  3. The RECONSTITUTION PROBE (the verifier + the metric): periodically, an agent given ONLY the store regenerates the test suite (cheap vs the whole system); diff against the real tests. Divergence = the harvest backlog AND the measured confidence number, trending. Scope to a slice to keep it cheap. This is the Goodhart defense — you cannot fake "the regenerated tests match". Enables a stronger Done: an optional `reconstitutable` lifecycle flag earned by passing the probe.
+  4. SEM-N micro-decisions: a record type BELOW ADR for the small semantic choices the harvest surfaces (ordering rule, error-code choice, validation limit) — near-zero ceremony so they don't get skipped. Most semantics live here.
+  5. Schema + contracts as first-class store artifacts (data model, API shape) — where rebuilds diverge most; the harvest gate diffs the actual schema/API against the recorded one and proposes updates.
+  6. Store-side reverse index (spec → files/tests that implemented it) so the implementation's SHAPE survives the code's deletion. trace: comments today live only in the code.
+
+  EXISTING SEAMS (not from scratch): EPIC-66 agent-gate pipeline (STORY-1156/1157 = the drain-gate plumbing) is the home for the harvest gate; verify-manual.py's interface_changes reflection check is already a narrow harvest gate for the CLI manual — generalize it; aida lint (EARS testability lens) is the seed for criterion quality; aida why file:line + git linkage give code→decision, add the reverse index store-side.
+
+  LIMITS: the compiler analogy holds for SEMANTICS, not aesthetics — no harvest captures visual design or taste; that residual is the cheapest to redo and the part you'd want to redo. Risk: a harvest gate drifting to rubber-stamp or noise-generator; the reconstitution probe is the honest check.
+
+  Recommend building 1 → 2 → 3 first, then 4/5/6 driven by what the first probe reveals is actually leaking.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T04:23:30.632353801Z
+modified_at: 2026-09-17T04:23:30.632353801Z
+req_type: Epic
+tags:
+- acceptance-criteria
+- compiler
+- harvest-gate
+- northstar
+- reconstitution
+- substrate
