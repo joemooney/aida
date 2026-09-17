@@ -786,6 +786,76 @@ fn normalize_usage_mode<'a>(
     }
 }
 
+/// TASK-1244 / ADR-41: map a merge-lease acquisition error to the drain's
+/// typed failure. A `WouldBlock` (another live merger held the lease past the
+/// bounded wait) is the shelvable `lease-conflict` cause — NeedsAttention for
+/// triage, never retried as a transient. Any other IO fault (lock dir
+/// unwritable, …) is a plain merge failure.
+// trace:TASK-1244 | ai:claude
+fn drain_merge_lease_failure(
+    e: &std::io::Error,
+    target: &str,
+    pr: u32,
+) -> auto_complete::PhaseFailure {
+    if e.kind() == std::io::ErrorKind::WouldBlock {
+        auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::LeaseConflict,
+            format!("another merger holds the '{target}' merge-lease while merging PR-{pr}: {e}"),
+        )
+    } else {
+        auto_complete::PhaseFailure::new(format!(
+            "could not take the '{target}' merge-lease for PR-{pr}: {e}"
+        ))
+    }
+}
+
+#[cfg(test)]
+mod task_1244_drain_merge_lease_tests {
+    use super::*;
+
+    #[test]
+    fn would_block_maps_to_shelvable_lease_conflict() {
+        let blocked = std::io::Error::new(std::io::ErrorKind::WouldBlock, "held by a live merger");
+        let f = drain_merge_lease_failure(&blocked, "main", 1875);
+        assert_eq!(f.kind, auto_complete::FailureKind::LeaseConflict);
+        assert!(f.kind.is_shelvable());
+        assert!(
+            f.reason.contains("PR-1875") && f.reason.contains("'main'"),
+            "{}",
+            f.reason
+        );
+        let io = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "locks dir");
+        let f = drain_merge_lease_failure(&io, "main", 1875);
+        assert_ne!(f.kind, auto_complete::FailureKind::LeaseConflict);
+    }
+
+    /// Source-shape guard: both AIDA merge paths take the lease before they
+    /// merge. Needles are split so this file cannot match its own literals.
+    #[test]
+    fn drain_merge_and_wave_merge_take_the_merge_lease() {
+        let src = include_str!("lib.rs");
+        let wave_start = src
+            .find(concat!("fn merge_wave_pr", "(project_root"))
+            .expect("wave fn");
+        let wave_body = &src[wave_start..wave_start + 4000];
+        let acquire = concat!("merge_lock::", "acquire(");
+        let merge_call = concat!(".merge_change(", "&change_ref");
+        let a = wave_body
+            .find(acquire)
+            .expect("wave merge acquires the lease");
+        let m = wave_body.find(merge_call).expect("wave merge merges");
+        assert!(a < m, "the wave lease must be taken BEFORE merge_change");
+        let drain_start = src
+            .find(concat!("\"aida queue work ", "(drain merge phase)\""))
+            .expect("drain merge phase acquires the lease");
+        let after = &src[drain_start..drain_start + 1500];
+        assert!(
+            after.contains(merge_call),
+            "the drain merge_change follows the lease"
+        );
+    }
+}
+
 #[cfg(test)]
 mod bug_1173_detection_hold_tests {
     // BUG-1173 regression guard (source assertion — this repo's idiom for "don't re-add X",
@@ -48199,6 +48269,30 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
         );
         return false;
     }
+    // TASK-1244 / ADR-41: the wave merge shares the per-branch merge-lease with
+    // `aida pr ship` and the drain merge phase, so no AIDA merge path runs
+    // unserialized. Contention here just skips the PR for this wave.
+    // trace:TASK-1244 | ai:claude
+    let lease_root = main_worktree_root_from(project_root);
+    let lease_target = crate::pr_cmd::pr_ship_target_branch(pr.number);
+    let _merge_lease = match crate::merge_lock::acquire(
+        &lease_root,
+        &lease_target,
+        Some(pr.number),
+        "aida burndown wave merge",
+        crate::merge_lock::DEFAULT_WAIT,
+    ) {
+        Ok(lease) => lease,
+        Err(e) => {
+            eprintln!(
+                "  {} PR-{} ({}) skipped this wave — {e} (`aida merge-lock` shows the holder)",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                pr.number,
+                pr.spec,
+            );
+            return false;
+        }
+    };
     let mut sink = network_retry::StderrSink;
     let change_ref = forge::ChangeRef {
         id: pr.number,
@@ -85061,6 +85155,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             squash_subject: None,
             delete_branch: true,
         };
+        // TASK-1244 / ADR-41: serialize this merge against every other AIDA
+        // merger (`aida pr ship`, the burndown wave) on the per-branch
+        // merge-lease (STORY-1171). Merge-scoped: the RAII guard drops when this
+        // method returns; contention past the bounded wait shelves the spec as
+        // `lease-conflict` (a stuck merger is a triage item, not a transient).
+        // trace:TASK-1244 | ai:claude
+        let lease_root = main_worktree_root_from(&self.project_root);
+        let lease_target = crate::pr_cmd::pr_ship_target_branch(pr as u64);
+        let _merge_lease = crate::merge_lock::acquire(
+            &lease_root,
+            &lease_target,
+            Some(pr as u64),
+            "aida queue work (drain merge phase)",
+            crate::merge_lock::DEFAULT_WAIT,
+        )
+        .map_err(|e| drain_merge_lease_failure(&e, &lease_target, pr))?;
         self.lifecycle_forge()
             .merge_change(&change_ref, &opts, &mut sink)
             .map_err(|e| {

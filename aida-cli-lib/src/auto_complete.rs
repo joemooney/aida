@@ -1725,6 +1725,11 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
              `aida queue rework {spec} --work`"
         ),
 
+        // TASK-1244 / ADR-41: contention on the per-branch merge-lease.
+        (Phase::Merge, FailureKind::LeaseConflict) => format!(
+            "Another merger holds the merge-lease — see who with `aida merge-lock`; once it is \
+             released, finish the merge: `aida pr ship {pr}`"
+        ),
         (Phase::Merge, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "merge the PR", "merge the PR manually")
         }
@@ -8956,6 +8961,22 @@ mod tests {
         let hint = recovery_hint(Phase::Reviewer, FailureKind::ReviewerWrote, &ctx);
         assert!(
             hint.contains("origin/bug-1177-x") && hint.contains("PR-1882"),
+            "{hint}"
+        );
+    }
+
+    // TASK-1244: merge-phase lease contention gets its own recovery hint.
+    // trace:TASK-1244.AC1 | ai:claude
+    #[test]
+    fn merge_lease_conflict_hint_names_merge_lock_and_pr_ship() {
+        let ctx = HintContext {
+            spec: "TASK-1244".into(),
+            pr_number: Some(1875),
+            ..HintContext::default()
+        };
+        let hint = recovery_hint(Phase::Merge, FailureKind::LeaseConflict, &ctx);
+        assert!(
+            hint.contains("aida merge-lock") && hint.contains("aida pr ship 1875"),
             "{hint}"
         );
     }
