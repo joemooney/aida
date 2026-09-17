@@ -1,5 +1,6 @@
 id: 01a0adb7-ed0a-7a13-93fb-8acef016ed0d
 spec_id: TASK-1-138
+agreed_id: TASK-162
 title: aida plan verify has no 'new file' convention — every greenfield plan fails on files it intends to CREATE
 description: 'Hit while archiving the STORY-1178 plan via /aida-plan. The plan legitimately lists three files it will CREATE (aida-cli-lib/src/criteria.rs, harvest.rs, reconstitute.rs) under ''Files (in build-order)''. aida plan verify treats every listed path as must-exist and reports each as ERROR ''file not found'' → Verdict FAIL — so a plan for new work can never pass the lint the skill tells you to run, and it cannot be used as the pre-commit hook the docs suggest for docs/plans/. There is no marker to say ''this path is new''. Fix: recognize a new-file convention — e.g. a ''— NEW'' suffix in the file heading (the template already uses ''### path — purpose'', so ''### path — NEW: purpose'' is natural), or a ''(new)'' tag, or a ''## New files'' subsection — and report those as OK (planned) rather than ERROR, while still ERRORing on a genuinely missing EXISTING-file reference. Also: ''--fix'' should not try to ''correct'' a new file''s path. Small, but it turns the lint from a false alarm into a usable gate for every from-scratch plan.'
 status: Draft
