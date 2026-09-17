@@ -72896,5 +72896,31 @@ operations:
   timestamp: 2026-09-17T17:44:36.666366033Z
   kind: !SetStatus
     status: Completed
-clock: 5677
+- id: 01a0b07d-6317-7f21-b8d6-64cac9ef10bd
+  target_id: 01a0b07d-57ad-7783-bfc8-249ff38300a3
+  author: aida
+  node_id: '1'
+  lamport: 5678
+  timestamp: 2026-09-17T17:50:02.519586859Z
+  kind: !Create
+    title: 'Review PR-1898: [AI:codex] docs(tui): guard the TUI seam rule (TASK-1252)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b077`) for branch `task-1252`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1898>
+      - Branch: `task-1252` → `main`
+
+      ## Covers
+
+      - TASK-1252
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1898` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5678
 node_id: '1'
