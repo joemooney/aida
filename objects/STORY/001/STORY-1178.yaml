@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T04:35:00.423305011Z
+modified_at: 2026-09-17T04:51:28.913780532Z
 req_type: Story
 tags:
 - acceptance-criteria
@@ -61,4 +61,11 @@ relationships:
 - rel_type: Parent
   target_id: 01a0adb4-4360-74c2-b892-35d43d6c7192
   created_at: 2026-09-17T04:51:21.422395044Z
+comments:
+- id: 01a0adb4-9811-7440-a76a-2a2c2e7548b7
+  author: joe
+  content: 'Design (planned 2026-09-16): criterion IDs = <SPEC>.<label>, explicit labels win, ac<6-hex> content-hash for unlabeled (no schema change; edited unlabeled criteria re-ID — nudge labels). SEM micro-decisions = [aida:sem] marked comments (the STORY-1173 ledger pattern), NOT a new type in v1. Harvest + probe agents ride the existing headless launcher (spawn_claude_headless / compose_headless_command). Selectivity filter in prompt + [harvest] config, strict default (anti-slop). v1 harvest is ADVISORY; every run ledgered as [aida:harvest] incl. skips. Probe is store-only by construction (scratch worktree, test dirs stripped) and its score is a labeled heuristic — the divergence report is the product.'
+  created_at: 2026-09-17T04:51:28.913780532Z
+  modified_at: 2026-09-17T04:51:28.913780532Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
