@@ -36,19 +36,19 @@ These commands exist because AIDA dogfoods itself: the people building AIDA run 
 
 **One line** — the one-verb release: sync the store, bump+tag+push, wait for the published tarballs, upgrade sibling installs.
 
-**Mental model.** Cutting an AIDA release is a multi-step ritual (version bump, changelog regen, tag, push, wait for the GitHub Actions build, propagate to your other installs), and `aida release` wraps the whole sequence so you don't have to remember it — it's the top-level counterpart to `aida dev release`, with a richer flag surface. The `--check` preview is the safety rail: it shows current→target version, the step sequence, and the repo/branch/tree state *without acting*, so you confirm before anything is tagged.
+**Mental model.** Cutting an AIDA release is a multi-step ritual (version bump, changelog regen, tag, push, wait for the GitHub Actions build, propagate to your other installs), and `aida release` wraps the whole sequence so you don't have to remember it — it's the top-level counterpart to `aida dev release`, with a richer command surface. The `aida release check` preview is the safety rail: it shows current→target version, the step sequence, and the repo/branch/tree state *without acting*, so you confirm before anything is tagged.
 
-**Reach for it when** — you're a maintainer cutting a version after a merge spree, and you want the full sequence run for you rather than driving `scripts/release.sh` by hand. Start with `--check`.
+**Reach for it when** — you're a maintainer cutting a version after a merge spree, and you want the full sequence run for you rather than driving `scripts/release.sh` by hand. Start with `aida release check`.
 
 **Don't reach for it when** — you're not the releaser, or cross-platform CI isn't green. A published release requires the cross-platform matrix green within 24h of tagging; `release` runs that pre-release gate for you, and you should **not** `--skip-xplat-check` a real release just to move faster — that's how Windows debt ships to users.
 
 **Key options (rationale only).**
-- `--check` — preview the planned release without acting. Always run this first; it surfaces a dirty tree or wrong-branch state before you've tagged anything irreversible.
-- `--patch` / `--minor` / `--major` — the semver level (default `patch`). The single most consequential choice; pick deliberately.
+- `aida release check` — preview the planned release without acting. Always run this first; it surfaces a dirty tree or wrong-branch state before you've tagged anything irreversible.
+- `aida release patch` / `aida release minor` / `aida release major` — the semver level (default `patch`). The single most consequential choice; pick deliberately.
 - `--after-pr <N>` — land an in-flight PR *first* (wait for its checks, squash-merge, sync main) and *then* release. The way to fold a last-minute fix into the release without a separate manual merge round-trip; it refuses if the PR's checks fail, so it can't ship a red PR.
 - `--skip-xplat-check` — bypass the cross-platform pre-release gate. Exists for emergencies, explicitly *not recommended for a published release* — the gate is there because PR CI is Linux-only and cross-platform runs nightly-only, so this is the only thing standing between you and untested Windows/macOS behavior.
 
-**Gotchas.** A clean `git status` is *not* "no work to release" — committed-but-unpushed work is on the branch; read what `--check` reports about tree/branch state before assuming. And the cross-platform gate's 24h freshness window means an old green run can go stale mid-release — if `--check` says the gate needs a fresh run, let it dispatch one rather than skipping.
+**Gotchas.** A clean `git status` is *not* "no work to release" — committed-but-unpushed work is on the branch; read what `aida release check` reports about tree/branch state before assuming. And the cross-platform gate's 24h freshness window means an old green run can go stale mid-release — if `aida release check` says the gate needs a fresh run, let it dispatch one rather than skipping.
 
 **Chains with** — runs after the merge that finishes the last spec; the version tag flips merged-since-last-tag specs to **Released** (the final lifecycle state, Ch.4). `aida dev release`/`patch` is the dev-toolbelt entry point into the same machinery.
 

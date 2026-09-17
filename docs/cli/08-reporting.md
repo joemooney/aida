@@ -49,19 +49,19 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — the audit trail: what's been touched and how it stands now.
 
-**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Two modes: the default **digest** mode is a per-requirement view sorted by last-touch ("what was I up to last session?"); `--events` switches to a **chronological per-event feed** that decodes each commit's YAML diff into one line per change. Digest is cheap and broad; events is slower (it shells out per file per commit) but precise — the mode for inspecting one spec closely.
+**Mental model.** `history` reads the **orphan-store git log** — the source-of-truth record of every status flip, comment, tag edit, owner change. Two modes: the default **digest** mode is a per-requirement view sorted by last-touch ("what was I up to last session?"); `aida history events` switches to a **chronological per-event feed** that decodes each commit's YAML diff into one line per change. Digest is cheap and broad; events is slower (it shells out per file per commit) but precise — the mode for inspecting one spec closely.
 
-**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "Did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me everything that happened to `<spec-id>`" (`--events --id`).
+**Reach for it when** — you want the *machine-faithful* record: what changed, when, by whom. "Did my ship register?" (`--shipped`), "what moved this week?" (`--since`), "show me everything that happened to `<spec-id>`" (`aida history events --id`).
 
-**Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `--events` as a general overview; it's slow by design. Use default digest mode for breadth, `--events` only when you're drilling into one spec or one transition type.
+**Don't reach for it when** — you want a *readable narrative* for a person (that's `digest` — same events, editorial prose). And don't reach for `aida history events` as a general overview; it's slow by design. Use default digest mode for breadth, `aida history events` only when you're drilling into one spec or one transition type.
 
 **Key options (rationale only).**
-- `--events` — the chronological decode. It's the slow, precise mode; pair it with `--id` (one spec) or `--status-changes`/`--comments` (one event kind) so you're not decoding the whole log.
+- `aida history events` — the chronological decode. It's the slow, precise mode; pair it with `--id` (one spec) or `--status-changes`/`--comments` (one event kind) so you're not decoding the whole log.
 - `--shipped` — the "did my ship register?" view: only recent Done→Completed merges, newest first. Distinct from `--all` (a recency-blind dump of every terminal spec) — `--shipped` answers a question, `--all` widens the net.
 - `--all` vs `--archived`/`--deferred` — `--all` is the everything-escape-hatch (active + archived + deferred, symmetric with `aida list --all`); `--archived`/`--deferred` narrow to *only* that shelf. Default `history` hides archived/deferred but keeps freshly-Completed ships visible.
 - `--max-commits` — bounds how far back it walks the orphan branch. The knob for "this is slow / I only care about recent."
 
-**Gotchas.** The default digest mode is sorted by *last-touch*, not by event time, so it's a "current standing" view, not a timeline — switch to `--events` for an actual chronology. The cache does **not** carry history rows; `history` reads the YAML/git log directly, which is why `--events` costs real time.
+**Gotchas.** The default digest mode is sorted by *last-touch*, not by event time, so it's a "current standing" view, not a timeline — switch to `aida history events` for an actual chronology. The cache does **not** carry history rows; `history` reads the YAML/git log directly, which is why `events` costs real time.
 
 **Chains with** — the audit counterpart to `status` (now) and `digest` (narrative). Feed an `--id` from `list`/`show` to drill into one spec's life.
 
@@ -114,21 +114,21 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **One line** — inspect locally-recorded CLI usage and the orchestrator's drain telemetry.
 
-**Mental model.** Two logs, one command. By default `usage` reads `~/.aida/usage.jsonl` (one privacy-floored line per `aida` invocation — *command shapes only*, never arg values or paths) and shows your top-20 commands over 30 days. With `--auto-complete` it pivots to a *different* log entirely (`~/.aida/auto-complete.jsonl`) — the autonomous-drain orchestrator's success/failure record. So it's really two lenses sharing a verb: "how am I using the CLI" and "how is the drain doing."
+**Mental model.** Two logs, one command family. By default `usage` reads `~/.aida/usage.jsonl` (one privacy-floored line per `aida` invocation — *command shapes only*, never arg values or paths) and shows your top-20 commands over 30 days. `aida usage drains` pivots to a *different* log entirely (`~/.aida/auto-complete.jsonl`) — the autonomous-drain orchestrator's success/failure record. So it's really two lenses sharing a verb: "how am I using the CLI" and "how is the drain doing."
 
 **Reach for it when**
-- bare / `--unused` / `--errors` — surface deprecation candidates (commands nobody runs) and UX-gap candidates (commands that error a lot). The substrate for "what should we cut or fix."
-- `--auto-complete` (+ `--failures` / `--pattern` / `--health`) — diagnose the autonomous drain: which phases fail most (`--pattern` = where to invest orchestrator fixes), every recent failure in full (`--failures`), or the deterministic project-health catalog (`--health`).
+- bare / `aida usage unused` / `aida usage errors` — surface deprecation candidates (commands nobody runs) and UX-gap candidates (commands that error a lot). The substrate for "what should we cut or fix."
+- `aida usage drains` / `aida usage health` — diagnose the autonomous drain: which phases fail most (`drains` patterns = where to invest orchestrator fixes), recent failures in full, or the deterministic project-health catalog (`health`).
 
 **Don't reach for it when** — you want the *polished* agent-lift story for a case study or release note (that's `metrics agent-lift`, which presents the same substrate as proof). `usage` is the raw inspection tool; `metrics` is the framed narrative.
 
 **Key options (rationale only).**
-- `--unused <Nd>` vs `--errors` — the two deprecation/UX signals, mutually exclusive because they answer opposite questions ("never used" vs "used and failing"). Both feed the `/aida-insights` review cadence.
-- `--auto-complete` — the mode-switch to drain telemetry. Without it you're in CLI-usage mode; the `--failures`/`--pattern`/`--health` sub-flags only mean anything *with* it.
+- `aida usage unused` vs `aida usage errors` — the two deprecation/UX signals, mutually exclusive because they answer opposite questions ("never used" vs "used and failing"). Both feed the `/aida-insights` review cadence.
+- `aida usage drains` — the mode-switch to drain telemetry. Without it you're in CLI-usage mode; drain failure/pattern details live under that subcommand, while the deterministic health catalog lives at `aida usage health`.
 - `--read-write` — the *trace-read-rate audit*: classify the logged command shapes into graph **reads** (`list`/`show`/`search`/`graph`/`why`/`history`/`queue list`/`rel list`/…) vs graph **writes** (`add`/`edit`/`comment add`/`rel add`/`queue add`/`defer`/`archive`/…), skip plumbing (sync/dev/statusline), and report the read:write ratio over the window. The question it answers: *is the intent graph consulted, or just written?* A ratio ≥ 1 is evidence the typed layer earns its keep; writes ≫ reads would suggest the typing is dead weight. Measures CLI telemetry only — MCP read tools aren't in `usage.jsonl` yet (an MCP read counter is a follow-up).
 - `--json` — machine consumption (`{cmd, count, errors, avg_ms}` per command; `{reads, writes, read_write_ratio, top_reads, top_writes}` under `--read-write`).
 
-**Gotchas.** `--failures`, `--pattern`, and `--health` are no-ops without `--auto-complete` — they qualify the drain-telemetry mode, not the default usage view. Telemetry is opt-out (`AIDA_TELEMETRY=0` or `[telemetry] enabled = false`); if the log is empty, telemetry was disabled — the command isn't broken.
+**Gotchas.** Drain failure/pattern views live under `aida usage drains`, not the default usage view, and the health catalog is `aida usage health`. Telemetry is opt-out (`AIDA_TELEMETRY=0` or `[telemetry] enabled = false`); if the log is empty, telemetry was disabled — the command isn't broken.
 
 **Chains with** — the inspection half of the telemetry surface; `metrics` is the presentation half. The `/aida-insights` skill synthesizes `usage` + `usage drains` into the monthly review.
 
@@ -142,7 +142,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 **Reach for it when** — you need to *demonstrate* that the autonomy machinery is working: a case study, a release-notes paragraph, a "look what the drains did this month" writeup.
 
-**Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida usage drains --pattern`/`--failures`/`--health`, the diagnostic side. `metrics` summarizes the win; `usage` dissects the failure.
+**Don't reach for it when** — you're *debugging* the drain (which phase keeps failing, what halted) — that's `aida drain status` and the phase logs, the diagnostic side. `metrics` summarizes the win; drain inspection dissects the failure.
 
 **Key options (rationale only).**
 - `--markdown` — emit pasteable Markdown for release notes / a case study (the default is the colorized terminal view). The flag exists because this command's *output is meant to be shared*.
@@ -166,7 +166,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 **Don't reach for it when** — you want general source trace rot across all files (that's `aida trace check` / `aida doctor validate-trace-comments`), or when the project is not Rust-test-backed. This first slice scans Rust tests only.
 
 **Key options (rationale only).**
-- `--json` — emit the same AC-to-test map and gap lists for scripts or gates.
+- JSON output — emit the same AC-to-test map and gap lists for scripts or gates when that surface is available.
 
 **Gotchas.** Explicit labels in `## Acceptance` are the most stable IDs (`A1.`, `AC3:`, etc.). Unlabeled criteria get content-hash IDs, which are stable across reorder but change when the criterion text changes; label important criteria when tests will trace them for a long time.
 

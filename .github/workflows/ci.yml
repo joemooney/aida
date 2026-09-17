@@ -260,14 +260,14 @@ jobs:
       # command the live binary exposes (`aida help-all`) has a `### `aida <cmd>``
       # rationale entry in some docs/cli/*.md chapter — a new command can't merge
       # without a manual entry. Also hard-fails on SPEC-ID leakage into the
-      # user-facing manual and on a surface-changing spec whose declared
-      # `interface_changes` delta is absent from the docs. Flag-accuracy mismatches
-      # print as WARNs (subcommand flags are checked only against the parent
-      # --help) and do NOT fail the build. The binary is already built above; put
-      # the dev-profile dir on PATH so the verifier's `aida ... --help` shell-outs
-      # resolve to it. The orphan `aida-store` branch (fetched by the gates above)
-      # backs the reflection check; it SKIPs non-failing when the store can't
-      # resolve. trace:STORY-597
+      # user-facing manual, on a surface-changing spec whose declared
+      # `interface_changes` delta is absent from the docs, and on cited `--flag`
+      # tokens that do not resolve against the cited command or its parent/child
+      # command subtree. The binary is already built above; put the dev-profile
+      # dir on PATH so the verifier's `aida ... --help` shell-outs resolve to it.
+      # The orphan `aida-store` branch (fetched by the gates above) backs the
+      # reflection check; it SKIPs non-failing when the store can't resolve.
+      # trace:STORY-597
       - name: CLI-manual drift-guard (every command documented)
         if: steps.changes.outputs.full_ci == 'true'
         run: |

@@ -189,7 +189,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - `--fix-sandbox` — a standalone guided printer (not a drift check): brings the OS sandbox (bubblewrap write-confinement) up on *this* host. It detects the current state, prints the exact copy-pasteable steps that host needs — install, the runtime + persist sysctl to permit unprivileged user namespaces, the `[contained] os_wrap` opt-in, and the verify command — with sudo steps clearly marked "run this yourself", then runs a non-sudo self-test smoke. It never runs sudo for you. The single command to run when standing up confinement on a new machine. (Full reference: `docs/agents/claude-bubblewrap-sandbox.md`.)
 - the focused subcommands (`verify-relationships`, `validate-trace-comments`, `scrub-collisions`, `repair-stale-blocks`, `migrate-counter-scope`, `convention-check`) — run *one* category when you know what you're chasing, instead of the full `fsck` sweep.
 
-**Gotchas.** `validate-trace-comments` and `verify-relationships` have their *own* destructive opt-ins (`--strip-dangling`, `--repair`) — read the per-subcommand `--help`, because the top-level `--heal` isn't the only write-gate in this family. `fsck` exits non-zero if any check found a problem, so it's CI-suitable as a gate.
+**Gotchas.** Focused doctor verbs have their *own* destructive opt-ins (`validate-trace-comments --strip-dangling`, plus the top-level `--heal` / `--category` repair path) — read the relevant `--help` before turning a diagnostic into a write. `fsck` exits non-zero if any check found a problem, so it's CI-suitable as a gate.
 
 **Chains with** — the structural counterpart to the content lenses; pairs with `db` (Ch.10) for store-level repair.
 
