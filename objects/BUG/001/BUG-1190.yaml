@@ -1,0 +1,52 @@
+id: 01a0b077-a777-77d3-ad42-0920e6d40d3a
+spec_id: BUG-1190
+agreed_id: BUG-1190
+title: 'auto-complete failure: phase 3 (reviewer) on TASK-1245'
+description: |
+  Auto-drafted by `aida queue work TASK-1245 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `verdict:request-changes`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework TASK-1245 --work`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-17T17:43:45.911067274+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 644058 ms
+    - phase 2 (ci): 538536 ms
+    - phase 3 (reviewer): 237854 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-1245","started_at":"2026-09-17T17:20:03.609609520+00:00","completed_at":"2026-09-17T17:43:45.911067274+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":644058},{"phase":2,"slug":"ci","elapsed_ms":538536},{"phase":3,"slug":"reviewer","elapsed_ms":237854}],"total_ms":1421563,"binary_sha":"1013e6969"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T17:43:46.807266870Z
+modified_at: 2026-09-17T17:43:46.807266870Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:verdict:request-changes
+- reviewer
