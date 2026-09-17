@@ -1,0 +1,29 @@
+id: 01a0b03a-f985-7572-ba0d-cccdad0ed9c8
+spec_id: TASK-1253
+agreed_id: TASK-1253
+title: pr ship in-drive guard refuses ALL merges while any drain runs — narrow it to the drain's own PR/spec now that the merge-lease serializes unrelated mergers
+description: |-
+  Observed 2026-09-17 09:40 by the driver-advisor: with the bugs-0917 drain running (single-drain lock held, working BUG-1187), `aida pr ship 1890` from the main checkout — an independently-reviewed, unrelated guided PR (TASK-1244) — was refused: "PR-1890 left OPEN — aida pr ship will not self-merge inside an orchestrated drive (headless or supervised). ... set AIDA_PR_SHIP_ALLOW_IN_DRIVE=1". Shipping the same way at 08:52 (#1888, no drain running) worked.
+
+  The guard exists so a drain's IMPLEMENTER cannot self-merge its own PR (the reviewer gates it). But it keys on "is any drive orchestrated in this repo" rather than "is THIS PR the one the drive owns", so it also blocks the advisor/integrator seat from merging unrelated reviewed PRs for the whole drain — which, after STORY-1171/TASK-1243/TASK-1244, is precisely the case the per-branch merge-lease was built to make safe (mergers serialize on the lease; the drain's own merge phase takes it too).
+
+  Fix: narrow the refusal. Refuse when (a) the caller session is the drive's implementer/reviewer seat (AIDA_HEADLESS / orchestrator envelope present, or the current worktree/lease belongs to the drive), or (b) the PR is the drive's own in-flight PR (matches the drain lock's spec/PR, or carries an active merge-hold owned by the drive). An unrelated PR shipped from a non-drive session (advisor at the main checkout, no orchestrator env) proceeds normally under the merge-lease. Keep AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 as the explicit override for the remaining refusal cases, and make the refusal message say WHICH condition fired.
+
+  Acceptance:
+  - Drain running on spec X (PR-A); from a plain shell at the main checkout with no orchestrator env, `aida pr ship B` (B unrelated, reviewed, green) merges without the override, taking the merge-lease.
+  - Same shell, `aida pr ship A` (the drive's own PR) is refused with the drive-owned reason.
+  - From inside a drive-launched session (orchestrator env set), `aida pr ship <any>` is refused with the seat reason.
+  - Unit tests for the three cases; refusal text names the condition.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T16:37:30.117300118Z
+modified_at: 2026-09-17T16:37:30.117300118Z
+req_type: Task
+tags:
+- drain
+- follow-up:TASK-1244
+- merge-lock
+- pr-ship
+- ux-signal
