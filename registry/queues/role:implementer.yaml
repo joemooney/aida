@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b00e-0a0e-7680-ab61-d97eebb51101
-  position: 95000
-  added_by: role:implementer
-  note: 'resolve the hold root ONCE (main_worktree) in pr_ship_handler and pass it to every merge_hold::* + ci_gate call; audit RealPhaseDriver merge/CI phases for the same split; test: marker under main clone is seen by a ship run from a sibling worktree'
-  added_at: 2026-09-17T15:48:55.147582515Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b016-2aac-7461-ab61-29904f6e4645
   position: 96000
   added_by: role:implementer
