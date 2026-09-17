@@ -12,12 +12,12 @@ description: |-
   3. FILTER DEFAULTS ([harvest] config): min_confidence = 0.7, skip_conventional = true, deny-list on (formatting, naming, logging, obvious error paths). The agent rates each candidate observable + non-obvious with a confidence; below threshold or deny-listed is filtered and ledgered as skipped. Start strict; loosen on evidence.
 
   Invariants carried from the plan: advisory only (never blocks), headless agent via spawn_claude_headless/compose_headless_command (no new launcher), every run writes the ledger comment.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:56:58.520355641Z
-modified_at: 2026-09-17T15:57:07.391045930Z
+modified_at: 2026-09-17T16:33:17.950928437Z
 req_type: Decision
 tags:
 - harvest
