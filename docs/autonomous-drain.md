@@ -112,7 +112,7 @@ drain shelves `ci-red` or `pr ship` aborts:
 
 ```toml
 [ci]
-informational_workflows = ["Cross-platform"]   # default: the path-filtered Windows/macOS matrix
+informational_workflows = ["Cross-platform*"]  # default: the path-filtered Windows/macOS matrix
 informational_checks = []                      # e.g. ["Build (windows*"] — `*` wildcards, case-insensitive
 ```
 

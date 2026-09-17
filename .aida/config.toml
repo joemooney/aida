@@ -54,3 +54,9 @@ allowed_hosts = [
   "static.crates.io", "index.crates.io", "crates.io",
   "registry.npmjs.org",
 ]
+
+# BUG-1180/ADR-39 informational CI allow-list. The path-filtered Windows/macOS
+# matrix workflow is named "Cross-platform (nightly)"; the binary default
+# ("Cross-platform", exact) does not match it, so spell the glob here.
+[ci]
+informational_workflows = ["Cross-platform*"]
