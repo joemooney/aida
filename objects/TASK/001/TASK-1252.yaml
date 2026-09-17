@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:02:57.246736455Z
-modified_at: 2026-09-17T15:02:57.246736455Z
+modified_at: 2026-09-17T15:03:09.771725539Z
 req_type: Task
 tags:
 - architecture
@@ -35,3 +35,7 @@ tags:
 - parent:EPIC-26
 - seam
 - tui
+relationships:
+- rel_type: Child
+  target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
+  created_at: 2026-09-17T15:03:09.771725539Z
