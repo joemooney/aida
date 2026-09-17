@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:28:48.134219025Z
-modified_at: 2026-09-17T17:44:20.467204182Z
+modified_at: 2026-09-17T17:44:21.936647793Z
 req_type: Task
 tags:
 - batch:bugs-0917
@@ -23,6 +23,12 @@ relationships:
   target_id: 01a0b06a-82ab-7933-84bb-95974f1e8ceb
   created_at: 2026-09-17T17:29:35.580622796Z
   created_by: joe
+comments:
+- id: 01a0b078-2fc0-7a11-a533-c9f0e8586e29
+  author: joe
+  content: '[rework] PR #1896 RequestChanges (drain reviewer, verified by the advisor against lib.rs:65757): collect_awaiting_report derives the MAIL scope from std::env AIDA_SESSION_ROLE and ignores ctx.role, so advisor_awaiting_line''s UserStatusContext{role: Some("advisor")} does not make advisor-addressed mail part of compact_line() when aida advisor watch is launched from a plain/operator/reviewer shell — a mail-arrived condition would not wake the heartbeat (acceptance: wake when aida awaiting is non-empty, mail included). Fix in the SAME PR (push fixups to the #1896 head branch): in collect_awaiting_report, resolve the mail-scope role as ctx.role first, falling back to AIDA_SESSION_ROLE only when ctx.role is None; add a test that a ctx role=advisor with an unread advisor-addressed message yields a non-empty compact_line() while the process env role is unset/operator. Keep the removal of the timer wake. Finish with aida queue done TASK-1245.'
+  created_at: 2026-09-17T17:44:21.696960657Z
+  modified_at: 2026-09-17T17:44:21.696960657Z
 execution_mode: drive
 implementation_info:
   implemented: true
