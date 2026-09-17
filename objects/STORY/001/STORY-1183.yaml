@@ -1,0 +1,26 @@
+id: 01a0aed3-eafc-7ed1-8e67-d0c62c2d97c3
+spec_id: STORY-1183
+agreed_id: STORY-1183
+title: 'Review PR-1885: [AI:codex] fix(merge-lock): gate dead-pid test by platform (BUG-1184)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0aed0`) for branch `bug-1184`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1885>
+  - Branch: `bug-1184` → `main`
+
+  ## Covers
+
+  - BUG-1184
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1885` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T10:05:18.972838225Z
+modified_at: 2026-09-17T10:05:18.972838225Z
+req_type: Story
