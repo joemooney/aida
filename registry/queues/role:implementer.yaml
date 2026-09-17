@@ -27,3 +27,11 @@
   added_at: 2026-09-17T10:01:30.929341698Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0adf3-5096-7252-a49a-2e051974f08e
+  position: 93000
+  added_by: role:implementer
+  note: 'derive permission mode from LAUNCH KIND: headless -> dontAsk, interactive TTY -> default/prompt inside the same sandbox; config permissions show per kind; refuse interactive dontAsk with guidance; test a TTY launch under contained=true carries no dontAsk'
+  added_at: 2026-09-17T15:48:48.757713524Z
+  for_role: implementer
+  added_by_machine: imac
