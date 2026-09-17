@@ -41,3 +41,16 @@ vendor = "codex"
 [drain]
 # STORY-975: retry a transient phase failure once before parking NeedsAttention.
 retry_transient = 1
+
+# Contained-launch egress allowlist (BUG-1178 workaround): the native sandbox
+# PROMPTS on a new network domain, and a dontAsk launch auto-denies that prompt —
+# which is why `gh` / `git fetch` got a 403 inside the contained advisor. Pre-allow
+# the hosts AIDA work needs so no prompt is ever raised. Default-denies all others.
+[contained]
+allowed_hosts = [
+  "github.com", "api.github.com", "objects.githubusercontent.com", "codeload.github.com",
+  "gitlab.joemooney.com",
+  "api.anthropic.com", "statsig.anthropic.com",
+  "static.crates.io", "index.crates.io", "crates.io",
+  "registry.npmjs.org",
+]
