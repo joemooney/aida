@@ -1052,7 +1052,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
 /// to `main`. A per-target-branch lease serializes only mergers heading to the
 /// same branch.
 // trace:STORY-1171 | ai:claude
-fn pr_ship_target_branch(pr: u64) -> String {
+pub(crate) fn pr_ship_target_branch(pr: u64) -> String {
     std::process::Command::new("gh")
         .args([
             "pr",
