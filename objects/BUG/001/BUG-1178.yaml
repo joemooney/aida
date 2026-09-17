@@ -10,12 +10,12 @@ description: |-
   Consequence: an operator who wants containment for unattended drains cannot also run an interactive advisor in the same repo without flipping the global posture back and forth (or bypassing the launcher via `aida role enter` + a raw `claude`).
 
   Fix: derive the permission mode from LAUNCH KIND, not the tier alone — headless (`--no-human`, drain phases, `claude -p`) → dontAsk; interactive (a TTY, `aida agent new` at a terminal) → default/prompt inside the same sandbox. Keep the sandbox for both. Make `aida config permissions show` display the mode per launch kind (headless vs interactive) so the posture is legible. Add a guard: refuse (with guidance) to launch an interactive session in dontAsk, since it can only fail. Test: a TTY launch under contained=true must not carry dontAsk.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:59:59.382279085Z
-modified_at: 2026-09-17T17:04:52.240342439Z
+modified_at: 2026-09-17T17:24:35.808575478Z
 req_type: Bug
 tags:
 - batch:bugs-0917
@@ -87,12 +87,24 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a0b066-1759-7292-aa48-7657b55307af
+  author: aida-auto-bump
+  timestamp: 2026-09-17T17:24:35.801775024Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 processing_record:
 - id: 01a0af97-e0a6-7221-a156-cb7901291290
   timestamp: 2026-09-17T13:39:21.382747568Z
   agent: aida
   commit_sha: 4896a0412df42434553392fed1fef5bd1cbfbf87
   summary: Completed via merge 4896a041
+- id: 01a0b066-1760-76e3-972a-9c2b994d184b
+  timestamp: 2026-09-17T17:24:35.808574053Z
+  agent: aida
+  commit_sha: e356186ceeb5f0d3b1a3b1ca4db2d0129e683416
+  summary: Completed via merge e356186c
 execution_mode: drive
 implementation_info:
   implemented: true
