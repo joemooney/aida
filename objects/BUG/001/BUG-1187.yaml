@@ -18,12 +18,12 @@ description: |-
   - commits_ahead uses patch equivalence (branch_unshipped_patch_count_default); a branch whose tree equals main or whose patches all cherry as "-" is not unshipped; a branch whose merge-base is more than N commits behind main with zero patch-unique commits is not unshipped.
   - Regression tests: (a) Completed spec + ahead branch → not listed; (b) merged-PR branch → not listed; (c) squash-merged branch (cherry all "-") → not listed; (d) genuinely unshipped branch (cherry "+", open spec, no PR) → listed with the pr ship hint.
   - On this repo, aida session reap / aida awaiting list zero of the sampled branches above.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:12:04.076397889Z
-modified_at: 2026-09-17T16:26:13.003527521Z
+modified_at: 2026-09-17T16:38:15.830370736Z
 req_type: Bug
 tags:
 - awaiting
@@ -40,8 +40,24 @@ relationships:
   target_id: 01a0b030-8dac-72e1-8c63-0d6e1b99e2b5
   created_at: 2026-09-17T16:26:13.003519966Z
   created_by: joe
+history:
+- id: 01a0b03b-ac0f-77f3-ac01-a62c1737b9db
+  author: aida-auto-bump
+  timestamp: 2026-09-17T16:38:15.823829632Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b03b-ac16-7fd0-ab99-654a5ab7f86e
+  timestamp: 2026-09-17T16:38:15.830370224Z
+  agent: aida
+  commit_sha: d743924424b7cba1bdb0080248f899a85100858b
+  summary: Completed via merge d7439244
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T16:25:40.199953536Z
   implemented_by: joe
+  completed_at: 2026-09-17T16:38:15.823686528Z
+  completion_sha: d743924424b7cba1bdb0080248f899a85100858b
