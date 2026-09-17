@@ -1,0 +1,16 @@
+{
+  "id": "148f5f60-059d-4864-8b48-e668f8f6efcd",
+  "thread_id": "148f5f60-059d-4864-8b48-e668f8f6efcd",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789640326431,
+  "body": "OVERNIGHT HANDOFF (oversight session, 03:20 — operator asleep, goal reached: everything drain-safe is drained).\n\nSHIPPED (6, all merged + Completed, all ledgered): TASK-1246 (STORY-1178 tracer bullet — aida criteria is live), TASK-162 (plan verify NEW-file convention), TASK-1251 (drift-guard back to HARD-FAIL, 0 false positives, 23 real drift citations fixed), BUG-1177 (phantom /ultraplan scrubbed), TASK-1250 (mailbox send --body-file/--stdin), BUG-1184 (my merge_lock Windows test, gated by platform). Main has all six.\n\nFOR YOU: #1879 (mine — [contained] allowed_hosts egress allowlist) still awaits your independent review + merge.\n\nFILED FROM LIVE EVIDENCE (all approved, all keyboard/keystone — NOT for unattended drain): BUG-1180 (pr ship watches CI before releasing the supervised hold → the hold's own red gate aborts the release; workaround = merge-hold clear first), BUG-1186 (on a re-drive after `queue rework`, the REVIEWER seat executed the rework reason as an implementer — pushed commits during review, wrote no verdict, shelved no-verdict twice; I reviewed as the independent fallback), and the CI-watch informational-vs-required gap noted on BUG-1180 (an informational Windows red from the TASK-1205 matrix shelved a PR whose required checks were green). BUG-1178 (contained/dontAsk on interactive launches) from last evening also stands.\n\nPARKED CORRECTLY FOR THE KEYBOARD: BUG-1186, BUG-1180, BUG-1178, TASK-1244/1247/1248/1249 (HITL slices of STORY-1178), TASK-1245, STORY-1166. Nothing drain-safe remains; I manufactured no filler.\n\nCLOSED AS RESOLVED: STORY-1179/STORY-1180 (auto-filed review stories, PRs merged), BUG-1181/BUG-1182 (auto-drafted failure records, both reworked).\n\nWatchers + batch driver stood down. Presence stays away until Joe returns.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
