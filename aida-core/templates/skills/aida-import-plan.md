@@ -1,6 +1,6 @@
 ---
 name: aida-import-plan
-description: Import a saved /ultraplan (or other free-floating) plan file into AIDA conventions — detect its target SPEC, move it under docs/plans/, pin it to the spec, parse its sections, and verify its refs. Use after /ultraplan's "teleport back to terminal → save plan to file" hands you a loose markdown file.
+description: Import a saved planner output file into AIDA conventions — detect its target SPEC, move it under docs/plans/, pin it to the spec, parse its sections, and verify its refs. Use after /aida-plan, a Plan agent, a multi-agent workflow, or another planner hands you a loose markdown file.
 allowed-tools:
   - Bash
   - Read
@@ -13,18 +13,20 @@ allowed-tools:
 
 ## Purpose
 
-`/ultraplan` (and other cloud planning flows) end by saving the plan to a
-loose local markdown file. That file is outside AIDA's conventions — not
-in `docs/plans/`, not pinned to a SPEC, refs unverified. This skill closes
-the loop: one command turns the loose file into first-class AIDA state.
+`/aida-plan`, Plan agents, multi-agent workflows, and other planning flows may
+end by saving the plan to a loose local markdown file. That file is outside
+AIDA's conventions — not in `docs/plans/`, not pinned to a SPEC, refs
+unverified. This skill closes the loop: one command turns the loose file into
+first-class AIDA state.
 
-This is **Direction B** of the AIDA/`/ultraplan` integration. Direction A
-is `aida ultraplan <SPEC>` (TASK-113), which assembles the *prompt* you
-feed to `/ultraplan`. This skill consumes the *output*.
+This is Direction B of AIDA's planner integration. Direction A is
+`aida ultraplan <SPEC>` (TASK-113), which assembles the *prompt* you feed to
+`/aida-plan`, a Plan agent, a multi-agent workflow, or a human reviewer. This
+skill consumes the *output*. trace:BUG-1177
 
 ## When to use
 
-- Right after `/ultraplan` teleports back and you chose "save plan to file".
+- Right after a planner gives you a loose saved plan file.
 - Any time you have a plan markdown file that should live under `docs/plans/`.
 
 ## Skip if
@@ -61,7 +63,7 @@ Confirm the detected ID with `aida show <SPEC-ID>`. If it doesn't resolve,
 or if step 2 was ambiguous (multiple candidates), **ask the user** which
 spec this plan targets — never guess silently.
 
-**Edge case — multi-spec plans:** `/ultraplan` output often names several
+**Edge case — multi-spec plans:** planner output often names several
 specs (e.g. "STORY-86 composes STORY-81"). Pick the **primary** spec (the
 one in the title / `Specs:` first position). Note the others for Step 4.
 
@@ -172,4 +174,4 @@ section summary (Critical Files / Followups counts, Verification present),
 - **TASK-96** — `aida queue done` files the Followups; this skill only
   surfaces them, to avoid double-filing.
 - **TASK-113** — `aida ultraplan <SPEC>` is the prompt-side round-trip
-  partner: it feeds `/ultraplan`, this skill consumes the saved output.
+  partner: it feeds a real planner, this skill consumes the saved output.

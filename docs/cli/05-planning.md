@@ -160,9 +160,9 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **One line** — assemble a rich, fully-contextualized planning prompt for a spec.
 
-**Mental model.** This is the command that *makes the plan worth writing*. A terse spec ("add retry to the pull command") becomes a bad plan because the planning agent lacks context. `ultraplan` gathers everything that context lives in — the spec's description, its `## Acceptance` criteria, related-spec context, the spec's enrichment comments, the AIDA 11-section plan-template structure, and the trace-graph reusable helpers — into **one prompt** you hand to the `/ultraplan` agent. It turns a terse ask into a fully-contextualized brief, and copies it to the clipboard by default (paste straight into the agent).
+**Mental model.** This is the command that *makes the plan worth writing*. A terse spec ("add retry to the pull command") becomes a bad plan because the planning agent lacks context. `ultraplan` gathers everything that context lives in — the spec's description, its `## Acceptance` criteria, related-spec context, the spec's enrichment comments, the AIDA 11-section plan-template structure, and the trace-graph reusable helpers — into **one prompt** you hand to `/aida-plan`, a Plan agent, a multi-agent workflow, or a human reviewer. It turns a terse ask into a fully-contextualized brief, and copies it to the clipboard by default.
 
-**Reach for it when** — you're about to plan any non-trivial spec. This is *step one* of planning: assemble the prompt, hand it to `/ultraplan`, save the result under `docs/plans/`.
+**Reach for it when** — you're about to plan any non-trivial spec. This is *step one* of planning: assemble the prompt, hand it to a real planner, save the result under `docs/plans/`.
 
 **Don't reach for it when** — the work doesn't need a plan at all (see "When to plan vs. just implement" — don't manufacture a planning ceremony for a trivial change); or you want to operate on an *existing* plan file (that's the `aida plan` subcommands).
 
@@ -173,7 +173,7 @@ The anti-pattern at *both* ends: planning trivial work (slop — a plan file nob
 
 **Gotchas.** Default behavior is *clipboard*, which silently no-ops in a headless context with no clipboard tool — but it falls back to stdout there, so you're not left empty-handed. If you're scripting, just use `--stdout` / `--json` and don't rely on the clipboard.
 
-**Chains with** — `aida ultraplan <spec>` → paste into `/ultraplan` → save the output → `aida import-plan` (or save under `docs/plans/` directly) → `aida plan verify` → `aida plan promote`.
+**Chains with** — `aida ultraplan <spec>` → run `/aida-plan <SPEC>` or hand the prompt to another planner → save the output → `aida import-plan` (or save under `docs/plans/` directly) → `aida plan verify` → `aida plan promote`.
 
 ---
 

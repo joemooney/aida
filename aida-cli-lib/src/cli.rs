@@ -11668,12 +11668,14 @@ pub enum Command {
         command: String,
     },
 
-    /// Assemble a rich, structured planning prompt for a SPEC and hand it
-    /// to `/ultraplan`. Pulls the spec's description, acceptance criteria,
-    /// related-spec context, the spec's enrichment comments, the AIDA
-    /// plan-template structure, and the trace-graph reusable helpers into
-    /// one prompt — turning a terse ask into a fully-contextualised
-    /// brief. Copies to the clipboard by default.
+    /// Assemble a rich, structured planning prompt for a SPEC. Pulls the
+    /// spec's description, acceptance criteria, related-spec context, the
+    /// spec's enrichment comments, the AIDA plan-template structure, and
+    /// the trace-graph reusable helpers into one prompt — turning a terse
+    /// ask into a fully-contextualised brief for `/aida-plan`, a Plan
+    /// agent, a multi-agent workflow, or a human reviewer. Copies to the
+    /// clipboard by default.
+    // trace:BUG-1177 | ai:codex
     // trace:TASK-113 TASK-247 | ai:claude
     Ultraplan {
         /// SPEC-ID (or UUID) to assemble the planning prompt for.

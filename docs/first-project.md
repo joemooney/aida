@@ -448,13 +448,13 @@ index that ties them together.)
 ## Step 10 *(optional)* — Plan a design-heavier spec
 
 STORY-4 ("Filter tasks by status and tag") has real design choices — filter
-syntax, AND/OR semantics, how tags compose. For specs like that, hand
-`/ultraplan` a fully-contextualized prompt instead of a one-liner:
+syntax, AND/OR semantics, how tags compose. For specs like that, hand a real
+planner a fully-contextualized prompt instead of a one-liner:
 
 ```
 $ aida ultraplan STORY-4
 ✓ assembled planning prompt for STORY-4 (description + acceptance + graph context)
-✓ copied to clipboard — paste into /ultraplan
+✓ copied to clipboard — run /aida-plan STORY-4 or hand it to another planner
 ```
 
 `aida ultraplan` reads STORY-4's description, its place in the graph (parent

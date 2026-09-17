@@ -7767,7 +7767,7 @@ fn workflow_tool_descriptors() -> Value {
         },
         {
             "name": "ultraplan_assemble",
-            "description": "Assemble the rich `/ultraplan` prompt for a spec from its description, acceptance criteria, graph context, reusable-helper section, and the 11-section plan structure. Read-only mirror of `aida ultraplan <spec> --stdout` — it returns the assembled prompt text; copying to the clipboard or opening a deep link stays CLI-only.",
+            "description": "Assemble a rich planner prompt for a spec from its description, acceptance criteria, graph context, reusable-helper section, and the 11-section plan structure. Read-only mirror of `aida ultraplan <spec> --stdout` — it returns the assembled prompt text; copying to the clipboard or opening a deep link stays CLI-only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

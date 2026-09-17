@@ -45579,7 +45579,7 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
             "Planning",
             &[
                 ("plan", "Verify plans + derive reusable-helper sections"),
-                ("ultraplan", "Assemble a rich /ultraplan prompt from a spec"),
+                ("ultraplan", "Assemble a rich planner prompt from a spec"),
                 ("import-plan", "Import a saved plan under docs/plans/"),
                 ("goal", "Derive a machine-checkable /goal condition"),
                 ("deps", "Dependency views + trace sweep"),
