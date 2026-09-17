@@ -1,0 +1,37 @@
+id: 01a0afe4-69de-7bd0-ae4d-d5fcf9f974c8
+spec_id: TASK-1252
+agreed_id: TASK-1252
+title: 'TUI seam rule: reads in-process via aida-core, mutations via the aida CLI subprocess, no aida-cli-lib dependency — document + CI-guard + migrate polled subprocess reads'
+description: |-
+  Context (advisor review 2026-09-17, answering "should aida-tui be its own repo?" — answer: not now; make the seam explicit so a future split is a mechanical git subtree split). Today the compile graph is already acyclic (aida-core <- aida-tui <- aida-cli-lib) and the runtime split is already de facto: in-process aida-core calls are READS (list rows, liveness, mailbox, graph_walk, CachedGitBackend) while the current_exe() subprocess calls are MUTATIONS (queue work, zen, pr, edit, add, worktree). Encode that as the rule and close the gaps.
+
+  The rule (three lines):
+  1. Reads go in-process through aida-core. Poll-cadence reads (liveness, list, mailbox, status) must never be a per-poll aida subprocess (that is the cold-start STORY-693 removed).
+  2. Mutations go through the aida CLI subprocess (current_exe()). One write path: role gating, merge-hold, proxy ledger, hooks, telemetry, drain lock all live in the CLI; the TUI must never be able to do something the CLI cannot.
+  3. Compile-time edge is one-way: aida-tui depends on aida-core only, never on aida-cli-lib. The CLI calling down into the TUI (handle_tui_command, run_config_menu, injected clap tree) is fine.
+
+  Work:
+  - Write the rule into docs/tui/README.md (a short "Seam rule" section) and a one-line pointer in CLAUDE.md's TUI sentence.
+  - Migrate the remaining POLLED subprocess reads in aida-tui/src to in-process aida-core calls (the shell-outs to list / show / status / questions — audit each: on a poll cadence -> migrate; keypress-triggered one-shot -> may stay a subprocess, note why inline).
+  - CI guard in .github/workflows/ci.yml: cargo check -p aida-tui in isolation, plus an assertion that cargo tree -p aida-tui -i aida-cli-lib reports no path (the boundary cannot silently regress).
+
+  Acceptance:
+  - docs/tui/README.md carries the three-line seam rule; CLAUDE.md points at it.
+  - No poll-cadence code path in aida-tui spawns an aida subprocess (grep for current_exe()/Command::new in the poll loop is empty or each remaining site has an inline justification comment).
+  - CI fails if aida-tui gains a dependency on aida-cli-lib or stops building standalone.
+  - Existing aida-tui tests green; no user-visible behavior change.
+
+  Mode: drive (supervised merge) — it touches the TUI poll loop; not for an unattended drain.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T15:02:57.246736455Z
+modified_at: 2026-09-17T15:02:57.246736455Z
+req_type: Task
+tags:
+- architecture
+- keyboard
+- parent:EPIC-26
+- seam
+- tui
