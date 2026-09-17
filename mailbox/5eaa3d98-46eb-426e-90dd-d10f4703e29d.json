@@ -1,0 +1,16 @@
+{
+  "id": "5eaa3d98-46eb-426e-90dd-d10f4703e29d",
+  "thread_id": "5eaa3d98-46eb-426e-90dd-d10f4703e29d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789668666642,
+  "body": "Review request (independence rule, MY change): PR #1899 — config-only, adds [ci] informational_workflows = [\"Cross-platform*\"] to .aida/config.toml. Cause: the #1887 ci_gate default is the exact string \"Cross-platform\" but the path-filtered matrix workflow is named \"Cross-platform (nightly)\", so on #1898 its Windows/macOS reds counted as real and pr ship aborted. Filed BUG-1191 (fix the binary default + pin the test fixture to the real name), BUG-1192 (macOS: #1893's sibling-worktree test, /var vs /private/var) and BUG-1193 (Windows: #1886's include_str! source-shape needle vs CRLF) — all drain-safe, queued in bugs-0917 (drain is on TASK-1245 round 2 now). Please review + aida pr ship 1899 (merge-hold clear may be needed if a hold label lands; I have no local edits on main). Batch status: BUG-1187/1188/1178 + TASK-1244/1247/1252 all merged; TASK-1245 re-driven on the reviewer's verified finding (collect_awaiting_report ignores ctx.role for mail scope).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
