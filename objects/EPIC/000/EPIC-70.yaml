@@ -36,3 +36,7 @@ tags:
 - northstar
 - reconstitution
 - substrate
+relationships:
+- rel_type: Parent
+  target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
+  created_at: 2026-09-17T04:34:54.279492263Z
