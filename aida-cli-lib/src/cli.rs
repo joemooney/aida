@@ -8442,6 +8442,16 @@ pub enum Command {
         cmd: Option<GraphCommand>,
     },
 
+    /// Report acceptance criteria traced by Rust tests for one requirement.
+    Criteria {
+        /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to inspect.
+        spec: String,
+
+        /// Emit JSON instead of a human report.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
     /// A newcomer-friendly shortcut for completing a task without the
     /// `edit --status completed` jargon.

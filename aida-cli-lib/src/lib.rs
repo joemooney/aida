@@ -38,6 +38,7 @@ mod config_cmd;
 mod config_edit;
 mod context_prompt;
 mod coordination;
+mod criteria;
 mod db_cmd;
 mod decide_cmd;
 mod deep_link;
@@ -4131,6 +4132,12 @@ fn run() -> Result<()> {
             graph_cmd::handle_graph_command(
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
+        }
+        Command::Criteria { spec, json } => {
+            let store = storage.load()?;
+            let project_root = find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
         }
         Command::Brief {
             agent,
@@ -20991,17 +20998,28 @@ fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
 /// git adds when grepping a tree; we locate the last `trace:` and read the id
 /// after it. Returns the id upper-cased, or None if the token is malformed.
 /// trace:TASK-673 | ai:claude
-fn parse_trace_id_token(line: &str) -> Option<String> {
+pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
     let idx = line.rfind("trace:")?;
     let rest = &line[idx + "trace:".len()..];
     let end = rest
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '.'))
         .unwrap_or(rest.len());
     let tok = &rest[..end];
-    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'). Guard against a bare
+    let (spec, suffix) = tok
+        .split_once('.')
+        .map_or((tok, None), |(spec, suffix)| (spec, Some(suffix)));
+    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'), optionally followed
+    // by a criterion suffix (`.A1`, `.AC3`, `.ac1a2b3`). Guard against a bare
     // word or a leading digit so non-spec `trace:` strings don't pollute the set.
-    let first_alpha = tok.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
-    if first_alpha && tok.contains('-') {
+    // trace:TASK-1246 | ai:codex
+    let first_alpha = spec.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+    let suffix_ok = suffix.is_none_or(|s| {
+        !s.is_empty()
+            && s.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    });
+    if first_alpha && spec.contains('-') && suffix_ok {
         Some(tok.to_ascii_uppercase())
     } else {
         None
@@ -45563,6 +45581,10 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("digest", "Narrative advisor report"),
                 ("usage", "Inspect locally-recorded CLI usage"),
                 ("metrics", "Agent-lift metrics over telemetry"),
+                (
+                    "criteria",
+                    "Acceptance-criteria trace coverage for one spec",
+                ),
                 ("why", "Explain a spec's current state"),
                 // trace:STORY-631 — AI WHY-comprehension, complementary to `why`.
                 (

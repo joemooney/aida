@@ -33,6 +33,7 @@ anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
+sha2 = "0.10"
 dirs = { workspace = true }
 tokio = { workspace = true }
 hostname = "0.4"

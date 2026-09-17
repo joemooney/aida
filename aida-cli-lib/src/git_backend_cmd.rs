@@ -3107,6 +3107,11 @@ pub(crate) fn handle_git_backend_command(
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
         }
+        Command::Criteria { spec, json } => {
+            let store = backend.load()?;
+            let project_root = find_project_root()?;
+            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+        }
         Command::Show {
             id,
             comments,
