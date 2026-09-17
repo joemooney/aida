@@ -6772,10 +6772,11 @@ pub enum AdvisorCommand {
     /// registered.
     Unregister,
 
-    /// Presence-gated fork-from-live watch loop: while `away`, periodically fork
-    /// the live advisor session and run a garden + mailbox-triage + escalate
-    /// pass headless. Opt-in by invocation; exits on `aida home` (or away-TTL).
-    /// The forked advisor only does safe/bounded work and escalates the rest.
+    /// Presence-gated fork-from-live watch loop: while `away`, fork the live
+    /// advisor only when `aida awaiting` is non-empty and run a garden +
+    /// mailbox-triage + escalate pass headless. Opt-in by invocation; exits on
+    /// `aida home` (or away-TTL). The forked advisor only does safe/bounded work
+    /// and escalates the rest.
     // trace:STORY-586 | ai:claude
     Watch {
         /// Preview each tick's decision (and the fork cost) without forking.
@@ -6795,7 +6796,8 @@ pub enum AdvisorCommand {
         #[clap(long, default_value_t = 60)]
         poll_interval: u64,
 
-        /// Seconds between forks while away (default 1200 = 20m).
+        /// Deprecated compatibility flag. Forks are driven by `aida awaiting`,
+        /// not elapsed time.
         #[clap(long, default_value_t = 1200)]
         fork_interval: u64,
     },

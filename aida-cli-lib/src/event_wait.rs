@@ -6,20 +6,15 @@
 //! drain it was following stops. It replaces the blind timer-poll that the
 //! integrator `--watch` loop used.
 //!
-//! The two low-level readers — [`scan_new_actionable_event`] (the offset-tracking
-//! "did any new actionable line appear?" scan) and [`event_stream_is_live`] (is a
-//! live drain streaming events right now?) — were LIFTED verbatim out of
-//! `advisor_watch.rs` so both the advisor watch loop (STORY-712) and the
-//! integrator watch loop (TASK-1036) share one implementation rather than two
-//! copies drifting apart. `advisor_watch` now calls the lifted versions; its
-//! behavior is unchanged.
+//! The event stream liveness probe and offset-tracking actionable-event scan are
+//! shared here so watch loops use one classifier instead of copies drifting
+//! apart.
 //!
 //! The wake taxonomy is exactly [`crate::events::EventKind::is_actionable`] — the
-//! same classifier `aida watch` and the advisor loop apply, so benign phase churn
-//! (`PhaseEntered`, `RunStarted`) is absorbed here and never wakes the loop. On
-//! launch a caller seeds the byte offset at the stream's CURRENT end so a stale
-//! backlog from a prior drain never re-fires an old wake (the advisor_watch
-//! precedent).
+//! same classifier `aida watch` applies, so benign phase churn (`PhaseEntered`,
+//! `RunStarted`) is absorbed here and never wakes the loop. On launch a caller
+//! seeds the byte offset at the stream's CURRENT end so a stale backlog from a
+//! prior drain never re-fires an old wake.
 //!
 //! trace:TASK-1036 trace:STORY-712 | ai:claude
 
@@ -46,7 +41,7 @@ pub(crate) enum WakeReason {
     /// such event kind consumed this wait.
     Event(EventKind),
     /// The idle backstop elapsed with no actionable event (the documented timer
-    /// fallback, exactly like `advisor_watch::plan_watch_tick`'s cadence path).
+    /// fallback for callers that explicitly opt into a bounded idle rescan.
     IdleBackstop,
     /// A live drain we had been following stopped streaming events (crashed or
     /// exited) — surface it so the caller rescans rather than blocking on a dead
@@ -72,61 +67,6 @@ pub(crate) fn event_stream_is_live(project_root: &Path) -> bool {
         )
 }
 
-/// Scan `.aida/events.jsonl` for any NEW **actionable** event appended since byte
-/// offset `*pos`, advancing `*pos` past every complete line consumed (so a given
-/// line triggers at most one wake). Reuses
-/// [`crate::events::EventKind::is_actionable`] — the exact classifier `aida watch`
-/// applies; benign churn (`PhaseEntered`, `RunStarted`) is absorbed here and
-/// never wakes the loop.
-///
-/// Best-effort and tolerant, mirroring `watch::drain_new_lines`: a missing or
-/// unreadable file yields `false` and leaves `*pos` untouched (so a dead event
-/// stream cleanly falls back to the cadence timer), a shrunk file re-reads from
-/// the top, a partial trailing line is left for the next tick, and a malformed
-/// line is skipped rather than erroring.
-///
-/// LIFTED verbatim from `advisor_watch.rs` (TASK-991) into this shared module.
-// trace:TASK-1036 trace:TASK-991 | ai:claude
-pub(crate) fn scan_new_actionable_event(path: &Path, pos: &mut u64) -> bool {
-    use std::io::{BufRead, BufReader, Seek, SeekFrom};
-    let mut file = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
-    let len = file.metadata().map(|m| m.len()).unwrap_or(*pos);
-    if len < *pos {
-        // File was truncated/rotated under us — re-read from the top.
-        *pos = 0;
-    }
-    if file.seek(SeekFrom::Start(*pos)).is_err() {
-        return false;
-    }
-    let mut reader = BufReader::new(file);
-    let mut buf = String::new();
-    let mut actionable = false;
-    loop {
-        buf.clear();
-        let read = match reader.read_line(&mut buf) {
-            Ok(n) => n,
-            Err(_) => break,
-        };
-        if read == 0 {
-            break;
-        }
-        if !buf.ends_with('\n') {
-            // Partial line — leave `pos` so the next tick re-reads it whole.
-            break;
-        }
-        *pos += read as u64;
-        if let Ok(ev) = serde_json::from_str::<Event>(buf.trim_end_matches('\n')) {
-            if ev.kind.is_actionable() {
-                actionable = true;
-            }
-        }
-    }
-    actionable
-}
-
 /// Is this event in the current focus scope? A `None` filter means no scoping —
 /// every event is in scope. With a filter, an event whose `spec` is in the
 /// subtree set (case-insensitive) is in scope; a drain-LEVEL event with no spec
@@ -143,12 +83,10 @@ fn event_in_focus(ev: &Event, focus_filter: Option<&HashSet<String>>) -> bool {
     }
 }
 
-/// Like [`scan_new_actionable_event`] but returns the FIRST focus-relevant
-/// actionable event's kind (so the caller can log what woke it) and short-circuits
-/// on it, instead of a bare bool over the whole new tail. Advances `*pos` past
-/// every line it consumes — including benign churn and out-of-focus events it
-/// skips — so a consumed line never re-fires. Same best-effort tolerance as the
-/// bool scan.
+/// Return the FIRST focus-relevant actionable event's kind (so the caller can
+/// log what woke it) and short-circuit on it. Advances `*pos` past every line it
+/// consumes — including benign churn and out-of-focus events it skips — so a
+/// consumed line never re-fires.
 // trace:TASK-1036 | ai:claude
 fn scan_new_focus_actionable(
     path: &Path,
@@ -197,9 +135,9 @@ fn scan_new_focus_actionable(
 /// wake. It is advanced past every line consumed across calls.
 ///
 /// `idle_backstop_secs` is the worst-case rescan cadence: with NO live event
-/// stream this degenerates to a plain timer (the documented fallback, exactly
-/// like `advisor_watch::plan_watch_tick`'s cadence path), so a project with no
-/// event-emitting drain regresses to nothing-worse-than-the-old-timer behavior.
+/// stream this degenerates to a plain timer (the documented fallback for the
+/// integrator watch loop), so a project with no event-emitting drain regresses
+/// to nothing-worse-than-the-old-timer behavior for those callers.
 ///
 /// `focus_filter`, when `Some`, scopes the wake to events about specs in that
 /// subtree (plus drain-level events with no spec); out-of-scope events are
@@ -249,75 +187,6 @@ mod tests {
         for e in events {
             writeln!(f, "{}", serde_json::to_string(e).unwrap()).unwrap();
         }
-    }
-
-    // ── scan_new_actionable_event (lifted from advisor_watch) ────────────────
-
-    #[test]
-    fn scan_detects_only_new_actionable_lines_and_advances_offset() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("events.jsonl");
-        // Benign-only backlog: no wake.
-        write_lines(
-            &path,
-            &[
-                Event::new(Some("STORY-1".into()), "", EventKind::RunStarted),
-                Event::new(
-                    Some("STORY-1".into()),
-                    "",
-                    EventKind::PhaseEntered {
-                        idx: 1,
-                        slug: "implementer".into(),
-                        vendor: None,
-                        seat: None,
-                        model: None,
-                        effort: None,
-                    },
-                ),
-            ],
-        );
-        let mut pos = 0u64;
-        assert!(
-            !scan_new_actionable_event(&path, &mut pos),
-            "benign churn must not wake"
-        );
-        let after_benign = pos;
-        assert!(after_benign > 0, "offset advanced past the benign lines");
-
-        // Append one actionable event — the next scan wakes exactly once.
-        write_lines(
-            &path,
-            &[Event::new(
-                Some("STORY-1".into()),
-                "",
-                EventKind::PuntFiled {
-                    spec: "STORY-1".into(),
-                },
-            )],
-        );
-        assert!(
-            scan_new_actionable_event(&path, &mut pos),
-            "a new actionable event wakes"
-        );
-        assert!(
-            pos > after_benign,
-            "offset advanced past the actionable line"
-        );
-
-        // Already consumed — no re-fire on the same line.
-        assert!(
-            !scan_new_actionable_event(&path, &mut pos),
-            "consumed lines never re-fire"
-        );
-    }
-
-    #[test]
-    fn scan_is_false_when_no_event_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("events.jsonl"); // never created
-        let mut pos = 0u64;
-        assert!(!scan_new_actionable_event(&path, &mut pos));
-        assert_eq!(pos, 0, "a missing file leaves the offset untouched");
     }
 
     #[test]
