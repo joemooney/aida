@@ -2913,6 +2913,14 @@ fn run() -> Result<()> {
         return handle_merge_lock_status(*json);
     }
 
+    // `aida merge-hold list|clear` inspects/clears supervised merge-hold markers.
+    // Read/writes only `.aida/merge-holds/` (+ a best-effort `gh` label/merged
+    // probe), needs no store handle — dispatch early like `aida merge-lock`.
+    // trace:TASK-161 | ai:claude
+    if let Command::MergeHold { action } = &cli.command {
+        return handle_merge_hold(action);
+    }
+
     // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
     // spec / drain id to the ONE log file that work streams into and tails it.
     // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
@@ -4431,6 +4439,9 @@ fn run() -> Result<()> {
         Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
         Command::MergeLock { .. } => {
             unreachable!("merge-lock is dispatched before storage init")
+        }
+        Command::MergeHold { .. } => {
+            unreachable!("merge-hold is dispatched before storage init")
         }
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         // trace:TASK-1034
@@ -27944,6 +27955,145 @@ fn handle_merge_lock_status(json: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Partition merge-hold markers into (stale, live) by a mergedness predicate:
+/// a marker whose PR has already merged is stale (a phantom hold left behind by
+/// a merge AIDA did not perform, e.g. a raw `gh pr merge`). Pure so the
+/// list/sweep logic is testable without a live forge.
+// trace:TASK-161 | ai:claude
+fn partition_stale_holds(
+    holds: Vec<(u64, String)>,
+    mut is_merged: impl FnMut(u64) -> Option<bool>,
+) -> (Vec<(u64, String)>, Vec<(u64, String)>) {
+    let mut stale = Vec::new();
+    let mut live = Vec::new();
+    for (pr, reason) in holds {
+        // Only a definite "yes, merged" makes a marker stale; an unknown
+        // (offline / gh error) is treated as live so we never clear a hold we
+        // could not confirm is safe to drop. trace:TASK-161 | ai:claude
+        if is_merged(pr) == Some(true) {
+            stale.push((pr, reason));
+        } else {
+            live.push((pr, reason));
+        }
+    }
+    (stale, live)
+}
+
+#[cfg(test)]
+mod merge_hold_cli_tests {
+    use super::partition_stale_holds;
+
+    #[test]
+    fn stale_partition_splits_merged_from_open_and_unknown() {
+        let holds = vec![
+            (1u64, "drive".to_string()),
+            (2u64, "drive".to_string()),
+            (3u64, "drive".to_string()),
+        ];
+        // PR 1 merged -> stale; PR 2 still open -> live; PR 3 unknown (offline /
+        // gh error) -> live, because an unconfirmed hold is never swept.
+        let (stale, live) = partition_stale_holds(holds, |pr| match pr {
+            1 => Some(true),
+            2 => Some(false),
+            _ => None,
+        });
+        assert_eq!(stale, vec![(1u64, "drive".to_string())]);
+        assert_eq!(
+            live,
+            vec![(2u64, "drive".to_string()), (3u64, "drive".to_string())]
+        );
+    }
+}
+
+// `aida merge-hold list|clear` — the human surface for supervised merge-hold
+// markers the docs + CI templates already reference. trace:TASK-161 | ai:claude
+fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
+    let root = find_project_root()?;
+    match action {
+        crate::cli::MergeHoldAction::List { json } => {
+            let holds = merge_hold::list_holds(&root);
+            let (stale, live) = partition_stale_holds(holds, |pr| {
+                let mut sink = network_retry::StderrSink;
+                pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+            });
+            if *json {
+                let row = |pr: u64, reason: &str, is_stale: bool| {
+                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"stale\":{is_stale}}}")
+                };
+                let mut items: Vec<String> = Vec::new();
+                for (pr, reason) in &live {
+                    items.push(row(*pr, reason, false));
+                }
+                for (pr, reason) in &stale {
+                    items.push(row(*pr, reason, true));
+                }
+                println!("{{\"merge_holds\":[{}]}}", items.join(","));
+                return Ok(());
+            }
+            if live.is_empty() && stale.is_empty() {
+                println!("No active merge-holds.");
+                return Ok(());
+            }
+            println!("Active merge-holds:");
+            for (pr, reason) in &live {
+                println!("  PR #{pr}  {reason}");
+            }
+            for (pr, reason) in &stale {
+                println!(
+                    "  PR #{pr}  {reason}  {}",
+                    "[stale — PR merged; `aida merge-hold clear --stale` to sweep]".yellow()
+                );
+            }
+            Ok(())
+        }
+        crate::cli::MergeHoldAction::Clear { pr, stale } => match (pr, stale) {
+            (Some(_), true) => {
+                anyhow::bail!(
+                        "give a PR number OR --stale, not both: `aida merge-hold clear <pr>` clears one, `aida merge-hold clear --stale` sweeps every already-merged marker"
+                    );
+            }
+            (None, false) => {
+                anyhow::bail!(
+                        "nothing to clear: `aida merge-hold clear <pr>` clears one hold, `aida merge-hold clear --stale` sweeps every already-merged marker"
+                    );
+            }
+            (Some(pr), false) => {
+                let existed = merge_hold::read_hold(&root, *pr).is_some();
+                merge_hold::clear_hold(&root, *pr)?;
+                merge_hold::sync_label(&root, *pr, false);
+                if existed {
+                    println!(
+                            "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
+                        );
+                } else {
+                    println!(
+                            "No merge-hold marker for PR #{pr}; dropped the `aida:merge-hold` label anyway in case it lingered."
+                        );
+                }
+                Ok(())
+            }
+            (None, true) => {
+                let holds = merge_hold::list_holds(&root);
+                let (stale, _live) = partition_stale_holds(holds, |pr| {
+                    let mut sink = network_retry::StderrSink;
+                    pr_is_merged_with_sink(&root, pr as u32, &mut sink)
+                });
+                if stale.is_empty() {
+                    println!("No stale merge-holds (every marker's PR is still open).");
+                    return Ok(());
+                }
+                for (pr, _reason) in &stale {
+                    let _ = merge_hold::clear_hold(&root, *pr);
+                    merge_hold::sync_label(&root, *pr, false);
+                    println!("Cleared stale merge-hold on PR #{pr} (PR already merged).");
+                }
+                println!("Swept {} stale merge-hold(s).", stale.len());
+                Ok(())
+            }
+        },
+    }
 }
 
 pub(crate) fn find_project_root() -> Result<std::path::PathBuf> {

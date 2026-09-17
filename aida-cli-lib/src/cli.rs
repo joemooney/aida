@@ -169,6 +169,30 @@ pub enum InternalCommand {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum MergeHoldAction {
+    /// List active merge-hold markers. Each row is the held PR + the hold
+    /// reason; a PR that has already merged is flagged `[stale — PR merged]`
+    /// so a phantom marker left by a direct merge is obvious at a glance.
+    // trace:TASK-161 | ai:claude
+    List {
+        /// Machine-readable JSON output.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Clear a merge-hold: remove the marker file and drop the
+    /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
+    /// or `--stale` to sweep every marker whose PR has already merged.
+    // trace:TASK-161 | ai:claude
+    Clear {
+        /// PR number whose hold to clear.
+        pr: Option<u64>,
+        /// Clear every marker whose PR has already merged (phantom holds).
+        #[clap(long)]
+        stale: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 pub enum ServerCommand {
     /// Check server status
     Status,
@@ -9153,6 +9177,21 @@ pub enum Command {
         /// Machine-readable JSON output.
         #[clap(long)]
         json: bool,
+    },
+
+    /// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
+    ///
+    /// A hold marker keeps a PR held for human/advisor review — it fails the
+    /// merge-hold-gate required check so the PR cannot be auto-merged. AIDA
+    /// merge paths (`aida pr ship`, the autonomous drain) clear the marker
+    /// automatically when they merge; this is the manual surface for the case
+    /// they cannot see — a PR merged directly (a raw `gh pr merge`) leaves a
+    /// phantom marker behind. `list` shows every marker and flags the ones
+    /// whose PR has already merged as stale; `clear` removes them.
+    // trace:TASK-161 | ai:claude
+    MergeHold {
+        #[clap(subcommand)]
+        action: MergeHoldAction,
     },
 
     /// Stream a running session's log — found by id, not by file path.
