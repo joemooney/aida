@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T09:28:27.880269326Z
+modified_at: 2026-09-17T09:30:51.703728224Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -72,6 +72,12 @@ comments:
   content: 'Codex headless wait-state 2026-09-17: PR-1882 is updated to 5944332a6 and local verification is green, but remote CI is still running. Current GitHub rollup: merge-hold-gate SUCCESS; Build (ubuntu-latest) IN_PROGRESS on run 35204250630/job 105146054051; PR mergeStateStatus UNSTABLE only because the Build job is pending. Per headless waiting rule, stopping instead of continuing as an unbounded CI watcher.'
   created_at: 2026-09-17T09:22:08.882164242Z
   modified_at: 2026-09-17T09:22:08.882164242Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0aeb4-5fb7-7272-90c9-7e29cc33b9b4
+  author: joe
+  content: '[oversight review — PR-1882, 02:31] The drain''s codex reviewer produced NO verdict on two attempts (shelved no-verdict), so I reviewed as the independent fallback (codex-authored; not mine). Verdict: APPROVED on content — see .aida/review-verdicts/PR-1882.json. Merge waits on the fresh Build triggered by the last fixup push (e1671b040); merge-hold-gate already green. Will merge on green + ledger it.'
+  created_at: 2026-09-17T09:30:51.703728224Z
+  modified_at: 2026-09-17T09:30:51.703728224Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
