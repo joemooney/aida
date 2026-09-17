@@ -11,12 +11,12 @@ description: |-
   - Pick ONE acquisition level (caller, not forge::merge_change) to avoid self-deadlock.
 
   Keyboard/guided, NOT an autonomous drain — it modifies hot merge paths (a wrong wire breaks all merges). Remove the #[allow(dead_code)] once acquire is called. Acceptance test: two concurrent pr-ship merges to main serialize (one waits, bounded); the drain merge and a pr ship serialize against each other.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T02:04:14.473016752Z
-modified_at: 2026-09-17T02:22:22.667319562Z
+modified_at: 2026-09-17T02:32:00.852915259Z
 req_type: Task
 tags:
 - keyboard
@@ -30,3 +30,21 @@ comments:
   created_at: 2026-09-17T02:22:22.667319562Z
   modified_at: 2026-09-17T02:22:22.667319562Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0ad34-e84e-77b3-a636-fe8cf204b658
+  author: aida-auto-bump
+  timestamp: 2026-09-17T02:32:00.846362981Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ad34-e854-77c0-824c-e972dcd264d3
+  timestamp: 2026-09-17T02:32:00.852913749Z
+  agent: aida
+  commit_sha: a54b3713afabb6efeca3d24e55db2aedf6066040
+  summary: Completed via merge a54b3713
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-17T02:32:00.846224581Z
+  completion_sha: a54b3713afabb6efeca3d24e55db2aedf6066040
