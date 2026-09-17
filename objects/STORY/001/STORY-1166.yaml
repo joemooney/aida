@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:59:47.560507247Z
-modified_at: 2026-09-17T18:21:54.692923373Z
+modified_at: 2026-09-17T18:22:56.881075277Z
 req_type: Story
 tags:
 - forge gitlab ci-watch review slice-3 parent:EPIC-68 aida:forge
@@ -27,6 +27,21 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b03e-2365-7522-b4e7-aa3da806acf2
   created_at: 2026-09-17T16:40:59.258169421Z
+comments:
+- id: 01a0b09b-8371-7c43-b62b-5b48f8108dd8
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1894 [AI:claude] feat(forge): GitLab slice 3 — CI register/watch/per-check rows behind the Forge trait (STORY-1166)
+    verdict: APPROVE + merged (guided spec; ADR-43 accepted by the advisor 11:26)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1894.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN, merge-lease taken (bugs-0917 drain live on BUG-1191)
+    reasoning: the load-bearing check was "GitHub byte-identical" — verified: checks_registered issues the same gh pr checks call and routes through classify_gh_pr_checks_registration whose conditions are the old logic verbatim (fake-gh harness now runs over the same classifier); check_rows / required_check_names are the old gh_checks_json relocated unchanged; ci_progress_snapshot = ci_rollup_json_for_branch. ci_gate shells out to nothing (source-shape guard). GitLab mapping pure + tested; no required-check concept there. Delegated review on non-GitHub falls back with a visible note (ADR-43.3). Live GitLab validation is the follow-up TASK-1254 per ADR-43.2. Nit (duplicated #[test] attribute) filed in TASK-1255.
+    merged: 2026-09-17 11:31 -07:00 → main cc11e2e45d
+  created_at: 2026-09-17T18:22:56.881075277Z
+  modified_at: 2026-09-17T18:22:56.881075277Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b09a-907e-7653-ba0e-5b85a99e5848
   author: aida-auto-bump
