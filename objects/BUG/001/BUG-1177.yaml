@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T07:51:52.831322327Z
+modified_at: 2026-09-17T07:51:54.196625935Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -40,6 +40,11 @@ comments:
   created_at: 2026-09-17T04:55:25.387882163Z
   modified_at: 2026-09-17T04:55:25.387882163Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ae59-c56a-7763-8ebe-83e7ac9e2617
+  author: joe
+  content: 'REWORK (oversight, 00:52) — PR-1882''s codex reviewer returned RequestChanges (verdict: .aida/review-verdicts/PR-1882.json): the sweep was incomplete. docs/cli/05-planning.md still says aida ultraplan output is handed to the /ultraplan agent, and that the /ultraplan/web flow produces the files /aida-import-plan ingests. Fix on the existing bug-1177 branch (PR-1882): rewrite those user-facing sections to /aida-plan (the in-project planner) or a generic real planner — aida ultraplan assembles a rich planning prompt for ANY planner; /aida-import-plan lands ANY saved plan. Then PROVE completeness: grep -rn ''/ultraplan'' across CLAUDE.md, docs/, aida-core/templates/, aida-cli-lib/src/ and remove or reframe every remaining user-facing reference (BUG-1177''s whole point is that the command no longer exists — Anthropic removed it). The only acceptable survivors are historical mentions that say it was removed (e.g. docs/positioning/vs-ultraplan.md may keep a dated note). Re-run docs/cli/verify-manual.py (completeness + reflection must stay OK), then push the fixup.'
+  created_at: 2026-09-17T07:51:53.962498775Z
+  modified_at: 2026-09-17T07:51:53.962498775Z
 execution_mode: drain
 implementation_info:
   implemented: true
