@@ -71668,5 +71668,13 @@ operations:
   timestamp: 2026-09-17T07:04:42.616631515Z
   kind: !AddTag
     tag: batch:away-0916
-clock: 5589
+- id: 01a0ae2e-96e4-77b2-99c9-61907e7e4fc1
+  target_id: 01a0adaf-a82c-73e2-a6df-4f7b8a98d52b
+  author: aida
+  node_id: '1'
+  lamport: 5590
+  timestamp: 2026-09-17T07:04:44.004424861Z
+  kind: !AddTag
+    tag: batch:away-0916
+clock: 5590
 node_id: '1'
