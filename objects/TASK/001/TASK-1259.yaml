@@ -1,0 +1,14 @@
+id: 01a0b0eb-713d-7fc0-a1fb-744879586ea8
+spec_id: TASK-1259
+agreed_id: TASK-1259
+title: Slice 4 blocking mode (`[harvest] gate = "block"`) once precision is proven
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T19:50:15.101376618Z
+modified_at: 2026-09-17T19:50:15.101376618Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
