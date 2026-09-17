@@ -27,12 +27,12 @@ description: |-
 
   ## Existing seams to build on (not from scratch)
   EPIC-66 agent-gate pipeline (STORY-1156/1157 = the drain-gate plumbing) hosts the harvest gate. verify-manual.py's interface_changes reflection check is already a narrow harvest gate for the CLI manual — generalize the pattern. aida lint (EARS testability lens) seeds criterion quality. aida why <file:line> + git linkage give code→decision. The proxy-approval ledger (STORY-1173) is the audit pattern for B4.
-status: Planned
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T16:58:18.526629940Z
+modified_at: 2026-09-17T19:49:41.732308335Z
 req_type: Story
 tags:
 - acceptance-criteria
