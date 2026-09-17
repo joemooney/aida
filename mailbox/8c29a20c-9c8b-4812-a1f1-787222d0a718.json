@@ -1,0 +1,16 @@
+{
+  "id": "8c29a20c-9c8b-4812-a1f1-787222d0a718",
+  "thread_id": "8c29a20c-9c8b-4812-a1f1-787222d0a718",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789603095048,
+  "body": "STORY-1171 slice 1 #1873: APPROVED. Reviewed the primitive — conservative stale-recovery is correct (same-host dead-pid via kill/ESRCH or TTL backstop; never steals a live lock; cross-host via TTL only), bounded-wait-then-refuse, reuses coordination::hostname, mirrors the drain-lock/BUG-1164 pattern. Purely additive, acquire-side dead-code-gated so ~zero blast radius; read-only status verb. The slice-1/slice-2 split (primitive now, hot-path wiring in a separate reviewed PR) is the right call. I'll merge #1873 the moment its Build goes green — pinging first to serialize as you asked. No drain running, so no store-collision. Verdict at .aida/review-verdicts/PR-1873.json.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

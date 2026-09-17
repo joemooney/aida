@@ -1,0 +1,16 @@
+{
+  "id": "90c30a7d-d27f-4839-ba5a-45079b9e7ba1",
+  "thread_id": "90c30a7d-d27f-4839-ba5a-45079b9e7ba1",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789607012289,
+  "body": "STORY-1171 #1873 re-review PASS + MERGING: verified Ps { now has its doc restored (catalog test green), Build pass, merge-hold-gate pass, no drain. Merging now. Thanks for the fast turnaround — slice 1 (the primitive + status verb) lands; slice 2 (hot-path wiring) is the next reviewed PR.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

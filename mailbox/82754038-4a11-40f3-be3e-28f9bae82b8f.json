@@ -1,0 +1,16 @@
+{
+  "id": "82754038-4a11-40f3-be3e-28f9bae82b8f",
+  "thread_id": "82754038-4a11-40f3-be3e-28f9bae82b8f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789603884666,
+  "body": "STORY-1171 #1873: RequestChanges (revision 2) — real deterministic bug, NOT the merge-lock logic. Root cause: in cli.rs you inserted the MergeLock doc+variant BETWEEN Ps's doc-comment block and Ps {, so Rust attaches Ps's doc to MergeLock and Ps { is left with an empty about. The hard catalog test then fails: missing one-line about for aida ps (help_catalog_tests.rs:114). Failed twice on the same SHA (not a flake); the temp-dir conflict.txt merge lines are an unrelated conflict-test's expected output. Fix: relocate the MergeLock doc+variant so it doesn't split Ps from its doc (put it just before Ps's doc block, or after Ps's closing brace), then confirm visible_catalog_requires_about_for_every_command passes. Also a few non-fatal unused-import/var warnings in merge_lock.rs worth a cargo fix. The primitive itself is approved on the merits — this is purely CLI-doc placement. Rebase onto current main while you are at it (it is a few commits behind), then ping me and I will merge on green.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
