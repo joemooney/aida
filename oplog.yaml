@@ -73010,5 +73010,29 @@ operations:
   timestamp: 2026-09-17T18:09:39.286954997Z
   kind: !AddTag
     tag: batch:bugs-0917
-clock: 5685
+- id: 01a0b08f-efc4-7472-b378-4dde3b38ffc8
+  target_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
+  author: aida
+  node_id: '1'
+  lamport: 5686
+  timestamp: 2026-09-17T18:10:18.180676662Z
+  kind: !AddTag
+    tag: batch:bugs-0917
+- id: 01a0b08f-f052-73b2-8d53-37091596d3a0
+  target_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
+  author: aida
+  node_id: '1'
+  lamport: 5687
+  timestamp: 2026-09-17T18:10:18.322821532Z
+  kind: !RemoveTag
+    tag: macos
+- id: 01a0b08f-f0de-74e2-a04c-55db80c18f9e
+  target_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
+  author: aida
+  node_id: '1'
+  lamport: 5688
+  timestamp: 2026-09-17T18:10:18.462114947Z
+  kind: !RemoveTag
+    tag: follow-up:BUG-1188
+clock: 5688
 node_id: '1'
