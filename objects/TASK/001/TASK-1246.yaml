@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T07:03:23.724880985Z
+modified_at: 2026-09-17T07:04:40.867460813Z
 req_type: Task
 tags:
 - afk
@@ -49,6 +49,20 @@ comments:
     FIX: preserve bare-ID tokenization when the character after the ID is punctuation or the suffix is empty/non-criterion (treat only a suffix matching a real criterion label — `A1`, `AC3`, `ac1a2b3` (6-hex) — as a criterion; anything else means the '.' is punctuation and the token is the bare ID). Add a regression test for the punctuation cases (`trace:TASK-673.`, `trace:TASK-673,`, `trace:TASK-673 | ai:claude`) asserting they parse as the bare id, alongside the existing byte-identical bare-id and .A1/.ac1a2b3 cases. Push the fixup on the existing task-1246 branch (PR-1880). Everything else in the PR was independently spot-checked clean.
   created_at: 2026-09-17T06:36:15.284432438Z
   modified_at: 2026-09-17T06:36:15.284432438Z
+- id: 01a0ae2e-8aa3-7d62-a411-0b040662da4f
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    verdict: MERGED (proxy) — PR-1880 shipped via aida merge-hold clear 1880 + aida pr ship 1880
+    scope: overnight oversight; proxy-merge on Joe's behalf of the STORY-1178 tracer bullet
+    independent: yes — codex implemented (3 commits); the drain's codex reviewer APPROVED on the second pass; I did NOT implement. I spot-checked the plan's landmines (parser regression guard, Command placement, manual entry) and verified the punctuation fixup (fc554f4e2: trace:TASK-673. / , / | ai:claude regression tests).
+    proxy: claude-opus-4.8 (product/oversight session), session 01FSF79sGFHdttbFjJAHicCd
+    authorized-by: joe (operator, AWAY — overnight /goal "drain all open items to the maximum extent"; standing "merge everything that passes review"), 2026-09-17 00:04 MST
+    gates cleared: reviewer Approved (2nd pass, after a RequestChanges the drain shelved and I re-drove with the exact finding); Build green; MERGEABLE; no live drain/merger; supervised hold (mode unset) released explicitly via aida merge-hold clear (marker + label) — the human/advisor review act — then merge-hold-gate re-ran green and pr ship merged. Note: pr ship alone could not release it (BUG-1180 filed: it watches CI before releasing the hold).
+    timestamp: 2026-09-17 00:04 MST
+  created_at: 2026-09-17T07:04:40.867460813Z
+  modified_at: 2026-09-17T07:04:40.867460813Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0ae2d-5d46-7051-a172-be54025e12fc
   author: aida-auto-bump
