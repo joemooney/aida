@@ -13,12 +13,12 @@ description: |-
   - With no [ci] section, classify_red on rows {Build (ubuntu-latest)/CI pass, Build (windows-latest)/"Cross-platform (nightly)" fail} and required = [merge-hold-gate] is not real and lists the windows job as ignored_informational.
   - The existing informational test fixture uses the real workflow name.
   - aida pr ship on a PR with only nightly-matrix reds + green required checks proceeds.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:07:48.692213685Z
-modified_at: 2026-09-17T18:09:39.204587418Z
+modified_at: 2026-09-17T18:17:36.493200514Z
 req_type: Bug
 tags:
 - batch:bugs-0917
