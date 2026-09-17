@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:34:51.458852667Z
-modified_at: 2026-09-17T04:51:34.777956349Z
+modified_at: 2026-09-17T04:55:26.912436549Z
 req_type: Story
 tags:
 - acceptance-criteria
@@ -79,5 +79,11 @@ comments:
   content: Planning complete (vertical slices TASK-1246 → TASK-1247 → TASK-1248 → TASK-1249; TASK-1246 is the tracer bullet). Ready for implementation — dispatch TASK-1246 (AFK) to a drain or guided; TASK-1247/TASK-1248/TASK-1249 are HITL.
   created_at: 2026-09-17T04:51:34.777956349Z
   modified_at: 2026-09-17T04:51:34.777956349Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0adb8-39c0-71b2-9c5a-f9235fc85693
+  author: joe
+  content: Commit eeddccf75 references this requirement
+  created_at: 2026-09-17T04:55:26.912436549Z
+  modified_at: 2026-09-17T04:55:26.912436549Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
