@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T04:46:05.356749415Z
+modified_at: 2026-09-17T04:47:32.889281704Z
 req_type: Bug
 tags:
 - cli
@@ -21,3 +21,10 @@ tags:
 - docs
 - ultraplan
 - ux-signal
+comments:
+- id: 01a0adb0-fe19-7cd0-8cb9-5518aaedf6c0
+  author: joe
+  content: 'Root cause CONFIRMED by operator: /ultraplan was a real Claude Code feature that Anthropic has since REMOVED. So AIDA''s round-trip (aida ultraplan → /ultraplan → /aida-import-plan) is built on an upstream command that no longer ships. Fix stands: re-point the docs + the aida ultraplan next-step at /aida-plan (the in-project equivalent) and reframe aida ultraplan as ''assemble a rich planning prompt for any planner''. Consider a tripwire: a CI/doc check that flags references to slash-commands that are not in this repo''s .claude/commands/ nor a known Claude Code built-in, so a future upstream removal surfaces as drift instead of a user dead-end.'
+  created_at: 2026-09-17T04:47:32.889281704Z
+  modified_at: 2026-09-17T04:47:32.889281704Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
