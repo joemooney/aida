@@ -3,12 +3,12 @@ spec_id: TASK-1246
 agreed_id: TASK-1246
 title: '[AFK] Slice 1 (tracer bullet): criteria IDs + trace:SPEC.ACn on tests + aida criteria gap report'
 description: 'Vertical slice 1 of STORY-1178 — proves the pipeline end-to-end. Parse a spec''s ## Acceptance into stable criterion IDs (<SPEC>.<label>; explicit labels win, ac<6-hex> content-hash for unlabeled). Extend parse_trace_id_token to accept the .ACn suffix (bare ids must parse byte-identically — regression test). Scan Rust #[test] fns for trace:SPEC.ACn (reuse doctor_validate_trace_comments'' file walk). New aida criteria <spec> [--json] surface: AC → tracing tests + the two gap classes (untested ACs; tests tracing to no/unknown AC = the harvest gap). Demo: run on STORY-1171 vs its merge_lock tests. Manual entries for the new command (drift-guard completeness). See docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md.'
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T04:51:01.133665206Z
+modified_at: 2026-09-17T06:08:45.103456741Z
 req_type: Task
 tags:
 - afk
