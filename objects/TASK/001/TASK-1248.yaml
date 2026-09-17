@@ -3,12 +3,12 @@ spec_id: TASK-1248
 agreed_id: TASK-1248
 title: '[HITL] Slice 3: aida reconstitute <spec> — the store-only reconstitution probe (regenerate tests, diff, score, feed harvest)'
 description: 'Vertical slice 3 of STORY-1178 — the round-trip verifier. Assemble STORE-ONLY context (aida show --full + linked ADRs/[aida:sem] + graph), run the probe agent in a scratch worktree with test dirs stripped (test: the prompt contains no test source), regenerate the slice''s tests, diff against the real traced tests, emit a divergence report ((i) ACs whose regenerated test is missing/disagrees, (ii) real tests not reproducible from the store) and a heuristic score (matched real traced tests / total) with --json, and emit each non-reproducible real test as a harvest candidate (C4, closes the loop). Label the score heuristic; the divergence report is primary. HITL: scoring + isolation decisions. See the plan.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:57.940417560Z
-modified_at: 2026-09-17T16:41:22.108091854Z
+modified_at: 2026-09-17T17:21:37.047266628Z
 req_type: Task
 tags:
 - hitl
@@ -27,3 +27,7 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b03e-3bcd-7f41-a90f-5c3d9ea2c313
   created_at: 2026-09-17T16:41:06.149041056Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-17T17:21:37.047266628Z
+  implemented_by: joe
