@@ -3365,6 +3365,10 @@ fn plan_verify_marked_new_annotation() {
     assert!(plan_path_marked_new("  (To Create) later"));
     assert!(!plan_path_marked_new(" — purpose (new)"));
     assert!(!plan_path_marked_new(" (newish)"));
+    assert!(plan_path_heading_marked_new(" — NEW: purpose"));
+    assert!(plan_path_heading_marked_new(" — NEW (slice 1)"));
+    assert!(plan_path_heading_marked_new(" - new — purpose"));
+    assert!(!plan_path_heading_marked_new(" — renewed purpose"));
 
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -3404,6 +3408,94 @@ fn plan_verify_marked_new_annotation() {
     // Marked-new file that already exists warns (stale plan signal).
     assert_eq!(find("src/stale.rs").level, PlanFindingLevel::Warn);
     assert!(find("src/stale.rs").msg.contains("already exists"));
+}
+
+// trace:TASK-162 | ai:codex
+/// TASK-162: new-file markers also work at the file-heading level, matching
+/// the plan template's ``### `path` — purpose`` shape.
+#[test]
+fn plan_verify_new_file_heading_annotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/stale.rs"), "// already here\n").unwrap();
+
+    let plan = "\
+# Plan: test
+
+## Files (in build-order)
+
+### `src/created_by_heading.rs` — NEW: parser split
+
+- create the module
+
+### `src/stale.rs` — NEW: already landed
+
+- stale annotation should warn
+";
+    let report = compute_plan_report(plan, root);
+    let find = |needle: &str| {
+        report
+            .files
+            .iter()
+            .find(|f| f.msg.contains(needle))
+            .unwrap_or_else(|| panic!("no file finding for {needle}"))
+    };
+
+    assert_eq!(
+        find("src/created_by_heading.rs").level,
+        PlanFindingLevel::Ok
+    );
+    assert!(find("src/created_by_heading.rs").msg.contains("marked new"));
+    assert_eq!(find("src/stale.rs").level, PlanFindingLevel::Warn);
+    assert!(find("src/stale.rs").msg.contains("already exists"));
+}
+
+// trace:TASK-162 | ai:codex
+/// TASK-162: paths listed in a `## New files` section are planned creations,
+/// while genuinely missing existing-file refs still fail.
+#[test]
+fn plan_verify_new_files_section_annotation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    std::fs::write(root.join("src/existing.rs"), "// here\n").unwrap();
+
+    let plan = "\
+# Plan: test
+
+## New files
+
+- `src/from_section.rs` — created by this plan
+
+### `src/from_section_heading.rs` — parser split
+
+- created by this plan
+
+## Files (in build-order)
+
+- `src/existing.rs` — normal existing edit
+- `src/missing_existing.rs` — this should still fail
+";
+    let report = compute_plan_report(plan, root);
+    let find = |needle: &str| {
+        report
+            .files
+            .iter()
+            .find(|f| f.msg.contains(needle))
+            .unwrap_or_else(|| panic!("no file finding for {needle}"))
+    };
+
+    assert_eq!(find("src/from_section.rs").level, PlanFindingLevel::Ok);
+    assert_eq!(
+        find("src/from_section_heading.rs").level,
+        PlanFindingLevel::Ok
+    );
+    assert_eq!(find("src/existing.rs").level, PlanFindingLevel::Ok);
+    assert_eq!(
+        find("src/missing_existing.rs").level,
+        PlanFindingLevel::Error
+    );
 }
 
 /// TASK-93: symbol extraction strips item keywords and rejects prose,

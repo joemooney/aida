@@ -42477,6 +42477,19 @@ fn plan_path_marked_new(rest: &str) -> bool {
     lower.starts_with("(new)") || lower.starts_with("(to create)")
 }
 
+// trace:TASK-162 | ai:codex
+/// True when the text immediately following a file path in a plan heading
+/// marks the file as planned-new, e.g. ``### `src/new.rs` — NEW: parser``.
+fn plan_path_heading_marked_new(rest: &str) -> bool {
+    let lower = rest.trim_start().to_ascii_lowercase();
+    let lower = lower.trim_start_matches(['—', '-', ':']).trim_start();
+    lower == "new"
+        || lower.starts_with("new:")
+        || lower.starts_with("new ")
+        || lower.starts_with("new(")
+        || lower.starts_with("new —")
+}
+
 /// True when `tok` (already stripped of any `:line` suffix) has a known
 /// source-file extension.
 fn has_plan_source_ext(tok: &str) -> bool {
@@ -42573,6 +42586,7 @@ fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
     // --- Section pass: collect `##` headers, track section membership. ---
     let mut headers_lower: Vec<String> = Vec::new();
     let mut files_section_paths: Vec<String> = Vec::new();
+    let mut planned_new_paths: HashSet<String> = HashSet::new();
     let mut critical_section_paths: HashSet<String> = HashSet::new();
     let mut in_fence = false;
     let mut in_html_comment = false;
@@ -42615,9 +42629,18 @@ fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
             // `### `path/to/file.rs` — purpose` names a build-order file.
             if let Some(cap) = bare_path_re.captures(h) {
                 let p = cap[1].to_string();
+                let rest = &h[cap.get(0).unwrap().end()..];
                 if current_section.contains("files") && !current_section.contains("critical") {
-                    files_section_paths.push(p);
+                    files_section_paths.push(p.clone());
                 }
+                if current_section.contains("new files") || plan_path_heading_marked_new(rest) {
+                    planned_new_paths.insert(p);
+                }
+            }
+        }
+        if current_section.contains("new files") {
+            for cap in bare_path_re.captures_iter(line) {
+                planned_new_paths.insert(cap[1].to_string());
             }
         }
         if current_section.contains("critical files") {
@@ -42706,7 +42729,10 @@ fn compute_plan_report(content: &str, root: &std::path::Path) -> PlanReport {
             }
             // trace:TASK-772 | ai:claude — a `(new)` / `(to create)` marker
             // right after the closing backtick sanctions a to-be-created file.
-            let marked_new = plan_path_marked_new(&line[cap.get(0).unwrap().end()..]);
+            // trace:TASK-162 | ai:codex — heading-level `NEW` markers and
+            // `## New files` sections sanction planned creations too.
+            let marked_new = plan_path_marked_new(&line[cap.get(0).unwrap().end()..])
+                || planned_new_paths.contains(&tok);
             if !checked_paths.insert(tok.clone()) {
                 continue;
             }
