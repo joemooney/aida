@@ -28209,7 +28209,8 @@ mod merge_hold_cli_tests {
 // `aida merge-hold list|clear` — the human surface for supervised merge-hold
 // markers the docs + CI templates already reference. trace:TASK-161 | ai:claude
 fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
-    let root = find_project_root()?;
+    // trace:BUG-1188 | ai:codex
+    let root = find_main_worktree_root()?;
     match action {
         crate::cli::MergeHoldAction::List { json } => {
             let holds = merge_hold::list_holds(&root);

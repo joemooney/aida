@@ -1125,6 +1125,7 @@ pub(crate) fn pr_ship_handler(
     let project_root = find_project_root()?;
     let forge_kind = crate::forge::resolve_forge_kind(&project_root);
     let main_worktree = main_worktree_root_from(&project_root);
+    let hold_root = pr_ship_hold_root(&project_root);
 
     let branch = current_git_branch(&project_root)?;
     if branch.is_empty() {
@@ -1568,9 +1569,9 @@ pub(crate) fn pr_ship_handler(
         if matches!(ci_result, Ok(crate::forge::CiState::Failed))
             && forge_kind == crate::forge::ForgeKind::GitHub
         {
-            let hold_present = crate::merge_hold::read_hold(&project_root, pr_number).is_some();
+            let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
             match crate::ci_gate::refine_red_via_gh(
-                &project_root,
+                &hold_root,
                 pr_number,
                 hold_present,
                 std::time::Duration::from_secs(20 * 60),
@@ -1701,22 +1702,22 @@ pub(crate) fn pr_ship_handler(
         // session's merge_change — never clear, so they stay refused. This is
         // the client-side release; the server-side required-check (ADR-37 layer
         // 2) still governs a raw `gh pr merge`. trace:BUG-1167 | ai:claude
-        if let Some(reason) = crate::merge_hold::read_hold(&project_root, pr_number) {
+        if let Some(reason) = crate::merge_hold::read_hold(&hold_root, pr_number) {
             eprintln!(
                 "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 pr_number,
                 reason,
             );
-            let _ = crate::merge_hold::clear_hold(&project_root, pr_number);
-            crate::merge_hold::sync_label(&project_root, pr_number, false);
+            let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
+            crate::merge_hold::sync_label(&hold_root, pr_number, false);
             // BUG-1180: removing the label re-runs `merge-hold-gate`; the
             // squash-merge below would be refused by branch protection until it
             // reports green, so wait for it (bounded) before merging.
             // trace:BUG-1180 | ai:claude
             if forge_kind == crate::forge::ForgeKind::GitHub {
                 match crate::ci_gate::wait_hold_gate_green(
-                    &project_root,
+                    &hold_root,
                     pr_number,
                     std::time::Duration::from_secs(180),
                     std::time::Duration::from_secs(10),
@@ -2071,6 +2072,13 @@ pub(crate) fn pr_ship_handler(
     // unused-import doesn't fire if a future refactor narrows usage.
     let _ = format_activity_event;
     Ok(())
+}
+
+/// Merge-hold markers are canonical in the main clone, even when `aida pr ship`
+/// is launched from a sibling implementation worktree.
+// trace:BUG-1188 | ai:codex
+pub(crate) fn pr_ship_hold_root(project_root: &std::path::Path) -> std::path::PathBuf {
+    main_worktree_root_from(project_root)
 }
 
 /// Loud "IMPLEMENTER COMPLETE — EXIT NOW" banner printed at the end of
@@ -3392,6 +3400,45 @@ mod pr_ship_environment_tests {
         assert!(!delete_branch);
         let merge_args = pr_ship::merge_args(732, delete_branch, None);
         assert!(!merge_args.iter().any(|arg| arg == "--delete-branch"));
+    }
+
+    #[test]
+    fn pr_ship_reads_merge_hold_from_main_worktree_when_run_from_sibling() {
+        // trace:BUG-1188 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        let sibling = tmp.path().join("bug-1188-worktree");
+        git(
+            tmp.path(),
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                "-b",
+                "bug-1188",
+                sibling.to_str().unwrap(),
+            ],
+        );
+
+        crate::merge_hold::write_hold(
+            tmp.path(),
+            1188,
+            "BUG-1188 is marked drive — merge requires review",
+        )
+        .unwrap();
+
+        let hold_root = pr_ship_hold_root(&sibling);
+        assert_eq!(hold_root, tmp.path());
+        assert!(
+            crate::merge_hold::read_hold(&hold_root, 1188)
+                .unwrap()
+                .contains("BUG-1188"),
+            "pr ship launched from a sibling worktree must see the main clone's hold marker"
+        );
+        assert!(
+            crate::merge_hold::read_hold(&sibling, 1188).is_none(),
+            "the regression was reading the sibling worktree's empty .aida directory"
+        );
     }
 }
 
