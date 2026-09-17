@@ -28,6 +28,27 @@ the cache-backed store **once**, in-process — every scope list and spec
 preview is an in-process read, so navigation is sub-millisecond and never
 shells out per row.
 
+## Seam rule
+
+`aida-tui` is allowed to be split out mechanically later only if this seam
+stays explicit:
+
+1. **Reads go in-process through `aida-core`.** Poll-cadence reads — scope
+   lists, liveness, queue rows, mailbox rows, status-line counts, and refresh
+   — must not shell out to a fresh `aida` subprocess per poll.
+2. **Mutations go through the `aida` CLI subprocess via `current_exe()`.** The
+   CLI remains the one write path for role gates, merge holds, proxy ledgers,
+   hooks, telemetry, and drain locks, so the TUI cannot do something the CLI
+   cannot.
+3. **The compile-time edge is one-way.** `aida-tui` may depend on `aida-core`
+   and must never depend on `aida-cli-lib`; the CLI calling into the TUI is
+   fine.
+
+Keypress-triggered one-shot read verbs may temporarily shell out when the
+shared logic still lives only in the CLI (`why`, `status`, and the read-only
+`groom` proposal today), but each site must say why inline and must not sit on
+a poll cadence.
+
 ## The model: scope → action → targets → execute
 
 ```

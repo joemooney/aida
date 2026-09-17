@@ -135,20 +135,14 @@ pub fn status_glyph(status: &str, mode: GlyphMode) -> &'static str {
 ///
 /// ## Why this is a consumed signal, not a re-probe
 ///
-/// The authoritative liveness machinery — the `/proc` process probe
-/// (`process_probe::pid_is_alive` / `probe_live_claude_sessions`), the session
-/// lease parse, and the `classify_spec_liveness` matrix — all live in
-/// `aida-cli`, which `aida-tui` MUST NOT depend on. So the cockpit does NOT
-/// reimplement the probe: it shells out to `aida ps --json` (the same binary,
-/// via `current_exe()`) on a poll cadence and maps each row's spec id through
-/// this enum. The probe runs in the CLI; the TUI only consumes its verdict.
-/// See `liveness.rs` for the shell-out + the `should_probe` cache gate.
-///
-/// FOLLOW-UP (not this task): the long-term home for the liveness probe is a
-/// shared `aida-core` helper both surfaces call, so the spec→liveness map can be
-/// computed in-process without a subprocess. Until then the `aida ps --json`
-/// shell-out is the agreed shared-logic seam.
+/// The authoritative liveness machinery — the `/proc` process probe, the
+/// session lease parse, and the `SpecLiveness` classifier — lives in
+/// `aida-core::liveness`, which both the CLI and TUI can call. The cockpit's
+/// poll-cadence row glyph computes the map in-process and then collapses each
+/// verdict through this enum; it must not shell out to `aida ps --json` per
+/// poll. See `liveness.rs` for the TTL + single-flight cache gate.
 // trace:TASK-978 | ai:claude
+// trace:TASK-1252 | ai:codex
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowLiveness {
     /// A spec-scoped session/lease is alive — work is actively backing this row.

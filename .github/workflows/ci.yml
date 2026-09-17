@@ -120,6 +120,10 @@ jobs:
         # trace:TASK-1204 | ai:codex
         run: cargo build --workspace
 
+      - name: TUI seam guard
+        if: steps.changes.outputs.full_ci == 'true'
+        run: bash scripts/check-tui-seam.sh
+
       - name: Run tests
         if: steps.changes.outputs.full_ci == 'true'
         # --no-fail-fast: one run reports every failing test binary across
