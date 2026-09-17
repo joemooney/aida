@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:59:59.382279085Z
-modified_at: 2026-09-17T15:48:44.158294888Z
+modified_at: 2026-09-17T15:48:45.853417138Z
 req_type: Bug
 tags:
 - contained
@@ -49,6 +49,12 @@ comments:
     merged: 2026-09-17 06:41 -07:00 via aida pr ship 1879 (squash) + aida pull → main 4896a0412
   created_at: 2026-09-17T13:39:59.800630393Z
   modified_at: 2026-09-17T13:39:59.800630393Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b00e-5a9d-77d2-9004-fe665776ef42
+  author: joe
+  content: 'Reopened 2026-09-17 08:50 by the driver-advisor: #1879''s (BUG-1178) trailer auto-completed this spec, but #1879 only landed the [contained] allowed_hosts egress WORKAROUND. The bug itself — dontAsk applied to INTERACTIVE launches — is unfixed. Status back to Approved; execution_mode drive (launcher change, supervised merge). batch:bugs-0917.'
+  created_at: 2026-09-17T15:48:45.853417138Z
+  modified_at: 2026-09-17T15:48:45.853417138Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0af97-e0a0-7793-be1c-618079010617
