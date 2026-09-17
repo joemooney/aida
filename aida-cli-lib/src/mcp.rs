@@ -7777,7 +7777,7 @@ fn workflow_tool_descriptors() -> Value {
                 "required": ["spec"]
             },
             "outputSchema": text_envelope_output_schema(
-                "the assembled `/ultraplan` prompt text, followed by any assembly `Warning:` lines (e.g. a spec with no description). On an unknown spec, or when ultraplan is disabled for the project, the envelope sets `isError: true`."
+                "the assembled planning prompt text, followed by any assembly `Warning:` lines (e.g. a spec with no description). On an unknown spec, or when ultraplan is disabled for the project, the envelope sets `isError: true`."
             )
         },
         {

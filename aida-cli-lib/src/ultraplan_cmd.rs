@@ -190,6 +190,6 @@ mod tests {
         assert!(msg.contains("TASK-514"));
         assert!(msg.contains("2655"));
         assert!(msg.contains("assembled planner prompt"));
-        assert!(!msg.contains("/ultraplan prompt"));
+        assert!(!msg.contains("slash-command prompt"));
     }
 }

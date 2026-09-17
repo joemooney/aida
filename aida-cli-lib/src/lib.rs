@@ -13143,9 +13143,9 @@ fn validate_and_restore_project_configs_after_pull(snapshots: &[ConfigSnapshot])
 }
 
 /// TASK-304: `[ultraplan] mode` governs whether AIDA proactively suggests
-/// `aida ultraplan <SPEC>` for chunky specs. /ultraplan is inherently
-/// interactive (claude.ai web approval), so the realistic surface is
-/// `never | on-demand | suggested` — never a "frequently auto-pull" mode.
+/// `aida ultraplan <SPEC>` for chunky specs. Planning is human/agent driven,
+/// so the realistic surface is `never | on-demand | suggested` — never a
+/// "frequently auto-pull" mode.
 /// trace:TASK-304 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UltraplanMode {
@@ -13174,7 +13174,7 @@ impl UltraplanMode {
 /// worth a planning prompt.
 ///
 /// SPIKE-8 (`docs/spikes/2026-06-07-spike-8-ultraplan-comparison.md`) found
-/// that `/ultraplan`'s value is a *context-assembly* aid: it helps most on
+/// that `aida ultraplan`'s value is a *context-assembly* aid: it helps most on
 /// thin / under-specified specs and least on well-formed ones (which already
 /// carry their own `## Proposed shape` + Acceptance — the spec *is* the plan).
 /// So acceptance-bullet count *anti-correlates* with where planning helps — a
@@ -13420,8 +13420,8 @@ fn print_ultraplan_suggestion_hint(project_root: &std::path::Path, req: &aida_co
 fn init_ultraplan_config_section() -> &'static str {
     "\n# trace:TASK-304 | ai:claude  (suggest_threshold: trace:TASK-697)\n\
      # Whether AIDA proactively suggests `aida ultraplan <SPEC>` for specs\n\
-     # where planning would help. /ultraplan is interactive (claude.ai web\n\
-     # approval), so there is no \"auto-pull\" mode — only:\n\
+     # where planning would help. Planning is human/agent driven, so there\n\
+     # is no \"auto-pull\" mode — only:\n\
      #   never      — `aida ultraplan` is disabled (refuses with a message)\n\
      #   on-demand  — current behavior: run `aida ultraplan SPEC` yourself\n\
      #   suggested  — pickup surfaces (/aida-pickup, queue work/list head)\n\
@@ -44991,8 +44991,8 @@ fn build_reusable_helpers_section(
 // ============================================================================
 // TASK-113 — `aida ultraplan <SPEC>`. Assemble a rich, structured planning
 // prompt from a spec's full context (description, acceptance, related specs,
-// the AIDA plan template, trace-graph reusable helpers) so `/ultraplan`'s
-// explorers anchor on concrete requirements instead of a terse user prompt.
+// the AIDA plan template, trace-graph reusable helpers) so planners anchor on
+// concrete requirements instead of a terse user prompt.
 // trace:TASK-113 | ai:claude
 // ============================================================================
 
@@ -45091,9 +45091,9 @@ fn handle_tui_command(
     )
 }
 
-/// The AIDA plan-template section list, inlined into the ultraplan prompt
-/// so `/ultraplan`'s output already matches `docs/plans/_TEMPLATE.md`
-/// (TASK-92) and `aida plan verify` (TASK-93) passes on the saved plan.
+/// The AIDA plan-template section list, inlined into the planning prompt so
+/// the returned plan already matches `docs/plans/_TEMPLATE.md` (TASK-92) and
+/// `aida plan verify` (TASK-93) passes on the saved plan.
 const ULTRAPLAN_STRUCTURE: &str = "\
 Produce the plan in AIDA's structured format — a header line with Date / \
 Specs / Status / Complexity, then these sections in order:
@@ -45182,7 +45182,7 @@ fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option
     Some(s)
 }
 
-/// Assemble the `/ultraplan` prompt for `target`. `helpers_section` is the
+/// Assemble the AIDA planning prompt for `target`. `helpers_section` is the
 /// pre-built trace-graph reusable-helpers markdown (None when there is
 /// none — see TASK-94). `include_comments` pulls the spec's enrichment
 /// comments into a `## Comments` section (TASK-247). Returns the prompt
@@ -45194,7 +45194,7 @@ fn ultraplan_comments_section(comments: &[aida_core::models::Comment]) -> Option
 /// punt` captured — and the `context_markdown` body reuses the `aida
 /// ultraplan` machinery (`assemble_ultraplan_prompt` + the trace-graph
 /// `build_reusable_helpers_section`), so an advisor with **no session
-/// context** has everything the implementer's `/ultraplan` would have.
+/// context** has everything the implementer's planning prompt would have.
 /// Split out as a deterministic, unit-testable transform — no session, no
 /// subprocess. trace:STORY-306 | ai:claude
 fn assemble_punt_payload(
@@ -69389,7 +69389,7 @@ pub(crate) fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     push_paren_spec_ids_from_line(subject, &mut out);
     // BUG-270: also recognize a leading `SPEC-ID:` prefix, e.g.
     // "STORY-439: three-way complexity calibration substrate (#270)". Some
-    // merge commits (web /ultraplan output, hand-authored squashes) put the
+    // merge commits (external planner output, hand-authored squashes) put the
     // spec id at the FRONT with a colon instead of the AIDA-convention
     // trailing `(REQ-ID)`. Without this, such a spec is never auto-bumped /
     // reconciled and strands at its pre-merge status. The `looks_like_spec_id`

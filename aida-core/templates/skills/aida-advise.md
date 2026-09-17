@@ -120,7 +120,7 @@ The payload (a `PuntRequest`) carries:
   trace-graph reusable helpers.
 
 Read all of it. The `context_markdown` is your primary evidence — it is the
-same context the implementer's `/ultraplan` would have had.
+same context the implementer's AIDA planning prompt would have carried.
 
 ### 2. Consult the recorded corpus
 

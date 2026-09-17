@@ -108,8 +108,8 @@ fn find_plan_file_for_spec(
 // the ADR-3 authority gate). trace:STORY-265 | ai:claude
 // ============================================================================
 // `aida plan capture <PR>` — synthesize a docs/plans/ file from a PR's
-// description + commit log. For plans authored via the web `/ultraplan` flow
-// that land a PR directly, leaving no local plan file (TASK-305). The PR
+// description + commit log. For externally authored planning flows that land a
+// PR directly, leaving no local plan file (TASK-305). The PR
 // description carries the plan summary; the commit log is the step-by-step
 // execution; `gh pr diff --name-only` is the blast radius. We fill the
 // 11-section template so the captured file passes `aida plan verify`.
@@ -257,10 +257,10 @@ fn synthesize_plan_from_pr(pr: &CapturedPr, date: &str) -> String {
         pr.commit_subjects.len(),
         pr.changed_files.len()
     ));
-    md.push_str(&format!("Source: web /ultraplan PR-{}\n\n", pr.number));
+    md.push_str(&format!("Source: external planner PR-{}\n\n", pr.number));
     md.push_str(&format!(
         "<!--\n  Captured by `aida plan capture {}` from the PR description + commit log.\n  \
-         The web /ultraplan flow lands a PR directly without writing a local plan file;\n  \
+         Some planning flows land a PR directly without writing a local plan file;\n  \
          this reconstructs the AIDA plan-archival record after the fact. trace:TASK-305\n-->\n\n",
         pr.number
     ));
@@ -350,10 +350,10 @@ fn synthesize_plan_from_pr(pr: &CapturedPr, date: &str) -> String {
     // ── Related. ──
     md.push_str("## Related\n\n");
     if specs.is_empty() {
-        md.push_str(&format!("- Source: web /ultraplan PR-{}\n", pr.number));
+        md.push_str(&format!("- Source: external planner PR-{}\n", pr.number));
     } else {
         md.push_str(&format!("- Specs: {}\n", specs.join(", ")));
-        md.push_str(&format!("- Source: web /ultraplan PR-{}\n", pr.number));
+        md.push_str(&format!("- Source: external planner PR-{}\n", pr.number));
     }
 
     md
@@ -1531,7 +1531,7 @@ mod tests {
             number: 65,
             title: "feat(plan): web flow plumbing (STORY-278)".to_string(),
             body:
-                "## Summary\n\nWire the web /ultraplan flow end to end.\n\n## Testing\n\n```bash\n\
+                "## Summary\n\nWire the external planner flow end to end.\n\n## Testing\n\n```bash\n\
                    cargo test -p aida-cli --release\naida plan verify docs/plans/x.md\n```\n"
                     .to_string(),
             commit_subjects: vec![
@@ -1549,12 +1549,12 @@ mod tests {
         // Header carries Date / Specs / Status / Complexity / Source.
         assert!(md.contains("Date: 2026-06-06"));
         assert!(md.contains("Specs: STORY-278"));
-        assert!(md.contains("Source: web /ultraplan PR-65"));
+        assert!(md.contains("Source: external planner PR-65"));
         assert!(md.contains("Status: Completed"));
         assert!(md.contains("Complexity: 2 commits"));
 
         // Approach pulls the PR body; Critical Files lists the diff.
-        assert!(md.contains("Wire the web /ultraplan flow end to end."));
+        assert!(md.contains("Wire the external planner flow end to end."));
         assert!(md.contains("- `aida-cli/src/main.rs`"));
         assert!(md.contains("- `aida-cli/src/cli.rs`"));
 
