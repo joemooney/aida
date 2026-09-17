@@ -1,11 +1,11 @@
 //! STORY-586: presence-gated fork-from-live advisor watch loop.
 //!
-//! While the operator is `away`, periodically fork the live advisor session
-//! (SPIKE-11: copy-then-resume the JSONL so the headless pass boots with the
-//! live session's full context) and run a scoped pass that gardens the
-//! substrate, triages the mailbox, and ESCALATES anything it can't safely
-//! settle. Exits when the operator returns (`aida home`) or the away-TTL
-//! lapses.
+//! While the operator is `away`, fork the live advisor session only when the
+//! canonical `aida awaiting` surface is non-empty (SPIKE-11:
+//! copy-then-resume the JSONL so the headless pass boots with the live
+//! session's full context) and run a scoped pass that gardens the substrate,
+//! triages the mailbox, and ESCALATES anything it can't safely settle. Exits
+//! when the operator returns (`aida home`) or the away-TTL lapses.
 //!
 //! Keystone-autonomy posture: opt-in by invocation, never on by default; the
 //! forked advisor is scoped to mechanical + escalate (no keystone or
@@ -13,7 +13,7 @@
 //! trace:STORY-586 trace:SPIKE-11 | ai:claude
 
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use chrono::Utc;
@@ -82,70 +82,30 @@ pub(crate) enum WatchTick {
 /// lapsed") and is the **hard gate** — a `Home` operator never forks, whatever
 /// else is true.
 ///
-/// The loop is **event-driven first, timer second** (STORY-712 slice 3). Two
-/// events fork immediately, before and independent of the cadence:
-/// `has_unread_mail` (TASK-776 — the one event trigger that already existed)
-/// and `actionable_event` (a NEW actionable line appeared in
-/// `.aida/events.jsonl` since the last fork — the same `events::is_actionable`
-/// classification `aida watch` uses).
-///
-/// `fork_interval_secs` is **demoted to the degenerate fallback**: it only
-/// fires when `event_stream_live` is false — i.e. there is no live drain
-/// writing `.aida/events.jsonl`, so correctness never leans on the event path.
-/// When the event stream IS live the timer goes quiet (no cadence fork, no
-/// first-tick fork): the watcher wakes only on a real event, and that is where
-/// the idle-poll token burn dies. When the stream is NOT live the behavior is
-/// EXACTLY as before this slice — fork on the first away tick (`None`) and then
-/// every `fork_interval_secs` — so a missing/empty event stream regresses
-/// nothing.
+/// TASK-1245: the substrate is the clock. The live advisor wakes only when the
+/// canonical `aida awaiting` surface is non-empty (mail, findings, mergeable
+/// PRs, worker directives, shelved work, and other operator gates). A timer may
+/// re-check the substrate, but elapsed time is never itself a reason to fork.
 // trace:TASK-991 trace:STORY-712 trace:TASK-776 | ai:claude
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn plan_watch_tick(
-    presence: Presence,
-    has_unread_mail: bool,
-    actionable_event: bool,
-    event_stream_live: bool,
-    secs_since_last_fork: Option<u64>,
-    fork_interval_secs: u64,
-) -> WatchTick {
+// trace:TASK-1245 | ai:codex
+pub(crate) fn plan_watch_tick(presence: Presence, awaiting_non_empty: bool) -> WatchTick {
     // Hard gate: a present operator is the supervisor — never fork.
     if matches!(presence, Presence::Home) {
         return WatchTick::Exit("operator is home (returned or away-TTL lapsed)".to_string());
     }
-    // Event-driven triggers — fire before and independent of the cadence.
-    if has_unread_mail {
+    if awaiting_non_empty {
         return WatchTick::Fork;
     }
-    if actionable_event {
-        return WatchTick::Fork;
-    }
-    // When a live drain is streaming events, the timer is quiet: we wake only on
-    // a real event (above). This is the token-savings payoff.
-    if event_stream_live {
-        return WatchTick::Skip(
-            "away; event stream live; no actionable event or unread mail — timer quiet".to_string(),
-        );
-    }
-    // Degenerate fallback: no live event stream → behave exactly as before.
-    match secs_since_last_fork {
-        None => WatchTick::Fork,
-        Some(s) if s >= fork_interval_secs => WatchTick::Fork,
-        Some(s) => WatchTick::Skip(format!(
-            "away; no unread mail; {s}s since last fork (< {fork_interval_secs}s cadence)"
-        )),
-    }
-}
 
-// `event_stream_is_live` and `scan_new_actionable_event` were LIFTED into the
-// shared `crate::event_wait` module (TASK-1036) so the advisor watch loop and the
-// integrator watch loop share one implementation. The calls below now route
-// through `event_wait`; behavior here is unchanged. trace:TASK-1036 | ai:claude
+    WatchTick::Skip("away; `aida awaiting` is empty — advisor stays asleep".to_string())
+}
 
 /// Options for [`run_advisor_watch`].
 pub(crate) struct WatchOpts {
     /// How often to wake and re-check presence (seconds).
     pub poll_interval_secs: u64,
-    /// How often to actually fork-and-run (seconds).
+    /// Legacy compatibility knob. The advisor no longer forks on elapsed time;
+    /// it wakes only when `aida awaiting` is non-empty.
     pub fork_interval_secs: u64,
     /// Preview decisions (and fork cost) without forking.
     pub dry_run: bool,
@@ -160,13 +120,14 @@ pub(crate) struct WatchOpts {
 /// after one tick when `once` is set.
 pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result<()> {
     let config = AdvisorConfig::load(project_root);
-    let mut last_fork: Option<Instant> = None;
 
     println!(
-        "advisor watch {}— forks the live advisor every {}s while away; exits on `aida home`.",
-        if opts.dry_run { "(dry-run) " } else { "" },
-        opts.fork_interval_secs
+        "advisor watch {}— wakes the live advisor only when `aida awaiting` is non-empty; exits on `aida home`.",
+        if opts.dry_run { "(dry-run) " } else { "" }
     );
+    if opts.fork_interval_secs != 1200 {
+        println!("  · --fork-interval is ignored by the event-driven advisor heartbeat");
+    }
 
     let prompt = if opts.triage_only {
         WATCH_PROMPT_TRIAGE
@@ -174,31 +135,10 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
         WATCH_PROMPT
     };
 
-    // Event-driven supervision (STORY-712 slice 3). We follow `.aida/events.jsonl`
-    // from its current end so only events appended AFTER the watch starts count
-    // as "new" — a stale backlog from a prior drain never re-fires. When no live
-    // drain is streaming events, `plan_watch_tick` falls back to the cadence
-    // timer, so an empty/absent stream regresses nothing.
-    let events_path = crate::events::events_path(project_root);
-    let mut event_offset: u64 = std::fs::metadata(&events_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
-
     loop {
         let presence = presence::current_presence(Utc::now());
-        let secs = last_fork.map(|t| t.elapsed().as_secs());
-        let has_unread = advisor_unread_count(project_root) > 0;
-        let stream_live = crate::event_wait::event_stream_is_live(project_root);
-        let actionable =
-            crate::event_wait::scan_new_actionable_event(&events_path, &mut event_offset);
-        match plan_watch_tick(
-            presence,
-            has_unread,
-            actionable,
-            stream_live,
-            secs,
-            opts.fork_interval_secs,
-        ) {
+        let awaiting = advisor_awaiting_line(project_root);
+        match plan_watch_tick(presence, awaiting.is_some()) {
             WatchTick::Exit(reason) => {
                 println!("advisor watch exiting: {reason}");
                 break;
@@ -207,17 +147,14 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
                 println!("  · skip: {reason}");
             }
             WatchTick::Fork => {
-                if has_unread {
-                    println!("  · unread advisor mail — forking now");
-                } else if actionable {
-                    println!("  · actionable drain event — forking now");
+                if let Some(line) = awaiting.as_deref() {
+                    println!("  · {line} — forking now");
                 }
                 if opts.dry_run {
                     preview_fork(project_root, &config);
                 } else {
                     fork_and_run(project_root, &config, prompt)?;
                 }
-                last_fork = Some(Instant::now());
             }
         }
         if opts.once {
@@ -228,18 +165,26 @@ pub(crate) fn run_advisor_watch(project_root: &Path, opts: &WatchOpts) -> Result
     Ok(())
 }
 
-/// Count unread messages addressed to the `advisor` (direct + broadcast),
-/// merging the local + canonical mailbox layers against the advisor's read
-/// watermark. Used for the event-driven fork trigger (TASK-776). Best-effort —
-/// any read failure yields 0 (never blocks the loop). trace:TASK-776 | ai:claude
-fn advisor_unread_count(project_root: &Path) -> usize {
-    let store_root = project_root.join(".aida-store");
-    let local = crate::mailbox_store::read_local_messages(project_root).unwrap_or_default();
-    let canonical = crate::mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
-    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
-    let mark = crate::mailbox_store::read_watermark(project_root, "advisor");
-    let (unread, _urgent) = aida_core::mailbox::unread_counts("advisor", &merged, mark);
-    unread
+/// The advisor heartbeat wakes from the same canonical surface an operator sees
+/// with `aida awaiting`, rather than from a parallel mail/event/cadence test.
+/// Best-effort and read-only: if the store/cache cannot be opened, stay quiet
+/// and let the next poll try again.
+// trace:TASK-1245 | ai:codex
+fn advisor_awaiting_line(project_root: &Path) -> Option<String> {
+    let store_path = super::detect_distributed_store_from(project_root)
+        .unwrap_or_else(|| project_root.join(".aida-store"));
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    let backend = aida_core::CachedGitBackend::open(&store_path, &cache_path).ok()?;
+    let ctx = super::UserStatusContext {
+        session: None,
+        role: Some("advisor".to_string()),
+        branch: None,
+        pr: None,
+        queue_head: Vec::new(),
+        queue_total: 0,
+        agents: Vec::new(),
+    };
+    super::collect_awaiting_report(project_root, &backend, &ctx, false).compact_line()
 }
 
 fn short_uuid(uuid: &str) -> &str {
@@ -304,119 +249,45 @@ mod tests {
     #[test]
     fn home_exits_the_loop_even_before_first_fork() {
         assert!(matches!(
-            plan_watch_tick(Presence::Home, false, false, false, None, 60),
+            plan_watch_tick(Presence::Home, false),
             WatchTick::Exit(_)
         ));
         assert!(matches!(
-            plan_watch_tick(Presence::Home, false, false, false, Some(9999), 60),
+            plan_watch_tick(Presence::Home, true),
             WatchTick::Exit(_)
         ));
     }
 
     #[test]
-    fn away_forks_on_the_first_tick() {
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, false, false, None, 60),
-            WatchTick::Fork
-        );
-    }
-
-    #[test]
-    fn away_forks_once_the_cadence_has_elapsed() {
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, false, false, Some(60), 60),
-            WatchTick::Fork
-        );
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, false, false, Some(600), 60),
-            WatchTick::Fork
-        );
-    }
-
-    #[test]
-    fn away_skips_before_the_cadence_with_no_mail() {
+    fn away_forks_only_when_awaiting_is_non_empty() {
+        assert_eq!(plan_watch_tick(Presence::Away, true), WatchTick::Fork);
         assert!(matches!(
-            plan_watch_tick(Presence::Away, false, false, false, Some(30), 60),
+            plan_watch_tick(Presence::Away, false),
             WatchTick::Skip(_)
         ));
-    }
-
-    #[test]
-    fn unread_mail_still_forks() {
-        // TASK-776 preserved: unread advisor mail beats the idle timer, both in
-        // the fallback path and when a live event stream is quiet.
-        assert_eq!(
-            plan_watch_tick(Presence::Away, true, false, false, Some(1), 60),
-            WatchTick::Fork
-        );
-        assert_eq!(
-            plan_watch_tick(Presence::Away, true, false, true, Some(1), 60),
-            WatchTick::Fork
-        );
     }
 
     #[test]
     fn presence_present_never_forks() {
         // Presence is the hard gate — Home exits over every other trigger.
         assert!(matches!(
-            plan_watch_tick(Presence::Home, true, false, false, Some(1), 60),
+            plan_watch_tick(Presence::Home, true),
             WatchTick::Exit(_)
         ));
         assert!(matches!(
-            plan_watch_tick(Presence::Home, false, true, true, None, 60),
+            plan_watch_tick(Presence::Home, false),
             WatchTick::Exit(_)
         ));
     }
 
     #[test]
-    fn plan_watch_tick_forks_on_actionable_event_before_cadence() {
-        // STORY-712: an actionable drain event forks immediately, well before
-        // the cadence would, whether or not a live stream marks the timer quiet.
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, true, true, Some(1), 60),
-            WatchTick::Fork
-        );
-        // And even with no prior fork recorded, the event drives the fork.
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, true, true, None, 60),
-            WatchTick::Fork
-        );
-    }
-
-    #[test]
-    fn plan_watch_tick_falls_back_to_timer_without_event_stream() {
-        // No live event stream → the cadence timer governs exactly as before:
-        // skip before the interval, fork once it elapses (and on the first tick).
+    fn elapsed_time_alone_never_wakes_the_advisor() {
         assert!(matches!(
-            plan_watch_tick(Presence::Away, false, false, false, Some(30), 60),
-            WatchTick::Skip(_)
-        ));
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, false, false, Some(60), 60),
-            WatchTick::Fork
-        );
-        assert_eq!(
-            plan_watch_tick(Presence::Away, false, false, false, None, 60),
-            WatchTick::Fork
-        );
-    }
-
-    #[test]
-    fn no_event_no_cadence_no_fork() {
-        // The savings case: a live event stream marks the timer quiet, so with no
-        // actionable event and no mail we Skip even when the cadence has long
-        // since elapsed — the timer no longer forks while events flow.
-        assert!(matches!(
-            plan_watch_tick(Presence::Away, false, false, true, Some(9999), 60),
-            WatchTick::Skip(_)
-        ));
-        assert!(matches!(
-            plan_watch_tick(Presence::Away, false, false, true, None, 60),
+            plan_watch_tick(Presence::Away, false),
             WatchTick::Skip(_)
         ));
     }
 
-    // The offset-tracking event reader (`scan_new_actionable_event`) and the
-    // live-stream probe (`event_stream_is_live`) — plus their tests — were lifted
-    // into `crate::event_wait` (TASK-1036); their tests live there now.
+    // Event-stream waiting for integrator watch lives in `crate::event_wait`;
+    // advisor watch now keys off the canonical `aida awaiting` report.
 }
