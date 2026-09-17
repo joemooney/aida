@@ -71545,5 +71545,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 5582
+- id: 01a0ae05-60f1-7582-943e-a92b3b8ea057
+  target_id: 01a0ae05-5c48-7a61-bcd7-1ed856811786
+  author: aida
+  node_id: '1'
+  lamport: 5583
+  timestamp: 2026-09-17T06:19:43.217639923Z
+  kind: !Create
+    title: 'Review PR-1880: [AI:codex] feat(criteria): report acceptance criterion test traces (TASK-1246)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0adfb`) for branch `task-1246`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1880>
+      - Branch: `task-1246` → `main`
+
+      ## Covers
+
+      - TASK-1246
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1880` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5583
 node_id: '1'
