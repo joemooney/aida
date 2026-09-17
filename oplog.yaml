@@ -72474,5 +72474,31 @@ operations:
   timestamp: 2026-09-17T15:57:10.238794259Z
   kind: !SetStatus
     status: In Progress
-clock: 5646
+- id: 01a0b016-30e7-7422-bb2e-b1ecd6b94192
+  target_id: 01a0b016-2aac-7461-ab61-29904f6e4645
+  author: aida
+  node_id: '1'
+  lamport: 5647
+  timestamp: 2026-09-17T15:57:19.463614831Z
+  kind: !Create
+    title: 'Review PR-1889: [AI:codex] fix(launcher): keep contained TTY launches promptable (BUG-1178)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b00f`) for branch `bug-1178`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1889>
+      - Branch: `bug-1178` → `main`
+
+      ## Covers
+
+      - BUG-1178
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1889` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5647
 node_id: '1'
