@@ -38,6 +38,7 @@ mod config_cmd;
 mod config_edit;
 mod context_prompt;
 mod coordination;
+mod criteria;
 mod db_cmd;
 mod decide_cmd;
 mod deep_link;
@@ -4131,6 +4132,12 @@ fn run() -> Result<()> {
             graph_cmd::handle_graph_command(
                 &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
             )?;
+        }
+        Command::Criteria { spec, json } => {
+            let store = storage.load()?;
+            let project_root = find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+            criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
         }
         Command::Brief {
             agent,
@@ -20991,21 +20998,54 @@ fn session_gc(dry_run: bool, yes: bool) -> Result<()> {
 /// git adds when grepping a tree; we locate the last `trace:` and read the id
 /// after it. Returns the id upper-cased, or None if the token is malformed.
 /// trace:TASK-673 | ai:claude
-fn parse_trace_id_token(line: &str) -> Option<String> {
+pub(crate) fn parse_trace_id_token(line: &str) -> Option<String> {
     let idx = line.rfind("trace:")?;
     let rest = &line[idx + "trace:".len()..];
-    let end = rest
+    let spec_end = rest
         .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
         .unwrap_or(rest.len());
-    let tok = &rest[..end];
-    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'). Guard against a bare
+    let spec = &rest[..spec_end];
+    // Shape: <ALPHA>+ '-' <DIGITS> (optional '-<DIGITS>'), optionally followed
+    // by a criterion suffix (`.A1`, `.AC3`, `.ac1a2b3`). Guard against a bare
     // word or a leading digit so non-spec `trace:` strings don't pollute the set.
-    let first_alpha = tok.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
-    if first_alpha && tok.contains('-') {
-        Some(tok.to_ascii_uppercase())
-    } else {
-        None
+    // trace:TASK-1246 | ai:codex
+    let first_alpha = spec.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+    if !first_alpha || !spec.contains('-') {
+        return None;
     }
+    if rest[spec_end..].starts_with('.') {
+        let suffix_rest = &rest[spec_end + 1..];
+        let suffix_end = suffix_rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+            .unwrap_or(suffix_rest.len());
+        let suffix = &suffix_rest[..suffix_end];
+        if criterion_trace_suffix(suffix) {
+            return Some(format!("{spec}.{suffix}").to_ascii_uppercase());
+        }
+    }
+    Some(spec.to_ascii_uppercase())
+}
+
+fn criterion_trace_suffix(suffix: &str) -> bool {
+    if suffix.is_empty()
+        || !suffix
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return false;
+    }
+    let upper = suffix.to_ascii_uppercase();
+    let Some(rest) = upper.strip_prefix("AC") else {
+        return upper
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+            && upper.chars().skip(1).all(|c| c.is_ascii_digit());
+    };
+    if !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    matches!(rest.len(), 5 | 6) && rest.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 /// Resolve a `--since` value to a UTC cutoff: first try it as a git ref/tag and
@@ -45563,6 +45603,10 @@ fn command_groups() -> &'static [(&'static str, &'static [(&'static str, &'stati
                 ("digest", "Narrative advisor report"),
                 ("usage", "Inspect locally-recorded CLI usage"),
                 ("metrics", "Agent-lift metrics over telemetry"),
+                (
+                    "criteria",
+                    "Acceptance-criteria trace coverage for one spec",
+                ),
                 ("why", "Explain a spec's current state"),
                 // trace:STORY-631 — AI WHY-comprehension, complementary to `why`.
                 (

@@ -3843,6 +3843,24 @@ hostname = "localhost"
             parse_trace_id_token("trace:TASK-673"),
             Some("TASK-673".into())
         );
+        assert_eq!(
+            parse_trace_id_token("trace:TASK-673"),
+            Some("TASK-673".to_string()),
+            "bare ids must keep the byte-identical normalized form"
+        );
+        assert_eq!(
+            parse_trace_id_token("trace:TASK-673."),
+            Some("TASK-673".to_string()),
+            "sentence punctuation after a bare id must not become an empty criterion suffix"
+        );
+        assert_eq!(
+            parse_trace_id_token("trace:TASK-673,"),
+            Some("TASK-673".to_string())
+        );
+        assert_eq!(
+            parse_trace_id_token("trace:TASK-673 | ai:claude"),
+            Some("TASK-673".to_string())
+        );
         // git grep on a ref may keep a `ref:file:` prefix — take the last trace:.
         assert_eq!(
             parse_trace_id_token("main:src/a.rs:trace:STORY-86"),
@@ -3852,6 +3870,15 @@ hostname = "localhost"
         assert_eq!(
             parse_trace_id_token("trace:FR-1-042"),
             Some("FR-1-042".into())
+        );
+        // Criterion-suffixed ids ride the same parser for test traces.
+        assert_eq!(
+            parse_trace_id_token("trace:STORY-1178.A1"),
+            Some("STORY-1178.A1".into())
+        );
+        assert_eq!(
+            parse_trace_id_token("trace:STORY-1178.ac1a2b3"),
+            Some("STORY-1178.AC1A2B3".into())
         );
         // Lower-case input normalizes up.
         assert_eq!(parse_trace_id_token("trace:task-9"), Some("TASK-9".into()));

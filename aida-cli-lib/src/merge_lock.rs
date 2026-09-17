@@ -259,6 +259,7 @@ mod tests {
 
     #[test]
     fn acquire_serializes_and_bounded_wait_refuses() {
+        // trace:STORY-1171.ac991dc3 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let held = acquire(root, "main", Some(1), "first", DEFAULT_WAIT).unwrap();
@@ -291,6 +292,7 @@ mod tests {
 
     #[test]
     fn stale_dead_pid_same_host_is_reclaimed() {
+        // trace:STORY-1171.acf58627 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
@@ -315,6 +317,7 @@ mod tests {
 
     #[test]
     fn stale_ttl_expired_is_reclaimed_any_host() {
+        // trace:STORY-1171.acf58627 | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
@@ -333,6 +336,7 @@ mod tests {
 
     #[test]
     fn status_lists_active_leases() {
+        // trace:STORY-1171.ac117c5a | ai:codex
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let _a = acquire(root, "main", Some(1), "on main", DEFAULT_WAIT).unwrap();

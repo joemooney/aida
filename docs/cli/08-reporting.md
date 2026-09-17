@@ -155,6 +155,25 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida criteria`
+
+**One line** — show which acceptance criteria for one spec are traced by Rust tests.
+
+**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions for criterion-qualified trace markers. It is the smallest anti-drift loop between the store and executable tests: each acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
+
+**Reach for it when** — you want to audit a spec's test coverage at the criterion level, especially before reconstitution/harvest work. The report answers: which criteria have tests, which criteria are untested, and which tests trace a bare spec or an unknown criterion.
+
+**Don't reach for it when** — you want general source trace rot across all files (that's `aida trace check` / `aida doctor validate-trace-comments`), or when the project is not Rust-test-backed. This first slice scans Rust tests only.
+
+**Key options (rationale only).**
+- `--json` — emit the same AC-to-test map and gap lists for scripts or gates.
+
+**Gotchas.** Explicit labels in `## Acceptance` are the most stable IDs (`A1.`, `AC3:`, etc.). Unlabeled criteria get content-hash IDs, which are stable across reorder but change when the criterion text changes; label important criteria when tests will trace them for a long time.
+
+**Chains with** — `aida show <ID>` for the contract, then test edits adding criterion-qualified trace comments, then `aida criteria <ID> --json` for a scriptable gap check.
+
+---
+
 ### `aida why`
 
 **One line** — explain why *this one* spec is still open.
