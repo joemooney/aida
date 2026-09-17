@@ -71953,5 +71953,13 @@ operations:
   timestamp: 2026-09-17T08:49:54.870191436Z
   kind: !AddTag
     tag: batch:away-0916
-clock: 5605
+- id: 01a0aea3-f971-7cf2-93a6-1dda3c4e35e2
+  target_id: 01a0adaf-a82c-73e2-a6df-4f7b8a98d52b
+  author: aida
+  node_id: '1'
+  lamport: 5606
+  timestamp: 2026-09-17T09:12:56.945491697Z
+  kind: !SetStatus
+    status: In Progress
+clock: 5606
 node_id: '1'
