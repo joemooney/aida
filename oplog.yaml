@@ -71176,5 +71176,25 @@ operations:
   timestamp: 2026-09-17T01:03:48.923296610Z
   kind: !SetStatus
     status: Completed
-clock: 5552
+- id: 01a0ad1b-8158-73c2-9334-07eeeef62f77
+  target_id: 01a0ad1b-7b09-7341-85e7-64e0adca68f3
+  author: aida
+  node_id: '1'
+  lamport: 5553
+  timestamp: 2026-09-17T02:04:16.088810825Z
+  kind: !Create
+    title: 'Merge-lease slice 2: wire the lease around check→merge→pull in pr ship + drain merge phase'
+    description: |-
+      Follow-up to STORY-1171 slice 1 (#1873, the merge_lock primitive + aida merge-lock status, ADR-38). Slice 1 landed the tested primitive but is wired NOWHERE (acquire-side is #[allow(dead_code)]). This slice wires it so the acceptance ('two concurrent merges to main serialize; one waits, bounded') actually holds.
+
+      Wire merge_lock::acquire/release (RAII MergeLease) around the merge critical section per ADR-38 (check→merge→pull width):
+      - pr_cmd::pr_ship_handler — acquire on the target branch before the merge_change block, hold the guard through the merge + aida pull, auto-release. On WouldBlock (a live holder outlasts DEFAULT_WAIT) print a refuse message + return Err.
+      - the drain RealPhaseDriver merge phase (lib.rs ~84592) — same lease so drain-vs-pr-ship serialize.
+      - Pick ONE acquisition level (caller, not forge::merge_change) to avoid self-deadlock.
+
+      Keyboard/guided, NOT an autonomous drain — it modifies hot merge paths (a wrong wire breaks all merges). Remove the #[allow(dead_code)] once acquire is called. Acceptance test: two concurrent pr-ship merges to main serialize (one waits, bounded); the drain merge and a pr ship serialize against each other.
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 5553
 node_id: '1'
