@@ -19,14 +19,14 @@ Three findings:
    collapse to the same `unavailable since T, expected back ~T'` record.
 
 2. **Per-provider budget APIs (Path 1) are a trap.** Anthropic / OpenAI / Antigravity each expose
-   different, changing, auth-coupled usage surfaces; Antigravity's is unknown; web `/ultraplan`
+   different, changing, auth-coupled usage surfaces; Antigravity's is unknown; web `Ultraplan`
    budget is opaque (same finding SPIKE-8 reached about web-flow cost). Integrating them is
    non-portable, brittle against upstream change, and — critically — *pre-evidence*. The spec's own
    operator decision says "don't over-invest pre-evidence." Path 1 is the over-investment.
 
 3. **The evidence bar isn't met yet, and that's fine — the manual discipline already covers us.**
    We have exactly 2 budget-pause observations (2026-05-23: Antigravity hourly limit; web
-   `/ultraplan` usage cap). The spec self-gates at ≥3–5. The manual discipline
+   `Ultraplan` usage cap). The spec self-gates at ≥3–5. The manual discipline
    (`feedback_multi_agent_budget_dispatching`) already prescribes the dispatch behavior; the
    substrate surface is an *amortization* of that discipline, worth building only once the event
    rate justifies the maintenance. This spike's job is to have the design ready when event #3–5 lands.
@@ -124,6 +124,6 @@ event #3 (and ideally #4–5) lands, pull the filed follow-up and ship — no re
 - **STORY-447 / TASK-513** — effort-estimation calibration + credit-burn workflow; "expected duration
   vs agent availability" is a future calibration pairing, out of scope for the MVP.
 - **SPIKE-8** (`2026-06-07-spike-8-ultraplan-comparison.md`) — reached the same "web-flow budget is
-  opaque" finding that helps sink Path 1 for the `/ultraplan` agent specifically.
+  opaque" finding that helps sink Path 1 for the `Ultraplan` agent specifically.
 - **`feedback_pushback_on_overengineering`** — why this spike files a design and defers the build
   rather than shipping a coordination surface on 2 data points.

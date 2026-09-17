@@ -7,7 +7,7 @@ Complexity: ~250 prod LOC, ~150 test LOC, 4 commits, risk medium-low
 
 <!--
   Worked example for the structured plan template (TASK-92).
-  Originally generated 2026-05-13 via /ultraplan, retrofitted 2026-05-14
+  Originally generated 2026-05-13 via Ultraplan, retrofitted 2026-05-14
   to match docs/plans/_TEMPLATE.md.
 -->
 
@@ -264,6 +264,6 @@ aida history --all                      # Done renders distinct from Completed
 
 ---
 
-*Plan generated 2026-05-13 via /ultraplan; retrofitted 2026-05-14 to the
+*Plan generated 2026-05-13 via Ultraplan; retrofitted 2026-05-14 to the
 structured plan template (TASK-92). Original prose preserved, sections
 re-shaped to match `docs/plans/_TEMPLATE.md`.*

@@ -217,5 +217,5 @@ PATH="$PWD/target/release:$PATH" python3 docs/cli/verify-manual.py   # completen
 - EPIC-70 (parent: AIDA as a compiler), EPIC-66 (gate pipeline host; STORY-1156/1157 plumbing).
 - STORY-1173 (`[aida:proxy-approval]` ledger — the marked-comment pattern reused).
 - STORY-597 (CLI-manual drift-guard; its reflection check is the narrow-harvest precedent).
-- TASK-0417 (`aida lint`), STORY-785 (`aida why file:line`), BUG-1177 (the phantom `/ultraplan`).
+- TASK-0417 (`aida lint`), STORY-785 (`aida why file:line`), BUG-1177 (the phantom `Ultraplan`).
 - ADR-38 (merge-lease — the last guided plan; same sketch-first cadence).

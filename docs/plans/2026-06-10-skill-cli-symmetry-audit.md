@@ -29,7 +29,7 @@ exist inconsistently across the catalog:
    data-derivation step the LLM does *before* it starts reasoning — should be a
    CLI verb. It is pure, testable, reusable by other agents and by CI, and it
    removes a source of LLM drift. Shipped exemplars: `aida ultraplan`
-   (←/ultraplan), `aida review prompt` (←/aida-review), `aida burndown plan`
+   (←Ultraplan), `aida review prompt` (←/aida-review), `aida burndown plan`
    (←/aida-burndown), `aida goal` (←/goal), `aida digest` (←/aida-digest).
 2. **The LAUNCHER** symmetry — a thin `aida X run` → `claude -p /skill` — but
    *only* for skills worth running unattended (cron / CI / headless drain).
@@ -145,7 +145,7 @@ Burndown carries both its B slice and its C launcher and is counted once as B.)
 **Already shipped (the slice exists as a CLI verb) — these are the exemplars
 the convention generalizes from:**
 
-- `aida ultraplan` / `aida plan helpers` ← /aida-plan, /ultraplan
+- `aida ultraplan` / `aida plan helpers` ← /aida-plan and generic planner prompts
 - `aida review prompt` / `aida review assemble` ← /aida-review
 - `aida burndown plan` ← /aida-burndown (and launcher `aida burndown run`)
 - `aida goal` ← /goal (and the /aida-drain-queue condition)

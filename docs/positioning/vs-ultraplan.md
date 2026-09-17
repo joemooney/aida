@@ -1,20 +1,20 @@
-# `/aida-plan` (+ `docs/plans/`) vs `/ultraplan`
+# `/aida-plan` (+ `docs/plans/`) vs archived Ultraplan
 
-*Last updated: 2026-07-09 — incorporates details from a vendor-published overview of Ultraplan's research-preview workflow (browser review surface, "teleport back to terminal" handoff, GitHub-repo requirement, Remote Control incompatibility). /ultraplan terms (3 free uses, then Max-quota or billed; 90-minute approval window before the cloud session terminates) captured live from the launch prompt 2026-05-13 and may shift while the feature is in research preview. Re-verify against [code.claude.com/docs/en/claude-code-on-the-web](https://code.claude.com/docs/en/claude-code-on-the-web) before relying on the cost line.*
+*Last updated: 2026-09-17 — Ultraplan was observed as a Claude Code on the web research-preview flow in 2026-05, but the Claude Code slash command is no longer available as of 2026-09-16. This page is retained as historical positioning context and as guidance for importing plans produced by any real external planner.*
 
-The TL;DR: **`/ultraplan` drafts and reviews the prose in the browser. AIDA persists, structures, verifies, and executes the result. The clean integration point is `/ultraplan`'s own "teleport back to terminal → save plan to file" option, which lands the plan exactly where AIDA's `docs/plans/` convention wants it.**
+The TL;DR: **AIDA should never direct users to invoke a removed Ultraplan slash command.** The durable lesson from that preview is still useful: if any external planner gives you a markdown plan, save it under AIDA's `docs/plans/` convention, verify it, and pin it to the requirement graph. `aida ultraplan <SPEC>` remains only a prompt assembler for `/aida-plan`, a Plan agent, a multi-agent workflow, or a human planning review. trace:BUG-1177
 
-This is the sister doc to [vs-ultrareview.md](vs-ultrareview.md). The same thesis applies twice: the Claude Code cloud `/ultra*` family is great at LLM-heavy generation and browser-native review; AIDA owns the surrounding agent-collaboration layer (graph, IDs, traces, queue, persistence, MCP). The skeptic's question — *"I use /ultraplan and it's great, why do I need AIDA?"* — has a sharper answer once you've used `/ultraplan` twice and lost the chat history both times.
+This is the sister doc to [vs-ultrareview.md](vs-ultrareview.md). The same thesis applies twice for external planners in general: cloud/browser planning can be good at LLM-heavy generation and review, while AIDA owns the surrounding agent-collaboration layer (graph, IDs, traces, queue, persistence, MCP). The skeptic's question — *"I already have a planner, why do I need AIDA?"* — has a sharper answer once you've lost a chat-only plan or tried to hand it to another agent.
 
 ---
 
 ## Different scopes, complementary
 
-| | `/aida-plan` + `docs/plans/` | `/ultraplan` |
+| | `/aida-plan` + `docs/plans/` | Archived Ultraplan preview |
 |---|---|---|
 | **Engine** | Local Claude session orchestrating req decomposition + plan file authoring | Cloud-based LLM generating dense, file-by-file plan documents |
 | **Cost** | $0 — uses the active Claude session | 3 free uses then Max quota or billed per use (research-preview; verify current terms); 90-minute approval window before timeout |
-| **Trigger** | `/aida-plan <SPEC>` in any Claude session | `/ultraplan <prompt>`, typing "ultraplan" anywhere in a prompt, or refining a local plan in cloud |
+| **Trigger** | `/aida-plan <SPEC>` in any Claude session | Historical only; no supported Claude Code slash-command invocation |
 | **Output shape** | Child requirement decomposition + design-decision comments + optional plan file under `docs/plans/` | Single dense markdown document: approach, file-by-file, risks, verification script, followups |
 | **Review surface** | Edit the file, use git diff, comment on the parent req | Browser: inline comments on passages, emoji reactions (approve/revise), structured outline sidebar, iterative comment-and-revise cycle with Claude |
 | **Status indicators** | `aida list --status planned` + plan file in git | CLI status indicator: Claude researching / needs clarification / `◆ ultraplan ready` |
@@ -25,13 +25,13 @@ This is the sister doc to [vs-ultrareview.md](vs-ultrareview.md). The same thesi
 | **Iteration** | Edit the plan file, recommit, diff is visible | Browser review-revise loop is genuinely good; once teleported back, iteration is git-based |
 | **Offline** | Works fully offline | Requires cloud round-trip + Claude Code on the web account + GitHub-connected repo |
 | **Driven by** | The requirement graph — knows children, parents, sibling specs, trace links | The diff between current code and the user's prompt — no req-graph awareness |
-| **Launchable from** | Anywhere a Claude session can run | User-triggered only (Claude Code controls); approval window forces human-in-the-loop; can't run simultaneously with Claude Code Remote Control |
+| **Launchable from** | Anywhere a Claude session can run | Historical only; use a currently supported planner instead |
 
 ---
 
-## What `/ultraplan` does that bare AIDA can't (today)
+## What archived Ultraplan showed that bare AIDA did not do
 
-The STORY-86 case study (`docs/plans/2026-05-13-story-86-done-status.md` — saved from a real `/ultraplan` cloud session) demonstrates the genuine depth `/ultraplan` brings:
+The STORY-86 case study (`docs/plans/2026-05-13-story-86-done-status.md` — saved from a real 2026-05 Ultraplan cloud session) demonstrates the genuine depth that style of external planner brought:
 
 | Strength | What it looked like in the STORY-86 plan |
 |---|---|
@@ -52,7 +52,7 @@ AIDA's `/aida-plan` skill is more decomposition-oriented (vertical-slice child r
 
 ### Multi-agent architecture (reported, hedged)
 
-A third-party explainer describes `/ultraplan`'s internal architecture as a Mixture-of-Agents pattern: three parallel "explorer" agents each independently attempt the planning problem in separate context windows, then a fourth "critic" agent evaluates their outputs and synthesizes a final plan that may include elements from none of the explorers verbatim. This claim is plausible (it matches published MoA research and would explain the consistently high "decision callout" quality we observed in the STORY-86 plan) but should be attributed to a secondhand explainer rather than vendor-confirmed documentation. Treat the structural details as best-effort context, not specification.
+A third-party explainer describes `Ultraplan`'s internal architecture as a Mixture-of-Agents pattern: three parallel "explorer" agents each independently attempt the planning problem in separate context windows, then a fourth "critic" agent evaluates their outputs and synthesizes a final plan that may include elements from none of the explorers verbatim. This claim is plausible (it matches published MoA research and would explain the consistently high "decision callout" quality we observed in the STORY-86 plan) but should be attributed to a secondhand explainer rather than vendor-confirmed documentation. Treat the structural details as best-effort context, not specification.
 
 If the description is accurate, the practical implications are:
 
@@ -60,7 +60,7 @@ If the description is accurate, the practical implications are:
 - **Critic synthesis beats single-explorer best.** The critic can combine the architecture from explorer 1 with the error-handling from explorer 2 and the test strategy from explorer 3 — final plan quality exceeds any single run.
 - **Convergence-as-confidence signal.** When all three explorers converge on a similar approach, that's strong evidence the approach is sound. When they diverge, the critic surfaces explicit tradeoff discussion. A single-agent plan can't tell you whether the AI was confident or just committed to its first thought.
 - **Wall-clock parallelism.** Three explorers running in parallel costs roughly the time of one explorer running alone, plus the critic pass. Higher quality without proportional latency.
-- **Multi-agent invoked conditionally.** Simple requests reportedly bypass the full pipeline — single-agent suffices. This explains why some /ultraplan outputs feel denser than others.
+- **Multi-agent invoked conditionally.** Simple requests reportedly bypass the full pipeline — single-agent suffices. This explains why some Ultraplan outputs feel denser than others.
 
 **AIDA's contrast:** `/aida-plan` runs in a single local Claude session — same context window throughout, no parallel exploration, no separate critic. The local model can be prompted to "consider three approaches, then evaluate," but anchoring bias persists because all three approaches share the same context. This is a real asymmetry; AIDA shouldn't claim parity here.
 
@@ -68,7 +68,7 @@ If the description is accurate, the practical implications are:
 
 ### Browser review surface — separate from the prose strength
 
-Distinct from the depth of the generated plan itself, `/ultraplan` brings a review-and-revise interface that local-terminal planning genuinely can't match:
+Distinct from the depth of the generated plan itself, `Ultraplan` brings a review-and-revise interface that local-terminal planning genuinely can't match:
 
 - **Inline comments on specific passages** — feedback is targeted to the exact paragraph or section, not a general response to a 300-line document.
 - **Emoji reactions** — quick approve/revise signals on sections, lower friction than typing.
@@ -80,26 +80,26 @@ These are not things AIDA replicates. They're real strengths in the specific nic
 
 ---
 
-## What AIDA does that `/ultraplan` doesn't
+## What AIDA does that `Ultraplan` doesn't
 
-The skeptic's argument starts to crack here. `/ultraplan`'s output, sitting alone in a chat window, has no answer to any of these:
+The skeptic's argument starts to crack here. `Ultraplan`'s output, sitting alone in a chat window, has no answer to any of these:
 
-- **Persistence by default, not by remembering.** `/ultraplan` does offer a "save to file" option in its teleport-back menu — but only if you remember to choose it before the 90-minute approval window closes. Two of the three teleport-back options (inject into session, start new session) discard the plan as soon as the chat ends. AIDA plans live in `docs/plans/YYYY-MM-DD-<slug>.md` from the moment they're saved, git-tracked, referenced by `Related Requirements` — no "remember to click the right option" failure mode.
-- **Graph membership.** AIDA plans are pinned to their target SPEC-ID via `aida comment add`, surfaceable from `aida show STORY-86`, queryable through the MCP server. `/ultraplan` doesn't know what your SPEC IDs are.
-- **Stable identifiers.** AIDA's symbol refs survive edits; `/ultraplan`'s line refs go stale within a day. (STORY-86 plan: 2 of 8 refs drifted within hours. The `DbCommand::Sync` callsite ref was off by ~19,000 lines.)
-- **Verifiability.** `aida plan verify [--fix]` (TASK-93, shipped) re-anchors stale line refs, validates file paths, and lints structural sections — no equivalent in `/ultraplan`'s output.
+- **Persistence by default, not by remembering.** `Ultraplan` does offer a "save to file" option in its teleport-back menu — but only if you remember to choose it before the 90-minute approval window closes. Two of the three teleport-back options (inject into session, start new session) discard the plan as soon as the chat ends. AIDA plans live in `docs/plans/YYYY-MM-DD-<slug>.md` from the moment they're saved, git-tracked, referenced by `Related Requirements` — no "remember to click the right option" failure mode.
+- **Graph membership.** AIDA plans are pinned to their target SPEC-ID via `aida comment add`, surfaceable from `aida show STORY-86`, queryable through the MCP server. `Ultraplan` doesn't know what your SPEC IDs are.
+- **Stable identifiers.** AIDA's symbol refs survive edits; `Ultraplan`'s line refs go stale within a day. (STORY-86 plan: 2 of 8 refs drifted within hours. The `DbCommand::Sync` callsite ref was off by ~19,000 lines.)
+- **Verifiability.** `aida plan verify [--fix]` (TASK-93, shipped) re-anchors stale line refs, validates file paths, and lints structural sections — no equivalent in `Ultraplan`'s output.
 - **Queue + session integration.** `aida queue work <SPEC>` rides the matching `docs/plans/` file's Critical-Files/Followups/Verification brief into a fresh implementer session (TASK-95, shipped; `/aida-pickup` leads with it) — the plan is loaded as context, not something to grep for.
-- **Followups auto-extraction.** Reaching Done/Completed parses the plan's `## Followups` section and offers to file each as a child TASK, idempotent via an `[aida:followups]` marker (TASK-96, shipped). `/ultraplan`'s followups list is inert markdown.
-- **Cross-vendor exposure.** AIDA plans live in the git-canonical store — reachable via the token-efficient CLI or the MCP server, and now genuinely multi-vendor-readable (Codex is a first-class vendor alongside Claude), so a saved plan is cross-vendor-durable. `/ultraplan`'s output is a single-chat, Claude-only artifact.
-- **Cost stability.** `/ultraplan`'s terms shifted within months of launch (initially-free → 3 free uses then Max-quota or billed). AIDA's local-first cost stays $0 regardless of vendor pricing changes.
+- **Followups auto-extraction.** Reaching Done/Completed parses the plan's `## Followups` section and offers to file each as a child TASK, idempotent via an `[aida:followups]` marker (TASK-96, shipped). `Ultraplan`'s followups list is inert markdown.
+- **Cross-vendor exposure.** AIDA plans live in the git-canonical store — reachable via the token-efficient CLI or the MCP server, and now genuinely multi-vendor-readable (Codex is a first-class vendor alongside Claude), so a saved plan is cross-vendor-durable. `Ultraplan`'s output is a single-chat, Claude-only artifact.
+- **Cost stability.** `Ultraplan`'s terms shifted within months of launch (initially-free → 3 free uses then Max-quota or billed). AIDA's local-first cost stays $0 regardless of vendor pricing changes.
 - **Independence from approval windows.** A 90-minute timeout on a planning artifact is a real workflow constraint; missed it once already on STORY-86. AIDA plans never expire.
-- **Works without internet.** Field-work, transit, flaky connections — `/ultraplan` is unreachable; AIDA plans aren't.
+- **Works without internet.** Field-work, transit, flaky connections — `Ultraplan` is unreachable; AIDA plans aren't.
 
 ---
 
-## The complementary workflow — teleport back is the clean handoff
+## The complementary workflow — saved files are the clean handoff
 
-`/ultraplan`'s "teleport back to terminal" menu has three sub-options after the browser approval:
+The old Ultraplan preview had a "teleport back to terminal" menu with three sub-options after browser approval:
 
 1. **Inject the plan into the current conversation and continue from there.**
 2. **Start a new session with the plan as the only context.**
@@ -107,11 +107,11 @@ The skeptic's argument starts to crack here. `/ultraplan`'s output, sitting alon
 
 **Option 3 is the AIDA-aligned path.** The plan file lands in your local environment exactly where AIDA's `docs/plans/YYYY-MM-DD-<slug>.md` convention expects it. Options 1 and 2 are the "no AIDA in the loop" paths — they work, but they re-create the chat-only persistence problem AIDA solves.
 
-For **complex/risky work** where the dense brief is worth the cloud round-trip:
+For **complex/risky work** where a dense external brief is worth the round-trip:
 
-1. **Run `/ultraplan`** with the target spec ID + acceptance criteria. Pay the cloud round-trip for the file-by-file depth.
-2. **Review in the browser.** Use the inline comments, emoji reactions, and outline sidebar to revise the plan iteratively with Claude until ready. (This is the part AIDA can't replicate; lean into it.)
-3. **Teleport back, choose "save to file."** Plan lands locally. Move/rename to `docs/plans/YYYY-MM-DD-<slug>.md` (AIDA convention). Commit it.
+1. **Assemble context with `aida ultraplan <SPEC>`.** This produces a rich planner prompt; it does not invoke a Claude Code Ultraplan slash command.
+2. **Hand the prompt to a real planner.** `/aida-plan`, a Plan agent, a multi-agent workflow, or a human reviewer can author the plan.
+3. **Save the result to a file.** Move/rename to `docs/plans/YYYY-MM-DD-<slug>.md` (AIDA convention). Commit it.
 4. **`aida comment add <SPEC-ID>`** with a one-liner pointing at the plan file. The plan becomes graph-reachable.
 5. **`aida queue add <SPEC-ID> --for implementer`** routes the work.
 6. **`aida queue work <SPEC-ID>`** launches a fresh implementer session that opens with the plan's brief as context (TASK-95).
@@ -120,14 +120,14 @@ For **complex/risky work** where the dense brief is worth the cloud round-trip:
 
 For **routine work** (small feature, well-bounded bug fix):
 
-1. **`/aida-plan`** alone — decompose into child reqs, comment design decisions on the parent. The decomposition often *is* the plan. No need to spend a `/ultraplan` use on it.
+1. **`/aida-plan`** alone — decompose into child reqs, comment design decisions on the parent. The decomposition often *is* the plan. No need to spend an external-planner round-trip on it.
 2. **Skip the cloud round-trip.** The session that has full context already has enough to execute.
 
-The empirical rule: if the file-by-file list would be longer than ~15 entries AND multiple reviewers need to leave comments on the plan, `/ultraplan` + teleport-back-to-file earns its keep. Below that, AIDA-only is faster.
+The empirical rule from the archived preview still generalizes: if the file-by-file list would be longer than ~15 entries AND multiple reviewers need to leave comments on the plan, a dense external planner plus save-to-file handoff may earn its keep. Below that, AIDA-only is faster.
 
 ### When cloud execution makes sense (and when it skips AIDA)
 
-`/ultraplan`'s alternative path is **cloud execution** — after browser approval, Claude implements the plan in the same web session, presents a diff view, and opens a PR all from the browser. The terminal isn't involved.
+Some external planners also offer **cloud execution** — after approval, the remote system implements the plan in the same web session, presents a diff view, and opens a PR from the browser. The terminal is not involved.
 
 This is genuinely useful for:
 
@@ -146,9 +146,9 @@ If your work needs AIDA's lifecycle tracking, **always teleport back**. If your 
 
 ---
 
-## Tightening AIDA's integration with `/ultraplan`
+## Tightening AIDA's integration with external planners
 
-`/ultraplan` exposes no API or MCP surface (as of research preview, 2026-05-13). Integration is **workflow-tight, not API-tight.** Two real directions:
+The archived Ultraplan preview exposed no API or MCP surface. For current planners, assume integration is **workflow-tight, not API-tight** until they expose a stable API. Two real directions:
 
 ### Direction A — AIDA → any planner: rich prompt assembly
 
@@ -162,9 +162,9 @@ aida ultraplan <SPEC> --stdout  # print for inspection / piping
 aida ultraplan <SPEC> --json    # prompt + warnings + token estimate, for scripting
 ```
 
-The assembled prompt includes: the target SPEC's description and extracted `## Acceptance` criteria, parent/child/sibling spec summaries (siblings capped to fit the token budget), the AIDA 11-section plan structure (from TASK-92) inlined so the returned plan matches `docs/plans/_TEMPLATE.md`, the trace-graph reusable helpers (from TASK-94's `build_reusable_helpers_section`), and a "symbol refs preferred" style note. It copies to the clipboard by default and falls back to stdout when no clipboard tool is available. The command assembles context; it does not depend on a built-in `/ultraplan` slash command.
+The assembled prompt includes: the target SPEC's description and extracted `## Acceptance` criteria, parent/child/sibling spec summaries (siblings capped to fit the token budget), the AIDA 11-section plan structure (from TASK-92) inlined so the returned plan matches `docs/plans/_TEMPLATE.md`, the trace-graph reusable helpers (from TASK-94's `build_reusable_helpers_section`), and a "symbol refs preferred" style note. It copies to the clipboard by default and falls back to stdout when no clipboard tool is available. The command assembles context; it does not depend on a built-in `Ultraplan` slash command.
 
-### Direction B — `/ultraplan` → AIDA: auto-import saved plan
+### Direction B — saved plan → AIDA: auto-import saved plan
 
 After the user teleports back and saves the plan file, the `/aida-import-plan` skill (TASK-114, shipped) processes it into AIDA's first-class state in one command:
 
@@ -176,25 +176,25 @@ After the user teleports back and saves the plan file, the `/aida-import-plan` s
 6. Run `aida plan verify <file>` to re-anchor line refs to symbols (composes with TASK-93)
 7. Optionally `aida queue add <SPEC> --for implementer` if invoked with `--queue`
 
-### What's NOT possible today
+### What's NOT possible for the archived preview
 
-- **Programmatic invocation** of `/ultraplan` from AIDA — no API/MCP exposed
-- **Reading `/ultraplan` output without manual teleport-back-save** — browser session is opaque from outside
+- **Programmatic invocation** of `Ultraplan` from AIDA — no API/MCP exposed
+- **Reading `Ultraplan` output without manual teleport-back-save** — browser session is opaque from outside
 - **Capturing the 3-explorer outputs separately** to show divergence — only the critic's synthesized output is exposed
 - **Watching the CLI status indicator** (`◆ ultraplan ready`) programmatically — no documented hook
 
-If Anthropic eventually exposes an MCP server for `/ultraplan`, the integration could become much tighter (e.g., AIDA polling for "ready" status, auto-pulling the output, programmatic confidence-signal extraction). Until then, workflow-tight is the ceiling.
+If a future planner exposes an MCP server or stable API, the integration could become much tighter (e.g., AIDA polling for "ready" status, auto-pulling the output, programmatic confidence-signal extraction). Until then, workflow-tight is the ceiling.
 
 ---
 
-## Research preview + requirements + limitations
+## Archived research preview + requirements + limitations
 
-`/ultraplan` is currently a **research preview**, which has practical implications:
+Ultraplan was a **research preview** when captured, and the Claude Code slash command is no longer available. Historical notes:
 
 - **Behavior may change** between releases. Workflows pinned to specific UI details (status indicator glyphs, teleport-back menu options) may need re-verification.
 - **Cost terms shifted** within months of launch — initially marketed as Max-included, the 2026-05-13 launch prompt observation showed 3 free uses then quota/billed. Future shifts likely.
 - **Requirements**: a **GitHub repository** AND a **Claude Code on the web** account. GitLab / Bitbucket / self-hosted-git users are excluded.
-- **Incompatibility**: cannot run simultaneously with Claude Code's **Remote Control** feature. Both share the `claude.ai/code` interface; launching `/ultraplan` disconnects an active Remote Control session.
+- **Incompatibility**: cannot run simultaneously with Claude Code's **Remote Control** feature. Both share the `claude.ai/code` interface; launching `Ultraplan` disconnects an active Remote Control session.
 
 AIDA has none of these constraints — local-first, vendor-neutral, works against any git remote (or no remote), no subscription required. That's not a "win" so much as a different design space: research-preview tooling buys you depth at the cost of dependencies; durable-infrastructure tooling buys you stability at the cost of cloud cycles. Use both where their strengths apply.
 
@@ -204,12 +204,12 @@ AIDA has none of these constraints — local-first, vendor-neutral, works agains
 
 The honest answer: **possible, but lossy.**
 
-A team using only `/ultraplan` + `/ultrareview` + manual git workflow can ship code. What they lose:
+A team using only a cloud planner, `/ultrareview`, and manual git workflow can ship code. What they lose:
 
 - **No queryable record** of why a piece of work was undertaken once the chat is gone. Tomorrow's "what was this commit's spec?" has no answer.
 - **No spec-to-code traceback.** `git blame` shows who and when; it doesn't show *why* — no `// trace:STORY-86` comment, no `aida show STORY-86` to read the rationale.
 - **Brittle lifecycle bookkeeping.** Plans go stale, sessions terminate, status fields drift. `/aida-pickup → /aida-pr → /aida-review`'s atomic close-out doesn't exist.
-- **No agent collaboration layer.** A second agent in a separate session has no way to discover what the first agent decided. `/ultraplan`'s output is a single-chat artifact; AIDA's graph is a shared workspace.
+- **No agent collaboration layer.** A second agent in a separate session has no way to discover what the first agent decided. `Ultraplan`'s output is a single-chat artifact; AIDA's graph is a shared workspace.
 - **No MCP exposure.** Editor-resident agents (Cursor, Continue, Aider, IDE Claude extensions) can't see the planning trail.
 
 This is genuinely the trade-off. If your project is a 2-week prototype with one developer and zero handoffs, the loss is mostly hypothetical. If it's a 6-month codebase with multiple contributors (human or agent) and the question *"why did we do X this way?"* will come up later — AIDA's defensible niche **is** that the answer survives.
@@ -218,11 +218,11 @@ This is genuinely the trade-off. If your project is a 2-week prototype with one 
 
 ## Honest scope statement
 
-`/aida-plan`'s value **isn't** *"better plans than `/ultraplan`."* `/ultraplan`'s LLM-heavy cloud cycles produce denser, more thorough planning artifacts than a single local Claude session can match. The defensible thing AIDA brings is *"plans that persist, integrate with the requirement graph, and stay anchored as the code evolves."* That's a complementary capability, not a substitute.
+`/aida-plan`'s value **isn't** *"better prose than every external planner."* LLM-heavy cloud cycles can produce denser, more thorough planning artifacts than a single local Claude session. The defensible thing AIDA brings is *"plans that persist, integrate with the requirement graph, and stay anchored as the code evolves."* That's a complementary capability, not a substitute.
 
 If a team has to pick one of the two for budget reasons, the right answer depends on what they're optimizing for:
 
-- *"Generate the most thorough plan per work item"* → `/ultraplan`. Cloud LLM cycles dominate single-session planning on raw output density.
+- *"Generate the most thorough plan per work item"* → use the best currently supported planner available to the team.
 - *"Keep planning artifacts queryable, versioned, and integrated with the code over time"* → AIDA. No competitor in this slot.
 - *"Plan without a vendor subscription or internet"* → AIDA. Local-first always works.
 
@@ -233,11 +233,11 @@ Both fit in most workflows. The point of this doc is that picking *one* in a bin
 ## See also
 
 - [vs-ultrareview.md](vs-ultrareview.md) — sister positioning doc, same thesis applied to code review
-- STORY-112 — Plan-mode skill placeholder ("inspired by /ultraplan"); parent of the plan-tooling roadmap
-- TASK-92 — Structured plan template (the 11-section convention extracted from /ultraplan dissection)
+- STORY-112 — Plan-mode skill placeholder ("inspired by Ultraplan"); parent of the plan-tooling roadmap
+- TASK-92 — Structured plan template (the 11-section convention extracted from Ultraplan dissection)
 - TASK-93 — `aida plan verify` (re-anchor stale line refs to symbols)
 - TASK-94 — Auto-derive "Reusable helpers" section from trace graph
 - TASK-95 — `aida queue work` pre-populates session manifest from matching plan file
 - TASK-96 — `aida queue done` extracts Followups section, offers to file as TASKs
-- `docs/plans/2026-05-13-story-86-done-status.md` — worked example: the actual `/ultraplan` output that prompted this doc
+- `docs/plans/2026-05-13-story-86-done-status.md` — worked example: the actual `Ultraplan` output that prompted this doc
 - [composition.md](composition.md) — generic guidance on layering AIDA with other tools (future page)

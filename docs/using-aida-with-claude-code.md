@@ -67,7 +67,7 @@ A subagent or Workflow agent calls AIDA's MCP tools mid-task: *"does this alread
 AIDA uses Claude Code primitives as the *implementation* of its phases:
 - the **implementer** phase → a `claude` (or `claude --bg`) session in an isolated worktree;
 - the **reviewer** phase → could fan out adversarial reviewers as a **Workflow**;
-- the **planning** phase → a multi-angle judge-panel Workflow (this is what `aida ultraplan` already feeds `/ultraplan`);
+- the **planning** phase → a multi-angle judge-panel Workflow (this is what `aida ultraplan` already feeds as a generic planner prompt);
 - the **drain** itself → compiled to a *saved* `workflow.js` artifact that Claude Code's runtime replays (SPIKE-32).
 
 **3. Claude Code writes back to AIDA (hooks).**

@@ -1,7 +1,7 @@
 # Multi-source coordination: seeing remote agent work in `aida status`
 
 When you coordinate work across more than one machine or session — Codex on
-this box, a sibling agent on another machine, a cloud `/ultraplan` session in
+this box, a sibling agent on another machine, a cloud `Ultraplan` session in
 the browser — AIDA's local agent registry (`.aida/agents/*.toml`, STORY-431)
 and session leases can only see the processes running on **this** machine.
 Cloud and cross-machine agents execute work and push commits but never appear

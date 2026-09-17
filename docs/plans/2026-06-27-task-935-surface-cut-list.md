@@ -111,7 +111,7 @@ alias now, scheduled removal).
 | B6 | `role repair` | 0 | **HIDE** under `role` | Zero-call recovery verb; keep callable for the rare corrupted-role-file case. | Low. 1 ref (main.rs). |
 | B7 | `session manifest` | 0 | **KEEP / investigate** | 19 codebase refs — likely harness/session-lifecycle dependency. Zero **human** calls but probably machine-driven. Do not cut without confirming the harness doesn't call it. | High if cut blind — KEEP pending grep. |
 | B8 | `advisor register`, `agent register`, `mcp register-agent` | 0 each | **KEEP** | Registration verbs the `--no-human=both` orchestrator and MCP onboarding depend on. Zero **human** calls is expected (machines call them). Recorded for completeness; not cut candidates. | High if cut — KEEP. |
-| B9 | `plan helpers` | 0 | **KEEP** | Part of the documented `/ultraplan` plan-tooling loop (CLAUDE.md). Zero recent calls but a deliberate capability; low surface cost (already under `plan`). | n/a |
+| B9 | `plan helpers` | 0 | **KEEP** | Part of the documented `Ultraplan` plan-tooling loop (CLAUDE.md). Zero recent calls but a deliberate capability; low surface cost (already under `plan`). | n/a |
 
 ### C. Near-duplicate skills — merge candidates (`.claude/skills/`)
 
