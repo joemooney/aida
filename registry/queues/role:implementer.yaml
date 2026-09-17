@@ -7,13 +7,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0adf3-5096-7252-a49a-2e051974f08e
-  position: 97000
-  added_by: role:implementer
-  note: '[rework] PR #1889 RequestChanges by the advisor gate: the STORY-495 interactive resolver for aida session new / session start --launch (lib.rs ~24554, fn near read_agents_bypass_from_file) still returns mode dontAsk under contained (and the sandbox arm below it). Fix in the SAME PR (push fixups to branch pr-1889''s head branch bug-1178-*): contained interactive → mode None + contained flags; dontAsk only for headless; extend guard_interactive_claude_dontask to that path; add the mirror test. Finish with aida queue done BUG-1178.'
-  added_at: 2026-09-17T16:13:34.644050236Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a0ad9f-d486-7dc2-8497-637136635b10
   position: 99000
   added_by: role:implementer
