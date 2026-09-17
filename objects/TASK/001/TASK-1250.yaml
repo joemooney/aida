@@ -6,12 +6,12 @@ description: |-
   aida mailbox send takes the message only as a positional <BODY> shell argument, so a caller must pass the whole message through the shell. When the body contains backticks or a dollar-paren, a double-quoted arg triggers command substitution and the message is corrupted before aida ever sees it (observed twice in one advisor session: a review-request mail got its backticked command names substituted, and an earlier one ran clear + an aida subcommand). This is an agent-facing papercut — agents compose rich multi-line messages and hit the quoting trap repeatedly.
 
   Fix: add a non-shell input path to mailbox send, e.g. --body-file <path> (read the body from a file) and/or --stdin (read the body from stdin). A caller then writes the body to a file or pipes it, sidestepping shell substitution entirely. Keep the positional <BODY> for the simple case. Mirror onto the MCP send_message tool docs if relevant. Low priority; small blast radius.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:51:40.467786658Z
-modified_at: 2026-09-17T09:47:28.501789250Z
+modified_at: 2026-09-17T09:58:38.921771834Z
 req_type: Task
 tags:
 - batch:away-0916
@@ -28,8 +28,24 @@ comments:
   created_at: 2026-09-17T08:20:17.956669925Z
   modified_at: 2026-09-17T08:20:17.956669925Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0aecd-d043-7471-8398-60c1c0b500a9
+  author: aida-auto-bump
+  timestamp: 2026-09-17T09:58:38.915059930Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0aecd-d049-7160-9b11-e4e63afe4b16
+  timestamp: 2026-09-17T09:58:38.921770339Z
+  agent: aida
+  commit_sha: fe8ba6d96a48027980a4c578e14a323db9a64a84
+  summary: Completed via merge fe8ba6d9
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T09:37:48.011451060Z
   implemented_by: joe
+  completed_at: 2026-09-17T09:58:38.914944858Z
+  completion_sha: fe8ba6d96a48027980a4c578e14a323db9a64a84
