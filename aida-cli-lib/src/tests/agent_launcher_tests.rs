@@ -558,10 +558,9 @@ fn tool_bypass_flags_per_agent() {
 }
 
 #[test]
-fn tool_contained_flags_for_claude_include_strict_settings() {
+fn tool_contained_flags_for_claude_keep_interactive_prompts() {
     let flags = tool_contained_flags("claude");
-    assert_eq!(flags[0], "--permission-mode");
-    assert_eq!(flags[1], "dontAsk");
+    assert!(!claude_args_request_dontask(&flags), "{flags:?}");
     assert!(flags.contains(&"--setting-sources".to_string()));
     assert!(flags.contains(&"project".to_string()));
     let settings_pos = flags
@@ -579,6 +578,57 @@ fn tool_contained_flags_for_claude_include_strict_settings() {
         .contains(&serde_json::Value::String(
             "Bash(git push --force *)".into()
         )));
+}
+
+// trace:BUG-1178 | ai:codex
+#[test]
+fn interactive_claude_dontask_guard_refuses_unpromptable_mode() {
+    let args = vec!["--permission-mode".to_string(), "dontAsk".to_string()];
+    let err = guard_interactive_claude_dontask("claude", &args).unwrap_err();
+    assert!(format!("{err:?}").contains("interactive Claude"));
+    assert!(guard_interactive_claude_dontask("claude", &tool_contained_flags("claude")).is_ok());
+}
+
+// trace:BUG-1178 | ai:codex
+#[test]
+fn contained_config_interactive_claude_resolves_promptable_sandbox() {
+    let tmp = TempDir::new().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/agents.toml"),
+        "[agents]\ncontained = true\n",
+    )
+    .unwrap();
+    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+
+    let resolved = resolve_interactive_launch_mode_for_root(None, false, Some(&project)).unwrap();
+    assert_eq!(
+        resolved,
+        ResolvedClaudeLaunch {
+            mode: None,
+            contained: true
+        }
+    );
+}
+
+// trace:BUG-1178 | ai:codex
+#[test]
+fn sandbox_flag_interactive_claude_resolves_promptable_sandbox() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+
+    let resolved = resolve_interactive_launch_mode_for_root(None, true, Some(&project)).unwrap();
+    assert_eq!(
+        resolved,
+        ResolvedClaudeLaunch {
+            mode: None,
+            contained: true
+        }
+    );
 }
 
 // trace:STORY-1124 | ai:codex
@@ -841,8 +891,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
         false,
     )
     .unwrap();
-    assert_eq!(claude.default_args[0], "--permission-mode");
-    assert_eq!(claude.default_args[1], "dontAsk");
+    assert!(!claude_args_request_dontask(&claude.default_args));
     assert!(claude.default_args.contains(&"--settings".to_string()));
 
     let mut codex = AgentLaunchConfig {

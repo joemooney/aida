@@ -802,8 +802,12 @@ pub(crate) struct PermissionPostureRow {
     pub tier: String,
     pub tier_source: String,
     pub flags: Vec<String>,
+    pub interactive_flags: Vec<String>,
+    pub headless_flags: Vec<String>,
     pub flags_source: String,
     pub prompts: String,
+    pub interactive_prompts: String,
+    pub headless_prompts: String,
     pub sandboxed: String,
     pub network: String,
     pub writable_roots: Vec<String>,
@@ -1238,6 +1242,13 @@ fn render_permission_posture_report(report: &PermissionPostureReport) {
             row.net_effect
         );
         println!(
+            "    launch: interactive flags={} prompts={} · headless flags={} prompts={}",
+            truncate_middle(&row.interactive_flags.join(" "), 72).dimmed(),
+            row.interactive_prompts.dimmed(),
+            truncate_middle(&row.headless_flags.join(" "), 72).dimmed(),
+            row.headless_prompts.dimmed()
+        );
+        println!(
             "    scope: tier={} · flags={} · network={} · writable_roots={}",
             row.tier_source.dimmed(),
             row.flags_source.dimmed(),
@@ -1342,6 +1353,10 @@ fn permission_posture_for_agent(
         )
     };
 
+    let (interactive_flags, headless_flags) = launch_kind_permission_flags(agent, &tier, &flags);
+    let interactive_prompts = prompts_for_agent_flags(agent, &tier, &interactive_flags, codex);
+    let headless_prompts = prompts_for_agent_flags(agent, &tier, &headless_flags, codex);
+
     let mut findings = Vec::new();
     let codex_sandbox_mode = codex
         .sandbox_mode
@@ -1372,16 +1387,10 @@ fn permission_posture_for_agent(
         Vec::new()
     };
 
-    let prompts = if tier == "bypass"
-        || flags
-            .iter()
-            .any(|f| f == "bypassPermissions" || f.contains("dontAsk"))
-    {
-        "no".to_string()
-    } else if agent == "codex" && codex_approval == "never" {
-        "no".to_string()
+    let prompts = if interactive_prompts == headless_prompts {
+        interactive_prompts.clone()
     } else {
-        "native".to_string()
+        format!("interactive {interactive_prompts}; headless {headless_prompts}")
     };
     let sandboxed = if tier == "bypass" {
         "no".to_string()
@@ -1453,8 +1462,12 @@ fn permission_posture_for_agent(
         tier,
         tier_source,
         flags,
+        interactive_flags,
+        headless_flags,
         flags_source,
         prompts,
+        interactive_prompts,
+        headless_prompts,
         sandboxed,
         network,
         writable_roots,
@@ -1474,7 +1487,7 @@ fn display_tool_bypass_flags(agent: &str) -> Vec<String> {
 
 fn display_tool_contained_flags(agent: &str) -> Vec<String> {
     match agent {
-        "claude" => vec!["--permission-mode".into(), "dontAsk".into()],
+        "claude" => vec!["--settings".into(), "<contained-settings>".into()],
         "codex" => vec![
             "--sandbox".into(),
             "workspace-write".into(),
@@ -1482,6 +1495,60 @@ fn display_tool_contained_flags(agent: &str) -> Vec<String> {
             "never".into(),
         ],
         _ => Vec::new(),
+    }
+}
+
+// trace:BUG-1178 | ai:codex
+fn display_tool_headless_contained_flags(agent: &str) -> Vec<String> {
+    match agent {
+        "claude" => vec![
+            "--permission-mode".into(),
+            "dontAsk".into(),
+            "--settings".into(),
+            "<contained-settings>".into(),
+        ],
+        _ => display_tool_contained_flags(agent),
+    }
+}
+
+// trace:BUG-1178 | ai:codex
+fn launch_kind_permission_flags(
+    agent: &str,
+    tier: &str,
+    flags: &[String],
+) -> (Vec<String>, Vec<String>) {
+    if tier == "contained" && agent == "claude" && flags == display_tool_contained_flags(agent) {
+        (
+            display_tool_contained_flags(agent),
+            display_tool_headless_contained_flags(agent),
+        )
+    } else {
+        (flags.to_vec(), flags.to_vec())
+    }
+}
+
+// trace:BUG-1178 | ai:codex
+fn prompts_for_agent_flags(
+    agent: &str,
+    tier: &str,
+    flags: &[String],
+    codex: &CodexConfigPosture,
+) -> String {
+    let codex_approval = codex
+        .approval_policy
+        .as_ref()
+        .map(|v| v.value.as_str())
+        .unwrap_or("native-default");
+    if tier == "bypass"
+        || flags
+            .iter()
+            .any(|f| f == "bypassPermissions" || f.contains("dontAsk"))
+    {
+        "no".to_string()
+    } else if agent == "codex" && codex_approval == "never" {
+        "no".to_string()
+    } else {
+        "native".to_string()
     }
 }
 
@@ -3638,6 +3705,39 @@ mod bug_533_config_show_tests {
             }),
             "contained without [sandbox_workspace_write] must be flagged: {report:?}"
         );
+    }
+
+    // trace:BUG-1178 | ai:codex
+    #[test]
+    fn permission_posture_shows_claude_contained_per_launch_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[contained]\nenable = true\n",
+        )
+        .unwrap();
+
+        let report = permission_posture_report(dir.path());
+        let claude = report
+            .agents
+            .iter()
+            .find(|row| row.agent == "claude")
+            .expect("claude row");
+
+        assert_eq!(claude.tier, "contained");
+        assert_eq!(claude.interactive_prompts, "native");
+        assert_eq!(claude.headless_prompts, "no");
+        assert!(!claude
+            .interactive_flags
+            .windows(2)
+            .any(|w| w[0] == "--permission-mode" && w[1] == "dontAsk"));
+        assert!(claude
+            .headless_flags
+            .windows(2)
+            .any(|w| w[0] == "--permission-mode" && w[1] == "dontAsk"));
     }
 
     #[test]
