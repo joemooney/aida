@@ -8,12 +8,12 @@ description: |-
   Root cause candidates: /ultraplan was a preview/plugin feature that is no longer shipped, or was never a built-in and the docs conflated it with an aspiration. Either way the product now points users at a phantom.
 
   Fix: (1) audit every /ultraplan mention (CLAUDE.md, aida ultraplan --help + its output banner, docs/positioning/vs-ultraplan.md, TASK-113/114/304 text, skills) and re-point the round-trip at what actually exists — the /aida-plan skill (runs planning in-session → docs/plans/), with `aida ultraplan` reframed as "assemble a rich planning prompt for ANY planner (a Plan agent, a multi-agent workflow, or a human)", not a specific dead command; (2) make `aida ultraplan` print a next-step that names a REAL invocation; (3) keep /aida-import-plan (it's fine — it lands any saved plan). Consider renaming `aida ultraplan` → `aida plan prompt` to stop implying the phantom. Verify with the CLI-manual drift-guard's reflection check once fixed.
-status: Done
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T07:51:01.986786821Z
+modified_at: 2026-09-17T07:51:52.831322327Z
 req_type: Bug
 tags:
 - batch:away-0916
