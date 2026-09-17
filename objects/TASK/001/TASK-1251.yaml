@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:57:54.453824115Z
-modified_at: 2026-09-17T08:48:55.684425753Z
+modified_at: 2026-09-17T08:49:53.480090430Z
 req_type: Task
 tags:
 - afk
@@ -49,6 +49,20 @@ comments:
   content: 'REWORK (oversight, 00:30) — PR-1881 failed its own CI on the re-armed drift-guard: ''FAIL flags — 23 cited --flag token(s) did not resolve''. The resolution fix is CORRECT (366 false positives → 0); the 23 remaining are GENUINE manual drift from STORY-1028 (mode flags promoted to subcommands) and the acceptance requires each fixed in the same PR before hard-fail is re-armed. The exact 23 with their canonical replacements are in the [oversight review — PR-1881] comment on this spec — apply those doc edits on the existing task-1251 branch (PR-1881), re-run docs/cli/verify-manual.py and confirm it prints ''OK flags'' and exits 0 with hard-fail ON, then push the fixup. Do not weaken the check back to advisory.'
   created_at: 2026-09-17T07:30:30.735445223Z
   modified_at: 2026-09-17T07:30:30.735445223Z
+- id: 01a0ae8e-dd48-7782-8b24-a0181b99afcf
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    verdict: MERGED (proxy) — PR-1881 via aida merge-hold clear 1881 + gh pr merge --squash + aida pull
+    scope: overnight oversight; proxy-merge on Joe's behalf; supervised (mode unset) spec that re-arms the CLI-manual drift-guard
+    independent: yes — codex implemented; I did not. Decisive acceptance check done by me directly: the branch's verify-manual.py run in a real worktree → exit 0, OK completeness (81 cmds) / spec-ids / reflection / FLAGS, 0 misses; CI's ubuntu drift-guard step also passed. Second-pass doc edits sanity-read (canonical subcommands).
+    proxy: claude-opus-4.8 (product/oversight session), session 01FSF79sGFHdttbFjJAHicCd
+    authorized-by: joe (operator, AWAY — overnight /goal; standing "merge everything that passes review"), 2026-09-17 01:50 MST
+    gates: required checks GREEN (Build ubuntu + merge-hold-gate); MERGEABLE. The drain shelved 'ci-red' on the INFORMATIONAL Windows/macOS matrix (TASK-1205 path filter) — red solely from an inherited unrelated failure on main (my #1873 merge_lock test; BUG-1184 filed, drain-fix queued), not this PR. Merged on the required set per the matrix's informational design; pr ship could not be used (aborts on any red — noted on BUG-1180). Hold released explicitly (marker+label) as the review act.
+    timestamp: 2026-09-17 01:50 MST
+  created_at: 2026-09-17T08:49:53.480090430Z
+  modified_at: 2026-09-17T08:49:53.480090430Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0ae8d-fb7d-7812-ba13-d93e98231548
   author: aida-auto-bump
