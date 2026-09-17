@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T04:50:35.884577356Z
+modified_at: 2026-09-17T04:50:51.879038106Z
 req_type: Task
 tags:
 - afk
@@ -20,3 +20,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T04:50:40.700621309Z
+- rel_type: Blocks
+  target_id: 01a0adb3-f2a8-7861-87bd-ef92e199bb19
+  created_at: 2026-09-17T04:50:51.879030304Z
+  created_by: joe
