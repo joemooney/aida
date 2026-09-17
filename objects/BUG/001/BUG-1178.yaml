@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:59:59.382279085Z
-modified_at: 2026-09-17T06:04:52.500158943Z
+modified_at: 2026-09-17T06:04:56.688845395Z
 req_type: Bug
 tags:
 - contained
@@ -29,4 +29,10 @@ comments:
   content: Commit 043f4622f references this requirement
   created_at: 2026-09-17T06:04:52.500158943Z
   modified_at: 2026-09-17T06:04:52.500158943Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0adf7-d9f0-7f91-8f6e-95de05e08e94
+  author: joe
+  content: 'Two additions from the live repro. (1) The same root cause blocks NETWORK, not just Bash: the native sandbox prompts on a new domain and dontAsk auto-denies it, so gh/git fetch inside the contained advisor got ''CONNECT tunnel failed, response 403'' for github.com. Workaround shipped as a config PR: [contained] allowed_hosts pre-allowing GitHub (+api/objects/codeload), gitlab.joemooney.com, Anthropic, crates.io, npm — listed hosts pass with no prompt (STORY-605). (2) Display gap: aida config permissions show does NOT render the effective allowed_hosts for claude (network column says ''native/tool-specific'' and the JSON view has no allowed_hosts field) even though contained_allowed_hosts() reads it — so an operator can''t see the egress policy that is actually in force. Fold into the fix: show the effective allowlist per agent, and show the permission mode per launch kind (headless vs interactive).'
+  created_at: 2026-09-17T06:04:56.688845395Z
+  modified_at: 2026-09-17T06:04:56.688845395Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
