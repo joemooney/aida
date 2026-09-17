@@ -73243,5 +73243,31 @@ operations:
   timestamp: 2026-09-17T19:06:53.069523142Z
   kind: !SetStatus
     status: Completed
-clock: 5708
+- id: 01a0b0e1-f58b-71b2-a57d-3a5bc76e614c
+  target_id: 01a0b0e1-f13a-7413-9b06-8a9da9f662db
+  author: aida
+  node_id: '1'
+  lamport: 5709
+  timestamp: 2026-09-17T19:39:53.611076369Z
+  kind: !Create
+    title: 'Review PR-1901: [AI:codex] fix(tests): normalize review envelope source guard (BUG-1193)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b0c6`) for branch `bug-1193`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1901>
+      - Branch: `bug-1193` → `main`
+
+      ## Covers
+
+      - BUG-1193
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1901` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5709
 node_id: '1'
