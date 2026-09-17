@@ -41,12 +41,13 @@ these are the calls being made.
 Symbol-anchored where possible. Order matters — top-to-bottom so each commit
 builds clean.
 
-Files this work will *create* don't exist yet — mark them with `(new)` (or
-`(to create)`) right after the backticked path, e.g. `` `src/widget.rs` (new) ``.
-`aida plan verify` then accepts the missing file instead of erroring, and
-warns if a `(new)`-marked file already exists (a stale-plan signal).
+Files this work will *create* don't exist yet — mark them with `NEW` in the
+file heading, put them under a `## New files` section, or add `(new)` / `(to
+create)` right after the backticked path. `aida plan verify` then accepts the
+missing file instead of erroring, and warns if a new-file-marked path already
+exists (a stale-plan signal).
 
-### `path/to/file.rs` — purpose
+### `path/to/file.rs` — NEW: purpose
 
 - `fn foo`: <specific edit shape>
 - `struct Bar`: add field `baz: Option<T>`
