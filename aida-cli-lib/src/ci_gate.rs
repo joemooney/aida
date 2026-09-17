@@ -64,7 +64,8 @@ impl Default for CiGateConfig {
             // TASK-1205's path-filtered Windows/macOS matrix. Its jobs are named
             // `Build (<os>)` exactly like PR CI's Linux job, so the workflow
             // name is the only reliable discriminator.
-            informational_workflows: vec!["Cross-platform".to_string()],
+            // trace:BUG-1191 | ai:codex
+            informational_workflows: vec!["Cross-platform*".to_string()],
             informational_checks: Vec::new(),
         }
     }
@@ -434,8 +435,8 @@ mod tests {
         // workflow name is the discriminator.
         let rows = [
             row("Build (ubuntu-latest)", "CI", "pass"),
-            row("Build (windows-latest)", "Cross-platform", "fail"),
-            row("Build (macos-latest)", "Cross-platform", "pass"),
+            row("Build (windows-latest)", "Cross-platform (nightly)", "fail"),
+            row("Build (macos-latest)", "Cross-platform (nightly)", "pass"),
         ];
         let r = classify_red(
             &rows,
@@ -491,7 +492,11 @@ mod tests {
     fn pending_relevant_rows_are_reported_but_informational_pending_is_not() {
         let rows = [
             row("Build (ubuntu-latest)", "CI", "pending"),
-            row("Build (windows-latest)", "Cross-platform", "pending"),
+            row(
+                "Build (windows-latest)",
+                "Cross-platform (nightly)",
+                "pending",
+            ),
             row(HOLD_GATE_CHECK, "merge-hold-gate", "fail"),
         ];
         let r = classify_red(&rows, &[], &CiGateConfig::default(), true);
@@ -502,11 +507,11 @@ mod tests {
     #[test]
     fn config_parses_arrays_and_empty_array_disables_default() {
         let cfg = parse_ci_gate_config(
-            "[drain]\nretry_transient = 1\n\n[ci]\ninformational_workflows = [\"Cross-platform\", 'Nightly *'] # note\ninformational_checks = [\"Build (windows*\"]\n",
+            "[drain]\nretry_transient = 1\n\n[ci]\ninformational_workflows = [\"Cross-platform*\", 'Nightly *'] # note\ninformational_checks = [\"Build (windows*\"]\n",
         );
         assert_eq!(
             cfg.informational_workflows,
-            vec!["Cross-platform", "Nightly *"]
+            vec!["Cross-platform*", "Nightly *"]
         );
         assert_eq!(cfg.informational_checks, vec!["Build (windows*"]);
         let cfg = parse_ci_gate_config("[ci]\ninformational_workflows = []\n");
