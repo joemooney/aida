@@ -446,6 +446,13 @@ This is one atomic step that:
 
 Equivalent to: `aida edit <spec_id> --status done && aida queue remove <spec_id>`
 
+**Rework pickups are not exempt.** When the card carries a `[rework]` /
+`--reason` block (a reviewer requested changes and `aida queue rework` sent
+the spec back to you), you still finish with `aida queue done <spec_id>`
+after pushing the fixups. The drain asserts Done itself if you forget
+(BUG-1186), but a spec left In Progress is what let the reviewer seat be
+re-routed as an implementer.
+
 `aida queue done` does **not** open the PR — Done means "finished on a
 branch," and the PR is Step 6's job. The ordering (done → PR) is by design
 (STORY-86), so Step 6 is mandatory, not optional: a spec left Done with no

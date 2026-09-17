@@ -5029,6 +5029,19 @@ pub(crate) fn handle_queue_command(
                         .unwrap_or(false);
                     if review_queued {
                         None
+                    } else if orchestrator_review_envelope_for_pr(pr) {
+                        // BUG-1186 / ADR-40: the orchestrator's review phase set
+                        // the review envelope for THIS PR. Falling back to the
+                        // backing spec here swaps the seat — an implementer
+                        // pickup that executes the spec's rework reason and
+                        // pushes to the PR under review. Refuse loudly instead.
+                        // trace:BUG-1186 | ai:claude
+                        anyhow::bail!(
+                            "review envelope is set for PR-{pr} but no pickable review story is \
+                             queued — refusing to fall back to an implementer pickup of the \
+                             backing spec. Queue a fresh review round (`aida pr auto-queue-review \
+                             --branch <pr-head-branch>`) and retry"
+                        );
                     } else {
                         let store = storage.load()?;
                         let project_root = storage.path().parent().ok_or_else(|| {
@@ -7773,6 +7786,30 @@ pub(crate) fn reviewer_verdict_anchor_suffix() -> Option<String> {
 /// outside the orchestrator. The owning spec being Done is expected, so the
 /// prompt must keep the session on the PR verdict contract instead of queue
 /// hygiene.
+/// BUG-1186: is the orchestrator's review envelope (`AIDA_FROM_PR_REVIEW` +
+/// `AIDA_FROM_PR_NUMBER`) set for exactly this PR? The routing chokepoint uses
+/// it to refuse the PR→backing-spec fallback that swapped the reviewer seat
+/// for an implementer pickup.
+// trace:BUG-1186 | ai:claude
+pub(crate) fn orchestrator_review_envelope_for_pr(pr: u32) -> bool {
+    review_envelope_targets_pr(
+        std::env::var("AIDA_FROM_PR_REVIEW").ok().as_deref(),
+        std::env::var("AIDA_FROM_PR_NUMBER").ok().as_deref(),
+        pr,
+    )
+}
+
+/// Pure half of [`orchestrator_review_envelope_for_pr`].
+// trace:BUG-1186 | ai:claude
+pub(crate) fn review_envelope_targets_pr(
+    review: Option<&str>,
+    number: Option<&str>,
+    pr: u32,
+) -> bool {
+    let enabled = review.is_some_and(|v| matches!(v.trim(), "1" | "true" | "yes"));
+    enabled && number.and_then(|n| n.trim().parse::<u32>().ok()) == Some(pr)
+}
+
 // trace:BUG-868 | ai:codex
 pub(crate) fn reviewer_from_pr_contract_suffix() -> Option<String> {
     let enabled = std::env::var("AIDA_FROM_PR_REVIEW")
@@ -7796,9 +7833,11 @@ pub(crate) fn reviewer_from_pr_contract_suffix() -> Option<String> {
 
     Some(format!(
         "\n\nFrom-PR review contract: review PR #{pr} at head `{head_sha}` and write the \
-         verdict file at `{verdict_path}`. The owning spec being Done is expected: \
-         implementation shipped outside the orchestrator. Do not treat Done as queue cleanup, \
-         and do not run `aida queue done`; complete this phase by writing the review verdict file."
+         verdict file at `{verdict_path}`. The owning spec being Done is expected (and so is \
+         In Progress under a rework re-drive): you REVIEW the PR, you never implement — a \
+         `[rework]` / `--reason` note on the spec is the implementer's instruction, not yours. \
+         Make no commits and no pushes to the PR branch; do not run `aida queue done`; complete \
+         this phase by writing the review verdict file."
     ))
 }
 

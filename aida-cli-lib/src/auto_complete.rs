@@ -410,6 +410,11 @@ pub(crate) enum FailureKind {
     /// shelve cause, not a crash.
     // trace:STORY-974 | ai:codex
     VerdictReject,
+    /// BUG-1186: the reviewer seat moved the PR head it was asked to judge —
+    /// an independence breach, not a transient. Shelved for triage, never
+    /// retried (a retry would review reviewer-authored commits).
+    // trace:BUG-1186 | ai:claude
+    ReviewerWrote,
     /// TASK-136: phase 1 ended *inconclusively* — the orchestrator could not
     /// confirm or deny a PR (a transient GH-API outage) even after the bounded
     /// `gh_verify_backoff_schedule` retry. In a *batch* drain this is shelved
@@ -483,6 +488,8 @@ impl FailureKind {
                 | Self::NoVerdict
                 | Self::VerdictRequestChanges
                 | Self::VerdictReject
+                // trace:BUG-1186 | ai:claude
+                | Self::ReviewerWrote
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
                 | Self::CacheLocked
@@ -502,6 +509,7 @@ impl FailureKind {
         match self {
             Self::VerdictRequestChanges => "verdict:request-changes",
             Self::VerdictReject => "verdict:reject",
+            Self::ReviewerWrote => "reviewer-wrote",
             Self::CiRed => "ci-red",
             Self::NoVerdict => "no-verdict",
             Self::NoPr => "no-pr",
@@ -1698,6 +1706,15 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         (Phase::Reviewer, FailureKind::NoVerdict) => format!(
             "The reviewer session ended without a usable verdict — re-run the review: \
              `aida queue work PR-{pr} --steal`"
+        ),
+        // BUG-1186: the reviewer seat modified the branch it was reviewing.
+        // Never retry (that would review reviewer-authored commits under the
+        // drain's own approval): a human inspects, then re-runs the review.
+        // trace:BUG-1186 | ai:claude
+        (Phase::Reviewer, FailureKind::ReviewerWrote) => format!(
+            "The reviewer pushed to `{branch}` during the review — inspect the extra commits \
+             (`git log origin/main..origin/{branch}`), drop or keep them deliberately, then \
+             re-run the review: `aida queue work PR-{pr} --steal`"
         ),
         // By phase 3 the spec is Done — the implementer opened the PR in
         // phase 1, so `aida queue work` (queued items only) would reject
@@ -8887,6 +8904,7 @@ mod tests {
         let allowed = [
             "verdict:request-changes",
             "verdict:reject",
+            "reviewer-wrote",
             "ci-red",
             "tool-exit",
             "no-verdict",
@@ -8907,6 +8925,7 @@ mod tests {
             FailureKind::NoVerdict,
             FailureKind::VerdictRequestChanges,
             FailureKind::VerdictReject,
+            FailureKind::ReviewerWrote,
             FailureKind::PrVerificationInconclusive,
             FailureKind::Watchdog,
             FailureKind::CacheLocked,
@@ -8919,6 +8938,26 @@ mod tests {
                 "{kind:?} mapped outside the closed cause set"
             );
         }
+    }
+
+    // BUG-1186: a reviewer that writes to the PR head is shelved under its
+    // own typed cause and is never a transient to retry.
+    #[test]
+    fn reviewer_wrote_is_shelvable_typed_and_not_transient() {
+        assert!(FailureKind::ReviewerWrote.is_shelvable());
+        assert_eq!(FailureKind::ReviewerWrote.cause_slug(), "reviewer-wrote");
+        assert!(!is_transient_retry_cause("reviewer-wrote"));
+        let ctx = HintContext {
+            spec: "BUG-1177".into(),
+            branch: Some("bug-1177-x".into()),
+            pr_number: Some(1882),
+            ..HintContext::default()
+        };
+        let hint = recovery_hint(Phase::Reviewer, FailureKind::ReviewerWrote, &ctx);
+        assert!(
+            hint.contains("origin/bug-1177-x") && hint.contains("PR-1882"),
+            "{hint}"
+        );
     }
 
     // --- Batch drain (TASK-285) -------------------------------------------
