@@ -1,0 +1,19 @@
+id: 01a0afbf-adc9-70c3-9098-b4d29d4c47e1
+spec_id: ADR-39
+agreed_id: ADR-39
+title: 'pr ship + drain CI gating: gate-aware watch keeps the supervised hold until merge; failure = REQUIRED checks only'
+description: |-
+  Accepted 2026-09-17 (operator, guided) for BUG-1180 and the CI-watch informational-vs-required gap.
+
+  1. GATE-AWARE WATCH, HOLD KEPT UNTIL MERGE. pr ship keeps the hold release (read_hold → clear_hold + unlabel) in step 3 (merge). In step 2 (CI watch), when the Forge watch reports Failed AND a local .aida/merge-holds marker exists for the PR, re-check per-check via gh: if the ONLY red check is merge-hold-gate (the hold itself), proceed as green. After releasing in step 3, re-poll merge-hold-gate until it re-runs green before invoking the merge, so the merge never races the unlabeled re-run. Rejected: releasing before the watch (simpler reorder, but leaves the PR unheld for the whole CI-watch window).
+
+  2. REQUIRED-ONLY FAILURE SEMANTICS, IN BOTH PLACES. CiState stays a coarse enum (no Forge-trait change). On Failed, both pr ship's step 2 and the drain's phase-2 CI watch re-check via gh against the target branch's branch-protection required_status_checks contexts: fail only if a REQUIRED check is red; informational reds (e.g. the TASK-1205 path-filtered Windows/macOS matrix) are surfaced as warnings and do not fail/shelve. This is a GitHub-path re-check (the label gate is GitHub-only; GitLab keeps its native watch). Rejected: pr-ship-only (tonight's false shelve was the drain's) and deferring.
+
+  3. MESSAGING. A held PR whose only red is the gate reports "under a supervised merge-hold — releasing at merge", never "CI failed"; a red gate with NO local marker (a lingering label) suggests `aida merge-hold clear <pr>`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T14:22:49.801705637Z
+modified_at: 2026-09-17T14:22:49.801705637Z
+req_type: Decision
