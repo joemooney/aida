@@ -1559,11 +1559,55 @@ pub(crate) fn pr_ship_handler(
             title: None,
         };
         let ci_result = crate::forge::forge_for(&project_root).watch_ci(&watch_change);
-        let ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
+        let mut ci_failed = matches!(ci_result, Ok(crate::forge::CiState::Failed) | Err(_));
+        // BUG-1180 / ADR-39: a coarse "failed" may be the supervised merge-hold
+        // gate itself (this command releases it at step 3) or an informational
+        // matrix job. Re-read the rows and abort only on a REAL red check.
+        // trace:BUG-1180 | ai:claude
+        let mut red_detail: Option<String> = None;
+        if matches!(ci_result, Ok(crate::forge::CiState::Failed))
+            && forge_kind == crate::forge::ForgeKind::GitHub
+        {
+            let hold_present = crate::merge_hold::read_hold(&project_root, pr_number).is_some();
+            match crate::ci_gate::refine_red_via_gh(
+                &project_root,
+                pr_number,
+                hold_present,
+                std::time::Duration::from_secs(20 * 60),
+                std::time::Duration::from_secs(15),
+            ) {
+                Ok(r) if !r.is_real() && !r.has_pending() => {
+                    ci_failed = false;
+                    let note = r.describe(pr_number);
+                    if !note.is_empty() {
+                        eprintln!(
+                            "  {} {}",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            note
+                        );
+                    }
+                }
+                Ok(r) if !r.is_real() => {
+                    red_detail = Some(format!(
+                        "CI on PR-{pr_number} did not settle in time — still pending: {}",
+                        r.pending.join(", ")
+                    ));
+                }
+                Ok(r) => {
+                    red_detail = Some(format!(
+                        "CI is red on PR-{pr_number}: {}",
+                        r.describe(pr_number)
+                    ))
+                }
+                Err(_) => {} // gh unavailable — keep the coarse verdict
+            }
+        }
         if ci_failed {
             let detail = match &ci_result {
                 Err(e) => format!("{e:#}"),
-                _ => format!("CI did not pass for PR-{pr_number}"),
+                _ => red_detail
+                    .clone()
+                    .unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}")),
             };
             log_ship_activity(
                 &main_worktree,
@@ -1578,7 +1622,10 @@ pub(crate) fn pr_ship_handler(
                 pr_number
             );
             eprintln!("  {}", hint);
-            anyhow::bail!("CI did not pass for PR-{pr_number}");
+            anyhow::bail!(
+                "{}",
+                red_detail.unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}"))
+            );
         }
         eprintln!(
             "  {} CI green for PR-{}",
@@ -1663,6 +1710,31 @@ pub(crate) fn pr_ship_handler(
             );
             let _ = crate::merge_hold::clear_hold(&project_root, pr_number);
             crate::merge_hold::sync_label(&project_root, pr_number, false);
+            // BUG-1180: removing the label re-runs `merge-hold-gate`; the
+            // squash-merge below would be refused by branch protection until it
+            // reports green, so wait for it (bounded) before merging.
+            // trace:BUG-1180 | ai:claude
+            if forge_kind == crate::forge::ForgeKind::GitHub {
+                match crate::ci_gate::wait_hold_gate_green(
+                    &project_root,
+                    pr_number,
+                    std::time::Duration::from_secs(180),
+                    std::time::Duration::from_secs(10),
+                ) {
+                    Ok(true) => {}
+                    Ok(false) => anyhow::bail!(
+                        "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
+                         180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
+                         inspect `gh pr checks {pr_number}`",
+                        crate::ci_gate::HOLD_GATE_CHECK
+                    ),
+                    Err(e) => eprintln!(
+                        "  {} could not confirm `{}` re-ran green ({e:#}) — attempting the merge anyway",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        crate::ci_gate::HOLD_GATE_CHECK
+                    ),
+                }
+            }
         }
         let mut merge_sink = crate::network_retry::StderrSink;
         if let Err(e) = crate::forge::forge_for(&project_root).merge_change(

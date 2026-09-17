@@ -146,6 +146,7 @@ mod init_cmd;
 mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
+mod ci_gate;
 mod integrate_checkout;
 mod integrate_view;
 mod intent;
@@ -84301,6 +84302,55 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 failed_summary,
             } => {
                 self.set_pr_number(pr_number);
+                // BUG-1180 / ADR-39: the coarse red may be the supervised
+                // merge-hold gate itself (released at merge, not a CI failure)
+                // or an informational matrix job. Re-read the per-check rows
+                // and shelve CiRed only for a REAL failing check. GitHub only;
+                // other forges keep the coarse verdict.
+                // trace:BUG-1180 | ai:claude
+                if self.lifecycle_forge == crate::forge::ForgeKind::GitHub {
+                    let hold_present =
+                        merge_hold::read_hold(&self.project_root, pr_number as u64).is_some();
+                    match ci_gate::refine_red_via_gh(
+                        &self.project_root,
+                        pr_number as u64,
+                        hold_present,
+                        std::time::Duration::from_secs(20 * 60),
+                        std::time::Duration::from_secs(15),
+                    ) {
+                        Ok(r) if !r.is_real() && !r.has_pending() => {
+                            if !self.json {
+                                eprintln!(
+                                    "  {} CI red on PR-{pr_number} is not a failure — {}",
+                                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                                    r.describe(pr_number as u64),
+                                );
+                            }
+                            return Ok(());
+                        }
+                        Ok(r) if !r.is_real() => {
+                            self.ci_run_id = latest_run_id_for_branch(&branch);
+                            return Err(auto_complete::PhaseFailure::of(
+                                auto_complete::FailureKind::CiTimeout,
+                                format!(
+                                    "CI on PR-{pr_number} did not settle in time — still pending: {}",
+                                    r.pending.join(", ")
+                                ),
+                            ));
+                        }
+                        Ok(r) => {
+                            self.ci_run_id = latest_run_id_for_branch(&branch);
+                            return Err(auto_complete::PhaseFailure::of(
+                                auto_complete::FailureKind::CiRed,
+                                format!(
+                                    "CI is red on PR-{pr_number}: {}",
+                                    r.describe(pr_number as u64)
+                                ),
+                            ));
+                        }
+                        Err(_) => {} // gh unavailable — fall through to the coarse verdict
+                    }
+                }
                 self.ci_run_id = latest_run_id_for_branch(&branch);
                 return Err(auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::CiRed,
