@@ -1,0 +1,23 @@
+id: 01a0adaf-a82c-73e2-a6df-4f7b8a98d52b
+spec_id: BUG-1177
+agreed_id: BUG-1177
+title: Docs + aida ultraplan reference a /ultraplan Claude Code command that does not exist (dead-end for users)
+description: |-
+  Operator hit this live 2026-09-16: ran /ultraplan in Claude Code → "Unknown command: /ultraplan". Verified via the Claude Code guide: /ultraplan is NOT a Claude Code slash command (not renamed, not gated — it does not exist). Yet AIDA's surfaces present it as the designed round-trip: CLAUDE.md ("the /ultraplan round-trip pair: aida ultraplan assembles the prompt, /aida-import-plan lands it", TASK-113/TASK-114), the `aida ultraplan <spec>` command whose whole purpose is to assemble a /ultraplan prompt, docs/positioning/vs-ultraplan.md, and TASK-304 (ultraplan invocation cadence). The user follows the documented path and lands on a dead command.
+
+  Root cause candidates: /ultraplan was a preview/plugin feature that is no longer shipped, or was never a built-in and the docs conflated it with an aspiration. Either way the product now points users at a phantom.
+
+  Fix: (1) audit every /ultraplan mention (CLAUDE.md, aida ultraplan --help + its output banner, docs/positioning/vs-ultraplan.md, TASK-113/114/304 text, skills) and re-point the round-trip at what actually exists — the /aida-plan skill (runs planning in-session → docs/plans/), with `aida ultraplan` reframed as "assemble a rich planning prompt for ANY planner (a Plan agent, a multi-agent workflow, or a human)", not a specific dead command; (2) make `aida ultraplan` print a next-step that names a REAL invocation; (3) keep /aida-import-plan (it's fine — it lands any saved plan). Consider renaming `aida ultraplan` → `aida plan prompt` to stop implying the phantom. Verify with the CLI-manual drift-guard's reflection check once fixed.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T04:46:05.356749415Z
+modified_at: 2026-09-17T04:46:05.356749415Z
+req_type: Bug
+tags:
+- cli
+- dead-end
+- docs
+- ultraplan
+- ux-signal
