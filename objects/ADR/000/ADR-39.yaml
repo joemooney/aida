@@ -15,10 +15,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T14:22:49.801705637Z
-modified_at: 2026-09-17T14:23:00.194332128Z
+modified_at: 2026-09-17T14:49:20.431426237Z
 req_type: Decision
 relationships:
 - rel_type: References
   target_id: 01a0ae2c-935f-7ec2-872c-15163cc8e888
   created_at: 2026-09-17T14:23:00.194326620Z
   created_by: joe
+comments:
+- id: 01a0afd7-f32f-77c3-b750-135c4f9985b8
+  author: joe
+  content: 'Secondary call (operator, guided, 2026-09-17): recon found main''s branch protection requires ONLY merge-hold-gate — Build (ubuntu-latest) is not required — and the informational Windows/macOS jobs share the Build (...) name with PR CI (only the workflow name differs: Cross-platform vs CI). A literal required-only rule would merge over a red Build. DECIDED: informational allow-list. A red check is ignorable only if it is NOT required AND its workflow/name matches [ci] informational_workflows (default: Cross-platform) / informational_checks globs; everything else red is a failure; merge-hold-gate red is ignorable only while the local hold marker exists (the hold itself, released at merge). Safe when a repo declares no branch protection.'
+  created_at: 2026-09-17T14:49:20.431426237Z
+  modified_at: 2026-09-17T14:49:20.431426237Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
