@@ -72670,5 +72670,24 @@ operations:
     req_type: Decision
     status: Draft
     priority: Medium
-clock: 5662
+- id: 01a0b03e-3fb3-7700-a1f0-90a257eabdb8
+  target_id: 01a0b03e-3bcd-7f41-a90f-5c3d9ea2c313
+  author: aida
+  node_id: '1'
+  lamport: 5663
+  timestamp: 2026-09-17T16:41:04.691983723Z
+  kind: !Create
+    title: 'aida reconstitute v1: store-only probe (no source), agent-judged heuristic matching, divergences as a harvest candidates file'
+    description: |-
+      Accepted 2026-09-17 (operator, guided, async fork round) for TASK-1248 (STORY-1178 slice 3, aida reconstitute).
+
+      1. ISOLATION = store-only context, NO source at all. The probe agent receives the spec (show --full), linked ADRs, [aida:sem] comments, graph context and the symbol names the spec's trace comments point at, and writes regenerated tests into an empty scratch directory. Regenerated tests are compared for intent, not compiled. Rejected: a scratch worktree with test dirs stripped (about 200 inline #[cfg(test)] modules in lib.rs alone would still leak) and stripping every cfg(test) block (brittle, and the code itself leaks intent).
+
+      2. MATCHING = agent-judged intent match per criterion, labelled heuristic. A second headless pass sees (real traced test, regenerated tests) per criterion and answers matched / partial / missing with a one-line reason. Score = matched / total real traced tests, always printed with the word heuristic; the per-criterion divergence lines are the primary output. Rejected: deterministic name/assertion-token overlap (a rephrased test scores as missing).
+
+      3. OUTPUT = harvest candidates file + the command. Divergences (real tests not reproducible from the store) are written in aida harvest's candidate shape to .aida/harvest/<spec>-probe-<id>.json and the report ends with aida harvest <SPEC> --from <file> (new flag), so confirmation stays opt-in and the probe itself never writes to the spec. Rejected: chaining straight into the confirm checklist.
+    req_type: Decision
+    status: Draft
+    priority: Medium
+clock: 5663
 node_id: '1'
