@@ -1,0 +1,27 @@
+id: 01a0b00e-0a0e-7680-ab61-d97eebb51101
+spec_id: BUG-1188
+agreed_id: BUG-1188
+title: pr ship reads merge-hold markers from project_root but ships from main_worktree — a worktree-launched ship misses a main-clone marker and aborts as 'lingering label'
+description: |-
+  Found during the independent review of #1887 (BUG-1180). In pr_ship_handler (aida-cli-lib/src/pr_cmd.rs) project_root = find_project_root() and main_worktree = main_worktree_root_from(&project_root). The hold-marker lookups (merge_hold::read_hold / clear_hold / sync_label, and the new ci_gate hold_present) take project_root, while ship activity + the merge itself use main_worktree. merge_hold stores markers under <root>/.aida/merge-holds/PR-<n>, and the orchestrator stamps the marker from the main clone at PR-detection (BUG-1173).
+
+  So a pr ship launched from a sibling worktree (the common implementer case: cd into the spec worktree, run aida pr ship) looks for the marker in the worktree's .aida, finds nothing, and the red merge-hold-gate is classified as a LINGERING LABEL → real failure → abort with an aida merge-hold clear hint — i.e. the BUG-1180 symptom returns for exactly the worktree-launched path. Pre-existing before #1887 (clear_hold already used project_root); #1887 made the consequence louder.
+
+  Fix: resolve the hold root ONCE — main_worktree — and pass it to every merge_hold::* and ci_gate call in pr_ship_handler (and audit the drain's RealPhaseDriver merge/CI phases for the same project_root-vs-main split; BUG-1173 stamps from the orchestrator's root so it is probably already main, verify). Add a test that a hold written under the main clone is seen by a ship whose cwd is a sibling worktree.
+
+  Acceptance:
+  - With a marker at <main>/.aida/merge-holds/PR-N, aida pr ship N run from a sibling worktree reports 'under a supervised merge-hold — releasing at merge', not 'lingering label', and releases the marker in the main clone at step 3.
+  - merge-hold list from the worktree and from main agree.
+  - Unit test pins the root resolution; existing merge_hold + ci_gate tests stay green.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T15:48:25.230554922Z
+modified_at: 2026-09-17T15:48:25.230554922Z
+req_type: Bug
+tags:
+- follow-up:BUG-1180
+- merge-hold
+- pr-ship
+- worktree
