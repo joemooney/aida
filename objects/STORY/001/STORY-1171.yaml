@@ -12,12 +12,12 @@ description: |-
   Needs: acquire/release; wait-or-refuse on contention (with a bounded wait); STALE-LOCK RECOVERY if the holder died (mirror the git index.lock stale-recovery BUG-1164 just shipped); who-holds-it/what-PR/timestamp for observability (aida merge-lock status).
 
   Sequence: AFTER the marker-at-PR-open fix (the direct race-closer for the supervised case); this adds the broader serialization + union-build safety on top. Acceptance: two concurrent merge attempts to main serialize (one waits, bounded); a dead holder's lock is recovered, not wedged; targeted store-writes are unaffected; observable via a status verb.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T15:31:49.109057963Z
-modified_at: 2026-09-17T00:53:52.779927165Z
+modified_at: 2026-09-17T01:03:48.852022239Z
 req_type: Story
 tags:
 - merge-lock serialization concurrency forge reliability bug-1167
@@ -75,4 +75,22 @@ comments:
   created_at: 2026-09-17T00:53:52.779927165Z
   modified_at: 2026-09-17T00:53:52.779927165Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0ace4-286d-72a0-886c-eca7d510bb65
+  author: aida-auto-bump
+  timestamp: 2026-09-17T01:03:48.845480917Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0ace4-2874-7b13-854f-69796a07273e
+  timestamp: 2026-09-17T01:03:48.852020981Z
+  agent: aida
+  commit_sha: 9fd438b70ac595ba37646db3f565cc4801fdcd19
+  summary: Completed via merge 9fd438b7
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-17T01:03:48.160182828Z
+  completion_sha: 9fd438b70ac595ba37646db3f565cc4801fdcd19
