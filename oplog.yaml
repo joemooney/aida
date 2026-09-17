@@ -71928,5 +71928,22 @@ operations:
   timestamp: 2026-09-17T08:48:57.388021747Z
   kind: !SetStatus
     status: Rejected
-clock: 5603
+- id: 01a0ae8e-2e13-7ec1-87bf-20138a6b23fd
+  target_id: 01a0ae8e-27f0-7182-ae5f-8240665d54b4
+  author: aida
+  node_id: '1'
+  lamport: 5604
+  timestamp: 2026-09-17T08:49:08.627239429Z
+  kind: !Create
+    title: 'merge_lock test stale_dead_pid_same_host_is_reclaimed panics on Windows — pid probe is unix-only, test lacks #[cfg(unix)]'
+    description: |-
+      Caught by the informational cross-platform matrix on PR-1881 (the first PR to trigger it after #1873 merged): Build (windows-latest) → cargo test → `merge_lock::tests::stale_dead_pid_same_host_is_reclaimed ... FAILED`, panicked at aida-cli-lib/src/merge_lock.rs:311 (the `.unwrap()` on acquire). Main's nightly was green on 09-15/09-16; #1873 (STORY-1171 slice 1) landed after the last green run, so this is a live Windows regression on main from that PR.
+
+      Root cause: `pid_alive` is `#[cfg(unix)]` (libc::kill probe); the `#[cfg(not(unix))]` fallback deliberately returns `true` ("cannot probe → assume alive, only the TTL backstop reclaims"). The test writes a holder on OUR host with pid 999999999 and expects an IMMEDIATE dead-pid reclaim — a branch that is unreachable on Windows by design, so acquire waits its 200ms bound, returns WouldBlock, and the unwrap panics.
+
+      Fix (small, drain-safe): gate that test `#[cfg(unix)]` (its premise is the unix pid probe), and add a `#[cfg(not(unix))]` sibling asserting the documented Windows behavior — a same-host holder with a bogus pid is NOT reclaimed by pid (stays live, WouldBlock within the bound) but IS reclaimed via the TTL path (reuse stale_ttl_expired_is_reclaimed_any_host's shape). The other 4 merge_lock tests are platform-neutral. Verify: cargo test -p aida-cli-lib --lib merge_lock green on Linux; the cross-platform matrix (workflow_dispatch) green on Windows. Author of the original test = the product/oversight session; do NOT let that session merge the fix (independence) — drain reviewer + advisor gate it.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5604
 node_id: '1'
