@@ -7,14 +7,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0ad9f-d486-7dc2-8497-637136635b10
-  position: 99000
-  added_by: role:implementer
-  note: 'supervised (drive): make the advisor heartbeat event-driven — wake only when aida awaiting is non-empty; no continuous /loop tick narration. Touches the loop/heartbeat invocation layer; merge held for the advisor'
-  added_at: 2026-09-17T16:38:25.630054281Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0afe4-69de-7bd0-ae4d-d5fcf9f974c8
   position: 100000
   added_by: role:implementer
