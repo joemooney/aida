@@ -10,12 +10,12 @@ description: |-
   Root cause: the BUG-1167 client-side release was placed inside the merge step, after the CI watch; Layer 2 (the label → required check) was added alongside, and the ordering interaction was missed. Same family as the BUG-1173 self-shelve (CI-watch has no notion that merge-hold-gate red == "held", not "failed").
 
   Fix (pick one, prefer the first): (a) in pr_ship_handler, perform the hold release (clear_hold + sync_label(false)) BEFORE the CI watch when a marker exists for the PR, then watch CI (the gate re-runs green on the unlabeled event); (b) teach the pr-ship CI watch to treat merge-hold-gate as non-blocking when a local marker exists (it is about to be released); (c) both. Add a regression test: a PR with a marker + red gate ships (release → gate green → merge). Also make the abort message say "this PR is under a supervised merge-hold — run `aida merge-hold clear <pr>` or let pr ship release it" instead of "CI failed", so the operator isn't misled into debugging CI.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T07:02:32.031793455Z
-modified_at: 2026-09-17T08:49:15.260749362Z
+modified_at: 2026-09-17T14:23:02.599027312Z
 req_type: Bug
 tags:
 - bug-1167
