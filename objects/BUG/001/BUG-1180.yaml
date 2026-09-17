@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T07:02:32.031793455Z
-modified_at: 2026-09-17T07:02:32.031793455Z
+modified_at: 2026-09-17T08:49:15.260749362Z
 req_type: Bug
 tags:
 - bug-1167
@@ -24,3 +24,10 @@ tags:
 - merge-hold
 - pr-ship
 - supervised-merge
+comments:
+- id: 01a0ae8e-47fc-73e2-b2a6-9fb8a7ae5a9a
+  author: joe
+  content: 'Sibling defect seen 01:46 on TASK-1251/PR-1881: the drain''s phase-2 CI-watch (and pr ship''s step-2 watch) treat ANY red check as CI failure, with no notion of REQUIRED vs INFORMATIONAL. PR-1881 had Build(ubuntu)+merge-hold-gate GREEN (the required set) but the TASK-1205 path-filtered Windows/macOS matrix — informational by design — was red on an UNRELATED inherited failure (the #1873 merge_lock Windows test, filed separately). The drain shelved ''ci-red'' and pr ship would have aborted the same way, so a correct PR was blocked by a check that is explicitly non-blocking. Fix alongside this bug: the CI-watch should gate on the branch''s REQUIRED checks (branch-protection required_status_checks) and report informational reds as warnings, not failures. Tonight''s workaround: merge-hold clear + raw gh pr merge + aida pull.'
+  created_at: 2026-09-17T08:49:15.260749362Z
+  modified_at: 2026-09-17T08:49:15.260749362Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
