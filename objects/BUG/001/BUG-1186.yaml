@@ -8,12 +8,12 @@ description: |-
   Three defects: (1) SEAT CONFUSION — the reviewer prompt/skill does not firmly constrain the seat to review-only, so a rework reason surfaced on the spec's pickup card is executed as a task; (2) INDEPENDENCE BREACH — the reviewer modified the code it was supposed to review; (3) the push during the review phase invalidates the CI the drain already watched (a fresh Build is triggered after review), so even a later verdict would be against a different SHA. Net effect: every re-drive of a reworked spec fails its review phase and burns two reviewer sessions.
 
   Fix: (a) the reviewer seat's headless prompt must state review-only + no git writes, and the phase should verify the branch SHA is unchanged after review (fail loudly if the reviewer pushed); (b) do not surface `[rework]`/`--reason` comments as actionable instructions to the reviewer seat (scope them to the implementer pickup card); (c) name reviewer headless logs by seat (pr-NNNN-review-*) consistently so this is diagnosable; (d) regression test: a rework + re-drive whose reviewer phase must produce a verdict without altering the branch. Related: EPIC-62 (unattended drain reliability), BUG-875 (reviewer watchdog), STORY-974 (verdict kinds). Outcome tonight: the branch content was correct and was reviewed by the oversight session as an independent fallback.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T09:31:37.237954154Z
-modified_at: 2026-09-17T14:45:08.689057455Z
+modified_at: 2026-09-17T15:03:56.319898382Z
 req_type: Bug
 tags:
 - drain
@@ -23,7 +23,23 @@ tags:
 - re-drive
 - reviewer
 - seat-confusion
+history:
+- id: 01a0afe5-5099-7ab3-ab36-9e9b9f858e91
+  author: aida-auto-bump
+  timestamp: 2026-09-17T15:03:56.313214725Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0afe5-509f-76d0-9e34-ba445ce2e9ef
+  timestamp: 2026-09-17T15:03:56.319897417Z
+  agent: aida
+  commit_sha: ab4daedc339c619b0af56427b0c503f1ed31ee2c
+  summary: Completed via merge ab4daedc
 implementation_info:
   implemented: true
   implemented_at: 2026-09-17T14:45:08.689057455Z
   implemented_by: joe
+  completed_at: 2026-09-17T15:03:56.313084695Z
+  completion_sha: ab4daedc339c619b0af56427b0c503f1ed31ee2c
