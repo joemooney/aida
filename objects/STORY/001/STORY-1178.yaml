@@ -41,3 +41,7 @@ tags:
 - keystone
 - parent:EPIC-70
 - reconstitution
+relationships:
+- rel_type: Child
+  target_id: 01a0ad9a-fc48-73a3-9c9f-513df7692acb
+  created_at: 2026-09-17T04:34:54.279492263Z
