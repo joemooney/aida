@@ -1,0 +1,25 @@
+id: 01a0b03e-561e-7233-abe7-727a7d572b8b
+spec_id: ADR-45
+agreed_id: ADR-45
+title: 'Harvest in the drain: advisory step after agent gates, propose-only (never lands unattended), [harvest] gate advisory|off'
+description: |-
+  Accepted 2026-09-17 (operator, guided, async fork round) for TASK-1249 (STORY-1178 slice 4, harvest in the drain).
+
+  Context correction: the before-merge agent-gate hook (run_agent_gates, [[agent_gates]]) already exists, so the earlier note that this slice must wait on STORY-1156/1157 (both still Draft) is stale.
+
+  1. SLOT = a dedicated advisory step right after the agent gates and before merge: PhaseDriver::run_harvest_gate(), invoked after run_agent_gates(). It never returns a phase failure (advisory), only a ledger. No new Phase enum variant (closed phase set, statusline indices and phase tests unchanged). Rejected: Phase::Harvest (touches the closed set) and registering as an [[agent_gates]] entry (harvest is not a verdict-producing gate).
+
+  2. UNATTENDED CONFIRMATION = propose-only. The drain runs the harvest agent and filter, writes the [aida:harvest] ledger comment and a candidates file, and surfaces a one-line pointer in aida awaiting; a human/advisor confirms later with aida harvest <SPEC> --from <file>. An unattended run never edits the contract. Rejected: --yes-all inside the drain.
+
+  3. GATING = [harvest] gate = "advisory" (default) | "off"; lifecycle:no-harvest skips per spec. Agent failures and timeouts are logged, never shelve the spec.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T16:41:10.430670277Z
+modified_at: 2026-09-17T16:41:10.430670277Z
+req_type: Decision
+tags:
+- harvest
+- parent:TASK-1249
+- reconstitution
