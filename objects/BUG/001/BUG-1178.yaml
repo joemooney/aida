@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:59:59.382279085Z
-modified_at: 2026-09-17T15:57:25.075996Z
+modified_at: 2026-09-17T16:13:23.815043586Z
 req_type: Bug
 tags:
 - batch:bugs-0917
@@ -61,6 +61,18 @@ comments:
   content: 'Reopened 2026-09-17 08:50 by the driver-advisor: #1879''s (BUG-1178) trailer auto-completed this spec, but #1879 only landed the [contained] allowed_hosts egress WORKAROUND. The bug itself — dontAsk applied to INTERACTIVE launches — is unfixed. Status back to Approved; execution_mode drive (launcher change, supervised merge). batch:bugs-0917.'
   created_at: 2026-09-17T15:48:45.853417138Z
   modified_at: 2026-09-17T15:48:45.853417138Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b024-e7e7-7b61-ac7b-fd6b95ebc0fe
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1889 [AI:codex] fix(launcher): keep contained TTY launches promptable (BUG-1178)
+    verdict: REQUEST CHANGES (supervised merge refused; hold kept)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless; drain reviewer approved; this is the drive-mode advisor gate)
+    reasoning: the fix is correct as far as it goes — tool_contained_flags("claude") no longer injects dontAsk, agent_new + agent_new_bg_dispatch refuse an explicit interactive dontAsk, headless paths keep their own dontAsk (session.rs spawn_claude_headless/resume, queue_cmd drain phases), config permissions show renders per launch kind. GAP: the STORY-495 resolver for `aida session new` / `aida session start --launch` (fn near read_agents_bypass_from_file, lib.rs ~24554: `if contained { return Ok(ResolvedClaudeLaunch { mode: Some("dontAsk"), contained: true }) }` and the `sandbox` arm below it) still emits dontAsk for an INTERACTIVE launch. Those are TTY launchers, so acceptance "a TTY launch under contained=true must not carry dontAsk" is unmet for them. Fix in the same PR: contained interactive → mode None (native prompt) + contained flags; keep dontAsk only where the launch is headless; extend the guard to that path; add the mirror test.
+  created_at: 2026-09-17T16:13:23.815043586Z
+  modified_at: 2026-09-17T16:13:23.815043586Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0af97-e0a0-7793-be1c-618079010617
