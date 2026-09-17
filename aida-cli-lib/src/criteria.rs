@@ -149,13 +149,22 @@ pub(crate) fn parse_acceptance_criteria(spec: &str, description: &str) -> Vec<Cr
     };
     section
         .lines()
-        .filter_map(|line| {
-            criterion_text_from_line(line).map(|text| criterion_from_text(spec, text))
+        .flat_map(|line| {
+            split_criterion_line(line).into_iter().filter_map(|text| {
+                criterion_text_from_line(text).map(|text| criterion_from_text(spec, text))
+            })
         })
         .collect()
 }
 
 fn acceptance_section(description: &str) -> Option<String> {
+    if let Some(section) = headed_acceptance_section(description) {
+        return Some(section);
+    }
+    inline_acceptance_section(description)
+}
+
+fn headed_acceptance_section(description: &str) -> Option<String> {
     let mut in_section = false;
     let mut out = String::new();
     for line in description.lines() {
@@ -180,6 +189,30 @@ fn acceptance_section(description: &str) -> Option<String> {
         }
     }
     Some(out).filter(|s| !s.trim().is_empty())
+}
+
+fn inline_acceptance_section(description: &str) -> Option<String> {
+    for marker in ["Acceptance criteria:", "Acceptance:"] {
+        if let Some(pos) = description.find(marker) {
+            let body = description[pos + marker.len()..].trim();
+            let body = body.split("\n\n").next().unwrap_or(body).trim();
+            if !body.is_empty() {
+                return Some(body.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn split_criterion_line(line: &str) -> Vec<&str> {
+    if line.contains(';') && !line.trim_start().starts_with('-') {
+        line.split(';')
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .collect()
+    } else {
+        vec![line]
+    }
 }
 
 fn criterion_text_from_line(line: &str) -> Option<&str> {
@@ -430,6 +463,17 @@ mod tests {
         assert!(first[1].id.starts_with("STORY-1.ac"));
         assert_eq!(first[1].id, reordered[0].id);
         assert_eq!(first[0].id, reordered[1].id);
+    }
+
+    #[test]
+    fn inline_acceptance_splits_semicolon_criteria() {
+        let desc = "Context. Acceptance: first outcome; second outcome.";
+        let criteria = parse_acceptance_criteria("STORY-1", desc);
+        assert_eq!(criteria.len(), 2);
+        assert_eq!(criteria[0].text, "first outcome");
+        assert_eq!(criteria[1].text, "second outcome.");
+        assert!(criteria[0].id.starts_with("STORY-1.ac"));
+        assert_ne!(criteria[0].id, criteria[1].id);
     }
 
     #[test]
