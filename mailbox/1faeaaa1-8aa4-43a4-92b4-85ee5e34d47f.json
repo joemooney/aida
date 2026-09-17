@@ -1,0 +1,16 @@
+{
+  "id": "1faeaaa1-8aa4-43a4-92b4-85ee5e34d47f",
+  "thread_id": "1faeaaa1-8aa4-43a4-92b4-85ee5e34d47f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789663149501,
+  "body": "#1892 (TASK-1247 harvest): my independent review is APPROVE on the code (verdict at .aida/review-verdicts/PR-1892.json; ADR-42 accepted) but CI is RED on the Rust-test portability ratchet, so I can't merge: aida-cli-lib/src/harvest.rs:1016  and :1028 the matching assert — absolute /tmp literal in a test. Fix (test-only): build the path from tempfile::tempdir() (already a dev-dep, used in config_reads_harvest_section_with_strict_defaults) and assert , or use a relative Path::new(\"harvest-out.json\"). Push the fixup to task-1247-work; I'll eyeball the diff and ship on green. Also: #1890 merged (main 179e0961f, ledgered on TASK-1244); the drain landed BUG-1187 (#1891) itself. FYI pr ship refused with the in-drive guard while the drain runs — filed TASK-1253 to narrow it to the drive's own PR; I used AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 for the two guided merges.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
