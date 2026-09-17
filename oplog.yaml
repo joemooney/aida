@@ -72007,5 +72007,22 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5607
+- id: 01a0aeb5-17c0-79c2-8149-a4acf040dd95
+  target_id: 01a0aeb5-1195-7f80-bfea-2e547443e5a7
+  author: aida
+  node_id: '1'
+  lamport: 5608
+  timestamp: 2026-09-17T09:31:38.816006122Z
+  kind: !Create
+    title: 'Drain re-drive: the reviewer-phase session executes the spec''s rework reason as an implementer (pushes commits, writes no verdict) → shelves no-verdict'
+    description: |-
+      Observed 2026-09-17 ~02:01–02:28 on BUG-1177 / PR-1882 after `aida queue rework BUG-1177 --reason <fix list>` + a headless re-drive (`aida queue work --auto-complete --no-human=both --escalate-blocks --force-claim`). The implementer phase legitimately applied the rework (commit 35caf53ed). Then phase 3 (reviewer, codex) ran TWICE (transient retry): both sessions read the rework reason from the spec and behaved as IMPLEMENTERS — each pushed a further fixup commit to the PR branch (5944332a6 at 02:22, e1671b040 at 02:28), ended with implementer-style completions ("Picked up BUG-1177 and addressed the reviewer rework on PR-1882", "Completed BUG-1177. Changed the docs sweep…"), and wrote NO verdict file. The drain shelved `no-verdict` after attempt 2. Logs: .aida/headless-logs/bug-1177-01a0ae99-*.jsonl and bug-1177-01a0aeac-*.jsonl (note: named by spec, like implementer logs — no seat marker in the filename).
+
+      Three defects: (1) SEAT CONFUSION — the reviewer prompt/skill does not firmly constrain the seat to review-only, so a rework reason surfaced on the spec's pickup card is executed as a task; (2) INDEPENDENCE BREACH — the reviewer modified the code it was supposed to review; (3) the push during the review phase invalidates the CI the drain already watched (a fresh Build is triggered after review), so even a later verdict would be against a different SHA. Net effect: every re-drive of a reworked spec fails its review phase and burns two reviewer sessions.
+
+      Fix: (a) the reviewer seat's headless prompt must state review-only + no git writes, and the phase should verify the branch SHA is unchanged after review (fail loudly if the reviewer pushed); (b) do not surface `[rework]`/`--reason` comments as actionable instructions to the reviewer seat (scope them to the implementer pickup card); (c) name reviewer headless logs by seat (pr-NNNN-review-*) consistently so this is diagnosable; (d) regression test: a rework + re-drive whose reviewer phase must produce a verdict without altering the branch. Related: EPIC-62 (unattended drain reliability), BUG-875 (reviewer watchdog), STORY-974 (verdict kinds). Outcome tonight: the branch content was correct and was reviewed by the oversight session as an independent fallback.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5608
 node_id: '1'
