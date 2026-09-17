@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T07:02:32.031793455Z
-modified_at: 2026-09-17T15:09:17.772725710Z
+modified_at: 2026-09-17T15:10:05.939649298Z
 req_type: Bug
 tags:
 - bug-1167
@@ -31,6 +31,21 @@ comments:
   created_at: 2026-09-17T08:49:15.260749362Z
   modified_at: 2026-09-17T08:49:15.260749362Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0afea-f473-7f51-89bf-e1b4e57350dc
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1887 [AI:claude] fix(pr-ship): gate-aware CI watch — hold and informational reds do not abort (BUG-1180)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict file .aida/review-verdicts/PR-1887.json)
+    gates: Build (ubuntu-latest) SUCCESS (pr ship waited for it), merge-hold-gate SUCCESS, MERGEABLE, no merge-lease/hold held
+    reasoning: implements ADR-39 decisions 1-3: hold kept through the CI watch and released at merge with a bounded wait for merge-hold-gate to re-run green; required-only-plus-informational-allow-list semantics in BOTH pr ship and the drain CI phase (a red row is ignorable only if it is the hold with a local marker, or non-required AND allow-listed; required-name fetch failure degrades stricter); GitHub-only, other forges unchanged; 8 unit tests cover the matrix.
+    observation (pre-existing, not a blocker, no spec filed yet): hold markers are read from project_root while ship activity logs to main_worktree. A pr ship launched from a sibling worktree whose marker lives in the main clone would classify the red gate as a lingering label and abort. clear_hold already used project_root, so not a regression from this PR. Worth folding into TASK-1244 (drain-phase merge-lease) since that is the next pass over the same seam.
+    merged: 2026-09-17 08:19 -07:00 via aida pr ship 1887 (squash) + aida pull → main 1013e6969
+  created_at: 2026-09-17T15:10:05.939649298Z
+  modified_at: 2026-09-17T15:10:05.939649298Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0afea-3844-7593-804e-e08c2a2d88a9
   author: aida-auto-bump
