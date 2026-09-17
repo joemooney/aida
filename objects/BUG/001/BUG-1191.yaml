@@ -1,0 +1,28 @@
+id: 01a0b08d-a7d4-7041-a05c-ad587eb6b324
+spec_id: BUG-1191
+agreed_id: BUG-1191
+title: ci_gate default informational_workflows = ["Cross-platform"] never matches the real workflow name "Cross-platform (nightly)" — path-filtered Windows/macOS reds still abort pr ship / shelve drains
+description: |-
+  Observed 2026-09-17 11:02 on PR #1898 (TASK-1252, touched aida-tui so the TASK-1205 path-filtered matrix ran): aida pr ship 1898 exited 1 with "CI is red on PR-1898: merge-hold-gate is red because PR-1898 is under a supervised merge-hold — releasing at merge; failing: Build (macos-latest), Build (windows-latest)". Both reds are jobs of the workflow named "Cross-platform (nightly)" (gh pr checks --json workflow). The hold classification worked; the informational classification did not.
+
+  Root cause: aida-cli-lib/src/ci_gate.rs CiGateConfig::default() sets informational_workflows = ["Cross-platform"], and wild_match is an exact (case-insensitive) match with explicit * only — no implicit prefix/substring semantics — so "Cross-platform" ≠ "Cross-platform (nightly)". The ADR-39 test informational_matrix_red_is_ignored_only_when_not_required uses the fixture workflow "Cross-platform", which is why it passes while the real repo does not. This is exactly the BUG-1180 "informational-vs-required gap" recurring one layer down.
+
+  Fix: (1) default to ["Cross-platform*"] (or match the real name and its variants; consider default substring semantics for workflow names and document it); (2) change the unit-test fixture workflow to the real name "Cross-platform (nightly)" so the default is pinned against reality; (3) keep the [ci] override. Workaround applied locally in .aida/config.toml: [ci] informational_workflows = ["Cross-platform*"] (to be committed alongside the fix or separately).
+
+  Acceptance:
+  - With no [ci] section, classify_red on rows {Build (ubuntu-latest)/CI pass, Build (windows-latest)/"Cross-platform (nightly)" fail} and required = [merge-hold-gate] is not real and lists the windows job as ignored_informational.
+  - The existing informational test fixture uses the real workflow name.
+  - aida pr ship on a PR with only nightly-matrix reds + green required checks proceeds.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T18:07:48.692213685Z
+modified_at: 2026-09-17T18:07:48.692213685Z
+req_type: Bug
+tags:
+- ci-gate
+- drain
+- drain-safe
+- follow-up:BUG-1180
+- pr-ship
