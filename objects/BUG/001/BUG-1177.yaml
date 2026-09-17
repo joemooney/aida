@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T09:12:29.889948407Z
+modified_at: 2026-09-17T09:12:31.832548108Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -74,3 +74,6 @@ failure_reason:
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1177 --work`'
   shelved_by: advisor
   shelved_at: 2026-09-17T07:51:01.986786821Z
+interface_changes:
+  cli:
+  - aida ultraplan — reframed as a rich prompt assembler for /aida-plan, Plan agents, multi-agent workflows, or humans; no longer points users at a phantom /ultraplan command
