@@ -72048,5 +72048,31 @@ operations:
   timestamp: 2026-09-17T09:39:04.204840717Z
   kind: !SetStatus
     status: Rejected
-clock: 5611
+- id: 01a0aec3-82e4-77a1-b3e4-bd2c2bbebf2e
+  target_id: 01a0aec3-7ee8-7220-b8d0-1ed331b138ba
+  author: aida
+  node_id: '1'
+  lamport: 5612
+  timestamp: 2026-09-17T09:47:23.748086044Z
+  kind: !Create
+    title: 'Review PR-1884: [AI:codex] feat(mailbox): add safe body input sources (TASK-1250)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0aeb6`) for branch `task-1250`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1884>
+      - Branch: `task-1250` → `main`
+
+      ## Covers
+
+      - TASK-1250
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1884` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5612
 node_id: '1'
