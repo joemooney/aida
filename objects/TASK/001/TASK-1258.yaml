@@ -1,0 +1,14 @@
+id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+spec_id: TASK-1258
+agreed_id: TASK-1258
+title: Multi-language test scanning (v1 scans Rust `#[test]` fns)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T19:50:05.582548155Z
+modified_at: 2026-09-17T19:50:05.582548155Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
