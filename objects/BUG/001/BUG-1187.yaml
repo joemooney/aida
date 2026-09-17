@@ -18,12 +18,12 @@ description: |-
   - commits_ahead uses patch equivalence (branch_unshipped_patch_count_default); a branch whose tree equals main or whose patches all cherry as "-" is not unshipped; a branch whose merge-base is more than N commits behind main with zero patch-unique commits is not unshipped.
   - Regression tests: (a) Completed spec + ahead branch → not listed; (b) merged-PR branch → not listed; (c) squash-merged branch (cherry all "-") → not listed; (d) genuinely unshipped branch (cherry "+", open spec, no PR) → listed with the pr ship hint.
   - On this repo, aida session reap / aida awaiting list zero of the sampled branches above.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:12:04.076397889Z
-modified_at: 2026-09-17T16:12:17.084540045Z
+modified_at: 2026-09-17T16:25:40.199953536Z
 req_type: Bug
 tags:
 - awaiting
@@ -37,3 +37,7 @@ relationships:
   created_at: 2026-09-17T15:12:18.327296756Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-17T16:25:40.199953536Z
+  implemented_by: joe
