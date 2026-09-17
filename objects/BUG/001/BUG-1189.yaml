@@ -1,0 +1,16 @@
+id: 01a0b04d-fd49-7af1-8b30-35a46deb6df2
+spec_id: BUG-1189
+agreed_id: BUG-1189
+title: 'aida criteria ignores a criterion trace placed on the comment line ABOVE a #[test] fn — only in-body markers count, contrary to the repo''s trace-comment convention'
+description: 'Observed 2026-09-17: PR-1890 added // trace:TASK-1244.AC1 | ai:claude on the line above #[test] fn merge_lease_conflict_hint_names_merge_lock_and_pr_ship (the CLAUDE.md convention places trace comments above the item). After merge, aida criteria TASK-1244 still reports TASK-1244.AC1 as untested. Cause: criteria::scan_rust_test_file only starts collecting traces_in_line once it has seen the fn line, so a marker in the preceding comment block (above #[test] and any other attributes) is never attributed to the test. Fix: carry a pending-traces buffer of criterion markers seen on consecutive comment/attribute lines immediately preceding a fn and attach them to that fn; keep in-body markers working. Test: a fixture with the marker above #[test] and one with it inside the body both trace the criterion; a marker followed by a blank line then unrelated code does not leak onto the next fn.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T16:58:16.265440526Z
+modified_at: 2026-09-17T16:58:16.265440526Z
+req_type: Bug
+tags:
+- criteria
+- parent:STORY-1178
+- reconstitution
