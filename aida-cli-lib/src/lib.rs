@@ -147,6 +147,7 @@ mod intake;
 mod integrate;
 // trace:TASK-1050 | ai:claude — own-checkout guard for `aida integrate` (BUG-650).
 mod ci_gate;
+mod harvest;
 mod integrate_checkout;
 mod integrate_view;
 mod intent;
@@ -4209,6 +4210,30 @@ fn run() -> Result<()> {
             let project_root = find_project_root()
                 .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
             criteria::handle_criteria_command(&project_root, &store, spec, *json)?;
+        }
+        Command::Harvest {
+            spec,
+            pr,
+            base,
+            yes_all,
+            dry_run,
+            json,
+        } => {
+            let store = storage.load()?;
+            let project_root = find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+            harvest::handle_harvest_command(
+                &project_root,
+                &store,
+                spec,
+                harvest::HarvestOptions {
+                    pr: *pr,
+                    base: base.clone(),
+                    yes_all: *yes_all,
+                    dry_run: *dry_run,
+                    json: *json,
+                },
+            )?;
         }
         Command::Brief {
             agent,

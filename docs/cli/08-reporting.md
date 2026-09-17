@@ -174,6 +174,29 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ---
 
+### `aida harvest`
+
+**One line** — pull what a diff *established* back into the spec, so the store stays sufficient to rebuild the behavior.
+
+**Mental model.** `harvest` is the advisory half of the reconstitution loop. It hands a headless agent the diff plus the spec's contract (its acceptance criteria, linked decisions, prior micro-decisions) and asks for the observable, non-obvious facts the diff established that the store does not yet say. Candidates pass a strict selectivity filter, you confirm an **opt-in** checklist (Enter accepts nothing), and confirmed items land per kind: a new labeled line in `## Acceptance` (so `aida criteria` sees it), an `[aida:sem]` marked comment for a micro-decision, or a Draft decision spec linked back. Every run writes an `[aida:harvest]` ledger comment recording what ran, what landed, and what was skipped and why — nothing is dropped silently.
+
+**Reach for it when** — a branch or PR is finished and you want the spec to carry what the code now guarantees, before the knowledge lives only in the diff.
+
+**Don't reach for it when** — the diff is a refactor/format/rename with no new observable behavior (the filter will skip it all, and the ledger will say so), or you want a coverage audit of what is already recorded (that is `aida criteria`).
+
+**Key options (rationale only).**
+- PR source — harvest a PR's diff instead of the current branch, for post-merge or review-time harvesting.
+- Base ref — compare against something other than the default branch when the branch stacks.
+- Accept-all — headless runs have no checklist; opt in to every filtered candidate explicitly (the filter still applies).
+- Dry run — print the agent brief without launching anything.
+- JSON — machine summary of the run.
+
+**Gotchas.** The filter is configured under `[harvest]` in `.aida/config.toml` (`min_confidence` 0.7, `skip_conventional`, `deny_keywords`, `allow_keywords`); start strict and loosen on evidence. Harvest is advisory — it never blocks a merge. An empty candidate list is a valid, good answer.
+
+**Chains with** — `aida harvest <ID> --pr <N>` after review, then `aida criteria <ID>` to see the new criterion as untested, then a traced test for it.
+
+---
+
 ### `aida why`
 
 **One line** — explain why *this one* spec is still open.

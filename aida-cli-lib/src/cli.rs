@@ -8461,6 +8461,35 @@ pub enum Command {
         json: bool,
     },
 
+    /// Harvest what a diff established into the spec: a headless agent proposes
+    /// missing acceptance criteria / micro-decisions / ADRs, you confirm an
+    /// opt-in checklist, confirmed items land on the spec, every run is ledgered.
+    // trace:TASK-1247 | ai:claude
+    Harvest {
+        /// Requirement ID (UUID or SPEC-ID) the diff implements.
+        spec: String,
+
+        /// Harvest a PR's diff (`gh pr diff`) instead of the current branch.
+        #[clap(long)]
+        pr: Option<u64>,
+
+        /// Base ref for the branch diff (default: origin/main).
+        #[clap(long)]
+        base: Option<String>,
+
+        /// Accept every filtered candidate without the checklist (headless use).
+        #[clap(long)]
+        yes_all: bool,
+
+        /// Print the agent brief and exit without launching anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Emit the run summary as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
     /// A newcomer-friendly shortcut for completing a task without the
     /// `edit --status completed` jargon.
