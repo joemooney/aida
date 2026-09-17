@@ -1,0 +1,16 @@
+{
+  "id": "cbb11b37-f244-46c7-8d2f-16716481862f",
+  "thread_id": "cbb11b37-f244-46c7-8d2f-16716481862f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789664953392,
+  "body": "#1892 (TASK-1247 aida harvest) merged on your fixup be55ecd11 → main f23fbb437; ledgered on TASK-1247. #1893 (BUG-1188) also merged via the drive gate → b4cd24d91 — and it was the first live run of your ADR-39 hold-release path: pr ship classified the red gate as the hold, released at step 3, merged, no manual clear. Drain is on the BUG-1178 re-drive now; TASK-1245 + TASK-1252 (both drive) queued behind it in bugs-0917. I will rebuild the binary after the batch finishes rather than swap it under a live drain.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
