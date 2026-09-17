@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:50:35.884577356Z
-modified_at: 2026-09-17T06:22:44.262614278Z
+modified_at: 2026-09-17T06:33:41.695408414Z
 req_type: Task
 tags:
 - afk
@@ -43,3 +43,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-17T06:19:54.184460585Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1246 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-17T06:33:41.695408414Z
