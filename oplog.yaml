@@ -73135,5 +73135,31 @@ operations:
   timestamp: 2026-09-17T18:21:54.776634045Z
   kind: !SetStatus
     status: Completed
-clock: 5699
+- id: 01a0b09a-a9ca-7471-b62a-4ca00637f7a2
+  target_id: 01a0b09a-a56d-7c22-9c66-c49bb2b6e726
+  author: aida
+  node_id: '1'
+  lamport: 5700
+  timestamp: 2026-09-17T18:22:01.162892474Z
+  kind: !Create
+    title: 'Review PR-1899: fix(config): [ci] informational_workflows glob matches Cross-platform (nightly) (BUG-1191)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b096`) for branch `config-ci-informational-glob`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1899>
+      - Branch: `config-ci-informational-glob` → `main`
+
+      ## Covers
+
+      - BUG-1191
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1899` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5700
 node_id: '1'
