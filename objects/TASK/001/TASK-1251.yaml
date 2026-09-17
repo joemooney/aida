@@ -11,12 +11,12 @@ description: |-
   - verify-manual.py flags-check reports 0 hits on main (or only genuine drift, each fixed in the same PR).
   - The CI step is hard-fail again (exit non-zero on drift).
   - A unit/fixture test pins at least three previously-false-positive citations (--type / --title under aida add, one inherited global flag) as resolving.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T05:57:54.453824115Z
-modified_at: 2026-09-17T07:04:45.279396626Z
+modified_at: 2026-09-17T07:04:52.890611391Z
 req_type: Task
 tags:
 - afk
