@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T04:46:05.356749415Z
-modified_at: 2026-09-17T09:12:56.861455226Z
+modified_at: 2026-09-17T09:16:56.446633142Z
 req_type: Bug
 tags:
 - batch:away-0916
@@ -60,6 +60,12 @@ comments:
   content: 'Codex pickup verification 2026-09-17: PR-1882 is open and mergeable (CI clean: Build ubuntu-latest SUCCESS, merge-hold-gate SUCCESS). Local checks passed: cargo fmt --all -- --check; cargo test -p aida-cli-lib ultraplan -- --nocapture (30 passed); python3 docs/cli/verify-manual.py hard checks OK (completeness/spec-id/reflection; advisory flag warnings only). aida pr ship 1882 --complexity low --effort 1h refused to self-merge inside orchestrated/headless drive, per reviewer-gate policy; leaving PR open for independent review/merge.'
   created_at: 2026-09-17T09:12:18.413390475Z
   modified_at: 2026-09-17T09:12:18.413390475Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0aea7-a0fe-7401-8aa3-73a2a41d0dde
+  author: joe
+  content: 'Codex rework 2026-09-17: addressed reviewer RequestChanges by sweeping remaining stale slash-command references. Proof: rg -n ''/ultraplan'' CLAUDE.md docs/cli docs/first-project.md docs/agents/cross-agent-onboarding.md aida-core/templates aida-cli-lib/src now returns no matches. Verification passed: cargo fmt --all -- --check; cargo test -p aida-cli-lib ultraplan -- --nocapture (30 passed); python3 docs/cli/verify-manual.py (completeness/spec-id/reflection/flags all OK). Pushed fixup commit 5944332a6 to PR-1882 on GitHub; GitLab mirror rejected the force update and may need mirror drift cleanup separately.'
+  created_at: 2026-09-17T09:16:56.446633142Z
+  modified_at: 2026-09-17T09:16:56.446633142Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
