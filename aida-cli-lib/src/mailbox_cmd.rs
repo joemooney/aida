@@ -16,6 +16,7 @@
 
 use anyhow::Result;
 use colored::Colorize;
+use std::io::Read;
 
 use crate::cli::MailboxCommand;
 use crate::*;
@@ -44,6 +45,8 @@ pub(crate) fn handle_mailbox_command(
             to,
             broadcast,
             body,
+            body_file,
+            stdin,
             thread,
             in_reply_to,
             from,
@@ -82,6 +85,7 @@ pub(crate) fn handle_mailbox_command(
             })?;
             let sender = from.clone().unwrap_or_else(|| current_user_id(None));
             let id = uuid::Uuid::new_v4().to_string();
+            let body = read_send_body(body.as_deref(), body_file.as_deref(), *stdin)?;
             // BUG-557: a reply must attach to the ORIGINAL message's thread, not
             // open a new one. Precedence: an explicit `--thread` wins; else
             // `--in-reply-to <id>` resolves to that target's thread so the
@@ -115,7 +119,7 @@ pub(crate) fn handle_mailbox_command(
                 to: recipient,
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 in_reply_to: in_reply_to.clone(),
-                body: body.clone(),
+                body,
                 urgent: *urgent,
                 intent: parsed_intent,
                 retracted: false,
@@ -569,6 +573,32 @@ pub(crate) fn handle_mailbox_command(
     }
 }
 
+// trace:TASK-1250 | ai:codex
+fn read_send_body(
+    body: Option<&str>,
+    body_file: Option<&std::path::Path>,
+    stdin: bool,
+) -> Result<String> {
+    match (body, body_file, stdin) {
+        (Some(body), None, false) => Ok(body.to_string()),
+        (None, Some(path), false) => std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("failed to read --body-file {}: {e}", path.display())),
+        (None, None, true) => {
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .map_err(|e| anyhow::anyhow!("failed to read mailbox body from stdin: {e}"))?;
+            Ok(buf)
+        }
+        (None, None, false) => {
+            anyhow::bail!("provide a message body, --body-file <path>, or --stdin")
+        }
+        _ => anyhow::bail!(
+            "choose exactly one mailbox body source: positional body, --body-file, or --stdin"
+        ),
+    }
+}
+
 // trace:TASK-1211 | ai:codex
 fn archive_mailbox_older_than(
     project_root: &std::path::Path,
@@ -649,4 +679,71 @@ fn message_read_by_all_selected_visible_identities(
         }
     }
     visible_to_any
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::{Cli, Command, MailboxCommand};
+    use clap::Parser;
+
+    // trace:TASK-1250 | ai:codex
+    #[test]
+    fn mailbox_send_body_file_preserves_shell_sensitive_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let body_path = dir.path().join("mail.txt");
+        let expected = "please run `aida queue next`\nnot $(clear)\n";
+        std::fs::write(&body_path, expected).unwrap();
+
+        let body = read_send_body(None, Some(&body_path), false).unwrap();
+
+        assert_eq!(body, expected);
+    }
+
+    // trace:TASK-1250 | ai:codex
+    #[test]
+    fn mailbox_send_requires_exactly_one_body_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let body_path = dir.path().join("mail.txt");
+        std::fs::write(&body_path, "from file").unwrap();
+
+        assert!(read_send_body(None, None, false).is_err());
+        assert!(read_send_body(Some("arg"), Some(&body_path), false).is_err());
+        assert!(read_send_body(Some("arg"), None, true).is_err());
+        assert!(read_send_body(None, Some(&body_path), true).is_err());
+    }
+
+    // trace:TASK-1250 | ai:codex
+    #[test]
+    fn mailbox_send_cli_accepts_file_or_stdin_without_positional_body() {
+        let from_file = Cli::try_parse_from([
+            "aida",
+            "mailbox",
+            "send",
+            "--to",
+            "codex",
+            "--body-file",
+            "mail.txt",
+        ])
+        .unwrap();
+        match from_file.command {
+            Command::Mailbox(MailboxCommand::Send {
+                body, body_file, ..
+            }) => {
+                assert!(body.is_none());
+                assert_eq!(body_file.unwrap(), std::path::PathBuf::from("mail.txt"));
+            }
+            other => panic!("expected mailbox send, got {other:?}"),
+        }
+
+        let from_stdin =
+            Cli::try_parse_from(["aida", "mailbox", "send", "--broadcast", "--stdin"]).unwrap();
+        match from_stdin.command {
+            Command::Mailbox(MailboxCommand::Send { body, stdin, .. }) => {
+                assert!(body.is_none());
+                assert!(stdin);
+            }
+            other => panic!("expected mailbox send, got {other:?}"),
+        }
+    }
 }

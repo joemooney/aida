@@ -24,6 +24,9 @@ Rule of thumb: **if the system should *act* on it, make it a state change; if a 
 ```bash
 # send to one agent
 aida mailbox send "heads-up: rebasing the forge branch, hold your PR" --to codex
+# send rich/multi-line text without shell expansion of backticks or $()
+aida mailbox send --to codex --body-file /tmp/aida-mail.txt
+printf '%s\n' 'please run `aida queue next`' | aida mailbox send --to codex --stdin
 # broadcast to everyone
 aida mailbox send "CI infra is flaky tonight, expect retries" --broadcast
 # mark the recipient-facing intent (default: fyi)
@@ -115,6 +118,7 @@ Each message carries:
 - **`to`** — a specific agent (`Recipient::Agent`) **or** a broadcast (`Recipient::Broadcast`)
 - **`timestamp`** — when it was sent
 - **`body`** — the text
+- Body input can come from exactly one of: the positional body, `--body-file <path>`, or `--stdin`. Prefer `--body-file` / `--stdin` for rich agent-authored notes so the shell cannot expand backticks or `$()` before AIDA receives the message.
 - **`urgent`** — a lightweight out-of-band escalation flag (*how loud*)
 - **`intent`** — how the recipient should treat it (*what kind*): `fyi` (informational, surface only — the default), `request` (needs a response), or `handoff` (work transfer). Orthogonal to `urgent`; set with `--intent` / the `intent` MCP field. An actionable intent (`request`/`handoff`) is surfaced with a `[request]`/`[handoff]` badge in `aida mailbox inbox`; `fyi` stays unmarked.
 - **`retracted` / `deleted`** — replayable state markers for withdraw/delete
