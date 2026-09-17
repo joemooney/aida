@@ -79,7 +79,7 @@ A/B/C layers the story lists:
 
 ## Files (in build-order)
 
-### `aida-cli-lib/src/criteria.rs` — NEW (slice 1)
+### `aida-cli-lib/src/criteria.rs` — shipped by TASK-1246 (slice 1)
 Parse a spec's `## Acceptance` section into `Vec<Criterion { id, label, text }>`; scan test
 sources for `trace:SPEC.ACn`; compute the two gap classes; render human + `--json`.
 
@@ -121,6 +121,18 @@ the section alongside the other `[...]` sections in the config reference.
   `visible_catalog_requires_about_for_every_command` test is the guard.
 - `aida-cli-lib/src/session.rs` — `spawn_claude_headless` / `compose_headless_command`: the
   agent transport for both harvest and probe; do not fork a second launcher.
+- `aida-cli-lib/src/criteria.rs` — the `.ACn` parser + gap classifier every later slice
+  reads; shipped by TASK-1246, so slices 2-4 extend it rather than re-parse.
+- `aida-cli-lib/src/harvest.rs` — the harvest gate is the drain-facing surface; its
+  refusal semantics must match `auto_complete.rs` shelve causes.
+- `aida-cli-lib/src/reconstitute.rs` — the scratch-worktree probe must never see real
+  tests; the isolation is the whole measurement.
+- `aida-cli-lib/src/auto_complete.rs` — new harvest phase slots into the closed
+  phase/cause sets; extend the closed-set tests, do not bypass them.
+- `aida-cli-lib/src/presence.rs` — the `[presence]` config reader is the pattern the
+  `[harvest]` reader copies; keep the two parsers shaped alike.
+- `docs/environment-variables.md` — every new `AIDA_*` read must land a row here in the
+  same change (repo rule).
 
 ## Reusable helpers (do not reimplement)
 
