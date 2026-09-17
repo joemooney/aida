@@ -27,10 +27,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T15:02:57.246736455Z
-modified_at: 2026-09-17T15:03:44.106366479Z
+modified_at: 2026-09-17T16:38:26.406219778Z
 req_type: Task
 tags:
 - architecture
+- batch:bugs-0917
 - keyboard
 - parent:EPIC-26
 - seam

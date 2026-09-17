@@ -72643,5 +72643,13 @@ operations:
   timestamp: 2026-09-17T16:38:23.372701392Z
   kind: !RemoveTag
     tag: from-advisor:general parent:TASK-160 papercut
-clock: 5660
+- id: 01a0b03b-d5c0-7781-b5af-a8ce4678b000
+  target_id: 01a0afe4-69de-7bd0-ae4d-d5fcf9f974c8
+  author: aida
+  node_id: '1'
+  lamport: 5661
+  timestamp: 2026-09-17T16:38:26.496567981Z
+  kind: !AddTag
+    tag: batch:bugs-0917
+clock: 5661
 node_id: '1'
