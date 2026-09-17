@@ -72175,5 +72175,28 @@ operations:
     req_type: Decision
     status: Approved
     priority: Medium
-clock: 5621
+- id: 01a0afbf-c7c8-7092-96b4-106e7d6921fc
+  target_id: 01a0afbf-c37b-7681-804d-6188dadd73cd
+  author: aida
+  node_id: '1'
+  lamport: 5622
+  timestamp: 2026-09-17T14:22:56.456102901Z
+  kind: !Create
+    title: 'Reviewer seat integrity on re-drive: always-forced review envelope, post-review SHA guard (shelve reviewer-wrote), orchestrator-asserted Done'
+    description: |-
+      Accepted 2026-09-17 (operator, guided) for BUG-1186.
+
+      Root cause (two halves, both closed): (i) the re-drive implementer skipped `aida queue done`, leaving the spec in-progress; (ii) the review phase's child `aida queue work PR-N` routes on the covered spec's state — Done → review, in-progress-with-rework → pickup — and the forced-review envelope was only set when the drain was launched from a PR.
+
+      1. ALWAYS-FORCED REVIEW ENVELOPE. The review phase sets AIDA_FROM_PR_REVIEW=1 and AIDA_FROM_PR_NUMBER for its child unconditionally (not only when from_pr), so `queue work PR-N` is a review regardless of the covered spec's status. Rejected: a new `aida review --pr` subcommand (heavier; the envelope already exists).
+
+      2. POST-REVIEW INTEGRITY GUARD. Record the branch head SHA before launching the reviewer; when it returns, if the head moved, shelve with a NEW typed cause `reviewer-wrote` (NeedsAttention for triage). A reviewer that modifies the code under review is an independence breach, not a transient. Rejected: retry-on-new-SHA (launders the breach, reviews unsanctioned commits) and warn-only (would have merged reviewer-authored commits under the drain's own approval).
+
+      3. ORCHESTRATOR-ASSERTED DONE + PROMPT HYGIENE. After a successful implementer phase (exit 0, commits pushed), the orchestrator sets the spec Done before entering CI — substrate-as-bouncer, never relying on the agent remembering. Additionally the rework pickup prompt requires `aida queue done`. Rejected: prompt-only (a rule in a prompt is exactly what failed).
+
+      4. Reviewer headless logs are named by PR scope (pr-NNNN…) consistently so a seat-confused session is diagnosable from the filename.
+    req_type: Decision
+    status: Approved
+    priority: Medium
+clock: 5622
 node_id: '1'
