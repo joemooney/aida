@@ -114,12 +114,12 @@ One graph-relevant flag pair not obvious from the name: `--add-ref` / `--remove-
 **Don't reach for it when** — you want the *edges of one spec* without transitive traversal — that's `aida rel list <ID>` (one hop). Or you want spec *text*, not structure — that's `search` / `grep`.
 
 **Key options (rationale only).**
-- `--impact` — reverse closure: everything (transitively) blocked by the root. The "blast radius" view before you touch or de-prioritize something.
+- `aida graph impact` — reverse closure: everything (transitively) blocked by the root. The "blast radius" view before you touch or de-prioritize something.
 - `--follow <TYPE>` — traverse an arbitrary (built-in or custom) edge type by name, outgoing, repeatable to walk several at once. The escape hatch for graph shapes beyond the blocked-by/parent built-ins.
 - `--depth <N>` — bound the traversal to N hops. Reach for it on a deep tree when you only want the immediate neighborhood.
 - `--json` — machine output for agents/scripts building rollups or dependency-aware schedulers.
 
-**Gotchas.** Modes are mutually exclusive — pick at most one; passing several is undefined. The default (no mode flag) is `--tree`, so a bare `aida graph <epic-id>` gives you the epic rollup, *not* the blocked-by chain people often expect.
+**Gotchas.** Modes are mutually exclusive — pick at most one; passing several is undefined. The default mode is `aida graph tree`, so a bare `aida graph <epic-id>` gives you the epic rollup, *not* the blocked-by chain people often expect.
 
 **Chains with** — `graph blocked-by` before `queue work` (don't pick up something that's blocked); `graph impact` before `edit --status rejected` (know what you're stranding).
 
