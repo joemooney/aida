@@ -71801,5 +71801,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5594
+- id: 01a0ae6a-9b1e-71d0-a41a-e5a21e372c84
+  target_id: 01a0ae6a-96fb-78d0-81ae-145ac1d82e43
+  author: aida
+  node_id: '1'
+  lamport: 5595
+  timestamp: 2026-09-17T08:10:17.246281821Z
+  kind: !Create
+    title: 'Review PR-1883: fix(plan): accept planned new files in verify'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0ae59`) for branch `task-1-138`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1883>
+      - Branch: `task-1-138` → `main`
+
+      ## Covers
+
+      - TASK-162
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1883` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5595
 node_id: '1'
