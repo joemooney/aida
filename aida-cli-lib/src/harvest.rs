@@ -1013,7 +1013,7 @@ mod tests {
 
     #[test]
     fn prompt_names_output_file_threshold_and_excludes_nothing_secret() {
-        let out = Path::new("/tmp/x/harvest.json");
+        let out = Path::new("harvest-out.json");
         let p = build_harvest_prompt(
             "T-1",
             "Title",
@@ -1025,7 +1025,7 @@ mod tests {
             &HarvestConfig::default(),
             out,
         );
-        assert!(p.contains("/tmp/x/harvest.json") && p.contains("0.70"));
+        assert!(p.contains("harvest-out.json") && p.contains("0.70"));
         assert!(p.contains("- A1: a") && p.contains("ADR-9: chosen") && p.contains("prior sem"));
         assert!(p.contains("```diff\ndiff --git a b\n+x\n```"));
         assert!(p.contains("Do not ask questions"));
