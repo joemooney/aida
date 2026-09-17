@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:41:10.430670277Z
-modified_at: 2026-09-17T16:41:12.173784396Z
+modified_at: 2026-09-17T16:41:19.124513430Z
 req_type: Decision
 tags:
 - harvest
@@ -27,3 +27,7 @@ relationships:
 - rel_type: Child
   target_id: 01a0adb4-4360-74c2-b892-35d43d6c7192
   created_at: 2026-09-17T16:41:12.173784396Z
+- rel_type: References
+  target_id: 01a0adb4-4360-74c2-b892-35d43d6c7192
+  created_at: 2026-09-17T16:41:19.124507396Z
+  created_by: joe
