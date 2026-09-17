@@ -1,35 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b016-2aac-7461-ab61-29904f6e4645
-  position: 96000
-  added_by: role:implementer
-  note: auto-queued by `session end` (01a0b00f); covers 1 spec
-  added_at: 2026-09-17T15:57:26.317297367Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b06a-82ab-7933-84bb-95974f1e8ceb
-  position: 102000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0b062); covers 1 spec
-  added_at: 2026-09-17T17:29:38.522391199Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0ad9f-d486-7dc2-8497-637136635b10
-  position: 103000
-  added_by: role:implementer
-  note: '[rework] PR #1896 RequestChanges (drain reviewer, verified by the advisor against lib.rs:65757): collect_awaiting_report derives the MAIL scope from std::env AIDA_SESSION_ROLE and ignores ctx.role, so advisor_awaiting_line''s UserStatusContext{role: Some("advisor")} does not make advisor-addressed mail part of compact_line() when aida advisor watch is launched from a plain/operator/reviewer shell — a mail-arrived condition would not wake the heartbeat (acceptance: wake when aida awaiting is non-empty, mail included). Fix in the SAME PR (push fixups to the #1896 head branch): in collect_awaiting_report, resolve the mail-scope role as ctx.role first, falling back to AIDA_SESSION_ROLE only when ctx.role is None; add a test that a ctx role=advisor with an unread advisor-addressed message yields a non-empty compact_line() while the process env role is unset/operator. Keep the removal of the timer wake. Finish with aida queue done TASK-1245.'
-  added_at: 2026-09-17T17:44:24.225400256Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a0b07d-57ad-7783-bfc8-249ff38300a3
-  position: 104000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0b077); covers 1 spec
-  added_at: 2026-09-17T17:50:08.819280302Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b08f-2fe0-75f0-b546-090e155bd19c
   position: 106000
   added_by: role:implementer
