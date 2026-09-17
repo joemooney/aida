@@ -71526,5 +71526,24 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 5581
+- id: 01a0adf3-581e-7782-9ef2-edfcdd93f0b5
+  target_id: 01a0adf3-5096-7252-a49a-2e051974f08e
+  author: aida
+  node_id: '1'
+  lamport: 5582
+  timestamp: 2026-09-17T06:00:01.310914460Z
+  kind: !Create
+    title: Contained posture applies --permission-mode dontAsk to INTERACTIVE launches — a TTY advisor session is denied all Bash with no way to answer
+    description: |-
+      Operator hit this live 2026-09-16 right after enabling the contained posture: `aida agent new claude --role advisor` (an INTERACTIVE session, human at the keyboard) launched with `--permission-mode dontAsk`, so the first `aida show` Bash call was denied outright: "Permission to use Bash has been denied because Claude Code is running in don't ask mode". `aida config permissions show` confirms: claude tier=contained, flags=--permission-mode dontAsk, prompts=no — applied uniformly.
+
+      Root cause: `[agents] contained = true` (~/.aida/agents.toml, or project `[contained] enable`) is ONE global switch, and tool_contained_flags("claude") always emits dontAsk. dontAsk is correct for a HEADLESS launch (a drain — nobody can answer a prompt, so deny-by-default is the safe choice). It is wrong for an INTERACTIVE launch: the whole point of a TTY session is that a human CAN answer, so contained should mean "sandboxed + prompt" (`--permission-mode default` inside the sandbox), never "sandboxed + deny everything". The switch conflates sandboxing with prompt-suppression.
+
+      Consequence: an operator who wants containment for unattended drains cannot also run an interactive advisor in the same repo without flipping the global posture back and forth (or bypassing the launcher via `aida role enter` + a raw `claude`).
+
+      Fix: derive the permission mode from LAUNCH KIND, not the tier alone — headless (`--no-human`, drain phases, `claude -p`) → dontAsk; interactive (a TTY, `aida agent new` at a terminal) → default/prompt inside the same sandbox. Keep the sandbox for both. Make `aida config permissions show` display the mode per launch kind (headless vs interactive) so the posture is legible. Add a guard: refuse (with guidance) to launch an interactive session in dontAsk, since it can only fail. Test: a TTY launch under contained=true must not carry dontAsk.
+    req_type: Bug
+    status: Approved
+    priority: High
+clock: 5582
 node_id: '1'
