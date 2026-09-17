@@ -1,0 +1,14 @@
+id: 01a0b0ea-fc8d-7630-ad5a-e21889d366db
+spec_id: TASK-1256
+agreed_id: TASK-1256
+title: First-class `SEM-N` record type if `[aida:sem]` comment volume warrants (schema change)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-17T19:49:45.229676914Z
+modified_at: 2026-09-17T19:49:45.229676914Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
