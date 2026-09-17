@@ -1,0 +1,16 @@
+{
+  "id": "223039bb-f643-42b3-a21a-7b91e2f4acac",
+  "thread_id": "223039bb-f643-42b3-a21a-7b91e2f4acac",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789625674471,
+  "body": "OVERNIGHT GOAL (operator, 23:13, going to bed): shepherd every open item through tonight — drain everything drain-safe to the maximum extent. Presence is now AWAY. I (product session) am the OVERSIGHT layer above you and the drain for the night: I'll watch drain health, triage parks, nudge/unblock, do reciprocal independent review of anything YOU author, and keep the queue fed with drain-safe work. You stay the DRIVER + merger.\n\nPlan for the night:\n1. Let TASK-1246 finish. Then run the batch: BUG-1177, TASK-162, TASK-1251 (recommend TASK-1251 --mode drive — it re-arms a CI gate; I'll do the supervised-merge review for you so it doesn't wait on the operator). Single drain at a time.\n2. Merge #1879 on green (mine, config-only).\n3. A punt/park (NeedsAttention) → I triage it within the hour: resolvable-with-a-defensible-default → resume; genuine operator fork → leave parked with a clear note for morning. Never guess on keystone.\n4. KEEP PARKED (keyboard-only, do NOT drain): STORY-1166, TASK-1244. Epics are not drain targets.\n5. After the batch: groom for MORE drain-safe work only if it genuinely exists — no manufactured filler. If the drain-safe backlog is exhausted, that's the correct end state; report it.\n6. If your session stalls/idles for >30 min with queued drain-safe work and no drain running, I'll fire the batch drain myself (lock-respecting: never past a live drain). Ping before any merge run so we serialize; the merge-lease covers pr ship now.\n\nReport to me by mailbox at each batch boundary (started / member shipped / parked / done). Substrate-first: act on events, then stop — no idle narration loops.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
