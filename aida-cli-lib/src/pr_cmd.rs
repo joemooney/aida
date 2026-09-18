@@ -1382,51 +1382,77 @@ pub(crate) fn pr_ship_handler(
         return Ok(());
     }
 
-    // ---- BUG-710: substrate-as-bouncer. An implementer running INSIDE an
-    // orchestrated HEADLESS drive (`AIDA_HEADLESS=1`) must NOT self-merge its
-    // own PR — `aida zen` promises an INDEPENDENT reviewer before the
-    // auto-merge, and a phase-1 self-merge bypasses it (the failure the codex
-    // TASK-1115/1119 drives exposed). Leave the PR OPEN and STOP so the
-    // orchestrator's CI + reviewer + merge phases finish it; the implementer's
-    // job was only to open the PR. Sibling of the STORY-529 gate below. One
-    // explicit opt-in (`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1`) covers a deliberate
-    // headless direct-publish. trace:BUG-710 | ai:claude
-    //
-    // BUG-716: BUG-710 gated only on AIDA_HEADLESS, so a --supervised
-    // (interactive) implementer — which has no AIDA_HEADLESS — slipped past and
-    // self-merged (codex TASK-1123, 0 reviews). Also treat a LIVE drain lock as
-    // "inside an orchestrated drive": every drive (headless AND supervised)
-    // holds it, a plain `aida queue work <spec>` session does not, and a stale
-    // post-crash lock (BUG-712) is not `Running`. trace:BUG-716 | ai:claude
+    // TASK-1253: distinguish the drive's seat/PR from an unrelated merger. A
+    // live drain lock alone must not freeze every `pr ship` in the repository;
+    // unrelated mergers serialize safely on the merge lease. trace:TASK-1253 | ai:codex
     let in_headless_drive = std::env::var("AIDA_HEADLESS")
         .map(|v| v == "1")
         .unwrap_or(false);
+    let has_orchestrator_envelope = std::env::var(orchestrator::AUTO_COMPLETE_ENV)
+        .ok()
+        .is_some_and(|v| !v.trim().is_empty());
     let live_drive = matches!(
         drain_lock::probe_lock(&main_worktree),
         drain_lock::LockStatus::Running(_)
     );
-    let in_orchestrated_drive = in_headless_drive || live_drive;
+    let drive_state = live_drive
+        .then(|| drain_state::DrainState::read(&main_worktree))
+        .flatten();
+    let drive_specs: Vec<&str> = drive_state
+        .as_ref()
+        .map(|state| {
+            state
+                .members
+                .iter()
+                .filter(|member| member.state.starts_with("in-phase-"))
+                .map(|member| member.spec.as_str())
+                .collect()
+        })
+        .unwrap_or_default();
+    let cwd_lease_scope = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&main_worktree, &cwd))
+        .map(|lease| lease.scope);
+    let worktree_belongs_to_drive = cwd_lease_scope
+        .as_deref()
+        .is_some_and(|scope| drive_specs.contains(&scope));
+    let caller_is_drive_seat =
+        in_headless_drive || has_orchestrator_envelope || worktree_belongs_to_drive;
+    let pr_matches_drive_state = drive_state.as_ref().is_some_and(|state| {
+        state.members.iter().any(|member| {
+            member.state.starts_with("in-phase-") && member.pr == Some(pr_number as u32)
+        })
+    });
+    let hold_matches_drive_spec = crate::merge_hold::read_hold(&main_worktree, pr_number)
+        .is_some_and(|reason| drive_specs.iter().any(|spec| reason.contains(spec)));
+    let pr_is_drive_owned = pr_matches_drive_state || hold_matches_drive_spec;
     let allow_in_drive = std::env::var("AIDA_PR_SHIP_ALLOW_IN_DRIVE")
         .map(|v| v == "1")
         .unwrap_or(false);
-    if pr_ship::should_block_ship_merge(in_orchestrated_drive, allow_in_drive) {
+    if let Some(reason) =
+        pr_ship::ship_merge_block_reason(caller_is_drive_seat, pr_is_drive_owned, allow_in_drive)
+    {
+        let reason_text = match reason {
+            pr_ship::ShipMergeBlockReason::DriveSeat => {
+                "caller is a drive implementer/reviewer seat"
+            }
+            pr_ship::ShipMergeBlockReason::DriveOwnedPr => "target PR is owned by the live drive",
+        };
         eprintln!(
-            "{} PR-{} left OPEN — `aida pr ship` will not self-merge inside an \
-             orchestrated drive (headless or supervised). The implementer opens \
-             the PR and exits; the orchestrator's independent reviewer gates the \
-             merge. (Deliberate in-drive direct-publish? set \
+            "{} PR-{} left OPEN — `aida pr ship` refused: {}. The orchestrator's \
+             independent reviewer gates the merge. (Deliberate in-drive direct-publish? set \
              AIDA_PR_SHIP_ALLOW_IN_DRIVE=1.)",
             "⏸".yellow().bold(),
             pr_number,
+            reason_text,
         );
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &pr_ship::ShipStep::Merge { delete_branch },
-            &pr_ship::StepOutcome::Skipped(
-                "inside an orchestrated drive — the reviewer gates the merge (BUG-710/BUG-716)"
-                    .to_string(),
-            ),
+            &pr_ship::StepOutcome::Skipped(format!(
+                "{reason_text} — the reviewer gates the merge (TASK-1253)"
+            )),
         );
         return Ok(());
     }
