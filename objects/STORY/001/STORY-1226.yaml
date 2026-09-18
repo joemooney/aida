@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T22:21:43.790310748Z
+modified_at: 2026-09-18T22:21:45.731537960Z
 req_type: Story
 tags:
 - keyboard-gate
@@ -79,4 +79,10 @@ comments:
   created_at: 2026-09-18T22:09:53.008342028Z
   modified_at: 2026-09-18T22:09:53.008342028Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b69c-8383-7d72-ae1a-73b36e97e014
+  author: joe
+  content: '[advisor:gate] PR #1946 round 1: CHANGES REQUESTED (verdict .aida/review-verdicts/PR-1946-advisor.json) — three fixes: interrupted-rebase guard on the ledger git write (BUG-1229 class), on-cursor initialised to now when first seen, global-config fallback only when no schedule key. ADR-46 accepted. Acceptance change: the cold-boot addition (one cold-boot within the hour, second suppressed, live advisor suppresses) is MOVED to STORY-1218 — ADR-46 §1 assigns cold-boot to the tick, and this story ships only the ledger fields it needs. Non-blocking findings filed as a follow-up task blocked on this story.'
+  created_at: 2026-09-18T22:21:45.731537960Z
+  modified_at: 2026-09-18T22:21:45.731537960Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
