@@ -12,12 +12,12 @@ description: |-
   3. aida-cli-lib/src/reconstitute.rs (from #1895 / TASK-1248): every run creates ~/.aida/reconstitute/<spec>-<uuid>/ (regenerated.json + matches.json) and nothing removes it. Add a bounded GC: keep the newest N (default 20) per machine or delete runs older than 7 days at the start of each probe, and mention the location + retention in the aida reconstitute manual entry. Same consideration for .aida/harvest/*.json candidates files (gitignored; probably fine to keep — note the decision in the manual either way).
 
   Acceptance: cargo test -p aida-cli-lib --lib green; rustdoc for HarvestConfig/HarvestGate reads correctly; a probe run leaves at most N scratch dirs behind; manual updated.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:07:25.916415704Z
+modified_at: 2026-09-18T01:14:35.933059158Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -27,3 +27,7 @@ tags:
 - follow-up:TASK-1249
 - papercut
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T01:14:35.933059158Z
+  implemented_by: joe
