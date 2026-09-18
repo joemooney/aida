@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:56:24.228834050Z
+modified_at: 2026-09-18T11:56:46.214316084Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -167,6 +167,17 @@ comments:
     merged: 2026-09-18 04:55 -07:00 → main 9171d728ec; spec auto-bumped Completed
   created_at: 2026-09-18T11:56:24.228834050Z
   modified_at: 2026-09-18T11:56:24.228834050Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b460-5106-73a3-8d85-359d48025ed4
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: The displayed rework round is derived from durable spec history: the original implementation is round 1, each recorded review-findings block advances the round, and unrelated comments do not affect the count; consequently the first rework pickup is round 2.
+    rationale: The existing criterion requires a round number but does not define its observable source or numbering. The production path and tests establish history-derived numbering rather than a constant or transient queue counter.
+    source: file:bug-1213-drain-01a0b45c-efd0-7c81-b424-5ad48d2d0239.json
+    confidence: 0.96
+  created_at: 2026-09-18T11:56:46.214316084Z
+  modified_at: 2026-09-18T11:56:46.214316084Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b45e-de0b-7211-82b6-2e3d49266bf3
