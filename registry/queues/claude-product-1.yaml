@@ -132,3 +132,11 @@
   added_at: 2026-09-18T13:19:31.214525458Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-product-1
+  requirement_id: 01a0b4c4-1e06-7f73-972c-654d9cc374d9
+  position: 14000
+  added_by: claude-product-1
+  note: auto-queued by `session end` (01a0b4b3); covers 1 spec
+  added_at: 2026-09-18T13:45:53.818645402Z
+  for_role: reviewer
+  added_by_machine: imac
