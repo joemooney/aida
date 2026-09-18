@@ -535,3 +535,11 @@ blocks:
   range_end: 1340
   next: 1241
   allocated_at: 2026-09-18T15:02:26.819232989Z
+- node_id: '9'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: SPIKE
+  range_start: 305
+  range_end: 404
+  next: 305
+  allocated_at: 2026-09-18T15:02:28.915092956Z
