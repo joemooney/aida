@@ -1,0 +1,18 @@
+id: 01a0b535-55a8-7ba1-b7b2-65e1c8d2047a
+spec_id: BUG-1226
+agreed_id: BUG-1226
+title: Drain CI-red recovery hint prints a literal 'run <ID>' on GitLab (run id is GitHub-shaped)
+description: 'Observed 2026-09-18 on the TASK-1254 live drain (mirror MR !2). After the per-job refinement correctly reported ''CI is red on PR-2: failing: verify'', the recovery hint read: ''CI failed on run <ID> — view it: glab ci status. Push fixups to the same branch: aida queue work TASK-1269 --branch task-1269 --steal''. The <ID> placeholder is never substituted because ci_run_id comes from latest_run_id_for_branch, which is a GitHub Actions run lookup; GitLab has pipeline ids. Fix: route the run/pipeline id through the Forge (e.g. newest pipeline id for the branch on GitLab) or drop the ''on run <ID>'' clause when no id is known. Acceptance: on GitLab the hint names the pipeline id or omits the clause; never a literal <ID>.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T15:49:26.568333157Z
+modified_at: 2026-09-18T15:49:26.568333157Z
+req_type: Bug
+tags:
+- forge
+- gitlab
+- orchestrator
+- papercut
+- parent:EPIC-68
