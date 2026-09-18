@@ -1,11 +1,11 @@
 scope = "drain"
-node_id = "9"
-clone_path = "/home/joe/ai/aida-gitlab-mirror"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
 host = "imac"
-pid = 236475
-agent = "queue work --auto-complete TASK-1269"
-started_at = "2026-09-18T15:22:11.638658630+00:00"
-heartbeat_at = "2026-09-18T15:42:50.821796621+00:00"
+pid = 815698
+agent = "queue work --auto-complete --batch followups-0918d"
+started_at = "2026-09-18T18:41:29.995839399+00:00"
+heartbeat_at = "2026-09-18T18:41:29.995839399+00:00"
 ttl_secs = 1800
 process_backed = true
 review_verb = false
