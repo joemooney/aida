@@ -700,7 +700,9 @@ mod tests {
                 Some("TASK-1"),
                 EventKind::SpecShelved {
                     phase: "ci".into(),
-                    kind: "ci-red".into()
+                    kind: "ci-red".into(),
+                    detail: None,
+                    recovery_hint: None,
                 }
             ),
             event(

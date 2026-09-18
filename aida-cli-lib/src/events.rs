@@ -94,6 +94,12 @@ pub enum EventKind {
         phase: String,
         /// Failure kind, e.g. `ci-red`.
         kind: String,
+        /// Human-readable failure detail (absent on legacy event lines).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        detail: Option<String>,
+        /// Recovery guidance supplied by the failed phase.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recovery_hint: Option<String>,
     },
     /// A transient phase failure spent retry budget and is being re-driven.
     /// Actionable: an overnight watcher should know the drain recovered itself.
@@ -306,6 +312,21 @@ pub fn read_all(project_root: &Path) -> Vec<Event> {
         .filter(|l| !l.trim().is_empty())
         .filter_map(|l| serde_json::from_str::<Event>(l).ok())
         .collect()
+}
+
+/// Return the newest shelving event for `spec` from an oldest-first stream.
+///
+/// Re-drives may shelve the same spec more than once. Consumers must therefore
+/// scan from the end instead of stopping at the first historical failure.
+// trace:BUG-1227 | ai:codex
+pub fn latest_spec_shelved<'a>(events: &'a [Event], spec: &str) -> Option<&'a Event> {
+    events.iter().rev().find(|event| {
+        event
+            .spec
+            .as_deref()
+            .is_some_and(|event_spec| event_spec.eq_ignore_ascii_case(spec))
+            && matches!(event.kind, EventKind::SpecShelved { .. })
+    })
 }
 
 /// STORY-1051: the supervisor's re-drive count for `spec` and the timestamp of
@@ -584,6 +605,53 @@ mod tests {
     use super::*;
 
     #[test]
+    fn latest_spec_shelved_selects_newest_matching_event() {
+        let first = Event::new(
+            Some("TASK-1269".into()),
+            "run-1",
+            EventKind::SpecShelved {
+                phase: "ci".into(),
+                kind: "watchdog".into(),
+                detail: Some("timed out".into()),
+                recovery_hint: Some("retry".into()),
+            },
+        );
+        let unrelated = Event::new(
+            Some("TASK-OTHER".into()),
+            "run-2",
+            EventKind::SpecShelved {
+                phase: "reviewer".into(),
+                kind: "request-changes".into(),
+                detail: None,
+                recovery_hint: None,
+            },
+        );
+        let newest = Event::new(
+            Some("TASK-1269".into()),
+            "run-3",
+            EventKind::SpecShelved {
+                phase: "ci".into(),
+                kind: "ci-red".into(),
+                detail: Some("verify failed".into()),
+                recovery_hint: Some("fix verify".into()),
+            },
+        );
+        let events = vec![first, unrelated, newest];
+
+        let selected = latest_spec_shelved(&events, "task-1269").unwrap();
+        assert!(matches!(
+            &selected.kind,
+            EventKind::SpecShelved {
+                kind,
+                detail: Some(detail),
+                recovery_hint: Some(hint),
+                ..
+            } if kind == "ci-red" && detail == "verify failed" && hint == "fix verify"
+        ));
+        assert_eq!(selected.run_uuid, "run-3");
+    }
+
+    #[test]
     fn is_actionable_wakes_on_punt_and_shelve_and_done() {
         // The load-bearing WAKE rows of the taxonomy.
         assert!(EventKind::PuntFiled {
@@ -593,6 +661,8 @@ mod tests {
         assert!(EventKind::SpecShelved {
             phase: "ci".into(),
             kind: "ci-red".into(),
+            detail: None,
+            recovery_hint: None,
         }
         .is_actionable());
         assert!(EventKind::PhaseDonePr { pr: 1207 }.is_actionable());

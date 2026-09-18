@@ -186,7 +186,7 @@ pub(crate) fn stuck_items_from_events(
         let Ok(event) = serde_json::from_str::<Event>(line) else {
             continue;
         };
-        let EventKind::SpecShelved { phase, kind } = event.kind else {
+        let EventKind::SpecShelved { phase, kind, .. } = event.kind else {
             continue;
         };
         if !is_transient_shelve_kind(&kind) {

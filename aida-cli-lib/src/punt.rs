@@ -149,6 +149,8 @@ pub fn append_failure_to_ledger(
             crate::events::EventKind::SpecShelved {
                 phase: fr.phase.clone(),
                 kind: fr.kind.clone(),
+                detail: Some(fr.detail.clone()),
+                recovery_hint: fr.recovery_hint.clone(),
             },
         ),
     );

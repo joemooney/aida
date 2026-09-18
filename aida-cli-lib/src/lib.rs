@@ -52698,6 +52698,43 @@ fn failure_reason_lines(fr: &aida_core::FailureReason) -> Vec<String> {
     out
 }
 
+/// Prefer the append-only stream's newest shelving payload over the mutable
+/// requirement snapshot. A supervised re-drive can shelve a spec again while
+/// another writer leaves the cache-backed snapshot describing the first run.
+// trace:BUG-1227 | ai:codex
+fn latest_shelved_failure(
+    project_root: &std::path::Path,
+    spec: &str,
+    snapshot: &aida_core::FailureReason,
+) -> aida_core::FailureReason {
+    let events = events::read_all(project_root);
+    let Some(event) = events::latest_spec_shelved(&events, spec) else {
+        return snapshot.clone();
+    };
+    let events::EventKind::SpecShelved {
+        phase,
+        kind,
+        detail,
+        recovery_hint,
+    } = &event.kind
+    else {
+        unreachable!("latest_spec_shelved returned a non-shelving event")
+    };
+    aida_core::FailureReason {
+        phase: phase.clone(),
+        phase_index: snapshot.phase_index,
+        kind: kind.clone(),
+        detail: detail.clone().unwrap_or_else(|| snapshot.detail.clone()),
+        recovery_hint: recovery_hint.clone().or_else(|| {
+            (phase == &snapshot.phase && kind == &snapshot.kind)
+                .then(|| snapshot.recovery_hint.clone())
+                .flatten()
+        }),
+        shelved_by: snapshot.shelved_by.clone(),
+        shelved_at: event.ts,
+    }
+}
+
 /// STORY-732 recovery-legibility tests: the three audit fixes are pure-helper
 /// shaped so the "tell the truth" guarantee is checkable without a store, a
 /// lease, or a live process.
@@ -53325,6 +53362,7 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
                     disp
                 );
             };
+            let fr = latest_shelved_failure(&project_root, &disp, fr);
             let cause = auto_complete_telemetry::failure_cause_label(Some(&fr.kind));
             let detail = auto_complete_telemetry::failure_detail_first_line(Some(&fr.detail));
             if json {
