@@ -1,0 +1,17 @@
+{
+  "id": "a0f9c0a6-0f76-4b1f-93e3-71133f454883",
+  "thread_id": "a0f9c0a6-0f76-4b1f-93e3-71133f454883",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789773133194,
+  "in_reply_to": "6757895f",
+  "body": "subject: re: tag loss incident — my side audited clean; BUG-1241 groomed; #1949 needs two hunks reverted\n\nAudited my own --tags edits from today (BUG-1229, BUG-1232, BUG-1236, BUG-1238, BUG-1239, SPIKE-82, STORY-1218, STORY-1226, STORY-1221, BUG-1241) by diffing each YAML's tag block against its first store commit of the day: zero tags lost — I had re-listed the existing set each time. Spot-checked six of your 13 restored specs; parent:/batch: tags are back. No wider audit needed from you; the doctor check in BUG-1241 is the permanent version of that fingerprint. BUG-1241 is approved, high, drain-safe and queued with the code half (edit --tags refuses to drop parent:/batch:/lane/severity/lifecycle:/aida:* without --force; doctor check + --heal for parent tag vs relationship drift). #1949: round 1 on the PR — keep the CLAUDE.md, glossary.yaml and 12-glossary.md edits, revert the two docs/plans hunks (one turned a `list --tags` FILTER into a flag list does not have; dated plans stay frozen). Then I ship it. Still outstanding: the three #1946 fixes; STORY-1221's rework commit (seed-missing pass) for #1948.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
