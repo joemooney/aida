@@ -2,7 +2,7 @@ id: 01a0b5ed-3eab-76c2-8f47-a49b9399a824
 spec_id: TASK-1276
 agreed_id: TASK-1276
 title: 'Spikes are drain candidates when the advisor sets execution_mode = drain: mode overrides the type''s human-only default and routes through the research-lane contract'
-description: |
+description: |-
   Today a SPIKE is skipped by the batch drain because the type defaults human_only = true (TASK-130); the opt-out is a flag at filing time (aida add --no-human-only), and the research lane (STORY-568, classify_spike_lane) dispatches spikes to a research agent as a separate command. Observed 2026-09-18: SPIKE-81 sat "human-only" in a drain wave although its deliverable was a report file with stated acceptance; the product seat set execution_mode=operator and did it by hand. SPIKE-82 (night-shift post-mortem: mine events.jsonl + mailbox, write docs/spikes/<date>.md) is the same shape and should be drainable.
 
   Proposal (three moves, all consistent with the advisor owning disposition):
@@ -15,12 +15,15 @@ description: |
   - A SPIKE with mode unset (or operator) is still skipped with the existing human-only note.
   - aida groom's proposal for a report-shaped spike is drain, with the reason line naming the deliverable path it found.
   - Unit tests on the mode-over-type-default decision and on the groom classifier.
-status: Draft
+  - (advisor refinement 2026-09-18, folded in from TASK-1275) Mode is the authority in BOTH directions: execution_mode = drive on a spike also overrides the type's human-only default (the wave runs implementer → CI → review and holds the merge for the advisor), so a spike never needs --no-human-only by hand once groomed.
+  - (advisor refinement 2026-09-18) aida groom proposes DRIVE, not drain, for a report-shaped spike that has at least one BlockedBy dependent (something will be built on its conclusions, so an advisor reads the report before it merges); drain only when nothing depends on it yet. The reason line names the dependent.
+  - (advisor refinement 2026-09-18) .aida/discipline/backlog-grooming.md (master under aida-core/templates/.aida/discipline/) gains a short "Spikes" paragraph: split by deliverable not type; report + acceptance + evidence path → drain/drive per the dependent rule; decision, taste call, or credentials → operator; bulk-queue still excludes spikes.
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:19.307148033Z
-modified_at: 2026-09-18T19:10:23.436949743Z
+modified_at: 2026-09-18T19:16:18.341243684Z
 req_type: Task
 tags:
 - groom
@@ -32,3 +35,4 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T19:10:23.436949743Z
+execution_mode: drain
