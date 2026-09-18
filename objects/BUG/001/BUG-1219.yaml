@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:02:43.295938213Z
-modified_at: 2026-09-18T12:53:44.862562812Z
+modified_at: 2026-09-18T12:57:36.644007060Z
 req_type: Bug
 tags:
 - batch:followups-0918b
@@ -61,6 +61,17 @@ comments:
   created_at: 2026-09-18T12:53:36.810371594Z
   modified_at: 2026-09-18T12:53:36.810371594Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b498-0484-7920-b4ab-3b30a69bff06
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: Standalone colon-form acceptance markers are matched case-insensitively (for example, `ACCEPTANCE:` and `acceptance criteria:` are recognized).
+    rationale: The parser uses case-insensitive equality for both supported marker phrases, while the stored requirement specifies the phrases and optional markup but does not state their case behavior. A user can observe this by varying marker capitalization.
+    source: file:bug-1219-drain-01a0b493-fe70-7f02-8da2-b6c9596bc832.json
+    confidence: 0.93
+  created_at: 2026-09-18T12:57:36.644007060Z
+  modified_at: 2026-09-18T12:57:36.644007060Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b494-7b1d-7e70-833d-7ce9278f3d59
   author: aida-auto-bump
