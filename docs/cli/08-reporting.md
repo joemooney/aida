@@ -157,13 +157,13 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 
 ### `aida criteria`
 
-**One line** — show which acceptance criteria for one spec are traced by Rust tests.
+**One line** — show which acceptance criteria for one spec are traced by Rust, pytest, JavaScript/TypeScript, or Go tests.
 
-**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions for criterion-qualified trace markers. It is the smallest anti-drift loop between the store and executable tests: each acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
+**Mental model.** `criteria` turns a spec's `## Acceptance` section into stable criterion IDs, then scans Rust `#[test]` functions, pytest `def test_*` functions, Jest/Vitest/Mocha `test(...)` and `it(...)` calls, and Go `func TestXxx(...)` functions. Put a `trace:<SPEC>.<label>` token in a comment directly above the test (`//` in Rust, JS/TS, and Go; `#` in Python) or inside its body. A blank or non-comment line breaks an above-test attachment. It is the smallest anti-drift loop between the store and executable tests: each acceptance criterion should have at least one traced test, and each traced test should point at a real criterion rather than a stale or vague marker.
 
 **Reach for it when** — you want to audit a spec's test coverage at the criterion level, especially before reconstitution/harvest work. The report answers: which criteria have tests, which criteria are untested, and which tests trace a bare spec or an unknown criterion.
 
-**Don't reach for it when** — you want general source trace rot across all files (that's `aida trace check` / `aida doctor validate-trace-comments`), or when the project is not Rust-test-backed. This first slice scans Rust tests only.
+**Don't reach for it when** — you want general source trace rot across all files (that's `aida trace check` / `aida doctor validate-trace-comments`), test-runner execution, or AST-complete discovery beyond these supported declaration shapes.
 
 **Key options (rationale only).**
 - JSON output — emit the same AC-to-test map and gap lists for scripts or gates when that surface is available.

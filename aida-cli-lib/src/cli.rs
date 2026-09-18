@@ -8453,7 +8453,7 @@ pub enum Command {
         cmd: Option<GraphCommand>,
     },
 
-    /// Report acceptance criteria traced by Rust tests for one requirement.
+    /// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests.
     Criteria {
         /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to inspect.
         spec: String,
