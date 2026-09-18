@@ -75452,5 +75452,21 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 5846
+- id: 01a0b36a-09ac-7f63-8387-093f79b96c72
+  target_id: 01a0b368-b826-71e3-8488-6c28257ff97e
+  author: aida
+  node_id: '1'
+  lamport: 5847
+  timestamp: 2026-09-18T07:27:46.092142979Z
+  kind: !SetTitle
+    title: harvest append_acceptance_line adds a second '## Acceptance' heading when the spec uses the 'Acceptance:' colon form — the heading shadows the original bullets in aida criteria — and next_ac_label reads their ac<6-hex> hash labels as numbers (BUG-1209.AC512631)
+- id: 01a0b36a-0a3f-7431-b153-bc6267ea0639
+  target_id: 01a0b368-b826-71e3-8488-6c28257ff97e
+  author: aida
+  node_id: '1'
+  lamport: 5848
+  timestamp: 2026-09-18T07:27:46.239175337Z
+  kind: !SetPriority
+    priority: Medium
+clock: 5848
 node_id: '1'

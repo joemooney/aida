@@ -1,7 +1,7 @@
 id: 01a0b368-b826-71e3-8488-6c28257ff97e
 spec_id: BUG-1216
 agreed_id: BUG-1216
-title: harvest next_ac_label treats content-hash criterion labels (ac<6-hex>) as numbers — a spec with unlabeled acceptance bullets gets a harvested AC named like BUG-1209.AC512631 instead of AC1
+title: harvest append_acceptance_line adds a second '## Acceptance' heading when the spec uses the 'Acceptance:' colon form — the heading shadows the original bullets in aida criteria — and next_ac_label reads their ac<6-hex> hash labels as numbers (BUG-1209.AC512631)
 description: |-
   Observed 2026-09-18 00:26: `aida harvest BUG-1209 --from <drain file> --yes-all` landed the confirmed criterion as BUG-1209.AC512631. BUG-1209's ## Acceptance bullets were unlabeled, so parse_acceptance_criteria gives them content-hash ids (ac<6-hex>, e.g. ac512630). harvest::next_ac_label computes "one past the highest existing number" by taking every label, skipping leading non-digits and parsing the rest as u32 — for a hash label like ac512630 that yields 512630, so the next explicit label became AC512631. Cosmetic but ugly and it poisons every later harvest on that spec (the next one will be AC512632…), and it makes trace:SPEC.ACn comments unreadable.
 
@@ -11,11 +11,11 @@ description: |-
 
   Acceptance: the unit cases above pass; harvesting onto a spec with only hash-labeled criteria yields AC1; BUG-1209's criterion reads AC1.
 status: Approved
-priority: Low
+priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T07:26:28.076891254Z
+modified_at: 2026-09-18T07:27:46.004732778Z
 req_type: Bug
 tags:
 - criteria
