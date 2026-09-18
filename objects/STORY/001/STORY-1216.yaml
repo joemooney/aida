@@ -1,0 +1,30 @@
+id: 01a0b565-47ac-71e0-8390-bee4a20c7b8c
+spec_id: STORY-1216
+agreed_id: STORY-1216
+title: 'GitLab mirror CI: prebuilt builder image + persistent checkout/target for incremental builds'
+description: |-
+  Problem (measured 2026-09-18 on the self-hosted mirror runner imac-docker, TASK-1254 live validation): every verify job on gitlab.joemooney.com ai/aida starts from nothing. It pulls rust:latest (pull policy always), apt-installs protobuf-compiler + libxcb-* + libxkbcommon + libssl + libgtk-3 + bubblewrap, runs rustup component add clippy rustfmt, restores a multi-GB GitLab cache zip of target/ + .cargo/registry, compiles, then re-zips the cache. A single verify job took 33-45 minutes while several ran concurrently; the cache zip round-trip alone is minutes. The 6-core box saturates with 3+ jobs.
+
+  Goal: make the mirror pipeline an incremental build the way a developer's checkout is: a prebuilt image with everything installed, a checkout that persists between jobs (git fetch, not clone), and a cargo target dir that persists on the host so `make build-fast`-style incremental release builds apply.
+
+  Slices (vertical, each shippable):
+  1. Builder image. Add ci/Dockerfile (FROM a pinned rust:<ver>; apt packages; clippy + rustfmt; nothing else). Build it on the runner host with podman as aida-ci:<rust-ver>, reference it in .gitlab-ci.yml `image:`, and set pull_policy = ["if-not-present"] in the runner's [runners.docker] so no per-run pull. Delete the apt/rustup before_script. Document the rebuild command in docs/ (the image is rebuilt when Cargo's MSRV or the apt set changes). Registry publication is out of scope for this slice.
+  2. Persistent checkout + target dir. Runner config volumes mount host dirs for /builds (persistent checkout, GIT_STRATEGY: fetch) and a CARGO_TARGET_DIR (e.g. /var/cache/aida-ci/target); CARGO_HOME on a host volume too. Remove the GitLab `cache:` block. Set CARGO_INCREMENTAL=1 for the verify job (mirrors make build-fast). Runner concurrency capped at 2 (jobs sharing a target dir serialize on cargo's lock; the box has 6 cores). Acceptance: second verify run of an unchanged-deps commit completes in under 10 minutes; no apt/rustup/cache-restore sections in the job log.
+  3. (Optional) sccache with a local disk backend for cross-branch/cross-worktree object reuse without a shared mutable target dir; evaluate only if slice 2's lock serialization hurts.
+
+  Non-goals: GitHub Actions changes (separate cost model), publishing the image to a public registry, cross-platform runners.
+
+  Related: TASK-1254 (live validation that measured this), TASK-825 (the original .gitlab-ci.yml), STORY-1048 (release assets on GitLab).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T16:41:48.716701811Z
+modified_at: 2026-09-18T16:41:48.716701811Z
+req_type: Story
+tags:
+- ci
+- forge
+- gitlab
+- infra
+- parent:EPIC-68
