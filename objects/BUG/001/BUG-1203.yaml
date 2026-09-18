@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T02:57:06.345926088Z
-modified_at: 2026-09-18T04:14:54.852805600Z
+modified_at: 2026-09-18T04:14:56.447029036Z
 req_type: Bug
 tags:
 - ci
@@ -20,3 +20,10 @@ relationships:
   target_id: 01a0b269-201b-77d1-b260-7ecad9095433
   created_at: 2026-09-18T04:14:54.852797427Z
   created_by: joe
+comments:
+- id: 01a0b2b9-7fbf-7552-894b-96d07aa3d691
+  author: joe
+  content: 'Superseded by BUG-1202 (same flaky test, filed 19:50 by the driver-advisor with the root cause from the CI log — ''Text file busy (os error 26)'': the hook runner execs the just-written script while a concurrent fork still holds the write fd — and the fix: ETXTBSY retry in the hook runner via the existing command_output_retrying_etxtbsy pattern + drop the fd before exec in the test).'
+  created_at: 2026-09-18T04:14:56.447029036Z
+  modified_at: 2026-09-18T04:14:56.447029036Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
