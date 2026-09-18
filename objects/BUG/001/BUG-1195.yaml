@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:48:11.546163776Z
-modified_at: 2026-09-18T04:13:50.087721682Z
+modified_at: 2026-09-18T04:15:19.790518957Z
 req_type: Bug
 tags:
 - drain
@@ -69,6 +69,20 @@ comments:
     Acceptance addition: the repro above resolves PR-1908 (or a fixture with the same shape) to the reviewer route; the pickup and the guard share one classifier; the bail names the dropped filter.
   created_at: 2026-09-18T03:10:48.131244646Z
   modified_at: 2026-09-18T03:10:48.131244646Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b2b9-daee-7090-b13a-5203598db12c
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1912 [AI:claude] fix(queue): PR-N pickup reads the reviewer route regardless of the shell's env role; bail names the dropped filter (BUG-1195 round 2)
+    verdict: APPROVE + merged (drive)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1912.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN; merged from a plain shell, no override
+    reasoning: my reopen repro was real — resolve_queue_work_plan derived the cross-user routing role from AIDA_SESSION_ROLE (advisor in my shell), so a PR-N pickup never merged the reviewer-routed story; now a PR/MR scope always reads the reviewer route, --role still wins for non-review scopes, and the zero-match bail names the dropped filter through the shared classifier. Correction to my reopen note: TASK-1261's actual shelve was BUG-1205 (the informational-only red returning early left the implementer lease held and the headless reviewer died on the lease prompt) — the product seat's drain log shows both reviewer attempts launched as reviews; my dry-run failure was the env-role path fixed here. Both now closed (#1910 pending my review).
+    merged: 2026-09-17 21:16 -07:00 → main 0fd6cdc661; spec auto-bumped Completed
+  created_at: 2026-09-18T04:15:19.790518957Z
+  modified_at: 2026-09-18T04:15:19.790518957Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b209-329f-7c20-8606-457c8775cde7
