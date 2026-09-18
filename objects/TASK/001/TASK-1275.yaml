@@ -12,12 +12,12 @@ description: |-
   2. aida queue add <SPIKE> and aida do <SPIKE>: if the spec is a spike with execution_mode drain (or unset), refuse with the rule and the fix (aida edit <ID> --mode drive); --force overrides for the rare evidence-only spike an advisor wants to fully automate.
   3. .aida/discipline/backlog-grooming.md (master under aida-core/templates/.aida/discipline/) gains a short "Spikes" paragraph with the two-part test above.
   Acceptance: unit tests on the groom proposal (spike → drive) and the queue-add refusal + --force path; discipline master updated and scaffolded copy in sync; no change to non-spike behaviour.
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:00.871774996Z
-modified_at: 2026-09-18T19:10:09.292574152Z
+modified_at: 2026-09-18T19:16:01.944497909Z
 req_type: Task
 tags:
 - discipline
