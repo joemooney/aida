@@ -2,12 +2,12 @@ id: 01a0b6b2-2989-7b82-80bd-d13611f4c830
 spec_id: TASK-1-141
 title: STORY-1221 awaits architecture sketch sign-off
 description: Implementation is committed on story-1221 at a46e6785dd and verified. queue done requires an open PR, but AGENTS.md forbids opening an architecture-class PR until the advisor/master signs off on the sketch posted to STORY-1221. Review the sketch, then open the PR and rerun aida queue done STORY-1221.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-18T22:45:24.489437512Z
-modified_at: 2026-09-18T22:45:24.489437512Z
+modified_at: 2026-09-18T22:52:35.057986928Z
 req_type: Task
 tags:
 - aida:pickup
@@ -16,3 +16,10 @@ tags:
 - kind:architectural-concern
 - linked:STORY-1221
 - severity:major
+comments:
+- id: 01a0b6b8-bb72-7f83-8251-59f458b321f1
+  author: joe
+  content: 'Dismissed by joe 2026-09-18: hand-off answered: sketch signed off on STORY-1221 (comment 15:58) with one required addition (seed-missing pass reachable from scaffold refresh / init --refresh); implementer to add it, open the held PR, and run queue done'
+  created_at: 2026-09-18T22:52:35.057986928Z
+  modified_at: 2026-09-18T22:52:35.057986928Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
