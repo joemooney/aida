@@ -322,7 +322,7 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             if *green { "CI green" } else { "CI red" }.to_string(),
         ),
         EventKind::PhaseDonePr { pr } => ("phase-done-pr", format!("PR #{} open", pr)),
-        EventKind::SpecShelved { phase, kind } => (
+        EventKind::SpecShelved { phase, kind, .. } => (
             "spec-shelved",
             format!(
                 "shelved at {} ({})",
@@ -712,6 +712,8 @@ mod tests {
                     EventKind::SpecShelved {
                         phase: "ci".into(),
                         kind: "ci-red".into(),
+                        detail: None,
+                        recovery_hint: None,
                     },
                 ), // WAKE
             ],

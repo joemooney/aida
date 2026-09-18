@@ -11,6 +11,8 @@ fn event_line(spec: &str, phase: &str, kind: &str, ts_ms: i64) -> String {
         kind: EventKind::SpecShelved {
             phase: phase.to_string(),
             kind: kind.to_string(),
+            detail: None,
+            recovery_hint: None,
         },
     })
     .unwrap()
