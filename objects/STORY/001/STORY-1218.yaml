@@ -1,0 +1,40 @@
+id: 01a0b5e0-7244-7451-89a9-f8c561574633
+spec_id: STORY-1218
+agreed_id: STORY-1218
+title: 'aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer'
+description: |
+  Goal: make the overnight window repeatable without depending on an interactive agent being awake. The 2026-09-17/18 night worked because a product-seat session relaunched drain waves whenever the lock freed and an advisor session gated merges; both were LLM sessions holding a Monitor. The one-hour unread-mail gap the advisor found in its own audit is the failure mode: the loop moves only while an agent notices.
+
+  Proposal: a deterministic, LLM-free tick command run by a system scheduler, composing surfaces that already exist (aida supervise for transient re-drives per ADR-26, aida session reap, aida awaiting --notice, the drain lock, aida advisor watch --once for the presence-gated fork):
+
+  aida shift tick [--dry-run] [--json]
+    1. If the drain lock is free and the role:implementer queue has entries whose execution_mode is drain (never drive/guided/operator/decide), launch the next wave: aida queue work --batch <auto or configured> --auto-complete --no-human=both --escalate-blocks --max-failures N. Wave size, max-failures and the batch selector come from [shift] config.
+    2. Run aida supervise (transient parks) and aida session reap.
+    3. Compute mailbox latency per seat (TASK-1271) and, above the threshold, escalate to the operator channel ([shift] notify = ntfy|mail|desktop command), never to chat.
+    4. Emit one ShiftTick event with what it did; quiet when nothing to do.
+    Guarded: refuses to launch when a human-gated wave is in flight, when the machine is over a load/memory ceiling, or when a drain lock is live; idempotent; safe to run every 10 minutes.
+
+  aida shift install --systemd-user | --cron   writes the unit+timer (OnUnitInactiveSec, journal logging, PATH to the activated binary, loginctl enable-linger reminder) or a crontab line for --once; aida shift status shows last tick, next tick, what it launched.
+
+  Why systemd user timer over cron as the default: overlap protection (OnUnitInactiveSec + the unit is a single process), journal logging, environment control, and it survives logout with linger; cron remains the portable fallback via --once. The interactive seats keep their Monitors for real-time reaction; the tick guarantees progress when they are gone.
+
+  Acceptance:
+  - With a queued drain-mode batch and no live drain, one tick launches the wave and the ShiftTick event names it; a second tick within the wave is a no-op.
+  - A queued drive/guided/operator spec is never launched by the tick.
+  - A transient park is re-driven by the tick (via aida supervise) without an interactive seat.
+  - Mailbox latency above the threshold raises the configured notification once, not every tick.
+  - aida shift install --systemd-user produces a working timer on this box; docs/autonomous-drain.md gains a "night shift" section that is the runbook.
+  - Off by default; opt-in per project via [shift] enabled = true.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T18:56:20.548044413Z
+modified_at: 2026-09-18T18:56:20.548044413Z
+req_type: Story
+tags:
+- autonomy
+- orchestrator
+- parent:EPIC-62
+- reliability
+- substrate-first
