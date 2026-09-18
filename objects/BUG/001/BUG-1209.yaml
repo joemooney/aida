@@ -32,7 +32,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T07:25:51.020239210Z
+modified_at: 2026-09-18T07:25:52.441267545Z
 req_type: Bug
 tags:
 - aida:list
@@ -85,6 +85,20 @@ comments:
   created_at: 2026-09-18T07:22:06.051398901Z
   modified_at: 2026-09-18T07:22:06.051398901Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b368-4db9-7f60-bdb5-b36f4af2ce39
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:bug-1209-drain-01a0b364-7549-7303-a342-0cf21e16163f.json
+    agent: codex
+    ran-at: 2026-09-18 00:25 -07:00
+    confirmed: 1
+    declined: 0
+    skipped: 0
+    + AC BUG-1209.AC512631 — When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
+  created_at: 2026-09-18T07:25:52.441267545Z
+  modified_at: 2026-09-18T07:25:52.441267545Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b364-f5cc-7cb2-85b5-d397ea40c4eb
   author: aida-auto-bump
