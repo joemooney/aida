@@ -3,12 +3,12 @@ spec_id: BUG-1227
 agreed_id: BUG-1227
 title: aida why shows the FIRST shelve's failure after a re-drive shelves the spec again for a different cause
 description: 'Observed 2026-09-18 on the TASK-1254 live drain. TASK-1269 was shelved twice: first ''watchdog at ci'' (15:05, the pre-fix single-probe bug), then after a re-drive ''ci-red'' (15:47, verify failed). .aida/events.jsonl records both SpecShelved events in order, yet aida why TASK-1269 still prints ''failure: watchdog at ci — CI on PR-2 did not reach a terminal state in time (attempt 2/2)'' with the stale hint ''CI is not red'', while the drain''s own console said ''CI is red on PR-2: failing: verify''. Expected: aida why reports the LATEST shelve (kind + detail + hint), or lists them newest-first. Acceptance: two SpecShelved events for one spec → aida why leads with the newest; unit test on the pure selection.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:50:21.126784967Z
-modified_at: 2026-09-18T19:44:57.439553814Z
+modified_at: 2026-09-18T19:45:04.481795045Z
 req_type: Bug
 tags:
 - batch:followups-0918d
@@ -39,8 +39,25 @@ comments:
   created_at: 2026-09-18T19:44:57.439553814Z
   modified_at: 2026-09-18T19:44:57.439553814Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b60d-0fe1-7d81-887a-acd038d52b53
+  author: aida-auto-bump
+  timestamp: 2026-09-18T19:45:04.481091190Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b60d-0fe1-7d81-887a-ace92694b5a6
+  timestamp: 2026-09-18T19:45:04.481794513Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1227-2026-09-18T194458Z.md
+  commit_sha: 36f1d09325f6528daddf40f51211c6e0e1ca5561
+  summary: Completed via merge 36f1d093
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T19:31:45.202572824Z
   implemented_by: joe
+  completed_at: 2026-09-18T19:45:04.480948813Z
+  completion_sha: 36f1d09325f6528daddf40f51211c6e0e1ca5561
