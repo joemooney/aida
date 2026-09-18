@@ -695,6 +695,62 @@ fn run_harvest_agent(
     })
 }
 
+// BUG-1198: whitespace- and case-insensitive form used to decide whether a
+/// harvested text is already on the spec.
+// trace:BUG-1198 | ai:claude
+pub(crate) fn normalize_text(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+        .trim_end_matches('.')
+        .to_string()
+}
+
+// BUG-1198: the label of an existing criterion whose text equals `text`
+/// (normalized), if any.
+// trace:BUG-1198 | ai:claude
+pub(crate) fn acceptance_label_for_text(
+    existing: &[(String, String)],
+    text: &str,
+) -> Option<String> {
+    let want = normalize_text(text);
+    existing
+        .iter()
+        .find(|(_, t)| *t == want)
+        .map(|(label, _)| label.clone())
+}
+
+// BUG-1198: the sidecar that marks a candidates file as consumed
+/// (`<file>.confirmed`), if it exists.
+// trace:BUG-1198 | ai:claude
+pub(crate) fn consumed_marker_for(file: &Path) -> Option<PathBuf> {
+    let marker = consumed_marker_path(file);
+    marker.exists().then_some(marker)
+}
+
+fn consumed_marker_path(file: &Path) -> PathBuf {
+    let mut name = file
+        .file_name()
+        .map(|n| n.to_os_string())
+        .unwrap_or_default();
+    name.push(".confirmed");
+    file.with_file_name(name)
+}
+
+// BUG-1198: mark a candidates file consumed by writing its sidecar with the
+/// confirmation time. The candidates file itself is left in place for audit.
+// trace:BUG-1198 | ai:claude
+pub(crate) fn mark_consumed(file: &Path) -> std::io::Result<()> {
+    std::fs::write(
+        consumed_marker_path(file),
+        format!(
+            "confirmed-at: {}\n",
+            chrono::Local::now().format("%Y-%m-%d %H:%M %Z")
+        ),
+    )
+}
+
 /// Flags the handler resolves from the clap subcommand.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct HarvestOptions {
@@ -901,6 +957,18 @@ pub(crate) fn handle_harvest_command(
     }
 
     let raw = if let Some(f) = &from_file {
+        // BUG-1198: a candidates file is consumed by ONE confirmation. A
+        // second `--from` on the same file (another seat already confirmed
+        // it) would re-land every candidate; refuse and point at the ledger.
+        // trace:BUG-1198 | ai:claude
+        if let Some(marker) = consumed_marker_for(f) {
+            anyhow::bail!(
+                "{} was already confirmed ({} exists) — see the [aida:harvest] ledger on {}; nothing to do",
+                f.display(),
+                marker.display(),
+                display
+            );
+        }
         std::fs::read_to_string(f)
             .with_context(|| format!("could not read candidates file {}", f.display()))?
     } else {
@@ -989,6 +1057,25 @@ pub(crate) fn handle_harvest_command(
     let mut declined: Vec<Candidate> = Vec::new();
     let mut description = req.description.clone();
     let mut labels: Vec<String> = existing.iter().map(|c| c.label.clone()).collect();
+    // BUG-1198: landing is idempotent — an AC whose text is already in
+    // `## Acceptance`, or a SEM whose decision is already recorded, is
+    // reported as already-present and not written again.
+    // trace:BUG-1198 | ai:claude
+    let mut ac_texts: Vec<(String, String)> = existing
+        .iter()
+        .map(|c| (c.label.clone(), normalize_text(&c.text)))
+        .collect();
+    let mut sem_texts: Vec<String> = req
+        .comments
+        .iter()
+        .filter(|c| c.content.trim_start().starts_with(SEM_MARKER))
+        .filter_map(|c| {
+            c.content
+                .lines()
+                .find_map(|l| l.strip_prefix("decision:"))
+                .map(|d| normalize_text(d))
+        })
+        .collect();
     let mut description_changed = false;
     for (i, c) in kept.into_iter().enumerate() {
         if !chosen.contains(&(i + 1)) {
@@ -997,19 +1084,29 @@ pub(crate) fn handle_harvest_command(
         }
         let landing = match c.kind {
             CandidateKind::Ac => {
-                let label = next_ac_label(&labels);
-                description = append_acceptance_line(&description, &label, &c.text);
-                labels.push(label.clone());
-                description_changed = true;
-                format!("{display}.{label}")
+                if let Some(label) = acceptance_label_for_text(&ac_texts, &c.text) {
+                    format!("already present as {display}.{label}")
+                } else {
+                    let label = next_ac_label(&labels);
+                    description = append_acceptance_line(&description, &label, &c.text);
+                    labels.push(label.clone());
+                    ac_texts.push((label.clone(), normalize_text(&c.text)));
+                    description_changed = true;
+                    format!("{display}.{label}")
+                }
             }
             CandidateKind::Sem => {
-                let body = sem_comment_body(&c, &source);
-                run_aida(
-                    project_root,
-                    &["comment", "add", &display, &body, "--author", "harvest"],
-                )?;
-                "[aida:sem] comment".to_string()
+                if sem_texts.contains(&normalize_text(&c.text)) {
+                    "already recorded as an [aida:sem] comment".to_string()
+                } else {
+                    let body = sem_comment_body(&c, &source);
+                    run_aida(
+                        project_root,
+                        &["comment", "add", &display, &body, "--author", "harvest"],
+                    )?;
+                    sem_texts.push(normalize_text(&c.text));
+                    "[aida:sem] comment".to_string()
+                }
             }
             CandidateKind::Adr => {
                 let desc = format!(
@@ -1058,6 +1155,16 @@ pub(crate) fn handle_harvest_command(
         project_root,
         &["comment", "add", &display, &ledger, "--author", "harvest"],
     )?;
+    if let Some(f) = &from_file {
+        // BUG-1198: consumed — a second confirmation of this file is refused.
+        if let Err(e) = mark_consumed(f) {
+            eprintln!(
+                "  {} could not mark {} as consumed ({e}) — a second `--from` on it would re-land",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                f.display()
+            );
+        }
+    }
 
     let summary = RunSummary {
         spec: display.clone(),
@@ -1196,6 +1303,35 @@ mod tests {
             !body.contains("confirmed:"),
             "nothing lands in propose-only"
         );
+    }
+
+    // BUG-1198: confirming the same file twice must not re-land anything.
+    #[test]
+    fn already_present_texts_are_detected_and_consumed_files_are_marked() {
+        let existing = vec![
+            (
+                "A1".to_string(),
+                normalize_text("Scratch-run pruning applies BOTH bounds."),
+            ),
+            ("AC2".to_string(), normalize_text("another one")),
+        ];
+        assert_eq!(
+            acceptance_label_for_text(&existing, "  scratch-run   pruning applies both bounds"),
+            Some("A1".to_string())
+        );
+        assert_eq!(acceptance_label_for_text(&existing, "a third thing"), None);
+        assert_eq!(normalize_text("  A  b\tC. "), "a b c");
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("t-1-drain-x.json");
+        std::fs::write(&f, "{\"candidates\":[]}").unwrap();
+        assert!(consumed_marker_for(&f).is_none());
+        mark_consumed(&f).unwrap();
+        let marker = consumed_marker_for(&f).expect("marked");
+        assert!(marker.ends_with("t-1-drain-x.json.confirmed"));
+        assert!(std::fs::read_to_string(marker)
+            .unwrap()
+            .starts_with("confirmed-at:"));
+        assert!(f.exists(), "the candidates file stays for audit");
     }
 
     #[test]
