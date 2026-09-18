@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:49:26.568333157Z
-modified_at: 2026-09-18T19:08:23.662432792Z
+modified_at: 2026-09-18T19:23:13.563738496Z
 req_type: Bug
 tags:
 - batch:followups-0918d
@@ -20,6 +20,22 @@ relationships:
   target_id: 01a0b5eb-507f-7363-b574-e257913c7b73
   created_at: 2026-09-18T19:08:18.607501486Z
   created_by: joe
+comments:
+- id: 01a0b5f9-0f1b-73d3-a368-47bc24ab4297
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1938
+    agent: codex
+    ran-at: 2026-09-18 12:23 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1226-drain-01a0b5f8-d158-7820-8c02-614ed53f6875.json
+    ? SEM (0.96) — When a CI-red recovery hint has no run identifier, it omits the entire `on run …` phrase for every forge, including GitHub, while still presenting the best available forge-specific CI viewer.
+  created_at: 2026-09-18T19:23:13.563738496Z
+  modified_at: 2026-09-18T19:23:13.563738496Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
