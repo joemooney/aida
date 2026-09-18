@@ -240,12 +240,8 @@ pub(crate) fn build_match_prompt(
     p
 }
 
-fn aida_exe() -> PathBuf {
-    std::env::current_exe().unwrap_or_else(|_| PathBuf::from("aida"))
-}
-
 fn aida_stdout(project_root: &Path, args: &[&str]) -> String {
-    std::process::Command::new(aida_exe())
+    std::process::Command::new(crate::aida_exe_path())
         .current_dir(project_root)
         .args(args)
         .env("AIDA_OUTPUT_FORMAT", "human")

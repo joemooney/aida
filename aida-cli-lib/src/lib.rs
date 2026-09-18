@@ -81413,9 +81413,8 @@ fn reconcile_orchestrated_branch(
     }
 }
 
-/// Resolve the aida binary path for orchestrator subprocess spawning, once
-/// at orchestrator construction time so a mid-flight binary replacement
-/// can't invalidate it.
+/// Resolve the aida binary path for all in-process `aida` subprocesses, once
+/// per process so a mid-flight binary replacement cannot invalidate it.
 ///
 /// Why this matters (BUG-217): the orchestrator drives multiple phases over
 /// 15-30 minutes. The implementer's phase-1 Claude session often runs
@@ -81424,14 +81423,22 @@ fn reconcile_orchestrated_branch(
 /// appended once the file is unlinked — and `Command::new("<path>
 /// (deleted)").spawn()` fails with ENOENT. By resolving once at the start
 /// (before phase 1 can rebuild) and stripping any pre-existing suffix, we
-/// stabilise the path for the whole orchestrator run.
+/// stabilise the path for the whole parent process.
 ///
 /// Falls back to the bare "aida" name (PATH search) if `current_exe()`
 /// failed or the resolved path doesn't exist on disk.
 ///
 /// trace:BUG-217 | ai:claude
-fn resolve_aida_exe() -> std::path::PathBuf {
-    if let Ok(p) = std::env::current_exe() {
+pub(crate) fn aida_exe_path() -> std::path::PathBuf {
+    static AIDA_EXE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    AIDA_EXE
+        .get_or_init(|| resolve_aida_exe_from(std::env::current_exe().ok()))
+        .clone()
+}
+
+// trace:BUG-1199 | ai:codex
+fn resolve_aida_exe_from(current: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    if let Some(p) = current {
         // Linux's `/proc/self/exe` can return "<path> (deleted)" when the
         // executable file has been unlinked. Strip that before checking.
         let lossy = p.to_string_lossy();
@@ -81446,6 +81453,10 @@ fn resolve_aida_exe() -> std::path::PathBuf {
     // Fall back to PATH search. Either current_exe() failed, or the
     // resolved path no longer points at an existing file.
     std::path::PathBuf::from("aida")
+}
+
+fn resolve_aida_exe() -> std::path::PathBuf {
+    aida_exe_path()
 }
 
 /// BUG-766: make every child process resolve `aida` to THIS build.

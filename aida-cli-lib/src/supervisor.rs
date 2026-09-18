@@ -363,7 +363,7 @@ fn render_decisions(decisions: &[SuperviseDecision], json: bool) -> Result<()> {
 /// (`queue work --from-pr`/`--force-claim --auto-complete --no-human=both`),
 /// not a new orchestration path (ADR-26).
 fn launch_redrive(project_root: &std::path::Path, spec: &str) -> Result<()> {
-    let status = std::process::Command::new(std::env::current_exe()?)
+    let status = std::process::Command::new(crate::aida_exe_path())
         .current_dir(project_root)
         .args([
             "queue",
