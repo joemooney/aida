@@ -6145,7 +6145,7 @@ fn constrain_requester_intake(arguments: &mut Value) -> Result<(), String> {
     // that draft to an existing graph node or assign its grooming metadata.
     // `parent` is especially important: add_requirement materializes it as a
     // relationship write, which would otherwise bypass the requester envelope.
-    if ["parent", "feature", "owner"]
+    if crate::REQUESTER_INTAKE_FORBIDDEN_FIELDS
         .iter()
         .any(|field| object.contains_key(*field))
     {
@@ -11691,7 +11691,7 @@ mod tests {
             "requester",
         );
 
-        for field in ["parent", "feature", "owner"] {
+        for field in crate::REQUESTER_INTAKE_FORBIDDEN_FIELDS {
             let result = server
                 .handle_tools_call(
                     &json!(1),
@@ -11700,7 +11700,7 @@ mod tests {
                         "arguments": {
                             "title": "Requester report",
                             "description": "Reproduction details",
-                            field: "STORY-1"
+                            (*field): "STORY-1"
                         }
                     }),
                 )

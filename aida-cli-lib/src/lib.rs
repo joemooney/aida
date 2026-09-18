@@ -659,6 +659,11 @@ const DEFAULT_MAX_FAILURES: usize = 5;
 // parallel knob. trace:TASK-1005 | ai:claude
 pub(crate) const SEQUENTIAL_DRAIN_CONCURRENCY: usize = 1;
 
+// Requester intake must remain a standalone Draft. Both the CLI and MCP gates
+// consume this list so relationship and grooming-field policy cannot drift.
+// trace:BUG-1211 | ai:codex
+pub(crate) const REQUESTER_INTAKE_FORBIDDEN_FIELDS: &[&str] = &["parent", "feature", "owner"];
+
 // TASK-970: default row cap for a bare `aida list` in AGENT MODE. ~925
 // unbounded rows is a token blowout when an agent reads the listing as
 // context; cap to the N most-recent (post-sort, post-filter) and emit a
@@ -12259,7 +12264,10 @@ fn enforce_stakeholder_role_capabilities_for_role(command: &mut Command, role: &
             if let Command::Add {
                 status,
                 r#type,
+                owner,
+                feature,
                 tags,
+                parent,
                 queue,
                 batch,
                 r#for,
@@ -12272,6 +12280,21 @@ fn enforce_stakeholder_role_capabilities_for_role(command: &mut Command, role: &
                 }
                 if *queue || batch.is_some() || r#for.is_some() {
                     return Err(stakeholder_refusal("requester", "queueing intake"));
+                }
+                let forbidden_fields = [
+                    ("parent", parent.is_some()),
+                    ("feature", feature.is_some()),
+                    ("owner", owner.is_some()),
+                ];
+                if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
+                    forbidden_fields
+                        .iter()
+                        .any(|(candidate, is_set)| candidate == field && *is_set)
+                }) {
+                    return Err(stakeholder_refusal(
+                        "requester",
+                        "setting parent, feature, or owner during intake",
+                    ));
                 }
                 let req_type = parse_requester_add_type(r#type.as_deref())?;
                 if !requester_add_type_allowed(&req_type) {
@@ -12345,6 +12368,24 @@ mod stakeholder_cli_policy_tests {
         assert!(guest_refusal(&["aida", "role", "enter", "advisor"])
             .to_string()
             .contains("refusing writes"));
+    }
+
+    #[test]
+    fn requester_cli_rejects_every_shared_forbidden_intake_field() {
+        for field in REQUESTER_INTAKE_FORBIDDEN_FIELDS {
+            let flag = format!("--{field}");
+            let mut cli = Cli::try_parse_from([
+                "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
+            ])
+            .expect("valid CLI command");
+            let err = enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "requester")
+                .expect_err("shared requester intake field must be refused");
+            assert!(
+                err.to_string()
+                    .contains("setting parent, feature, or owner during intake"),
+                "field {field}: {err}"
+            );
+        }
     }
 }
 
