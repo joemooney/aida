@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:58:10.802593693Z
+modified_at: 2026-09-18T05:29:34.182100013Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -154,6 +154,12 @@ comments:
     Finish with aida queue done BUG-1197.
   created_at: 2026-09-18T04:58:10.547707509Z
   modified_at: 2026-09-18T04:58:10.547707509Z
+- id: 01a0b2fd-d2e6-7c51-8753-759bf36287cb
+  author: joe
+  content: 'Addressed PR #1913 advisor round-2 findings in d61cd2048b: requester MCP intake now rejects parent/feature/owner with the stakeholder refusal; CLI stakeholder reads now include mcp-serve and the coordination/read surfaces while retaining default-to-Write. Verified: stakeholder_cli_policy_tests (4 passed), requester_persona (3 passed), guest_persona (1 passed), cargo fmt --all -- --check. Branch is synchronized with origin/bug-1197.'
+  created_at: 2026-09-18T05:29:34.182100013Z
+  modified_at: 2026-09-18T05:29:34.182100013Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
