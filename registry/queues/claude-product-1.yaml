@@ -1,7 +1,1 @@
-- user_id: claude-product-1
-  requirement_id: 01a0b5bf-fa25-7e80-b111-4bd751958e05
-  position: 1000
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1942: mcp.rs mark_seen advances the recipient watermark via set_watermark but never calls record_seen for the acknowledged messages, so MCP-path reads update last_seen_at without per-message latency history. Call record_seen for each acknowledged message on the MCP path (mirror the CLI inbox path) and add a test that an MCP read produces the same latency rows as aida mailbox inbox.'
-  added_at: 2026-09-18T20:56:00.579728518Z
-  for_role: implementer
+[]
