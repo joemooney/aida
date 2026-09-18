@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:00.871774996Z
-modified_at: 2026-09-18T19:10:00.871774996Z
+modified_at: 2026-09-18T19:10:09.292574152Z
 req_type: Task
 tags:
 - discipline
@@ -25,4 +25,8 @@ tags:
 - groom
 - parent:EPIC-62
 - queue
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-18T19:10:09.292574152Z
 execution_mode: drain
