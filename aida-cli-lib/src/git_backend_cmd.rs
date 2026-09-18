@@ -61,7 +61,9 @@ where
         0
     };
     let (title_width, tag_width) = match options.terminal_width {
-        None => (usize::MAX, desired_tag_width),
+        // Preserve the pre-BUG-1207 piped-output contract. Only an attached
+        // terminal opts into width-aware geometry.
+        None => (if options.show_tags { 50 } else { usize::MAX }, usize::MAX),
         Some(total) if options.show_tags => {
             let available = total.saturating_sub(prefix_width);
             let tag_width = desired_tag_width.min(available.saturating_sub(25)).max(4);
@@ -75,9 +77,15 @@ where
     } else {
         title_width
     };
-    let table_width = options.terminal_width.unwrap_or(
-        prefix_width + title_column_width + usize::from(options.show_tags) * (tag_width + 1),
-    );
+    let table_width = options.terminal_width.unwrap_or_else(|| {
+        flow_width
+            + match (options.show_origin, options.show_tags) {
+                (true, true) => 113,
+                (true, false) => 81,
+                (false, true) => 111,
+                (false, false) => 77,
+            }
+    });
 
     let render_status = |r: &aida_core::RequirementSummary| -> String {
         let label = status_display::display_status_for_type(&r.req_type, &r.status);
@@ -117,13 +125,17 @@ where
 
     let mut lines = Vec::with_capacity(reqs.len() + 2);
     if options.show_tags {
-        lines.push(format!(
-            "{}{:<width$} {:<tag_width$}",
-            header_prefix,
-            "Title",
-            truncate("Tags", tag_width),
-            width = title_column_width,
-        ));
+        if options.terminal_width.is_none() {
+            lines.push(format!("{}{:<50} Tags", header_prefix, "Title"));
+        } else {
+            lines.push(format!(
+                "{}{:<width$} {:<tag_width$}",
+                header_prefix,
+                "Title",
+                truncate("Tags", tag_width),
+                width = title_column_width,
+            ));
+        }
     } else {
         lines.push(format!("{}Title", header_prefix));
     }
@@ -163,7 +175,11 @@ where
             )
         };
         if options.show_tags {
-            let tags = truncate(&format_tags_inline(&req.tags, 3), tag_width);
+            let tags = if options.terminal_width.is_none() {
+                format_tags_inline(&req.tags, 3)
+            } else {
+                truncate(&format_tags_inline(&req.tags, 3), tag_width)
+            };
             lines.push(format!(
                 "{}{:<width$} {}",
                 prefix,
@@ -255,10 +271,10 @@ mod list_title_width_tests {
     }
 
     #[test]
-    fn non_tty_rendering_does_not_truncate_title_or_tags() {
+    fn non_tty_show_tags_preserves_legacy_fixed_geometry() {
         let req = summary();
         let options = ListTableOptions {
-            show_origin: true,
+            show_origin: false,
             show_tags: true,
             no_glyph: true,
             flow_header: String::new(),
@@ -267,8 +283,11 @@ mod list_title_width_tests {
         let lines = render_list_table(std::slice::from_ref(&req), &options, |_| {
             (false, false, false)
         });
+        assert_eq!(visible_width(&lines[0]), 108);
+        assert_eq!(visible_width(&lines[1]), 111);
         let row = strip_ansi_color(&lines[2]);
-        assert!(row.contains(&req.title));
+        assert!(row.contains(&truncate(&req.title, 50)));
+        assert!(!row.contains(&req.title));
         assert!(row.contains(&format_tags_inline(&req.tags, 3)));
     }
 }
