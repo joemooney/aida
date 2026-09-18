@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T22:09:51.280547699Z
+modified_at: 2026-09-18T22:09:53.008342028Z
 req_type: Story
 tags:
 - keyboard-gate
@@ -65,4 +65,10 @@ comments:
   created_at: 2026-09-18T21:02:30.387265855Z
   modified_at: 2026-09-18T21:03:02.138120976Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b691-a370-7ae3-95ff-e04f637d75dc
+  author: joe
+  content: 'Implementation landed as PR #1946 (branch story-1226, 3 commits, 22 files, +3771/-430): schedule_predicate.rs (9-field typed grammar, once-until-cleared), schedule_ledger.rs (store object schedule/<job>.yaml, CAS loop, 60 s debounce), maintenance_schedule.rs grown (JobConfig back-compat, seat/substrate/fires_task, tick every/on/when, list/due/done, aida cron alias), events CronJobFired/CronJobFailed/MailReceived, awaiting CronChannel (file-only), pickup DUE JOBS block and agent-new Due Jobs section, init sample jobs, docs. Local: 5011 cli-lib tests green, fmt + clippy clean, throwaway e2e tick→due→notice→done→store commit. Held for the advisor''s gate (guided). Deviations: headless_tail::known_kinds untouched (it is log kinds, not event names — EventKind::known_names added instead); doctor has no --quiet so the sample job is plain doctor; ci.red_prs is always 0 on the file-only snapshot (documented). Follow-up worth a spec once merged: every ledger commit advances the store HEAD and triggers a cache rebuild on next read — the debounce bounds it, but a chatty every-job will churn the cache; consider batching ledger commits per tick.'
+  created_at: 2026-09-18T22:09:53.008342028Z
+  modified_at: 2026-09-18T22:09:53.008342028Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
