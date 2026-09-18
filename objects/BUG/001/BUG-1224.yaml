@@ -3,12 +3,12 @@ spec_id: BUG-1224
 agreed_id: BUG-1224
 title: GitLab CI progress snapshot is the pipeline list, so a single long job shows no progress and the default 10-min idle window would abort the CI wait
 description: 'Observed 2026-09-18 on the TASK-1254 live drain (mirror gitlab.joemooney.com ai/aida, MR !2). With the headless GitLab CI watch now blocking (TASK-1254 fix), the wait loop printed ''CI still running on PR-2 (8m 59s elapsed, 540s since progress)'' while the verify job was actively compiling — the idle clock kept climbing because GitLabForge::ci_progress_snapshot returns the raw projects/:id/pipelines?ref= listing, which only changes when a job transitions. A cold cargo build job runs 20+ minutes with no transition, so the default AIDA_WORKER_CI_IDLE of 600s would return NoSignal (CI idle — giving up) and the drain would proceed WITHOUT a CI gate. The run was only saved by launching with AIDA_WORKER_CI_IDLE=2400. Fix options: include the pipeline''s jobs (projects/:id/pipelines/:pid/jobs — status + started_at + duration is fine) in the snapshot so an in-flight job''s changing duration counts as progress; or treat a job in status running as progress by definition. Acceptance: with one running job and no state transition for 15 minutes, the fingerprint changes between polls (or the verdict is Continue), so the default idle window no longer trips during a long single job; unit test on the pure fingerprint input; the GitHub rollup keeps its current behaviour.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:32:19.250009247Z
-modified_at: 2026-09-18T19:01:07.383598642Z
+modified_at: 2026-09-18T19:01:15.266854621Z
 req_type: Bug
 tags:
 - batch:followups-0918d
@@ -42,8 +42,25 @@ comments:
   created_at: 2026-09-18T19:01:07.383598642Z
   modified_at: 2026-09-18T19:01:07.383598642Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b5e4-f182-7b01-935a-4820c685620d
+  author: aida-auto-bump
+  timestamp: 2026-09-18T19:01:15.266064708Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b5e4-f182-7b01-935a-483846b78473
+  timestamp: 2026-09-18T19:01:15.266853779Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1224-2026-09-18T190109Z.md
+  commit_sha: cce8c2e73f969da8b101adca477d2d1c5f36a46f
+  summary: Completed via merge cce8c2e7
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T18:47:38.795633961Z
   implemented_by: joe
+  completed_at: 2026-09-18T19:01:15.265861293Z
+  completion_sha: cce8c2e73f969da8b101adca477d2d1c5f36a46f
