@@ -75805,5 +75805,31 @@ operations:
   timestamp: 2026-09-18T09:03:53.301366921Z
   kind: !SetStatus
     status: Completed
-clock: 5874
+- id: 01a0b3d7-4f0d-7941-a9f3-cdc599ce2f7f
+  target_id: 01a0b3d7-4b00-75b2-9164-ed9bc6282730
+  author: aida
+  node_id: '1'
+  lamport: 5875
+  timestamp: 2026-09-18T09:27:07.277733911Z
+  kind: !Create
+    title: 'Review PR-1921: [AI:codex] fix(drain): clean refused stale-base rebases (BUG-1218)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b3c7`) for branch `bug-1218`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1921>
+      - Branch: `bug-1218` → `main`
+
+      ## Covers
+
+      - BUG-1218
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1921` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5875
 node_id: '1'
