@@ -559,3 +559,11 @@ blocks:
   range_end: 400
   next: 301
   allocated_at: 2026-09-18T15:02:32.423623642Z
+- node_id: '9'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: CON
+  range_start: 301
+  range_end: 400
+  next: 301
+  allocated_at: 2026-09-18T15:02:34.165206479Z
