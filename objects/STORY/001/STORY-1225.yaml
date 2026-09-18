@@ -1,0 +1,26 @@
+id: 01a0b640-4cc4-72e0-ab7f-5cb11c514414
+spec_id: STORY-1225
+agreed_id: STORY-1225
+title: 'Review PR-1942: [AI:codex] feat(mailbox): expose unread latency warnings (TASK-1271)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b638`) for branch `task-1271`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1942>
+  - Branch: `task-1271` → `main`
+
+  ## Covers
+
+  - TASK-1271
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1942` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T20:41:02.404289058Z
+modified_at: 2026-09-18T20:41:02.404289058Z
+req_type: Story
