@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:41:48.716701811Z
-modified_at: 2026-09-18T18:29:34.662680311Z
+modified_at: 2026-09-18T18:31:27.928438975Z
 req_type: Story
 tags:
 - ci
@@ -61,6 +61,12 @@ comments:
   created_at: 2026-09-18T18:29:34.662680311Z
   modified_at: 2026-09-18T18:29:34.662680311Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b5c9-abb8-73e1-86bf-24cf767fa5ad
+  author: joe
+  content: 'Observation (1 occurrence, 2026-09-18 10:03, pipeline 288 job 582): the aida-merge-hold-gate job died with exit 143 during the runner''s cleanup_file_variables step, on the first pipeline that used the persistent /builds host volume; a retry passed in 23 s and the next two gate runs were clean. Not reproduced; watch for it — if it recurs, suspect the shared /builds path between the alpine gate container and a concurrently running verify job in the same concurrency slot.'
+  created_at: 2026-09-18T18:31:27.928438975Z
+  modified_at: 2026-09-18T18:31:27.928438975Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0b5c4-0214-7810-afad-09bca5ae4599
   author: aida-auto-bump
