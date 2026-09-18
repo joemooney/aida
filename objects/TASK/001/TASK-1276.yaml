@@ -18,12 +18,12 @@ description: |-
   - (advisor refinement 2026-09-18, folded in from TASK-1275) Mode is the authority in BOTH directions: execution_mode = drive on a spike also overrides the type's human-only default (the wave runs implementer → CI → review and holds the merge for the advisor), so a spike never needs --no-human-only by hand once groomed.
   - (advisor refinement 2026-09-18) aida groom proposes DRIVE, not drain, for a report-shaped spike that has at least one BlockedBy dependent (something will be built on its conclusions, so an advisor reads the report before it merges); drain only when nothing depends on it yet. The reason line names the dependent.
   - (advisor refinement 2026-09-18) .aida/discipline/backlog-grooming.md (master under aida-core/templates/.aida/discipline/) gains a short "Spikes" paragraph: split by deliverable not type; report + acceptance + evidence path → drain/drive per the dependent rule; decision, taste call, or credentials → operator; bulk-queue still excludes spikes.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:19.307148033Z
-modified_at: 2026-09-18T22:13:57.275216082Z
+modified_at: 2026-09-18T22:15:39.304201211Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -57,3 +57,7 @@ comments:
   modified_at: 2026-09-18T22:13:57.275216082Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T22:15:39.304201211Z
+  implemented_by: joe
