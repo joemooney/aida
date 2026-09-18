@@ -15,12 +15,12 @@ description: |-
   - Hook runner retries ETXTBSY (bounded, e.g. 5 × 50ms) and only then reports failure; unit test simulates the error kind through the helper.
   - The named test no longer holds an open write fd when the runner execs.
   - 20 consecutive `cargo test -p aida-cli-lib --lib post_init_hooks` runs pass.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T02:47:09.083547722Z
-modified_at: 2026-09-18T08:36:51.509422501Z
+modified_at: 2026-09-18T08:36:58.491220242Z
 req_type: Bug
 tags:
 - batch:followups-0917b
@@ -53,8 +53,24 @@ comments:
   created_at: 2026-09-18T08:36:51.509422501Z
   modified_at: 2026-09-18T08:36:51.509422501Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b3a9-65f4-71e1-8739-5ecda79cc3d6
+  author: aida-auto-bump
+  timestamp: 2026-09-18T08:36:58.484310625Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b3a9-65fb-7ca0-8f8c-ad41f485844f
+  timestamp: 2026-09-18T08:36:58.491218959Z
+  agent: aida
+  commit_sha: 03e945cd18c7f82baf21b82097f9b6daa0d88f66
+  summary: Completed via merge 03e945cd
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T08:09:06.070487222Z
   implemented_by: joe
+  completed_at: 2026-09-18T08:36:58.484122763Z
+  completion_sha: 03e945cd18c7f82baf21b82097f9b6daa0d88f66
