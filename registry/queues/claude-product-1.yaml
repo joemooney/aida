@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1948: STORY-1221: Add an idempotent existing-project upgrade path reachable from scaffold refresh / init --refresh (or the approved equivalent) that creates only missing protocol:<type> META rows, preserves edited protocol bodies, and tests the two-present/four-missing case. At a46e678, seed_meta_requirements is only invoked by new-store initialization paths, and running this branch''s aida protocol list in the existing AIDA repository prints no protocols.'
-  added_at: 2026-09-18T22:58:18.344243245Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b6b9-0a3c-70a0-816f-4a483743dc4a
   position: 1000
   added_by: claude-product-1
