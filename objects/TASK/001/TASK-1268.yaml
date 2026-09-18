@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:57:07.056374646Z
-modified_at: 2026-09-18T14:12:25.022139771Z
+modified_at: 2026-09-18T14:16:21.336014204Z
 req_type: Task
 tags:
 - batch:followups-0918c
@@ -23,6 +23,23 @@ relationships:
   target_id: 01a0b4dc-696c-76f0-9d2c-7f465c7e0523
   created_at: 2026-09-18T14:12:25.022134739Z
   created_by: joe
+comments:
+- id: 01a0b4e0-1c58-72d0-9b78-3de6da66d68c
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1931
+    agent: codex
+    ran-at: 2026-09-18 07:16 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1268-drain-01a0b4df-9722-7712-ad82-5f969c859d01.json
+    ? AC (0.96) — The surfaced drain command is `aida queue work --batch <name> --auto-complete --single-branch`; `--sequential` is not added automatically, and the hint instead tells the operator to add it when order matters.
+    ? SEM (0.91) — If a requirement belongs to multiple batches, `aida show` examines its batch names in lexical order and surfaces the first batch whose members contain a serialize pair.
+  created_at: 2026-09-18T14:16:21.336014204Z
+  modified_at: 2026-09-18T14:16:21.336014204Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
