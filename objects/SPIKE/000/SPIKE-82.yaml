@@ -21,11 +21,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T18:56:11.435264766Z
+modified_at: 2026-09-18T18:56:13.641442177Z
 req_type: Spike
 tags:
 - autonomy
 - orchestrator
 - parent:EPIC-62
 - reliability
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-18T18:56:13.641442177Z
 human_only: true
