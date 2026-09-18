@@ -76646,5 +76646,31 @@ operations:
   timestamp: 2026-09-18T13:24:24.278090994Z
   kind: !SetStatus
     status: Completed
-clock: 5924
+- id: 01a0b4c4-21ee-77f0-9f08-eb24d13108ed
+  target_id: 01a0b4c4-1e06-7f73-972c-654d9cc374d9
+  author: aida
+  node_id: '1'
+  lamport: 5925
+  timestamp: 2026-09-18T13:45:47.758647756Z
+  kind: !Create
+    title: 'Review PR-1930: [AI:codex] refactor(fasttrack): retire express tier alias (TASK-1267)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b4b3`) for branch `task-1267`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1930>
+      - Branch: `task-1267` → `main`
+
+      ## Covers
+
+      - TASK-1267
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1930` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5925
 node_id: '1'
