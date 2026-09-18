@@ -1,1 +1,7 @@
-[]
+- user_id: role:implementer
+  requirement_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+  position: 1000
+  added_by: role:implementer
+  note: '[rework] PR #1906 RequestChanges (drain reviewer, verified by the advisor against scan_python_test_file in the diff): the test-body loop continues on ANY line starting with ''#'', regardless of indent, so an outdented `# trace:SPEC.ACn` comment directly above the NEXT `def test_…` is swallowed into the previous test''s traces before the loop breaks at the def — the documented directly-above convention misattributes the marker. Fix in the SAME PR (push fixups to the #1906 head branch): end the body when a comment line''s indent is <= the def''s indent (an outdented comment is not body), keep indented `#` comments as body, then let pending-trace handling attach the outdented marker to the following test. Add a regression fixture with two consecutive Python tests where the second carries an above-marker, and assert the first test''s traces do not include it. Check the Go and JS/TS scanners for the same shape (a comment between two tests at the outer indent). Finish with aida queue done TASK-1258.'
+  added_at: 2026-09-18T02:12:33.525238452Z
+  for_role: implementer
