@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:16:53.224999188Z
+modified_at: 2026-09-18T11:16:54.417133371Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -93,6 +93,17 @@ comments:
   content: 'Round-2 findings addressed by the proxy on bug-1213 (9f6fafaae5): loop guard now compares only the immediately previous findings block (A,B,A requeues; A,A escalates) with a table-driven test. The reviewer''s second item (queue_rework_flips_status_and_requeues red under cargo test rework) does not reproduce locally on this branch — passes isolated and filtered; if it is red for you, capture the panic text. Nothing left to implement — verify, aida queue done, let CI/review proceed.'
   created_at: 2026-09-18T11:16:52.969621230Z
   modified_at: 2026-09-18T11:16:52.969621230Z
+- id: 01a0b43b-d10e-7bc2-9644-72004cfa3072
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1924):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1213 loop guard: queue_cmd.rs:6434 treats any historical identical findings comment as recurrence. Sequence A→B→A incorrectly escalates on A even though the last two findings differ. Track/compare the immediately previous blocking findings (or hash), and add an end-to-end test proving exactly two consecutive identical RequestChanges escalate while A→B→A does not.
+    2. Verification failure: cargo test -p aida-cli-lib rework -- --nocapture fails mcp::tests::queue_rework_flips_status_and_requeues (expected requeued spec; queue is empty). The exact isolated test also fails. Restore the advertised focused suite to green.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-18T11:16:54.158609418Z
+  modified_at: 2026-09-18T11:16:54.158609418Z
 execution_mode: drive
 implementation_info:
   implemented: true
