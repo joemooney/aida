@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:19.307148033Z
-modified_at: 2026-09-18T22:26:06.276013787Z
+modified_at: 2026-09-18T22:31:46.679641392Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -59,6 +59,22 @@ comments:
   content: 'Implemented: spike drain/drive modes override the type-default human_only gate; report-shaped grooming proposes drain or dependent-aware drive with named path/dependent; spike pickup prompt carries the research-lane dated-report + PR contract; assess/backlog discipline updated. Verified focused core/classifier tests, 124 queue_work tests, and cargo check --workspace.'
   created_at: 2026-09-18T22:13:57.275216082Z
   modified_at: 2026-09-18T22:13:57.275216082Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b6a5-aef7-7d72-8ad8-0172fd3e1b6f
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1947
+    agent: codex
+    ran-at: 2026-09-18 15:31 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 1
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1276-drain-01a0b6a5-48a5-78b3-844f-c05ccef17dfe.json
+    ? SEM (0.96) — Every item-mode SPIKE pickup receives the research-lane report contract, including SPIKEs groomed to drive; the generated prompt requires a dated docs/spikes report and PR, and forbids making or applying the product/design decision in the report.
+    - SEM skipped (matches a deny keyword) — The spike groom classifier recognizes a concrete report deliverable as any whitespace-delimited path beginning with docs/ and ending in .md when the body contains the word acceptance; it is not restricted to docs/spikes/.
+  created_at: 2026-09-18T22:31:46.679641392Z
+  modified_at: 2026-09-18T22:31:46.679641392Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
