@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:03:25.350681063Z
-modified_at: 2026-09-18T21:32:43.275836270Z
+modified_at: 2026-09-18T21:34:21.794850988Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -58,6 +58,19 @@ comments:
   created_at: 2026-09-18T21:27:29.713332033Z
   modified_at: 2026-09-18T21:27:29.713332033Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b671-1e62-7e80-9a44-def92e3705f0
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1943 [AI:codex] fix(store): fail closed during interrupted rebase (BUG-1229)
+    verdict: APPROVE + merged (auto-bumped Done → Completed at 80be03f)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (headless codex implementer in wave followups-0918e; the drain's headless reviewer APPROVED — .aida/review-verdicts/PR-1943.json; this advisor read the full diff — PR-1943-advisor.json)
+    gates: required Build (ubuntu-latest) = success at ba30fd1d; merge-hold MARKER present and released by aida pr ship (explicit review-merge); merge-hold-gate check was red only because the product seat applied the missing label by hand at 14:26 (BUG-1236 — the drain had written the marker but not the label); Build (windows-latest) red = informational, the BUG-1233 scratch-GC test already fixed in #1944; merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: one guard (git_ops::ensure_store_write_safe) on every GitBackend mutation refuses when the store worktree is detached, mid-rebase, or off the aida-store branch; pull_rebase aborts a rebase it started; doctor + remote status surface the state; docs carry the recovery recipe. Tests prove no YAML and no commit land on a detached HEAD and that a failed pull restores branch, HEAD and file. Non-blocking note: pull_rebase_auto_merge is untouched, so a half-done rebase from that path is caught by the write guard rather than auto-aborted.
+    timestamp: 2026-09-18T14:33-07:00
+  created_at: 2026-09-18T21:34:21.794850988Z
+  modified_at: 2026-09-18T21:34:21.794850988Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b66f-9d8b-7b70-8e64-fc7d830943b1
   author: aida-auto-bump
