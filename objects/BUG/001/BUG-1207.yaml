@@ -16,12 +16,12 @@ description: |-
   - Non-tty stdout (pipe, file, --format toon/json) is unchanged.
   - The header rule width matches the computed title column.
   - Applies to the same table in the --tags branch (currently a hardcoded 50).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T06:05:23.013461758Z
+modified_at: 2026-09-18T06:10:51.430547856Z
 req_type: Bug
 tags:
 - aida:list
@@ -30,3 +30,7 @@ tags:
 - proxy-groomed
 - severity:cosmetic
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T06:10:51.430547856Z
+  implemented_by: joe
