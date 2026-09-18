@@ -8,14 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:49:26.568333157Z
-modified_at: 2026-09-18T16:52:39.378071959Z
+modified_at: 2026-09-18T18:41:15.281315016Z
 req_type: Bug
 tags:
-- forge
-- gitlab
-- orchestrator
-- papercut
-- parent:EPIC-68
+- batch:followups-0918d
 relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
