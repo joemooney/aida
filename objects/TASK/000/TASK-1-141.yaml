@@ -1,5 +1,6 @@
 id: 01a0b6b2-2989-7b82-80bd-d13611f4c830
 spec_id: TASK-1-141
+agreed_id: TASK-165
 title: STORY-1221 awaits architecture sketch sign-off
 description: Implementation is committed on story-1221 at a46e6785dd and verified. queue done requires an open PR, but AGENTS.md forbids opening an architecture-class PR until the advisor/master signs off on the sketch posted to STORY-1221. Review the sketch, then open the PR and rerun aida queue done STORY-1221.
 status: Rejected
