@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b52b-4b69-7cb0-80bc-f19921a5add6
-  position: 1000
-  added_by: role:implementer
-  note: truncate/hash the hostname-derived node id to <=32 (keep a stable prefix + short hash), never reject our own derivation; test with a 49-char runner hostname
-  added_at: 2026-09-18T16:52:48.896704592Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b525-a8b2-79e3-a00a-f7e5d16f2bcb
   position: 2000
   added_by: role:implementer
