@@ -73846,5 +73846,31 @@ operations:
   timestamp: 2026-09-18T01:53:39.380716688Z
   kind: !SetStatus
     status: Completed
-clock: 5751
+- id: 01a0b23b-2852-70f3-b4ed-6c285884ae93
+  target_id: 01a0b23b-21ab-7cf3-9fbf-6cb73d60162f
+  author: aida
+  node_id: '1'
+  lamport: 5752
+  timestamp: 2026-09-18T01:56:56.530459211Z
+  kind: !Create
+    title: 'Drain harvest step: when the [aida:harvest] ledger comment write fails, the audit record is lost (only the candidates file survives) and the error text is truncated — persist the ledger locally on fai'
+    description: |-
+      Observed 2026-09-17 18:52 in the followups-0917 drain, member TASK-1253 / PR-1904 (second live run of the ADR-45 advisory harvest). The step ran the agent, filtered 4 → 3 candidates, wrote .aida/harvest/task-1253-drain-01a0b236-….json, then failed on the ledger write: "⚠ advisory harvest did not complete (could not run `aida comment add TASK-1253 [aida:harvest] …<whole ledger body>…" — the with_context("could not run …") branch of harvest::run_aida, i.e. Command::output() itself errored (not a non-zero exit). The underlying io error is appended AFTER the multi-line ledger body and was cut off in the drain log, so the cause is unknown. The advisor later ran `aida harvest TASK-1253 --from <file> --yes-all` successfully (same comment-add path), so the failure was transient.
+
+      Consequences: (1) the propose-only [aida:harvest] ledger — the audit record ADR-45 requires on every run — was never written for this run (the confirm run's ledger exists, but the drain's proposed/skipped-with-reasons record is gone); (2) the advisor brief was not filed (it follows the ledger write), so nothing surfaced in aida awaiting — the candidates were only found by reading the drain log; (3) the error is undiagnosable from the log.
+
+      Fix:
+      - In harvest::propose_only, write the ledger body to <candidates-file>.ledger.md (or embed it in the candidates JSON) BEFORE attempting the comment write, so the audit survives a store/exec failure; on failure, print the io error FIRST and the path of the persisted ledger, not the whole body.
+      - File the advisor brief even when the comment write fails (the brief is local runtime state and is what makes the proposal visible in aida awaiting).
+      - Add a bounded retry (the store may be briefly locked by a concurrent write — cf. CacheLocked) before giving up.
+      - In run_aida, include the io::Error kind + os error in the context and truncate the echoed args (never dump a multi-line body into an error line).
+      Also worth a follow-up: `aida harvest <SPEC> --from <file>` should detect an unwritten drain ledger next to the file and fold it into the confirm ledger so the record is complete.
+
+      Acceptance:
+      - Simulated comment-add failure in propose_only → ledger persisted next to the candidates file, brief filed, error line ≤ 2 lines naming the io error; drain continues to merge.
+      - Existing propose-only ledger test extended; a unit test for the persisted-ledger path.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5752
 node_id: '1'
