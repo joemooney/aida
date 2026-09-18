@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:52:53.322025721Z
-modified_at: 2026-09-18T16:57:36.843973912Z
+modified_at: 2026-09-18T16:59:34.413133821Z
 req_type: Spike
 tags:
 - adoption
@@ -65,6 +65,21 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b497-90f0-70b1-9246-c71a6762d3e8
   created_at: 2026-09-18T12:57:09.072402208Z
+comments:
+- id: 01a0b575-8a8d-71a3-a082-90ebd56ed1c5
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1928 [AI:claude] docs(spike): SPIKE-81 lane discoverability findings + CI-cycle correction + --single-branch surfaced (SPIKE-81)
+    verdict: APPROVE + merged (operator-mode spike; product seat answered as proxy, advisor reviewed + merged at the operator's "review and approve all open items")
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1928.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN; merged from a plain shell
+    reasoning: findings are measured and reproducible (lane tokens per surface, zero groom proposals, contradictory help, 9.7-min median CI over 23 runs vs the "~3-5 min" claim); per-lane verdicts each name one routing change; lane set collapses to three; the three-carrier rule (groom proposal / next[] hints / one CLAUDE.md line) is the durable takeaway. Side effects: CLAUDE.md CI-cycle correction + batch paragraph naming --single-branch/--sequential; backlog groom help fixed (doc-comment only). Follow-ups TASK-1266/1267/1268 filed and draining.
+    merged: 2026-09-18 09:56 -07:00 → main f6bbadb06c; spec Completed
+  created_at: 2026-09-18T16:59:34.413133821Z
+  modified_at: 2026-09-18T16:59:34.413133821Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b573-bf45-74f1-bcc3-32996dc02308
   author: aida-auto-bump
