@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:19.307148033Z
-modified_at: 2026-09-18T19:17:46.465890913Z
+modified_at: 2026-09-18T19:17:48.753611371Z
 req_type: Task
 tags:
 - groom
@@ -41,5 +41,11 @@ comments:
   content: 'Closed in favour of TASK-1275 (advisor): spikes go to a headless implementer only in DRIVE mode with the merge held, never drain, and only when the output is an evidence-grounded report and nothing downstream is built on it before an advisor reads it. The research-lane routing idea from here is carried as a comment on TASK-1275.'
   created_at: 2026-09-18T19:16:43.089448329Z
   modified_at: 2026-09-18T19:16:43.089448329Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b5f4-1a51-74e2-8933-eb9c296af1ae
+  author: joe
+  content: 'Crossed edits at 12:16: the advisor rejected TASK-1275 and folded it into this spec (approved, mode drain, refinements in their comment on TASK-1275) while I was closing this one in favour of TASK-1275. Restored to the advisor''s disposition (Approved). Carry both refinements into the implementation: (1) mode overrides the type''s human-only default in both directions; (2) the advisor''s two-part test — evidence-grounded report AND nothing downstream built on it before an advisor reads it — which argues for DRIVE (merge held) rather than drain as the mode groom proposes for a passing spike; (3) the pickup routes through the research-lane contract. Advisor to confirm drive vs drain as the default proposal and re-queue.'
+  created_at: 2026-09-18T19:17:48.753611371Z
+  modified_at: 2026-09-18T19:17:48.753611371Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
