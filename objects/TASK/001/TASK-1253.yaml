@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:56:22.649384626Z
+modified_at: 2026-09-18T01:56:23.829617081Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -101,6 +101,22 @@ comments:
     confidence: 0.93
   created_at: 2026-09-18T01:56:22.649384626Z
   modified_at: 2026-09-18T01:56:22.649384626Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b23a-a895-7543-b36d-0b23660dee04
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:task-1253-drain-01a0b236-74e3-7110-88fd-45a107fded0d.json
+    agent: codex
+    ran-at: 2026-09-17 18:56 -07:00
+    confirmed: 3
+    declined: 0
+    skipped: 0
+    + SEM [aida:sem] comment — Only drain members whose state begins with `in-phase-` contribute drive-owned spec/PR identity; members in other states do not cause their PR or worktree lease scope to be treated as drive-owned.
+    + SEM [aida:sem] comment — When both refusal conditions apply, the drive-seat condition takes precedence and the refusal reports `caller is a drive implementer/reviewer seat`, rather than the drive-owned-PR reason.
+    + SEM [aida:sem] comment — A merge hold identifies a PR as drive-owned when its stored reason text contains the spec ID of any in-phase drive member.
+  created_at: 2026-09-18T01:56:23.829617081Z
+  modified_at: 2026-09-18T01:56:23.829617081Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b238-25db-7232-b12d-5f7f0e34634a
