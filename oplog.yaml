@@ -75141,5 +75141,31 @@ operations:
       ## Acceptance
       - AC1. Requester MCP intake refuses add_requirement calls that supply parent, feature, or owner, and creates no requirement when any of those grooming or graph-attachment fields is present.
       - AC2. Requester MCP intake preserves caller-supplied tags while adding intake:requester, and a missing type defaults to change-request before the draft is created.
-clock: 5832
+- id: 01a0b318-8125-75d0-aea6-c962381e3bec
+  target_id: 01a0b318-7ce8-7c10-b042-96df6d8b84b9
+  author: aida
+  node_id: '1'
+  lamport: 5833
+  timestamp: 2026-09-18T05:58:42.725036793Z
+  kind: !Create
+    title: 'Review PR-1915: [AI:codex] fix(harvest): suppress docs-only restatements (TASK-1263)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b309`) for branch `task-1263`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1915>
+      - Branch: `task-1263` → `main`
+
+      ## Covers
+
+      - TASK-1263
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1915` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5833
 node_id: '1'
