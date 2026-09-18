@@ -75633,5 +75633,31 @@ operations:
   timestamp: 2026-09-18T07:56:19.356533315Z
   kind: !SetStatus
     status: Completed
-clock: 5857
+- id: 01a0b38f-bbdf-7790-ad02-65f597094673
+  target_id: 01a0b38f-b286-7163-a1eb-957bd933becf
+  author: aida
+  node_id: '1'
+  lamport: 5858
+  timestamp: 2026-09-18T08:08:56.543784396Z
+  kind: !Create
+    title: 'Review PR-1919: [AI:codex] fix(init): retry ETXTBSY when running hooks (BUG-1202)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b386`) for branch `bug-1202`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1919>
+      - Branch: `bug-1202` → `main`
+
+      ## Covers
+
+      - BUG-1202
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1919` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5858
 node_id: '1'
