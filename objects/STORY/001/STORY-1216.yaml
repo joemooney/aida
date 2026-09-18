@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:41:48.716701811Z
-modified_at: 2026-09-18T18:25:16.827101296Z
+modified_at: 2026-09-18T18:29:34.662680311Z
 req_type: Story
 tags:
 - ci
@@ -48,6 +48,19 @@ comments:
   created_at: 2026-09-18T17:45:14.940069758Z
   modified_at: 2026-09-18T17:45:14.940069758Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b5c7-f146-73b0-9b67-fc9b1f855b06
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1934 [AI:claude] ci(gitlab): prebuilt builder image + incremental mirror builds (STORY-1216)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (product seat authored at the keyboard; this advisor reviewed the full diff; verdict at .aida/review-verdicts/PR-1934.json)
+    gates: required Build (ubuntu-latest) = success at 91777093; merge-hold-gate = success; MERGEABLE/CLEAN; merge lease taken by aida pr ship
+    reasoning: mirror-only blast radius (.gitlab-ci.yml, ci/Dockerfile, docs/gitlab-ci-runner.md) — GitHub CI untouched. Replaces per-run apt/rustup + a multi-GB cache zip round-trip with a prebuilt localhost/aida-ci:1.92 image and two host volumes (persistent checkout, persistent cargo home + target). nextest for unit tests with doctests kept on cargo test --doc. Runner recipe documents the register-as-root and podman-shim gotchas and the concurrent=2 rationale. Non-blocking nit: the nextest install pulls get.nexte.st/latest, so image reproducibility rests on the tag-bump convention — fine for one self-hosted runner.
+    timestamp: 2026-09-18T11:26-07:00
+  created_at: 2026-09-18T18:29:34.662680311Z
+  modified_at: 2026-09-18T18:29:34.662680311Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b5c4-0214-7810-afad-09bca5ae4599
   author: aida-auto-bump
