@@ -23,14 +23,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:19.307148033Z
-modified_at: 2026-09-18T19:21:57.408585792Z
+modified_at: 2026-09-18T19:50:23.213606301Z
 req_type: Task
 tags:
-- groom
-- orchestrator
-- parent:EPIC-28
-- research-lane
-- spike
+- batch:followups-0918e
 relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
