@@ -65,6 +65,7 @@ mod git_backend_cmd;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
+mod protocol_cmd;
 mod queue_cmd;
 mod solo_cmd;
 mod status_cmd;
@@ -2831,6 +2832,12 @@ fn run() -> Result<()> {
         if *refresh && init_footprint == cli::InitFootprint::Full {
             let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
             scaffold_refresh::print_refresh_summary(&packs);
+            let store_path = determine_requirements_path(None)?;
+            let storage = Storage::new(store_path);
+            let seeded = protocol_cmd::seed_missing_protocols(&storage)?;
+            if seeded > 0 {
+                println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
+            }
         }
         // TASK-859: surface a small curated set of high-value config knobs that
         // are otherwise silent defaults (telemetry opt-out today) and offer to
@@ -4166,6 +4173,9 @@ fn run() -> Result<()> {
         // verdicts and mail are all distributed-mode concepts. trace:STORY-741
         Command::Awaiting { .. } => {
             anyhow::bail!("`aida awaiting` is available in the default (distributed) mode.");
+        }
+        Command::Protocol(_) => {
+            anyhow::bail!("`aida protocol` is available in the default (distributed) mode.");
         }
         Command::Schedule(_) => {
             anyhow::bail!("`aida schedule` is available in the default (distributed) mode.");
@@ -12443,6 +12453,7 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             | Command::History { .. }
             | Command::McpServe
             | Command::Awaiting { .. }
+            | Command::Protocol(_)
             | Command::Queue(QueueCommand::List { .. })
             | Command::Queue(QueueCommand::Next { .. })
             | Command::Queue(QueueCommand::Progress { .. })
@@ -55205,6 +55216,20 @@ fn handle_worktree_enter(
         out.branch,
         out.focus,
     );
+    // `worktree enter` is itself a pickup surface. Keep stdout pure shell code
+    // and put the same capped, META-citing protocol block on stderr.
+    // trace:STORY-1221 | ai:codex
+    if let Ok(main_root) = find_main_worktree_root() {
+        if let Ok(store) = Storage::new(main_root.join(".aida-store")).load() {
+            if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg)) {
+                if let Some(protocol) =
+                    protocol_cmd::protocol_for_requirement(&store, &req.req_type)
+                {
+                    eprintln!("\n{}\n", protocol.pickup_block());
+                }
+            }
+        }
+    }
     // BUG-654: warn (to STDERR, never stdout) when the installed shell wrapper
     // can't auto-eval this `cd`, so the silent no-op is explained instead of
     // leaving the operator wondering why `aida focus` shows nothing afterward.
@@ -66652,6 +66677,34 @@ fn handle_awaiting_command(
         let report = collect_awaiting_report(&project_root, backend, &ctx, true);
         if let Some(line) = report.compact_line() {
             println!("{line}");
+        }
+        // Re-teach a compacted session its type contract while this worktree
+        // still holds the spec lease. `queue done` removes/releases that lease,
+        // so the reminder naturally disappears. Fail-open on every read.
+        // trace:STORY-1221 | ai:codex
+        let canonical_cwd = project_root
+            .canonicalize()
+            .unwrap_or_else(|_| project_root.clone());
+        let lease_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
+        if let Some(scope) = list_leases(&lease_root)
+            .into_iter()
+            .find(|lease| canonical_cwd.starts_with(&lease.worktree_path))
+            .map(|lease| lease.scope)
+        {
+            if let Ok(store) = backend.load() {
+                if let Some(req) = store.requirements.iter().find(|r| {
+                    r.display_id().eq_ignore_ascii_case(&scope)
+                        || r.spec_id
+                            .as_deref()
+                            .is_some_and(|id| id.eq_ignore_ascii_case(&scope))
+                }) {
+                    if let Some(protocol) =
+                        protocol_cmd::protocol_for_requirement(&store, &req.req_type)
+                    {
+                        println!("{}", protocol.notice_line());
+                    }
+                }
+            }
         }
         let store_path = detect_distributed_store_from(&project_root)
             .unwrap_or_else(|| project_root.join(".aida-store"));
@@ -80486,6 +80539,14 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
     };
 
     // The human-contract banner — ALWAYS printed before any harness acts.
+    // `aida do` is a pickup surface; keep slice 1 interactive-only (headless
+    // prompt propagation belongs to TASK-1278).
+    // trace:STORY-1221 | ai:codex
+    if std::env::var("AIDA_HEADLESS").ok().as_deref() != Some("1") {
+        if let Some(protocol) = protocol_cmd::protocol_for_requirement(&store, &req.req_type) {
+            eprintln!("{}\n", protocol.pickup_block());
+        }
+    }
     eprintln!(
         "  {} {} · {}",
         crate::glyph(crate::glyphs::Glyph::Arrow).cyan(),

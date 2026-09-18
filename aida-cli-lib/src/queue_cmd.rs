@@ -8721,6 +8721,25 @@ pub(crate) fn handle_queue_work(
         review_findings.as_deref(),
         &rework_comments,
     );
+    // Slice 1 injects the editable type protocol into interactive pickup
+    // prompts. Headless/lane propagation is intentionally TASK-1278.
+    // trace:STORY-1221 | ai:codex
+    if !no_human && !role.eq_ignore_ascii_case("reviewer") {
+        let spec_id = plan
+            .entries
+            .first()
+            .map(|entry| entry.spec_id.as_str())
+            .unwrap_or(plan.anchor_display.as_str());
+        if let Ok(store) = storage.load() {
+            if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
+                if let Some(protocol) =
+                    crate::protocol_cmd::protocol_for_requirement(&store, &req.req_type)
+                {
+                    prompt = format!("{}\n\n{}", protocol.pickup_block(), prompt);
+                }
+            }
+        }
+    }
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {

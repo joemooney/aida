@@ -513,6 +513,10 @@ pub(crate) fn handle_scaffold_command(
             }
             let packs = crate::scaffold_refresh::refresh_agent_packs(&root, dest.as_deref());
             crate::scaffold_refresh::print_refresh_summary(&packs);
+            let seeded = crate::protocol_cmd::seed_missing_protocols(storage)?;
+            if seeded > 0 {
+                println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
+            }
             // TASK-1233: refresh is an existing-project setup pass too. Keep
             // it read-only unless an interactive operator accepts the same
             // contained-posture repair offered by `aida init`.
