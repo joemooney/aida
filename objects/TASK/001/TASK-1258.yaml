@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-18T02:30:50.228499226Z
+modified_at: 2026-09-18T02:30:51.427341800Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -97,6 +97,22 @@ comments:
     confidence: 0.94
   created_at: 2026-09-18T02:30:50.228499226Z
   modified_at: 2026-09-18T02:30:50.228499226Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b25a-3523-7c33-a8cd-c8558c1ad75a
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:task-1258-drain-01a0b257-d610-7400-9a97-2e978ab777d3.json
+    agent: codex
+    ran-at: 2026-09-17 19:30 -07:00
+    confirmed: 3
+    declined: 0
+    skipped: 0
+    + SEM [aida:sem] comment — Python discovery recognizes both `def test_*` and `async def test_*` declarations.
+    + SEM [aida:sem] comment — JavaScript/TypeScript test names may use single quotes, double quotes, or backtick-delimited strings.
+    + SEM [aida:sem] comment — When test source is extracted for a traced Python test, extraction stops at the first nonblank, non-comment line whose indentation is no deeper than the test declaration, so subsequent peer tests are excluded.
+  created_at: 2026-09-18T02:30:51.427341800Z
+  modified_at: 2026-09-18T02:30:51.427341800Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b258-7d9f-70b3-b731-5ca70de3c392
