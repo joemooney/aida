@@ -31,12 +31,12 @@ description: |-
   - Precedence with the seat's own judgment: a seat job's prompt is advice to the seat ("due: mailbox-triage"), never an automatic action; substrate jobs are idempotent and print nothing when idle (TASK-160).
   Operator decision (2026-09-18, fork "who owns seat-job delivery on Codex/Antigravity"): BOTH. (a) Due seat jobs always surface in the seat's pickup prompt and per-turn notice, so a live Codex/Antigravity seat acts on its next turn. (b) When a seat job is overdue and no live session holds that role, the scheduler tick cold-boots a headless seat for it (codex exec / claude -p per the configured vendor), rate-limited to at most once per hour per seat, ledgered like any run, and never for jobs that launch drains or merge.
   Acceptance addition: with no live advisor session and mailbox-triage overdue, one tick within the hour starts a headless advisor that triages and ledgers the run; a second overdue tick inside the same hour does not start another; a live advisor session suppresses the cold-boot entirely.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T21:09:21.745868886Z
+modified_at: 2026-09-18T21:14:30.485534950Z
 req_type: Story
 tags:
 - keyboard-gate
