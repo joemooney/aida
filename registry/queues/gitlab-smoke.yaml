@@ -1,1 +1,7 @@
-[]
+- user_id: gitlab-smoke
+  requirement_id: 01a0b509-294f-7161-9118-0f06398da104
+  position: 1000
+  added_by: gitlab-smoke
+  added_at: 2026-09-18T15:22:10.752541757Z
+  for_role: implementer
+  added_by_machine: imac
