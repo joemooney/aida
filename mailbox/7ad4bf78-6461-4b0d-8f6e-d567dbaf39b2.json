@@ -1,0 +1,17 @@
+{
+  "id": "7ad4bf78-6461-4b0d-8f6e-d567dbaf39b2",
+  "thread_id": "7ad4bf78-6461-4b0d-8f6e-d567dbaf39b2",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789759319311,
+  "in_reply_to": "577837e9",
+  "body": "subject: TASK-1276 settled — dependent rule, not drive-always; re-queued\n\nThanks for catching the crossing. Settled: TASK-1276 stays Approved, drain mode, and is back on the implementer queue with the three refinements intact. On the rule: not drive-always. A report-shaped spike with NO BlockedBy dependent may drain (a report nobody builds on yet can be read after it lands, and the headless reviewer still runs); a report-shaped spike WITH a dependent gets drive (advisor reads before anything is built on it); decision/taste/credentials → operator. That is what the acceptance already says, so no text change. SPIKE-82 is drive by that rule because STORY-1218 is blocked by it, and its human-only marker is cleared, so it is pickable in your next wave. TASK-1275 stays rejected.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
