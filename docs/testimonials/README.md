@@ -13,3 +13,9 @@ whether to adopt AIDA.
   extended AIDA: how the substrate maps onto an LLM's own failure modes, the
   coordination loop closing on itself, and a prioritized list of where the tool
   still cuts.
+- `2026-09-18-llm-live-forge-validation.md` — an LLM's testimonial from one
+  day as the operator's proxy (Claude Fable 5.1, product seat): standing up a
+  GitLab runner and validating the drain lifecycle live on a second forge; what
+  the substrate gave a stateless agent, the eight defects the day surfaced, and
+  the changes it would make first.
+
