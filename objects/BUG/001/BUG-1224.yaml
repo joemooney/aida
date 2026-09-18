@@ -8,14 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:32:19.250009247Z
-modified_at: 2026-09-18T18:14:21.935273531Z
+modified_at: 2026-09-18T18:41:07.851602609Z
 req_type: Bug
 tags:
-- ci-wait
-- forge
-- gitlab
-- orchestrator
-- parent:EPIC-68
+- batch:followups-0918d
 relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
