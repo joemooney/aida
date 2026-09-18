@@ -6140,6 +6140,20 @@ fn constrain_requester_intake(arguments: &mut Value) -> Result<(), String> {
     let Some(object) = arguments.as_object_mut() else {
         return Err("arguments must be an object".to_string());
     };
+    // trace:BUG-1197 | ai:codex
+    // Requester intake may create a standalone draft, but it may not attach
+    // that draft to an existing graph node or assign its grooming metadata.
+    // `parent` is especially important: add_requirement materializes it as a
+    // relationship write, which would otherwise bypass the requester envelope.
+    if ["parent", "feature", "owner"]
+        .iter()
+        .any(|field| object.contains_key(*field))
+    {
+        return Err(crate::stakeholder_refusal_message(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
     let queues_intake = object.get("queue").and_then(Value::as_bool) == Some(true)
         || object.get("batch").is_some_and(|value| !value.is_null())
         || object.get("for").is_some_and(|value| !value.is_null());
@@ -11661,6 +11675,43 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("adding anything except change-request, bug, or user specs"));
+        assert!(server.storage.load().unwrap().requirements.is_empty());
+    }
+
+    #[test]
+    fn requester_persona_rejects_relationship_and_grooming_fields_on_intake() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server = McpServer::with_profile_and_role(
+            storage,
+            dir.path().to_path_buf(),
+            McpProfile::Full,
+            "requester",
+        );
+
+        for field in ["parent", "feature", "owner"] {
+            let result = server
+                .handle_tools_call(
+                    &json!(1),
+                    &json!({
+                        "name": "add_requirement",
+                        "arguments": {
+                            "title": "Requester report",
+                            "description": "Reproduction details",
+                            field: "STORY-1"
+                        }
+                    }),
+                )
+                .result
+                .unwrap();
+            assert_eq!(result["structuredError"]["code"], "permission_denied");
+            assert!(result["structuredError"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("setting parent, feature, or owner during intake"));
+        }
         assert!(server.storage.load().unwrap().requirements.is_empty());
     }
 

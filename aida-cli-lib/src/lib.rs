@@ -346,12 +346,13 @@ use crate::cli::{
     BriefCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
     DepsCommand, DevCommand, DrainCommand, FindingsCommand, FocusCommand, GitHubCommand,
     GitLabCommand, GlyphCommand, GraphCommand, HeadlessCommand, HistoryCommand, IdentityCommand,
-    JiraCommand, LoadCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
-    OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
-    RelationshipCommand, ReleaseCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand, SkillCommand,
-    SoloAction, SpecCommand, StackCommand, TeamCommand, TerminalCommand, TraceCommand,
-    UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand, WorktreePoolCommand, ZenCommand,
+    JiraCommand, LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand,
+    OrchestratorCommand, OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
+    QueueCommand, RelationshipCommand, ReleaseCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand,
+    SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand, TerminalCommand,
+    TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand,
+    WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12323,6 +12324,27 @@ mod stakeholder_cli_policy_tests {
                 .contains("refusing writes")
         );
     }
+
+    #[test]
+    fn guest_allows_mcp_and_coordination_reads() {
+        for args in [
+            &["aida", "mcp-serve"][..],
+            &["aida", "awaiting", "--no-ci"][..],
+            &["aida", "queue", "list"][..],
+            &["aida", "mailbox", "inbox", "--peek"][..],
+        ] {
+            let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+            enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
+                .unwrap_or_else(|err| panic!("guest read {args:?} was refused: {err}"));
+        }
+    }
+
+    #[test]
+    fn guest_refuses_role_enter() {
+        assert!(guest_refusal(&["aida", "role", "enter", "advisor"])
+            .to_string()
+            .contains("refusing writes"));
+    }
 }
 
 fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
@@ -12338,6 +12360,39 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             | Command::Search { .. }
             | Command::Digest { .. }
             | Command::History { .. }
+            | Command::McpServe
+            | Command::Awaiting { .. }
+            | Command::Queue(QueueCommand::List { .. })
+            | Command::Queue(QueueCommand::Next { .. })
+            | Command::Queue(QueueCommand::Progress { .. })
+            | Command::Mailbox(MailboxCommand::Inbox { .. })
+            | Command::Mailbox(MailboxCommand::Thread { .. })
+            | Command::Brief {
+                cmd: Some(BriefCommand::List { .. } | BriefCommand::Read { .. }),
+                ..
+            }
+            | Command::Findings {
+                cmd: None | Some(FindingsCommand::List { .. }),
+            }
+            | Command::Punts(PuntsCommand::List { .. } | PuntsCommand::Read { .. })
+            | Command::Worker(WorkerCommand::Directives { .. })
+            | Command::Comment(CommentCommand::List { .. })
+            | Command::Role(
+                RoleCommand::List
+                    | RoleCommand::Show { .. }
+                    | RoleCommand::Active
+                    | RoleCommand::Current { .. },
+            )
+            | Command::Session(SessionCommand::Leases { .. } | SessionCommand::Show { .. })
+            | Command::Schema { .. }
+            | Command::Cache(CacheCommand::Status)
+            | Command::Usage { .. }
+            | Command::Plan(PlanCommand::Verify { fix: false, .. })
+            | Command::Plan(PlanCommand::Helpers { append: None, .. })
+            | Command::Ultraplan { .. }
+            | Command::Goal { .. }
+            | Command::Criteria { .. }
+            | Command::HelpAll
     ) {
         StakeholderAction::Read
     } else {
