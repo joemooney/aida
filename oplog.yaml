@@ -73872,5 +73872,31 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 5752
+- id: 01a0b246-2c21-75b2-95d5-ed4d38549a23
+  target_id: 01a0b246-27fc-7252-9c2f-90e7827e93f2
+  author: aida
+  node_id: '1'
+  lamport: 5753
+  timestamp: 2026-09-18T02:08:58.401494913Z
+  kind: !Create
+    title: 'Review PR-1906: [AI:codex] feat(criteria): scan tests across common languages (TASK-1258)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b237`) for branch `task-1258`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1906>
+      - Branch: `task-1258` → `main`
+
+      ## Covers
+
+      - TASK-1258
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1906` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5753
 node_id: '1'
