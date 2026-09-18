@@ -1,0 +1,12 @@
+id: 01a0b27e-5750-77a2-9622-1ff5d3d0e748
+spec_id: TERM-4
+agreed_id: TERM-4
+title: stakeholder persona
+description: A fileless, non-routable least-privilege identity gate activated through AIDA_SESSION_ROLE. Guest is read-only; requester adds constrained Draft intake. A persona is not a build-loop seat and cannot hold a lease. See docs/architecture/roles-seats-and-personas.md. trace:TASK-1260
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T03:10:19.472249426Z
+modified_at: 2026-09-18T03:10:19.472249426Z
+req_type: Term
