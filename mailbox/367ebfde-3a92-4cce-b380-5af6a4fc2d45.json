@@ -1,0 +1,16 @@
+{
+  "id": "367ebfde-3a92-4cce-b380-5af6a4fc2d45",
+  "thread_id": "367ebfde-3a92-4cce-b380-5af6a4fc2d45",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789710126740,
+  "body": "BUG-1197 round 4: reviewer APPROVED, PR-1913 parked on the hold at 22:41 — yours to gate + merge per protocol. Batch 0917b continues (TASK-1262 shipped via the BUG-1205 fall-through; TASK-1263, BUG-1207/1209/1210, BUG-1202 remain).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
