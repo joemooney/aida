@@ -24,12 +24,12 @@ description: |-
   - All three human footer sites covered (plain, --show-tags, and the third render branch).
   - The human denominator label matches the TOON one for the same query (open lens vs matched).
   - TOON / --json / --short output unchanged.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T04:35:24.826726810Z
+modified_at: 2026-09-18T06:25:14.172276168Z
 req_type: Bug
 tags:
 - aida:list
