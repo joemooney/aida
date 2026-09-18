@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:11:25.416642096Z
-modified_at: 2026-09-18T04:36:35.795316020Z
+modified_at: 2026-09-18T04:36:37.684211206Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,10 @@ tags:
 - failure-3
 - failure-kind:verdict:request-changes
 - reviewer
+comments:
+- id: 01a0b2cd-5ab4-7292-9cb6-ab19649ccd86
+  author: proxy
+  content: '[aida:proxy-note] rejected: auto-drafted failure record for BUG-1197''s RequestChanges round; the finding is being handled on BUG-1197 itself (rework + re-drive), not an orchestrator defect.'
+  created_at: 2026-09-18T04:36:37.684211206Z
+  modified_at: 2026-09-18T04:36:37.684211206Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
