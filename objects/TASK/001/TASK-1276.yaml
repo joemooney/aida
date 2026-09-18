@@ -1,0 +1,30 @@
+id: 01a0b5ed-3eab-76c2-8f47-a49b9399a824
+spec_id: TASK-1276
+agreed_id: TASK-1276
+title: 'Spikes are drain candidates when the advisor sets execution_mode = drain: mode overrides the type''s human-only default and routes through the research-lane contract'
+description: |
+  Today a SPIKE is skipped by the batch drain because the type defaults human_only = true (TASK-130); the opt-out is a flag at filing time (aida add --no-human-only), and the research lane (STORY-568, classify_spike_lane) dispatches spikes to a research agent as a separate command. Observed 2026-09-18: SPIKE-81 sat "human-only" in a drain wave although its deliverable was a report file with stated acceptance; the product seat set execution_mode=operator and did it by hand. SPIKE-82 (night-shift post-mortem: mine events.jsonl + mailbox, write docs/spikes/<date>.md) is the same shape and should be drainable.
+
+  Proposal (three moves, all consistent with the advisor owning disposition):
+  1. execution_mode is the authority. When the advisor sets a SPIKE to execution_mode = drain (aida edit SPIKE-N --mode drain, or aida do), the orchestrator treats it as drainable regardless of the type default; the pickup prompt routes it through the research-lane contract (deliverable = a dated report under docs/spikes/, PR for review, no design decision inside) instead of the implementer contract. The type default stays operator when the mode is unset, so nothing changes for ungroomed spikes.
+  2. aida groom proposes drain for a spike whose description names a concrete deliverable path and acceptance, and proposes operator when the deliverable is a decision, a taste call, or needs credentials; it prints the reason.
+  3. The drain banner names the lane ("research lane" not "implementer") and the harvest/review phases apply as for docs-only changes.
+
+  Acceptance:
+  - A SPIKE with execution_mode = drain and no human-only tag is picked up by aida queue work --batch and produces a PR containing docs/spikes/<date>-<slug>.md; the review story is filed as usual.
+  - A SPIKE with mode unset (or operator) is still skipped with the existing human-only note.
+  - aida groom's proposal for a report-shaped spike is drain, with the reason line naming the deliverable path it found.
+  - Unit tests on the mode-over-type-default decision and on the groom classifier.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T19:10:19.307148033Z
+modified_at: 2026-09-18T19:10:19.307148033Z
+req_type: Task
+tags:
+- groom
+- orchestrator
+- parent:EPIC-28
+- research-lane
+- spike
