@@ -17,12 +17,12 @@ description: |-
   Acceptance:
   - Simulated comment-add failure in propose_only → ledger persisted next to the candidates file, brief filed, error line ≤ 2 lines naming the io error; drain continues to merge.
   - Existing propose-only ledger test extended; a unit test for the persisted-ledger path.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:56:54.827970711Z
-modified_at: 2026-09-18T02:32:53.267738833Z
+modified_at: 2026-09-18T02:38:45.320218999Z
 req_type: Bug
 tags:
 - batch:exe-0917
@@ -57,3 +57,7 @@ comments:
   modified_at: 2026-09-18T02:31:18.546337595Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T02:38:45.320218999Z
+  implemented_by: joe
