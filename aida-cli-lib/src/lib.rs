@@ -20268,6 +20268,24 @@ fn collect_doctor_findings(
         }
     };
 
+    // A detached/mid-rebase store can accept commits that disappear on
+    // `rebase --abort`; surface this before any further maintenance writes.
+    // trace:BUG-1229 | ai:codex
+    let store_worktree = project_root.join(".aida-store");
+    if let Some(state) = aida_core::git_ops::store_worktree_issue(&store_worktree) {
+        push(DoctorFinding {
+            category: "store-worktree".to_string(),
+            id: "store-worktree-unsafe-head".to_string(),
+            summary: state.to_string(),
+            action: format!(
+                "run `git -C {} rebase --continue` or `git -C {} rebase --abort`, then retry",
+                store_worktree.display(),
+                store_worktree.display()
+            ),
+            safe_heal: false,
+        });
+    }
+
     // BUG-915: repos with container tooling and linked worktrees need the
     // worktree `.git` file's target mounted inside the container. Otherwise
     // `git rev-parse`, hooks, revision capture, and repo discovery fail from

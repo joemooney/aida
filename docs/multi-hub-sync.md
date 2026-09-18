@@ -34,6 +34,22 @@ aida remote status --json     # machine-readable
 
 The same check is a health finding: `aida doctor --category remote-drift`.
 
+Both `aida remote status` and `aida doctor` also report when the local
+`.aida-store` worktree is detached or has a rebase in progress. AIDA refuses
+store writes in that state because a later `rebase --abort` would discard
+commits made on the temporary HEAD. Finish or abandon the interrupted rebase,
+then retry the original command:
+
+```bash
+git -C .aida-store rebase --continue # after resolving the conflict
+# or
+git -C .aida-store rebase --abort
+```
+
+Store pulls that start a rebase now abort it automatically before returning a
+failure. The manual recipe remains relevant for rebases started outside AIDA
+or interrupted by process termination. trace:BUG-1229
+
 `remote status` also checks the latest local `vN` tag. The tag must exist on every hub,
 and GitLab remotes are probed for a matching release record so binary-release drift is
 caught with branch drift.
