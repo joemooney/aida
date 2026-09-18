@@ -31,14 +31,6 @@
   added_at: 2026-09-18T04:58:12.957633602Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a0b30b-3fbf-7991-9e19-f6f6d6306cfd
-  position: 10000
-  added_by: role:implementer
-  note: 'one PR with BUG-1211: shared refusal-label fn + real (argv, tool) parity test; trailer both'
-  added_at: 2026-09-18T05:44:21.283615251Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b337-1b82-73a0-a98d-4dd74da2cb82
   position: 12000
   added_by: role:implementer
@@ -74,5 +66,12 @@
   position: 17000
   added_by: role:implementer
   added_at: 2026-09-18T08:49:34.291465518Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b30b-3fbf-7991-9e19-f6f6d6306cfd
+  position: 18000
+  added_by: role:implementer
+  added_at: 2026-09-18T08:49:36.794524993Z
   for_role: implementer
   added_by_machine: imac
