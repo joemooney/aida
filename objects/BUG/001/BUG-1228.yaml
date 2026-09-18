@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:58:49.982734868Z
-modified_at: 2026-09-18T18:27:53.932362779Z
+modified_at: 2026-09-18T18:29:51.101126851Z
 req_type: Bug
 tags:
 - forge
@@ -26,6 +26,19 @@ comments:
   content: 'Dequeued 2026-09-18 11:19 by the driver-advisor: the fix is already on PR #1933 (one forge detector; forge-aware refs/merge-requests/N/head refspecs). Completes when #1933 merges.'
   created_at: 2026-09-18T18:19:00.307363514Z
   modified_at: 2026-09-18T18:19:00.307363514Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b5c8-317d-70a0-b555-347213c358b7
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1933 [AI:claude] fix(review): one forge detector + forge-aware PR head refspecs; hash-suffixed node names (BUG-1228)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (product seat authored at the keyboard; this advisor read the full diff; verdict at .aida/review-verdicts/PR-1933.json). Supersedes the earlier #1932 gate, which merged at a 4-commit head before two more commits were pushed.
+    gates: required Build (ubuntu-latest) = success at 1e585e85; merge-hold-gate = success; MERGEABLE/CLEAN; merge lease taken by aida pr ship; aida pull ran post-merge
+    reasoning: detect_forge_from_origin routes through forge::resolve_forge_kind (config + shared host heuristics) so a self-hosted GitLab no longer falls back to GitHub; pr_head_remote_ref[_for] yields refs/pull/N/head vs refs/merge-requests/N/head and is used by pr rebase and both pre-flight fetches; error text no longer hardcodes the GitHub ref; unit test covers both forges. BUG-1225 follow-up: shortened node names carry a 6-hex FNV-1a suffix so long hostnames sharing a prefix derive distinct ids (tested). Dequeued from the drain earlier today since the fix landed by hand.
+    timestamp: 2026-09-18T11:28-07:00
+  created_at: 2026-09-18T18:29:51.101126851Z
+  modified_at: 2026-09-18T18:29:51.101126851Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b5c6-67c5-7f20-8385-61109388f5ef
