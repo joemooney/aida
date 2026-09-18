@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-18T20:22:22.974313401Z
+modified_at: 2026-09-18T20:22:25.977508967Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -35,4 +35,10 @@ comments:
   created_at: 2026-09-18T20:04:39.354268533Z
   modified_at: 2026-09-18T20:04:39.354268533Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b62f-43b9-7b32-a986-70ea910cc49e
+  author: joe
+  content: '[advisor:groom] Re-groomed 13:22: cause confirmed on TASK-1270 (405 = ci_must_pass, glab renders it as a privilege error), so the fix no longer needs the mirror and is fixture-testable. Moved to DRAIN mode in wave followups-0918e. Fix contract: the GitLab merge phase reads detailed_merge_status from the API before and after the merge call; 405 or {ci_must_pass, ci_still_running, checking, preparing} → wait for the head pipeline (bounded by the existing CI idle window) and re-read; {not_approved, discussions_not_resolved, blocked_status, draft_status, conflict, need_rebase} → shelve with THAT status in the failure line; glab''s wrapper text is never surfaced as the reason. Tests: a fixture per detailed_merge_status class + the 405 path; GitHub merge phase untouched.'
+  created_at: 2026-09-18T20:22:25.977508967Z
+  modified_at: 2026-09-18T20:22:25.977508967Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
