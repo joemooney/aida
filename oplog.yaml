@@ -75923,5 +75923,31 @@ operations:
       - TOON / --json / --short output unchanged.
 
       - AC1. When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
-clock: 5879
+- id: 01a0b3ef-6b57-7110-858e-64305983e223
+  target_id: 01a0b3ef-674d-7041-abfe-ab81f58072c6
+  author: aida
+  node_id: '1'
+  lamport: 5880
+  timestamp: 2026-09-18T09:53:27.383371027Z
+  kind: !Create
+    title: 'Review PR-1922: [AI:codex] fix(harvest): preserve inline acceptance criteria (BUG-1216)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b3db`) for branch `bug-1216`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1922>
+      - Branch: `bug-1216` → `main`
+
+      ## Covers
+
+      - BUG-1216
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1922` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5880
 node_id: '1'
