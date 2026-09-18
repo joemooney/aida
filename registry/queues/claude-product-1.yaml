@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b5cd-a76d-7a80-b832-7f46598aff98
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 1 on PR #1950: aida-cli-lib/src/forge.rs:2545 classifies GitLab''s documented detailed_merge_status=unchecked as Blocked. unchecked means Git has not yet computed mergeability, so a fresh MR can be shelved immediately instead of entering the bounded reread loop; classify it as Wait and cover it in the transient-status test. | aida-cli-lib/src/forge.rs:2091 maps MergeMethod::Rebase to squash=false and calls the ordinary /merge endpoint, yet returns method=Rebase. The previous glab path passed --rebase. Preserve the Forge merge-method contract (or explicitly reject unsupported rebase) rather than silently performing a normal merge.'
+  added_at: 2026-09-18T23:18:12.879745206Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b6b9-0a3c-70a0-816f-4a483743dc4a
   position: 1000
   added_by: claude-product-1
