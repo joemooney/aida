@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:22:55.018180760Z
+modified_at: 2026-09-18T01:27:26.018813186Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -31,6 +31,24 @@ relationships:
   target_id: 01a0b21b-ece5-7d30-8f4f-e219daa7936f
   created_at: 2026-09-18T01:22:55.018176375Z
   created_by: joe
+comments:
+- id: 01a0b220-2442-76b0-9b6a-2e9267a4d984
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1903
+    agent: codex
+    ran-at: 2026-09-17 18:27 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 1
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1255-drain-01a0b21f-d3cd-79f2-9c2f-10cf08179b5a.json
+    ? AC (0.96) — Scratch-run pruning applies both retention bounds: it removes run directories older than seven days and, among the rest, retains only the newest entries needed to keep the machine-wide total at 20 after the new probe directory is created.
+    ? SEM (0.98) — Harvest candidate files under a project's gitignored .aida/harvest/ directory have no automatic retention cleanup; they remain until manually reviewed because they may contain unconfirmed proposals.
+    - AC skipped (matches a deny keyword) — Scratch cleanup removes only directories under ~/.aida/reconstitute and leaves non-directory entries, including ordinary files, untouched.
+  created_at: 2026-09-18T01:27:26.018813186Z
+  modified_at: 2026-09-18T01:27:26.018813186Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
