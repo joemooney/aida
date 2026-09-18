@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:40:43.479253932Z
-modified_at: 2026-09-18T09:27:11.615563679Z
+modified_at: 2026-09-18T09:30:49.623727759Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -55,6 +55,25 @@ relationships:
   target_id: 01a0b3d7-4b00-75b2-9164-ed9bc6282730
   created_at: 2026-09-18T09:27:11.615558744Z
   created_by: joe
+comments:
+- id: 01a0b3da-b397-7ed3-981d-e1688490d007
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1921
+    agent: codex
+    ran-at: 2026-09-18 02:30 -07:00
+    mode: propose-only (drain)
+    proposed: 4
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1218-drain-01a0b3da-3625-7990-944d-62e905668ed7.json
+    ? SEM (0.94) — A force-push refusal preserves the full actionable guard diagnostic by appending it to `.aida/logs/pr-rebase-N.log`, and failure to create or write that log does not prevent scratch-worktree cleanup.
+    ? AC (0.96) — Both stale-base and intermediate-only reviewer preflight probes fetch the pull-request head into a process-specific `refs/aida/preflight/pr-N-PID` ref, leave the conventional local `pr-N` branch unchanged, and delete the scratch ref after a successful probe.
+    ? AC (0.88) — When the stale-base force-push guard refuses, the surfaced recovery hint tells the operator to follow the fetch-and-rebase recipe in the failure detail and then rerun review with `aida queue work PR-N --steal`.
+    ? SEM (0.84) — The reviewer classifies an auto-rebase subprocess failure as `stale-base-refused` when its combined stdout/stderr contains either `force-push refused` or `Force-pushing would DROP`; other nonzero auto-rebase exits retain the generic failure path.
+  created_at: 2026-09-18T09:30:49.623727759Z
+  modified_at: 2026-09-18T09:30:49.623727759Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
