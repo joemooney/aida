@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-18T02:30:47.271467844Z
+modified_at: 2026-09-18T02:30:48.451706438Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -75,6 +75,17 @@ comments:
     confidence: 0.97
   created_at: 2026-09-18T02:30:47.271467844Z
   modified_at: 2026-09-18T02:30:47.271467844Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b25a-2983-75b2-9754-0e13f2f7b215
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: JavaScript/TypeScript test names may use single quotes, double quotes, or backtick-delimited strings.
+    rationale: The scanner explicitly accepts all three delimiters, while the stored requirement only says that `test(` and `it(` have a name string.
+    source: file:task-1258-drain-01a0b257-d610-7400-9a97-2e978ab777d3.json
+    confidence: 0.91
+  created_at: 2026-09-18T02:30:48.451706438Z
+  modified_at: 2026-09-18T02:30:48.451706438Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b258-7d9f-70b3-b731-5ca70de3c392
