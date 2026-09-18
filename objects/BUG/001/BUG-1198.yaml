@@ -8,13 +8,28 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:34:58.860989851Z
-modified_at: 2026-09-18T02:44:57.572954737Z
+modified_at: 2026-09-18T02:46:09.376796302Z
 req_type: Bug
 tags:
 - follow-up:TASK-1249
 - harvest
 - proxy-groomed
 - reconstitution
+comments:
+- id: 01a0b268-36e0-7c71-bbcb-1961636c5cd1
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1905 [AI:claude] fix(harvest): make --from idempotent — consumed-file marker and already-present landing (BUG-1198)
+    verdict: APPROVE + merged (drive)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1905.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN; merged from a plain shell while an unrelated drain was live — first merge under the TASK-1253 narrowed guard, no override
+    reasoning: .confirmed sidecar refuses a second --from (candidates file kept for audit); landing dedupes ac by normalized text against ## Acceptance and sem by decision: line against existing [aida:sem] comments; ledger records already-present landings; unit test covers normalization + marker.
+    merged: 2026-09-17 19:45 -07:00 → main d25185c319; spec auto-bumped Completed
+  created_at: 2026-09-18T02:46:09.376796302Z
+  modified_at: 2026-09-18T02:46:09.376796302Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b267-1e5d-7e42-be2c-d44f18f4590c
   author: aida-auto-bump
