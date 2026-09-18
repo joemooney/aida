@@ -12,6 +12,286 @@ use crate::*;
 
 const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
 
+fn terminal_list_width() -> Option<usize> {
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        return None;
+    }
+    crossterm::terminal::size()
+        .ok()
+        .map(|(columns, _)| usize::from(columns))
+}
+
+struct ListTableOptions {
+    show_origin: bool,
+    show_tags: bool,
+    no_glyph: bool,
+    flow_header: String,
+    terminal_width: Option<usize>,
+}
+
+// trace:BUG-1207 | ai:codex
+fn render_list_table<F>(
+    reqs: &[aida_core::RequirementSummary],
+    options: &ListTableOptions,
+    row_routing: F,
+) -> Vec<String>
+where
+    F: Fn(&aida_core::RequirementSummary) -> (bool, bool, bool),
+{
+    let flow_width = options.flow_header.chars().count();
+    let header_prefix = if options.show_origin {
+        format!(
+            "{}{:<12} {:<14} {:<12} {:<13} ",
+            options.flow_header, "ID", "Origin ID", "Type", "Status"
+        )
+    } else {
+        format!(
+            "{}{:<14} {:<12} {:<13} {:<10} ",
+            options.flow_header, "ID", "Type", "Status", "Priority"
+        )
+    };
+    let prefix_width = header_prefix.chars().count();
+    let desired_tag_width = if options.show_tags {
+        reqs.iter()
+            .map(|r| format_tags_inline(&r.tags, 3).chars().count())
+            .chain(std::iter::once("Tags".len()))
+            .max()
+            .unwrap_or(4)
+    } else {
+        0
+    };
+    let (title_width, tag_width) = match options.terminal_width {
+        // Preserve the pre-BUG-1207 piped-output contract. Only an attached
+        // terminal opts into width-aware geometry.
+        None => (if options.show_tags { 50 } else { usize::MAX }, usize::MAX),
+        Some(total) if options.show_tags => {
+            let available = total.saturating_sub(prefix_width);
+            let tag_width = desired_tag_width.min(available.saturating_sub(25)).max(4);
+            let tag_width = tag_width.min(available.saturating_sub(1));
+            (available.saturating_sub(tag_width + 1), tag_width)
+        }
+        Some(total) => (total.saturating_sub(prefix_width), 0),
+    };
+    let title_column_width = if title_width == usize::MAX {
+        24
+    } else {
+        title_width
+    };
+    let table_width = options.terminal_width.unwrap_or_else(|| {
+        flow_width
+            + match (options.show_origin, options.show_tags) {
+                (true, true) => 113,
+                (true, false) => 81,
+                (false, true) => 111,
+                (false, false) => 77,
+            }
+    });
+
+    let render_status = |r: &aida_core::RequirementSummary| -> String {
+        let label = status_display::display_status_for_type(&r.req_type, &r.status);
+        if options.no_glyph {
+            status_display::status_cell_no_glyph(label, 13)
+        } else {
+            status_display::status_cell(label, 11)
+        }
+    };
+    let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
+        if flow_width == 0 {
+            return String::new();
+        }
+        let (in_flight, blocked, queued) = row_routing(r);
+        let supervised = r.execution_mode.as_deref().is_some_and(|m| {
+            matches!(
+                m.to_ascii_lowercase().as_str(),
+                "guided" | "operator" | "decide"
+            )
+        });
+        let glyph = status_display::flow_glyph(in_flight, blocked, queued, supervised);
+        format!("{:<width$}", format!("{glyph} "), width = flow_width)
+    };
+    let title_cell = |r: &aida_core::RequirementSummary| -> String {
+        if options.show_tags {
+            return truncate(&r.title, title_width);
+        }
+        match r.assignee.as_deref() {
+            Some(a) if !a.is_empty() => {
+                let suffix = format!("@{a}");
+                let available = title_width.saturating_sub(suffix.chars().count() + 1);
+                format!("{} {}", truncate(&r.title, available), suffix.cyan())
+            }
+            _ => truncate(&r.title, title_width),
+        }
+    };
+
+    let mut lines = Vec::with_capacity(reqs.len() + 2);
+    if options.show_tags {
+        if options.terminal_width.is_none() {
+            lines.push(format!("{}{:<50} Tags", header_prefix, "Title"));
+        } else {
+            lines.push(format!(
+                "{}{:<width$} {:<tag_width$}",
+                header_prefix,
+                "Title",
+                truncate("Tags", tag_width),
+                width = title_column_width,
+            ));
+        }
+    } else {
+        lines.push(format!("{}Title", header_prefix));
+    }
+    lines.push("─".repeat(table_width));
+
+    for req in reqs {
+        let display_id = req
+            .agreed_id
+            .as_deref()
+            .or(req.spec_id.as_deref())
+            .unwrap_or("?");
+        let status = render_status(req);
+        let prefix = if options.show_origin {
+            let origin = req.spec_id.as_deref().unwrap_or("-");
+            let origin_padded = format!("{:<14}", origin);
+            let origin_cell = if origin == display_id {
+                origin_padded.dimmed().to_string()
+            } else {
+                origin_padded
+            };
+            format!(
+                "{}{:<12} {} {:<12} {} ",
+                flow_prefix(req),
+                display_id,
+                origin_cell,
+                req.req_type,
+                status
+            )
+        } else {
+            format!(
+                "{}{:<14} {:<12} {} {:<10} ",
+                flow_prefix(req),
+                display_id,
+                req.req_type,
+                status,
+                req.priority
+            )
+        };
+        if options.show_tags {
+            let tags = if options.terminal_width.is_none() {
+                format_tags_inline(&req.tags, 3)
+            } else {
+                truncate(&format_tags_inline(&req.tags, 3), tag_width)
+            };
+            lines.push(format!(
+                "{}{:<width$} {}",
+                prefix,
+                title_cell(req),
+                tags.dimmed(),
+                width = title_column_width,
+            ));
+        } else {
+            lines.push(format!("{}{}", prefix, title_cell(req)));
+        }
+    }
+    lines
+}
+
+#[cfg(test)]
+mod list_title_width_tests {
+    use super::*;
+
+    fn summary() -> aida_core::RequirementSummary {
+        aida_core::RequirementSummary {
+            id: Uuid::nil(),
+            spec_id: Some("BUG-1207".into()),
+            agreed_id: Some("BUG-1207".into()),
+            title: "A deliberately very long title that must be clipped before it can wrap the human table".into(),
+            description: String::new(),
+            status: "in-progress".into(),
+            priority: "medium".into(),
+            owner: String::new(),
+            assignee: None,
+            feature: String::new(),
+            req_type: "bug".into(),
+            tags: vec![
+                "aida:list".into(),
+                "severity:cosmetic".into(),
+                "a-very-long-third-tag".into(),
+                "extra".into(),
+            ],
+            created_at: String::new(),
+            modified_at: String::new(),
+            archived: false,
+            archived_at: None,
+            deferred: false,
+            deferred_at: None,
+            deferred_until: None,
+            in_degree: 0,
+            out_degree: 0,
+            heft: 0,
+            blocked: false,
+            has_pending_decision: false,
+            execution_mode: None,
+            weight: None,
+            origin: None,
+            yaml_path: String::new(),
+        }
+    }
+
+    fn visible_width(line: &str) -> usize {
+        strip_ansi_color(line).chars().count()
+    }
+
+    #[test]
+    fn rendered_tables_fit_default_origin_and_tag_variants() {
+        let reqs = vec![summary()];
+        for width in [80, 120] {
+            for show_origin in [false, true] {
+                for show_tags in [false, true] {
+                    let options = ListTableOptions {
+                        show_origin,
+                        show_tags,
+                        no_glyph: true,
+                        flow_header: String::new(),
+                        terminal_width: Some(width),
+                    };
+                    let lines = render_list_table(&reqs, &options, |_| (false, false, false));
+                    assert_eq!(
+                        visible_width(&lines[1]),
+                        width,
+                        "divider: origin={show_origin} tags={show_tags}"
+                    );
+                    for line in lines {
+                        assert!(
+                            visible_width(&line) <= width,
+                            "{width}-column table overflowed: origin={show_origin} tags={show_tags}: {line:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn non_tty_show_tags_preserves_legacy_fixed_geometry() {
+        let req = summary();
+        let options = ListTableOptions {
+            show_origin: false,
+            show_tags: true,
+            no_glyph: true,
+            flow_header: String::new(),
+            terminal_width: None,
+        };
+        let lines = render_list_table(std::slice::from_ref(&req), &options, |_| {
+            (false, false, false)
+        });
+        assert_eq!(visible_width(&lines[0]), 108);
+        assert_eq!(visible_width(&lines[1]), 111);
+        let row = strip_ansi_color(&lines[2]);
+        assert!(row.contains(&truncate(&req.title, 50)));
+        assert!(!row.contains(&req.title));
+        assert!(row.contains(&format_tags_inline(&req.tags, 3)));
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct ProxyApprovalEntry {
     spec_id: String,
@@ -1950,7 +2230,6 @@ pub(crate) fn handle_git_backend_command(
                 // chips have room without breaking word-wrap on narrow
                 // terminals; chip set itself is truncated to 3 with a
                 // "+N more" suffix. trace:TASK-569 | ai:claude
-                let title_max = if *show_tags { 50 } else { usize::MAX };
                 // TASK-670: the leading work-routing column. `flow_prefix` is
                 // "<glyph> " (2 visible cols) per row when the column is shown,
                 // else "". `flow_header` reserves the same 2 cols in the header
@@ -1967,165 +2246,15 @@ pub(crate) fn handle_git_backend_command(
                 } else {
                     ""
                 };
-                let flow_width = flow_header.len();
-                let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
-                    if !show_flow {
-                        return String::new();
-                    }
-                    let (in_flight, blocked, queued) = row_routing(r);
-                    let supervised = r.execution_mode.as_deref().is_some_and(|m| {
-                        matches!(
-                            m.to_ascii_lowercase().as_str(),
-                            "guided" | "operator" | "decide"
-                        )
-                    });
-                    let glyph = status_display::flow_glyph(in_flight, blocked, queued, supervised);
-                    format!("{:<width$}", format!("{glyph} "), width = flow_width)
+                let options = ListTableOptions {
+                    show_origin: *show_origin,
+                    show_tags: *show_tags,
+                    no_glyph: *no_glyph,
+                    flow_header: flow_header.to_string(),
+                    terminal_width: terminal_list_width(),
                 };
-                // BUG-781: the Status column renders the TYPE-AWARE label, so an
-                // accepted decision reads `☑ Accepted` (terminal) instead of the
-                // `▸ Approved` a not-yet-started task wears. trace:BUG-781
-                let render_status = |r: &aida_core::RequirementSummary| -> String {
-                    let label = status_display::display_status_for_type(&r.req_type, &r.status);
-                    if *no_glyph {
-                        // 13 cols = the glyph(1)+space(1)+11-label width the
-                        // glyph cell occupies, so columns line up either way.
-                        status_display::status_cell_no_glyph(label, 13)
-                    } else {
-                        status_display::status_cell(label, 11)
-                    }
-                };
-                // STORY-639: append a compact ` @user` marker to the Title cell
-                // when a spec is assigned — only when set, so unassigned rows
-                // render exactly as before (no new column, no width churn).
-                // trace:STORY-639 | ai:claude
-                let with_assignee = |title: &str, r: &aida_core::RequirementSummary| -> String {
-                    match r.assignee.as_deref() {
-                        Some(a) if !a.is_empty() => {
-                            format!("{} {}", title, format!("@{a}").cyan())
-                        }
-                        _ => title.to_string(),
-                    }
-                };
-                if *show_origin {
-                    if *show_tags {
-                        println!(
-                            "{}{:<12} {:<14} {:<12} {:<13} {:<50} Tags",
-                            flow_header, "ID", "Origin ID", "Type", "Status", "Title"
-                        );
-                    } else {
-                        println!(
-                            "{}{:<12} {:<14} {:<12} {:<13} Title",
-                            flow_header, "ID", "Origin ID", "Type", "Status"
-                        );
-                    }
-                    println!(
-                        "{}",
-                        "─".repeat(flow_width + if *show_tags { 113 } else { 81 })
-                    );
-                    for req in &reqs {
-                        let display_id = req
-                            .agreed_id
-                            .as_deref()
-                            .or(req.spec_id.as_deref())
-                            .unwrap_or("?");
-                        let origin = req.spec_id.as_deref().unwrap_or("-");
-                        // Pad to visible width FIRST, then color. Otherwise
-                        // .dimmed()'s ANSI escapes inflate the string length
-                        // and {:<14} ends up padding on byte count, breaking
-                        // column alignment. trace:FR-1-070 | ai:claude
-                        let origin_padded = format!("{:<14}", origin);
-                        let origin_cell = if origin == display_id {
-                            origin_padded.dimmed().to_string()
-                        } else {
-                            origin_padded
-                        };
-                        // TASK-269: unified status palette. Pad the plain
-                        // string to column width FIRST, then colour —
-                        // {:<10} counts ANSI escape bytes otherwise.
-                        // trace:TASK-269 | ai:claude
-                        // TASK-315: glyph + colour in the Status column (cell is
-                        // 13 visible cols: glyph + space + 11-wide label).
-                        let status_cell = render_status(req);
-                        let flow = flow_prefix(req);
-                        if *show_tags {
-                            let title_cell = truncate(&req.title, title_max);
-                            let tags_cell = format_tags_inline(&req.tags, 3);
-                            println!(
-                                "{}{:<12} {}{:<12} {} {:<50} {}",
-                                flow,
-                                display_id,
-                                origin_cell,
-                                req.req_type,
-                                status_cell,
-                                title_cell,
-                                tags_cell.dimmed(),
-                            );
-                        } else {
-                            println!(
-                                "{}{:<12} {}{:<12} {} {}",
-                                flow,
-                                display_id,
-                                origin_cell,
-                                req.req_type,
-                                status_cell,
-                                with_assignee(&req.title, req),
-                            );
-                        }
-                    }
-                } else {
-                    if *show_tags {
-                        println!(
-                            "{}{:<14} {:<12} {:<13} {:<10} {:<50} Tags",
-                            flow_header, "ID", "Type", "Status", "Priority", "Title"
-                        );
-                    } else {
-                        println!(
-                            "{}{:<14} {:<12} {:<13} {:<10} Title",
-                            flow_header, "ID", "Type", "Status", "Priority"
-                        );
-                    }
-                    println!(
-                        "{}",
-                        "─".repeat(flow_width + if *show_tags { 111 } else { 77 })
-                    );
-                    for req in &reqs {
-                        let display_id = req
-                            .agreed_id
-                            .as_deref()
-                            .or(req.spec_id.as_deref())
-                            .unwrap_or("?");
-                        // TASK-269: unified status palette — pad-then-colour
-                        // keeps the column aligned. trace:TASK-269 | ai:claude
-                        // TASK-315: glyph + colour in the Status column (cell is
-                        // 13 visible cols: glyph + space + 11-wide label).
-                        let status_cell = render_status(req);
-                        let flow = flow_prefix(req);
-                        if *show_tags {
-                            let title_cell = truncate(&req.title, title_max);
-                            let tags_cell = format_tags_inline(&req.tags, 3);
-                            println!(
-                                "{}{:<14} {:<12} {} {:<10} {:<50} {}",
-                                flow,
-                                display_id,
-                                req.req_type,
-                                status_cell,
-                                req.priority,
-                                title_cell,
-                                tags_cell.dimmed(),
-                            );
-                        } else {
-                            println!(
-                                "{}{:<14} {:<12} {} {:<10} {}",
-                                flow,
-                                display_id,
-                                req.req_type,
-                                status_cell,
-                                req.priority,
-                                with_assignee(&req.title, req),
-                            );
-                        }
-                    }
+                for line in render_list_table(&reqs, &options, row_routing) {
+                    println!("{line}");
                 }
                 println!(
                     "\n{}",

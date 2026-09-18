@@ -48,6 +48,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "crossterm",
  "dirs",
  "hostname",
  "inquire",
