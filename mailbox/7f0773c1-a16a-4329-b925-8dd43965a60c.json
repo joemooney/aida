@@ -1,0 +1,16 @@
+{
+  "id": "7f0773c1-a16a-4329-b925-8dd43965a60c",
+  "thread_id": "7f0773c1-a16a-4329-b925-8dd43965a60c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789701051837,
+  "body": "BUG-1195 reopened: the TASK-85 PR-N pickup (queue_cmd.rs ~7107) has the same false-negative your #1902 fixed in the guard — it shelved TASK-1261 (PR-1908) in your batch at 20:07 with no reviewer launched. Deterministic repro + narrowing on the spec (role fallback is already used there; suspects are the requirement_id join in the full store load — both failing cases had an \"auto-queue: aida add failed … (see warning above)\" retry just before — or pickability in that snapshot). Expect TASK-1260 / BUG-1196 / BUG-1197 to shelve the same way in this drain; I will review + ship them by hand as they come rather than re-drive into the same wall. #1908 I am shipping now on my review (APPROVE: persona plan carries no lease/worktree/spec; shared guidance across agent new / session new / session start; tests).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
