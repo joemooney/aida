@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:48:11.546163776Z
-modified_at: 2026-09-18T03:10:44.413256599Z
+modified_at: 2026-09-18T03:10:48.131244646Z
 req_type: Bug
 tags:
 - drain
@@ -49,6 +49,26 @@ comments:
     merged: 2026-09-17 18:06 -07:00 → main 70c2798466; spec auto-bumped Completed. Drain binary rebuilt before the next batch (followups-0917).
   created_at: 2026-09-18T01:03:54.391361344Z
   modified_at: 2026-09-18T01:03:54.391361344Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b27e-c743-7832-8281-2ac272a054b6
+  author: joe
+  content: |-
+    REOPENED 2026-09-17 20:15 (advisor): #1902 fixed the envelope guard's lookup (queued_review_story_for_pr), but the TASK-85 PR-N pickup in resolve_queue_work_plan (queue_cmd.rs ~7060-7110, the "no queued review story for PR-N — check gh pr view" bail) has the same false-negative and shelved TASK-1261 in the product seat's batch tonight (PR-1908, 20:07, no reviewer launched, no verdict file).
+
+    Deterministic repro on binary 9df74155 (includes #1902):
+      aida queue work PR-1908 --user role:implementer --role reviewer --dry-run
+      → error: "no queued review story for PR-1908 — …"
+    while at the same moment:
+      aida queue list --user role:implementer --for reviewer → STORY-1196 "Review PR-1908: …" Approved, for_role reviewer
+      aida why STORY-1196 → actionable
+      aida queue work STORY-1196 --user role:implementer --role reviewer --dry-run → resolves to scope PR-1908 normally
+    Same shape as PR-1901/STORY-1191 on 09-17 12:40. Meanwhile PR-1903/1904/1906 (STORY-1192/1193/1194, all auto-filed by the same `session end` backup trigger) resolved fine in the same drains — so it is data-dependent, not the filing path.
+
+    Narrowing done: that block already reads entries via queue_list_with_role_fallback (line ~6855), so the user key is NOT the cause here. Remaining suspects, in order: (1) the join `store.requirements.iter().find(|r| r.id == e.requirement_id)` — the queue entry's requirement_id vs the story's id in the FULL store load (storage.load()); note the failing cases both had an "auto-queue: aida add failed for PR #N (see warning above)" retry in the drain log right before — check whether the retry produces a queue entry whose requirement_id is not the id of the YAML that finally landed (or two entries, one dangling), and whether the full store load sees the story at all; (2) queue_fresh_pickup_policy(req, &store, force_needs_attention) on the story in THAT store snapshot. Instrument: log which filter dropped each candidate entry (same typed-diagnosis idea as #1902's ReviewStoryLookup) and reuse classify_review_story_lookup here so the two paths cannot diverge again.
+
+    Acceptance addition: the repro above resolves PR-1908 (or a fixture with the same shape) to the reviewer route; the pickup and the guard share one classifier; the bail names the dropped filter.
+  created_at: 2026-09-18T03:10:48.131244646Z
+  modified_at: 2026-09-18T03:10:48.131244646Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b209-329f-7c20-8606-457c8775cde7
