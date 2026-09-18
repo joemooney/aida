@@ -15,12 +15,13 @@ description: |
 
   ## Acceptance
   - AC1. Scratch-run pruning applies both retention bounds: it removes run directories older than seven days and, among the rest, retains only the newest entries needed to keep the machine-wide total at 20 after the new probe directory is created.
+  - AC2. Scratch-run pruning applies both retention bounds: it removes run directories older than seven days and, among the rest, retains only the newest entries needed to keep the machine-wide total at 20 after the new probe directory is created.
 status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:33:26.125531393Z
+modified_at: 2026-09-18T01:33:27.226001111Z
 req_type: Task
 tags:
 - batch:followups-0917
