@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-18T02:28:58.932691383Z
+modified_at: 2026-09-18T02:30:47.271467844Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -65,6 +65,17 @@ comments:
     Summary: Python above-test trace markers can be attributed to the preceding test
   created_at: 2026-09-18T02:16:36.895369756Z
   modified_at: 2026-09-18T02:16:36.895369756Z
+- id: 01a0b25a-24e7-7442-bd97-81b94d1a3e09
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: Python discovery recognizes both `def test_*` and `async def test_*` declarations.
+    rationale: Async pytest functions are an observable additional declaration shape not named by the requirement, which specifies only `def test_*`.
+    source: file:task-1258-drain-01a0b257-d610-7400-9a97-2e978ab777d3.json
+    confidence: 0.97
+  created_at: 2026-09-18T02:30:47.271467844Z
+  modified_at: 2026-09-18T02:30:47.271467844Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b258-7d9f-70b3-b731-5ca70de3c392
   author: aida-auto-bump
