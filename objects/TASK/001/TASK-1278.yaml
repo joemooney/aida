@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:34.903795856Z
-modified_at: 2026-09-18T23:39:00.859991415Z
+modified_at: 2026-09-18T23:43:43.776426947Z
 req_type: Task
 tags:
 - agent-ux
@@ -32,4 +32,13 @@ comments:
   created_at: 2026-09-18T23:39:00.859991415Z
   modified_at: 2026-09-18T23:39:00.859991415Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b6e7-8ea0-7843-9379-a236a2e9b115
+  author: joe
+  content: |-
+    [advisor:sketch-signoff] Signed off 2026-09-18 16:44. Proceed to implement and open the PR (drain mode: no hold; the drain's reviewer gates it).
+    Sketch accepted as written: one shared ResolvedProtocol renderer in aida-core over META rows protocol:<type> and protocol:lane:<lane>; deterministic labeled layers in precedence order type < lane, with the spec's own ## Acceptance authoritative at every injection site; ONE shared 40-body-line budget across layers (truncation appends the "see aida protocol show <type> --lane <lane>" pointer); protocol show --lane; MCP resources aida://protocol/{type} and aida://protocol/{type}/{lane} served from the same renderer so resource bytes equal CLI stdout; headless implementer and reviewer prompts prepend the same capped block; tests on merge/precedence/cap, MCP parity, and prompt construction.
+    Two clarifications, not scope changes: (1) a spec's lane is read from its `lane:<name>` tag (research | docs | keystone); no tag = type layer only; document the tag in docs/cli and the discipline tag-conventions. (2) Lane METAs are seeded through the same seed-missing pass that STORY-1221 added (seed_missing_type_protocols or a sibling), so scaffold refresh / init --refresh / protocol seed create them on existing projects too; keep the pass idempotent and never overwrite an edited body.
+  created_at: 2026-09-18T23:43:43.776426947Z
+  modified_at: 2026-09-18T23:43:43.776426947Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
