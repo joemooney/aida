@@ -15,12 +15,12 @@ description: |-
   Non-goals: GitHub Actions changes (separate cost model), publishing the image to a public registry, cross-platform runners.
 
   Related: TASK-1254 (live validation that measured this), TASK-825 (the original .gitlab-ci.yml), STORY-1048 (release assets on GitLab).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:41:48.716701811Z
-modified_at: 2026-09-18T17:45:14.940069758Z
+modified_at: 2026-09-18T18:25:16.827101296Z
 req_type: Story
 tags:
 - ci
@@ -48,4 +48,22 @@ comments:
   created_at: 2026-09-18T17:45:14.940069758Z
   modified_at: 2026-09-18T17:45:14.940069758Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b5c4-0214-7810-afad-09bca5ae4599
+  author: aida-auto-bump
+  timestamp: 2026-09-18T18:25:16.820353372Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0b5c4-021b-7bc2-8bac-2d7fcb794ecc
+  timestamp: 2026-09-18T18:25:16.827100304Z
+  agent: aida
+  commit_sha: 50e1939b21c0194914cb5a488f211ada060b45e5
+  summary: Completed via merge 50e1939b
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-18T18:25:16.820207905Z
+  completion_sha: 50e1939b21c0194914cb5a488f211ada060b45e5
