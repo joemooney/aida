@@ -3,12 +3,12 @@ spec_id: TASK-1268
 agreed_id: TASK-1268
 title: queue progress --batch and next[] hints name the --single-branch cluster command when the batch carries serialize verdicts
 description: 'SPIKE-81 general recommendation (carrier 2): a completed capability survives its spec closing only if hints surface it. When aida queue progress --batch NAME (and aida show on a member) finds groom serialize verdicts among the batch members, print a next-step line with the exact cluster command (--single-branch, plus --sequential when order matters). Acceptance: a batch with at least one serialize verdict shows the hint; a batch without shows nothing new; snapshot test of the hint text.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:57:07.056374646Z
-modified_at: 2026-09-18T14:16:21.336014204Z
+modified_at: 2026-09-18T14:16:28.445264005Z
 req_type: Task
 tags:
 - batch:followups-0918c
@@ -40,8 +40,25 @@ comments:
   created_at: 2026-09-18T14:16:21.336014204Z
   modified_at: 2026-09-18T14:16:21.336014204Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b4e0-381c-7933-b128-ae49ff5d3e7a
+  author: aida-auto-bump
+  timestamp: 2026-09-18T14:16:28.444537926Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b4e0-381d-7be1-ba86-51c8911b4f27
+  timestamp: 2026-09-18T14:16:28.445263304Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1268-2026-09-18T141622Z.md
+  commit_sha: d29af1d0386776a9ba9bfe7f12ed0ac74e26fcb0
+  summary: Completed via merge d29af1d0
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T14:01:53.717898471Z
   implemented_by: joe
+  completed_at: 2026-09-18T14:16:28.444394833Z
+  completion_sha: d29af1d0386776a9ba9bfe7f12ed0ac74e26fcb0
