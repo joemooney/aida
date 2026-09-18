@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T19:07:17.658074050Z
+modified_at: 2026-09-18T19:07:41.725044296Z
 req_type: Spike
 tags:
 - autonomy
@@ -34,6 +34,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-18T18:56:13.641442177Z
+- rel_type: Blocks
+  target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
+  created_at: 2026-09-18T19:07:41.725041444Z
+  created_by: joe
 comments:
 - id: 01a0b5ea-791a-7351-850f-4c75f16f9af4
   author: joe
