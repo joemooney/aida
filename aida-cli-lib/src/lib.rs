@@ -12123,17 +12123,46 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
     }
 }
 
-fn active_stakeholder_role() -> Option<String> {
+pub(crate) fn active_stakeholder_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .map(|role| canonical_role_name(role.trim()))
         .filter(|role| role == "guest" || role == "requester")
 }
 
-fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
-    anyhow::anyhow!(
+pub(crate) fn stakeholder_refusal_message(role: &str, action: &str) -> String {
+    format!(
         "AIDA_SESSION_ROLE={role} is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
     )
+}
+
+fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
+    anyhow::anyhow!(stakeholder_refusal_message(role, action))
+}
+
+// trace:BUG-1197 | ai:codex
+/// Shared capability vocabulary for the CLI and MCP stakeholder envelopes.
+/// Keeping this decision independent of either transport prevents a new write
+/// path from silently widening guest/requester authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StakeholderAction {
+    Read,
+    Intake,
+    Write,
+}
+
+pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
+    match role {
+        "guest" => action == StakeholderAction::Read,
+        "requester" => matches!(action, StakeholderAction::Read | StakeholderAction::Intake),
+        _ => true,
+    }
+}
+
+pub(crate) fn requester_intake_type_allowed(type_name: &str) -> bool {
+    parse_requirement_type(type_name)
+        .map(|req_type| requester_add_type_allowed(&req_type))
+        .unwrap_or(false)
 }
 
 fn parse_requester_add_type(raw: Option<&str>) -> Result<RequirementType> {
@@ -12177,9 +12206,8 @@ fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
     };
     match role.as_str() {
         "guest" => {
-            if command_triggers_per_write_auto_push(command)
-                || stakeholder_command_is_build_loop(command)
-            {
+            let action = stakeholder_cli_action(command);
+            if !stakeholder_action_allowed("guest", action) {
                 return Err(stakeholder_refusal(
                     "guest",
                     stakeholder_action_label(command),
@@ -12218,9 +12246,8 @@ fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
                 add_csv_tag(tags, "intake:requester");
                 return Ok(());
             }
-            if command_triggers_per_write_auto_push(command)
-                || stakeholder_command_is_build_loop(command)
-            {
+            let action = stakeholder_cli_action(command);
+            if !stakeholder_action_allowed("requester", action) {
                 return Err(stakeholder_refusal(
                     "requester",
                     stakeholder_action_label(command),
@@ -12230,6 +12257,18 @@ fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
+    if matches!(command, Command::Add { .. }) {
+        StakeholderAction::Intake
+    } else if command_triggers_per_write_auto_push(command)
+        || stakeholder_command_is_build_loop(command)
+    {
+        StakeholderAction::Write
+    } else {
+        StakeholderAction::Read
+    }
 }
 
 fn stakeholder_command_is_build_loop(command: &Command) -> bool {
