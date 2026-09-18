@@ -40,6 +40,20 @@ impl NextStep {
     }
 }
 
+/// Add the coupled cluster drain surfaced by a groom `serialize` verdict.
+// trace:TASK-1268 | ai:codex
+pub fn push_serialize_cluster(steps: &mut Vec<NextStep>, command: Option<String>) {
+    if let Some(command) = command {
+        steps.insert(
+            0,
+            NextStep::new(
+                command,
+                "single-branch; add --sequential when order matters",
+            ),
+        );
+    }
+}
+
 /// The stable lowercase token for a lifecycle target state — the `to` column of
 /// the `next` block, so the agent sees WHICH state a suggestion advances to.
 fn state_token(s: State) -> &'static str {
@@ -351,6 +365,9 @@ fn human_hint(to: &str) -> &'static str {
         "triage" => "triage the draft inbox",
         "fill-queue" => "fill the queue from the approved backlog",
         "children" => "inspect the unfinished children; the epic closes when they finish",
+        "single-branch; add --sequential when order matters" => {
+            "drain the overlapping batch on one branch; add `--sequential` when order matters"
+        }
         _ => "",
     }
 }

@@ -3453,6 +3453,22 @@ pub(crate) fn handle_git_backend_command(
                     } else {
                         format!("{}", req.effective_status())
                     };
+                    // Keep a groomed serialize verdict discoverable from any
+                    // member after the grooming command has left scrollback.
+                    // trace:TASK-1268 | ai:codex
+                    let serialize_cluster_command = backend.load().ok().and_then(|store| {
+                        let project_root = find_project_root().unwrap_or_else(|_| {
+                            store_path
+                                .parent()
+                                .map(|p| p.to_path_buf())
+                                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+                        });
+                        backlog::member_serialize_batch_command(
+                            &store.requirements,
+                            &req,
+                            &project_root,
+                        )
+                    });
                     // STORY-632: `--json` emits the spec as a machine object,
                     // including the centrality fields, then returns early.
                     // trace:STORY-632 | ai:claude
@@ -3614,8 +3630,12 @@ pub(crate) fn handle_git_backend_command(
                         // TASK-974 (AXI #9): lifecycle-aware next-step block —
                         // the valid next transition(s) for THIS spec's current
                         // state, templated with its id. trace:TASK-974
-                        let next =
+                        let mut next =
                             crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                        crate::help_next::push_serialize_cluster(
+                            &mut next,
+                            serialize_cluster_command.clone(),
+                        );
                         if let Some(block) = crate::help_next::render(&next) {
                             println!("{block}");
                         }
@@ -3646,6 +3666,14 @@ pub(crate) fn handle_git_backend_command(
                             }
                         }
                         render_spec_card(&req, &rels, store_path, density, *no_git, *verbose);
+                        let mut next = Vec::new();
+                        crate::help_next::push_serialize_cluster(
+                            &mut next,
+                            serialize_cluster_command.clone(),
+                        );
+                        if let Some(block) = crate::help_next::render_human(&next) {
+                            println!("{block}");
+                        }
                         return Ok(());
                     }
                     println!("{}: {}", "ID".bold(), req.display_id());
@@ -4117,8 +4145,9 @@ pub(crate) fn handle_git_backend_command(
                     // but not to per-spec inspection, so the human `show` never
                     // got a next command. Render it now, leading with `aida zen
                     // <id>` for an Approved/Planned spec. trace:STORY-727
-                    let next =
+                    let mut next =
                         crate::help_next::spec_next(&effective_status_str, &req.display_id());
+                    crate::help_next::push_serialize_cluster(&mut next, serialize_cluster_command);
                     if let Some(block) = crate::help_next::render_human(&next) {
                         println!("{block}");
                     }
