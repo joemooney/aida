@@ -1,0 +1,7 @@
+- user_id: joe
+  requirement_id: 01a0b5dd-93e3-7382-bb96-c99e4a8014af
+  position: 1000
+  added_by: joe
+  note: Promoted from finding TASK-1-140 via `aida findings promote`
+  added_at: 2026-09-18T19:11:42.729337649Z
+  for_role: implementer
