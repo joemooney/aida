@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:26:03.945081691Z
-modified_at: 2026-09-18T21:34:01.538603078Z
+modified_at: 2026-09-18T21:34:04.842385381Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -35,4 +35,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T21:26:08.231591942Z
+comments:
+- id: 01a0b670-dc2a-7921-b7fd-f57db0337868
+  author: joe
+  content: '[advisor:groom] Approved, high, DRIVE, queued into wave followups-0918e. Confirmed on #1943 at 14:20: my gate read merge-hold-gate = success while the marker existed, and I had been treating that check as one of the two gates — the marker (layer 1) was the only thing holding. Until this lands the advisor gate reads the MARKER, not the GitHub check. Scope guard for the implementer: do not touch the merge_change marker refusal (BUG-1167) or the gate workflow itself; this fix is (1) label at PR-open for every supervised spec, (2) sync_label surfaces failure + retries once + records label: applied|failed on the marker, (3) merge-hold list shows the label column and --fix re-syncs, (4) doctor flags marker-without-label and label-without-marker. Merge at the advisor gate.'
+  created_at: 2026-09-18T21:34:04.842385381Z
+  modified_at: 2026-09-18T21:34:04.842385381Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
