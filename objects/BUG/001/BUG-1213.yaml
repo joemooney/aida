@@ -16,12 +16,12 @@ description: |-
   - A re-drive whose phase 1 leaves the PR head unchanged and files no punt shelves as rework-no-op (unit-tested through the mock PhaseDriver like reviewer-wrote); the drain never advances to review on an unchanged head after a rework.
   - The rework pickup prompt leads with the round number and the still-open items (source-shape or prompt-builder test).
   - Two consecutive identical RequestChanges on one spec produce an advisor escalation finding, not a third re-queue.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T10:33:23.935808547Z
+modified_at: 2026-09-18T10:33:56.490709959Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -40,3 +40,7 @@ comments:
   modified_at: 2026-09-18T10:33:23.935808547Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T10:33:56.490709959Z
+  implemented_by: joe
