@@ -95,7 +95,16 @@ impl Pickability {
 ///    target) so the UI surfaces the louder failure mode.
 /// 4. Otherwise pickable.
 pub fn pickability(req: &Requirement, store: &RequirementsStore) -> Pickability {
-    if req.human_only {
+    // A spike defaults to human-only at creation time, but once the advisor
+    // explicitly grooms it into an agent harness the mode is authoritative.
+    // `drain` runs the full research/report lifecycle; `drive` runs the same
+    // work but holds the merge for advisor review. trace:TASK-1276 | ai:codex
+    let groomed_spike = matches!(req.req_type, crate::RequirementType::Spike)
+        && matches!(
+            req.execution_mode,
+            Some(crate::ExecutionMode::Drain | crate::ExecutionMode::Drive)
+        );
+    if req.human_only && !groomed_spike {
         return Pickability::Blocked(BlockedReason::HumanOnly);
     }
 
@@ -328,6 +337,30 @@ mod tests {
             pickability(&h, &store),
             Pickability::Blocked(BlockedReason::HumanOnly)
         );
+    }
+
+    #[test]
+    fn groomed_spike_mode_overrides_type_default_human_only_in_both_directions() {
+        for mode in [crate::ExecutionMode::Drain, crate::ExecutionMode::Drive] {
+            let mut spike = make_req("SPIKE-1", RequirementStatus::Approved);
+            spike.req_type = crate::RequirementType::Spike;
+            spike.human_only = true;
+            spike.execution_mode = Some(mode);
+            let store = store_with(vec![spike.clone()]);
+            assert_eq!(pickability(&spike, &store), Pickability::Pickable);
+        }
+
+        for mode in [None, Some(crate::ExecutionMode::Operator)] {
+            let mut spike = make_req("SPIKE-2", RequirementStatus::Approved);
+            spike.req_type = crate::RequirementType::Spike;
+            spike.human_only = true;
+            spike.execution_mode = mode;
+            let store = store_with(vec![spike.clone()]);
+            assert_eq!(
+                pickability(&spike, &store),
+                Pickability::Blocked(BlockedReason::HumanOnly)
+            );
+        }
     }
 
     #[test]

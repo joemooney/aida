@@ -39,6 +39,10 @@ pub(crate) struct ModeProposalInput<'a> {
     pub has_pending_decision: bool,
     /// True when `aida lint` flagged the spec as under-specified.
     pub under_specified: bool,
+    /// Full spike body, used to recognize a concrete report deliverable.
+    pub description: &'a str,
+    /// A dependent whose `BlockedBy` edge points at this spike, if any.
+    pub blocked_by_dependent: Option<&'a str>,
 }
 
 /// A proposed execution mode plus the reasoning line that justifies it.
@@ -58,6 +62,9 @@ pub(crate) struct ModeProposal {
 // trace:STORY-776 | ai:claude
 pub(crate) fn propose_execution_mode(i: &ModeProposalInput) -> ModeProposal {
     let keystone_tag = i.tags.iter().find(|t| is_keystone_marker_tag(t));
+    if i.req_type.eq_ignore_ascii_case("spike") {
+        return propose_spike_execution_mode(i);
+    }
     if i.human_only {
         return ModeProposal {
             mode: ExecutionMode::Operator,
@@ -121,6 +128,53 @@ pub(crate) fn propose_execution_mode(i: &ModeProposalInput) -> ModeProposal {
             "bounded {}, no supervised markers",
             i.req_type.trim().to_lowercase()
         ),
+    }
+}
+
+// trace:TASK-1276 | ai:codex
+fn propose_spike_execution_mode(i: &ModeProposalInput<'_>) -> ModeProposal {
+    let body = i.description.to_ascii_lowercase();
+    if i.has_pending_decision
+        || [
+            "deliverable is a decision",
+            "make the decision",
+            "choose between",
+            "taste call",
+            "credentials required",
+            "needs credentials",
+            "requires credentials",
+        ]
+        .iter()
+        .any(|needle| body.contains(needle))
+    {
+        return ModeProposal {
+            mode: ExecutionMode::Operator,
+            reason: "decision-, taste-, or credential-shaped spike requires the operator".into(),
+        };
+    }
+    let deliverable = i
+        .description
+        .split_whitespace()
+        .map(|s| s.trim_matches(|c: char| "`'\"(),;:.".contains(c)))
+        .find(|s| s.starts_with("docs/") && s.ends_with(".md"));
+    if let Some(path) = deliverable.filter(|_| body.contains("acceptance")) {
+        if let Some(dependent) = i.blocked_by_dependent {
+            return ModeProposal {
+                mode: ExecutionMode::Drive,
+                reason: format!(
+                    "report deliverable `{path}` gates dependent {dependent}; advisor reviews before merge"
+                ),
+            };
+        }
+        return ModeProposal {
+            mode: ExecutionMode::Drain,
+            reason: format!("report deliverable `{path}` with acceptance and no dependent"),
+        };
+    }
+    ModeProposal {
+        mode: ExecutionMode::Operator,
+        reason: "spike has no concrete report path plus acceptance; keep it with the operator"
+            .into(),
     }
 }
 
@@ -229,6 +283,8 @@ mod tests {
             human_only: false,
             has_pending_decision: false,
             under_specified: false,
+            description: "",
+            blocked_by_dependent: None,
         }
     }
 
@@ -280,6 +336,30 @@ mod tests {
         let tags = vec!["lifecycle:trivial".to_string()];
         let p = propose_execution_mode(&base_input("task", &tags));
         assert_eq!(p.mode, ExecutionMode::Drain);
+    }
+
+    #[test]
+    fn report_shaped_spike_drains_without_a_dependent_and_drives_with_one() {
+        let tags = vec![];
+        let mut i = base_input("spike", &tags);
+        i.human_only = true; // type default must not defeat grooming
+        i.description = "Deliver docs/spikes/2026-09-18-night.md. Acceptance: cite evidence.";
+        let p = propose_execution_mode(&i);
+        assert_eq!(p.mode, ExecutionMode::Drain);
+        assert!(p.reason.contains("docs/spikes/2026-09-18-night.md"));
+
+        i.blocked_by_dependent = Some("TASK-99");
+        let p = propose_execution_mode(&i);
+        assert_eq!(p.mode, ExecutionMode::Drive);
+        assert!(p.reason.contains("TASK-99"));
+    }
+
+    #[test]
+    fn decision_shaped_spike_stays_operator_owned() {
+        let tags = vec![];
+        let mut i = base_input("spike", &tags);
+        i.description = "Make the architecture decision; this is a taste call.";
+        assert_eq!(propose_execution_mode(&i).mode, ExecutionMode::Operator);
     }
 
     #[test]

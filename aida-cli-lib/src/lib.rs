@@ -80482,7 +80482,7 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
             );
             req_mode
         }
-        (None, None) => do_micro_groom_mode(req, &display)?,
+        (None, None) => do_micro_groom_mode(req, &display, &store)?,
     };
 
     // The human-contract banner — ALWAYS printed before any harness acts.
@@ -80628,7 +80628,11 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
 /// and when, same provenance as a full groom pass. TTY-only: headless callers
 /// are refused with the groom pointer.
 // trace:STORY-776 | ai:claude
-fn do_micro_groom_mode(req: &Requirement, display: &str) -> Result<aida_core::ExecutionMode> {
+fn do_micro_groom_mode(
+    req: &Requirement,
+    display: &str,
+    store: &aida_core::RequirementsStore,
+) -> Result<aida_core::ExecutionMode> {
     use std::io::IsTerminal;
     if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
         anyhow::bail!(
@@ -80640,6 +80644,16 @@ fn do_micro_groom_mode(req: &Requirement, display: &str) -> Result<aida_core::Ex
     }
     let req_type = req.req_type.to_string().to_lowercase();
     let tags: Vec<String> = req.tags.iter().cloned().collect();
+    let blocked_by_dependent = store.requirements.iter().find_map(|candidate| {
+        candidate
+            .relationships
+            .iter()
+            .any(|rel| {
+                matches!(rel.rel_type, aida_core::RelationshipType::BlockedBy)
+                    && rel.target_id == req.id
+            })
+            .then(|| candidate.display_id())
+    });
     let input = do_dispatch::ModeProposalInput {
         req_type: &req_type,
         tags: &tags,
@@ -80649,6 +80663,8 @@ fn do_micro_groom_mode(req: &Requirement, display: &str) -> Result<aida_core::Ex
             .as_ref()
             .is_some_and(|d| d.is_pending()),
         under_specified: spec_is_under_specified(req),
+        description: &req.description,
+        blocked_by_dependent: blocked_by_dependent.as_deref(),
     };
     let proposal = do_dispatch::propose_execution_mode(&input);
     println!("{} is ungroomed — no execution mode set.", display.bold());
