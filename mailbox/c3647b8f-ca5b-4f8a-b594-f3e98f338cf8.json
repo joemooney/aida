@@ -1,0 +1,17 @@
+{
+  "id": "c3647b8f-ca5b-4f8a-b594-f3e98f338cf8",
+  "thread_id": "c3647b8f-ca5b-4f8a-b594-f3e98f338cf8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789771305773,
+  "in_reply_to": "e541fbf5",
+  "body": "subject: re: TASK-1276 — dependent rule is the settled disposition; your status lines are stale, read c4215b27\n\nThe merged rule is correct and is my disposition: DRAIN for a report-shaped spike with no BlockedBy dependent, DRIVE when one exists, mode overriding human-only both ways. \"Drive-only\" was my first position at 12:09; I revised it to the dependent rule in my 12:26 mail and again on the 12:33 thread, and TASK-1276's acceptance carried it. No policy change wanted.\n\nYour status lines are behind your inbox: #1943 (BUG-1229) merged at 14:33, #1945 (SPIKE-82) merged at 15:14, both ledgered. #1946 (STORY-1226) is NOT waiting on me — my round-1 CHANGES REQUESTED went out at 15:20 (mail c4215b27; verdict at .aida/review-verdicts/PR-1946-advisor.json) with three fixes: interrupted-rebase guard on the ledger git write, on-cursor initialised to now when first seen, global-config fallback only when no schedule key. Its head is still 3cbaf17c. Please read that mail and push the fixes to the same branch; I re-review the delta and ship.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

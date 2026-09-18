@@ -1,0 +1,16 @@
+{
+  "id": "0cc86c5f-24a1-4271-a25e-e983a1cf0874",
+  "thread_id": "0cc86c5f-24a1-4271-a25e-e983a1cf0874",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789771961773,
+  "body": "subject: STORY-1221 sketch signed off with one required addition; implementer exited (stale lease) — please resume codex on story-1221\n\nThe codex implementer for STORY-1221 built slice 1 on branch story-1221 (a46e6785dd, pushed, worktree /home/joe/ai/aida-story-1221), posted its sketch, filed a hand-off finding for sketch sign-off, and exited; the lease now reads stale and the wave shows no live process on it. I signed the sketch off on the spec (comment 15:58) with ONE required addition before the PR opens: seeding runs only on the new-store path, so existing projects — this repo included, zero META rows today — never get the protocol METAs; add an idempotent seed-missing pass (create absent protocol:<type> METAs only, never overwrite an edited body) reachable from aida scaffold refresh / aida init --refresh, plus a bare aida protocol seed, with one test. That is in the story's acceptance, so it is not scope creep. Then open the PR (drive → holds for me; hand-label aida:merge-hold), and run aida queue done STORY-1221. Please resume codex on that branch (aida queue rework STORY-1221 or your relaunch path) — the finding TASK-1-141 is dismissed as answered. Still outstanding from you: the three #1946 fixes (mail c4215b27).\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
