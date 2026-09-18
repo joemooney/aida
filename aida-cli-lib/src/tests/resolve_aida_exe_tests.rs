@@ -1,4 +1,7 @@
-use super::{pr_ship_post_merge_aida_exe, prepend_dir_to_path, resolve_aida_exe};
+use super::{
+    aida_exe_path, pr_ship_post_merge_aida_exe, prepend_dir_to_path, resolve_aida_exe,
+    resolve_aida_exe_from,
+};
 
 #[test]
 fn returns_a_path() {
@@ -25,6 +28,20 @@ fn handles_deleted_suffix_via_string_strip() {
     assert!(
         !s.contains(" (deleted)"),
         "resolved path must not contain ' (deleted)' suffix; got: {s}"
+    );
+}
+
+#[test]
+fn deleted_executable_path_uses_replacement_at_clean_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let live = dir.path().join("aida");
+    std::fs::write(&live, b"replacement").unwrap();
+    let deleted = std::path::PathBuf::from(format!("{} (deleted)", live.display()));
+    assert_eq!(resolve_aida_exe_from(Some(deleted)), live);
+    assert_eq!(
+        aida_exe_path(),
+        aida_exe_path(),
+        "resolver is stable once cached"
     );
 }
 

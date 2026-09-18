@@ -579,22 +579,31 @@ pub(crate) fn propose_only(
     };
     let ledger =
         ledger_comment_body_proposed(&source, vendor.as_str(), &kept, &skipped, file.as_deref());
-    run_aida(
-        project_root,
-        &["comment", "add", &display, &ledger, "--author", "harvest"],
+    let ledger_path = persisted_ledger_path(file.as_deref().unwrap_or(&out_path));
+    persist_ledger_and_publish(
+        &ledger_path,
+        &ledger,
+        || {
+            run_aida_with_retry(
+                project_root,
+                &["comment", "add", &display, &ledger, "--author", "harvest"],
+            )
+            .map(|_| ())
+        },
+        || {
+            if let Some(f) = &file {
+                let note = format!(
+                    "drain harvest proposed {} candidate(s) from {source} — confirm with: aida harvest {display} --from {}",
+                    kept.len(),
+                    f.display()
+                );
+                let _ = run_aida(
+                    project_root,
+                    &["brief", "advisor", &display, "--note", &note],
+                );
+            }
+        },
     )?;
-    if let Some(f) = &file {
-        // Surface in `aida awaiting` (unacked briefs) — best-effort.
-        let note = format!(
-            "drain harvest proposed {} candidate(s) from {source} — confirm with: aida harvest {display} --from {}",
-            kept.len(),
-            f.display()
-        );
-        let _ = run_aida(
-            project_root,
-            &["brief", "advisor", &display, "--note", &note],
-        );
-    }
     Ok(ProposeSummary {
         candidates: total,
         proposed: kept.len(),
@@ -776,24 +785,68 @@ struct RunSummary {
     landed: Vec<serde_json::Value>,
 }
 
-fn aida_exe() -> PathBuf {
-    std::env::current_exe().unwrap_or_else(|_| PathBuf::from("aida"))
-}
-
 fn run_aida(project_root: &Path, args: &[&str]) -> Result<String> {
-    let out = std::process::Command::new(aida_exe())
+    let command = concise_aida_command(args);
+    let out = std::process::Command::new(crate::aida_exe_path())
         .current_dir(project_root)
         .args(args)
         .output()
-        .with_context(|| format!("could not run `aida {}`", args.join(" ")))?;
+        .map_err(|error| {
+            anyhow::anyhow!("could not run `{command}`: {:?}: {error}", error.kind())
+        })?;
     if !out.status.success() {
         anyhow::bail!(
-            "`aida {}` failed: {}",
-            args.join(" "),
+            "`{command}` failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         );
     }
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
+}
+
+fn concise_aida_command(args: &[&str]) -> String {
+    const LIMIT: usize = 160;
+    let flat = format!("aida {}", args.join(" ")).replace(['\n', '\r'], " ");
+    if flat.chars().count() <= LIMIT {
+        return flat;
+    }
+    format!("{}…", flat.chars().take(LIMIT).collect::<String>())
+}
+
+fn persisted_ledger_path(candidates_file: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.ledger.md", candidates_file.display()))
+}
+
+// Persist first and always surface the local brief, even when the canonical
+// comment write cannot spawn or exhausts its retries. trace:BUG-1199 | ai:codex
+fn persist_ledger_and_publish(
+    ledger_path: &Path,
+    ledger: &str,
+    mut publish_comment: impl FnMut() -> Result<()>,
+    mut publish_brief: impl FnMut(),
+) -> Result<()> {
+    std::fs::write(ledger_path, ledger)?;
+    let comment_result = publish_comment();
+    publish_brief();
+    comment_result.with_context(|| {
+        format!(
+            "harvest ledger comment failed; persisted ledger: {}",
+            ledger_path.display()
+        )
+    })
+}
+
+fn run_aida_with_retry(project_root: &Path, args: &[&str]) -> Result<String> {
+    let mut last = None;
+    for attempt in 0..3 {
+        match run_aida(project_root, args) {
+            Ok(output) => return Ok(output),
+            Err(error) => last = Some(error),
+        }
+        if attempt < 2 {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+    }
+    Err(last.expect("retry loop always attempts at least once"))
 }
 
 fn collect_diff(project_root: &Path, opts: &HarvestOptions) -> Result<(String, String)> {
@@ -1303,6 +1356,33 @@ mod tests {
             !body.contains("confirmed:"),
             "nothing lands in propose-only"
         );
+        assert_eq!(
+            persisted_ledger_path(f),
+            std::path::Path::new("harvest/t-1-drain-x.json.ledger.md")
+        );
+        let command = concise_aida_command(&["comment", "add", "TASK-1", &body]);
+        assert!(!command.contains('\n'));
+        assert!(command.chars().count() <= 161);
+    }
+
+    #[test]
+    fn comment_failure_keeps_ledger_and_still_files_brief() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("candidates.json.ledger.md");
+        let mut brief_filed = false;
+        let error = persist_ledger_and_publish(
+            &path,
+            "audit body",
+            || Err(anyhow::anyhow!("NotFound: No such file or directory")),
+            || brief_filed = true,
+        )
+        .unwrap_err();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "audit body");
+        assert!(brief_filed);
+        let message = format!("{error:#}");
+        assert!(message.contains("persisted ledger"));
+        assert!(message.contains("NotFound"));
+        assert_eq!(message.lines().count(), 1);
     }
 
     // BUG-1198: confirming the same file twice must not re-land anything.

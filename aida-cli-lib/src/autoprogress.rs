@@ -122,7 +122,7 @@ pub(crate) fn resolve_project(explicit: Option<&str>) -> Result<PathBuf> {
 /// Run the `aida` binary (self) with the project as cwd. Reuses the tested CLI
 /// behaviour instead of reimplementing groom/drive.
 fn run_aida(root: &Path, args: &[&str]) -> Result<()> {
-    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let exe = crate::aida_exe_path();
     let status = std::process::Command::new(exe)
         .current_dir(root)
         .args(args)
@@ -138,7 +138,7 @@ fn run_aida(root: &Path, args: &[&str]) -> Result<()> {
 
 /// The approved ready set via `aida list` (tested), filtered + bounded here.
 fn ready_specs(root: &Path, max: usize) -> Result<Vec<String>> {
-    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let exe = crate::aida_exe_path();
     let out = std::process::Command::new(exe)
         .current_dir(root)
         .args(["list", "--status", "approved", "--format", "json"])

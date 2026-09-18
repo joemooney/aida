@@ -212,7 +212,7 @@ pub(crate) fn advance_dispatch(
 ) -> Result<()> {
     use burndown::AdvanceAction;
 
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = crate::aida_exe_path();
     let project_root = store_path.parent().map(|p| p.to_path_buf());
 
     match action {
@@ -10748,7 +10748,7 @@ pub(crate) fn handle_queue_recover(
     }
 
     // --- Execution. ---
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = crate::aida_exe_path();
     // Helper: run an `aida` subcommand from the project root, surfacing its
     // exit code. Non-zero leaves the state visible for manual resume.
     let run_aida = |args: &[&str]| -> std::io::Result<std::process::ExitStatus> {
@@ -11156,7 +11156,7 @@ pub(crate) fn handle_queue_integrate(
         anyhow::bail!(msg);
     }
 
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = crate::aida_exe_path();
 
     // TASK-1036: resolve the active focus once — `--focus <id>` wins, else the
     // per-worktree `aida focus` marker / `AIDA_FOCUS` (STORY-706). The per-pass

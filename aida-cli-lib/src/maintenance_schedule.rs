@@ -447,7 +447,7 @@ fn valid_commands() -> Vec<&'static str> {
 }
 
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
-    let exe = std::env::current_exe().context("failed to resolve current aida executable")?;
+    let exe = crate::aida_exe_path();
     let output = ProcessCommand::new(exe)
         .current_dir(project_root)
         .env("AIDA_SCHEDULE_CHILD", "1")

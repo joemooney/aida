@@ -262,7 +262,7 @@ fn handle_drain_start(
         eprintln!("  stop:    aida drain stop");
     }
 
-    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let exe = crate::aida_exe_path();
     let status = std::process::Command::new(exe)
         .current_dir(&root)
         .args(&args)

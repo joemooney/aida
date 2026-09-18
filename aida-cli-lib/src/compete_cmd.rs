@@ -739,7 +739,7 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
     );
     // Route the comment through the CLI's own dispatch so it lands correctly
     // on either storage backend (git-canonical or legacy). Best-effort.
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = crate::aida_exe_path();
     let commented = std::process::Command::new(&aida)
         .args([
             "comment",

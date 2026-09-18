@@ -573,7 +573,7 @@ fn plan_promote(spec: Option<&str>, all: bool, dry_run: bool) -> Result<()> {
                         rel.display()
                     );
                 } else {
-                    let status = std::process::Command::new(std::env::current_exe()?)
+                    let status = std::process::Command::new(crate::aida_exe_path())
                         .args(["edit", &real_id, "--status", "planned"])
                         .status()?;
                     if status.success() {
@@ -835,7 +835,7 @@ fn plan_fan_out(
         return Ok(());
     }
 
-    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let exe = crate::aida_exe_path();
     let (mut planned, mut promoted, mut failed) = (0usize, 0usize, 0usize);
     for sid in &set {
         if !promote_only {
