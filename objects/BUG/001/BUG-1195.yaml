@@ -22,12 +22,12 @@ description: |-
   - The repro command above resolves PR-1901 to the reviewer route (or the test-equivalent fixture) with no bail.
   - A lookup failure is logged with its cause and never shelves the spec as tool-exit; a genuine no-story case still bails as today.
   - Regression test covering the sibling-worktree-filed story + the drain user id.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:48:11.546163776Z
-modified_at: 2026-09-18T03:49:00.880450262Z
+modified_at: 2026-09-18T04:13:50.087721682Z
 req_type: Bug
 tags:
 - drain
@@ -78,12 +78,24 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a0b2b8-7c80-73f3-b08d-e8756d0bac71
+  author: aida-auto-bump
+  timestamp: 2026-09-18T04:13:50.080769373Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 processing_record:
 - id: 01a0b209-32a5-7942-a0ac-5264a501b553
   timestamp: 2026-09-18T01:02:22.373737002Z
   agent: aida
   commit_sha: 70c2798466526bfe0a3e33d9773ed1959e986cb8
   summary: Completed via merge 70c27984
+- id: 01a0b2b8-7c87-79b2-840f-0a8496b1ec00
+  timestamp: 2026-09-18T04:13:50.087720918Z
+  agent: aida
+  commit_sha: 0fd6cdc6615ccd0d6183785178d795665b10dda5
+  summary: Completed via merge 0fd6cdc6
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T00:52:05.275920320Z
