@@ -139,7 +139,14 @@ drain merges as usual.
 ```toml
 [harvest]
 gate = "advisory"   # default; "off" disables the step in drains
+docs_only_mode = "strict" # default; "off" keeps doc restatements eligible
 ```
+
+With `docs_only_mode = "strict"`, a diff whose changed paths are all Markdown
+documentation still runs the advisory harvest step, but facts merely restated
+from its added prose (or copied verbatim from an existing spec's acceptance
+criteria) are filtered as `restated from docs` and recorded that way in the
+ledger. A genuinely new decision introduced by documentation remains eligible.
 
 Per spec, the `lifecycle:no-harvest` tag skips it (the other short-circuit tags
 do not imply it; `lifecycle:trivial` still harvests).

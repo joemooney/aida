@@ -43,12 +43,20 @@ pub(crate) enum HarvestGate {
     Off,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DocsOnlyMode {
+    Strict,
+    Off,
+}
+
 /// `[harvest]` config — the calibration surface for the selectivity filter.
 /// Strict by default (anti-slop); loosen on evidence.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct HarvestConfig {
     /// `[harvest] gate = "advisory" | "off"`.
     pub(crate) gate: HarvestGate,
+    /// Suppress facts merely restated by documentation-only diffs.
+    pub(crate) docs_only_mode: DocsOnlyMode,
     /// Candidates rated below this confidence are skipped.
     pub(crate) min_confidence: f64,
     /// Skip candidates the agent itself marks as conventional/obvious.
@@ -64,6 +72,7 @@ impl Default for HarvestConfig {
     fn default() -> Self {
         Self {
             gate: HarvestGate::Advisory,
+            docs_only_mode: DocsOnlyMode::Strict,
             min_confidence: 0.7,
             skip_conventional: true,
             deny_keywords: [
@@ -106,6 +115,12 @@ pub(crate) fn read_harvest_config(config_path: &Path) -> HarvestConfig {
         cfg.gate = match v.trim().to_ascii_lowercase().as_str() {
             "off" | "false" | "no" | "disabled" => HarvestGate::Off,
             _ => HarvestGate::Advisory,
+        };
+    }
+    if let Some(v) = table.get("docs_only_mode").and_then(|v| v.as_str()) {
+        cfg.docs_only_mode = match v.trim().to_ascii_lowercase().as_str() {
+            "off" => DocsOnlyMode::Off,
+            _ => DocsOnlyMode::Strict,
         };
     }
     if let Some(v) = table.get("min_confidence").and_then(|v| v.as_float()) {
@@ -178,6 +193,7 @@ pub(crate) enum SkipReason {
     Conventional,
     DenyListed,
     Empty,
+    RestatedFromDocs,
 }
 
 impl SkipReason {
@@ -187,6 +203,7 @@ impl SkipReason {
             Self::Conventional => "agent marked it conventional",
             Self::DenyListed => "matches a deny keyword",
             Self::Empty => "empty text",
+            Self::RestatedFromDocs => "restated from docs",
         }
     }
 }
@@ -196,12 +213,18 @@ impl SkipReason {
 pub(crate) fn filter_candidates(
     candidates: Vec<Candidate>,
     cfg: &HarvestConfig,
+    context: &FilterContext,
 ) -> (Vec<Candidate>, Vec<(Candidate, SkipReason)>) {
     let mut kept = Vec::new();
     let mut skipped = Vec::new();
     for c in candidates {
         let hay = format!("{} {}", c.text, c.rationale).to_lowercase();
         let allowed = cfg.allow_keywords.iter().any(|k| hay.contains(k.as_str()));
+        let normalized = normalize_text(&c.text);
+        let restated_from_docs = cfg.docs_only_mode == DocsOnlyMode::Strict
+            && context.docs_only
+            && (context.added_prose.contains(&normalized)
+                || context.existing_acceptance.contains(&normalized));
         let reason = if c.text.trim().is_empty() {
             Some(SkipReason::Empty)
         } else if c.confidence < cfg.min_confidence {
@@ -210,6 +233,8 @@ pub(crate) fn filter_candidates(
             Some(SkipReason::Conventional)
         } else if !allowed && cfg.deny_keywords.iter().any(|k| hay.contains(k.as_str())) {
             Some(SkipReason::DenyListed)
+        } else if restated_from_docs {
+            Some(SkipReason::RestatedFromDocs)
         } else {
             None
         };
@@ -219,6 +244,59 @@ pub(crate) fn filter_candidates(
         }
     }
     (kept, skipped)
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct FilterContext {
+    docs_only: bool,
+    added_prose: String,
+    existing_acceptance: BTreeSet<String>,
+}
+
+fn is_docs_path(path: &str) -> bool {
+    let path = path.trim_start_matches("a/").trim_start_matches("b/");
+    (path.starts_with("docs/") && path.ends_with(".md"))
+        || path == "CLAUDE.md"
+        || path == "OVERVIEW.md"
+        || path.starts_with("README")
+        || (path.starts_with("templates/") && path.ends_with(".md"))
+        || (path.contains("/templates/") && path.ends_with(".md"))
+}
+
+fn diff_is_docs_only(diff: &str) -> bool {
+    let paths: Vec<&str> = diff
+        .lines()
+        .filter_map(|line| line.strip_prefix("diff --git "))
+        .filter_map(|rest| rest.split_whitespace().nth(1))
+        .collect();
+    !paths.is_empty() && paths.iter().all(|path| is_docs_path(path))
+}
+
+// Documentation describes existing behavior as often as it establishes new
+// decisions; keep that prose out of the harvest proposal stream.
+// trace:TASK-1263 | ai:codex
+fn filter_context(diff: &str, store: &aida_core::RequirementsStore) -> FilterContext {
+    let added_prose = normalize_text(
+        &diff
+            .lines()
+            .filter(|line| line.starts_with('+') && !line.starts_with("+++"))
+            .map(|line| line.trim_start_matches('+'))
+            .collect::<Vec<_>>()
+            .join(" "),
+    );
+    let existing_acceptance = store
+        .requirements
+        .iter()
+        .flat_map(|req| {
+            crate::criteria::parse_acceptance_criteria(&req.display_id(), &req.description)
+        })
+        .map(|criterion| normalize_text(&criterion.text))
+        .collect();
+    FilterContext {
+        docs_only: diff_is_docs_only(diff),
+        added_prose,
+        existing_acceptance,
+    }
 }
 
 /// Parse the agent's output file: either `{"candidates": [...]}` or a bare
@@ -433,6 +511,9 @@ pub(crate) fn build_harvest_prompt(
         out_path.display(),
         cfg.min_confidence
     ));
+    if cfg.docs_only_mode == DocsOnlyMode::Strict && diff_is_docs_only(diff) {
+        p.push_str("Documentation-only diff rule: ESTABLISHED means a NEW decision introduced by this diff, not a restatement of behavior the documentation merely describes. If the diff only documents existing behavior, return an empty candidates list.\n\n");
+    }
     p.push_str("## Requirement\n\n");
     p.push_str(description.trim());
     p.push_str("\n\n## Existing acceptance criteria (do NOT repeat these)\n");
@@ -563,7 +644,8 @@ pub(crate) fn propose_only(
     let raw = run_harvest_agent(project_root, &display, &prompt, &run_id, &out_path)?;
     let candidates = parse_candidates(&raw)?;
     let total = candidates.len();
-    let (kept, skipped) = filter_candidates(candidates, &cfg);
+    let context = filter_context(&diff, store);
+    let (kept, skipped) = filter_candidates(candidates, &cfg, &context);
     let file = if kept.is_empty() {
         None
     } else {
@@ -1068,7 +1150,8 @@ pub(crate) fn handle_harvest_command(
     };
     let candidates = parse_candidates(&raw)?;
     let total = candidates.len();
-    let (kept, skipped) = filter_candidates(candidates, &cfg);
+    let context = filter_context(&diff, store);
+    let (kept, skipped) = filter_candidates(candidates, &cfg, &context);
 
     // Confirm: opt-IN checklist (ADR-42) — nothing lands unless chosen.
     let chosen: BTreeSet<usize> = if opts.yes_all {
@@ -1287,7 +1370,7 @@ mod tests {
             ),
             cand(CandidateKind::Ac, "", 0.9, false),
         ];
-        let (kept, skipped) = filter_candidates(cands, &cfg);
+        let (kept, skipped) = filter_candidates(cands, &cfg, &FilterContext::default());
         assert_eq!(kept.len(), 1, "{kept:?}");
         assert!(kept[0].text.starts_with("A merged"));
         let reasons: Vec<&SkipReason> = skipped.iter().map(|(_, r)| r).collect();
@@ -1317,12 +1400,86 @@ mod tests {
                 ),
             ],
             &cfg,
+            &FilterContext::default(),
         );
         assert_eq!(
             kept.len(),
             2,
             "allow-list overrides deny; skip_conventional=false keeps agent-flagged"
         );
+    }
+
+    #[test]
+    fn docs_only_diff_restatements_are_skipped_but_code_diff_keeps_them() {
+        let texts = [
+            "requester may create only change-request/bug/user; forced Draft; tagged for intake",
+            "queue user identity precedence --user → AIDA_USER → USER → USERNAME → default; case-insensitive compare",
+            "personas in a separate discovery-only role list section",
+            "a session binds one role to one scope via lease + worktree",
+        ];
+        let candidates = texts
+            .iter()
+            .map(|text| cand(CandidateKind::Sem, text, 0.9, false))
+            .collect::<Vec<_>>();
+        let prose = texts
+            .iter()
+            .map(|text| format!("+{text}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let docs_diff = format!(
+            "diff --git a/docs/identity.md b/docs/identity.md\n--- a/docs/identity.md\n+++ b/docs/identity.md\n{prose}\n"
+        );
+        let cfg = HarvestConfig::default();
+        let context = FilterContext {
+            docs_only: diff_is_docs_only(&docs_diff),
+            added_prose: normalize_text(
+                &prose
+                    .lines()
+                    .map(|line| line.trim_start_matches('+'))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+            existing_acceptance: BTreeSet::new(),
+        };
+        let (kept, skipped) = filter_candidates(candidates.clone(), &cfg, &context);
+        assert!(kept.is_empty());
+        assert_eq!(skipped.len(), 4);
+        assert!(skipped
+            .iter()
+            .all(|(_, reason)| reason == &SkipReason::RestatedFromDocs));
+
+        let code_context = FilterContext {
+            docs_only: diff_is_docs_only(
+                "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n",
+            ),
+            ..context
+        };
+        let (kept, skipped) = filter_candidates(candidates, &cfg, &code_context);
+        assert_eq!(kept.len(), 4);
+        assert!(skipped.is_empty());
+
+        let acceptance_context = FilterContext {
+            docs_only: true,
+            added_prose: String::new(),
+            existing_acceptance: [normalize_text(texts[0])].into_iter().collect(),
+        };
+        let (_, skipped) = filter_candidates(
+            vec![cand(CandidateKind::Sem, texts[0], 0.9, false)],
+            &cfg,
+            &acceptance_context,
+        );
+        assert_eq!(skipped[0].1, SkipReason::RestatedFromDocs);
+
+        let off = HarvestConfig {
+            docs_only_mode: DocsOnlyMode::Off,
+            ..cfg
+        };
+        let (kept, _) = filter_candidates(
+            vec![cand(CandidateKind::Sem, texts[0], 0.9, false)],
+            &off,
+            &acceptance_context,
+        );
+        assert_eq!(kept.len(), 1);
     }
 
     // TASK-1249: the drain gate and the propose-only ledger.
@@ -1421,11 +1578,12 @@ mod tests {
         assert_eq!(read_harvest_config(&p), HarvestConfig::default());
         std::fs::write(
             &p,
-            "[harvest]\nmin_confidence = 0.5\nskip_conventional = false\ndeny_keywords = []\nallow_keywords = [\"Retry\"]\n",
+            "[harvest]\ndocs_only_mode = \"off\"\nmin_confidence = 0.5\nskip_conventional = false\ndeny_keywords = []\nallow_keywords = [\"Retry\"]\n",
         )
         .unwrap();
         let cfg = read_harvest_config(&p);
         assert_eq!(cfg.min_confidence, 0.5);
+        assert_eq!(cfg.docs_only_mode, DocsOnlyMode::Off);
         assert!(!cfg.skip_conventional);
         assert!(
             cfg.deny_keywords.is_empty(),
@@ -1560,5 +1718,18 @@ mod tests {
         assert!(p.contains("- A1: a") && p.contains("ADR-9: chosen") && p.contains("prior sem"));
         assert!(p.contains("```diff\ndiff --git a b\n+x\n```"));
         assert!(p.contains("Do not ask questions"));
+
+        let docs_prompt = build_harvest_prompt(
+            "T-1",
+            "Title",
+            "Body",
+            &[],
+            &[],
+            &[],
+            "diff --git a/docs/a.md b/docs/a.md\n+x",
+            &HarvestConfig::default(),
+            out,
+        );
+        assert!(docs_prompt.contains("Documentation-only diff rule"));
     }
 }
