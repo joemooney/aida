@@ -20,7 +20,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:35:39.640738590Z
+modified_at: 2026-09-18T01:36:28.715805974Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -103,6 +103,12 @@ comments:
     + SEM [aida:sem] comment — Harvest candidate files under a project's gitignored .aida/harvest/ directory have no automatic retention cleanup; they remain until manually reviewed because they may contain unconfirmed proposals.
   created_at: 2026-09-18T01:33:28.541060164Z
   modified_at: 2026-09-18T01:33:28.541060164Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b228-6c2b-71a2-89f3-f2183f3f8466
+  author: proxy
+  content: '[aida:proxy-note] 2026-09-17 18:33 the proxy confirmed the drain harvest file a second time (the advisor had confirmed it at 18:28); the duplicate AC2 line and the duplicate [aida:sem] comment were removed at 18:45. Filed BUG-1217 to make aida harvest --from idempotent.'
+  created_at: 2026-09-18T01:36:28.715805974Z
+  modified_at: 2026-09-18T01:36:28.715805974Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0b220-449c-7650-9cde-17fab8f7ad69
