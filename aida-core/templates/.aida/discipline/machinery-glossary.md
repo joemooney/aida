@@ -1,7 +1,8 @@
 # Machinery glossary
 
 AIDA's docs, error messages, and agent-to-agent handoffs lean on a small set
-of machinery terms — **orchestrator, phase, drain, lease, role, session,
+of machinery terms — **orchestrator, phase, drain, lease, role, seat,
+stakeholder persona, session,
 scope, worktree, sentinel, batch, autonomy mode**. Each has a precise
 meaning; conflating them produces handoffs that almost-work and specs that
 almost-reproduce. This page is the canonical definition for each.
@@ -160,15 +161,30 @@ A session has exactly one scope; a scope has at most one live lease.
 
 ### role
 
-A workflow position: **implementer**, **reviewer**, or **advisor**
-(user-facing identity: *advisor*). The role decides queue routing
-(`aida queue add <id> --for <role>`), worktree naming, and which skill
-templates a session loads.
+A persistent workflow position such as **advisor**, **implementer**,
+**reviewer**, **integrator**, or **product**. A role is stored in a role file,
+can receive routed work (`aida queue add <id> --for <role>`), and supplies the
+context and authority used by its sessions.
 
 A role is **not** a Claude Code subagent — see
 [`vs-claude-code-subagents.md`](../positioning/vs-claude-code-subagents.md) for
 the within-conversation (subagent) vs cross-conversation (AIDA role) layer
 distinction.
+
+### seat
+
+The place a [role](#role) occupies in AIDA's build loop. A seat can receive
+work and own leased sessions/worktrees; driver seats are subject to the
+one-authoritative-driver rule. “Role” names the workflow position; “seat”
+emphasizes its operational place and cardinality.
+
+### stakeholder persona
+
+A fileless, non-routable least-privilege gate activated with
+`AIDA_SESSION_ROLE=guest|requester`: `guest` is read-only and `requester` adds
+Draft-only intake. A persona is discoverable in `aida role list` but has no
+seat, history, or lease. See
+`docs/architecture/roles-seats-and-personas.md` in the AIDA repository.
 
 ### worktree
 
