@@ -3,12 +3,12 @@ spec_id: TASK-1267
 agreed_id: TASK-1267
 title: Retire the batch:express fasttrack tier as an alias of execution_mode=drain
 description: 'SPIKE-81 lane 4 verdict: batch:express is genuinely redundant with mode=drain (same gates, same routing, only the tag differs) and was never used. Make aida fasttrack --express file with --status approved --queue --mode drain (no batch:express tag), keep the flag as a documented alias for one release, remove batch:express from the fasttrack skill and docs/cli, and keep EXPRESS_TIER_TAG recognised on read so existing specs still drain. Acceptance: fasttrack --express produces mode=drain with no batch:express tag; docs/skills no longer describe an express tier; existing express-tagged specs are unaffected.'
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:57:00.311234971Z
-modified_at: 2026-09-18T13:50:20.283616312Z
+modified_at: 2026-09-18T13:50:30.677184952Z
 req_type: Task
 tags:
 - batch:followups-0918c
@@ -41,8 +41,25 @@ comments:
   created_at: 2026-09-18T13:50:20.283616312Z
   modified_at: 2026-09-18T13:50:20.283616312Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b4c8-7314-70e3-9752-edc2bc3cf2c5
+  author: aida-auto-bump
+  timestamp: 2026-09-18T13:50:30.676447180Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b4c8-7315-7c21-b255-d9c20151febf
+  timestamp: 2026-09-18T13:50:30.677184055Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1267-2026-09-18T135021Z.md
+  commit_sha: 69c5aa10ce548de4e4133538303fed971f2e84f6
+  summary: Completed via merge 69c5aa10
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T13:35:51.025811550Z
   implemented_by: joe
+  completed_at: 2026-09-18T13:50:30.676308214Z
+  completion_sha: 69c5aa10ce548de4e4133538303fed971f2e84f6
