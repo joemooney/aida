@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T22:35:36.056070691Z
+modified_at: 2026-09-18T22:36:01.514999594Z
 req_type: Story
 tags:
 - batch:followups-0918e
@@ -50,4 +50,11 @@ relationships:
   target_id: 01a0b5fd-0bf7-7ae3-8e7c-306b04c7fba7
   created_at: 2026-09-18T19:28:09.967897568Z
   created_by: joe
+comments:
+- id: 01a0b6a9-926b-7171-aa04-588c60053b1d
+  author: joe
+  content: 'Architecture sketch (Codex, 2026-09-18) — slice 1 only:\n1. Add a provider-neutral protocol module in aida-core that resolves a type protocol from META requirements using the stable tag/slug protocol:<type>, returns the META id, a <=40-line pickup block, and a one-line reminder. Resolution reads the live store each invocation so META edits require no rebuild.\n2. Seed one META protocol per supported work type during init from embedded defaults, including the spike deliverable/reviewer two-part contract. Preserve idempotency and existing-project data.\n3. Add aida protocol list/show <type> as read-only CLI projections over the same resolver.\n4. Inject the labeled type layer (type protocol < spec acceptance) into interactive pickup entry surfaces in this slice: queue work / do / worktree enter, using one shared formatter. Do not add lane, MCP, headless, or done-gate behavior (TASK-1277/1278).\n5. Extend aida awaiting --notice to print the one-line reminder only when the current session holds a spec lease; naturally disappears when the lease is cleared/done.\n6. Add focused resolver, seeding, CLI, prompt-cap, live-edit, and notice lifecycle tests; trace implementation with STORY-1221.'
+  created_at: 2026-09-18T22:36:01.514999594Z
+  modified_at: 2026-09-18T22:36:01.514999594Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
