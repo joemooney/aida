@@ -16,10 +16,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T02:57:43.565050040Z
-modified_at: 2026-09-18T02:57:43.565050040Z
+modified_at: 2026-09-18T04:16:55.713573156Z
 req_type: Task
 tags:
+- batch:night-0917
 - current-exe
 - drain-safe
 - follow-up:BUG-1199
 - papercut
+execution_mode: drain
