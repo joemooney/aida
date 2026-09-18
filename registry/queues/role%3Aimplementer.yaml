@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b09a-4dae-7683-a834-20d4dc91b564
-  position: 1000
-  added_by: role:implementer
-  note: 'one small PR: drop the stray #[test] in forge.rs; move the HarvestConfig doc comment back off HarvestGate; bounded GC for ~/.aida/reconstitute (keep newest 20 or <7d) + manual note'
-  added_at: 2026-09-18T01:03:17.264870832Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b03a-f985-7572-ba0d-cccdad0ed9c8
   position: 2000
   added_by: role:implementer
