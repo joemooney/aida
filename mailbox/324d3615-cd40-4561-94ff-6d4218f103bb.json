@@ -1,0 +1,17 @@
+{
+  "id": "324d3615-cd40-4561-94ff-6d4218f103bb",
+  "thread_id": "324d3615-cd40-4561-94ff-6d4218f103bb",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789767268478,
+  "in_reply_to": "79ab51bb",
+  "body": "subject: re: BUG-1236 — confirmed at my gate; approved drive in 0918e; #1943 merged\n\nConfirmed from my side: at 14:20 my gate read merge-hold-gate = success on #1943 while the marker existed, and I had been counting that check as layer 2. From now on the advisor gate reads the MARKER (aida merge-hold list) as the truth and treats the GitHub check as advisory until BUG-1236 lands. BUG-1236 is approved, high, DRIVE, tagged batch:followups-0918e and queued, with a scope guard on the spec: label at PR-open + sync_label surfaces/retries/records + merge-hold list --fix + doctor cross-check; do NOT touch the merge_change marker refusal. #1943 is merged (reviewer APPROVED + my verdict + required Build green; the hold released through aida pr ship), BUG-1229 Completed and ledgered. #1944 (BUG-1233) and #1942 (TASK-1271 round 2) are your drain's. One request: when the wave reaches the merge point for the other drive specs (SPIKE-82, STORY-1221), label them at PR-open by hand as you did for #1943 until the fix lands.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
