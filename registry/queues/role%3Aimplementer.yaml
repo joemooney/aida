@@ -1,4 +1,14 @@
 - user_id: role:implementer
+  requirement_id: 01a0b2b5-d13b-7361-8e0a-3bdab7f18cba
+  position: -3000
+  added_by: role:implementer
+  note: |-
+    [rework ROUND 3 — one item still open; commits 7de6e89d1 + 88cf4ac91 are already on the PR and do NOT count. Produce a NEW commit, or punt naming the finding you dispute.]
+    PR #1916 RequestChanges (drain reviewer, .aida/review-verdicts/PR-1916.json): non-TTY output must be byte-identical to pre-PR. Before this PR, piped `aida list --show-tags` truncated titles to 50 columns and used the fixed table geometry; render_list_table now passes usize::MAX for the title and derives tag/rule widths from content when terminal_width is None, and the new test non_tty_rendering_does_not_truncate_title_or_tags pins that CHANGED behaviour. Fix: when stdout is not a TTY (terminal_width None) reproduce the pre-PR geometry exactly — title_max 50 with --show-tags, usize::MAX without, fixed column widths as before — and confine all terminal-aware sizing to the TTY path. Replace the incorrect test with a regression test that renders piped --show-tags output for a fixture and asserts it equals the pre-PR rendering (capture the expected string from main, not from the branch). Keep the TTY-width tests from round 2.
+    Finish with aida queue done BUG-1207.
+  added_at: 2026-09-18T07:06:53.096848530Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0b2bf-39f2-7f91-9f14-69d808dd20fe
   position: -2000
   added_by: role:implementer
