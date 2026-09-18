@@ -67503,6 +67503,23 @@ fn list_human_count_footer(
     format!("{visible} requirements")
 }
 
+/// Print the count footer for an empty human list only when an explicit limit
+/// hid matching rows. A genuinely empty filtered result keeps the existing
+/// concise `No requirements found.` presentation.
+// trace:BUG-1209 | ai:codex
+fn print_empty_human_list_truncation_footer(
+    total_after_filters: usize,
+    limit: Option<usize>,
+    default_open_lens: bool,
+) {
+    if total_after_filters > 0 && limit.is_some() {
+        println!(
+            "\n{}",
+            list_human_count_footer(0, total_after_filters, limit, default_open_lens)
+        );
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/bug_1209_list_limit_footer_tests.rs"]
 mod bug_1209_list_limit_footer_tests;

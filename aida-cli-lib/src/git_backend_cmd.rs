@@ -1741,6 +1741,11 @@ pub(crate) fn handle_git_backend_command(
             if *tree {
                 if reqs.is_empty() {
                     println!("No requirements found.");
+                    print_empty_human_list_truncation_footer(
+                        total_after_filters,
+                        *limit,
+                        default_open_lens,
+                    );
                     print_hidden_hints();
                     print_empty_list_hint();
                     return Ok(());
@@ -1899,6 +1904,11 @@ pub(crate) fn handle_git_backend_command(
                 let selected = toon_list_fields(Some(csv))?;
                 if reqs.is_empty() {
                     println!("No requirements found.");
+                    print_empty_human_list_truncation_footer(
+                        total_after_filters,
+                        *limit,
+                        default_open_lens,
+                    );
                     print_hidden_hints();
                     print_empty_list_hint();
                 } else {
@@ -1921,6 +1931,11 @@ pub(crate) fn handle_git_backend_command(
 
             if reqs.is_empty() {
                 println!("No requirements found.");
+                print_empty_human_list_truncation_footer(
+                    total_after_filters,
+                    *limit,
+                    default_open_lens,
+                );
                 print_hidden_hints();
                 print_empty_list_hint();
             } else {

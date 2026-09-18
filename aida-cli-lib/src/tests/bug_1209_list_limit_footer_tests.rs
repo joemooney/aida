@@ -39,3 +39,15 @@ fn implicit_agent_cap_does_not_change_human_footer() {
         "50 requirements"
     );
 }
+
+#[test]
+fn zero_limit_discloses_all_hidden_matches() {
+    assert_eq!(
+        list_human_count_footer(0, 13, Some(0), true),
+        "0 of 13 open requirements (--limit 0; drop it or raise N to see the rest)"
+    );
+    assert_eq!(
+        list_human_count_footer(0, 13, Some(0), false),
+        "0 of 13 matched requirements (--limit 0; drop it or raise N to see the rest)"
+    );
+}
