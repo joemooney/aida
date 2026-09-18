@@ -73812,5 +73812,31 @@ operations:
 
       ## Acceptance
       - AC1. Scratch-run pruning applies both retention bounds: it removes run directories older than seven days and, among the rest, retains only the newest entries needed to keep the machine-wide total at 20 after the new probe directory is created.
-clock: 5749
+- id: 01a0b231-9201-76e2-84cd-8e983775ae1e
+  target_id: 01a0b231-8dd1-78d2-928a-0a4858dfd56f
+  author: aida
+  node_id: '1'
+  lamport: 5750
+  timestamp: 2026-09-18T01:46:28.225039510Z
+  kind: !Create
+    title: 'Review PR-1904: fix(pr): scope drive merge guard to owned work (TASK-1253)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b222`) for branch `task-1253`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1904>
+      - Branch: `task-1253` → `main`
+
+      ## Covers
+
+      - TASK-1253
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1904` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5750
 node_id: '1'
