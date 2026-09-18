@@ -1,0 +1,16 @@
+id: 01a0b497-7697-7b11-8a5d-3190f082ee56
+spec_id: TASK-1267
+agreed_id: TASK-1267
+title: Retire the batch:express fasttrack tier as an alias of execution_mode=drain
+description: 'SPIKE-81 lane 4 verdict: batch:express is genuinely redundant with mode=drain (same gates, same routing, only the tag differs) and was never used. Make aida fasttrack --express file with --status approved --queue --mode drain (no batch:express tag), keep the flag as a documented alias for one release, remove batch:express from the fasttrack skill and docs/cli, and keep EXPRESS_TIER_TAG recognised on read so existing specs still drain. Acceptance: fasttrack --express produces mode=drain with no batch:express tag; docs/skills no longer describe an express tier; existing express-tagged specs are unaffected.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T12:57:00.311234971Z
+modified_at: 2026-09-18T12:57:00.311234971Z
+req_type: Task
+tags:
+- lane-routing
+- parent:SPIKE-81
+- proxy-groomed
