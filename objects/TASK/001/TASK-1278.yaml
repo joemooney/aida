@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:34.903795856Z
-modified_at: 2026-09-18T23:38:09.227126933Z
+modified_at: 2026-09-18T23:39:00.859991415Z
 req_type: Task
 tags:
 - agent-ux
@@ -25,4 +25,11 @@ relationships:
   target_id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
   created_at: 2026-09-18T19:28:09.028447897Z
   created_by: joe
+comments:
+- id: 01a0b6e3-3d7c-76f3-aff5-b80511755f9f
+  author: joe
+  content: 'Architecture sketch (Codex): introduce a shared ResolvedProtocol renderer in aida-core that loads optional META tags protocol:<type> and protocol:lane:<lane>, emits deterministic labeled layers in precedence order (type then lane, with spec acceptance remaining authoritative at injection sites), and enforces one shared 40-body-line budget across protocol layers. Extend protocol show with --lane and make CLI/MCP both call the same renderer so resource bytes match CLI stdout. Register aida://protocol/{type} and aida://protocol/{type}/{lane} templates/read routing. At headless implementer and reviewer prompt construction, resolve the target spec type plus lane tag, then prepend the same capped block before the existing prompt. Add unit tests for merge/precedence/cap, MCP parity, and prompt construction. Requesting master sign-off before PR per Sketch-First Protocol.'
+  created_at: 2026-09-18T23:39:00.859991415Z
+  modified_at: 2026-09-18T23:39:00.859991415Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
