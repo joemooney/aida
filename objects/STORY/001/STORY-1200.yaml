@@ -1,0 +1,26 @@
+id: 01a0b2f1-c9b3-7320-b74d-a5f19042f25e
+spec_id: STORY-1200
+agreed_id: STORY-1200
+title: 'Review PR-1914: [AI:codex] fix(runtime): harden remaining executable resolution (TASK-1262)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b2e0`) for branch `task-1262`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1914>
+  - Branch: `task-1262` → `main`
+
+  ## Covers
+
+  - TASK-1262
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1914` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T05:16:25.395136208Z
+modified_at: 2026-09-18T05:16:25.395136208Z
+req_type: Story

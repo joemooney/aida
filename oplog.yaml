@@ -75004,5 +75004,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5823
+- id: 01a0b2f1-cdea-7372-963f-a02373d46320
+  target_id: 01a0b2f1-c9b3-7320-b74d-a5f19042f25e
+  author: aida
+  node_id: '1'
+  lamport: 5824
+  timestamp: 2026-09-18T05:16:26.474338784Z
+  kind: !Create
+    title: 'Review PR-1914: [AI:codex] fix(runtime): harden remaining executable resolution (TASK-1262)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b2e0`) for branch `task-1262`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1914>
+      - Branch: `task-1262` → `main`
+
+      ## Covers
+
+      - TASK-1262
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1914` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5824
 node_id: '1'
