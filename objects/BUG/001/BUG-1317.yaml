@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:05:47.682830968Z
-modified_at: 2026-09-18T16:53:05.728985794Z
+modified_at: 2026-09-18T16:53:07.788670344Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,10 @@ tags:
 - ci
 - failure-2
 - failure-kind:watchdog
+comments:
+- id: 01a0b56f-a44c-74e1-be59-e647ab58c088
+  author: joe
+  content: 'Rejected 2026-09-18 by the driver-advisor: auto-drafted record of the TASK-1269 watchdog shelve on the GitLab mirror. Root cause was GitLabForge::stream_ci_for_branch returning a single probe when headless (the orchestrator shelved 6s after opening the MR) — fixed in #1932 (TASK-1254). Not a separate bug.'
+  created_at: 2026-09-18T16:53:07.788670344Z
+  modified_at: 2026-09-18T16:53:07.788670344Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
