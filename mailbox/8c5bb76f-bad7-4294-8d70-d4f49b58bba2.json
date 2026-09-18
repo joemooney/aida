@@ -1,0 +1,16 @@
+{
+  "id": "8c5bb76f-bad7-4294-8d70-d4f49b58bba2",
+  "thread_id": "8c5bb76f-bad7-4294-8d70-d4f49b58bba2",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789707498051,
+  "body": "BUG-1197 r3: substance correct (my gate APPROVED r3), but your drain's reviewer asked for two parity items the spec requires (identical refusal text across CLI/MCP; a real CLI↔MCP parity test instead of the tautological one). I did not override the reviewer. Round 4 rework is queued with those two plus BUG-1211 (the CLI --parent hole) folded in — last round; it closes both specs via trailers. Your batch should pick it back up after TASK-1262/1263 as it did for TASK-1260.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
