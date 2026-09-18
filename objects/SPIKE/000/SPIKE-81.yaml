@@ -40,12 +40,12 @@ description: |-
   - Correct the CI duration in CLAUDE.md as a side-effect fix.
 
   NON-GOAL: building any new drain capability. The capability exists; this is about the seam between having it and reaching it.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:52:53.322025721Z
-modified_at: 2026-09-18T12:57:09.072402208Z
+modified_at: 2026-09-18T13:00:55.925282034Z
 req_type: Spike
 tags:
 - adoption
@@ -66,4 +66,8 @@ relationships:
   target_id: 01a0b497-90f0-70b1-9246-c71a6762d3e8
   created_at: 2026-09-18T12:57:09.072402208Z
 execution_mode: operator
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T13:00:55.925282034Z
+  implemented_by: joe
 human_only: true
