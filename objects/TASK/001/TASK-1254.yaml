@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:47:04.754202553Z
-modified_at: 2026-09-18T16:56:21.761456906Z
+modified_at: 2026-09-18T16:57:17.872349086Z
 req_type: Task
 tags:
 - forge
@@ -45,4 +45,18 @@ comments:
   content: '[advisor] #1932 merged with its five-check plan 3/5 ticked live (unlabelled gate pass on MR !1; headless drain blocks + ticks in CI phase; cargo test via CI). NOT yet exercised on the mirror: (a) a labelled MR blocked by aida-merge-hold-gate + "Pipelines must succeed", then released via merge-hold clear; (b) [review] mode = delegated → not-supported note + standard reviewer. Both filed as a keyboard/operator follow-up task (needs the operator''s glab auth). The trailer completes this spec for the code + wiring it delivered; the two open checks live on the follow-up.'
   created_at: 2026-09-18T16:55:57.030635662Z
   modified_at: 2026-09-18T16:55:57.030635662Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b573-7530-74c1-b410-628f5f8fe833
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1932 [AI:claude] feat(gitlab): live drain validation on the self-hosted mirror — gate wiring + two CI-watch fixes (TASK-1254)
+    verdict: APPROVE + merged (operator-creds spec worked by the product seat once the mirror was reachable)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1932.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN; merged from a plain shell
+    reasoning: mirror CI wiring (test stage + scaffolded merge-hold gate, cache keyed on Cargo.lock, self-contained gate job, bwrap gate hard on live evidence); GitLab stream_ci_for_branch now blocks on the shared wait loop on an InProgress probe (was a single probe → shelved 6s after MR open); BUG-1223 forge-resolved auto-queue; BUG-1225 node-id shortening. Three of five live checks ticked; the two unticked (labelled MR blocked + released; delegated-mode note) are TASK-1270 (operator). Spec set Completed by hand — it was Draft, so the trailer could not bump it.
+    merged: 2026-09-18 09:53 -07:00 → main d03601f294
+  created_at: 2026-09-18T16:57:17.872349086Z
+  modified_at: 2026-09-18T16:57:17.872349086Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
