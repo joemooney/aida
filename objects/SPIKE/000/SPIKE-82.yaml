@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T21:57:48.482486868Z
+modified_at: 2026-09-18T22:00:23.639367246Z
 req_type: Spike
 tags:
 - batch:followups-0918e
@@ -46,4 +46,10 @@ comments:
   created_at: 2026-09-18T19:07:17.658074050Z
   modified_at: 2026-09-18T19:07:17.658074050Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b688-f357-7e21-8f93-6a811c059563
+  author: joe
+  content: 'Post-mortem committed as 17a3d0db33. Recomputed the 18:00-08:00 window from /home/joe/ai/aida/.aida/events.jsonl: 24 non-empty spec IDs, 17 PrMerged, 15 SpecShelved (10 request-changes, 3 ci-red, 2 tool-exit), 7 QueueDrained, 4 AdvisorEscalated; git first-parent records 28 main commits. Report includes hypothesis verdicts, 18:00 runbook, reliability-fix round accounting, and no-awake-seat gaps for STORY-1218. Branch pushed for independent advisor review; not self-merged.'
+  created_at: 2026-09-18T22:00:23.639367246Z
+  modified_at: 2026-09-18T22:00:23.639367246Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
