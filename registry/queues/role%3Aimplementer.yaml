@@ -62,19 +62,3 @@
   added_at: 2026-09-18T19:08:21.239779812Z
   for_role: reviewer
   added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b5ec-f6a7-7f30-9323-e3ebad715234
-  position: 12000
-  added_by: role:implementer
-  note: 'spike → drive-only rule: groom proposal + queue add/do refusal with --force + discipline master paragraph; tests'
-  added_at: 2026-09-18T19:10:14.581075708Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b5ed-3eab-76c2-8f47-a49b9399a824
-  position: 13000
-  added_by: role:implementer
-  note: mode overrides spike human-only default (drain AND drive); research-lane pickup contract; groom classifier report-shaped→drain (or drive when a BlockedBy dependent exists) / decision-shaped→operator; discipline paragraph; tests
-  added_at: 2026-09-18T19:16:19.637061169Z
-  for_role: implementer
-  added_by_machine: imac
