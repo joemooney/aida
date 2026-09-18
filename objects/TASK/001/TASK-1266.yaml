@@ -3,12 +3,12 @@ spec_id: TASK-1266
 agreed_id: TASK-1266
 title: 'Groom proposes lanes: serialize verdicts print the --single-branch cluster command; docs-only/papercut specs get a lifecycle:trivial proposal'
 description: 'SPIKE-81 lane 1 + lane 2 fix. (1) In backlog.rs, where classify_pair_overlap yields PairVerdict::Serialize{shared}, replace the ''serialize / do not parallelize'' rendering with a proposal that prints the exact command: aida queue work --batch NAME --auto-complete --single-branch (add --sequential when member order matters) and, under --apply, tags the pair''s batch so the hint is durable. (2) aida groom proposes lifecycle:trivial for specs whose predicted footprint is docs-only / templates-only or that carry papercut / severity:cosmetic, as a normal disposition the advisor accepts or declines; never auto-applied without --apply. Acceptance: a groom dry-run over two overlapping specs prints the --single-branch command verbatim; a docs-only papercut spec gets a lifecycle:trivial proposal line; unit tests for both renderers; no change to drain behaviour.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:56:51.325973803Z
-modified_at: 2026-09-18T13:24:14.103452302Z
+modified_at: 2026-09-18T13:24:23.274694212Z
 req_type: Task
 tags:
 - batch:followups-0918c
@@ -42,8 +42,25 @@ comments:
   created_at: 2026-09-18T13:24:14.103452302Z
   modified_at: 2026-09-18T13:24:14.103452302Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b4b0-8869-76e1-917a-c6a4aa16660a
+  author: aida-auto-bump
+  timestamp: 2026-09-18T13:24:23.273953469Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b4b0-886a-7213-aacc-870186925911
+  timestamp: 2026-09-18T13:24:23.274693516Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1266-2026-09-18T132415Z.md
+  commit_sha: a1aee56fe2541ddac7eaf41f19bd8094c01fc8a2
+  summary: Completed via merge a1aee56f
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T13:09:04.148040269Z
   implemented_by: joe
+  completed_at: 2026-09-18T13:24:23.273818735Z
+  completion_sha: a1aee56fe2541ddac7eaf41f19bd8094c01fc8a2
