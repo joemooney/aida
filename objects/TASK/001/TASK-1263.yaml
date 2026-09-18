@@ -18,13 +18,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T03:47:28.286274854Z
-modified_at: 2026-09-18T04:16:58.259634629Z
+modified_at: 2026-09-18T04:35:19.850704522Z
 req_type: Task
 tags:
 - anti-slop
+- batch:followups-0917b
 - batch:night-0917
 - calibration
 - drain-safe
 - follow-up:TASK-1249
 - harvest
+- proxy-groomed
 execution_mode: drain
