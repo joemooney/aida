@@ -8,10 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:13:42.736978554Z
-modified_at: 2026-09-18T20:29:24.029397321Z
+modified_at: 2026-09-18T22:59:43.652633057Z
 req_type: Bug
 tags:
+- aida:pr:auto-queue-review
 - batch:followups-0918d
+- papercut
+- review
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a0b62a-21d6-73f1-a64c-c6c749010b25
