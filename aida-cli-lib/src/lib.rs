@@ -186,6 +186,7 @@ mod pr_ship;
 mod presence;
 mod presence_cmd;
 mod process_probe;
+mod process_retry;
 // BUG-677: the /proc probe + lease/spec liveness classifiers moved to
 // aida-core so aida-tui can compute liveness in-process. Re-export the shared
 // classifier types + fns at the crate root so `crate::LeaseState` /

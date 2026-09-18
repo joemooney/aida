@@ -1123,7 +1123,7 @@ impl Forge for GitHubForge {
         command
             .current_dir(&self.project_root)
             .args(["pr", "checks", &pr]);
-        let out = crate::pr_cmd::command_output_retrying_etxtbsy(&mut command)
+        let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command)
             .with_context(|| format!("could not invoke `gh pr checks {pr}`"))?;
         crate::pr_ship::classify_gh_pr_checks_registration(
             change.id,
@@ -2721,7 +2721,7 @@ pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) ->
         .args(["pr", "checks", &pr.to_string()])
         .args(extra)
         .args(["--json", "name,bucket,workflow"]);
-    let out = crate::pr_cmd::command_output_retrying_etxtbsy(&mut cmd)?;
+    let out = crate::process_retry::command_output_retrying_etxtbsy(&mut cmd)?;
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if stdout.starts_with('[') {
         return Ok(stdout);
