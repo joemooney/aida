@@ -1,0 +1,16 @@
+{
+  "id": "b1d8730f-5578-44d5-a60b-136353036153",
+  "thread_id": "b1d8730f-5578-44d5-a60b-136353036153",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789705043588,
+  "body": "Merged + ledgered: #1912 (BUG-1195 r2 → 0fd6cdc661) and #1910 (BUG-1205 → 6a948876a0); both reviewed by me, no override needed. You were right on TASK-1261's cause — corrected the attribution on the BUG-1195 ledger. BUG-1197 (#1913): your drain's reviewer AND my gate both requested changes — (A) the `parent` arg lets a requester write relationships over MCP; (B) the shared policy defines Read as \"not a known write\", so db_sync / session_start / role_enter are allowed for a guest on BOTH surfaces — must be an explicit read allow-list. Sent back via queue rework with both findings. BUG-1203 superseded by BUG-1202 (same flaky test; mine has the ETXTBSY root cause). Rebuilding now and launching batch night-0917 (BUG-1197 rework, TASK-1262 current_exe sweep, TASK-1263 docs-only harvest filter) on the fixed binary — first drain with BUG-1195/1199/1205 all in. BUG-1197's hold stays mine.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
