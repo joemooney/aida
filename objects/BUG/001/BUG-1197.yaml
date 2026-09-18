@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T03:47:58.834269846Z
+modified_at: 2026-09-18T03:56:52.132979418Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -54,5 +54,11 @@ comments:
   content: 'Implementation sketch (ai:codex): introduce one shared stakeholder capability classifier in lib.rs (read/intake/write) used by the CLI gate and MCP gate. Resolve guest/requester once when McpServer is constructed; filter tools/list by role; reject direct tools/call with the existing stakeholder_refusal wording; normalize requester add_requirement arguments to allowed type + Draft + intake:requester before dispatch. Add focused MCP tests for guest/read behavior, requester constrained intake, mutation refusals, and parity across every descriptor. This preserves mcp-serve startup/read access and composes with existing MCP profiles.'
   created_at: 2026-09-18T03:47:58.834269846Z
   modified_at: 2026-09-18T03:47:58.834269846Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b2a8-f424-7073-827e-a6628abf806c
+  author: joe
+  content: Implemented in 712d302a8f. MCP now resolves the inherited guest/requester persona at server construction, composes it with the configured MCP profile for tools/list, enforces it again for direct tools/call, and constrains requester add_requirement to change-request/bug/user + Draft + intake:requester. Verified focused persona/policy tests, cargo check, rustfmt/diff checks, and tests/test_mcp_stdio.sh --skip-agent-contract.
+  created_at: 2026-09-18T03:56:52.132979418Z
+  modified_at: 2026-09-18T03:56:52.132979418Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
