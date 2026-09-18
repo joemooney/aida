@@ -31643,6 +31643,9 @@ fn verdict_tip_relation(
 #[path = "tests/bug_1186_reviewer_seat_tests.rs"]
 mod bug_1186_reviewer_seat_tests;
 #[cfg(test)]
+#[path = "tests/bug_1230_auto_queue_review_tests.rs"]
+mod bug_1230_auto_queue_review_tests;
+#[cfg(test)]
 #[path = "tests/bug_775_commits_ahead_tests.rs"]
 mod bug_775_commits_ahead_tests;
 
@@ -36968,31 +36971,36 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
 /// pickable review story, or `queue work PR-N` finds nothing to review and
 /// falls through to the backing spec as an implementer pickup.
 // trace:BUG-1186 | ai:claude
-fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64) -> bool {
+fn open_pr_review_story(project_root: &std::path::Path, pr_number: u64) -> Option<String> {
     let aida = aida_exe_path();
     let Ok(out) = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(["list", "--type", "story", "--format", "json"])
         .output()
     else {
-        return false;
+        return None;
     };
     if !out.status.success() {
-        return false;
+        return None;
     }
-    review_story_round_is_open(&String::from_utf8_lossy(&out.stdout), pr_number)
+    open_review_story_id(&String::from_utf8_lossy(&out.stdout), pr_number)
 }
 
 /// BUG-1186: does `aida list --type story --format json` output carry a
 /// `Review PR-<n>:` story whose round is still open (not Done / Completed /
 /// Rejected / Superseded)? Pure so the round semantics are unit-testable.
 // trace:BUG-1186 | ai:claude
+#[cfg(test)]
 fn review_story_round_is_open(list_json: &str, pr_number: u64) -> bool {
+    open_review_story_id(list_json, pr_number).is_some()
+}
+
+fn open_review_story_id(list_json: &str, pr_number: u64) -> Option<String> {
     let needle = format!("review pr-{}:", pr_number);
     let Ok(rows) = serde_json::from_str::<Vec<serde_json::Value>>(list_json) else {
-        return false;
+        return None;
     };
-    rows.iter().any(|row| {
+    rows.iter().find_map(|row| {
         let title = row
             .get("title")
             .and_then(|t| t.as_str())
@@ -37000,7 +37008,7 @@ fn review_story_round_is_open(list_json: &str, pr_number: u64) -> bool {
             .trim_start()
             .to_ascii_lowercase();
         if !title.starts_with(&needle) {
-            return false;
+            return None;
         }
         let status = row
             .get("status")
@@ -37009,11 +37017,68 @@ fn review_story_round_is_open(list_json: &str, pr_number: u64) -> bool {
             .trim()
             .to_ascii_lowercase()
             .replace([' ', '-', '_'], "");
-        !matches!(
+        (!matches!(
             status.as_str(),
             "done" | "completed" | "rejected" | "superseded" | "released"
-        )
+        ))
+        .then(|| row.get("spec_id")?.as_str().map(str::to_owned))
+        .flatten()
     })
+}
+
+// trace:BUG-1230 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ReviewStoryQueueDecision {
+    Create,
+    Requeue(String),
+    Skip(String),
+}
+
+fn review_story_queue_decision(
+    open_story: Option<String>,
+    queued_story_ids: &[String],
+) -> ReviewStoryQueueDecision {
+    match open_story {
+        None => ReviewStoryQueueDecision::Create,
+        Some(id)
+            if queued_story_ids
+                .iter()
+                .any(|queued| queued.eq_ignore_ascii_case(&id)) =>
+        {
+            ReviewStoryQueueDecision::Skip(id)
+        }
+        Some(id) => ReviewStoryQueueDecision::Requeue(id),
+    }
+}
+
+fn reviewer_queue_story_ids(project_root: &std::path::Path) -> Option<Vec<String>> {
+    let out = std::process::Command::new(aida_exe_path())
+        .current_dir(project_root)
+        .args([
+            "queue",
+            "list",
+            "--all",
+            "--for",
+            "reviewer",
+            "--json",
+            "--no-scope",
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let rows = serde_json::from_slice::<Vec<serde_json::Value>>(&out.stdout).ok()?;
+    Some(
+        rows.iter()
+            .filter(|row| row.get("for_role").and_then(|v| v.as_str()) == Some("reviewer"))
+            .filter_map(|row| {
+                row.get("spec_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned)
+            })
+            .collect(),
+    )
 }
 
 /// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
@@ -38725,12 +38790,26 @@ fn try_auto_queue_pr_review(
     if let Some(reason) = auto_queue_skip_reason(true, Some(pr.number), None) {
         return AutoQueueOutcome::skipped_by_design(reason);
     }
-    if pr_review_story_already_exists(project_root, pr.number) {
-        return AutoQueueOutcome::already_exists(format!(
-            "PR #{} already has a `Review PR-{}` story queued — skipping",
-            pr.number, pr.number
-        ))
-        .with_pr(pr.number);
+    let open_story = open_pr_review_story(project_root, pr.number);
+    let queued_story_ids = reviewer_queue_story_ids(project_root).unwrap_or_default();
+    match review_story_queue_decision(open_story, &queued_story_ids) {
+        ReviewStoryQueueDecision::Skip(_) => {
+            return AutoQueueOutcome::already_exists(format!(
+                "PR #{} already has a `Review PR-{}` story queued — skipping",
+                pr.number, pr.number
+            ))
+            .with_pr(pr.number);
+        }
+        ReviewStoryQueueDecision::Requeue(story_id) => {
+            let note = format!("re-queued by auto-queue-review for PR #{}", pr.number);
+            aida_subcmd_queue_add_for_reviewer(project_root, &story_id, &note);
+            return AutoQueueOutcome::filed(format!(
+                "re-queued existing {} → reviewer queue (PR #{})",
+                story_id, pr.number
+            ))
+            .with_pr(pr.number);
+        }
+        ReviewStoryQueueDecision::Create => {}
     }
 
     // Pull the commit-range spec ids using the existing helpers from STORY-67.
