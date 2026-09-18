@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b23b-21ab-7cf3-9fbf-6cb73d60162f
-  position: 2000
-  added_by: role:implementer
-  note: 'class bug: shared aida_exe_path() (strip '' (deleted)'', PATH fallback, cached once) for every raw current_exe() subprocess site; harvest ledger persisted before the comment write; brief filed regardless; io error printed first'
-  added_at: 2026-09-18T02:30:28.855267818Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b203-526c-7233-acb4-578e984cafa4
   position: 3000
   added_by: role:implementer
