@@ -1,0 +1,37 @@
+id: 01a0b2bf-39f2-7f91-9f14-69d808dd20fe
+spec_id: BUG-1209
+agreed_id: BUG-1209
+title: 'aida list --limit N human footer prints ''N requirements'' with no denominator — the agent/TOON surface already prints ''count: N of M'''
+description: |-
+  `aida list --limit 5` prints a footer of `5 requirements` whether 5 matched or 500 did. The truncation is invisible, so a human reads a bounded slice as the complete set.
+
+  The agent surface already gets this right. Same store, same moment:
+
+    aida list --format toon --limit 5   ->  count: 5 of 10 open
+    aida list --format human --limit 5  ->  5 requirements
+
+  The denominator is already computed and in scope. git_backend_cmd.rs captures total_after_filters immediately before reqs.truncate(n), and the human path already has a count-of-total renderer — it is just gated on agent_default_cap.is_some(). agent_list_default_cap (lib.rs:1574) returns None whenever limit.is_some(), so the one case where the user explicitly asked for a slice is the one case the hint is suppressed. The TASK-970 implicit agent cap gets the disclosure; the explicit --limit does not.
+
+  Three human footer sites print the bare count: git_backend_cmd.rs lines 1877, 1898, 2099 (println of "{} requirements", reqs.len()).
+
+  Proposed: when total_after_filters > reqs.len(), the human footer reads `5 of 10 requirements (--limit 5; drop it or raise N to see the rest)`; when nothing was trimmed it stays exactly `10 requirements`. Reuse list_count_denom_label so the human and TOON denominators agree rather than drifting into two vocabularies.
+
+  Note this is the same class as the existing closed/decisions hidden-count hints, which DO fire on the human path — the limit is the only silent truncation left.
+
+  Acceptance:
+  - `aida list --limit N` where more than N matched prints the count and the total, and names --limit as the cause.
+  - `aida list --limit N` where N or fewer matched is byte-identical to today.
+  - All three human footer sites covered (plain, --show-tags, and the third render branch).
+  - The human denominator label matches the TOON one for the same query (open lens vs matched).
+  - TOON / --json / --short output unchanged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T04:21:11.794027533Z
+modified_at: 2026-09-18T04:21:11.794027533Z
+req_type: Bug
+tags:
+- aida:list
+- papercut
+- surface-parity
