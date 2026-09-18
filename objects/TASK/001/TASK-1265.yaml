@@ -10,12 +10,12 @@ description: |-
   2. Content-based no-op predicate: RealPhaseDriver::rework_no_op_failure compares the PR head SHA captured in begin_rework_guard with the head after phase 1. An implementer that only rebases onto main, or amends without changing the tree, moves the SHA with no new work and slips past the guard (the BUG-1207 round-4 shape, where the auto-rebase had already changed the head). Make the predicate: no-op when `git diff <before> <after>` is empty (tree-identical) OR when `git cherry <before> <after>` reports no `+` commits (nothing patch-unique after the snapshot); keep the SHA equality as the fast path. Reuse the patch-id helpers the force-push guard already has (pr_rebase / branch_unshipped_patch_count_default). Tests: fixture repo where the branch is rebased with no new commit → no-op; a genuine new commit → not a no-op.
 
   Acceptance: both tests green; the existing rework_no_op_is_shelvable and unchanged_rework_head_shelves tests unchanged; prompt header shows the computed round.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:53:00.149541934Z
-modified_at: 2026-09-18T12:03:43.026458026Z
+modified_at: 2026-09-18T12:06:58.776586516Z
 req_type: Task
 tags:
 - batch:followups-0918b
