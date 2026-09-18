@@ -916,6 +916,27 @@ fn prompt_implementer_item_passes_focus() {
     );
 }
 
+/// TASK-1276: a groomed spike rides the normal PR lifecycle, but phase 1 must
+/// receive the research/report contract instead of treating it as code work.
+#[test]
+fn prompt_spike_item_names_research_lane_and_report_contract() {
+    let e = resolved("SPIKE-82", entry(Uuid::now_v7(), Some("implementer"), None));
+    let plan = QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![e],
+        scope: "SPIKE-82".into(),
+        review_target: None,
+        anchor_display: "SPIKE-82".into(),
+        anchor_title: "night-shift report".into(),
+    };
+    let prompt = derive_queue_work_prompt(&plan, "implementer", false, false, None);
+    assert!(prompt.starts_with("/aida-pickup SPIKE-82"), "{prompt}");
+    assert!(prompt.contains("Research-lane contract"), "{prompt}");
+    assert!(prompt.contains("docs/spikes/<date>-<slug>.md"), "{prompt}");
+    assert!(prompt.contains("open a PR"), "{prompt}");
+    assert!(prompt.contains("Do not make or apply"), "{prompt}");
+}
+
 /// BUG-814: a rework pickup with a blocking review verdict must lead with the
 /// findings before `/aida-pickup`, so the implementer treats the review as the
 /// acceptance delta instead of silently passing the same commit back.

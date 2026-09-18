@@ -113,6 +113,15 @@ between `drain` and `drive`, pick `drive` — the human keeps the merge. Carry a
 short reason per mode call ("guided: carries keystone tag") so a wrong
 classification is visible in review.
 
+**Spikes are classified by deliverable, not by their human-only type default.**
+When a spike names a concrete `docs/spikes/<date>-<slug>.md` report path and
+acceptance/evidence criteria, propose `drain` if no requirement has a
+`BlockedBy` edge to it. If a dependent does, propose `drive` so the advisor
+reads the report before merge, and name that dependent in the reason. A spike
+whose deliverable is itself a decision or taste call, or which needs
+credentials, remains `operator`. Do not bulk-queue spikes; each needs this
+explicit advisor disposition.
+
 For each ID in `AIDA_INTAKE_TRIVIAL_PROPOSALS`, include
 `lifecycle:trivial: accept` or `lifecycle:trivial: decline` in its proposal.
 This is a normal advisor disposition: do not write the tag in propose-mode.

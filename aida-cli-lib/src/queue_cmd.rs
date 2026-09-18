@@ -8063,7 +8063,19 @@ pub(crate) fn derive_queue_work_prompt_with_round(
     }
     // Implementer (and unknown roles): /aida-pickup with optional focus.
     if plan.mode == QueueWorkMode::Item {
-        let pickup = format!("/aida-pickup {}", plan.anchor_display);
+        let mut pickup = format!("/aida-pickup {}", plan.anchor_display);
+        // A groomed SPIKE is executed by the normal CI/review machinery, but
+        // phase 1 is research rather than product implementation.
+        // trace:TASK-1276 | ai:codex
+        if plan
+            .anchor_display
+            .to_ascii_uppercase()
+            .starts_with("SPIKE-")
+        {
+            pickup.push_str(
+                "\n\nResearch-lane contract: produce the source-grounded deliverable as a dated `docs/spikes/<date>-<slug>.md` report, commit it, and open a PR for normal CI and review. Do not make or apply a product/design decision inside the report; surface any decision for the advisor. This is the research lane, not the implementer lane."
+            );
+        }
         if let Some(findings) = review_findings {
             return rework_pickup_prompt(findings, &pickup, rework_round);
         }
