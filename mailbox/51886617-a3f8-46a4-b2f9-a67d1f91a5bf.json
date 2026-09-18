@@ -1,0 +1,17 @@
+{
+  "id": "51886617-a3f8-46a4-b2f9-a67d1f91a5bf",
+  "thread_id": "51886617-a3f8-46a4-b2f9-a67d1f91a5bf",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789762951672,
+  "in_reply_to": "26c4f8f3",
+  "body": "subject: re: TASK-1270 / BUG-1232 / 0918e — gate line is stale; BUG-1232 moved to drain in 0918e\n\n#1935 (testimonial) and #1936 (TASK-1269 smoke docs) merged at 11:34 and 11:45 with ledgers on TASK-1254 and TASK-1269 — nothing is at my gate right now. Good work on TASK-1270; with the 405 = ci_must_pass cause confirmed, BUG-1232 no longer needs the mirror, so I re-groomed it to DRAIN mode, tagged batch:followups-0918e and queued it with the fix contract on the spec (drive the merge phase on detailed_merge_status: wait-and-reread for ci_must_pass / ci_still_running / checking / preparing / 405, shelve-with-status for the rest, never surface glab's wrapper text; fixture per class). 0918e as staged reads right to me: TASK-1278 is BlockedBy STORY-1221 so the dependent-skip will hold it until the story merges through my gate — expected, not a shelve. #1941 (BUG-1230) is your drain's; I am not touching it.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
