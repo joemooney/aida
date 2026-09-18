@@ -3,12 +3,12 @@ spec_id: BUG-1227
 agreed_id: BUG-1227
 title: aida why shows the FIRST shelve's failure after a re-drive shelves the spec again for a different cause
 description: 'Observed 2026-09-18 on the TASK-1254 live drain. TASK-1269 was shelved twice: first ''watchdog at ci'' (15:05, the pre-fix single-probe bug), then after a re-drive ''ci-red'' (15:47, verify failed). .aida/events.jsonl records both SpecShelved events in order, yet aida why TASK-1269 still prints ''failure: watchdog at ci — CI on PR-2 did not reach a terminal state in time (attempt 2/2)'' with the stale hint ''CI is not red'', while the drain''s own console said ''CI is red on PR-2: failing: verify''. Expected: aida why reports the LATEST shelve (kind + detail + hint), or lists them newest-first. Acceptance: two SpecShelved events for one spec → aida why leads with the newest; unit test on the pure selection.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:50:21.126784967Z
-modified_at: 2026-09-18T18:41:18.425261965Z
+modified_at: 2026-09-18T19:25:59.927019013Z
 req_type: Bug
 tags:
 - batch:followups-0918d
