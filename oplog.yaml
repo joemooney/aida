@@ -74690,5 +74690,37 @@ operations:
   timestamp: 2026-09-18T04:21:44.491067366Z
   kind: !SetStatus
     status: Done
-clock: 5802
+- id: 01a0b2c1-53ef-7271-a406-f6914d2fd8f1
+  target_id: 01a0b2c1-4edf-7f23-897d-596a22acb3ff
+  author: aida
+  node_id: '1'
+  lamport: 5803
+  timestamp: 2026-09-18T04:23:29.519591003Z
+  kind: !Create
+    title: aida drain status human output has zero colour — it sits outside the TASK-269 unified status palette that list/status/show all use
+    description: |-
+      `aida drain status --format human` renders entirely in the default foreground colour. Verified it is genuinely absent, not tty-suppressed: with CLICOLOR_FORCE=1 set, `aida list --format human` emits ESC[36m around the status cell while `aida drain status --format human` emits zero escape sequences.
+
+      Cause: aida-cli-lib/src/drain_state.rs has no `use colored` and not one call to .green()/.red()/.dimmed()/.bold() anywhere in the file. render_human_inner builds a plain String with push_str/format! and leans entirely on glyphs (crate::glyphs::Glyph) to carry meaning.
+
+      This is a parity gap, not a new idea. TASK-269 established a unified status palette and wired it into git_backend_cmd.rs (list, show) and status_cmd.rs. Drain status is the one high-frequency human surface left outside it — and it is the surface a human stares at while a drain runs, so it is the one where scanability matters most.
+
+      Highest-value targets, in order:
+
+      1. The pacing/quiet signal on each member line. `last output 52s ago` past drain_quiet_warn_minutes is the single fact that tells a human the drain has stalled. It should be yellow at the warn threshold and red well past it. Today it reads identically to a healthy line.
+      2. The stale banner (glyph Warning + "orchestrator (pid N) is no longer running") — red.
+      3. Member state: STATE_COMPLETED green, STATE_FAILED red, running/in-phase cyan, STATE_QUEUED dim.
+      4. Dim the low-signal chrome: the echoed launch command, `orchestrator pid N`, `started <ts>`. That line is the longest on screen and the least read.
+
+      Implementation caveat: render_human_inner RETURNS a String rather than printing, and the unit tests in the same file assert on its contents (e.g. out.contains("Stale drain-state file") at line 2071). The `colored` crate no-ops when stdout is not a tty, so those assertions keep passing under plain `cargo test` — but they WILL break if CLICOLOR_FORCE is set in the environment. Either strip ANSI in the test helper or set colored::control::set_override(false) in the test setup, rather than leaving a latent env-dependent failure.
+
+      Acceptance:
+      - At a tty, `aida drain status` colours the stale banner, the member state, and the quiet/stall pacing signal.
+      - Piped or redirected output is byte-identical to today (no ANSI), so `aida drain status | grep` and the TOON/json shapes are unaffected.
+      - The status colours match the TASK-269 palette rather than introducing a second vocabulary for the same concepts.
+      - drain_state.rs unit tests pass with and without CLICOLOR_FORCE=1 in the environment.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5803
 node_id: '1'
