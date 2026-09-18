@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T03:45:43.455132514Z
+modified_at: 2026-09-18T03:46:45.379648747Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -33,4 +33,20 @@ tags:
 - personas
 - proxy-groomed
 - security
+comments:
+- id: 01a0b29f-b203-79b2-a2b5-00353c76dca7
+  author: joe
+  content: |-
+    Architecture sketch (Codex, 2026-09-17)
+
+    1. Extract the STORY-1110 stakeholder envelope into shared crate-level policy: canonical persona detection, stable refusal text, action classification (read / constrained requester intake / write-build-loop), requester type allow-list, and intake normalization. CLI enforcement delegates to this policy.
+    2. Resolve the stakeholder persona once when McpServer is constructed, independently of the existing MCP profile. Persona can only narrow a profile: guest advertises/calls read actions; requester advertises/calls reads plus add_requirement. Direct calls to known disallowed tools return the exact shared stakeholder refusal text.
+    3. In requester add_requirement, reject queue/batch/for-style routing inputs and disallowed types, then force Draft and add intake:requester before persistence, matching CLI behavior. Keep mcp-serve itself startable for persona reads.
+    4. Add table/parity tests over every MCP descriptor/action classification plus behavioral tests: guest reads succeed and writes refuse; requester bug intake is Draft+tagged, story intake refuses, update/queue/relationship writes refuse. Add stdio coverage where practical.
+    5. Preserve the independent STORY-474 profile boundary by applying both gates (persona first for stable stakeholder wording, profile second for non-persona clients).
+
+    Sign-off requested before implementation because this changes MCP tool visibility/call authorization and shared lifecycle policy (Sketch-First Protocol). trace:BUG-1197 | ai:codex
+  created_at: 2026-09-18T03:46:45.379648747Z
+  modified_at: 2026-09-18T03:46:45.379648747Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
