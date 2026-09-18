@@ -1,0 +1,26 @@
+id: 01a0b600-f2da-7b40-8658-5ace1d519a4a
+spec_id: STORY-1222
+agreed_id: STORY-1222
+title: 'Review PR-1939: [AI:codex] fix(why): prefer latest shelving event (BUG-1227)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b5fb`) for branch `bug-1227`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1939>
+  - Branch: `bug-1227` → `main`
+
+  ## Covers
+
+  - BUG-1227
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1939` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T19:31:50.618301907Z
+modified_at: 2026-09-18T19:31:50.618301907Z
+req_type: Story
