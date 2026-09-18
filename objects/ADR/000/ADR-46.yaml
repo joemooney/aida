@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:14:22.526081517Z
-modified_at: 2026-09-18T21:14:24.293021957Z
+modified_at: 2026-09-18T21:14:28.646376140Z
 req_type: Decision
 tags:
 - adr
@@ -35,3 +35,7 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-18T21:14:24.293021957Z
+- rel_type: References
+  target_id: 01a0b64f-a564-7e53-a0b0-95305e3df161
+  created_at: 2026-09-18T21:14:28.646371593Z
+  created_by: joe
