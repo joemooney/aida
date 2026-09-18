@@ -76124,5 +76124,21 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5889
+- id: 01a0b41a-f8bc-7fb0-9b5b-6b5d8fa3ff97
+  target_id: 01a0b2dc-3dca-76f0-922e-c8979fcf41af
+  author: aida
+  node_id: '1'
+  lamport: 5890
+  timestamp: 2026-09-18T10:41:01.628754412Z
+  kind: !AddTag
+    tag: needs:advisor-or-operator
+- id: 01a0b41a-f956-73a3-b674-d83e98bb958a
+  target_id: 01a0b2dc-3dca-76f0-922e-c8979fcf41af
+  author: aida
+  node_id: '1'
+  lamport: 5891
+  timestamp: 2026-09-18T10:41:01.782076359Z
+  kind: !RemoveTag
+    tag: batch:followups-0918
+clock: 5891
 node_id: '1'
