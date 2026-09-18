@@ -1,0 +1,30 @@
+id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
+spec_id: TASK-1279
+agreed_id: TASK-1279
+title: 'Seat-parity audit: prove Codex can occupy every seat (product, advisor, implementer, reviewer, integrator) interactively and headless; fix the Claude-only surfaces'
+description: |
+  Operator requirement (2026-09-18): Codex is a co-equal agent and must be able to occupy ANY seat — product, advisor, implementer, reviewer, integrator — interactively and headless. Today the implementer and reviewer seats run under Codex in every drain (vendor: codex in the events), STORY-683 made the headless vendor configurable, STORY-1033 added per-seat model/effort tuning, TASK-0421 inventoried Claude-specific surfaces and TASK-1181 ported the hooks to .codex/hooks.json. What is not proven is the two coordination seats: the last two days' product and advisor sessions were both Claude, and several surfaces those seats leaned on are Claude-shaped — the memory pack (Codex has no memory dir; AGENTS.md is the analogue), aida advisor watch's fork-from-live (a Claude session feature), the Monitor-based event supervision, and the skills catalog form (.codex/skills + ~/.codex/prompts exist but drift is only checked for Claude's pack by aida memories check).
+
+  Deliverable: a seat-parity audit with a matrix and fixes for the gaps.
+  1. Matrix in docs/agents/seat-parity.md: rows = seats (product, advisor, implementer, reviewer, integrator) x modes (interactive, headless, fork-from-live, scheduled tick); columns = Claude, Codex (and Antigravity where scaffolded); each cell = works / degraded (how) / missing, with the command that proves it (aida agent new codex --role advisor, aida queue work --no-human=both with headless_vendor = codex for BOTH implementer and reviewer, aida advisor watch under Codex, /aida-advise tier under Codex).
+  2. Fix or file each gap: advisor watch must be able to fork a Codex advisor (or run the tick as a cold-boot codex exec when the live seat is Codex); the discipline/memory pack must have an AGENTS.md-side equivalent that aida init --refresh keeps level (extend aida memories check to the Codex pack); every hook handler registered in settings.json must be registered in .codex/hooks.json with a CI guard that fails on drift; the role-context snapshot and pickup prompts must not reference Claude-only tools (Monitor, AskUserQuestion) without a Codex phrasing.
+  3. Dogfood run: one overnight window (or one batch wave) with the advisor seat under Codex and the product seat under Claude, then the reverse, recorded on this spec with the same event counts as SPIKE-82 uses.
+
+  Acceptance:
+  - The matrix exists and every cell has a proving command that was run, with output linked or pasted.
+  - No "missing" cell remains for product/advisor/implementer/reviewer under Codex; "degraded" cells have a filed spec each.
+  - CI fails when a hook is wired for one vendor and not the other.
+  - The dogfood wave under a Codex advisor merges at least one drain-mode spec with the merge gated by that Codex advisor.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T19:29:01.811098746Z
+modified_at: 2026-09-18T19:29:01.811098746Z
+req_type: Task
+tags:
+- codex
+- multivendor
+- parent:EPIC-56
+- roles
+- seats
