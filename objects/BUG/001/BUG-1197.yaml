@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:37:08.072529336Z
+modified_at: 2026-09-18T04:43:06.739903319Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -127,6 +127,12 @@ comments:
     Finish with aida queue done BUG-1197.
   created_at: 2026-09-18T04:37:07.817683347Z
   modified_at: 2026-09-18T04:37:07.817683347Z
+- id: 01a0b2d3-4a73-7c63-9209-a6c9e14731d3
+  author: joe
+  content: 'Addressed advisor round-2 findings: requester MCP intake now rejects parent/feature/owner before add_requirement can create relationships or assign grooming metadata; CLI stakeholder reads now include the MCP bootstrap and read-side coordination commands while mutating flag forms remain default-denied. Added regression tests for required guest allow/deny cases and requester field rejection.'
+  created_at: 2026-09-18T04:43:06.739903319Z
+  modified_at: 2026-09-18T04:43:06.739903319Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
