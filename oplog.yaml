@@ -74291,5 +74291,31 @@ operations:
   timestamp: 2026-09-18T03:10:44.501077998Z
   kind: !SetStatus
     status: Approved
-clock: 5778
+- id: 01a0b281-e1e1-7cf0-8529-36159ea7e37d
+  target_id: 01a0b281-dd6b-7442-8ccf-9bf585f683be
+  author: aida
+  node_id: '1'
+  lamport: 5779
+  timestamp: 2026-09-18T03:14:11.553103011Z
+  kind: !Create
+    title: 'Review PR-1909: [AI:codex] docs(architecture): define seats and stakeholder personas (TASK-1260)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b27b`) for branch `task-1260`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1909>
+      - Branch: `task-1260` → `main`
+
+      ## Covers
+
+      - TASK-1260
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1909` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5779
 node_id: '1'
