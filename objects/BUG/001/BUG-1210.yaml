@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:23:28.223098146Z
-modified_at: 2026-09-18T07:59:11.897364087Z
+modified_at: 2026-09-18T07:59:15.531200629Z
 req_type: Bug
 tags:
 - aida:drain
@@ -68,6 +68,20 @@ comments:
     confidence: 0.98
   created_at: 2026-09-18T07:59:11.897364087Z
   modified_at: 2026-09-18T07:59:11.897364087Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b386-de4b-73c0-ae96-6dadd548d522
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:bug-1210-drain-01a0b383-c5fa-7ab0-a4e3-17656d80e375.json
+    agent: codex
+    ran-at: 2026-09-18 00:59 -07:00
+    confirmed: 1
+    declined: 0
+    skipped: 0
+    + SEM [aida:sem] comment — For a running drain member, pacing becomes severe when the time since last output reaches twice the configured quiet-warning duration; at that point both the `last output … ago` text and the accompanying quiet warning change from yellow to red.
+  created_at: 2026-09-18T07:59:15.531200629Z
+  modified_at: 2026-09-18T07:59:15.531200629Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b384-2aee-7711-99a4-e06d8d37fd37
