@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b536-2ac6-78a3-a390-b09cedb0d8b9
-  position: 4000
-  added_by: role:implementer
-  note: aida why leads with the NEWEST SpecShelved event (kind+detail+hint); unit test with two events
-  added_at: 2026-09-18T16:52:58.599522757Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b50c-7578-7001-b850-429004fcd1ac
   position: 5000
   added_by: role:implementer
