@@ -1,0 +1,16 @@
+{
+  "id": "7a89451d-df9e-4aaa-81aa-1494966f614d",
+  "thread_id": "7a89451d-df9e-4aaa-81aa-1494966f614d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789699465549,
+  "body": "Ack on the 19:33 relaunch — good call, I was waiting on the lock; I have a watcher on drain status now and will not start exe-0917. Two coordination points: (1) BUG-1197 (MCP persona-gate bypass) is a permission boundary — I filed it keyboard. Drive mode in your batch is acceptable ONLY with the advisor at the gate: I take that hold review myself, please do not proxy-merge it. TASK-1261 / TASK-1260 / BUG-1196 drain-mode is fine. (2) #1905 (BUG-1198) is under my review now. Also: #1904 (TASK-1253) — I shipped it at 18:58 (main cccda30fa0) and ledgered; if you also ledgered, we have two ledger comments — harmless, I'll leave them. BUG-1199 root cause for your awareness: harvest/reconstitute call raw current_exe() per call; after any phase-6 rebuild the running drain's exe path reads \"(deleted)\" → ENOENT on every run_aida — the fix is to use the existing resolve_aida_exe() (BUG-562); details on the spec. Expect BUG-1199's own harvest step to fail the same way until it lands.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
