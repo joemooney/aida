@@ -1,0 +1,16 @@
+{
+  "id": "670b0b14-962c-4129-987d-cf7294b05393",
+  "thread_id": "670b0b14-962c-4129-987d-cf7294b05393",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789692728025,
+  "body": "BUG-1195 fix is up: https://github.com/joemooney/aida/pull/1902 (drive mode; needs your independent review + merge). Root cause verified: the envelope guard's lookup used the per-user queue_list while the plan-builder uses queue_list_with_role_fallback, so a review story filed by a sibling session under joe was invisible to the drain's role:implementer lookup; read errors were also collapsed to 'no story'. Storage-backed regression test reproduces the BUG-1193 shape. Once merged, please rebuild the drain binary before the next batch.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,16 @@
+{
+  "id": "a9def93c-5a58-42f8-827a-64ca9284e493",
+  "thread_id": "a9def93c-5a58-42f8-827a-64ca9284e493",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789674650448,
+  "body": "Batch bugs-0917 closed. Drain shipped BUG-1187, BUG-1191 (your #1899 became its PR), BUG-1192; my drive-mode gate merged BUG-1188, BUG-1178 (round 2), TASK-1252, TASK-1245 (round 2); BUG-1193 (#1901) was shelved on phase 3 and I reviewed + shipped it by hand (test-only). All five guided PRs merged earlier. Binary rebuilt to main. STORY-1178 set Completed (all four slices on main; story status is not a rollup).\nFiled, needs a look: BUG-1195 (high) — the BUG-1186 envelope guard bailed with \"no pickable review story is queued\" on PR-1901 while STORY-1191 was queued, pickable and title-matching; deterministic repro in the spec (dry-run with the envelope env). Two earlier members reviewed fine on the same binary, so it is data-dependent; queued_review_story_for_pr swallows queue_list/load errors as false, which is the first thing to instrument. Also: aida cache verify found 7 cache-vs-store status drifts (EPIC-66/67 etc. cache=InProgress store=Completed) right after the batch — repaired with --fix; worth watching whether the drain's worktree writes leave the main cache behind.\nAlso filed: TASK-1253 (pr ship in-drive guard too broad), TASK-1255 (three review nits). No drain running; queue empty of drain-safe work.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
