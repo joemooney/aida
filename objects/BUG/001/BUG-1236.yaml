@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:26:03.945081691Z
-modified_at: 2026-09-18T23:18:09.910517426Z
+modified_at: 2026-09-18T23:24:04.762581453Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -42,4 +42,10 @@ comments:
   created_at: 2026-09-18T21:34:04.842385381Z
   modified_at: 2026-09-18T21:34:04.842385381Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b6d5-911a-7e31-b010-8e90e4506400
+  author: joe
+  content: 'Implemented PR #1948 round-2 finding on story-1221 branch: existing stores now seed missing protocol META rows through refresh/init refresh/explicit seed.'
+  created_at: 2026-09-18T23:24:04.762581453Z
+  modified_at: 2026-09-18T23:24:04.762581453Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
