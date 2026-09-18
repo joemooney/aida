@@ -18,13 +18,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:36:40.157061609Z
-modified_at: 2026-09-18T18:36:40.157061609Z
+modified_at: 2026-09-18T19:50:21.224613029Z
 req_type: Bug
 tags:
-- drain-safe
-- nightly
-- portability
-- reconstitute
-- test-only
-- windows
+- batch:followups-0918e
 execution_mode: drain
