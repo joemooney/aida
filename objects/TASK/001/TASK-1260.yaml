@@ -1,0 +1,38 @@
+id: 01a0b201-cc15-7560-ba57-dbcdb1573710
+spec_id: TASK-1260
+agreed_id: TASK-1260
+title: 'Document the identity model: role (seat) vs stakeholder persona (gate) vs session/user — docs/architecture/roles-seats-and-personas.md + glossary entries + TERM specs'
+description: |-
+  Operator question 2026-09-17 ("what is the difference between a stakeholder persona and a role?") had no written answer — it lives in code (permissions.rs persona gate, role_cmd.rs, queue_cmd.rs role_is_stakeholder_only) and in TASK-1237/STORY-1110. Capture it where readers will actually find it. NOT a new top-level docs/ARCHITECTURE.md: OVERVIEW.md already is the architecture overview and docs/architecture/ is the per-topic home; a monolith would duplicate both and drift.
+
+  Deliverables:
+  1. docs/architecture/roles-seats-and-personas.md — the identity model on one page:
+     - ROLE = a seat in the build loop: a persistent named context (~/.aida/roles/<name>.toml or .aida/roles/), entered with aida role enter, routable (aida queue add --for <role>), can hold leases/worktrees, run drains, write verdicts, merge; ADR-33 one-driver-per-role applies. Starter set: advisor, implementer, reviewer, integrator, product.
+     - STAKEHOLDER PERSONA = a least-privilege gate, not a seat: guest (read-only) and requester (read + file a Draft), activated purely by AIDA_SESSION_ROLE=guest|requester, checked in permissions.rs BEFORE role/roster resolution, non-routable (role_is_stakeholder_only), no file, no history, no lease.
+     - SESSION = one unit of ownership (lease + worktree + role); USER ID = the shell identity the queue is keyed on (BUG-89, case-insensitive TASK-951). A short table of role vs persona vs session vs user across: storage, how you become it, routable?, can write?, can hold a lease?, shows in aida role list?
+     - Why the split exists (STORY-1110: let a PM/customer look at the graph or file a request without a seat) and the anti-pattern (aida role add requester — turns a gate into a seat; cf. BUG-1196).
+     - Pointers: docs/architecture/autonomy-and-escalation.md (seats in the escalation cascade), machinery-glossary.md, TASK-1237, STORY-1110, ADR-33.
+  2. aida-core/templates/.aida/discipline/machinery-glossary.md — add entries for **seat** and **stakeholder persona** next to the existing **role** entry (the glossary is scaffolded into every downstream project, so this is the highest-leverage home). Keep them to the glossary's 3-6 line register.
+  3. Store: file TERM specs "role (seat)" and "stakeholder persona" (aida add --type term) so aida why / the graph can link the vocabulary; link them Related to TASK-1237 and STORY-1110.
+  4. Pointer lines: CLAUDE.md (the vocabulary sentence that already names the glossary) and OVERVIEW.md where "role/RBAC gates" is mentioned, each one line pointing at the new page. No new content in CLAUDE.md beyond the pointer.
+
+  Acceptance:
+  - The page exists, is linked from CLAUDE.md + OVERVIEW.md + the glossary, and answers "role vs persona" without reading code.
+  - Glossary has seat + stakeholder persona entries; aida memories check / scaffold refresh pick them up (template change only).
+  - TERM-N specs exist for both terms with the Related links.
+  - aida plan verify style check: every file/symbol the page cites exists (permissions.rs persona gate, role_is_stakeholder_only, role_cmd.rs picker).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T00:54:17.365890248Z
+modified_at: 2026-09-18T00:54:17.365890248Z
+req_type: Task
+tags:
+- architecture
+- docs
+- drain-safe
+- follow-up:TASK-1237
+- glossary
+- personas
+- roles
