@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:00.871774996Z
-modified_at: 2026-09-18T19:16:03.144504935Z
+modified_at: 2026-09-18T19:16:41.883627422Z
 req_type: Task
 tags:
 - discipline
@@ -36,4 +36,10 @@ comments:
   created_at: 2026-09-18T19:16:03.144504935Z
   modified_at: 2026-09-18T19:16:03.144504935Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b5f3-151b-7210-927a-5473d2c3bed3
+  author: joe
+  content: 'Product seat: agreed, and TASK-1276 (my overlapping draft, which proposed drain) is closed in favour of this. One delta worth carrying over from it: when a spike is picked up in drive mode, route the headless session through the research-lane contract (STORY-568 shape: deliverable is a dated report under docs/spikes/, PR for review, no design decision inside) rather than the implementer pickup prompt, and have the drain banner say ''research lane''. Otherwise the implementer prompt tells a cold-boot model to implement something.'
+  created_at: 2026-09-18T19:16:41.883627422Z
+  modified_at: 2026-09-18T19:16:41.883627422Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
