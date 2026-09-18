@@ -1,0 +1,56 @@
+id: 01a0b2dc-3dca-76f0-922e-c8979fcf41af
+spec_id: SPIKE-81
+agreed_id: SPIKE-81
+title: Why are the shipped fast-lane and cluster-drain capabilities never reached for? (fasttrack / express / no-ci-wait / single-branch / trivial)
+description: |-
+  PREMISE: these are NOT deprecation candidates. Every one of them is built, tested and documented. The question this spike answers is why work does not route into them, and what single change would fix that per lane. Retire is an allowed outcome only where a lane is shown to be redundant or wrong, and must say which.
+
+  EVIDENCE (measured 2026-09-17):
+
+    lane                     specs ever    last used
+    batch:fasttrack          8             2026-07-18
+    lifecycle:no-review      13            -
+    lifecycle:trivial        6             2026-07-12
+    batch:express            0             never
+    lifecycle:no-ci-wait     0             never
+    --single-branch          0             never
+
+  `aida usage` has ZERO rows for the `fasttrack` verb in the 30-day window, so the CLI entry point is not being invoked at all.
+
+  THE TRIGGERING INCIDENT. The operator asked whether AIDA can fix/test/review/CI a SET of issues as one unit. I answered from docs/lifecycle.md and the batch help, concluded the capability was missing, and designed a `--as-one-pr` feature with the operator across two turns. It already exists: `aida queue work --batch NAME --auto-complete --single-branch`, shipped as TASK-1003 out of SPIKE-70, with cluster_pr_title/cluster_pr_body in pr_ship.rs and a completion-scan round-trip test. A sibling `--sequential` exists too. Neither surfaced.
+
+  That is the finding in miniature: zero usage here measured DISCOVERABILITY, not value. An agent holding CLAUDE.md, the lifecycle doc and the batch help still could not find a completed keystone feature. A human is worse off.
+
+  WHAT TO INVESTIGATE, per lane, classify as one of: undiscoverable / unroutable / wrong-default / genuinely-redundant.
+
+  1. Undiscoverable. `--single-branch` and `--sequential` live only in `queue work --help`, behind a flag list long enough that nobody reads to them. Neither is in CLAUDE.md's daily-use block. SPIKE-70 and TASK-1003 are Completed and archived, so the knowledge left the working set when the specs closed. Ask: what should carry a capability forward after its spec closes?
+
+  2. Unroutable. Nothing PROPOSES these lanes. backlog.rs already computes classify_pair_overlap -> PairVerdict::Serialize{shared} at groom time, which is exactly the "these want one branch" signal, and it terminates in "do not parallelize" instead. The groom pass is the natural place for a lane proposal and makes none.
+
+  3. Contradictory help. `aida backlog groom --help` promises it tags batch:NAME "so `aida queue work --batch NAME` can drain them as one cluster". The default batch drain is one full lifecycle PER MEMBER. The sentence is only true with a flag the groom help never names. An operator reading groom's help reasonably concludes clustering is automatic.
+
+  4. Wrong default. fasttrack was used for ~5 weeks in Jun-Jul then abandoned. Find out what displaced it: too many tiers to choose from, the eligibility litmus being too much thinking for a one-line fix, or plain forgetting.
+
+  5. Stale cost basis. CLAUDE.md:212 claims PR CI is "~3-5 min". Measured over the last 25 ci.yml runs it is a ~9 min median (6-10, one 18). Every lane decision anchors on that number and it is stale by ~2x, in the direction that makes fast lanes look less necessary than they are.
+
+  DELIVERABLES
+  - A per-lane verdict with the classification above and ONE concrete routing change each.
+  - A recommendation on the general problem: where a completed capability should be surfaced so it survives its spec closing (next[] hints, groom proposals, CLAUDE.md daily-use block, `aida do` mode routing).
+  - Whether the lane set is too large to choose from, and if so which lanes collapse.
+  - Correct the CI duration in CLAUDE.md as a side-effect fix.
+
+  NON-GOAL: building any new drain capability. The capability exists; this is about the seam between having it and reaching it.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T04:52:53.322025721Z
+modified_at: 2026-09-18T04:52:53.322025721Z
+req_type: Spike
+tags:
+- adoption
+- discovery
+- dogfooding
+- orchestration
+- usage-signal
+human_only: true
