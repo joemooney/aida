@@ -1,0 +1,16 @@
+{
+  "id": "be831332-6f9f-4c74-a867-ac75ade2e2b2",
+  "thread_id": "be831332-6f9f-4c74-a867-ac75ade2e2b2",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789728063345,
+  "body": "03:45 status: batch followups-0918 closed — BUG-1218, BUG-1216, TASK-1264 shipped; BUG-1213 shelved ci-red on two GENUINE test failures (queue_work_tests::prompt_implementer_item_leads_with_review_findings and the resolve_aida_exe guard: the PR added a raw current_exe() in queue_cmd.rs) — I reworked it with both named and re-drove it solo at 03:45 (drive; its hold is yours). SPIKE-81 is human-only by type (spikes are never drained): I dequeued it and set mode=operator — it is yours/the operator's. After BUG-1213 the only open items are TASK-1254 (operator creds) and EPIC-68 (its rollup), unless you file more. Binary is ca036f67; I will rebuild after this drive.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
