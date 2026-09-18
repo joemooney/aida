@@ -1,0 +1,26 @@
+id: 01a0b668-63e5-7733-898e-7462d7f236e1
+spec_id: STORY-1227
+agreed_id: STORY-1227
+title: 'Review PR-1943: [AI:codex] fix(store): fail closed during interrupted rebase (BUG-1229)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b64e`) for branch `bug-1229`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1943>
+  - Branch: `bug-1229` → `main`
+
+  ## Covers
+
+  - BUG-1229
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1943` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T21:24:49.765846403Z
+modified_at: 2026-09-18T21:24:49.765846403Z
+req_type: Story
