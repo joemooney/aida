@@ -334,25 +334,31 @@ pub fn ship_branch_context(
     (branch_to_delete, retarget_base, child_prs)
 }
 
-/// BUG-710/BUG-716: substrate-as-bouncer decision — should `aida pr ship`
-/// REFUSE its merge step? An implementer running inside an orchestrated drive
-/// must not self-merge its own PR: `aida zen` promises an INDEPENDENT reviewer
-/// before the auto-merge, and a phase-1 self-merge bypasses it (the failure the
-/// codex TASK-1115/1119 *headless* and TASK-1123 *supervised* drives exposed).
-/// The implementer's job is to OPEN the PR; the orchestrator's CI + reviewer +
-/// merge phases finish it.
-///
-/// BUG-710 gated only on `AIDA_HEADLESS=1`, so a `--supervised` (interactive)
-/// implementer slipped past and self-merged (BUG-716). The caller now passes
-/// `in_orchestrated_drive` = `AIDA_HEADLESS` OR a LIVE drain lock
-/// (`probe_lock == Running`) — present in every drive mode (headless AND
-/// supervised), absent for a plain `aida queue work <spec>` session and for a
-/// stale post-crash lock (BUG-712). One explicit opt-in
-/// (`AIDA_PR_SHIP_ALLOW_IN_DRIVE=1`) covers a deliberate in-drive direct-publish.
-/// Pure so the decision is unit-testable without the process env or a live drive.
-// trace:BUG-710 trace:BUG-716 | ai:claude
-pub fn should_block_ship_merge(in_orchestrated_drive: bool, override_allow: bool) -> bool {
-    in_orchestrated_drive && !override_allow
+/// Why `aida pr ship` must leave a PR open for the drive's independent reviewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShipMergeBlockReason {
+    DriveSeat,
+    DriveOwnedPr,
+}
+
+/// BUG-710/BUG-716/TASK-1253: a drive seat may not merge any PR, and no caller
+/// may merge the live drive's own PR. Merely observing an unrelated live drain
+/// is not grounds to block: those merges serialize on the merge lease.
+// trace:BUG-710 trace:BUG-716 trace:TASK-1253 | ai:codex
+pub fn ship_merge_block_reason(
+    caller_is_drive_seat: bool,
+    pr_is_drive_owned: bool,
+    override_allow: bool,
+) -> Option<ShipMergeBlockReason> {
+    if override_allow {
+        None
+    } else if caller_is_drive_seat {
+        Some(ShipMergeBlockReason::DriveSeat)
+    } else if pr_is_drive_owned {
+        Some(ShipMergeBlockReason::DriveOwnedPr)
+    } else {
+        None
+    }
 }
 
 /// BUG-732: after a forge merge command returns non-zero, decide whether the
@@ -1026,18 +1032,25 @@ mod tests {
     }
 
     #[test]
-    fn should_block_ship_merge_truth_table() {
-        // BUG-710/BUG-716: the first arg is "inside an orchestrated drive" —
-        // AIDA_HEADLESS OR a live drain lock — so it now covers BOTH the
-        // headless AND the supervised/interactive implementer.
-        // Inside a drive (headless or supervised) → REFUSE the self-merge.
-        assert!(should_block_ship_merge(true, false));
-        // Not in a drive (plain session / human at the keyboard) → allow.
-        assert!(!should_block_ship_merge(false, false));
-        // In a drive but the explicit opt-in is set → allow (deliberate publish).
-        assert!(!should_block_ship_merge(true, true));
-        // Override with no drive context is a no-op → still allowed.
-        assert!(!should_block_ship_merge(false, true));
+    fn unrelated_pr_from_plain_shell_is_allowed_during_drain() {
+        assert_eq!(ship_merge_block_reason(false, false, false), None);
+    }
+
+    #[test]
+    fn drive_owned_pr_from_plain_shell_is_blocked_with_owned_reason() {
+        assert_eq!(
+            ship_merge_block_reason(false, true, false),
+            Some(ShipMergeBlockReason::DriveOwnedPr)
+        );
+    }
+
+    #[test]
+    fn drive_seat_blocks_any_pr_with_seat_reason() {
+        assert_eq!(
+            ship_merge_block_reason(true, false, false),
+            Some(ShipMergeBlockReason::DriveSeat)
+        );
+        assert_eq!(ship_merge_block_reason(true, true, true), None);
     }
 
     #[test]
