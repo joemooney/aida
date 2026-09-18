@@ -73609,5 +73609,13 @@ operations:
   timestamp: 2026-09-18T01:03:24.110869435Z
   kind: !SetDescription
     description: 'Follow-up from the STORY-1178 plan: [aida:sem] micro-decisions are marked comments today (ADR-42 decision 2, zero schema churn). Promote to a first-class SEM-N record type only if comment volume makes aggregation/querying by marker inadequate. Design-bearing (schema + ID dispenser + graph) — not drain work.'
-clock: 5731
+- id: 01a0b20a-3202-7990-beea-796783cc791f
+  target_id: 01a0b0eb-2734-7153-9425-61ceee95b412
+  author: aida
+  node_id: '1'
+  lamport: 5732
+  timestamp: 2026-09-18T01:03:27.746624777Z
+  kind: !SetDescription
+    description: 'Follow-up from the STORY-1178 plan: a lifecycle flag (reconstitutable) a spec earns by passing aida reconstitute at a threshold score. Design-bearing: needs the probe''s precision to be trusted first (score is heuristic, agent-judged) and a decision on where the flag lives (status vs view-flag like archived/deferred). Not drain work.'
+clock: 5732
 node_id: '1'

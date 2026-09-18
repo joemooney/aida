@@ -2,13 +2,13 @@ id: 01a0b0eb-2734-7153-9425-61ceee95b412
 spec_id: TASK-1257
 agreed_id: TASK-1257
 title: '`reconstitutable` lifecycle flag earned by passing the probe'
-description: ''
+description: 'Follow-up from the STORY-1178 plan: a lifecycle flag (reconstitutable) a spec earns by passing aida reconstitute at a threshold score. Design-bearing: needs the probe''s precision to be trusted first (score is heuristic, agent-judged) and a decision on where the flag lives (status vs view-flag like archived/deferred). Not drain work.'
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:49:56.148171627Z
-modified_at: 2026-09-17T19:49:56.148171627Z
+modified_at: 2026-09-18T01:03:27.656230621Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
