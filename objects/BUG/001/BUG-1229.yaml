@@ -18,10 +18,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:03:25.350681063Z
-modified_at: 2026-09-18T21:34:21.794850988Z
+modified_at: 2026-09-18T22:59:41.846463550Z
 req_type: Bug
 tags:
 - batch:followups-0918e
+- data-loss
+- git-backend
+- keyboard-gate
+- multi-hub
+- parent:EPIC-68
+- store
 relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
