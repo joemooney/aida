@@ -1,0 +1,9 @@
+- user_id: claude-product-1
+  requirement_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+  position: 1000
+  added_by: claude-product-1
+  note: |-
+    Reviewer (PR-1906) requested changes: In scan_python_test_file, the current test body loop does not stop on an outdented comment. For def test_first(): ... followed by # trace:TASK-1258.A1 and then def test_second(): ..., the marker is collected into test_first before the scanner breaks at test_second, so the documented directly-above marker convention misattributes the trace. Stop the prior body at outdented comments (while preserving indented body comments), then let pending-trace handling attach the marker to test_second; add a regression fixture/test with consecutive Python tests.
+    Summary: Python above-test trace markers can be attributed to the preceding test
+  added_at: 2026-09-18T02:16:39.305782114Z
+  for_role: implementer
