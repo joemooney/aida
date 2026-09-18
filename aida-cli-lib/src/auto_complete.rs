@@ -1728,10 +1728,18 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 .and_then(|r| ctx.forge.ci_view_cmd(r))
                 .or(branch_runs)
                 .unwrap_or_else(|| "check your CI dashboard".to_string());
-            let run = ctx.ci_run_id.as_deref().unwrap_or("<ID>");
+            // BUG-1226: GitLab's coarse CI probe does not currently provide a
+            // pipeline id. Do not expose the internal `<ID>` placeholder when
+            // the forge-specific branch viewer is the best available target.
+            // trace:BUG-1226 | ai:codex
+            let failure = ctx
+                .ci_run_id
+                .as_deref()
+                .map(|run| format!("CI failed on run {run}"))
+                .unwrap_or_else(|| "CI failed".to_string());
             format!(
-                "CI failed on run {run} — view it: `{view}`. Push fixups to the same \
-                 branch: `aida queue work {spec} --branch {branch} --steal`"
+                "{failure} — view it: `{view}`. Push fixups to the same branch: \
+                 `aida queue work {spec} --branch {branch} --steal`"
             )
         }
         (Phase::Ci, FailureKind::CiTimeout) => {
@@ -8595,6 +8603,19 @@ mod tests {
         c.ci_run_id = None;
         let hint = recovery_hint(Phase::Ci, FailureKind::CiRed, &c);
         assert!(hint.contains("gh run list --branch task-247"));
+        assert!(!hint.contains("<ID>"));
+        assert!(!hint.contains("CI failed on run"));
+    }
+
+    #[test]
+    fn recovery_hint_gitlab_ci_red_without_pipeline_id_omits_placeholder() {
+        let mut c = ctx();
+        c.forge = crate::forge::ForgeKind::GitLab;
+        c.ci_run_id = None;
+        let hint = recovery_hint(Phase::Ci, FailureKind::CiRed, &c);
+        assert!(hint.contains("CI failed — view it: `glab ci status`"));
+        assert!(!hint.contains("<ID>"));
+        assert!(!hint.contains("CI failed on run"));
     }
 
     #[test]
