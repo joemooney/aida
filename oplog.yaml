@@ -75965,5 +75965,32 @@ operations:
   timestamp: 2026-09-18T09:58:41.727262329Z
   kind: !SetStatus
     status: Completed
-clock: 5882
+- id: 01a0b3f7-eb3f-7402-8ccc-5773955a0504
+  target_id: 01a0b3f7-e6df-7573-96d6-39e4adaef0e4
+  author: aida
+  node_id: '1'
+  lamport: 5883
+  timestamp: 2026-09-18T10:02:44.415175550Z
+  kind: !Create
+    title: 'criteria parser (post-BUG-1216) is too greedy on the colon-form section: BUG-1218 now lists ~40 ''criteria'' that are pasted worktree paths from its evidence paragraph; the colon section must take only '
+    description: |-
+      Observed 2026-09-18 03:02 right after #1922 (BUG-1216) merged. The union parser correctly restored BUG-1209's five colon-form criteria (previously shadowed by the harvested `## Acceptance` heading). But `aida criteria BUG-1218` now returns roughly 40 criteria, most of them lines like `/home/joe/ai/aida-task-…` — the spec's evidence paragraph contains an inline "Acceptance:" marker followed later by a pasted `git worktree list` block, and the colon-form scanner keeps consuming lines after the marker (paths, prose fragments such as "the member parks with …", "after a refused auto-r…") until the end of the description. Every one of those is now an "untested criterion" in coverage output and a candidate for trace:SPEC.ACn — pure noise.
+
+      Rules the colon-form section should follow (mirror the heading form):
+      1. The marker must be a standalone line (`Acceptance:` / `Acceptance criteria:`, optional bold/underscore markup) — an inline "Acceptance:" mid-paragraph is NOT a section start.
+      2. Only bullet lines count (`- `, `* `, `N.`/`N)`, or an explicit `A1.`/`AC2:` label), each becoming one criterion; continuation lines indented under a bullet join it.
+      3. The section ends at the first blank line followed by a non-bullet line, at the next heading, or at a fenced code block (``` … ``` is never parsed).
+      4. If a description has BOTH a colon section and a `## Acceptance` heading, union them (BUG-1216 behaviour) but apply rules 1-3 to each.
+
+      Also repair BUG-1218's two harvested labels (AC557146 → AC1, AC557147 → AC2) which the BUG-1216 PR did not touch, and re-check BUG-1209's harvested line (AC512631 is no longer listed by aida criteria after #1922 — confirm it was folded into the colon section as a bullet and is still present in the description; if it was dropped, restore it as `- AC1. …`).
+
+      Acceptance:
+      - Fixture reproducing BUG-1218's shape (inline "Acceptance:" mid-paragraph + a later pasted path list) yields ZERO criteria from that paragraph; a standalone `Acceptance:` line + bullets yields exactly the bullets; a fenced block inside a section is ignored.
+      - `aida criteria BUG-1218` lists only its real criteria (the two harvested ACs, relabelled AC1/AC2, plus any genuine bullets).
+      - BUG-1209 shows its five originals plus the harvested criterion; no `## Acceptance` duplicate.
+      - next_ac_label cases from BUG-1216 stay green.
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5883
 node_id: '1'
