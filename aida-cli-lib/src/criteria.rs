@@ -468,10 +468,7 @@ fn scan_python_test_file(root: &Path, path: &Path, content: &str, spec: &str) ->
                 let body = lines[index];
                 let body_trimmed = body.trim_start();
                 let body_indent = body.len() - body_trimmed.len();
-                if !body_trimmed.is_empty()
-                    && !body_trimmed.starts_with('#')
-                    && body_indent <= indent
-                {
+                if !body_trimmed.is_empty() && body_indent <= indent {
                     break;
                 }
                 traces.extend(traces_in_line(body, spec));
@@ -866,7 +863,14 @@ mod tests {
         let fixture_root = root.join("src/tests/fixtures/criteria");
         let cases = [
             ("sample.rs", vec!["rust_above", "rust_inside"]),
-            ("sample.py", vec!["test_python_above", "test_python_inside"]),
+            (
+                "sample.py",
+                vec![
+                    "test_python_above",
+                    "test_python_inside",
+                    "test_python_after_direct_marker",
+                ],
+            ),
             ("sample.ts", vec!["typescript above", "typescript inside"]),
             ("sample.go", vec!["TestGoAbove", "TestGoInside"]),
         ];
@@ -892,10 +896,27 @@ mod tests {
     }
 
     #[test]
+    fn python_outdented_marker_attaches_to_following_test() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let path = root.join("src/tests/fixtures/criteria/sample.py");
+        let content = std::fs::read_to_string(&path).expect("fixture");
+        let tests = scan_python_test_file(root, &path, &content, "STORY-1");
+
+        assert!(!tests
+            .iter()
+            .any(|test| test.name == "test_python_before_direct_marker"));
+        let following = tests
+            .iter()
+            .find(|test| test.name == "test_python_after_direct_marker")
+            .expect("directly-above marker belongs to the following test");
+        assert_eq!(following.traces, vec!["STORY-1.A3"]);
+    }
+
+    #[test]
     fn mixed_language_tree_reports_paths_and_lines() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/criteria");
         let tests = scan_tests_for_criteria(&root, "STORY-1").expect("scan fixtures");
-        assert_eq!(tests.len(), 8);
+        assert_eq!(tests.len(), 9);
         for test in tests {
             assert!(test.path.starts_with("sample."), "{}", test.path);
             assert!(test.line > 0);

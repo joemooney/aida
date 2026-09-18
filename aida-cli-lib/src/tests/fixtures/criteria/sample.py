@@ -9,3 +9,9 @@ class TestGroup:
 
 def test_python_untraced():
     pass
+
+def test_python_before_direct_marker():
+    pass
+# trace:STORY-1.A3 | ai:codex
+def test_python_after_direct_marker():
+    pass
