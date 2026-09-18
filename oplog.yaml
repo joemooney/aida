@@ -75715,5 +75715,21 @@ operations:
   timestamp: 2026-09-18T08:49:33.076642677Z
   kind: !AddTag
     tag: proxy-groomed
-clock: 5865
+- id: 01a0b3b4-f230-7942-8336-0114334f9d2a
+  target_id: 01a0b30b-3fbf-7991-9e19-f6f6d6306cfd
+  author: aida
+  node_id: '1'
+  lamport: 5866
+  timestamp: 2026-09-18T08:49:35.280131701Z
+  kind: !AddTag
+    tag: batch:followups-0918
+- id: 01a0b3b4-f2c5-78f3-8154-ea2570b5ae12
+  target_id: 01a0b30b-3fbf-7991-9e19-f6f6d6306cfd
+  author: aida
+  node_id: '1'
+  lamport: 5867
+  timestamp: 2026-09-18T08:49:35.429443571Z
+  kind: !AddTag
+    tag: proxy-groomed
+clock: 5867
 node_id: '1'
