@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:05:47.682830968Z
-modified_at: 2026-09-18T15:05:47.682830968Z
+modified_at: 2026-09-18T15:45:35.128328994Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,10 @@ tags:
 - ci
 - failure-2
 - failure-kind:watchdog
+comments:
+- id: 01a0b531-cd98-7e32-a87b-e0528f19730c
+  author: joe
+  content: 'Auto-filed by the first headless drain shelve on the GitLab mirror (TASK-1269, 2026-09-18). Root cause: GitLabForge::stream_ci_for_branch returned a single probe when headless, so a pending pipeline read as ''never reached a terminal state''. Fixed on task-1254-work (commit cac296deb7, PR #1932) as part of TASK-1254''s live validation; the re-driven run blocks correctly. Closing this record in favour of that fix.'
+  created_at: 2026-09-18T15:45:35.128328994Z
+  modified_at: 2026-09-18T15:45:35.128328994Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
