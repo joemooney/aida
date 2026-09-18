@@ -1,0 +1,32 @@
+id: 01a0b5fc-ec4d-7493-a755-33abd4c39528
+spec_id: TASK-1277
+agreed_id: TASK-1277
+title: 'Typed protocols slice 2: protocol check at done — aida queue done / pr create evaluate the type protocol''s machine-checkable items, warn by default, refuse when [protocol] enforce = refuse, --force wi'
+description: |-
+  Child of STORY-1221 (typed protocols). The story ships storage + injection; this task ships the gate.
+
+  Scope: aida queue done and aida pr create evaluate the machine-checkable items of the spec type's protocol (a file matching the deliverable glob is in the diff — docs/spikes/<date>-*.md for a spike; an ADR is status accepted with a references edge; a bug PR touches at least one test file) and report each item as met/missing with the layer it came from (type < lane < spec ## Acceptance). Default posture is WARN ([protocol] enforce = "warn"): the missing items are printed and the ledger comment records them, but done proceeds. [protocol] enforce = "refuse" makes a missing item block done/PR creation with the item named; --force overrides with a ledger comment naming who forced and why. The headless reviewer prompt carries the same checklist so review rounds cite protocol items by name. Reuse: the deliverable-in-diff check is the same shape as the harvest/criteria loop's file scan (STORY-1178) — share the helper, do not re-implement.
+
+  Why guided/keyboard: a gate that misfires blocks every drain in the repo; the operator decides the default posture and the first refuse-able items at the keyboard.
+
+  Acceptance:
+  - aida queue done on a SPIKE whose PR has no docs/spikes/*.md prints "protocol: spike — missing deliverable docs/spikes/<date>-<slug>.md" and proceeds under enforce = warn; refuses under enforce = refuse; --force proceeds and writes a ledger comment.
+  - The same check runs at aida pr create and its output appears in the PR body under a "Protocol" heading.
+  - A bug PR with no test-file change is reported the same way (warn/refuse per config).
+  - The reviewer prompt for a headless review includes the type's checklist items verbatim.
+  - Unit tests: one per machine-checkable item kind, plus the warn/refuse/force matrix; integrity floors (CI gate, merge lease, single drain) are untouched.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T19:27:26.797150984Z
+modified_at: 2026-09-18T19:27:26.797150984Z
+req_type: Task
+tags:
+- agent-ux
+- discipline
+- keyboard-gate
+- parent:EPIC-28
+- protocol:slice-2
+- substrate-as-bouncer
+execution_mode: guided
