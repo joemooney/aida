@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T09:30:55.700236932Z
+modified_at: 2026-09-18T09:34:08.219146771Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -36,5 +36,11 @@ comments:
     Repair BUG-1209 by hand in the fix PR: fold the AC512631 line into the colon section as `- AC1. …` (or convert the whole section to `## Acceptance` with the five originals labelled A1..A5 and the new one AC1).
   created_at: 2026-09-18T07:27:47.394515954Z
   modified_at: 2026-09-18T07:27:47.394515954Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b3dd-bb5b-7d80-afea-e06feb5d6d04
+  author: joe
+  content: 'Second instance (advisor, 2026-09-18 02:35): harvesting BUG-1218 produced BUG-1218.AC557146 and .AC557147 although its description has NO line-start `## Acceptance` / `Acceptance:` section — so parse_acceptance_criteria is finding hash-labelled criteria from an inline "Acceptance:" mid-paragraph (or similar prose), and next_ac_label again turned a hash tail into a number. Two additions for the fix: (a) include this shape in the fixture (inline "Acceptance:" inside a paragraph, followed by bullets) and decide explicitly whether it should parse at all — if it does, the harvested line must land in that same span, not in a new heading; (b) repair BUG-1218''s two labels alongside BUG-1209''s (AC557146 → AC1, AC557147 → AC2); no tests trace them yet.'
+  created_at: 2026-09-18T09:34:08.219146771Z
+  modified_at: 2026-09-18T09:34:08.219146771Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
