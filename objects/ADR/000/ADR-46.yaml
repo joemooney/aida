@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:14:22.526081517Z
-modified_at: 2026-09-18T21:14:22.526081517Z
+modified_at: 2026-09-18T21:14:24.293021957Z
 req_type: Decision
 tags:
 - adr
@@ -31,3 +31,7 @@ tags:
 - multivendor
 - parent:EPIC-62
 - seats
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-18T21:14:24.293021957Z
