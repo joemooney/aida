@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:56:54.827970711Z
-modified_at: 2026-09-18T02:30:24.166847536Z
+modified_at: 2026-09-18T02:30:27.343867959Z
 req_type: Bug
 tags:
 - batch:exe-0917
@@ -32,4 +32,15 @@ tags:
 - follow-up:TASK-1249
 - harvest
 - ledger
+comments:
+- id: 01a0b259-d70f-7362-90b0-6cec2432f4ae
+  author: joe
+  content: |-
+    ROOT CAUSE (advisor, 2026-09-17 19:30, reproduced twice: TASK-1253 at 18:52 and TASK-1258 at 19:28, both AFTER the first batch member's phase 6 'build verify' rebuilt target/release/aida at 18:28 / 19:16):
+    the drain log's full error is "could not run `aida comment add … --author harvest`: No such file or directory (os error 2)". harvest::aida_exe() (harvest.rs:723) and reconstitute::aida_exe() (reconstitute.rs:243) call std::env::current_exe() per invocation; once cargo has replaced the binary the still-running drain's /proc/self/exe reads "<path> (deleted)", which Command::new cannot spawn. The orchestrator itself is immune because RealPhaseDriver resolves self.aida_exe ONCE at construction; solo_cmd.rs:18 and pr_cmd.rs:~1895 already special-case the "(deleted)" suffix. TASK-1255's harvest (18:27, before the first rebuild) succeeded — consistent.
+
+    Scope widening: this is a CLASS bug — every raw current_exe() subprocess site in a long-lived process breaks after a rebuild (harvest, reconstitute, pr_review_story_already_exists in lib.rs, the TUI's app.rs aida_exe(), …). Fix: one shared crate::aida_exe_path() that (1) strips a trailing " (deleted)" and re-validates the path exists, (2) falls back to `aida` on PATH, (3) is resolved once and cached for the process; replace all raw call sites; add a unit test for the "(deleted)" strip. Keep the ledger-persist-before-comment + brief-regardless items from the original description — they are still right (any spawn failure must not lose the audit).
+  created_at: 2026-09-18T02:30:27.343867959Z
+  modified_at: 2026-09-18T02:30:27.343867959Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
