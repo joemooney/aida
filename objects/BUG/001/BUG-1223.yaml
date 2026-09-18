@@ -8,10 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:23:24.751360127Z
-modified_at: 2026-09-18T15:23:24.751360127Z
+modified_at: 2026-09-18T15:23:34.612503143Z
 req_type: Bug
 tags:
 - aida:pr:auto-queue-review
 - forge
 - gitlab
 - parent:EPIC-68
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-18T15:23:34.612503143Z
