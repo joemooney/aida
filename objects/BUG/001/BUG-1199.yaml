@@ -22,10 +22,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:56:54.827970711Z
-modified_at: 2026-09-18T02:31:18.546337595Z
+modified_at: 2026-09-18T02:32:47.012967618Z
 req_type: Bug
 tags:
 - batch:exe-0917
+- batch:followups-0917
 - current-exe
 - drain
 - drain-safe
