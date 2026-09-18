@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:56:51.325973803Z
-modified_at: 2026-09-18T13:19:29.948860934Z
+modified_at: 2026-09-18T13:24:14.103452302Z
 req_type: Task
 tags:
 - batch:followups-0918c
@@ -23,6 +23,25 @@ relationships:
   target_id: 01a0b4ab-f93b-73e0-93a8-c67460b368d1
   created_at: 2026-09-18T13:19:29.948856186Z
   created_by: joe
+comments:
+- id: 01a0b4b0-6497-7a63-8c87-e4407fca43a2
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1929
+    agent: codex
+    ran-at: 2026-09-18 06:24 -07:00
+    mode: propose-only (drain)
+    proposed: 4
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1266-drain-01a0b4af-f0ac-7500-a929-fea4124d2c2c.json
+    ? SEM (0.94) — A predicted footprint is docs/templates-only only when it is non-empty and every normalized path is under a `docs` or `templates` directory; matching is case-insensitive and treats backslashes as path separators.
+    ? SEM (0.86) — Only groom-eligible specs receive lifecycle:trivial proposals; fenced specs are excluded even if their tags or predicted footprint otherwise qualify.
+    ? SEM (0.95) — The advisor subprocess receives the eligible trivial-proposal IDs as a comma-separated `AIDA_INTAKE_TRIVIAL_PROPOSALS` environment value and must return an explicit `lifecycle:trivial: accept` or `lifecycle:trivial: decline` disposition for each ID.
+    ? AC (0.90) — When groom is given a batch name, each serialize-lane proposal substitutes that actual name into the printed `--batch` command; without a batch name it prints the placeholder `NAME`.
+  created_at: 2026-09-18T13:24:14.103452302Z
+  modified_at: 2026-09-18T13:24:14.103452302Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
