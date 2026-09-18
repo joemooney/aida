@@ -10,12 +10,12 @@ description: |-
   Also fix BUG-1209's own label: rename BUG-1209.AC512631 → BUG-1209.AC1 in its ## Acceptance (no test traces it yet, so no trace comments to update).
 
   Acceptance: the unit cases above pass; harvesting onto a spec with only hash-labeled criteria yields AC1; BUG-1209's criterion reads AC1.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T09:58:33.800088345Z
+modified_at: 2026-09-18T09:58:40.943575354Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -70,6 +70,21 @@ comments:
   created_at: 2026-09-18T09:58:33.800088345Z
   modified_at: 2026-09-18T09:58:33.800088345Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b3f4-342e-7921-9b9c-0f9c67dec262
+  author: aida-auto-bump
+  timestamp: 2026-09-18T09:58:40.942896668Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b3f4-342f-7341-b89b-369943a2f1d2
+  timestamp: 2026-09-18T09:58:40.943574789Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1216-2026-09-18T095834Z.md
+  commit_sha: bd6d5d0ad9c03cedfd91af31d2ac09e0e978c032
+  summary: Completed via merge bd6d5d0a
 test_coverage_notes: Added regression cases for hash-only and mixed labels, colon-form append preserving all criteria, and mixed inline/heading parser union. Targeted aida-cli-lib tests and cargo fmt check pass.
 implementation_summary: Harvest now ignores generated ac<6-hex> IDs when allocating explicit AC numbers, appends into standalone colon-style acceptance sections, and unions inline plus headed sections during parsing so existing criteria cannot be shadowed.
 execution_mode: drain
@@ -77,3 +92,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-18T09:43:10.203211913Z
   implemented_by: joe
+  completed_at: 2026-09-18T09:58:40.942697975Z
+  completion_sha: bd6d5d0ad9c03cedfd91af31d2ac09e0e978c032
