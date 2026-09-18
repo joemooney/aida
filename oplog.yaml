@@ -74155,5 +74155,25 @@ operations:
     req_type: Bug
     status: Approved
     priority: Low
-clock: 5771
+- id: 01a0b272-d53c-7873-a5c2-0953642d66cd
+  target_id: 01a0b272-ce8d-7ca2-98e1-d0aab82ebd4d
+  author: aida
+  node_id: '1'
+  lamport: 5772
+  timestamp: 2026-09-18T02:57:45.276279854Z
+  kind: !Create
+    title: 'Finish the current_exe() sweep: remaining raw call sites (lib.rs pr_review_story_already_exists, session.rs, supervise_cmd.rs, upgrade_cmd.rs, dev_cmd.rs) + a TUI-side strip + a source-guard test'
+    description: |-
+      Follow-up to BUG-1199 (#1907), which introduced the process-wide crate::aida_exe_path() resolver and swept nine call sites. Still calling std::env::current_exe() directly for subprocess spawning (grep 2026-09-17): aida-cli-lib/src/lib.rs pr_review_story_already_exists (used by session end / auto-queue — a long-lived interactive session hits it after a rebuild), session.rs, supervise_cmd.rs (the oversight watch loop is long-lived), upgrade_cmd.rs, dev_cmd.rs, and aida-tui/src/app.rs aida_exe() + redesign/liveness.rs (the TUI is the longest-lived process of all and cannot import aida-cli-lib — give it its own tiny resolver with the same '(deleted)' strip + PATH fallback, or move the resolver into aida-core so both crates share it).
+
+      Work:
+      - Route every remaining spawn site through aida_exe_path() (cli-lib) or the shared/TUI resolver; judge one-shot commands (upgrade/dev) case by case but prefer the resolver everywhere for uniformity.
+      - Add a source-guard test in aida-cli-lib: no file other than the resolver's module contains "current_exe()" (split the needle so the test does not match itself), mirroring the ci_gate_has_no_direct_forge_cli_calls idiom. Same guard in aida-tui.
+      - Manual/docs: one line in docs/environment-variables.md or the dev workflow section noting that a rebuild under a running aida process is safe because subprocesses resolve the binary once.
+
+      Acceptance: grep for current_exe() outside the resolver modules is empty; guard tests exist in both crates; existing tests green.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5772
 node_id: '1'
