@@ -1689,6 +1689,22 @@ impl GitLabForge {
             .context("could not invoke `glab` — is the GitLab CLI installed?")
     }
 
+    fn glab_api_put(&self, path: &str, fields: &[(&str, &str)]) -> Result<std::process::Output> {
+        let mut args: Vec<String> = vec!["api".into(), "-X".into(), "PUT".into(), path.into()];
+        for (k, v) in fields {
+            args.push("-f".into());
+            args.push(format!("{k}={v}"));
+        }
+        let glab = crate::resolve_forge_cli(ForgeKind::GitLab).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `glab` — is the GitLab CLI installed?")
+        })?;
+        Command::new(&glab)
+            .current_dir(&self.project_root)
+            .args(args.iter().map(String::as_str))
+            .output()
+            .context("could not invoke GitLab's merge API")
+    }
+
     /// Best-effort resolve the open MR iid for a branch — used to fill the
     /// `change` number a [`CiProbeResult`] carries. GitLab pipelines are
     /// branch-scoped, so a missing MR (no MR opened yet) is not an error: it
@@ -2044,39 +2060,80 @@ impl Forge for GitLabForge {
         opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
-        // `glab mr merge <iid> --squash [--message <s>] [--remove-source-branch]
-        // --yes`. Symmetric with the gh path; live-validated against a real
-        // GitLab in slice 3 (needs a PAT). trace:STORY-516 | ai:claude
-        let iid = c.id.to_string();
-        let mut args: Vec<String> = vec!["mr".into(), "merge".into(), iid];
-        match opts.method {
-            MergeMethod::Squash => args.push("--squash".into()),
-            MergeMethod::Rebase => args.push("--rebase".into()),
-            MergeMethod::Merge => {}
+        // BUG-1232: `glab mr merge` rewrites some GitLab 405/409 responses as a
+        // false "not enough privileges" error. Gate on GitLab's authoritative
+        // detailed_merge_status, then call the REST merge endpoint directly.
+        // Statuses that mean GitLab is still computing or observing CI get a
+        // bounded wait-and-reread; all other blockers are returned with the
+        // actual status so the drain shelves an actionable reason. Never leak
+        // the misleading `glab mr merge` wrapper text. trace:BUG-1232 | ai:codex
+        let path = format!("projects/:id/merge_requests/{}", c.id);
+        const MAX_GATE_READS: usize = 6;
+        for attempt in 0..MAX_GATE_READS {
+            let view = self.glab_api_get(&path, &[])?;
+            anyhow::ensure!(
+                view.status.success(),
+                "GitLab could not read MR !{} before merge",
+                c.id
+            );
+            let body = String::from_utf8_lossy(&view.stdout);
+            let snapshot = parse_gitlab_merge_snapshot(&body)
+                .with_context(|| format!("could not read merge status for GitLab MR !{}", c.id))?;
+            if snapshot.state == "merged" {
+                return Ok(MergeResult {
+                    merged: true,
+                    sha: None,
+                    method: opts.method,
+                });
+            }
+            match classify_gitlab_merge_status(&snapshot.detailed_merge_status) {
+                GitLabMergeGate::Ready => {
+                    let squash = matches!(opts.method, MergeMethod::Squash).to_string();
+                    let remove = opts.delete_branch.to_string();
+                    let mut fields = vec![
+                        ("squash", squash.as_str()),
+                        ("should_remove_source_branch", remove.as_str()),
+                    ];
+                    if let Some(message) = opts.squash_subject.as_deref() {
+                        fields.push(("squash_commit_message", message));
+                    }
+                    let merged = self.glab_api_put(&format!("{path}/merge"), &fields)?;
+                    if merged.status.success() {
+                        return Ok(MergeResult {
+                            merged: true,
+                            sha: None,
+                            method: opts.method,
+                        });
+                    }
+                    if gitlab_merge_response_is_retryable(&merged.stderr)
+                        && attempt + 1 < MAX_GATE_READS
+                    {
+                        std::thread::sleep(std::time::Duration::from_secs(2));
+                        continue;
+                    }
+                    anyhow::bail!(
+                        "GitLab rejected merge of MR !{} while detailed_merge_status was `{}`{}",
+                        c.id,
+                        snapshot.detailed_merge_status,
+                        gitlab_api_message(&merged.stderr)
+                    );
+                }
+                GitLabMergeGate::Wait if attempt + 1 < MAX_GATE_READS => {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+                GitLabMergeGate::Wait => anyhow::bail!(
+                    "GitLab MR !{} is still waiting to merge (detailed_merge_status=`{}`)",
+                    c.id,
+                    snapshot.detailed_merge_status
+                ),
+                GitLabMergeGate::Blocked => anyhow::bail!(
+                    "GitLab MR !{} cannot merge (detailed_merge_status=`{}`)",
+                    c.id,
+                    snapshot.detailed_merge_status
+                ),
+            }
         }
-        if let Some(subject) = &opts.squash_subject {
-            args.push("--message".into());
-            args.push(subject.clone());
-        }
-        if opts.delete_branch {
-            args.push("--remove-source-branch".into());
-        }
-        args.push("--yes".into());
-        let argv: Vec<&str> = args.iter().map(String::as_str).collect();
-        let out = self.glab(&argv)?;
-        // STORY-516: unified merge_change contract — Err (with stderr) on a
-        // failed merge, Ok only when it landed. trace:STORY-516 | ai:claude
-        anyhow::ensure!(
-            out.status.success(),
-            "glab mr merge failed for !{}: {}",
-            c.id,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-        Ok(MergeResult {
-            merged: true,
-            sha: None,
-            method: opts.method,
-        })
+        unreachable!("bounded GitLab merge gate always returns or errors")
     }
 
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
@@ -2465,6 +2522,71 @@ fn glab_stderr_is_transient(stderr: &str) -> bool {
         || s.contains("502")
         || s.contains("504")
         || s.contains("eof")
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum GitLabMergeGate {
+    Ready,
+    Wait,
+    Blocked,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GitLabMergeSnapshot {
+    state: String,
+    detailed_merge_status: String,
+}
+
+// GitLab documents these as temporary mergeability states. In particular,
+// `ci_must_pass` can briefly remain after the head pipeline turns green; that
+// race was the live BUG-1232 failure. Everything unknown fails closed and is
+// surfaced verbatim for shelving rather than guessed mergeable.
+// trace:BUG-1232 | ai:codex
+fn classify_gitlab_merge_status(status: &str) -> GitLabMergeGate {
+    match status {
+        "mergeable" => GitLabMergeGate::Ready,
+        "ci_must_pass" | "ci_still_running" | "checking" | "preparing" => GitLabMergeGate::Wait,
+        _ => GitLabMergeGate::Blocked,
+    }
+}
+
+fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
+    let value: serde_json::Value = serde_json::from_str(body.trim())?;
+    Ok(GitLabMergeSnapshot {
+        state: value
+            .get("state")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        detailed_merge_status: value
+            .get("detailed_merge_status")
+            .and_then(|v| v.as_str())
+            .or_else(|| value.get("merge_status").and_then(|v| v.as_str()))
+            .unwrap_or("unknown")
+            .to_string(),
+    })
+}
+
+fn gitlab_merge_response_is_retryable(stderr: &[u8]) -> bool {
+    let stderr = String::from_utf8_lossy(stderr).to_ascii_lowercase();
+    stderr.contains("405")
+        || stderr.contains("409")
+        || stderr.contains("method not allowed")
+        || stderr.contains("cannot be merged")
+}
+
+/// Extract only GitLab's JSON message. Arbitrary CLI prose is deliberately
+/// discarded because glab's wrapper is the source of BUG-1232's false auth
+/// diagnosis.
+fn gitlab_api_message(stderr: &[u8]) -> String {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(stderr) else {
+        return String::new();
+    };
+    value
+        .get("message")
+        .and_then(|v| v.as_str())
+        .map(|message| format!(": {message}"))
+        .unwrap_or_default()
 }
 
 /// Map a `glab mr view <iid> --output json` body to a [`ChangeStatus`]. GitLab
@@ -3904,6 +4026,67 @@ mod tests {
     #[test]
     fn parse_glab_mr_status_rejects_garbage() {
         assert!(parse_glab_mr_status("not json").is_err());
+    }
+
+    #[test]
+    fn gitlab_merge_gate_classifies_every_transient_status() {
+        // Fixture classes from the BUG-1232 drain contract: these must wait
+        // and reread instead of invoking merge against stale GitLab state.
+        // trace:BUG-1232 | ai:codex
+        for status in ["ci_must_pass", "ci_still_running", "checking", "preparing"] {
+            assert_eq!(
+                classify_gitlab_merge_status(status),
+                GitLabMergeGate::Wait,
+                "{status}"
+            );
+        }
+        assert_eq!(
+            classify_gitlab_merge_status("mergeable"),
+            GitLabMergeGate::Ready
+        );
+        for status in [
+            "conflict",
+            "not_approved",
+            "discussions_not_resolved",
+            "unknown",
+        ] {
+            assert_eq!(
+                classify_gitlab_merge_status(status),
+                GitLabMergeGate::Blocked,
+                "{status}"
+            );
+        }
+    }
+
+    #[test]
+    fn gitlab_merge_snapshot_and_retry_responses_are_fixture_driven() {
+        let snapshot = parse_gitlab_merge_snapshot(
+            r#"{"state":"opened","detailed_merge_status":"ci_still_running"}"#,
+        )
+        .unwrap();
+        assert_eq!(snapshot.state, "opened");
+        assert_eq!(snapshot.detailed_merge_status, "ci_still_running");
+
+        for response in [
+            br#"glab: 405 Method Not Allowed"#.as_slice(),
+            br#"{"message":"405 Cannot be merged"}"#.as_slice(),
+            br#"HTTP 409 Conflict"#.as_slice(),
+        ] {
+            assert!(gitlab_merge_response_is_retryable(response));
+        }
+        assert!(!gitlab_merge_response_is_retryable(
+            b"HTTP 401 Unauthorized"
+        ));
+    }
+
+    #[test]
+    fn gitlab_merge_error_never_forwards_glab_wrapper_prose() {
+        let wrapper = b"glab: you do not have enough privileges to merge this merge request";
+        assert_eq!(gitlab_api_message(wrapper), "");
+        assert_eq!(
+            gitlab_api_message(br#"{"message":"Branch cannot be merged"}"#),
+            ": Branch cannot be merged"
+        );
     }
 
     #[test]
