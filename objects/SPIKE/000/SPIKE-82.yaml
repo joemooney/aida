@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T22:00:57.673324597Z
+modified_at: 2026-09-18T22:05:44.812862195Z
 req_type: Spike
 tags:
 - batch:followups-0918e
@@ -55,6 +55,30 @@ comments:
   content: 'Post-mortem committed as 17a3d0db33. Recomputed the 18:00-08:00 window from /home/joe/ai/aida/.aida/events.jsonl: 24 non-empty spec IDs, 17 PrMerged, 15 SpecShelved (10 request-changes, 3 ci-red, 2 tool-exit), 7 QueueDrained, 4 AdvisorEscalated; git first-parent records 28 main commits. Report includes hypothesis verdicts, 18:00 runbook, reliability-fix round accounting, and no-awake-seat gaps for STORY-1218. Branch pushed for independent advisor review; not self-merged.'
   created_at: 2026-09-18T22:00:23.639367246Z
   modified_at: 2026-09-18T22:00:23.639367246Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b68d-d9ec-74d0-bb94-8585e3b0198e
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1945
+    agent: codex
+    ran-at: 2026-09-18 15:05 -07:00
+    mode: propose-only (drain)
+    proposed: 10
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/spike-82-drain-01a0b68c-7ea7-7b70-a5d5-b8fc2d0a05a7.json
+    ? SEM (0.98) — For the 2026-09-17/18 window, first-parent commits reaching main are the authoritative throughput measure; PrMerged events cover only 17 of the 28 main commits and therefore cannot be treated as a complete merge ledger.
+    ? AC (0.93) — An overnight drain must preserve reciprocal gate independence: the author of a change cannot approve and merge that same change; the observed window satisfied this for both advisor-authored and Codex-authored changes.
+    ? SEM (0.97) — BUG-1213 required five orchestrator runs before merge: two ci-red shelves, two verdict:request-changes shelves, and one AdvisorEscalated run; the escalation rather than another unchanged cycle was the successful dogfood signal.
+    ? SEM (0.94) — BUG-1218 was exposed by one BUG-1207 drain round with two reviewer attempts, then reached the advisor gate in one implementation/CI/review run after the fix; BUG-1195 was fixed before the bounded window after one reviewer phase made two failed tool attempts.
+    ? ADR (0.91) — Unattended shift supervision is event-first: persist the last consumed event and an idempotent action key, wake on event append, and use periodic scheduler ticks only for crash recovery so restarts cannot duplicate launches, rework, or mail.
+    ? ADR (0.94) — Drain ownership and liveness must be lease-based, using PID plus process-start identity, heartbeat, command/run UUID, and an expiry/reap policy; process-name matching is insufficient to own or recover the global drain lock.
+    ? AC (0.90) — A durable advisor gate may release a merge only after an independent verdict, required CI, and harvest/ledger checks; changes requiring judgment remain held for morning rather than being auto-released.
+    ? AC (0.88) — Mailbox supervision must emit a MailReceived event, track oldest unread age, and escalate or reassign when the gate misses its service window instead of assuming the recipient session is reading.
+    ? SEM (0.92) — Every running wave must identify its binary build SHA; a substrate fix landed during a wave triggers a controlled rebuild whose new binary applies only to the next run, and the version transition is recorded.
+    ? AC (0.91) — End-of-shift reconciliation must be machine-generated from event counts, queue membership, open PRs, holds, findings, unread mail, and remaining operator-only work, and must flag discrepancies between main commits and PrMerged-event coverage.
+  created_at: 2026-09-18T22:05:44.812862195Z
+  modified_at: 2026-09-18T22:05:44.812862195Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
