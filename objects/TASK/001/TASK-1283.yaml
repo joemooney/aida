@@ -1,0 +1,26 @@
+id: 01a0b6e4-4406-75b3-bd4b-8edb17119ec9
+spec_id: TASK-1283
+agreed_id: TASK-1283
+title: 'STORY-1221 slice 1 shipped without CLI-level tests: add regression tests for protocol injection at queue work / do / worktree enter and for the awaiting --notice reminder appearing only while the curr'
+description: |-
+  Origin: the drain reviewer's round-2 finding on PR #1948 (verdict written 16:37, two minutes after the advisor merged at 16:35 — merged over an in-flight review; see the STORY-1221 ledger). The finding is valid: c25ba5c1 adds only aida-core META tests; `cargo test -p aida-cli-lib --lib protocol` discovers 0 tests, so the CLI injection and the notice lifecycle — the user-visible half of the slice — are untested.
+
+  Add, in aida-cli-lib:
+  1. Pickup injection: for a spike, a bug and a story fixture, `queue work`, `do` and `worktree enter` pickup prompts start with the type protocol block, cite the META id, are capped at PROTOCOL_PICKUP_LINE_CAP lines, and carry the precedence label (type protocol < spec acceptance) before the spec's own acceptance; a type with no protocol row injects nothing.
+  2. Notice lifecycle: `aida awaiting --notice` adds the one-line protocol reminder only while the current worktree holds a lease on the spec; zero lines with no lease; the line disappears after `queue done` / lease release (TASK-160 quiet contract).
+  3. Seed path from the CLI: `aida protocol seed` on a store with two of six protocols adds four and is idempotent (the core test exists; add the CLI-level one).
+  Acceptance: `cargo test -p aida-cli-lib --lib protocol` discovers and passes at least 6 tests covering the three groups; no behaviour change.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T23:40:08.070346228Z
+modified_at: 2026-09-18T23:40:08.070346228Z
+req_type: Task
+tags:
+- drain-safe
+- follow-up:STORY-1221
+- parent:EPIC-28
+- protocol
+- test-coverage
+execution_mode: drain
