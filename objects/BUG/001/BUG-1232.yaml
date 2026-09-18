@@ -8,15 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-18T20:04:39.354268533Z
+modified_at: 2026-09-18T20:22:22.974313401Z
 req_type: Bug
 tags:
+- batch:followups-0918e
+- cause-confirmed
 - drain
 - forge
 - gitlab
-- keyboard-gate
 - merge-phase
-- needs-repro:mirror
 - parent:EPIC-68
 relationships:
 - rel_type: Child
@@ -35,4 +35,4 @@ comments:
   created_at: 2026-09-18T20:04:39.354268533Z
   modified_at: 2026-09-18T20:04:39.354268533Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
-execution_mode: drive
+execution_mode: drain
