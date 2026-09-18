@@ -117,3 +117,32 @@ fn clean_auto_rebase_proceeds_without_retrying_preflight() {
     assert_eq!(driver.auto_rebase_events.len(), 1);
     assert_eq!(driver.auto_rebase_events[0].outcome, "clean");
 }
+
+#[cfg(unix)]
+#[test]
+fn force_push_refusal_is_typed_and_not_retryable() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let fake_aida = tmp.path().join("aida");
+    std::fs::write(
+        &fake_aida,
+        "#!/bin/sh\necho 'Refusing to force-push: remote commit not incorporated by patch-id. Force-pushing would DROP it. Recover by git fetch origin topic && git rebase origin/topic' >&2\nexit 1\n",
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&fake_aida, perms).unwrap();
+
+    let mut driver = driver(Some(auto_complete::NoHumanMode::Both), false, false);
+    driver.aida_exe = fake_aida;
+    driver.project_root = tmp.path().to_path_buf();
+    let failure = driver.attempt_phase3_auto_rebase(1218).unwrap_err();
+
+    assert_eq!(failure.kind, auto_complete::FailureKind::StaleBaseRefused);
+    assert_eq!(failure.kind.cause_slug(), "stale-base-refused");
+    assert!(!auto_complete::is_transient_retry_cause(
+        failure.kind.cause_slug()
+    ));
+    assert!(failure.reason.contains("git fetch origin topic"));
+}

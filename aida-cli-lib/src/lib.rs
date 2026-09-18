@@ -82898,7 +82898,7 @@ struct RealPhaseDriver {
 #[derive(Debug, PartialEq, Eq)]
 enum Phase3StaleOverlapAction {
     Proceed,
-    Refuse(String),
+    Refuse(auto_complete::PhaseFailure),
 }
 
 /// TASK-136: the outcome of one phase-1 PR-verify attempt. The verify can
@@ -83203,7 +83203,10 @@ impl RealPhaseDriver {
         Ok(())
     }
 
-    fn attempt_phase3_auto_rebase(&mut self, pr_number: u64) -> bool {
+    fn attempt_phase3_auto_rebase(
+        &mut self,
+        pr_number: u64,
+    ) -> Result<(), auto_complete::PhaseFailure> {
         if !self.json {
             eprintln!(
                 "  {} stale-base + overlap detected on PR-{pr_number}; attempting one clean auto-rebase…",
@@ -83213,9 +83216,15 @@ impl RealPhaseDriver {
         let status = std::process::Command::new(self.aida_exe())
             .current_dir(&self.project_root)
             .args(build_phase3_auto_rebase_args(pr_number))
-            .status();
+            .output();
         match status {
-            Ok(s) if s.success() => {
+            Ok(output) if output.status.success() => {
+                if !output.stdout.is_empty() {
+                    eprint!("{}", String::from_utf8_lossy(&output.stdout));
+                }
+                if !output.stderr.is_empty() {
+                    eprint!("{}", String::from_utf8_lossy(&output.stderr));
+                }
                 self.record_auto_rebase(pr_number, "clean");
                 if !self.json {
                     eprintln!(
@@ -83223,15 +83232,34 @@ impl RealPhaseDriver {
                         crate::glyph(crate::glyphs::Glyph::Check).green().bold()
                     );
                 }
-                true
+                Ok(())
             }
-            Ok(_) => {
+            Ok(output) => {
+                let detail = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                if !detail.is_empty() {
+                    eprint!("{detail}");
+                }
+                if detail.contains("force-push refused")
+                    || detail.contains("Force-pushing would DROP")
+                {
+                    self.record_auto_rebase(pr_number, "stale-base-refused");
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::StaleBaseRefused,
+                        detail.trim().to_string(),
+                    ));
+                }
                 self.record_auto_rebase(pr_number, "conflict");
-                false
+                Err(auto_complete::PhaseFailure::new(detail.trim().to_string()))
             }
             Err(e) => {
                 self.record_auto_rebase(pr_number, format!("failed:{e}"));
-                false
+                Err(auto_complete::PhaseFailure::new(format!(
+                    "auto-rebase failed to start: {e}"
+                )))
             }
         }
     }
@@ -83245,10 +83273,16 @@ impl RealPhaseDriver {
         match self.should_auto_rebase_stale_base(*auto_rebase_attempted) {
             Ok(()) => {
                 *auto_rebase_attempted = true;
-                if self.attempt_phase3_auto_rebase(pr_number as u64) {
-                    return Phase3StaleOverlapAction::Proceed;
+                match self.attempt_phase3_auto_rebase(pr_number as u64) {
+                    Ok(()) => return Phase3StaleOverlapAction::Proceed,
+                    Err(failure)
+                        if failure.kind == auto_complete::FailureKind::StaleBaseRefused =>
+                    {
+                        return Phase3StaleOverlapAction::Refuse(failure);
+                    }
+                    Err(_) => {}
                 }
-                Phase3StaleOverlapAction::Refuse(msg)
+                Phase3StaleOverlapAction::Refuse(auto_complete::PhaseFailure::new(msg))
             }
             Err("allow-stale-base") => {
                 self.record_auto_rebase(pr_number as u64, "skipped:allow-stale-base");
@@ -83262,7 +83296,7 @@ impl RealPhaseDriver {
             }
             Err(reason) => {
                 self.record_auto_rebase(pr_number as u64, format!("skipped:{reason}"));
-                Phase3StaleOverlapAction::Refuse(msg)
+                Phase3StaleOverlapAction::Refuse(auto_complete::PhaseFailure::new(msg))
             }
         }
     }
@@ -85452,8 +85486,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 let msg = pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
                 match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
                     Phase3StaleOverlapAction::Proceed => {}
-                    Phase3StaleOverlapAction::Refuse(msg) => {
-                        return Err(auto_complete::PhaseFailure::new(msg));
+                    Phase3StaleOverlapAction::Refuse(failure) => {
+                        return Err(failure);
                     }
                 }
             }
