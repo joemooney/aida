@@ -53,3 +53,11 @@
   added_at: 2026-09-18T05:44:21.283615251Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b2dd-cc77-7182-afca-1a210942dbd0
+  position: 11000
+  added_by: role:implementer
+  note: 'do together with the parity-polish task: refuse --parent/--feature/--owner in the CLI requester add arm, shared field const with mcp.rs, CLI test'
+  added_at: 2026-09-18T05:44:22.166877188Z
+  for_role: implementer
+  added_by_machine: imac
