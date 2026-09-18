@@ -1,0 +1,18 @@
+id: 01a0b27c-8a99-74b0-9385-0156ae7b9f06
+spec_id: BUG-1205
+agreed_id: BUG-1205
+title: 'Drain CI phase: informational-only red returns early and skips end_implementer_session / auto-queue / stale-base preflight — the reviewer child then hits an interactive ''branch held by lease'' prompt a'
+description: 'Observed 2026-09-17 20:06 on TASK-1261 / PR-1908 in batch followups-0917: CiTerminal green:false (the path-filtered Cross-platform (nightly) matrix was red/pending while PR CI Build was green), the BUG-1180 ci_gate refinement in RealPhaseDriver::finish_ci classified it as not a real failure and returned Ok(()) EARLY from the CiProbe::Red arm — before the steps the Green path runs after the probe match (end the implementer session/lease, try_auto_queue_pr_review, stale-base preflight). The implementer lease 01a0b266e79e on worktree aida-task-1261 stayed held; the reviewer child (queue work PR-1908) then hit the interactive ''PR-1908 source branch task-1261 is held by lease … Choice [1/2/3/4]'' prompt, auto-cancelled under headless, and the drain shelved the spec as tool-exit after 2 attempts. Fix: in finish_ci, an informational-only red must be treated exactly like Green — fall through to the same post-probe steps (set pr_number, end implementer session, auto-queue review, stale-base preflight) instead of returning early; add a mock/driver test that a refined-not-real red still ends the implementer session. Also: the reviewer child must never block on that lease prompt under AIDA_HEADLESS — auto-pick the safe option (end the dead implementer session) or fail with a typed cause, not tool-exit. Acceptance: a drain member whose only red check is informational reaches the reviewer with its implementer lease released; the lease-held prompt never appears headless.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T03:08:21.529985391Z
+modified_at: 2026-09-18T03:08:21.529985391Z
+req_type: Bug
+tags:
+- ci-gate
+- drain
+- follow-up:BUG-1180
+- proxy-groomed
+- regression
