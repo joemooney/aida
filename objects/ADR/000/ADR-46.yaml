@@ -1,0 +1,33 @@
+id: 01a0b65e-d1be-7391-a091-b6c82f54187c
+spec_id: ADR-46
+agreed_id: ADR-46
+title: 'aida cron design: dual delivery with hourly cold-boot fallback, store-object ledger, project+global registry, typed predicate grammar'
+description: |
+  ## Context
+  STORY-1226 (aida cron: per-seat periodic job registry + ledger) is guided; four load-bearing forks were decided with the operator on 2026-09-18 in a guided session (product seat asking, operator answering).
+
+  ## Decisions
+  1. Seat-job delivery on Codex/Antigravity: BOTH channels. Due seat jobs always surface in the seat's pickup prompt and per-turn notice; when a seat job is overdue and no live session holds the role, the scheduler tick cold-boots a headless seat (codex exec / claude -p per configured vendor), at most once per hour per seat, ledgered, never for jobs that launch drains or merge. A live seat suppresses the cold-boot.
+     Rejected: prompt-only (leaves the nobody-awake gap); cold-boot on every overdue tick (unbounded token spend).
+  2. Ledger: one store object per job under the aida-store branch (like specs), updated per run with last_run / by seat+session / result and, for condition jobs, the episode (first_true, fired_at, cleared_at). Writes are debounced for high-frequency substrate jobs.
+     Rejected: rows in .aida/events.jsonl (per-clone, lost on rotation, slow status); SQLite cache table (derived projection by contract, not durable truth).
+  3. Registry scope: project-tracked .aida/cron.toml PLUS a machine-global ~/.aida/cron.toml; entries merge by job name with the project layer winning.
+     Rejected: project-only (duplicates machine-wide jobs across every project on a multi-project box).
+  4. Condition predicates: a small typed expression grammar — field op value, joined by && / ||, over a fixed documented field set computed from the existing status/awaiting snapshot (mail.oldest_unread_age, drain.lock_free, queue.drain_mode_ready, sessions.finished_unreaped, ci.red_prs, ...), durations like 15m parsed; once-until-cleared firing.
+     Rejected: named presets only (every new condition is a code change and a name); shell-command exit status (slow per tick, uninspectable, config becomes scripts).
+
+  ## Consequences
+  The registry is vendor-neutral by construction (one file, one status view); Claude additionally mirrors its seat jobs as in-session cron entries. The ledger becomes the source for "who last triaged the mailbox and when" (SPIKE-82) and for TASK-1271's latency row. STORY-1218's tick consumes the same registry and owns the installer and unattended execution.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T21:14:22.526081517Z
+modified_at: 2026-09-18T21:14:22.526081517Z
+req_type: Decision
+tags:
+- adr
+- cron
+- multivendor
+- parent:EPIC-62
+- seats
