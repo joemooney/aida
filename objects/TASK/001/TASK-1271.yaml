@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-18T20:55:56.796587884Z
+modified_at: 2026-09-18T20:55:58.380032136Z
 req_type: Task
 tags:
 - batch:followups-0918d
@@ -26,6 +26,12 @@ relationships:
   target_id: 01a0b640-4cc4-72e0-ab7f-5cb11c514414
   created_at: 2026-09-18T20:41:08.018919842Z
   created_by: joe
+comments:
+- id: 01a0b64d-f7a5-7db3-abb7-6a5f568b36a4
+  author: joe
+  content: 'Reviewer round 1 on PR #1942: mcp.rs mark_seen advances the recipient watermark via set_watermark but never calls record_seen for the acknowledged messages, so MCP-path reads update last_seen_at without per-message latency history. Call record_seen for each acknowledged message on the MCP path (mirror the CLI inbox path) and add a test that an MCP read produces the same latency rows as aida mailbox inbox.'
+  created_at: 2026-09-18T20:55:58.117215863Z
+  modified_at: 2026-09-18T20:55:58.117215863Z
 execution_mode: drain
 implementation_info:
   implemented: true
