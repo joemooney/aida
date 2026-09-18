@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:37:02.863453395Z
+modified_at: 2026-09-18T04:37:04.071056317Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -107,6 +107,16 @@ comments:
     Keep the round-1 fix (requester intake rejects parent) intact.
   created_at: 2026-09-18T04:37:02.623022068Z
   modified_at: 2026-09-18T04:37:02.623022068Z
+- id: 01a0b2cd-c0d6-7942-894e-705b2c866811
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1913-advisor-r2):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1197 round 2 CHANGES REQUESTED at the drive gate. Finding B is fixed correctly on MCP: stakeholder_mcp_read_allowed is an explicit 25-tool read allow-list (narrower than the read-only profile; db_sync/fetch/pull/queue_work/session_*/role_* now Write) with positive + negative tests, and the CLI classifier now defaults to Write. Two gaps remain: (A) the reviewer's round-1 finding is NOT addressed — constrain_requester_intake still leaves `parent` (and feature/owner) intact, so a requester can still write a relationship onto an existing spec via add_requirement; reject those fields with the stakeholder refusal + regression test. (B') the CLI Read list is now too narrow: only Why/List/Show/Status/Graph/Search/Digest/History are Read, so a persona is refused `aida mcp-serve` (which defeats the MCP gate this PR adds — the server enforces its own envelope and must be startable), and also `aida awaiting`, `queue list/next/progress`, `mailbox inbox/read`, `brief list/read`, `findings list`, `punts`, `directives list`, `comment list`, `role list/show/active/current`, `session leases/status`, `schema`, `cache status`, `usage`, `plan verify/helpers`, `ultraplan`, `goal`, `criteria`, `help`. Mirror the MCP allow-list on the CLI side (one shared list of read verbs, or a parity test between the two), add mcp-serve, and pin with tests that a guest may run `aida mcp-serve`, `aida awaiting`, `aida queue list`, `aida mailbox inbox` and may NOT run `aida db sync` / `session start` / `role enter`. Default-to-Write stays.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-18T04:37:03.830471739Z
+  modified_at: 2026-09-18T04:37:03.830471739Z
 execution_mode: drive
 implementation_info:
   implemented: true
