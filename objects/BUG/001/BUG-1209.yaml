@@ -25,14 +25,13 @@ description: |
   - The human denominator label matches the TOON one for the same query (open lens vs matched).
   - TOON / --json / --short output unchanged.
 
-  ## Acceptance
-  - AC512631. When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
+  - AC1. When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T07:25:52.441267545Z
+modified_at: 2026-09-18T09:34:27.152715247Z
 req_type: Bug
 tags:
 - aida:list
