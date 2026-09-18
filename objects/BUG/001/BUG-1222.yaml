@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:04:47.736441019Z
-modified_at: 2026-09-18T20:01:54.144059727Z
+modified_at: 2026-09-18T20:05:29.471620483Z
 req_type: Bug
 tags:
 - batch:followups-0918d
@@ -17,6 +17,20 @@ relationships:
   target_id: 01a0b61c-5bf5-75c1-900d-4c6df23c73b4
   created_at: 2026-09-18T20:01:54.144054500Z
   created_by: joe
+comments:
+- id: 01a0b61f-c0ff-79c0-9b99-22f69fa74ff3
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1940
+    agent: codex
+    ran-at: 2026-09-18 13:05 -07:00
+    mode: propose-only (drain)
+    proposed: 0
+    skipped: 0
+  created_at: 2026-09-18T20:05:29.471620483Z
+  modified_at: 2026-09-18T20:05:29.471620483Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
