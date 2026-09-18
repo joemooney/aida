@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b525-a8b2-79e3-a00a-f7e5d16f2bcb
-  position: 2000
-  added_by: role:implementer
-  note: GitLab ci_progress_snapshot must include job-level state (newest pipeline's jobs list with status/started_at) so a long single job still shows progress; test the fingerprint changes when a job moves created→running
-  added_at: 2026-09-18T16:52:51.300244376Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b535-55a8-7ba1-b7b2-65e1c8d2047a
   position: 3000
   added_by: role:implementer
