@@ -1,0 +1,52 @@
+id: 01a0b6bd-7387-70f3-87c9-f3b792811e8a
+spec_id: BUG-1240
+agreed_id: BUG-1240
+title: 'auto-complete failure: phase 3 (reviewer) on STORY-1221'
+description: |
+  Auto-drafted by `aida queue work STORY-1221 --auto-complete` after phase 3 (reviewer) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  reviewer verdict is RequestChanges — not Approved
+
+  Failure kind: `verdict:request-changes`
+
+  ## Recovery hint shown to the user
+
+  Address the review feedback, then push fixups: `aida queue rework STORY-1221 --work`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-18T22:57:43.451986389+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 1063183 ms
+    - phase 2 (ci): 21141 ms
+    - phase 3 (reviewer): 275128 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"STORY-1221","started_at":"2026-09-18T22:35:02.058470559+00:00","completed_at":"2026-09-18T22:57:43.451986389+00:00","outcome":"failed","variant":"full","failed_phase":3,"failure_kind":"verdict:request-changes","failure_message":"reviewer verdict is RequestChanges — not Approved","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":1063183},{"phase":2,"slug":"ci","elapsed_ms":21141},{"phase":3,"slug":"reviewer","elapsed_ms":275128}],"total_ms":1360373,"binary_sha":"f13f164386"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T22:57:44.327349003Z
+modified_at: 2026-09-18T22:57:44.327349003Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- failure-3
+- failure-kind:verdict:request-changes
+- reviewer
