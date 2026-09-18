@@ -36,12 +36,12 @@ description: |-
   /home/joe/ai/aida/.claude/worktrees/agent-a942df7439695a8aa  d9f9eceb8c [worktree-agent-a942df7439695a8aa] locked
   /home/joe/ai/aida/.claude/worktrees/agent-ab76dad2f2712ef43  d9f9eceb8c [worktree-agent-ab76dad2f2712ef43] locked
   /home/joe/ai/aida/.claude/worktrees/agent-ada058a96e1aba25f  d9f9eceb8c [worktree-agent-ada058a96e1aba25f] locked has no pr-rebase-N entry and no pr-N branch is left checked out; the member parks with a typed stale-base cause and the recovery text; the reviewer's checkout tolerates a stale pr-N branch. Repro fixture: a PR whose remote branch has a commit not in the local pr-N ref.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:40:43.479253932Z
-modified_at: 2026-09-18T09:09:56.695673423Z
+modified_at: 2026-09-18T09:17:05.213877703Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -51,3 +51,7 @@ tags:
 - regression-class
 - stale-base
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T09:17:05.213877703Z
+  implemented_by: joe
