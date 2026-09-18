@@ -1,1 +1,32 @@
-[]
+- user_id: role:implementer
+  requirement_id: 01a0b525-a8b2-79e3-a00a-f7e5d16f2bcb
+  position: 2000
+  added_by: role:implementer
+  note: GitLab ci_progress_snapshot must include job-level state (newest pipeline's jobs list with status/started_at) so a long single job still shows progress; test the fingerprint changes when a job moves created→running
+  added_at: 2026-09-18T16:52:51.300244376Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b535-55a8-7ba1-b7b2-65e1c8d2047a
+  position: 3000
+  added_by: role:implementer
+  note: 'route the run/pipeline id through the Forge (GitLab: newest pipeline id for the branch) or drop the ''on run <ID>'' clause when unknown'
+  added_at: 2026-09-18T16:52:54.415907679Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b536-2ac6-78a3-a390-b09cedb0d8b9
+  position: 4000
+  added_by: role:implementer
+  note: aida why leads with the NEWEST SpecShelved event (kind+detail+hint); unit test with two events
+  added_at: 2026-09-18T16:52:58.599522757Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b50c-7578-7001-b850-429004fcd1ac
+  position: 5000
+  added_by: role:implementer
+  note: 'lifecycle:trivial-class: add the ''harvest'' label to LifecycleSkip''s rendered skip list; unit test per flag'
+  added_at: 2026-09-18T16:52:59.798297408Z
+  for_role: implementer
+  added_by_machine: imac

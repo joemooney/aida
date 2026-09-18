@@ -76850,5 +76850,178 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 5937
+- id: 01a0b535-5a0d-7d50-9907-4949299d6d9c
+  target_id: 01a0b535-55a8-7ba1-b7b2-65e1c8d2047a
+  author: aida
+  node_id: '1'
+  lamport: 5937
+  timestamp: 2026-09-18T15:49:27.693915044Z
+  kind: !Create
+    title: Drain CI-red recovery hint prints a literal 'run <ID>' on GitLab (run id is GitHub-shaped)
+    description: 'Observed 2026-09-18 on the TASK-1254 live drain (mirror MR !2). After the per-job refinement correctly reported ''CI is red on PR-2: failing: verify'', the recovery hint read: ''CI failed on run <ID> — view it: glab ci status. Push fixups to the same branch: aida queue work TASK-1269 --branch task-1269 --steal''. The <ID> placeholder is never substituted because ci_run_id comes from latest_run_id_for_branch, which is a GitHub Actions run lookup; GitLab has pipeline ids. Fix: route the run/pipeline id through the Forge (e.g. newest pipeline id for the branch on GitLab) or drop the ''on run <ID>'' clause when no id is known. Acceptance: on GitLab the hint names the pipeline id or omits the clause; never a literal <ID>.'
+    req_type: Bug
+    status: Draft
+    priority: Low
+- id: 01a0b536-575c-7d60-8938-82354a545df7
+  target_id: 01a0b536-2ac6-78a3-a390-b09cedb0d8b9
+  author: aida
+  node_id: '1'
+  lamport: 5938
+  timestamp: 2026-09-18T15:50:32.540536380Z
+  kind: !Create
+    title: aida why shows the FIRST shelve's failure after a re-drive shelves the spec again for a different cause
+    description: 'Observed 2026-09-18 on the TASK-1254 live drain. TASK-1269 was shelved twice: first ''watchdog at ci'' (15:05, the pre-fix single-probe bug), then after a re-drive ''ci-red'' (15:47, verify failed). .aida/events.jsonl records both SpecShelved events in order, yet aida why TASK-1269 still prints ''failure: watchdog at ci — CI on PR-2 did not reach a terminal state in time (attempt 2/2)'' with the stale hint ''CI is not red'', while the drain''s own console said ''CI is red on PR-2: failing: verify''. Expected: aida why reports the LATEST shelve (kind + detail + hint), or lists them newest-first. Acceptance: two SpecShelved events for one spec → aida why leads with the newest; unit test on the pure selection.'
+    req_type: Bug
+    status: Draft
+    priority: Low
+- id: 01a0b565-4cc8-70d1-90c3-14b8fb60a694
+  target_id: 01a0b565-47ac-71e0-8390-bee4a20c7b8c
+  author: aida
+  node_id: '1'
+  lamport: 5939
+  timestamp: 2026-09-18T16:41:50.024437398Z
+  kind: !Create
+    title: 'GitLab mirror CI: prebuilt builder image + persistent checkout/target for incremental builds'
+    description: |-
+      Problem (measured 2026-09-18 on the self-hosted mirror runner imac-docker, TASK-1254 live validation): every verify job on gitlab.joemooney.com ai/aida starts from nothing. It pulls rust:latest (pull policy always), apt-installs protobuf-compiler + libxcb-* + libxkbcommon + libssl + libgtk-3 + bubblewrap, runs rustup component add clippy rustfmt, restores a multi-GB GitLab cache zip of target/ + .cargo/registry, compiles, then re-zips the cache. A single verify job took 33-45 minutes while several ran concurrently; the cache zip round-trip alone is minutes. The 6-core box saturates with 3+ jobs.
+
+      Goal: make the mirror pipeline an incremental build the way a developer's checkout is: a prebuilt image with everything installed, a checkout that persists between jobs (git fetch, not clone), and a cargo target dir that persists on the host so `make build-fast`-style incremental release builds apply.
+
+      Slices (vertical, each shippable):
+      1. Builder image. Add ci/Dockerfile (FROM a pinned rust:<ver>; apt packages; clippy + rustfmt; nothing else). Build it on the runner host with podman as aida-ci:<rust-ver>, reference it in .gitlab-ci.yml `image:`, and set pull_policy = ["if-not-present"] in the runner's [runners.docker] so no per-run pull. Delete the apt/rustup before_script. Document the rebuild command in docs/ (the image is rebuilt when Cargo's MSRV or the apt set changes). Registry publication is out of scope for this slice.
+      2. Persistent checkout + target dir. Runner config volumes mount host dirs for /builds (persistent checkout, GIT_STRATEGY: fetch) and a CARGO_TARGET_DIR (e.g. /var/cache/aida-ci/target); CARGO_HOME on a host volume too. Remove the GitLab `cache:` block. Set CARGO_INCREMENTAL=1 for the verify job (mirrors make build-fast). Runner concurrency capped at 2 (jobs sharing a target dir serialize on cargo's lock; the box has 6 cores). Acceptance: second verify run of an unchanged-deps commit completes in under 10 minutes; no apt/rustup/cache-restore sections in the job log.
+      3. (Optional) sccache with a local disk backend for cross-branch/cross-worktree object reuse without a shared mutable target dir; evaluate only if slice 2's lock serialization hurts.
+
+      Non-goals: GitHub Actions changes (separate cost model), publishing the image to a public registry, cross-platform runners.
+
+      Related: TASK-1254 (live validation that measured this), TASK-825 (the original .gitlab-ci.yml), STORY-1048 (release assets on GitLab).
+    req_type: Story
+    status: Draft
+    priority: Medium
+- id: 01a0b56f-1d5f-7d83-b5f9-d669a3618c52
+  target_id: 01a0b52b-4b69-7cb0-80bc-f19921a5add6
+  author: aida
+  node_id: '1'
+  lamport: 5940
+  timestamp: 2026-09-18T16:52:33.247357099Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a0b56f-24be-7e03-a6d2-3e6225189aaa
+  target_id: 01a0b525-a8b2-79e3-a00a-f7e5d16f2bcb
+  author: aida
+  node_id: '1'
+  lamport: 5941
+  timestamp: 2026-09-18T16:52:35.134913784Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a0b56f-35af-7300-bd57-18cb93fee4cc
+  target_id: 01a0b535-55a8-7ba1-b7b2-65e1c8d2047a
+  author: aida
+  node_id: '1'
+  lamport: 5942
+  timestamp: 2026-09-18T16:52:39.471246717Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a0b56f-40da-72a0-b8b0-df74fb5427b3
+  target_id: 01a0b536-2ac6-78a3-a390-b09cedb0d8b9
+  author: aida
+  node_id: '1'
+  lamport: 5943
+  timestamp: 2026-09-18T16:52:42.330027850Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a0b56f-48a2-7501-b4f4-969c7acb8a49
+  target_id: 01a0b50c-7578-7001-b850-429004fcd1ac
+  author: aida
+  node_id: '1'
+  lamport: 5944
+  timestamp: 2026-09-18T16:52:44.322845027Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a0b56f-89f4-7092-b27b-a0bc14c51379
+  target_id: 01a0b565-47ac-71e0-8390-bee4a20c7b8c
+  author: aida
+  node_id: '1'
+  lamport: 5945
+  timestamp: 2026-09-18T16:53:01.044126305Z
+  kind: !SetStatus
+    status: Approved
+- id: 01a0b56f-8a95-7490-8c21-e3c18a587e1f
+  target_id: 01a0b565-47ac-71e0-8390-bee4a20c7b8c
+  author: aida
+  node_id: '1'
+  lamport: 5946
+  timestamp: 2026-09-18T16:53:01.205364807Z
+  kind: !AddTag
+    tag: keyboard
+- id: 01a0b56f-9cd2-7963-bb1d-fe67494ece93
+  target_id: 01a0b50d-5fa2-75a2-9a1c-e68fc7c4bf68
+  author: aida
+  node_id: '1'
+  lamport: 5947
+  timestamp: 2026-09-18T16:53:05.874291585Z
+  kind: !SetStatus
+    status: Rejected
+- id: 01a0b572-11c4-74b2-9616-0ba1063c1f2a
+  target_id: 01a0b572-0b9c-7941-8126-58dbaef33621
+  author: aida
+  node_id: '1'
+  lamport: 5948
+  timestamp: 2026-09-18T16:55:46.884850501Z
+  kind: !Create
+    title: 'GitLab live validation — the two TASK-1254 checks not yet exercised on the mirror: a labelled MR is blocked by aida-merge-hold-gate + ''Pipelines must succeed'', and [review] mode = delegated logs the n'
+    description: |-
+      #1932 (TASK-1254) landed the gate wiring and two live-run fixes, and its test plan ticked three of the five checks live on gitlab.joemooney.com ai/aida (unlabelled gate passes on MR !1 pipeline 280; re-driven headless drain blocks in the CI phase and ticks; cargo test via CI). Two remain unticked and need the operator's mirror (glab auth to the self-hosted instance):
+      1. Label an MR aida:merge-hold → aida-merge-hold-gate fails (pipelines 282/283) AND the project's "Pipelines must succeed" setting refuses the merge until the label is cleared; then clear via aida merge-hold clear and confirm the gate re-runs green and the merge proceeds (the GitLab twin of the BUG-1180/ADR-39 path).
+      2. Set [review] mode = delegated in .aida/config.toml on the mirror clone, run one headless drive, and confirm the drain logs "delegated review not supported on this forge — running the standard reviewer" and the standard reviewer produces a verdict (ADR-43 decision 3).
+      Record both results as comments on TASK-1254 (which the #1932 trailer completed) and on this task; file any defect found as its own bug under EPIC-68.
+      Acceptance: both checks observed live and recorded with pipeline/MR ids; EPIC-68's validation section in docs/forge-providers.md updated.
+    req_type: Task
+    status: Approved
+    priority: Low
+- id: 01a0b572-9a5c-7241-b6e2-48c54a00741a
+  target_id: 01a0b043-be32-7cd0-be62-ab46fb21d252
+  author: aida
+  node_id: '1'
+  lamport: 5949
+  timestamp: 2026-09-18T16:56:21.852318685Z
+  kind: !SetStatus
+    status: Completed
+- id: 01a0b572-cb93-7c63-9fc3-12573db064fe
+  target_id: 01a0b51d-80cf-7c33-b81a-d6c65a329f9a
+  author: aida
+  node_id: '1'
+  lamport: 5950
+  timestamp: 2026-09-18T16:56:34.451036192Z
+  kind: !SetStatus
+    status: Completed
+- id: 01a0b572-e339-7d10-acb2-89dcc292135c
+  target_id: 01a0b52b-4b69-7cb0-80bc-f19921a5add6
+  author: aida
+  node_id: '1'
+  lamport: 5951
+  timestamp: 2026-09-18T16:56:40.505932288Z
+  kind: !SetStatus
+    status: Completed
+- id: 01a0b573-bfa6-7c20-81dd-14646188791d
+  target_id: 01a0b2dc-3dca-76f0-922e-c8979fcf41af
+  author: aida
+  node_id: '1'
+  lamport: 5952
+  timestamp: 2026-09-18T16:57:36.934506300Z
+  kind: !SetStatus
+    status: Completed
+- id: 01a0b574-e3fd-7eb2-8fb7-1ddefdd90ec3
+  target_id: 01a0b574-dcfe-7f60-bb26-5376ff183d78
+  author: aida
+  node_id: '1'
+  lamport: 5953
+  timestamp: 2026-09-18T16:58:51.773636451Z
+  kind: !Create
+    title: 'Reviewer phase fetches refs/pull/N/head on GitLab (should be refs/merge-requests/N/head): first attempt tool-exits, pre-flight stale-base and intermediate-only checks degrade'
+    description: 'Observed 2026-09-18 on the TASK-1254 live drain (mirror gitlab.joemooney.com ai/aida, MR !2, headless --no-human=both, GitLab-origin checkout). After CI went green the reviewer phase printed: ''fatal: couldn''t find remote ref pull/2/head'' then ''error: git fetch origin +pull/2/head:pr-2 failed — is PR #2 valid? (For self-hosted forges, override with --forge github|gitlab.)'' → ''transient reviewer failure (tool-exit); retrying phase 3 attempt 2/2''. The retry proceeded but both pre-flight checks degraded: ''pre-flight stale-base check failed (could not fetch PR-2 head ref (refs/pull/2/head) …); proceeding with reviewer'' and the same for the intermediate-only check. The delegated-mode fallback note itself was correct (check 4 of TASK-1254). Cause: the reviewer session''s PR checkout and the pre-flight helpers hard-code GitHub''s refs/pull/N/head; on GitLab the ref is refs/merge-requests/N/head (and the forge is already resolved as GitLab at that point — the error hint to pass --forge is misleading for a repo whose origin IS gitlab). Fix: route the head-ref name through the Forge (ReviewForge::pr_head_ref exists for the review-prompt path; the orchestrator''s reviewer pickup + pre-flight checks must use it too), and drop the --forge hint when the forge was auto-detected. Acceptance: on a GitLab-origin checkout the reviewer phase fetches refs/merge-requests/N/head on the first attempt (no tool-exit retry) and both pre-flight checks run; GitHub unchanged; unit test on the ref-name mapping.'
+    req_type: Bug
+    status: Draft
+    priority: Medium
+clock: 5954
 node_id: '1'

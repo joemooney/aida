@@ -3,12 +3,12 @@ spec_id: BUG-1223
 agreed_id: BUG-1223
 title: Session-end auto-queue-review hardcodes ReviewForge::GitHub, so a GitLab MR's commit range yields no trailers and no Review MR story is filed
 description: 'Observed 2026-09-18 during the TASK-1254 live drain on the GitLab mirror: the implementer commit on MR !2 carries the (TASK-1269) trailer, yet end_implementer_session printed ''auto-queue: PR #2 carries no (REQ-ID) trailers in its commit range — no reviewer story was filed''. Cause: the auto-queue call site passes ReviewForge::GitHub to pr_base_head unconditionally (aida-cli-lib/src/lib.rs, the pr_base_head call inside the auto-queue path near auto_queue_skip_reason), so on a GitLab project the base/head lookup runs gh pr view against the wrong forge and the fallback range covers nothing. The other call site (the review-prompt path) already resolves the forge properly. Fix: derive the ReviewForge from resolve_forge_kind(project_root) at the auto-queue call site; add a unit test that the GitLab kind maps to the mr-N fallback head. Acceptance: on a GitLab-origin checkout, ending an implementer session with an open MR whose commits carry a (REQ-ID) trailer files the ''Review PR-N'' story; the GitHub path is unchanged.'
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:23:24.751360127Z
-modified_at: 2026-09-18T15:23:34.612503143Z
+modified_at: 2026-09-18T16:56:45.426059484Z
 req_type: Bug
 tags:
 - aida:pr:auto-queue-review
@@ -19,3 +19,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T15:23:34.612503143Z
+comments:
+- id: 01a0b572-f672-7f41-a004-4b0f36045d58
+  author: joe
+  content: 'Completed 2026-09-18 09:55 by the driver-advisor: fixed in #1932 (TASK-1254) → main d03601f294 — try_auto_queue_pr_review resolves the review forge from the detected forge kind (review_forge_for_kind) instead of hard-coding GitHub; unit test. Trailer named TASK-1254 only, so the auto-bump missed this spec.'
+  created_at: 2026-09-18T16:56:45.426059484Z
+  modified_at: 2026-09-18T16:56:45.426059484Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c

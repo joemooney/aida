@@ -1,0 +1,22 @@
+id: 01a0b574-dcfe-7f60-bb26-5376ff183d78
+spec_id: BUG-1228
+agreed_id: BUG-1228
+title: 'Reviewer phase fetches refs/pull/N/head on GitLab (should be refs/merge-requests/N/head): first attempt tool-exits, pre-flight stale-base and intermediate-only checks degrade'
+description: 'Observed 2026-09-18 on the TASK-1254 live drain (mirror gitlab.joemooney.com ai/aida, MR !2, headless --no-human=both, GitLab-origin checkout). After CI went green the reviewer phase printed: ''fatal: couldn''t find remote ref pull/2/head'' then ''error: git fetch origin +pull/2/head:pr-2 failed — is PR #2 valid? (For self-hosted forges, override with --forge github|gitlab.)'' → ''transient reviewer failure (tool-exit); retrying phase 3 attempt 2/2''. The retry proceeded but both pre-flight checks degraded: ''pre-flight stale-base check failed (could not fetch PR-2 head ref (refs/pull/2/head) …); proceeding with reviewer'' and the same for the intermediate-only check. The delegated-mode fallback note itself was correct (check 4 of TASK-1254). Cause: the reviewer session''s PR checkout and the pre-flight helpers hard-code GitHub''s refs/pull/N/head; on GitLab the ref is refs/merge-requests/N/head (and the forge is already resolved as GitLab at that point — the error hint to pass --forge is misleading for a repo whose origin IS gitlab). Fix: route the head-ref name through the Forge (ReviewForge::pr_head_ref exists for the review-prompt path; the orchestrator''s reviewer pickup + pre-flight checks must use it too), and drop the --forge hint when the forge was auto-detected. Acceptance: on a GitLab-origin checkout the reviewer phase fetches refs/merge-requests/N/head on the first attempt (no tool-exit retry) and both pre-flight checks run; GitHub unchanged; unit test on the ref-name mapping.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T16:58:49.982734868Z
+modified_at: 2026-09-18T16:58:53.310120782Z
+req_type: Bug
+tags:
+- forge
+- gitlab
+- orchestrator
+- parent:EPIC-68
+- review
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-18T16:58:53.310120782Z
