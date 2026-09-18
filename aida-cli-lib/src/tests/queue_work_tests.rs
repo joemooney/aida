@@ -53,7 +53,7 @@ fn findings_recur_only_when_the_last_block_is_identical() {
 // trace:BUG-1213 | ai:claude
 #[test]
 fn rework_pickup_round_is_derived_from_recorded_findings_blocks() {
-    use crate::queue_cmd::{derive_queue_work_prompt_with_round, rework_round_from_comments};
+    use crate::queue_cmd::{derive_rework_queue_work_prompt, rework_round_from_comments};
     let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
     let block = |n: usize| format!("{prefix}PR #9):\nVerdict: RequestChanges\n- item {n}");
     let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
@@ -77,14 +77,10 @@ fn rework_pickup_round_is_derived_from_recorded_findings_blocks() {
         anchor_title: "title".into(),
     };
     let findings = block(2);
-    let prompt = derive_queue_work_prompt_with_round(
-        &plan,
-        "implementer",
-        false,
-        false,
-        Some(&findings),
-        rework_round_from_comments(&two),
-    );
+    // Exercise the history-aware production assembly path used by
+    // `handle_queue_work`, rather than injecting a round into the formatter.
+    let prompt =
+        derive_rework_queue_work_prompt(&plan, "implementer", false, false, Some(&findings), &two);
     assert!(prompt.starts_with("ROUND 3 — ITEMS STILL OPEN"), "{prompt}");
     assert!(prompt.ends_with("/aida-pickup BUG-1213"), "{prompt}");
 }

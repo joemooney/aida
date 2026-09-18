@@ -8054,6 +8054,28 @@ pub(crate) fn derive_queue_work_prompt_with_round(
     pickup
 }
 
+// BUG-1213: keep durable-history round derivation on the same path used to
+/// assemble the production pickup prompt, so callers cannot accidentally
+/// reintroduce a constant round.
+// trace:BUG-1213 | ai:codex
+pub(crate) fn derive_rework_queue_work_prompt(
+    plan: &QueueWorkPlan,
+    role: &str,
+    plan_only: bool,
+    guided: bool,
+    review_findings: Option<&str>,
+    comments: &[aida_core::Comment],
+) -> String {
+    derive_queue_work_prompt_with_round(
+        plan,
+        role,
+        plan_only,
+        guided,
+        review_findings,
+        rework_round_from_comments(comments),
+    )
+}
+
 // BUG-1213: the review-findings block that was recorded LAST on the spec
 /// (by comment time), if any.
 // trace:BUG-1213 | ai:claude
@@ -8635,7 +8657,7 @@ pub(crate) fn handle_queue_work(
     // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
     // the spec's recorded findings blocks (one per `queue rework`), not a
     // constant. trace:BUG-1213 | ai:claude
-    let rework_round = if review_findings.is_some() {
+    let rework_comments = if review_findings.is_some() {
         let spec_id = plan
             .entries
             .first()
@@ -8649,19 +8671,19 @@ pub(crate) fn handle_queue_work(
                     .requirements
                     .iter()
                     .find(|r| spec_matches(r, spec_id))
-                    .map(|r| rework_round_from_comments(&r.comments))
+                    .map(|r| r.comments.clone())
             })
-            .unwrap_or(2)
+            .unwrap_or_default()
     } else {
-        2
+        Vec::new()
     };
-    let mut prompt = derive_queue_work_prompt_with_round(
+    let mut prompt = derive_rework_queue_work_prompt(
         &plan,
         &role,
         plan_only,
         guided,
         review_findings.as_deref(),
-        rework_round,
+        &rework_comments,
     );
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
