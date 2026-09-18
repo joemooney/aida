@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:40:43.479253932Z
-modified_at: 2026-09-18T09:33:24.232126987Z
+modified_at: 2026-09-18T09:33:39.796949969Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -87,6 +87,17 @@ comments:
     merged: 2026-09-18 02:32 -07:00 → main c486a5c48a; spec auto-bumped Completed
   created_at: 2026-09-18T09:33:24.232126987Z
   modified_at: 2026-09-18T09:33:24.232126987Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b3dd-4c54-7d12-97a5-14b6a005ad00
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: A force-push refusal preserves the full actionable guard diagnostic by appending it to `.aida/logs/pr-rebase-N.log`, and failure to create or write that log does not prevent scratch-worktree cleanup.
+    rationale: The requirement asks to keep a patch/log for inspection but does not specify a durable location, append behavior, or that diagnostic persistence is best-effort and subordinate to cleanup. A user can inspect the log after repeated refusals or make the log unwritable and verify cleanup still occurs.
+    source: file:bug-1218-drain-01a0b3da-3625-7990-944d-62e905668ed7.json
+    confidence: 0.94
+  created_at: 2026-09-18T09:33:39.796949969Z
+  modified_at: 2026-09-18T09:33:39.796949969Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b3dc-0401-7a70-82fd-f4ca5e04253a
