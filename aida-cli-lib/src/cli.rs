@@ -2678,6 +2678,8 @@ pub enum ProtocolCommand {
     List,
     /// Show one protocol by requirement type (for example `spike` or `bug`).
     Show { req_type: String },
+    /// Idempotently add any missing built-in type protocols to this store.
+    Seed,
 }
 
 /// Throwaway sandbox store for drain-testing and scenario play.

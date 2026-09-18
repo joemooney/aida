@@ -640,8 +640,8 @@ pub(crate) fn handle_git_backend_command(
             return record_cmd::handle_record_command(record_cmd, &backend, store_path);
         }
         Command::Protocol(protocol_cmd) => {
-            let store = backend.load()?;
-            return crate::protocol_cmd::handle_protocol_command(protocol_cmd, &store);
+            let storage = Storage::new(store_path);
+            return crate::protocol_cmd::handle_protocol_command(protocol_cmd, &storage);
         }
         Command::Schedule(schedule_cmd) => {
             return maintenance_schedule::handle_schedule_command(schedule_cmd, store_path);

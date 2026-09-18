@@ -317,7 +317,7 @@ pub fn seed_meta_requirements(store: &mut RequirementsStore) -> Result<()> {
         .any(|r| r.req_type == RequirementType::Meta);
 
     if has_meta {
-        seed_type_protocols(store);
+        seed_missing_type_protocols(store);
         return Ok(());
     }
 
@@ -382,12 +382,15 @@ pub fn seed_meta_requirements(store: &mut RequirementsStore) -> Result<()> {
         )?;
     }
 
-    seed_type_protocols(store);
+    seed_missing_type_protocols(store);
 
     Ok(())
 }
 
-fn seed_type_protocols(store: &mut RequirementsStore) {
+/// Add absent built-in protocols without overwriting project-edited rows.
+// trace:STORY-1221 | ai:codex
+pub fn seed_missing_type_protocols(store: &mut RequirementsStore) -> usize {
+    let mut seeded = 0;
     for (kind, body) in DEFAULT_PROTOCOLS {
         let tag = format!("protocol:{kind}");
         if store.requirements.iter().any(|r| {
@@ -400,7 +403,9 @@ fn seed_type_protocols(store: &mut RequirementsStore) {
         protocol.req_type = RequirementType::Meta;
         protocol.tags.insert(tag);
         store.add_requirement_with_id(protocol, None, Some("META"));
+        seeded += 1;
     }
+    seeded
 }
 
 /// Check if META requirements need seeding
@@ -481,6 +486,34 @@ mod tests {
             PROTOCOL_PICKUP_LINE_CAP + 2
         );
         assert!(!edited.pickup_block().contains("line 40"));
+    }
+
+    #[test]
+    fn seed_missing_protocols_preserves_two_and_adds_four() {
+        let mut store = RequirementsStore::default();
+        for kind in ["spike", "bug"] {
+            let mut protocol = Requirement::new(
+                format!("{kind} protocol"),
+                format!("custom {kind} contract"),
+            );
+            protocol.req_type = RequirementType::Meta;
+            protocol.tags.insert(format!("protocol:{kind}"));
+            store.add_requirement_with_id(protocol, None, Some("META"));
+        }
+
+        assert_eq!(seed_missing_type_protocols(&mut store), 4);
+        assert_eq!(seed_missing_type_protocols(&mut store), 0);
+        assert_eq!(
+            get_type_protocol(&store, "spike").unwrap().body,
+            "custom spike contract"
+        );
+        assert_eq!(
+            get_type_protocol(&store, "bug").unwrap().body,
+            "custom bug contract"
+        );
+        for kind in ["spike", "bug", "story", "task", "decision", "doc"] {
+            assert!(get_type_protocol(&store, kind).is_some(), "missing {kind}");
+        }
     }
 
     #[test]

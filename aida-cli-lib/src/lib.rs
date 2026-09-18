@@ -2832,6 +2832,12 @@ fn run() -> Result<()> {
         if *refresh && init_footprint == cli::InitFootprint::Full {
             let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
             scaffold_refresh::print_refresh_summary(&packs);
+            let store_path = determine_requirements_path(None)?;
+            let storage = Storage::new(store_path);
+            let seeded = protocol_cmd::seed_missing_protocols(&storage)?;
+            if seeded > 0 {
+                println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
+            }
         }
         // TASK-859: surface a small curated set of high-value config knobs that
         // are otherwise silent defaults (telemetry opt-out today) and offer to

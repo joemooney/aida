@@ -199,9 +199,9 @@ pub use integrations::jira::{
 };
 pub use meta::{
     get_prompt_template, get_type_protocol, needs_meta_seeding, seed_meta_requirements,
-    TypeProtocol, DEFAULT_DUPLICATES_PROMPT, DEFAULT_EVALUATION_PROMPT,
-    DEFAULT_GENERATE_CHILDREN_PROMPT, DEFAULT_IMPROVE_PROMPT, DEFAULT_RELATIONSHIPS_PROMPT,
-    PROTOCOL_PICKUP_LINE_CAP,
+    seed_missing_type_protocols, TypeProtocol, DEFAULT_DUPLICATES_PROMPT,
+    DEFAULT_EVALUATION_PROMPT, DEFAULT_GENERATE_CHILDREN_PROMPT, DEFAULT_IMPROVE_PROMPT,
+    DEFAULT_RELATIONSHIPS_PROMPT, PROTOCOL_PICKUP_LINE_CAP,
 };
 pub use models::{
     default_reaction_definitions,
