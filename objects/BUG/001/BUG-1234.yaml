@@ -1,0 +1,17 @@
+id: 01a0b5fe-dbd0-78b2-8812-de40460036a4
+spec_id: BUG-1234
+agreed_id: BUG-1234
+title: aida edit lacks --description-from-file / --description-stdin (aida add has them), so refining a description forces the shell-expanded inline form
+description: 'Observed 2026-09-18: aida add accepts --description-from-file and --description-stdin (the safe forms for multi-line text with backticks or dollar signs), but aida edit only accepts --description, so refining an existing spec''s acceptance (the ''refinements must be acceptance criteria'' discipline) forces --description "$(cat file)", the exact form that wiped a description earlier this week when the producer failed. Fix: add both flags to aida edit with the same semantics and the same mutual-exclusion error; the MCP update_requirement tool already takes a body, no change there. Acceptance: aida edit SPEC --description-from-file F replaces the description; an empty or missing file is refused (not written as an empty description); help text lists all three forms.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T19:29:33.648523007Z
+modified_at: 2026-09-18T19:29:33.648523007Z
+req_type: Bug
+tags:
+- agent-ux
+- cli
+- papercut
+- parent:EPIC-28
