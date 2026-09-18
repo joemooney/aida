@@ -21,12 +21,12 @@ description: |-
   - Editing the META body changes what is injected on the next pickup; no binary rebuild.
   - Token cost measured: pickup prompt grows by at most the cap; CLAUDE.md does not grow.
   - Vendor parity (operator requirement 2026-09-18): every injection channel and the done-check work identically for a Codex seat — pickup prompt, .codex/hooks.json per-turn notice, headless codex exec prompts, and AGENTS.md pointer — with no channel that exists only for Claude; the acceptance run is executed once under each vendor.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T23:24:03.570022176Z
+modified_at: 2026-09-18T23:35:10.554581009Z
 req_type: Story
 tags:
 - agent-ux
@@ -103,12 +103,24 @@ comments:
   created_at: 2026-09-18T23:24:03.570022176Z
   modified_at: 2026-09-18T23:24:03.570022176Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b6df-b9d3-73b0-a7ba-9b2d728cee22
+  author: aida-auto-bump
+  timestamp: 2026-09-18T23:35:10.547823454Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0b6df-b9da-7201-8781-76f437378c75
+  timestamp: 2026-09-18T23:35:10.554580477Z
+  agent: aida
+  commit_sha: dbc3a5755b710129360e258317b504c65a227a25
+  summary: Completed via merge dbc3a575
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drive
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1221 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-18T22:57:42.440680007Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-18T23:35:10.547572125Z
+  completion_sha: dbc3a5755b710129360e258317b504c65a227a25
