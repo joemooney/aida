@@ -4551,7 +4551,8 @@ pub enum BacklogCommand {
     },
     /// Move selected backlog items onto the queue. Optionally tags every
     /// groomed item with `batch:NAME` so `aida queue work --batch NAME`
-    /// can drain them as one cluster.
+    /// can drain them together — by default one full lifecycle PER MEMBER;
+    /// add `--single-branch` to ship the batch as one branch / one PR.
     Groom {
         /// Comma-separated list of spec IDs to groom into the queue.
         #[clap(long, value_name = "CSV")]
