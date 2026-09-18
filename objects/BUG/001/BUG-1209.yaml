@@ -2,7 +2,7 @@ id: 01a0b2bf-39f2-7f91-9f14-69d808dd20fe
 spec_id: BUG-1209
 agreed_id: BUG-1209
 title: 'aida list --limit N human footer prints ''N requirements'' with no denominator — the agent/TOON surface already prints ''count: N of M'''
-description: |-
+description: |
   `aida list --limit 5` prints a footer of `5 requirements` whether 5 matched or 500 did. The truncation is invisible, so a human reads a bounded slice as the complete set.
 
   The agent surface already gets this right. Same store, same moment:
@@ -24,12 +24,15 @@ description: |-
   - All three human footer sites covered (plain, --show-tags, and the third render branch).
   - The human denominator label matches the TOON one for the same query (open lens vs matched).
   - TOON / --json / --short output unchanged.
+
+  ## Acceptance
+  - AC512631. When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T07:22:13.324995141Z
+modified_at: 2026-09-18T07:25:51.020239210Z
 req_type: Bug
 tags:
 - aida:list
