@@ -144,24 +144,26 @@ fn criteria_report_from_parts(
 }
 
 pub(crate) fn parse_acceptance_criteria(spec: &str, description: &str) -> Vec<Criterion> {
-    let Some(section) = acceptance_section(description) else {
-        return Vec::new();
-    };
-    section
-        .lines()
-        .flat_map(|line| {
-            split_criterion_line(line).into_iter().filter_map(|text| {
-                criterion_text_from_line(text).map(|text| criterion_from_text(spec, text))
+    // trace:BUG-1216 | ai:codex
+    // Parse both supported section forms. A malformed/migrating spec that has
+    // both must not silently lose the inline criteria to heading precedence.
+    [
+        headed_acceptance_section(description),
+        inline_acceptance_section(description),
+    ]
+    .into_iter()
+    .flatten()
+    .flat_map(|section| {
+        section
+            .lines()
+            .flat_map(|line| {
+                split_criterion_line(line).into_iter().filter_map(|text| {
+                    criterion_text_from_line(text).map(|text| criterion_from_text(spec, text))
+                })
             })
-        })
-        .collect()
-}
-
-fn acceptance_section(description: &str) -> Option<String> {
-    if let Some(section) = headed_acceptance_section(description) {
-        return Some(section);
-    }
-    inline_acceptance_section(description)
+            .collect::<Vec<_>>()
+    })
+    .collect()
 }
 
 fn headed_acceptance_section(description: &str) -> Option<String> {
@@ -797,6 +799,15 @@ mod tests {
         assert_eq!(criteria[1].text, "second outcome.");
         assert!(criteria[0].id.starts_with("STORY-1.ac"));
         assert_ne!(criteria[0].id, criteria[1].id);
+    }
+
+    #[test]
+    fn heading_and_inline_acceptance_sections_are_both_preserved() {
+        let desc = "Acceptance:\n- original\n\n## Acceptance\n- AC1. harvested\n";
+        let criteria = parse_acceptance_criteria("BUG-1", desc);
+        assert_eq!(criteria.len(), 2);
+        assert_eq!(criteria[0].text, "harvested");
+        assert_eq!(criteria[1].text, "original");
     }
 
     #[test]
