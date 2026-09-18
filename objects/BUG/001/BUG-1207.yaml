@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T07:06:52.180196909Z
+modified_at: 2026-09-18T07:28:19.576590996Z
 req_type: Bug
 tags:
 - aida:list
@@ -76,6 +76,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T07:06:51.929714787Z
   modified_at: 2026-09-18T07:06:51.929714787Z
+- id: 01a0b36a-8c78-7262-913d-6e2a068ed8b2
+  author: joe
+  content: 'PR #1916 review fix: restored legacy non-TTY --show-tags geometry (50-column title truncation, untruncated formatted tags, fixed 111/113 rule widths) while keeping terminal-aware sizing confined to TTY output. Added regression coverage for default piped --show-tags output.'
+  created_at: 2026-09-18T07:28:19.576590996Z
+  modified_at: 2026-09-18T07:28:19.576590996Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
