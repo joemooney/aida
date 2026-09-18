@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:30:24.441933051Z
+modified_at: 2026-09-18T11:31:43.467229769Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -110,6 +110,12 @@ comments:
   created_at: 2026-09-18T11:20:11.367796946Z
   modified_at: 2026-09-18T11:20:11.367796946Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b449-62eb-74a0-8dae-f58a4c45c983
+  author: joe
+  content: '[advisor] ROUND 4 — one item open (drain reviewer RequestChanges on round 3): the rework pickup always says ROUND 2 (rework_pickup_prompt(…, 2) at queue_cmd.rs ~8029/8037); the acceptance requires the CURRENT round. Compute round = 1 + number of comments starting with FINDINGS_BLOCK_PREFIX (durable history; latest_findings_block already scans them), use it in the pickup prompt and the rework-no-op failure text; test two prior blocks → ROUND 3. Handed to the product seat (by hand on bug-1213); advisor gate verdict remains APPROVE. Round 3 (9f6fafaae) correctly fixed the A→B→A loop-guard false positive.'
+  created_at: 2026-09-18T11:31:43.467229769Z
+  modified_at: 2026-09-18T11:31:43.467229769Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
