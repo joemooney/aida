@@ -12,12 +12,12 @@ description: |-
   3. aida-cli-lib/src/reconstitute.rs (from #1895 / TASK-1248): every run creates ~/.aida/reconstitute/<spec>-<uuid>/ (regenerated.json + matches.json) and nothing removes it. Add a bounded GC: keep the newest N (default 20) per machine or delete runs older than 7 days at the start of each probe, and mention the location + retention in the aida reconstitute manual entry. Same consideration for .aida/harvest/*.json candidates files (gitignored; probably fine to keep — note the decision in the manual either way).
 
   Acceptance: cargo test -p aida-cli-lib --lib green; rustdoc for HarvestConfig/HarvestGate reads correctly; a probe run leaves at most N scratch dirs behind; manual updated.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:27:26.018813186Z
+modified_at: 2026-09-18T01:27:34.355844642Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -49,8 +49,25 @@ comments:
   created_at: 2026-09-18T01:27:26.018813186Z
   modified_at: 2026-09-18T01:27:26.018813186Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0b220-449c-7650-9cde-17fab8f7ad69
+  author: aida-auto-bump
+  timestamp: 2026-09-18T01:27:34.300656403Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b220-44d3-7790-8bb6-5aedf30c394b
+  timestamp: 2026-09-18T01:27:34.355842895Z
+  agent: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+  brief_ref: .aida/agent-briefs/advisor/TASK-1255-2026-09-18T012728Z.md
+  commit_sha: f314589e911f56cc9b57047cc5614aa0dc614734
+  summary: Completed via merge f314589e
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T01:14:35.933059158Z
   implemented_by: joe
+  completed_at: 2026-09-18T01:27:34.300516100Z
+  completion_sha: f314589e911f56cc9b57047cc5614aa0dc614734
