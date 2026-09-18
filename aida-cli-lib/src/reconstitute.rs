@@ -637,6 +637,27 @@ fn prune_scratch_runs(root: &Path, keep: usize, max_age: Duration, now: SystemTi
 mod tests {
     use super::*;
 
+    // trace:BUG-1233 | ai:codex
+    fn set_dir_modified(path: &Path, modified: SystemTime) {
+        #[cfg(windows)]
+        let directory = {
+            use std::os::windows::fs::OpenOptionsExt;
+
+            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+            std::fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(path)
+                .unwrap()
+        };
+        #[cfg(not(windows))]
+        let directory = std::fs::File::open(path).unwrap();
+
+        directory
+            .set_times(std::fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+    }
+
     fn m(c: &str, t: &str, v: MatchVerdict, r: &str) -> TestMatch {
         TestMatch {
             criterion: c.into(),
@@ -769,20 +790,11 @@ mod tests {
             let run = root.path().join(format!("run-{index}"));
             std::fs::create_dir(&run).unwrap();
             let modified = now - Duration::from_secs((index as u64 + 1) * 60);
-            std::fs::File::open(&run)
-                .unwrap()
-                .set_times(std::fs::FileTimes::new().set_modified(modified))
-                .unwrap();
+            set_dir_modified(&run, modified);
         }
         let expired = root.path().join("expired");
         std::fs::create_dir(&expired).unwrap();
-        std::fs::File::open(&expired)
-            .unwrap()
-            .set_times(
-                std::fs::FileTimes::new()
-                    .set_modified(now - SCRATCH_MAX_AGE - Duration::from_secs(1)),
-            )
-            .unwrap();
+        set_dir_modified(&expired, now - SCRATCH_MAX_AGE - Duration::from_secs(1));
         let marker = root.path().join("leave-me.txt");
         std::fs::write(&marker, "not a run directory").unwrap();
 
