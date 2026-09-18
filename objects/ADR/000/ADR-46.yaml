@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:14:22.526081517Z
-modified_at: 2026-09-18T22:14:10.501522646Z
+modified_at: 2026-09-18T22:14:11.715481986Z
 req_type: Decision
 tags:
 - adr
@@ -42,3 +42,10 @@ relationships:
   target_id: 01a0b64f-a564-7e53-a0b0-95305e3df161
   created_at: 2026-09-18T21:14:28.646371593Z
   created_by: joe
+comments:
+- id: 01a0b695-9603-70d0-8b91-ee137a38d6d7
+  author: joe
+  content: '[advisor] Accepted 2026-09-18 15:14. The four forks were decided with the operator in the STORY-1226 guided session; decision 5 (grow aida schedule from STORY-1047 and register aida cron as its alias, deprecate the STORY-262 schedules.toml in place as a fires_task job kind) is the right reading of prior art: one scheduler to explain, existing emit-cron crontabs and the aida pull cadence keep working. Two consequences to hold the implementation to at the gate: (a) the hourly cold-boot is bounded per seat AND suppressed by any live session holding the role; (b) the ledger objects live on the aida-store branch and are debounced for substrate jobs so the store''s commit rate does not balloon.'
+  created_at: 2026-09-18T22:14:11.715481986Z
+  modified_at: 2026-09-18T22:14:11.715481986Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
