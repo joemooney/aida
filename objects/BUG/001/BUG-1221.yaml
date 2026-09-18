@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T11:06:09.323750423Z
-modified_at: 2026-09-18T12:03:37.379087673Z
+modified_at: 2026-09-18T12:03:38.644393360Z
 req_type: Bug
 tags:
 - auto-complete
@@ -56,6 +56,12 @@ comments:
   content: 'Auto-resolved: BUG-1213 reached Completed via commit 9171d72; rejecting auto-drafted phase-failure finding BUG-1221.'
   created_at: 2026-09-18T11:55:13.097248428Z
   modified_at: 2026-09-18T11:55:13.097248428Z
+- id: 01a0b466-9c14-7740-8452-589c75e52353
+  author: proxy
+  content: '[aida:proxy-note] rejected: auto-drafted failure record for a BUG-1213 phase that was handled on BUG-1213 itself (rework/re-drive); not an orchestrator defect.'
+  created_at: 2026-09-18T12:03:38.644393360Z
+  modified_at: 2026-09-18T12:03:38.644393360Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0b45e-e549-7b23-b406-b4cc23703cb5
   author: aida-auto-bump
