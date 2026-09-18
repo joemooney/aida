@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-18T19:29:01.811098746Z
+modified_at: 2026-09-18T19:29:04.330022232Z
 req_type: Task
 tags:
 - codex
@@ -28,3 +28,7 @@ tags:
 - parent:EPIC-56
 - roles
 - seats
+relationships:
+- rel_type: Child
+  target_id: 019f1045-2667-7460-9ff3-f203df44eb21
+  created_at: 2026-09-18T19:29:04.330022232Z
