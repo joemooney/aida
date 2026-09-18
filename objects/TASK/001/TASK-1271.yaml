@@ -17,12 +17,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-18T18:20:52.645970995Z
+modified_at: 2026-09-18T18:41:27.437104867Z
 req_type: Task
 tags:
-- coordination
-- drain-safe
-- follow-up:TASK-160
-- mailbox
-- observability
+- batch:followups-0918d
 execution_mode: drain
