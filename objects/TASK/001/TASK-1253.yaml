@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:55:43.933933048Z
+modified_at: 2026-09-18T01:56:20.275099117Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -68,6 +68,17 @@ comments:
     merged: 2026-09-17 18:58 -07:00 → main cccda30fa0; spec auto-bumped Completed
   created_at: 2026-09-18T01:55:43.933933048Z
   modified_at: 2026-09-18T01:55:43.933933048Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b23a-9ab3-7941-8a90-66a4c67d9b70
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: Only drain members whose state begins with `in-phase-` contribute drive-owned spec/PR identity; members in other states do not cause their PR or worktree lease scope to be treated as drive-owned.
+    rationale: The requirement describes matching the drain lock's spec/PR but does not define which member lifecycle states are considered in flight. This changes observable allow/refuse behavior for PRs and lease scopes associated with non-phase members.
+    source: file:task-1253-drain-01a0b236-74e3-7110-88fd-45a107fded0d.json
+    confidence: 0.90
+  created_at: 2026-09-18T01:56:20.275099117Z
+  modified_at: 2026-09-18T01:56:20.275099117Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b238-25db-7232-b12d-5f7f0e34634a
