@@ -41,7 +41,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:40:43.479253932Z
-modified_at: 2026-09-18T09:33:39.796949969Z
+modified_at: 2026-09-18T09:33:40.659023661Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -98,6 +98,17 @@ comments:
     confidence: 0.94
   created_at: 2026-09-18T09:33:39.796949969Z
   modified_at: 2026-09-18T09:33:39.796949969Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b3dd-4fb3-7c92-a44f-1cc2ac7f2c83
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: The reviewer classifies an auto-rebase subprocess failure as `stale-base-refused` when its combined stdout/stderr contains either `force-push refused` or `Force-pushing would DROP`; other nonzero auto-rebase exits retain the generic failure path.
+    rationale: This is the observable boundary that makes the typed non-retryable outcome work across the child-process interface. Tests can vary subprocess output and verify which cause is emitted; the requirement does not state the recognition protocol.
+    source: file:bug-1218-drain-01a0b3da-3625-7990-944d-62e905668ed7.json
+    confidence: 0.84
+  created_at: 2026-09-18T09:33:40.659023661Z
+  modified_at: 2026-09-18T09:33:40.659023661Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b3dc-0401-7a70-82fd-f4ca5e04253a
