@@ -76098,5 +76098,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5888
+- id: 01a0b41a-bd00-7801-957e-e310d7c51a4c
+  target_id: 01a0b41a-b635-7031-9011-3b3ba41bf361
+  author: aida
+  node_id: '1'
+  lamport: 5889
+  timestamp: 2026-09-18T10:40:46.336753161Z
+  kind: !Create
+    title: 'Review PR-1924: [AI:codex] fix(drain): stop unchanged rework loops (BUG-1213)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b40c`) for branch `bug-1213`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1924>
+      - Branch: `bug-1213` → `main`
+
+      ## Covers
+
+      - BUG-1213
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1924` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5889
 node_id: '1'
