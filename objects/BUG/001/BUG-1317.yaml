@@ -1,0 +1,51 @@
+id: 01a0b50d-5fa2-75a2-9a1c-e68fc7c4bf68
+spec_id: BUG-1317
+agreed_id: BUG-1317
+title: 'auto-complete failure: phase 2 (ci) on TASK-1269'
+description: |
+  Auto-drafted by `aida queue work TASK-1269 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  CI on PR-2 did not reach a terminal state in time (attempt 2/2)
+
+  Failure kind: `watchdog`
+
+  ## Recovery hint shown to the user
+
+  CI never reached a terminal state in the wait window — it may be queued or a runner is slow, CI is not red. Check progress with `glab ci status`, then re-run auto-complete once CI settles.
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-18T15:05:46.766629348+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 79152 ms
+    - phase 2 (ci): 2757 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-1269","started_at":"2026-09-18T15:04:19.972941568+00:00","completed_at":"2026-09-18T15:05:46.766629348+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"watchdog","failure_message":"CI on PR-2 did not reach a terminal state in time (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":79152},{"phase":2,"slug":"ci","elapsed_ms":2757}],"total_ms":82170,"binary_sha":"d29af1d038","lifecycle_skips":["no-harvest"]}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T15:05:47.682830968Z
+modified_at: 2026-09-18T15:05:47.682830968Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- ci
+- failure-2
+- failure-kind:watchdog
