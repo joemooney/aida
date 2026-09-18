@@ -16,12 +16,12 @@ description: |-
   - aida criteria <spec> on a mixed-language tree lists tests from all four languages with correct path:line.
   - Manual entry for aida criteria names the supported languages and the marker convention.
   - Non-goals: full AST parsing, other languages, test-runner integration.
-status: Done
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-18T02:15:33.982235463Z
+modified_at: 2026-09-18T02:16:35.715005513Z
 req_type: Task
 tags:
 - batch:followups-0917
