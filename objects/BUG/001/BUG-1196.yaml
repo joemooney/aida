@@ -2,7 +2,7 @@ id: 01a0b1f9-6f57-7f21-b29b-f1c9f4d64b5d
 spec_id: BUG-1196
 agreed_id: BUG-1196
 title: 'aida role enter picker offers the stakeholder personas (guest/requester) as selectable rows, then fails ''No such role: requester'' — personas are AIDA_SESSION_ROLE gates, not role files'
-description: |-
+description: |
   Operator hit this live 2026-09-17 17:44 in the aida dev repo:
 
     $ aida role enter
@@ -21,12 +21,15 @@ description: |-
   - `aida role enter` picker: choosing guest/requester never errors; the shell ends up with AIDA_SESSION_ROLE set to the persona (A) or the persona is not selectable (B).
   - `aida role enter requester` (explicit) behaves the same way; the error/help for a genuinely unknown name is unchanged.
   - Unit test on the picker's row source: personas are either tagged as persona rows or absent.
+
+  ## Acceptance
+  - AC1. Stakeholder persona names passed to `aida role enter` are matched case-insensitively and exported in canonical lowercase form (for example, `REQUESTER` activates `requester`).
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:45:09.335172014Z
-modified_at: 2026-09-18T03:37:57.204768110Z
+modified_at: 2026-09-18T03:37:58.281464620Z
 req_type: Bug
 tags:
 - batch:followups-0917

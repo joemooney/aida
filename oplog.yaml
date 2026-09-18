@@ -74429,5 +74429,34 @@ operations:
   timestamp: 2026-09-18T03:34:22.441358315Z
   kind: !SetStatus
     status: Completed
-clock: 5786
+- id: 01a0b297-a764-7ea1-a52e-31f5476b22e0
+  target_id: 01a0b1f9-6f57-7f21-b29b-f1c9f4d64b5d
+  author: aida
+  node_id: '1'
+  lamport: 5787
+  timestamp: 2026-09-18T03:37:58.372608615Z
+  kind: !SetDescription
+    description: |
+      Operator hit this live 2026-09-17 17:44 in the aida dev repo:
+
+        $ aida role enter
+        > Select a role to enter:   requester — least-privilege read/intake; not a build seat
+        error: "No such role: requester"
+        help: aida role add requester
+
+      Root cause: TASK-1237 added guest/requester as STAKEHOLDER PERSONAS — programmatic AIDA_SESSION_ROLE gates, deliberately NOT role files and not build-loop seats (role_cmd.rs print_stakeholder_personas: "become it via AIDA_SESSION_ROLE=<name>"). But the interactive picker used by `aida role enter` with no name (pick_role_interactively → pick_role_with_header, role_cmd.rs ~331) lists them as selectable rows alongside the real roles (~/.aida/roles/*.toml: advisor, implementer, integrator, product, reviewer). Selecting one routes into load_role, which has no file → "No such role", and the help text ("aida role add requester") would create a real role file for a persona — the opposite of TASK-1237's intent.
+
+      Fix (pick one, prefer A):
+      A. On selecting a persona in the picker, do what `role enter` cannot: emit the persona activation for the shell wrapper (export AIDA_SESSION_ROLE=requester, no role file, no lease), with a one-line note that this is a persona, not a seat.
+      B. Or exclude personas from the selectable list and render them as a non-selectable footer with the AIDA_SESSION_ROLE hint, exactly like `aida role list` does.
+      Either way `aida role enter requester` (explicit name) should give the same outcome as the picker choice, and the "No such role → aida role add" help must not fire for a known persona name.
+
+      Acceptance:
+      - `aida role enter` picker: choosing guest/requester never errors; the shell ends up with AIDA_SESSION_ROLE set to the persona (A) or the persona is not selectable (B).
+      - `aida role enter requester` (explicit) behaves the same way; the error/help for a genuinely unknown name is unchanged.
+      - Unit test on the picker's row source: personas are either tagged as persona rows or absent.
+
+      ## Acceptance
+      - AC1. Stakeholder persona names passed to `aida role enter` are matched case-insensitively and exported in canonical lowercase form (for example, `REQUESTER` activates `requester`).
+clock: 5787
 node_id: '1'
