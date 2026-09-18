@@ -128,6 +128,13 @@ a scratch GitLab project (`joe/aida-gl-test`), not in automated CI. The pure
 formatting and the provider parsers are unit-tested in isolation; the
 subprocess-level `glab` wiring is exercised manually.
 
+### Live validation (2026-09-18)
+
+A headless `--auto-complete --no-human=both` drain was run against the
+self-hosted mirror at `gitlab.joemooney.com` (project `ai/aida`), with the
+scaffolded `merge-hold-gate` job wired into `.gitlab-ci.yml`. The run exercised
+CI registration, the CI watch, per-job red refinement, and the merge-hold gate.
+
 ### Manual validation checklist (GitLab)
 
 1. `glab auth status` — confirm `glab` is installed and logged in.
