@@ -7,14 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b582-7c50-7df1-a2e3-d59132f88ab9
-  position: 7000
-  added_by: role:implementer
-  note: auto-queue-review idempotency must require BOTH an open Review PR-N story AND a reviewer-queue entry; story-exists-but-unqueued → (re)queue it and say so; test
-  added_at: 2026-09-18T18:20:46.995227692Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b5bf-fa25-7e80-b111-4bd751958e05
   position: 8000
   added_by: role:implementer
