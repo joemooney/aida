@@ -3,12 +3,12 @@ spec_id: BUG-1232
 agreed_id: BUG-1232
 title: 'Drain merge phase on GitLab: glab mr merge reported ''not enough privileges'' on a mergeable MR while authenticated as an admin with api scope'
 description: 'Observed 2026-09-18 11:2x on the TASK-1254 live drain (mirror gitlab.joemooney.com ai/aida, MR !2, drain run 7). Review round 2 recorded APPROVED with head pipeline 292 green; the orchestrator entered phase 4 and printed: ''transient merge failure (tool-exit); retrying phase 4 attempt 2/2'' then ''phase 4 (merge PR) failed: glab merge failed for MR-2: glab mr merge failed for !2: you do not have enough privileges to merge this merge request''. Evidence gathered right after: the MR''s detailed_merge_status was mergeable, labels empty, head_pipeline 292 success, no approval rules; glab is authenticated as root (is_admin true) with token scopes api + write_repository + read_api; main is protected with merge and push allowed to Maintainers. Cause NOT verified — candidates: (a) glab mapping a 405/409 (merge checked while the pipeline was still flipping to success, ''Pipelines must succeed'' on) onto its privileges message; (b) glab running with a different token in the drain''s environment (GITLAB_TOKEN unset, config token) than the shell; (c) the mirror''s Maintainers-only merge rule not applying to an admin the way expected. Next step: reproduce by hand (glab mr merge <iid> --squash --yes on a fresh throwaway MR, then the REST PUT merge) and capture glab''s raw response with --debug; if (a), the merge phase should treat a ci_still_running/not_mergeable status as a wait, not a privileges failure.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-18T20:22:25.977508967Z
+modified_at: 2026-09-18T22:57:49.426228537Z
 req_type: Bug
 tags:
 - batch:followups-0918e
