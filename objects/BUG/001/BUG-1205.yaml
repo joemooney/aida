@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T03:08:21.529985391Z
-modified_at: 2026-09-18T04:15:50.369497673Z
+modified_at: 2026-09-18T04:17:22.686790841Z
 req_type: Bug
 tags:
 - ci-gate
@@ -16,6 +16,21 @@ tags:
 - follow-up:BUG-1180
 - proxy-groomed
 - regression
+comments:
+- id: 01a0b2bb-bafe-7a73-9c18-2ea60823ce58
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1910 [AI:claude] fix(drain): informational-only CI red falls through to the green steps; lease-held prompt is headless-safe (BUG-1205)
+    verdict: APPROVE + merged (drive)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1910.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE/CLEAN; merged from a plain shell, no override
+    reasoning: (1) finish_ci's informational-only-red arm returned early (BUG-1180 regression), skipping end_implementer_session + auto-queue, so the headless reviewer hit the branch-held-by-lease prompt — the real TASK-1261 shelve; now it falls through like Green, pinned by a source-shape guard. (2) session_start's lease-held pre-flight decides from the substrate under headless/non-TTY: dead lease → auto-end (aida session end --yes --skip-ci, flags verified), live lease → typed refusal, TTY → the existing 4-option prompt; truth-table test.
+    merged: 2026-09-17 21:19 -07:00 → main 6a948876a0; spec auto-bumped Completed
+  created_at: 2026-09-18T04:17:22.686790841Z
+  modified_at: 2026-09-18T04:17:22.686790841Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b2ba-525a-71c3-925e-b00b6accef2b
   author: aida-auto-bump
