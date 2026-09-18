@@ -1,0 +1,26 @@
+id: 01a0b489-01b4-7352-8eac-5cbe2b387e68
+spec_id: STORY-1212
+agreed_id: STORY-1212
+title: 'Review PR-1927: [AI:codex] fix(criteria): bound colon-form acceptance parsing (BUG-1219)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b482`) for branch `bug-1219`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1927>
+  - Branch: `bug-1219` → `main`
+
+  ## Covers
+
+  - BUG-1219
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1927` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T12:41:12.884690448Z
+modified_at: 2026-09-18T12:41:12.884690448Z
+req_type: Story

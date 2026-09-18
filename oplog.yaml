@@ -76502,5 +76502,31 @@ operations:
       - TOON / --json / --short output unchanged.
 
       - AC1. When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
-clock: 5912
+- id: 01a0b489-07c4-7ad2-b63d-a5b98c19abd1
+  target_id: 01a0b489-01b4-7352-8eac-5cbe2b387e68
+  author: aida
+  node_id: '1'
+  lamport: 5913
+  timestamp: 2026-09-18T12:41:14.436506425Z
+  kind: !Create
+    title: 'Review PR-1927: [AI:codex] fix(criteria): bound colon-form acceptance parsing (BUG-1219)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b482`) for branch `bug-1219`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1927>
+      - Branch: `bug-1219` → `main`
+
+      ## Covers
+
+      - BUG-1219
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1927` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5913
 node_id: '1'
