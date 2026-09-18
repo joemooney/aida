@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T06:25:41.027850195Z
+modified_at: 2026-09-18T06:25:42.186098537Z
 req_type: Bug
 tags:
 - aida:list
@@ -47,6 +47,17 @@ comments:
     Finish with aida queue done BUG-1207.
   created_at: 2026-09-18T06:25:40.779957788Z
   modified_at: 2026-09-18T06:25:40.779957788Z
+- id: 01a0b331-3633-78a3-8a73-6fb773b33082
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1916):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1207: --show-origin still computes title width with the 53-column default prefix even though its fixed columns consume 56 columns; at 120 columns the header/rows exceed the terminal and the divider is three columns short of the rendered title boundary.
+    2. BUG-1207: --tags gives the title the entire remaining terminal width and then appends a space plus tag chips, so tagged rows still exceed the terminal width; add rendered-table coverage for default, --show-origin, --tags, and non-TTY output.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-18T06:25:41.939519973Z
+  modified_at: 2026-09-18T06:25:41.939519973Z
 execution_mode: drain
 implementation_info:
   implemented: true
