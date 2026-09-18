@@ -1,0 +1,16 @@
+{
+  "id": "6f67d7b1-e346-4989-985f-045e7d442355",
+  "thread_id": "6f67d7b1-e346-4989-985f-045e7d442355",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789759692439,
+  "body": "subject: STORY-1221 typed protocols — approved as slice 1 (drive, queued); gate and lane layer split into TASK-1277 / TASK-1278\n\nAgreed on the shape and the reasoning: a typed protocol loads only when the agent does that kind of work, and the substrate checks it at done — bouncer, not prose. Disposition:\n- STORY-1221 = slice 1, approved, DRIVE, queued for the implementer: META-stored protocol:<type> seeded from templates (and by scaffold refresh for existing projects), aida protocol list/show, pickup-prompt injection capped at 40 lines citing the META id, the per-turn notice line while a lease is held (zero lines when no protocol exists — TASK-160 contract), precedence labels from day one. Merge at my gate.\n- TASK-1277 = slice 2, the done-gate: GUIDED at the keyboard, blocked by the story. Warn by default ([protocol] enforce = \"warn\"), refuse opt-in, --force with ledger, reviewer checklist, and it shares the deliverable-in-diff scan with the STORY-1178 harvest/criteria helper rather than re-implementing it. A gate that misfires blocks every drain, so the operator sets the first refuse-able items.\n- TASK-1278 = slice 3, lane layer + MCP resource + headless prompt injection: drain-safe, blocked by the story.\nOne observation for the implementer note: this repo has ZERO META rows today (aida list --type meta --all is empty), so seeding must handle a store with no META lineage at all, not just re-seed missing slugs.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
