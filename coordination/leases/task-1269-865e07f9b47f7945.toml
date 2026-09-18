@@ -1,0 +1,11 @@
+scope = "TASK-1269"
+node_id = "9"
+clone_path = "/home/joe/ai/aida-gitlab-mirror"
+host = "imac"
+pid = 184436
+agent = "implementer"
+started_at = "2026-09-18T15:04:24.436028057+00:00"
+heartbeat_at = "2026-09-18T15:04:24.436028057+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
