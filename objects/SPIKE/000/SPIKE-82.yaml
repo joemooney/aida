@@ -1,0 +1,31 @@
+id: 01a0b5e0-4eab-7c03-acdd-7250d89e58fe
+spec_id: SPIKE-82
+agreed_id: SPIKE-82
+title: 'Night-shift post-mortem: what made the 2026-09-17/18 overnight window succeed, and which parts depend on an agent being awake'
+description: |
+  Question: what made the 2026-09-17/18 overnight window succeed (28 PRs merged to main between 18:00 and 08:00, 24 specs touched, 17 PrMerged / 15 SpecShelved events — 10 verdict:request-changes, 3 ci-red, 2 tool-exit — 7 QueueDrained waves, 4 AdvisorEscalated; every open drain-safe item closed by morning), and which parts of it were luck, agent attention, or substrate?
+
+  Evidence to mine: .aida/events.jsonl for that window; aida history events; the product and advisor sessions' mailbox thread (the 21:38 protocol: product launches drains when the lock frees, advisor gates reviews/merges/harvest and hand-picks shelves); the batch tags followups-0917, 0917b, 0918, 0918b, 0918c and their queue progress; the four escalations; the fixes that were shipped at the keyboard during the window (BUG-1195, BUG-1213, BUG-1218) and how many drain rounds each cost.
+
+  Hypotheses to confirm or kill:
+  1. Two seats with a written protocol and one gate (advisor) beat one seat doing everything — independence held and nothing merged its own code.
+  2. Small batch waves (4-8 specs) with --max-failures and --escalate-blocks, relaunched as soon as the lock freed, kept throughput high without piling shelves.
+  3. Event-driven supervision (a persistent Monitor on events.jsonl waking the product seat on PR opened / shelved / merged / red CI / queue drained) is what kept the loop moving — not polling, not the clock.
+  4. The /goal loop plus the "presence is not the clock" discipline turned idle time into work; the check-ins were the heartbeat.
+  5. Reliability fixes shipped at the keyboard the moment a drain exposed them, then re-driven through the drain (self-test by dogfood), are why later waves had fewer rounds.
+  6. What was fragile: it all depended on two interactive sessions staying alive and awake (context compaction, one hour of unread advisor mail per their own audit); a single drain lock relaunched by an agent noticing; pgrep-based liveness that self-matched once; a shared machine.
+
+  Output: a dated report under docs/spikes/ that (a) states which hypotheses held with the event counts, (b) writes the overnight runbook as a checklist an operator can follow at 18:00 (queue + tag + protocol mail + launch + monitors), and (c) lists the substrate gaps that would let the runbook run with NO interactive seat awake — feeding the night-shift tick story.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T18:56:11.435264766Z
+modified_at: 2026-09-18T18:56:11.435264766Z
+req_type: Spike
+tags:
+- autonomy
+- orchestrator
+- parent:EPIC-62
+- reliability
+human_only: true
