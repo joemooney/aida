@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T20:57:48.132153187Z
+modified_at: 2026-09-18T20:57:50.737789449Z
 req_type: Story
 tags:
 - multivendor
@@ -35,3 +35,7 @@ tags:
 - reliability
 - seats
 - substrate-first
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-18T20:57:50.737789449Z
