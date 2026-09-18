@@ -1,0 +1,26 @@
+id: 01a0b4ab-f93b-73e0-93a8-c67460b368d1
+spec_id: STORY-1213
+agreed_id: STORY-1213
+title: 'Review PR-1929: [AI:codex] feat(groom): propose execution lanes and trivial lifecycle (TASK-1266)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b49b`) for branch `task-1266`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1929>
+  - Branch: `task-1266` → `main`
+
+  ## Covers
+
+  - TASK-1266
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1929` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T13:19:24.475452169Z
+modified_at: 2026-09-18T13:19:24.475452169Z
+req_type: Story
