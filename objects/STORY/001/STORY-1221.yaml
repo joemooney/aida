@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T23:35:10.554581009Z
+modified_at: 2026-09-18T23:36:49.112916462Z
 req_type: Story
 tags:
 - agent-ux
@@ -103,6 +103,19 @@ comments:
   created_at: 2026-09-18T23:24:03.570022176Z
   modified_at: 2026-09-18T23:24:03.570022176Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b6e1-3ad8-7262-b7ad-ad9e8d46d70a
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1948 [AI:codex] feat(protocol): inject editable type contracts (STORY-1221) — slice 1
+    verdict: APPROVE + merged (auto-bumped In Progress → Completed at dbc3a57)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (codex implementer in wave followups-0918e; the drain's headless reviewer issued round 1 — the same finding the advisor put on the sketch sign-off; the product seat drove the round-2 rework c25ba5c1; the advisor reviewed both rounds — .aida/review-verdicts/PR-1948-advisor.json)
+    gates: required Build (ubuntu-latest) = success at c25ba5c1; merge-hold marker present and released via aida pr ship (explicit review-merge); label applied by hand at 16:02 (BUG-1236 workaround); merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: slice 1 as groomed — META-stored protocol:<type> rows (six seeded), resolver with a 40-line cap citing the META id, precedence label type protocol < spec acceptance, aida protocol list/show/seed, injection at queue work / do / worktree enter, one-line notice only while a lease is held; the round-1 gap (existing projects never seeded) closed by an idempotent seed-missing pass reachable from scaffold refresh / init --refresh / protocol seed, tested two-present/four-missing with edited bodies preserved. Non-blocking: rework commit subject cites BUG-1236 (unrelated). Children now unblocked: TASK-1277 (done-gate, guided/keyboard), TASK-1278 (lane/MCP/headless, drain). Next dogfood step: run `aida scaffold refresh` (or `aida protocol seed`) in this repo once the binary is rebuilt so the six protocols exist here.
+    timestamp: 2026-09-18T16:36-07:00
+  created_at: 2026-09-18T23:36:49.112916462Z
+  modified_at: 2026-09-18T23:36:49.112916462Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b6df-b9d3-73b0-a7ba-9b2d728cee22
   author: aida-auto-bump
