@@ -73486,5 +73486,25 @@ operations:
     req_type: Task
     status: Approved
     priority: Medium
-clock: 5721
+- id: 01a0b203-56c0-7ce2-8b0f-f6fda2e24bb5
+  target_id: 01a0b203-526c-7233-acb4-578e984cafa4
+  author: aida
+  node_id: '1'
+  lamport: 5722
+  timestamp: 2026-09-18T00:55:58.400774787Z
+  kind: !Create
+    title: aida agent new --role guest|requester launches the persona correctly but the launch context says 'No stored role file was found' — give personas their own launch guidance (read/intake envelope, what i
+    description: |-
+      Verified 2026-09-17: `aida agent new claude --role requester --show-context` works — run_tracked_agent exports AIDA_SESSION_ROLE=requester to the child, so the STORY-1110 gate applies inside the session (reads OK; `aida add` limited to change-request/bug/user, forced Draft, tagged intake:requester; approve/queue/edit-status/merge refused). But the Role Guidance section of the launch context reads "No stored role file was found for `requester`. Follow the project discipline in AGENTS.md…" — i.e. the persona is treated as a missing role file, and the session gets no statement of its envelope.
+
+      Fix: when the launch role is a stakeholder persona (role_is_stakeholder_only), render a persona guidance block instead of the missing-file text: who you are (least-privilege stakeholder, not a build seat), what you can do (guest: why/list/status/graph/search/digest; requester: the same + `aida add --type change-request|bug|user` which lands Draft tagged intake:requester for the advisor's groom pass), what will be refused and the one-line hint the gate prints, and that nothing you file is worked until an advisor approves it. Also: do not create a spec lease/worktree for a persona launch (a persona is not a seat; leases are for seats) — verify what agent new does today with --role requester and no --spec, and skip the lease if one is taken. Same guidance should appear for `aida session new` / `session start --launch` with a persona role.
+
+      Acceptance:
+      - `aida agent new claude --role requester --show-context` prints the persona guidance block, not "No stored role file".
+      - A persona launch takes no lease (aida session leases shows none for it).
+      - Guidance text lives in one place (a template or const) shared by agent new and session new; unit test pins that guest and requester get the persona block and a real role does not.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5722
 node_id: '1'
