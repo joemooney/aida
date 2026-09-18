@@ -8,10 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:34.903795856Z
-modified_at: 2026-09-18T19:50:27.562083145Z
+modified_at: 2026-09-18T22:59:56.048952545Z
 req_type: Task
 tags:
+- agent-ux
 - batch:followups-0918e
+- discipline
+- drain-safe
+- parent:EPIC-28
+- protocol:slice-3
 relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
