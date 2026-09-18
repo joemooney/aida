@@ -41,6 +41,70 @@ pub(crate) fn handle_mailbox_command(
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
 
     match cmd {
+        MailboxCommand::Latency { recipient, json } => {
+            let local = mailbox_store::read_local_messages(project_root)?;
+            let canonical = mailbox_store::read_canonical_messages(store_root)?;
+            let merged = merge_dedup(&local, &canonical);
+            let identities = recipient.clone().map(|v| vec![v]).unwrap_or_else(|| {
+                std::env::var("AIDA_SESSION_ROLE")
+                    .ok()
+                    .filter(|v| !v.trim().is_empty())
+                    .map(|v| vec![v])
+                    .unwrap_or_else(|| vec![current_user_id(None)])
+            });
+            let now = chrono::Utc::now().timestamp_millis();
+            let rows: Vec<serde_json::Value> = identities
+                .iter()
+                .map(|who| {
+                    let watermark = mailbox_store::read_watermark(project_root, who);
+                    let latency = aida_core::mailbox::mailbox_latency(who, &merged, watermark, now);
+                    let receipts = mailbox_store::read_receipts(project_root, who);
+                    let mut read_latencies: Vec<(i64, i64)> = merged
+                        .iter()
+                        .filter_map(|m| {
+                            receipts
+                                .get(&m.id)
+                                .map(|seen| (*seen, seen.saturating_sub(m.timestamp).max(0)))
+                        })
+                        .collect();
+                    read_latencies.sort_by_key(|(seen, _)| std::cmp::Reverse(*seen));
+                    let max_read = read_latencies
+                        .into_iter()
+                        .take(100)
+                        .map(|(_, latency)| latency)
+                        .max();
+                    serde_json::json!({
+                        "recipient": who,
+                        "last_seen_at": mailbox_store::read_last_seen(project_root, who),
+                        "unread": latency.unread,
+                        "oldest_unread_age_ms": latency.oldest_unread_age_ms,
+                        "max_read_latency_ms": max_read,
+                    })
+                })
+                .collect();
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                for row in rows {
+                    let who = row["recipient"].as_str().unwrap_or("?");
+                    let seen = row["last_seen_at"]
+                        .as_i64()
+                        .map(format_mail_timestamp)
+                        .unwrap_or_else(|| "never".into());
+                    let unread = row["unread"].as_u64().unwrap_or(0);
+                    let oldest = row["oldest_unread_age_ms"]
+                        .as_i64()
+                        .map(format_mail_age)
+                        .unwrap_or_else(|| "—".into());
+                    let max_read = row["max_read_latency_ms"]
+                        .as_i64()
+                        .map(format_mail_age)
+                        .unwrap_or_else(|| "—".into());
+                    println!("{who}: last read {seen} · {unread} unread · oldest {oldest} · max read latency {max_read}");
+                }
+            }
+            Ok(())
+        }
         MailboxCommand::Send {
             to,
             broadcast,
@@ -277,8 +341,10 @@ pub(crate) fn handle_mailbox_command(
                 );
             } else {
                 for who in &who_list {
-                    if let Some(newest) = inbox_for(who, &merged).iter().map(|m| m.timestamp).max()
-                    {
+                    let full_inbox = inbox_for(who, &merged);
+                    if let Some(newest) = full_inbox.iter().map(|m| m.timestamp).max() {
+                        let ids: Vec<&str> = full_inbox.iter().map(|m| m.id.as_str()).collect();
+                        let _ = mailbox_store::record_seen(project_root, who, &ids);
                         let _ = mailbox_store::set_watermark(project_root, who, newest);
                     }
                 }

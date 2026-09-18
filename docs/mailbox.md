@@ -8,6 +8,15 @@ AIDA's mailbox is a lightweight **peer-to-peer messaging channel** between agent
 
 ## When to use the mailbox (and when not to)
 
+## Am I reading my mail?
+
+Run `aida mailbox latency` (or `aida mailbox latency --for advisor`) to see
+the recipient's last-read time, unread count, and oldest-unread age. The
+per-turn `aida awaiting --notice`, `aida status`, and `aida statusbar` surfaces
+also show `⚠ mail: oldest unread …` when that age crosses
+`[mailbox] unread_warn_after` (default `15m`). With no unread mail they remain
+quiet, preserving the quiet-tick contract.
+
 AIDA gives you two coordination channels; use the right one:
 
 | Use… | When the thing is… | Examples |

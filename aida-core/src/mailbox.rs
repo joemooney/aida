@@ -358,6 +358,44 @@ pub fn unread_counts(
     (unread, urgent)
 }
 
+/// Read-side latency facts for one mailbox identity. Ages are clamped at zero
+/// so clock skew or a future-dated message never produces a negative warning.
+// trace:TASK-1271 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MailboxLatency {
+    pub unread: usize,
+    pub oldest_unread_age_ms: Option<i64>,
+}
+
+/// Compute unread count and age of the oldest unread message at `now_ms`.
+// trace:TASK-1271 | ai:codex
+pub fn mailbox_latency(
+    agent: &str,
+    messages: &[Message],
+    read_watermark: Option<i64>,
+    now_ms: i64,
+) -> MailboxLatency {
+    let mark = read_watermark.unwrap_or(i64::MIN);
+    let unread: Vec<&Message> = inbox_for(agent, messages)
+        .into_iter()
+        .filter(|m| !m.archived && m.timestamp > mark)
+        .collect();
+    MailboxLatency {
+        unread: unread.len(),
+        oldest_unread_age_ms: unread
+            .iter()
+            .map(|m| m.timestamp)
+            .min()
+            .map(|ts| now_ms.saturating_sub(ts).max(0)),
+    }
+}
+
+pub fn mailbox_latency_warns(latency: &MailboxLatency, threshold_ms: i64) -> bool {
+    latency
+        .oldest_unread_age_ms
+        .is_some_and(|age| age >= threshold_ms.max(0))
+}
+
 /// Build the operator overview across every agent that appears as a recipient.
 /// `watermarks` maps an agent id to its read-watermark timestamp (absent = the
 /// agent has read nothing). Broadcasts count toward every *known* recipient's
@@ -1147,6 +1185,22 @@ mod tests {
         // Caught up: nothing unread.
         let (unread, urgent) = unread_counts("claude", &msgs, Some(30));
         assert_eq!((unread, urgent), (0, 0));
+    }
+
+    #[test]
+    fn latency_uses_oldest_unread_and_threshold() {
+        let msgs = vec![
+            msg("old", "t", "a", Recipient::Agent("claude".into()), 1_000),
+            msg("new", "t", "a", Recipient::Agent("claude".into()), 4_000),
+        ];
+        let latency = mailbox_latency("claude", &msgs, Some(500), 10_000);
+        assert_eq!(latency.unread, 2);
+        assert_eq!(latency.oldest_unread_age_ms, Some(9_000));
+        assert!(mailbox_latency_warns(&latency, 9_000));
+        assert!(!mailbox_latency_warns(&latency, 9_001));
+        let quiet = mailbox_latency("claude", &msgs, Some(4_000), 10_000);
+        assert_eq!(quiet.oldest_unread_age_ms, None);
+        assert!(!mailbox_latency_warns(&quiet, 0));
     }
 
     #[test]

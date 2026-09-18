@@ -151,7 +151,64 @@ pub(crate) fn set_watermark(project_root: &Path, agent: &str, ts: i64) -> Result
     }
     aida_core::write_atomic(&path, ts.to_string().as_bytes())
         .with_context(|| format!("writing read-marker {}", path.display()))?;
+    let seen_path = read_marker_dir(project_root).join(format!("{}.seen", sanitize_id(agent)));
+    aida_core::write_atomic(
+        &seen_path,
+        chrono::Utc::now().timestamp_millis().to_string().as_bytes(),
+    )
+    .with_context(|| format!("writing read timestamp {}", seen_path.display()))?;
     Ok(())
+}
+
+/// Wall-clock time when this identity last advanced its read watermark.
+// trace:TASK-1271 | ai:codex
+pub(crate) fn read_last_seen(project_root: &Path, agent: &str) -> Option<i64> {
+    let path = read_marker_dir(project_root).join(format!("{}.seen", sanitize_id(agent)));
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+/// Record per-message acknowledgement times so read-latency history is exact.
+// trace:TASK-1271 | ai:codex
+pub(crate) fn record_seen(project_root: &Path, agent: &str, message_ids: &[&str]) -> Result<()> {
+    let dir = mailbox_dir(project_root)
+        .join(".read-receipts")
+        .join(sanitize_id(agent));
+    std::fs::create_dir_all(&dir)?;
+    let now = chrono::Utc::now().timestamp_millis().to_string();
+    for id in message_ids {
+        let path = dir.join(format!("{}.txt", sanitize_id(id)));
+        if !path.exists() {
+            aida_core::write_atomic(&path, now.as_bytes())?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn read_receipts(
+    project_root: &Path,
+    agent: &str,
+) -> std::collections::HashMap<String, i64> {
+    let dir = mailbox_dir(project_root)
+        .join(".read-receipts")
+        .join(sanitize_id(agent));
+    let mut out = std::collections::HashMap::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(id) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if let Ok(ts) = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .trim()
+            .parse()
+        {
+            out.insert(id.to_string(), ts);
+        }
+    }
+    out
 }
 
 /// Read every recorded read-watermark, keyed by agent id. Absent dir → empty.

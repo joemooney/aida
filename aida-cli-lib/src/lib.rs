@@ -18430,6 +18430,73 @@ struct MailboxPolicy {
     act_on_mail: aida_core::mailbox::ActOnMail,
 }
 
+// trace:TASK-1271 | ai:codex
+fn format_mail_age(ms: i64) -> String {
+    let seconds = ms.max(0) / 1_000;
+    if seconds < 60 {
+        format!("{seconds}s")
+    } else if seconds < 3_600 {
+        format!("{}m", seconds / 60)
+    } else if seconds < 86_400 {
+        format!("{}h{}m", seconds / 3_600, (seconds % 3_600) / 60)
+    } else {
+        format!("{}d{}h", seconds / 86_400, (seconds % 86_400) / 3_600)
+    }
+}
+
+fn format_mail_timestamp(ts: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(ts)
+        .map(|dt| {
+            dt.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M")
+                .to_string()
+        })
+        .unwrap_or_else(|| "unknown".into())
+}
+
+fn mailbox_warn_after_ms(project_root: &std::path::Path) -> i64 {
+    let configured = std::fs::read_to_string(project_root.join(".aida/config.toml"))
+        .ok()
+        .and_then(|s| s.parse::<toml::Value>().ok())
+        .and_then(|v| {
+            v.get("mailbox")?
+                .get("unread_warn_after")?
+                .as_str()
+                .map(str::to_owned)
+        });
+    configured
+        .and_then(|s| crate::drain_caps::parse_duration(&s))
+        .map(|d| d.as_millis().min(i64::MAX as u128) as i64)
+        .unwrap_or(15 * 60 * 1_000)
+}
+
+/// Warning shared by awaiting/status/statusbar. No unread mail means no line.
+// trace:TASK-1271 | ai:codex
+fn mailbox_latency_warning(project_root: &std::path::Path, role: Option<&str>) -> Option<String> {
+    let identity = role
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| current_user_id(None));
+    let store_root = project_root.join(".aida-store");
+    let local = mailbox_store::read_local_messages(project_root).ok()?;
+    let canonical = mailbox_store::read_canonical_messages(&store_root).unwrap_or_default();
+    let merged = aida_core::mailbox::merge_dedup(&local, &canonical);
+    let latency = aida_core::mailbox::mailbox_latency(
+        &identity,
+        &merged,
+        mailbox_store::read_watermark(project_root, &identity),
+        chrono::Utc::now().timestamp_millis(),
+    );
+    aida_core::mailbox::mailbox_latency_warns(&latency, mailbox_warn_after_ms(project_root)).then(
+        || {
+            format!(
+                "⚠ mail: oldest unread {}",
+                format_mail_age(latency.oldest_unread_age_ms.unwrap_or(0))
+            )
+        },
+    )
+}
+
 // trace:STORY-583 trace:TASK-782 | ai:codex,claude
 fn mailbox_policy(project_root: &std::path::Path) -> MailboxPolicy {
     let mut policy = MailboxPolicy {
@@ -66694,6 +66761,9 @@ fn handle_awaiting_command(
                     println!("{line}");
                 }
             }
+        }
+        if let Some(line) = mailbox_latency_warning(&project_root, ctx.role.as_deref()) {
+            println!("{line}");
         }
         let store_path = detect_distributed_store_from(&project_root)
             .unwrap_or_else(|| project_root.join(".aida-store"));

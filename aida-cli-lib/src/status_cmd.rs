@@ -489,6 +489,9 @@ pub(crate) fn handle_status_command_distributed(
     }
     let stdout = std::io::stdout();
     let _ = awaiting_report.render(verbose, stdout.lock());
+    if let Some(line) = crate::mailbox_latency_warning(&project_root, user_ctx.role.as_deref()) {
+        println!("{line}");
+    }
 
     print_status_presence_line(&project_root);
     print_status_presence_consumers(&project_root, backend);

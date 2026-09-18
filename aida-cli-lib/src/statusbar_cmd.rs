@@ -44,6 +44,7 @@ pub(crate) struct MeterCounts {
     /// Needs-you breakdown: `(count, channel label)` per non-empty channel,
     /// in render order. Labels arrive pre-pluralized.
     pub you: Vec<(usize, String)>,
+    pub mail_latency_warning: Option<String>,
 }
 
 impl MeterCounts {
@@ -92,6 +93,9 @@ pub(crate) fn render_meter(c: &MeterCounts) -> String {
             named.join(" · ")
         };
         parts.push(format!("you:{total} ({inner})"));
+    }
+    if let Some(warning) = &c.mail_latency_warning {
+        parts.push(warning.clone());
     }
     parts.join(" · ")
 }
@@ -202,6 +206,7 @@ fn collect_meter(
         live,
         stale,
         you,
+        mail_latency_warning: crate::mailbox_latency_warning(project_root, raw_role.as_deref()),
     }
 }
 
@@ -317,6 +322,7 @@ mod tests {
             live: 2,
             stale: 1,
             you: vec![(2, "mail".to_string()), (1, "punt".to_string())],
+            mail_latency_warning: None,
         };
         assert_eq!(
             render_meter(&c),
@@ -455,6 +461,7 @@ mod tests {
             live: 3,
             stale: 2,
             you: vec![(1, "mail".to_string())],
+            mail_latency_warning: None,
         };
         let line = render_meter(&c);
         assert!(line.chars().all(|ch| !ch.is_control()), "{line:?}");
