@@ -5,7 +5,7 @@
 //! subject covering no specs on EVERY session end of a remote-less repo.
 // trace:BUG-776 | ai:claude
 
-use super::{auto_queue_skip_reason, review_forge_for_kind, ReviewForge};
+use super::{auto_queue_skip_reason, pr_head_remote_ref_for, review_forge_for_kind, ReviewForge};
 
 #[test]
 fn no_origin_remote_skips_the_auto_file() {
@@ -78,4 +78,17 @@ fn auto_queue_review_forge_follows_detected_kind() {
         review_forge_for_kind(crate::forge::ForgeKind::GitHub),
         ReviewForge::GitHub
     ));
+}
+
+// trace:BUG-1228 | ai:claude
+#[test]
+fn pr_head_remote_ref_is_forge_shaped() {
+    assert_eq!(
+        pr_head_remote_ref_for(ReviewForge::GitHub, 7),
+        "refs/pull/7/head"
+    );
+    assert_eq!(
+        pr_head_remote_ref_for(ReviewForge::GitLab, 2),
+        "refs/merge-requests/2/head"
+    );
 }

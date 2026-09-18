@@ -159,7 +159,7 @@ pub(crate) fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &s
         )
     } else {
         format!(
-            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) — \
+            "could not fetch PR-{n}'s head ref — \
              is the PR number correct and the remote reachable?"
         )
     }
@@ -247,7 +247,9 @@ pub(crate) fn pr_rebase_handler(
     // doesn't normally fetch. Mirrors how `aida session start --pr`
     // primes the worktree branch in EPIC-20.
     let pr_local_branch = format!("pr-{}", n);
-    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    // BUG-1228: forge-aware head ref (refs/merge-requests/N/head on GitLab).
+    let pr_head_ref = crate::pr_head_remote_ref(&project_root, n);
+    let pr_refspec = format!("+{pr_head_ref}:refs/heads/{pr_local_branch}");
     // BUG-289: capture stderr so the failure hint can branch on the actual
     // git error — git refuses to fetch into a local branch that's checked out
     // in a worktree (typically the pr-N reviewer worktree), which is a
@@ -2928,7 +2930,9 @@ pub(crate) fn preflight_stale_base_check_with_info(
     // ref is safe to fetch and is deleted after the probe.
     // trace:BUG-1218 | ai:codex
     let pr_local_branch = format!("refs/aida/preflight/pr-{n}-{}", std::process::id());
-    let pr_refspec = format!("+refs/pull/{n}/head:{pr_local_branch}");
+    // BUG-1228: forge-aware head ref (refs/merge-requests/N/head on GitLab).
+    let pr_head_ref = crate::pr_head_remote_ref(project_root, n);
+    let pr_refspec = format!("+{pr_head_ref}:{pr_local_branch}");
     let pr_fetch = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -2938,7 +2942,7 @@ pub(crate) fn preflight_stale_base_check_with_info(
         .status();
     if !matches!(pr_fetch, Ok(s) if s.success()) {
         anyhow::bail!(
-            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) for pre-flight \
+            "could not fetch PR-{n}'s head ref (`{pr_head_ref}`) for pre-flight \
              stale-base check"
         );
     }
@@ -3095,7 +3099,9 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
         .status();
     // trace:BUG-1218 | ai:codex
     let pr_local_branch = format!("refs/aida/preflight/pr-{n}-{}", std::process::id());
-    let pr_refspec = format!("+refs/pull/{n}/head:{pr_local_branch}");
+    // BUG-1228: forge-aware head ref (refs/merge-requests/N/head on GitLab).
+    let pr_head_ref = crate::pr_head_remote_ref(project_root, n);
+    let pr_refspec = format!("+{pr_head_ref}:{pr_local_branch}");
     let pr_fetch = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -3105,7 +3111,7 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
         .status();
     if !matches!(pr_fetch, Ok(s) if s.success()) {
         anyhow::bail!(
-            "could not fetch PR-{n}'s head ref (`refs/pull/{n}/head`) for pre-flight \
+            "could not fetch PR-{n}'s head ref (`{pr_head_ref}`) for pre-flight \
              intermediate-only check"
         );
     }

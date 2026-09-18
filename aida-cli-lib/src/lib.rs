@@ -29464,23 +29464,38 @@ fn review_title_matches(title: &str, forge: ReviewForge, n: u64) -> bool {
 /// without telltale domain, etc.) — caller can require `--forge`.
 /// trace:STORY-61 | ai:claude
 fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForge> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+    // BUG-1228: ONE forge detector. This used to inline its own origin-URL
+    // match that only knew `github.com`, `gitlab.com` and `/gitlab/`, so a
+    // self-hosted GitLab (gitlab.<yourdomain>) fell through to `None` and the
+    // reviewer/`--owns` paths defaulted to GitHub — fetching `refs/pull/N/head`
+    // on a GitLab origin (TASK-1254 live finding). Route through
+    // `forge::resolve_forge_kind`, which honours `[forge]` config and the
+    // shared host heuristics. trace:BUG-1228 | ai:claude
+    match crate::forge::resolve_forge_kind(project_root) {
+        crate::forge::ForgeKind::GitHub => Some(ReviewForge::GitHub),
+        crate::forge::ForgeKind::GitLab => Some(ReviewForge::GitLab),
+        _ => None,
     }
-    let url = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
-    if url.contains("github.com") {
-        Some(ReviewForge::GitHub)
-    } else if url.contains("gitlab.com") || url.contains("/gitlab/") {
-        Some(ReviewForge::GitLab)
-    } else {
-        None
-    }
+}
+
+/// BUG-1228: the remote-side head ref of PR/MR `n` for `forge`, in the full
+/// `refs/…` form a fetch refspec wants (`refs/pull/N/head` on GitHub,
+/// `refs/merge-requests/N/head` on GitLab). Pure; see
+/// [`pr_head_remote_ref`] for the project-resolved form.
+// trace:BUG-1228 | ai:claude
+pub(crate) fn pr_head_remote_ref_for(forge: ReviewForge, n: u64) -> String {
+    format!("refs/{}", forge.pr_head_ref(n))
+}
+
+/// BUG-1228: [`pr_head_remote_ref_for`] with the forge resolved from the
+/// project (config, else origin URL); GitHub when nothing is detectable so the
+/// pre-BUG-1228 behaviour is preserved for local-only repos.
+// trace:BUG-1228 | ai:claude
+pub(crate) fn pr_head_remote_ref(project_root: &std::path::Path, n: u64) -> String {
+    pr_head_remote_ref_for(
+        detect_forge_from_origin(project_root).unwrap_or(ReviewForge::GitHub),
+        n,
+    )
 }
 
 /// True if `branch` exists either locally or as `origin/<branch>`. Used by
