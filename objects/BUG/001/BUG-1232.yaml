@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-18T18:52:10.973989108Z
+modified_at: 2026-09-18T18:52:14.000807871Z
 req_type: Bug
 tags:
 - drain
@@ -22,4 +22,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T18:35:52.465797091Z
+comments:
+- id: 01a0b5dc-af30-73e3-a210-f9f6da82e6d8
+  author: joe
+  content: '[advisor:groom] Approved, medium, drive mode, NOT queued for the headless drain: reproduction needs the mirror''s runner + token, so this is keyboard work for whoever holds those (product seat). Cause hints to check first, cheapest to costliest: (1) GitLab returns ''not enough privileges''/405 on `mr merge` when the project''s merge checks are unmet even for admins — ''pipelines must succeed'' with the merge-hold-gate or a still-running job, or ''all threads resolved'' with the reviewer''s r1 discussion left open; glab wraps both as a privilege error. (2) A token with api scope still needs the user to be a project member at Maintainer+ on a protected target branch; instance-admin alone does not grant push-to-protected on a project it is not a member of. (3) `glab mr merge` without `--yes`/`-y` prompts at a TTY and fails non-interactively with a misleading message. Fix shape once the cause is known: the drain''s GitLab merge phase should surface the MR''s `merge_status`/`detailed_merge_status` and the unresolved-thread count in the failure line instead of the glab wrapper text, and retry once when the status is `ci_still_running`.'
+  created_at: 2026-09-18T18:52:14.000807871Z
+  modified_at: 2026-09-18T18:52:14.000807871Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
