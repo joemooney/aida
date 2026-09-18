@@ -13,16 +13,17 @@ description: |-
   - With .aida-store deliberately left mid-rebase, `aida add` fails loudly naming the state and the fix (or repairs and lands the write on the branch); integration test covers it.
   - `aida remote status` and `aida doctor` report "store worktree detached / rebase in progress".
   - The store pull --rebase failure path leaves the worktree on the branch (its own rebase aborted) — test.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:03:25.350681063Z
-modified_at: 2026-09-18T17:03:31.919853091Z
+modified_at: 2026-09-18T18:19:57.857060863Z
 req_type: Bug
 tags:
 - data-loss
 - git-backend
+- keyboard-gate
 - multi-hub
 - parent:EPIC-68
 - store
@@ -30,3 +31,4 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T17:03:31.919853091Z
+execution_mode: drive
