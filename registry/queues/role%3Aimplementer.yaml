@@ -44,14 +44,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b689-5abb-7a83-a493-79041f8a6ea5
-  position: 22000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0b686); covers 1 spec
-  added_at: 2026-09-18T22:00:55.876955806Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b691-2b61-7b72-a434-026d6f3d2733
   position: 23000
   added_by: role:implementer
@@ -81,13 +73,6 @@
   added_by: role:implementer
   note: 'six small ledger/tick hardening items from the #1946 review; one test each'
   added_at: 2026-09-18T22:21:44.985836038Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
-  position: 27000
-  added_by: role:implementer
-  added_at: 2026-09-18T22:58:19.450293650Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
