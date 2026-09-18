@@ -18,7 +18,15 @@
 
 stages:
   - verify
+  - test
   - release
+
+# TASK-1254 / ADR-37 Layer 2 on GitLab: the merge-hold gate fails an MR pipeline
+# while the MR carries the `aida:merge-hold` label (supervised specs), so a
+# labelled MR cannot merge until a human/advisor clears the hold. Included from
+# the scaffolded master so upstream fixes flow. trace:TASK-1254 | ai:claude
+include:
+  - local: 'aida-core/templates/gitlab-ci-merge-hold-gate.yml'
 
 variables:
   CARGO_TERM_COLOR: "always"
@@ -28,10 +36,19 @@ variables:
 
 default:
   image: rust:latest
+  # Warm-build cache shared across branches/MRs (keyed on Cargo.lock, so a
+  # dependency bump starts a fresh cache and unchanged deps reuse the old one).
+  # Was keyed per branch, which made every new MR build from scratch. With a
+  # single docker-executor runner the cache lives on that runner host.
+  # trace:TASK-1254 | ai:claude
   cache:
-    key: "cargo-$CI_COMMIT_REF_SLUG"
+    key:
+      files:
+        - Cargo.lock
+      prefix: cargo
     paths:
       - .cargo/registry/
+      - .cargo/git/
       - target/
   before_script:
     - apt-get update
@@ -60,11 +77,10 @@ verify:
 
 # STORY-612 live OS-wrap confinement gate. Security boundary — proves
 # write-inside-OK / write-outside-blocked under a real bubblewrap run. Needs
-# unprivileged userns; `allow_failure` until the runner's capabilities are
-# confirmed (then make it a hard gate, mirroring GitHub).
+# unprivileged userns. Confirmed passing live on the self-hosted docker-executor
+# runner (TASK-1254, 2026-09-18), so it is a hard gate here, mirroring GitHub.
 bwrap-confinement:
   stage: verify
-  allow_failure: true
   rules:
     - if: $CI_MERGE_REQUEST_IID
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

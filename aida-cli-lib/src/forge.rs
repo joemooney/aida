@@ -2009,7 +2009,23 @@ impl Forge for GitLabForge {
                 .args(["ci", "status", "-b", branch])
                 .status();
         }
-        self.ci_probe_for_branch(branch)
+        // TASK-1254 live finding: with nothing streaming (headless, non-TTY, or
+        // a `glab ci status` that returned early) this used to hand back the
+        // ONE probe above — and the orchestrator reads a lone `InProgress` as
+        // "CI never reached a terminal state". The first live headless drain on
+        // the GitLab mirror shelved its spec six seconds after opening the MR,
+        // while the pipeline was still `pending`. Mirror the GitHub path (which
+        // quiet-polls to a verdict) by blocking on the shared, forge-routed
+        // idle-window/absolute-ceiling loop until the pipeline is terminal.
+        // trace:TASK-1254 | ai:claude
+        let probe = self.ci_probe_for_branch(branch)?;
+        if !stream_probe_needs_wait(&probe) {
+            return Ok(probe);
+        }
+        Ok(ci_probe_result_from_ci_probe(crate::wait_for_ci_terminal(
+            Some(&self.project_root),
+            branch,
+        )))
     }
 
     fn merge_change(
@@ -2794,6 +2810,15 @@ fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value>
 /// `CiState::None` (no CI / nothing to wait on), mirroring
 /// GitHubForge::ci_status's treatment of an empty check set.
 /// trace:STORY-510 | ai:claude
+/// TASK-1254: after the optional live stream, must the GitLab watch keep
+/// blocking? Only an `InProgress` probe does — every other variant is already
+/// the terminal verdict (or a no-signal the caller degrades on its own).
+/// Pure so the decision is unit-testable without `glab`.
+// trace:TASK-1254 | ai:claude
+pub(crate) fn stream_probe_needs_wait(probe: &CiProbeResult) -> bool {
+    matches!(probe, CiProbeResult::InProgress { .. })
+}
+
 fn ci_status_from_glab_pipelines(out: Result<std::process::Output>) -> CiStatus {
     let none = || CiStatus {
         state: CiState::None,
@@ -4100,6 +4125,28 @@ mod tests {
             newest.get("status").and_then(|v| v.as_str()),
             Some("success")
         );
+    }
+
+    #[test]
+    // trace:TASK-1254 | ai:claude
+    #[test]
+    fn gitlab_stream_keeps_waiting_only_on_in_progress_probe() {
+        assert!(stream_probe_needs_wait(&CiProbeResult::InProgress {
+            change: 2
+        }));
+        assert!(!stream_probe_needs_wait(&CiProbeResult::Green {
+            change: 2
+        }));
+        assert!(!stream_probe_needs_wait(&CiProbeResult::Failed {
+            change: 2,
+            summary: "pipeline failed".into(),
+        }));
+        assert!(!stream_probe_needs_wait(&CiProbeResult::NoChecks {
+            change: 2
+        }));
+        assert!(!stream_probe_needs_wait(&CiProbeResult::NoSignal(
+            "glab missing".into()
+        )));
     }
 
     #[test]
