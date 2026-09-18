@@ -179,6 +179,35 @@ fn requester_adds_allowed_intake_as_draft_with_tag() {
 }
 
 #[test]
+fn requester_refuses_parent_during_cli_intake() {
+    // A requester may file a standalone Draft, but attaching it to an existing
+    // spec would perform a relationship write outside the intake envelope.
+    // trace:BUG-1211 | ai:codex
+    let (_base, repo, home) = init_repo();
+
+    let add = aida(&repo, &home)
+        .env("AIDA_SESSION_ROLE", "requester")
+        .args([
+            "add",
+            "--title",
+            "attached request",
+            "--type",
+            "bug",
+            "--parent",
+            "EPIC-5",
+        ])
+        .output()
+        .expect("run requester add with parent");
+
+    assert!(!add.status.success(), "requester parent must be refused");
+    let err = String::from_utf8_lossy(&add.stderr);
+    assert!(
+        err.contains("setting parent, feature, or owner during intake"),
+        "{err}"
+    );
+}
+
+#[test]
 fn requester_refuses_non_add_writes_and_build_loop_routing() {
     let (_base, repo, home) = init_repo();
 
