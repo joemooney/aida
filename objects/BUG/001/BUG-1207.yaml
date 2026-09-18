@@ -21,9 +21,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T04:10:55.163831878Z
+modified_at: 2026-09-18T04:35:22.667184280Z
 req_type: Bug
 tags:
 - aida:list
+- batch:followups-0917b
 - papercut
+- proxy-groomed
 - severity:cosmetic
+execution_mode: drain
