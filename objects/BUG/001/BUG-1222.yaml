@@ -3,15 +3,16 @@ spec_id: BUG-1222
 agreed_id: BUG-1222
 title: Drain banner prints 'skipping  per lifecycle tag' with an empty phase name for lifecycle:no-harvest
 description: 'Observed 2026-09-18 launching aida queue work TASK-1269 --auto-complete --no-human=both on a spec tagged lifecycle:no-harvest. The banner read: ''🚀 auto-complete: TASK-1269 (full pipeline); skipping  per lifecycle tag'' — two spaces where the skipped phase name should be. The LifecycleSkip renderer knows no-ci-wait/no-review/no-build labels but has no label for the TASK-1249 no_harvest skip, so it prints an empty string. Expected: ''skipping harvest per lifecycle tag''. Acceptance: the banner names ''harvest'' for lifecycle:no-harvest; a unit test covers the rendered skip list for each LifecycleSkip flag.'
-status: Draft
+status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:04:47.736441019Z
-modified_at: 2026-09-18T15:04:47.736441019Z
+modified_at: 2026-09-18T16:52:44.229725433Z
 req_type: Bug
 tags:
 - aida:queue:work
 - orchestrator
 - papercut
 - severity:cosmetic
+execution_mode: drain
