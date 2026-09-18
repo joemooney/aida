@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T22:59:48.716940605Z
+modified_at: 2026-09-18T23:24:03.570022176Z
 req_type: Story
 tags:
 - agent-ux
@@ -97,6 +97,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T22:58:17.163057646Z
   modified_at: 2026-09-18T22:58:17.163057646Z
+- id: 01a0b6d5-8c72-78a3-9327-0cc8c093922e
+  author: joe
+  content: 'Round 2 rework: added idempotent missing-protocol seeding on scaffold refresh, init --refresh, and explicit protocol seed; regression covers two present/four missing and preservation of edits.'
+  created_at: 2026-09-18T23:24:03.570022176Z
+  modified_at: 2026-09-18T23:24:03.570022176Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 failure_reason:
   phase: reviewer
