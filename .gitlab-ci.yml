@@ -10,7 +10,9 @@
 # follow-up here: adapt them to CI_MERGE_REQUEST_* + `git fetch origin
 # aida-store` once a GitLab runner is wired.
 #
-# NOTE: requires a Linux GitLab runner with the docker executor. The live bwrap
+# NOTE: requires a Linux GitLab runner with the docker executor, the
+# localhost/aida-ci builder image (ci/Dockerfile) and the /builds + /ci-cache
+# host volumes described in docs/gitlab-ci-runner.md (STORY-1216). The live bwrap
 # confinement gate needs unprivileged user namespaces, which a locked-down
 # runner may deny — it is `allow_failure: true` here (reported, not blocking)
 # until the runner's capabilities are confirmed; promote it to a hard gate then.
@@ -30,32 +32,24 @@ include:
 
 variables:
   CARGO_TERM_COLOR: "always"
-  # Keep cargo's registry + build artifacts inside the project dir so the
-  # cache: block below can persist them across runs.
-  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  # STORY-1216: incremental CI. The runner mounts two host directories into
+  # every job container (see the runner's [runners.docker] volumes):
+  #   /builds    — the checkout persists between jobs, so GIT_STRATEGY fetch
+  #                is a `git fetch`, not a fresh clone;
+  #   /ci-cache  — cargo's registry + target dir persist on disk, so a build
+  #                is incremental like a developer's `make build-fast`.
+  # No GitLab `cache:` zip round-trip any more. trace:STORY-1216 | ai:claude
+  GIT_STRATEGY: fetch
+  CARGO_HOME: "/ci-cache/cargo-home"
+  CARGO_TARGET_DIR: "/ci-cache/target"
+  CARGO_INCREMENTAL: "1"
 
 default:
-  image: rust:latest
-  # Warm-build cache shared across branches/MRs (keyed on Cargo.lock, so a
-  # dependency bump starts a fresh cache and unchanged deps reuse the old one).
-  # Was keyed per branch, which made every new MR build from scratch. With a
-  # single docker-executor runner the cache lives on that runner host.
-  # trace:TASK-1254 | ai:claude
-  cache:
-    key:
-      files:
-        - Cargo.lock
-      prefix: cargo
-    paths:
-      - .cargo/registry/
-      - .cargo/git/
-      - target/
-  before_script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends
-        protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
-        libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap
-    - rustup component add clippy rustfmt
+  # STORY-1216: prebuilt builder image (ci/Dockerfile) with the toolchain,
+  # clippy/rustfmt, cross targets and the apt set baked in — nothing is
+  # downloaded per run. Built on the runner host with podman; the runner uses
+  # pull_policy if-not-present. Bump the tag together with ci/Dockerfile.
+  image: localhost/aida-ci:1.92
 
 # Single verify job mirroring the GitHub `build` job's always-run gates. Runs on
 # merge requests and on pushes to the default branch.
@@ -67,7 +61,10 @@ verify:
   script:
     - cargo build --workspace --release
     # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
-    - env -u AIDA_SESSION_ROLE cargo test --workspace
+    # STORY-1216: nextest (one process per test) for speed + isolation; it does
+    # not run doctests, so those keep `cargo test --doc`.
+    - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
+    - env -u AIDA_SESSION_ROLE cargo test --workspace --doc
     - bash tests/test_mcp_stdio.sh
     - bash tests/test_mcp_doc_consistency.sh
     - cargo fmt --all -- --check
@@ -99,10 +96,7 @@ release-linux-assets:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'
   script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends
-        protobuf-compiler gcc-aarch64-linux-gnu curl ca-certificates
-    - rustup target add x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
+    # Toolchain, cross gcc and targets come from the builder image (STORY-1216).
     - |
       for pair in \
         "x86_64-unknown-linux-gnu aida-linux-x86_64" \
@@ -116,8 +110,8 @@ release-linux-assets:
         fi
         cargo build --release --target "$target" -p aida-cli -p aida-server
         mkdir -p "stage/$name"
-        cp "target/$target/release/aida" "stage/$name/aida"
-        cp "target/$target/release/aida-server" "stage/$name/aida-server"
+        cp "$CARGO_TARGET_DIR/$target/release/aida" "stage/$name/aida"
+        cp "$CARGO_TARGET_DIR/$target/release/aida-server" "stage/$name/aida-server"
         chmod +x "stage/$name/aida" "stage/$name/aida-server"
         tar czf "$name.tar.gz" -C "stage/$name" aida aida-server
         curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" \
