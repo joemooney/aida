@@ -18,7 +18,15 @@
 
 stages:
   - verify
+  - test
   - release
+
+# TASK-1254 / ADR-37 Layer 2 on GitLab: the merge-hold gate fails an MR pipeline
+# while the MR carries the `aida:merge-hold` label (supervised specs), so a
+# labelled MR cannot merge until a human/advisor clears the hold. Included from
+# the scaffolded master so upstream fixes flow. trace:TASK-1254 | ai:claude
+include:
+  - local: 'aida-core/templates/gitlab-ci-merge-hold-gate.yml'
 
 variables:
   CARGO_TERM_COLOR: "always"
