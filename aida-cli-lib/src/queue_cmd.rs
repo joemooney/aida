@@ -6286,6 +6286,30 @@ pub(crate) fn handle_queue_progress(
         }
     }
 
+    // A groomed overlap verdict is only useful after grooming if the operator
+    // can still discover the matching coupled-drain command here.
+    // trace:TASK-1268 | ai:codex
+    if let Source::Batch { name, .. } = &source {
+        let tag = format!("batch:{name}");
+        let members: Vec<aida_core::Requirement> = store
+            .requirements
+            .iter()
+            .filter(|req| req.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)))
+            .cloned()
+            .collect();
+        if let Some(command) = backlog::serialize_batch_command(&members, &project_root, name) {
+            let mut next = Vec::new();
+            crate::help_next::push_serialize_cluster(&mut next, Some(command));
+            if agent_output_mode() {
+                if let Some(block) = crate::help_next::render(&next) {
+                    println!("{block}");
+                }
+            } else if let Some(block) = crate::help_next::render_human(&next) {
+                println!("{block}");
+            }
+        }
+    }
+
     Ok(())
 }
 

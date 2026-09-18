@@ -133,6 +133,44 @@ fn serialize_lane_proposal(batch: Option<&str>) -> String {
     )
 }
 
+/// Return the exact cluster-drain command when a batch contains at least one
+/// pair that backlog grooming classifies as `serialize`.
+// trace:TASK-1268 | ai:codex
+pub(crate) fn serialize_batch_command(
+    reqs: &[Requirement],
+    project_root: &Path,
+    batch: &str,
+) -> Option<String> {
+    (!serialize_pairs(reqs, project_root).is_empty())
+        .then(|| format!("aida queue work --batch {batch} --auto-complete --single-branch"))
+}
+
+// Find a serialize-bearing batch shared by `member` and its batch siblings.
+pub(crate) fn member_serialize_batch_command(
+    all: &[Requirement],
+    member: &Requirement,
+    project_root: &Path,
+) -> Option<String> {
+    let mut batches: Vec<&str> = member
+        .tags
+        .iter()
+        .filter_map(|tag| tag.strip_prefix("batch:"))
+        .collect();
+    batches.sort_unstable();
+    for batch in batches {
+        let tag = format!("batch:{batch}");
+        let members: Vec<Requirement> = all
+            .iter()
+            .filter(|req| req.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag)))
+            .cloned()
+            .collect();
+        if let Some(command) = serialize_batch_command(&members, project_root, batch) {
+            return Some(command);
+        }
+    }
+    None
+}
+
 fn serialize_pairs<'a>(
     reqs: &'a [Requirement],
     project_root: &Path,

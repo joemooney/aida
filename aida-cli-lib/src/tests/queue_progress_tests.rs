@@ -136,6 +136,46 @@ fn batch_tag_matches_case_insensitively() {
     assert!(!tags.iter().any(|t| t.eq_ignore_ascii_case(want_miss)));
 }
 
+#[test]
+fn serialize_batch_hint_names_exact_cluster_command() {
+    // Snapshot the durable capability hint text. trace:TASK-1268 | ai:codex
+    let mut a = aida_core::Requirement::new("A".into(), String::new());
+    a.spec_id = Some("TASK-1".into());
+    let mut b = aida_core::Requirement::new("B".into(), String::new());
+    b.spec_id = Some("TASK-2".into());
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join("src")).unwrap();
+    std::fs::write(
+        root.path().join("src/shared.rs"),
+        "// trace:TASK-1 | ai:codex\n// trace:TASK-2 | ai:codex\n",
+    )
+    .unwrap();
+
+    let command = backlog::serialize_batch_command(&[a, b], root.path(), "coupled");
+    assert_eq!(
+        command,
+        Some("aida queue work --batch coupled --auto-complete --single-branch".into())
+    );
+    let mut next = Vec::new();
+    crate::help_next::push_serialize_cluster(&mut next, command);
+    assert_eq!(
+        crate::help_next::render(&next).unwrap(),
+        "next[1]{cmd,to}:\n  aida queue work --batch coupled --auto-complete --single-branch,single-branch; add --sequential when order matters"
+    );
+}
+
+#[test]
+fn batch_without_serialize_verdict_has_no_new_hint() {
+    // trace:TASK-1268 | ai:codex
+    let a = aida_core::Requirement::new("A".into(), String::new());
+    let b = aida_core::Requirement::new("B".into(), String::new());
+    let root = tempfile::tempdir().unwrap();
+    assert_eq!(
+        backlog::serialize_batch_command(&[a, b], root.path(), "independent"),
+        None
+    );
+}
+
 // TASK-270: `batch:NAME` is the literal tag printed by `aida queue
 // list`; first-users copy-paste it back. Accept it as a positional id
 // and tolerate the redundant prefix on `--batch`. trace:TASK-270
