@@ -8,10 +8,14 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:33.648523007Z
-modified_at: 2026-09-18T19:29:33.648523007Z
+modified_at: 2026-09-18T19:29:38.725932059Z
 req_type: Bug
 tags:
 - agent-ux
 - cli
 - papercut
 - parent:EPIC-28
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-18T19:29:38.725932059Z
