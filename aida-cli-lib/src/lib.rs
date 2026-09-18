@@ -67482,6 +67482,48 @@ fn list_count_denom_label(default_open_lens: bool) -> &'static str {
     }
 }
 
+/// Render the human `aida list` footer without hiding an explicit `--limit`
+/// slice. Untrimmed output remains byte-for-byte compatible with the historic
+/// footer; a trimmed slice shares the TOON denominator vocabulary.
+// trace:BUG-1209 | ai:codex
+fn list_human_count_footer(
+    visible: usize,
+    total_after_filters: usize,
+    limit: Option<usize>,
+    default_open_lens: bool,
+) -> String {
+    if total_after_filters > visible {
+        if let Some(limit) = limit {
+            return format!(
+                "{visible} of {total_after_filters} {} requirements (--limit {limit}; drop it or raise N to see the rest)",
+                list_count_denom_label(default_open_lens)
+            );
+        }
+    }
+    format!("{visible} requirements")
+}
+
+/// Print the count footer for an empty human list only when an explicit limit
+/// hid matching rows. A genuinely empty filtered result keeps the existing
+/// concise `No requirements found.` presentation.
+// trace:BUG-1209 | ai:codex
+fn print_empty_human_list_truncation_footer(
+    total_after_filters: usize,
+    limit: Option<usize>,
+    default_open_lens: bool,
+) {
+    if total_after_filters > 0 && limit.is_some() {
+        println!(
+            "\n{}",
+            list_human_count_footer(0, total_after_filters, limit, default_open_lens)
+        );
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/bug_1209_list_limit_footer_tests.rs"]
+mod bug_1209_list_limit_footer_tests;
+
 /// STORY-723: the role-routed queue entries that are ACTUALLY actionable, in
 /// queue-position order. The raw role queue is padded with archived / completed
 /// / deferred corpses that were never dequeued (BUG: the front-door `next` once
