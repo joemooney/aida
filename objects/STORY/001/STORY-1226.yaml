@@ -2,7 +2,7 @@ id: 01a0b64f-a564-7e53-a0b0-95305e3df161
 spec_id: STORY-1226
 agreed_id: STORY-1226
 title: 'aida cron: per-seat periodic job registry + ledger (substrate jobs run by the scheduler tick, seat jobs delivered to whoever holds the role, vendor-neutral)'
-description: |
+description: |-
   Operator idea (2026-09-18): an aida cron that manages and specifies which periodic jobs each seat runs (mailbox read check, dead-session reaping, doctor, queue gc, mail-latency alerts), so a newly launched agent is populated with the entries that apply to its seat, and the substrate knows whether a job is overdue. Today these live in one Claude session's memory (the advisor created a session-only cron for aida awaiting --notice by hand; it dies with the session) and in a product-seat Monitor.
 
   Design, in two halves so it is vendor-neutral by construction:
@@ -22,17 +22,26 @@ description: |
   - A seat job overdue past its interval appears in aida awaiting for that seat and in aida status; a substrate job never appears there (the tick runs it).
   - The ledger answers "who last triaged the mailbox and when" for the night-shift post-mortem (SPIKE-82).
   - Works with STORY-1218: the tick runs substrate jobs; aida cron is the registry both consult.
-status: Draft
-priority: Medium
+
+  Advisor refinements (2026-09-18, from the operator's "maybe a trigger or condition?"):
+  - A job's schedule is ONE of three kinds, all in the same cron.toml entry shape: `every = "30m"` (interval — the heartbeat fallback), `on = ["PrMerged", "SpecShelved", "QueueDrained", "AdvisorEscalated", "PuntFiled", "CiTerminal", "UnshippedWorkDetected", "MailReceived"]` (event — the kinds already emitted to .aida/events.jsonl, plus MailReceived for the mailbox; this formalises the product seat's overnight Monitor, which SPIKE-82 hypothesis 3 credits), or `when = "<predicate>"` (condition over the substrate snapshot the awaiting/status readers already compute: e.g. `mail.oldest_unread_age > 15m`, `drain.lock_free && queue.drain_mode_ready > 0`, `sessions.finished_unreaped > 0`). A job may combine `every` with `on` (event fast path + interval fallback).
+  - Condition semantics: evaluated on every tick AND on every event; a condition job fires ONCE when its predicate turns true and not again until it has been false (once-until-cleared), so a seat is nudged once per episode, not every tick — the same rule TASK-1271 uses for the latency warning. The ledger records the episode (first_true, fired_at, cleared_at).
+  - Events are read from the existing events.jsonl tail (no new bus); the per-vendor delivery is unchanged: Claude gets an in-session cron/Monitor per job, Codex/Antigravity get due-lines in the pickup prompt and per-turn notice, the tick cold-boots a headless seat for an overdue seat job.
+  - Slice boundary: THIS story ships the registry, ledger, schedule kinds, aida cron list/status/due/run/done, Claude delivery via aida agent new + SessionStart hook, and Codex/Antigravity due-lines. `aida cron install` and the unattended execution of substrate jobs belong to STORY-1218's tick, which consults this registry; until the tick lands, substrate jobs run when a seat's tick delivers them or by hand via aida cron run.
+  - Precedence with the seat's own judgment: a seat job's prompt is advice to the seat ("due: mailbox-triage"), never an automatic action; substrate jobs are idempotent and print nothing when idle (TASK-160).
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T20:58:01.645274090Z
+modified_at: 2026-09-18T21:02:27.911200897Z
 req_type: Story
 tags:
+- keyboard-gate
 - multivendor
 - parent:EPIC-62
 - reliability
+- scheduler
 - seats
 - substrate-first
 relationships:
@@ -47,3 +56,4 @@ relationships:
   target_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
   created_at: 2026-09-18T20:58:01.645268785Z
   created_by: joe
+execution_mode: guided
