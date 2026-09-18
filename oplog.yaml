@@ -76426,5 +76426,50 @@ operations:
   timestamp: 2026-09-18T12:31:57.768284269Z
   kind: !SetStatus
     status: Completed
-clock: 5910
+- id: 01a0b486-ce83-7383-abf4-7bdf89f25229
+  target_id: 01a0b375-e657-7070-b20d-c7ab7f5f68a4
+  author: aida
+  node_id: '1'
+  lamport: 5911
+  timestamp: 2026-09-18T12:38:48.707506846Z
+  kind: !SetDescription
+    description: |-
+      Observed 2026-09-18 00:38 on BUG-1207 / PR-1916 (batch followups-0917b, binary 6a948876). Phase 3 attempt 1: 'stale-base + overlap detected on PR-1916; attempting one clean auto-rebase' → worktree .aida/worktrees/pr-rebase-1916 on branch pr-1916 → rebase ok → the force-push guard correctly refused ('origin/bug-1207 has 1 commit not incorporated into this branch by patch-id: 88cf4ac918') → 'Worktree left at .aida/worktrees/pr-rebase-1916 for inspection' → error surfaced as a plain tool-exit and the phase retried. Attempt 2: the reviewer child ran  and failed 'refusing to fetch into branch refs/heads/pr-1916 checked out at .aida/worktrees/pr-rebase-1916' → exit 1 → tool-exit → SpecShelved. The leftover from attempt 1 poisoned attempt 2 deterministically; no reviewer ever ran. Three defects: (1) the auto-rebase must remove its scratch worktree (and drop the pr-N branch it created) on EVERY exit path, keeping only a patch/log for inspection; (2) a force-push refusal is not transient — it must shelve with a typed cause (e.g. stale-base-refused) carrying the guard's recovery text (fetch + rebase the un-incorporated commit) instead of tool-exit + a wasted retry; (3) the reviewer's pr-N checkout must not target a branch checked out in another worktree (detect and use a unique branch name, or fail with a typed message naming the worktree). Acceptance: after a refused auto-rebase, /home/joe/ai/aida                                            3f200c957c [main]
+      /home/joe/ai/aida-bug-1140                                   cc681fce23 [bug-1140-codex-exit]
+      /home/joe/ai/aida-bug-1145                                   55545da614 [fix/bug-1145-worktree]
+      /home/joe/ai/aida-bug-1177                                   e1671b040d [bug-1177]
+      /home/joe/ai/aida-bug-1210                                   3f200c957c [bug-1210]
+      /home/joe/ai/aida-bug1176                                    70ced8cfc8 [bug-1176-flags-advisory]
+      /home/joe/ai/aida-bug1180                                    d728a9a8c2 [bug-1180-work]
+      /home/joe/ai/aida-bug1186                                    dde0b718d4 [bug-1186-work]
+      /home/joe/ai/aida-bug1195                                    2ccb1978d9 [bug-1195-work]
+      /home/joe/ai/aida-cfg1178                                    16b10aabc3 [config-contained-allowed-hosts]
+      /home/joe/ai/aida-ci-early-return                            a0c3b176b5 [ci-early-return-work]
+      /home/joe/ai/aida-harvest-idem                               cc00b99af9 [harvest-idempotent-work]
+      /home/joe/ai/aida-plan1178                                   40028c5b07 [docs-story-1178-plan]
+      /home/joe/ai/aida-plan1178-lint                              576bf49e56 [plan-1178-lint]
+      /home/joe/ai/aida-prn-role                                   ad85c2f0fe [prn-review-role-work]
+      /home/joe/ai/aida-story1165                                  e1bbd00aff [story-1165-work]
+      /home/joe/ai/aida-story1166                                  ef70646637 [story-1166-work]
+      /home/joe/ai/aida-story1171                                  b0e68ae385 [story-1171-merge-lease]
+      /home/joe/ai/aida-task-1251                                  ea936564f6 [task-1251]
+      /home/joe/ai/aida-task1205                                   a4f8e2c515 [task-1205]
+      /home/joe/ai/aida-task1207                                   ba50091d8c [task-1207]
+      /home/joe/ai/aida-task1238                                   b1ffd729c1 [task-1238-work]
+      /home/joe/ai/aida-task1241                                   aa2ae74ef9 [task-1241-work]
+      /home/joe/ai/aida-task1243                                   56e7db90fd [task-1243-merge-lease-wiring]
+      /home/joe/ai/aida-task1244                                   b677f473a4 [task-1244-work]
+      /home/joe/ai/aida-task1247                                   be55ecd111 [task-1247-work]
+      /home/joe/ai/aida-task1248                                   036e9c7bc6 [task-1248-work]
+      /home/joe/ai/aida-task1249                                   7e14cd5949 [task-1249-work]
+      /home/joe/ai/aida-task1251-verify                            ea936564f6 (detached HEAD)
+      /home/joe/ai/aida/.aida-store                                16d7e2fbd1 [aida-store]
+      /home/joe/ai/aida/.claude/worktrees/agent-a942df7439695a8aa  d9f9eceb8c [worktree-agent-a942df7439695a8aa] locked
+      /home/joe/ai/aida/.claude/worktrees/agent-ab76dad2f2712ef43  d9f9eceb8c [worktree-agent-ab76dad2f2712ef43] locked
+      /home/joe/ai/aida/.claude/worktrees/agent-ada058a96e1aba25f  d9f9eceb8c [worktree-agent-ada058a96e1aba25f] locked has no pr-rebase-N entry and no pr-N branch is left checked out; the member parks with a typed stale-base cause and the recovery text; the reviewer's checkout tolerates a stale pr-N branch. Repro fixture: a PR whose remote branch has a commit not in the local pr-N ref.
+
+      ## Acceptance
+      - AC1. Both stale-base and intermediate-only reviewer preflight probes fetch the pull-request head into a process-specific `refs/aida/preflight/pr-N-PID` ref, leave the conventional local `pr-N` branch unchanged, and delete the scratch ref after a successful probe.
+      - AC2. When the stale-base force-push guard refuses, the surfaced recovery hint tells the operator to follow the fetch-and-rebase recipe in the failure detail and then rerun review with `aida queue work PR-N --steal`.
+clock: 5911
 node_id: '1'
