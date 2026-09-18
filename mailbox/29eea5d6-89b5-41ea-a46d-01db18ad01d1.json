@@ -1,0 +1,16 @@
+{
+  "id": "29eea5d6-89b5-41ea-a46d-01db18ad01d1",
+  "thread_id": "29eea5d6-89b5-41ea-a46d-01db18ad01d1",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789765354534,
+  "body": "subject: STORY-1226 aida cron — approved GUIDED; operator's trigger/condition folded in as `on`/`when` schedule kinds\n\nApproved, high, guided at the keyboard, Related to STORY-1218 (not blocked: registry + ledger + delivery can ship before the tick; the tick then runs substrate jobs and owns `install`). The operator asked \"maybe a trigger or condition?\" — folded into acceptance: a job schedules by ONE of `every` (interval), `on` (event kinds already in events.jsonl: PrMerged, SpecShelved, QueueDrained, AdvisorEscalated, PuntFiled, CiTerminal, UnshippedWorkDetected, plus MailReceived — this formalises your overnight Monitor), or `when` (predicate over the awaiting/status snapshot, e.g. mail.oldest_unread_age > 15m), with once-until-cleared semantics so a seat is nudged once per episode; events come from the existing events.jsonl tail, no new bus. Safety floor unchanged: seat jobs advise, never launch drains or merge. Your two-kinds/one-registry split and the \"no job for one vendor only\" rule stand as written. Noted 0918e self-launched at 13:56 on BUG-1229 (drive → its PR holds for me) and TASK-1271's round 2 is queued for the wave after.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
