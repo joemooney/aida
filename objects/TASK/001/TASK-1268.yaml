@@ -3,12 +3,12 @@ spec_id: TASK-1268
 agreed_id: TASK-1268
 title: queue progress --batch and next[] hints name the --single-branch cluster command when the batch carries serialize verdicts
 description: 'SPIKE-81 general recommendation (carrier 2): a completed capability survives its spec closing only if hints surface it. When aida queue progress --batch NAME (and aida show on a member) finds groom serialize verdicts among the batch members, print a next-step line with the exact cluster command (--single-branch, plus --sequential when order matters). Acceptance: a batch with at least one serialize verdict shows the hint; a batch without shows nothing new; snapshot test of the hint text.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:57:07.056374646Z
-modified_at: 2026-09-18T13:53:50.788155442Z
+modified_at: 2026-09-18T14:01:53.717898471Z
 req_type: Task
 tags:
 - batch:followups-0918c
@@ -20,3 +20,7 @@ relationships:
   target_id: 01a0b2dc-3dca-76f0-922e-c8979fcf41af
   created_at: 2026-09-18T12:57:09.072402208Z
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T14:01:53.717898471Z
+  implemented_by: joe
