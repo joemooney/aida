@@ -11,12 +11,12 @@ description: |-
   - Manual/docs: one line in docs/environment-variables.md or the dev workflow section noting that a rebuild under a running aida process is safe because subprocesses resolve the binary once.
 
   Acceptance: grep for current_exe() outside the resolver modules is empty; guard tests exist in both crates; existing tests green.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T02:57:43.565050040Z
-modified_at: 2026-09-18T05:23:32.157136424Z
+modified_at: 2026-09-18T05:23:39.942579522Z
 req_type: Task
 tags:
 - batch:followups-0917b
@@ -45,8 +45,24 @@ comments:
   created_at: 2026-09-18T05:23:32.157136424Z
   modified_at: 2026-09-18T05:23:32.157136424Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b2f8-6b1f-7e13-9aaf-70053aae8354
+  author: aida-auto-bump
+  timestamp: 2026-09-18T05:23:39.935921712Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b2f8-6b26-77f2-ac8c-75be56f125e8
+  timestamp: 2026-09-18T05:23:39.942578543Z
+  agent: aida
+  commit_sha: ef4fe0f8fb5b14e0c73d616b0dfffe8f42fd3367
+  summary: Completed via merge ef4fe0f8
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T05:04:21.184463008Z
   implemented_by: joe
+  completed_at: 2026-09-18T05:23:39.935791862Z
+  completion_sha: ef4fe0f8fb5b14e0c73d616b0dfffe8f42fd3367
