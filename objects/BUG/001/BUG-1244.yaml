@@ -1,0 +1,31 @@
+id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
+spec_id: BUG-1244
+agreed_id: BUG-1244
+title: 'Drain wave cross-spec contamination: the BUG-1236 implementer ran on the story-1221 branch, queue done accepted a commit that only touched another spec, the spec flipped Done with no work of its own, '
+description: |-
+  Observed 2026-09-18 16:18-16:40, wave followups-0918e (batch drain, --no-human=both), reconstructed from .aida/events.jsonl, .aida/headless-logs/bug-1236-01a0b6d0-*.jsonl, and the store log:
+  - 16:18 PhaseEntered implementer for BUG-1236. The implementer's git commands in its log are `git push origin story-1221` — it was working on STORY-1221's branch/worktree (STORY-1221 had just been shelved after review round 1 in the same wave), and it produced c25ba5c1 "fix(protocol): seed missing contracts on refresh (STORY-1221 BUG-1236)" — the STORY-1221 round-2 rework, nothing for BUG-1236 (no merge_hold change at all).
+  - The local branch bug-1236 exists with ZERO commits over origin/main and was never pushed; no PR, no PhaseDonePr, no review story for BUG-1236.
+  - queue done BUG-1236 accepted this and flipped BUG-1236 to Done ("done on a branch — awaiting merge").
+  - 16:24 CI phase and 16:34 reviewer phase for "BUG-1236" ran against PR #1948 (STORY-1221's PR); the reviewer wrote .aida/review-verdicts/PR-1948.json round 2 (CHANGES REQUESTED, 16:37) — while the advisor, seeing STORY-1221 shelved and no review story for round 2, merged #1948 at 16:35. Auto-drafted failure record: BUG-1243. The product seat reset BUG-1236 to Approved at 16:40.
+  Three defects, one root:
+  1. Worktree/branch selection for a wave member must be the member's own (bug-1236), never a sibling's shelved worktree; if the intended worktree is unavailable the phase must punt, not fall through to whatever is checked out (BUG-553 class: reset/isolate between specs).
+  2. queue done <SPEC> must verify the branch it is finishing belongs to SPEC: the branch name or at least one commit since merge-base must reference SPEC, and the diff must not be attributable only to another spec's trailer; otherwise refuse with the mismatch named (--force for the rare deliberate shared branch, ledgered).
+  3. The CI and reviewer phases must bind to the PR opened for THIS spec (PhaseDonePr for this run) — never resolve a PR by branch name inherited from a sibling; if no PR exists for the spec, punt/shelve, do not review another spec's PR under this spec's name (and do not write that spec's verdict file).
+  Acceptance: unit tests for the queue-done ownership check (refuse / --force paths); an orchestrator test where a member's worktree is a sibling's branch punts instead of committing; a test that the reviewer phase refuses when the run has no PhaseDonePr for its spec; the drain banner names the worktree + branch it is operating on at phase 1 start.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T23:41:13.677938849Z
+modified_at: 2026-09-18T23:41:13.677938849Z
+req_type: Bug
+tags:
+- drain
+- integrity
+- keyboard-gate
+- orchestrator
+- parent:EPIC-28
+- queue-done
+- worktree
+execution_mode: drive
