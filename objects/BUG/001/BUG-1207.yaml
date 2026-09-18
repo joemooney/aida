@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T07:41:05.711199276Z
+modified_at: 2026-09-18T07:42:19.986211482Z
 req_type: Bug
 tags:
 - aida:list
@@ -82,6 +82,20 @@ comments:
   created_at: 2026-09-18T07:28:19.576590996Z
   modified_at: 2026-09-18T07:28:19.576590996Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b377-5f52-71e2-89cf-6118ff2a318f
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1916 [AI:codex] fix(list): fit human titles to terminal width (BUG-1207) — round 3
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless, three rounds; drain reviewer verdicts r1/r2 = RequestChanges (width budgets per flag set; then piped --show-tags geometry changed), r3 reviewer exited 1 twice before launching — no verdict; this advisor reviewed the round-3 diff directly; verdict .aida/review-verdicts/PR-1916-advisor.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE; merged from a plain shell, no override
+    reasoning: TTY path fits the title to the real terminal width with the fixed-prefix width computed per flag set and the tag-chip budget reserved; non-TTY path reproduces the pre-PR geometry exactly (title 50 with --show-tags, unbounded without, tags untruncated, legacy fixed totals, legacy header) and is pinned by non_tty_show_tags_preserves_legacy_fixed_geometry; workspace crossterm, no new crate. No harvest ran (the drain never reached phase 4; pr ship does not harvest).
+    merged: 2026-09-18 00:44 -07:00 → main 4fa18dab8b; spec auto-bumped Completed
+  created_at: 2026-09-18T07:42:19.986211482Z
+  modified_at: 2026-09-18T07:42:19.986211482Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b376-3d28-7cd1-9c5f-05aaadfedadd
   author: aida-auto-bump
