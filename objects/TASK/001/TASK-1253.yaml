@@ -19,11 +19,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-17T16:37:30.117300118Z
+modified_at: 2026-09-18T01:03:18.261917254Z
 req_type: Task
 tags:
+- batch:followups-0917
 - drain
 - follow-up:TASK-1244
 - merge-lock
 - pr-ship
 - ux-signal
+execution_mode: drive
