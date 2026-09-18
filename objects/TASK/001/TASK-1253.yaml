@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:56:20.275099117Z
+modified_at: 2026-09-18T01:56:21.510203225Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -79,6 +79,17 @@ comments:
     confidence: 0.90
   created_at: 2026-09-18T01:56:20.275099117Z
   modified_at: 2026-09-18T01:56:20.275099117Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b23a-9f86-71a2-aa88-212f8eb282fd
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: When both refusal conditions apply, the drive-seat condition takes precedence and the refusal reports `caller is a drive implementer/reviewer seat`, rather than the drive-owned-PR reason.
+    rationale: The criteria require condition-specific refusal text but do not specify the tie-break when a drive seat targets the drive's own PR. The decision function establishes a user-visible precedence.
+    source: file:task-1253-drain-01a0b236-74e3-7110-88fd-45a107fded0d.json
+    confidence: 0.96
+  created_at: 2026-09-18T01:56:21.510203225Z
+  modified_at: 2026-09-18T01:56:21.510203225Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b238-25db-7232-b12d-5f7f0e34634a
