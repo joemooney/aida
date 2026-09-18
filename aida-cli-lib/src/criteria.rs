@@ -145,30 +145,22 @@ fn criteria_report_from_parts(
 
 pub(crate) fn parse_acceptance_criteria(spec: &str, description: &str) -> Vec<Criterion> {
     // trace:BUG-1216 | ai:codex
+    // trace:BUG-1219 | ai:codex
     // Parse both supported section forms. A malformed/migrating spec that has
     // both must not silently lose the inline criteria to heading precedence.
     [
-        headed_acceptance_section(description),
-        inline_acceptance_section(description),
+        headed_acceptance_criteria(description),
+        inline_acceptance_criteria(description),
     ]
     .into_iter()
     .flatten()
-    .flat_map(|section| {
-        section
-            .lines()
-            .flat_map(|line| {
-                split_criterion_line(line).into_iter().filter_map(|text| {
-                    criterion_text_from_line(text).map(|text| criterion_from_text(spec, text))
-                })
-            })
-            .collect::<Vec<_>>()
-    })
+    .map(|text| criterion_from_text(spec, &text))
     .collect()
 }
 
-fn headed_acceptance_section(description: &str) -> Option<String> {
+fn headed_acceptance_criteria(description: &str) -> Vec<String> {
     let mut in_section = false;
-    let mut out = String::new();
+    let mut lines = Vec::new();
     for line in description.lines() {
         let trimmed = line.trim();
         if let Some(title) = trimmed.strip_prefix('#') {
@@ -186,50 +178,94 @@ fn headed_acceptance_section(description: &str) -> Option<String> {
             }
         }
         if in_section {
-            out.push_str(line);
-            out.push('\n');
+            lines.push(line);
         }
     }
-    Some(out).filter(|s| !s.trim().is_empty())
+    collect_bulleted_criteria(lines)
 }
 
-fn inline_acceptance_section(description: &str) -> Option<String> {
-    for marker in ["Acceptance criteria:", "Acceptance:"] {
-        if let Some(pos) = description.find(marker) {
-            let body = description[pos + marker.len()..].trim();
-            let body = body.split("\n\n").next().unwrap_or(body).trim();
-            if !body.is_empty() {
-                return Some(body.to_string());
+fn inline_acceptance_criteria(description: &str) -> Vec<String> {
+    let lines: Vec<_> = description.lines().collect();
+    for (index, line) in lines.iter().enumerate() {
+        if is_inline_acceptance_marker(line) {
+            return collect_bulleted_criteria(lines[index + 1..].iter().copied());
+        }
+    }
+    Vec::new()
+}
+
+fn is_inline_acceptance_marker(line: &str) -> bool {
+    let marker = line
+        .trim()
+        .trim_matches(|ch| matches!(ch, '*' | '_'))
+        .trim();
+    marker.eq_ignore_ascii_case("Acceptance:")
+        || marker.eq_ignore_ascii_case("Acceptance criteria:")
+}
+
+fn collect_bulleted_criteria<'a>(lines: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut criteria: Vec<String> = Vec::new();
+    let mut saw_blank = false;
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") || trimmed.starts_with('#') {
+            break;
+        }
+        if trimmed.is_empty() {
+            saw_blank = true;
+            continue;
+        }
+        if let Some(text) = bullet_text(trimmed) {
+            criteria.push(text.to_string());
+            saw_blank = false;
+            continue;
+        }
+        if saw_blank {
+            break;
+        }
+        if line.chars().next().is_some_and(char::is_whitespace) {
+            if let Some(current) = criteria.last_mut() {
+                current.push(' ');
+                current.push_str(trimmed);
             }
         }
     }
-    None
+    criteria
 }
 
-fn split_criterion_line(line: &str) -> Vec<&str> {
-    if line.contains(';') && !line.trim_start().starts_with('-') {
-        line.split(';')
-            .map(str::trim)
-            .filter(|part| !part.is_empty())
-            .collect()
-    } else {
-        vec![line]
+fn bullet_text(t: &str) -> Option<&str> {
+    if explicit_acceptance_prefix(t).is_some() {
+        return Some(t);
     }
-}
-
-fn criterion_text_from_line(line: &str) -> Option<&str> {
-    let t = line.trim();
     let rest = t
         .strip_prefix("- [ ] ")
         .or_else(|| t.strip_prefix("- [x] "))
         .or_else(|| t.strip_prefix("- [X] "))
         .or_else(|| t.strip_prefix("- "))
         .or_else(|| t.strip_prefix("* "))
-        .or_else(|| t.strip_prefix("+ "))
-        .or_else(|| numbered_prefix(t))
-        .unwrap_or(t);
+        .or_else(|| numbered_prefix(t))?;
     let rest = rest.trim();
     (!rest.is_empty()).then_some(rest)
+}
+
+fn explicit_acceptance_prefix(t: &str) -> Option<&str> {
+    let upper = t.to_ascii_uppercase();
+    let digits_start = if upper.starts_with("AC") {
+        2
+    } else if upper.starts_with('A') {
+        1
+    } else {
+        return None;
+    };
+    let digits = upper[digits_start..]
+        .bytes()
+        .take_while(u8::is_ascii_digit)
+        .count();
+    if digits == 0 {
+        return None;
+    }
+    let end = digits_start + digits;
+    matches!(upper.as_bytes().get(end), Some(b'.' | b':')).then(|| t[end + 1..].trim_start())
 }
 
 fn numbered_prefix(t: &str) -> Option<&str> {
@@ -791,14 +827,33 @@ mod tests {
     }
 
     #[test]
-    fn inline_acceptance_splits_semicolon_criteria() {
-        let desc = "Context. Acceptance: first outcome; second outcome.";
+    fn inline_acceptance_marker_must_be_standalone_and_only_collects_bullets() {
+        // trace:BUG-1219 | ai:codex
+        let desc = "Context with inline Acceptance: prose.\n/home/joe/ai/aida-task-1\nafter a refused rebase";
         let criteria = parse_acceptance_criteria("STORY-1", desc);
-        assert_eq!(criteria.len(), 2);
+        assert!(criteria.is_empty());
+
+        let desc = "**Acceptance:**\n- first outcome\n2) second outcome\nAC3: third outcome";
+        let criteria = parse_acceptance_criteria("STORY-1", desc);
+        assert_eq!(criteria.len(), 3);
         assert_eq!(criteria[0].text, "first outcome");
-        assert_eq!(criteria[1].text, "second outcome.");
-        assert!(criteria[0].id.starts_with("STORY-1.ac"));
-        assert_ne!(criteria[0].id, criteria[1].id);
+        assert_eq!(criteria[1].text, "second outcome");
+        assert_eq!(criteria[2].text, "third outcome");
+        assert_eq!(criteria[2].label, "AC3");
+    }
+
+    #[test]
+    fn acceptance_sections_join_continuations_and_stop_at_fences_or_prose() {
+        // trace:BUG-1219 | ai:codex
+        let desc = "Acceptance criteria:\n- first line\n  continued line\n\nprose after section\n- not included";
+        let criteria = parse_acceptance_criteria("BUG-1", desc);
+        assert_eq!(criteria.len(), 1);
+        assert_eq!(criteria[0].text, "first line continued line");
+
+        let desc = "## Acceptance\n- before fence\n```text\n- inside fence\n```\n- after fence";
+        let criteria = parse_acceptance_criteria("BUG-1", desc);
+        assert_eq!(criteria.len(), 1);
+        assert_eq!(criteria[0].text, "before fence");
     }
 
     #[test]
