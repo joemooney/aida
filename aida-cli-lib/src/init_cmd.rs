@@ -2173,39 +2173,123 @@ fn enqueue_initial_scaffold_task(root: &std::path::Path, db_path: &std::path::Pa
 
 fn init_schedule_config_section() -> &'static str {
     r#"
-# Native scheduled maintenance. `aida schedule tick` runs due enabled tasks
-# opportunistically from the per-turn hook; `aida schedule emit-cron` prints
-# crontab lines if you prefer real cron. Fresh projects stay silent because
-# every sample task is commented/disabled. trace:STORY-1047
+# Per-seat job registry (`aida schedule`, alias `aida cron`). Two job kinds:
+#   substrate — `command = "<allow-listed aida subcommand>"`; no LLM; run by
+#               `aida schedule tick` (the per-turn hook) or real cron
+#               (`aida schedule emit-cron`). Idempotent, quiet when idle.
+#   seat      — `prompt = "..."`, `seats = ["advisor"]`; needs the seat's
+#               judgment; NEVER executed by the scheduler. It becomes due and
+#               is delivered to whoever holds the seat (`aida awaiting
+#               --notice`, the pickup prompt, `aida agent new`); the seat
+#               reports back with `aida schedule done <job>`.
+# Schedules (combine `every` + `on` for event fast path + interval fallback):
+#   every = "30m"                       interval heartbeat
+#   on    = ["PrMerged", "MailReceived"] events from .aida/events.jsonl
+#   when  = "mail.oldest_unread_age > 15m"   predicate; fires once per episode
+# Machine-wide jobs go in ~/.aida/schedule.toml (same shape); a project entry
+# with the same name wins. Every run is ledgered on the aida-store branch
+# (schedule/<job>.yaml). Fresh projects stay silent: every sample is commented.
+# trace:STORY-1047 trace:STORY-1226
 #
 # [schedule]
 # min_gap = "60s"
 #
-# [[schedule.tasks]]
-# name = "cache-verify"
-# command = "cache verify"
-# interval = "24h"
-# enabled = false
-#
-# [[schedule.tasks]]
+# [[schedule.jobs]]
 # name = "session-reap"
 # command = "session reap"
-# interval = "24h"
+# every = "30m"
 # enabled = false
 #
-# [[schedule.tasks]]
+# [[schedule.jobs]]
+# name = "doctor"
+# command = "doctor"
+# every = "6h"
+# enabled = false
+#
+# [[schedule.jobs]]
 # name = "queue-gc"
 # command = "queue gc"
-# interval = "7d"
+# every = "2h"
 # enabled = false
 #
-# [[schedule.tasks]]
-# name = "notify-check"
+# [[schedule.jobs]]
+# name = "cache-verify"
+# command = "cache verify"
+# every = "24h"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "mailbox-latency"
 # command = "notify check"
-# interval = "1h"
+# when = "mail.oldest_unread_age > 15m"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "mailbox-triage"
+# seats = ["advisor"]
+# every = "30m"
+# on = ["MailReceived"]
+# prompt = "Triage the mailbox: `aida mailbox inbox`, answer or route each item."
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "groom-drafts"
+# seats = ["advisor"]
+# every = "1h"
+# prompt = "Groom the draft inbox: `aida groom` (propose), then `aida groom --apply`."
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "capture-sweep"
+# seats = ["product"]
+# on = ["QueueDrained"]
+# prompt = "Run /aida-capture: file every requirement the drain surfaced but nobody wrote down."
 # enabled = false
 #
 "#
+}
+
+/// STORY-1226: the scaffolded `[schedule]` section must list the default
+/// substrate + seat jobs and parse as valid TOML once uncommented.
+// trace:STORY-1226 | ai:claude
+#[cfg(test)]
+mod story_1226_init_schedule_section_tests {
+    use super::*;
+
+    #[test]
+    fn init_schedule_section_lists_default_jobs() {
+        let section = init_schedule_config_section();
+        for job in [
+            "session-reap",
+            "doctor",
+            "queue-gc",
+            "mailbox-latency",
+            "mailbox-triage",
+            "groom-drafts",
+            "capture-sweep",
+        ] {
+            assert!(
+                section.contains(&format!("name = \"{job}\"")),
+                "{job} missing"
+            );
+        }
+        assert!(section.contains("seats = [\"advisor\"]"));
+        assert!(section.contains("seats = [\"product\"]"));
+        assert!(section.contains("on = [\"MailReceived\"]"));
+        assert!(section.contains("when = \"mail.oldest_unread_age > 15m\""));
+        // Every sample is commented → a fresh project is silent.
+        assert!(section.lines().all(|l| l.is_empty() || l.starts_with('#')));
+        // Uncommented, the sample is a valid registry.
+        let start = section.find("# [schedule]").expect("sample table present");
+        let uncommented: String = section[start..]
+            .lines()
+            .map(|l| l.trim_start_matches('#').trim_start())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let parsed: toml::Value = toml::from_str(&uncommented).expect("sample parses");
+        let jobs = parsed["schedule"]["jobs"].as_array().unwrap();
+        assert_eq!(jobs.len(), 8);
+    }
 }
 
 #[cfg(test)]

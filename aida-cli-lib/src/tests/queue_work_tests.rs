@@ -935,6 +935,56 @@ fn prompt_spike_item_names_research_lane_and_report_contract() {
     assert!(prompt.contains("docs/spikes/<date>-<slug>.md"), "{prompt}");
     assert!(prompt.contains("open a PR"), "{prompt}");
     assert!(prompt.contains("Do not make or apply"), "{prompt}");
+/// STORY-1226: a seat's due `[schedule]` jobs lead the pickup prompt, and the
+/// pickup line stays last; an empty block leaves the prompt untouched.
+// trace:STORY-1226 | ai:claude
+#[test]
+fn pickup_prompt_leads_with_due_jobs_for_role() {
+    let _guard = crate::test_env::env_lock();
+    std::env::remove_var("AIDA_AGENT_GATE_NAME");
+    let e = resolved("TASK-1226", entry(Uuid::now_v7(), Some("advisor"), None));
+    let plan = QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![e],
+        scope: "TASK-1226".into(),
+        review_target: None,
+        anchor_display: "TASK-1226".into(),
+        anchor_title: "title".into(),
+    };
+    let due = vec![crate::maintenance_schedule::DueJob {
+        name: "mailbox-triage".into(),
+        kind: crate::maintenance_schedule::JobKind::Seat,
+        seats: vec!["advisor".into()],
+        schedule: "every 30m".into(),
+        reason: "every 30m".into(),
+        prompt: Some("triage the mailbox".into()),
+        command: None,
+        last_run: None,
+        last_by: None,
+        due_since: None,
+    }];
+    let block = crate::maintenance_schedule::render_due_jobs_block(&due, "advisor");
+    let base = derive_queue_work_prompt(&plan, "advisor", false, false, None);
+    let prompt = prepend_due_jobs(base.clone(), &block);
+    assert!(
+        prompt.starts_with("DUE JOBS (seat: advisor):\n"),
+        "{prompt}"
+    );
+    assert!(
+        prompt.contains("- mailbox-triage (every 30m, never run) → triage the mailbox"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("aida schedule done <job>"), "{prompt}");
+    assert!(
+        prompt.ends_with(&base),
+        "pickup line must stay last: {prompt}"
+    );
+    // Nothing due → unchanged.
+    assert_eq!(prepend_due_jobs(base.clone(), ""), base);
+    // An agent gate never gets the block.
+    std::env::set_var("AIDA_AGENT_GATE_NAME", "security");
+    assert_eq!(prepend_due_jobs(base.clone(), &block), base);
+    std::env::remove_var("AIDA_AGENT_GATE_NAME");
 }
 
 /// BUG-814: a rework pickup with a blocking review verdict must lead with the

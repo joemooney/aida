@@ -254,6 +254,43 @@ These three support the autonomy machinery rather than driving work directly.
 
 **`aida goal`** — derive a *machine-checkable* completion condition from spec metadata, ready to paste into `/goal` or `/schedule`. Each flag is one clause (`aida goal --batch`, `aida goal --epic`, `aida goal --queue-empty`, …); flags compose with AND; every clause carries an explicit verification command. **Reach for it when** you want a loop/drain to stop on a *deterministic* condition rather than a vague "make it pass." **Don't** pick a clause whose mechanism your drain bypasses (e.g. an `aida goal --queue-empty` condition met trivially because autonomous-merge skipped that queue) — the clause must match how the work actually routes.
 
+### `aida schedule` (alias `aida cron`)
+
+The per-seat **job registry**: which periodic jobs each seat runs, whether one is overdue, and who last ran it. One command, one registry, two kinds of job:
+
+- **substrate** — `command = "session reap"` (an allow-listed `aida` subcommand: `cache verify`, `session reap`, `queue gc`, `notify check`, `doctor`, `fetch --code-only`, `store compact`). Needs no LLM. `aida schedule tick` runs the due ones (the per-turn hook calls it with `--hook`, which skips network-touching jobs) or paste `aida schedule emit-cron` into a real crontab. Idempotent, quiet when idle.
+- **seat** — `prompt = "Triage the mailbox…"`, `seats = ["advisor"]`. Needs the seat's judgment, so the scheduler **never executes it**: it becomes *due* and is delivered as text to whoever holds the seat — the `aida awaiting --notice` per-turn line (`⏰ 1 due seat job — mailbox-triage (every 30m, last 47m ago) → …`), a `DUE JOBS (seat: advisor)` block leading the pickup prompt, and a `## Due Jobs` section in `aida agent new`'s launch context. Identical under every vendor; a Claude launch is additionally told it may mirror the jobs as in-session cron entries. The seat reports back with `aida schedule done <job> [--note "…"]`.
+
+A job's **schedule** is any of three, on the same entry (`every` + `on` combine — event fast path, interval fallback):
+
+```toml
+[[schedule.jobs]]
+name = "mailbox-triage"
+seats = ["advisor"]
+every = "30m"                          # interval heartbeat
+on = ["MailReceived"]                  # events already written to .aida/events.jsonl
+prompt = "Triage the mailbox: `aida mailbox inbox`."
+enabled = true
+
+[[schedule.jobs]]
+name = "mailbox-latency"
+command = "notify check"
+when = "mail.oldest_unread_age > 15m"  # predicate; fires once per episode
+enabled = true
+```
+
+`when` is a small typed grammar: `field op value`, joined by `&&` / `||` (`&&` binds tighter; parentheses allowed), durations like `90s` / `15m` / `2h`. A condition job fires **once when its predicate turns true and not again until it has been false** (once-until-cleared; the ledger records the episode). The field set is fixed: `mail.unread`, `mail.oldest_unread_age`, `drain.lock_free`, `queue.drain_mode_ready`, `queue.depth`, `sessions.finished_unreaped`, `ci.red_prs` (0 without network), `findings.open`, `escalations.open`. `on` accepts the event names the drain emits (`PrMerged`, `SpecShelved`, `QueueDrained`, `AdvisorEscalated`, `PuntFiled`, `CiTerminal`, `UnshippedWorkDetected`, `MailReceived`, …); a typo in either is refused at config-load time.
+
+**Registry** = the project's `[schedule]` section in `.aida/config.toml` plus the machine-global `~/.aida/schedule.toml` (same shape, or bare `[[jobs]]`), merged by name with the project entry winning. The original `[[schedule.tasks]]` / `interval` spelling still works. **Ledger** = one store object per job on the `aida-store` branch (`schedule/<job>.yaml`: `last_run`, `last_by` seat/session/vendor, `result`, `due_since`, `episode`), so "who last triaged the mailbox and when" has one answer on every clone; writes are debounced (a run clock moving <60 s with the same result is not committed) and merge last-writer-wins.
+
+Verbs: `aida schedule list [--seat advisor] [--json]` (the merged registry, with source layer and last reporter), `aida schedule status [--json]` (every job with status / last run / next due; legacy `.aida/schedules.toml` cadence entries appear as kind `fires_task`, deprecated), `aida schedule due [--seat advisor] [--json]` (what is due now), `aida schedule run [<job>]` (force a substrate job; for a seat job print its prompt), `aida schedule done <job> [--note …]`, `aida schedule tick [--hook]`, `aida schedule emit-cron`.
+
+**Reach for it when** a seat has recurring duties that keep living in one session's memory (a hand-made in-session cron dies with the session), or when a substrate chore (reap, gc, doctor) should run whether or not any agent is alive. **Don't** put a merge or a drain launch in a seat job — a seat job is advice to the seat, never an automatic action; the tick and the gates own those. Unattended execution of substrate jobs, the `install` verb, and cold-booting a headless seat for an overdue seat job belong to the scheduler tick (a separate story), which consults this registry.
+
+<!-- doc-intent: shaped by STORY-1226 -->
+
+---
+
 ### The OS sandbox — `[contained] os_wrap`
 
 <!-- trace:TASK-867 -->

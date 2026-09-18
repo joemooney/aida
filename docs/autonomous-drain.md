@@ -1169,6 +1169,26 @@ aida edit TASK-99 --status rejected      # drop (was wrong direction)
 Triaging a spec out of `NeedsAttention` clears both `attention_reason`
 and `failure_reason`. The punt ledger entry stays — it's history.
 
+## Seat jobs — periodic duties per seat (STORY-1226)
+
+The `[schedule]` registry (`aida schedule`, alias `aida cron`) gives every seat
+its recurring duties without depending on any one session staying alive.
+A **substrate** job (`command = "session reap"`, `every = "30m"`) needs no LLM
+and is run by `aida schedule tick`; a **seat** job (`prompt = "triage the
+mailbox"`, `seats = ["advisor"]`, `every` / `on = ["MailReceived"]` /
+`when = "…"`) is *never executed by the scheduler* — it becomes due and is
+delivered to whoever holds the seat: the `aida awaiting --notice` per-turn
+line, a `DUE JOBS` block leading the pickup prompt, and the `## Due Jobs`
+section of `aida agent new`'s launch context. That delivery is identical for
+Claude, Codex and Antigravity (one registry, one `aida schedule due` view);
+the seat reports each run with `aida schedule done <job>`, which ledgers who
+ran it and when on the `aida-store` branch. A seat job is advice to the seat,
+not an automatic action: it never launches a drain or merges. Unattended
+execution, `aida schedule install`, and cold-booting a headless seat for an
+overdue seat job (at most once per hour per seat) are the scheduler tick's
+business — STORY-1218 — which consults this same registry. Full reference:
+`docs/cli/03-work-autonomy.md` (`aida schedule`).
+
 ## Limits of this cut
 
 - There is no liveness watchdog yet: a genuinely stuck headless run is not

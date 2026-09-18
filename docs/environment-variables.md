@@ -213,6 +213,7 @@ doesn't match.
 | `AIDA_BG_FETCH` | Enables the background store fetcher. | enabled. Opt-out with `false`/`0`/`no`/`off`. | user / test | process env |
 | `AIDA_BG_FETCH_INTERVAL_SECS` | Skip a background fetch if the last attempt was within this window (seconds). | `300`. | user / test | process env |
 | `AIDA_FETCH_FRESHNESS_SECS` | Staleness threshold (seconds) for rendering `cache:fresh\|behind` in status. | `300`. | user / test | process env |
+| `AIDA_SCHEDULE_CHILD` | Set to `1` on every `aida` subprocess the scheduler (`aida schedule tick` / `run`) spawns for a substrate job, so a scheduled child can be told apart from an interactive invocation (e.g. to stay quiet / skip prompts). Read-only marker; never set it by hand. | unset. | launch-path (`aida schedule`) | process env |
 | `AIDA_SERVER` | Remote gRPC server address for distributed mode. Overrides the `--server` flag when the flag is absent. | unset = `None`. Values: `host:port` or `grpc://host:port`. | user | process env |
 | `AIDA_MCP_PROFILE` | MCP tool access tier. Resolution: CLI flag → env → config → default. | `full`. Values: `read-only` / `core` / `full`. | user | process env |
 | `AIDA_GH_VERIFY_RETRIES` | Retry count for GitHub PR-verification during pull/merge. | `3`. | user | process env |
