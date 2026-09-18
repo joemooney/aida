@@ -37,12 +37,12 @@ description: |
   ## Recurse-fix
 
   Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:58:37.116167688Z
-modified_at: 2026-09-18T16:58:37.116167688Z
+modified_at: 2026-09-18T18:43:42.528652044Z
 req_type: Bug
 tags:
 - auto-complete
@@ -50,3 +50,17 @@ tags:
 - failure-3
 - failure-kind:tool-exit
 - reviewer
+comments:
+- id: 01a0b5d4-e140-7f93-bc05-1e0a309628bd
+  author: aida-auto-bump
+  content: 'Auto-resolved: TASK-1269 reached Completed via commit d38109f / PR #1936; rejecting auto-drafted phase-failure finding BUG-1319.'
+  created_at: 2026-09-18T18:43:42.528650935Z
+  modified_at: 2026-09-18T18:43:42.528650935Z
+history:
+- id: 01a0b5d4-e140-7f93-bc05-1df4fd7d5118
+  author: aida-auto-bump
+  timestamp: 2026-09-18T18:43:42.528649557Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
