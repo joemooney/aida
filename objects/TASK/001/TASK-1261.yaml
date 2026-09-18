@@ -11,12 +11,12 @@ description: |-
   - `aida agent new claude --role requester --show-context` prints the persona guidance block, not "No stored role file".
   - A persona launch takes no lease (aida session leases shows none for it).
   - Guidance text lives in one place (a template or const) shared by agent new and session new; unit test pins that guest and requester get the persona block and a real role does not.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:55:57.292682234Z
-modified_at: 2026-09-18T01:08:09.765027512Z
+modified_at: 2026-09-18T02:44:31.341337091Z
 req_type: Task
 tags:
 - batch:followups-0917
