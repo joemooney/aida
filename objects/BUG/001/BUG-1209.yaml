@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T06:45:50.211144296Z
+modified_at: 2026-09-18T07:08:46.956802025Z
 req_type: Bug
 tags:
 - aida:list
@@ -61,6 +61,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T06:45:49.953265894Z
   modified_at: 2026-09-18T06:45:49.953265894Z
+- id: 01a0b358-a7ec-7133-9d54-021046b7ec33
+  author: joe
+  content: 'Addressed PR #1917 review: empty human render paths now disclose explicit truncation, including --limit 0; added zero-limit regression assertions and manually verified the rebuilt CLI prints 0 of 15 open requirements. cargo fmt check and targeted 5-test suite pass.'
+  created_at: 2026-09-18T07:08:46.956802025Z
+  modified_at: 2026-09-18T07:08:46.956802025Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
