@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:34.903795856Z
-modified_at: 2026-09-18T23:43:43.776426947Z
+modified_at: 2026-09-18T23:48:58.305217332Z
 req_type: Task
 tags:
 - agent-ux
@@ -41,4 +41,10 @@ comments:
   created_at: 2026-09-18T23:43:43.776426947Z
   modified_at: 2026-09-18T23:43:43.776426947Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b6ec-5b41-7ad2-aa6e-f7c085ed506f
+  author: joe
+  content: 'Implementation sketch (architecture-class): centralize type+optional-lane resolution and the 40-line merged renderer in aida-core; have CLI and MCP share that renderer for byte parity; infer research/docs/keystone lanes only when assembling queue-work prompts; prepend the resolved block to headless implementer and reviewer prompts. Precedence is rendered as type < lane < spec acceptance and every body line is layer-tagged. Tests cover merge order/cap and MCP parity.'
+  created_at: 2026-09-18T23:48:58.305217332Z
+  modified_at: 2026-09-18T23:48:58.305217332Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
