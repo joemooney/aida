@@ -76954,5 +76954,22 @@ operations:
   timestamp: 2026-09-18T16:53:05.874291585Z
   kind: !SetStatus
     status: Rejected
-clock: 5947
+- id: 01a0b572-11c4-74b2-9616-0ba1063c1f2a
+  target_id: 01a0b572-0b9c-7941-8126-58dbaef33621
+  author: aida
+  node_id: '1'
+  lamport: 5948
+  timestamp: 2026-09-18T16:55:46.884850501Z
+  kind: !Create
+    title: 'GitLab live validation — the two TASK-1254 checks not yet exercised on the mirror: a labelled MR is blocked by aida-merge-hold-gate + ''Pipelines must succeed'', and [review] mode = delegated logs the n'
+    description: |-
+      #1932 (TASK-1254) landed the gate wiring and two live-run fixes, and its test plan ticked three of the five checks live on gitlab.joemooney.com ai/aida (unlabelled gate passes on MR !1 pipeline 280; re-driven headless drain blocks in the CI phase and ticks; cargo test via CI). Two remain unticked and need the operator's mirror (glab auth to the self-hosted instance):
+      1. Label an MR aida:merge-hold → aida-merge-hold-gate fails (pipelines 282/283) AND the project's "Pipelines must succeed" setting refuses the merge until the label is cleared; then clear via aida merge-hold clear and confirm the gate re-runs green and the merge proceeds (the GitLab twin of the BUG-1180/ADR-39 path).
+      2. Set [review] mode = delegated in .aida/config.toml on the mirror clone, run one headless drive, and confirm the drain logs "delegated review not supported on this forge — running the standard reviewer" and the standard reviewer produces a verdict (ADR-43 decision 3).
+      Record both results as comments on TASK-1254 (which the #1932 trailer completed) and on this task; file any defect found as its own bug under EPIC-68.
+      Acceptance: both checks observed live and recorded with pipeline/MR ids; EPIC-68's validation section in docs/forge-providers.md updated.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5948
 node_id: '1'
