@@ -112,7 +112,7 @@ through.
 ### Selector axes (all funnel through one gate)
 
 ```
-aida burndown plan --batch <name>        # a cluster (reuse: list --tags batch:<name>)
+aida burndown plan --batch <name>        # a cluster (reuse: list --add-tag batch:<name>)
 aida burndown plan --tag <tag>           # by tag      (reuse: list --tags)
 aida burndown plan --status approved     # ready backlog (DEFAULT) (reuse: list --status)
 aida burndown plan --queue               # active role's queue (reuse: queue list)

@@ -92,7 +92,7 @@ implements one iteration of it.
 
 ### batch
 
-A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --tags batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
+A set of specs sharing a `batch:NAME` tag (set via `aida edit <id> --add-tag batch:NAME`), drained as a unit. `aida queue work --batch NAME` picks the
 head queued member of that batch; `--batch NAME --auto-complete` drains
 the whole batch sequentially.
 
