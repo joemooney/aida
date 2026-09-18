@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:56:46.214316084Z
+modified_at: 2026-09-18T11:56:47.251966195Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -178,6 +178,17 @@ comments:
     confidence: 0.96
   created_at: 2026-09-18T11:56:46.214316084Z
   modified_at: 2026-09-18T11:56:46.214316084Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b460-5513-7ba0-9360-c4c92d50d0d5
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: Review-loop recurrence compares the new findings only with the most recently created prior review-findings block, ignoring intervening non-findings comments; a nonconsecutive A → B → A sequence is not treated as a loop.
+    rationale: The requirement says findings must be unchanged twice in a row, but the diff establishes the non-obvious durable-history semantics used to decide what 'in a row' means, including timestamp ordering and exclusion of unrelated comments.
+    source: file:bug-1213-drain-01a0b45c-efd0-7c81-b424-5ad48d2d0239.json
+    confidence: 0.90
+  created_at: 2026-09-18T11:56:47.251966195Z
+  modified_at: 2026-09-18T11:56:47.251966195Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b45e-de0b-7211-82b6-2e3d49266bf3
