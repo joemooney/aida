@@ -1,0 +1,26 @@
+id: 01a0b47b-c67e-77d0-9a56-8fe6d9b75b4a
+spec_id: STORY-1211
+agreed_id: STORY-1211
+title: 'Review PR-1926: [AI:codex] fix(orchestrator): detect content-only rework no-ops (TASK-1265)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b46a`) for branch `task-1265`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1926>
+  - Branch: `task-1265` → `main`
+
+  ## Covers
+
+  - TASK-1265
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1926` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T12:26:45.758990763Z
+modified_at: 2026-09-18T12:26:45.758990763Z
+req_type: Story
