@@ -1,0 +1,28 @@
+id: 01a0b2a0-599e-79b2-bfd4-c7f70f5a9f97
+spec_id: TASK-1263
+agreed_id: TASK-1263
+title: 'Harvest selectivity: on a docs-only diff, treat candidates whose text merely restates the diff''s prose (no code change) as not-established — the drain proposed 4 slop SEMs on TASK-1260'
+description: |-
+  Calibration evidence 2026-09-17 20:47 (advisor decline ledger on TASK-1260, PR #1909 — the identity-model docs PR): the drain's advisory harvest proposed 4 SEM candidates at 0.80-0.96 confidence, all restating facts the doc DESCRIBES and the store already RECORDS (STORY-1110 requester envelope, BUG-89/TASK-951 user-id precedence, TASK-1237 persona discovery section, glossary session definition). None was a decision the diff made. The advisor declined all four; on a docs-only PR the loop produced pure duplication.
+
+  Fix (two layers, keep both simple):
+  1. Prompt: tell the harvest agent that for a diff touching only documentation/markdown (no source, config or test change), "established by this diff" means a NEW decision the docs introduce, not a restatement of existing behavior; instruct it to return an empty list when the doc only documents.
+  2. Filter: in harvest::filter_candidates, when the diff's changed paths are all docs (*.md under docs/, CLAUDE.md, OVERVIEW.md, README*, templates/**/*.md) skip candidates whose normalized text (reuse BUG-1198 normalize_text) appears as a substring of the diff's added prose, with SkipReason::RestatedFromDocs; also skip candidates that name an existing spec's acceptance verbatim. Configurable under [harvest] (docs_only_mode = "strict" | "off", default strict).
+
+  Acceptance:
+  - A unit test with a docs-only diff fixture and the four TASK-1260 candidate texts: all four are skipped with the new reason; the same texts on a code diff are kept.
+  - The ledger records the skip reason; the drain still runs the step on docs PRs (advisory), it just proposes nothing.
+  - docs/autonomous-drain.md [harvest] section documents docs_only_mode.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T03:47:28.286274854Z
+modified_at: 2026-09-18T03:47:28.286274854Z
+req_type: Task
+tags:
+- anti-slop
+- calibration
+- drain-safe
+- follow-up:TASK-1249
+- harvest
