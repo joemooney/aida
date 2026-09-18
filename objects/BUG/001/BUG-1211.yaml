@@ -8,12 +8,12 @@ description: |-
   Fix: in the requester Add arm, refuse when parent / feature / owner is set, with the same refusal text as MCP ("setting parent, feature, or owner during intake"); share the field list with mcp.rs constrain_requester_intake (one const) so the two surfaces cannot drift; add the CLI test next to guest_refuses_db_sync (requester `aida add --type bug --parent X` refused; plain `aida add --type bug` still lands Draft + intake:requester).
 
   Acceptance: the CLI test above; a parity test asserting the CLI and MCP intake-field deny-lists are the same constant; existing stakeholder tests green.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:54:35.383232444Z
-modified_at: 2026-09-18T04:58:17.025631369Z
+modified_at: 2026-09-18T08:39:43.378381052Z
 req_type: Bug
 tags:
 - batch:followups-0917b
