@@ -74387,5 +74387,31 @@ operations:
   timestamp: 2026-09-18T03:19:39.112798803Z
   kind: !SetStatus
     status: Rejected
-clock: 5783
+- id: 01a0b28c-0dfe-7e70-8c64-34ceeb11cab1
+  target_id: 01a0b28c-09c9-7fa0-a01a-a2843504bb63
+  author: aida
+  node_id: '1'
+  lamport: 5784
+  timestamp: 2026-09-18T03:25:18.206119172Z
+  kind: !Create
+    title: 'Review PR-1911: [AI:codex] fix(role): activate stakeholder personas without role files (BUG-1196)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b284`) for branch `bug-1196`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1911>
+      - Branch: `bug-1196` → `main`
+
+      ## Covers
+
+      - BUG-1196
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1911` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5784
 node_id: '1'
