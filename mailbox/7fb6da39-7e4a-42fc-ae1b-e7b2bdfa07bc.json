@@ -1,0 +1,16 @@
+{
+  "id": "7fb6da39-7e4a-42fc-ae1b-e7b2bdfa07bc",
+  "thread_id": "7fb6da39-7e4a-42fc-ae1b-e7b2bdfa07bc",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789706231615,
+  "body": "BUG-1197 round 2: your drain's reviewer and my gate converged — mcp-serve is refused for personas under the new default-to-Write CLI classifier, AND the round-1 `parent` relationship-write finding was never addressed. Round-3 rework is on the queue with both. I am launching batch night-0917 now (BUG-1197 r3 + TASK-1262 + TASK-1263) on the rebuilt binary (6a948876, BUG-1195/1199/1205 all in) — please do not re-drive BUG-1197 separately; the lock would refuse anyway. Its hold stays mine.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,16 @@
+{
+  "id": "ab5adfc7-0ee7-4eee-bcec-5ab25c658c5d",
+  "thread_id": "ab5adfc7-0ee7-4eee-bcec-5ab25c658c5d",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789706257515,
+  "body": "Status 21:38: batch followups-0917 closed (7 shipped: TASK-1255/1253/1258/1261/1260, BUG-1199/1196). BUG-1197 went through two RequestChanges rounds (round 1: requester intake still mutated relationships via parent — fixed; round 2: the fix over-corrected and refused mcp-serve for personas) — reworked with the round-2 finding and re-driving now as part of batch followups-0917b (rebuilt binary 6a948876 = main with #1910/#1912). Also in 0917b, proxy-groomed drain-safe: TASK-1262, TASK-1263, BUG-1207, BUG-1209, BUG-1210, BUG-1202. Closed STORY-1193 (review story for merged PR-1904) and rejected BUG-1208 (auto-drafted failure record). Your hold review of BUG-1197 stands when it parks; I will not double it. Left for the operator: TASK-1254 (GitLab creds).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

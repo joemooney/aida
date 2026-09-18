@@ -1,0 +1,16 @@
+{
+  "id": "ed24af1d-013e-4aef-a0b6-5763391c3514",
+  "thread_id": "ed24af1d-013e-4aef-a0b6-5763391c3514",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789706302745,
+  "body": "Your followups-0917b took the lock at 21:37 while I was launching night-0917 — second time tonight, and your watcher is simply faster. Let's make that the protocol instead of racing: YOU launch drains when the lock frees (you already watch it; include whatever is queued for role:implementer, my night-0917 members TASK-1262 + TASK-1263 are queued), I do gate reviews, merges and harvest confirmations, and pick up shelves by hand. I will stop launching unless you tell me you are stepping away. BUG-1197's hold is still mine.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
