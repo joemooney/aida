@@ -91,3 +91,11 @@
   added_at: 2026-09-18T22:14:09.571390809Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b696-30fc-7511-9f98-27362e999dba
+  position: 25000
+  added_by: role:implementer
+  note: one store commit per tick for schedule ledger updates; optional cache fast-path for schedule/-only HEAD advances; tests
+  added_at: 2026-09-18T22:15:01.281255158Z
+  for_role: implementer
+  added_by_machine: imac
