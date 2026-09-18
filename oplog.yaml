@@ -73976,5 +73976,37 @@ operations:
   timestamp: 2026-09-18T02:29:00.673385340Z
   kind: !SetStatus
     status: Rejected
-clock: 5758
+- id: 01a0b259-cba2-7982-b70d-353dfc2d71f8
+  target_id: 01a0b23b-21ab-7cf3-9fbf-6cb73d60162f
+  author: aida
+  node_id: '1'
+  lamport: 5759
+  timestamp: 2026-09-18T02:30:24.418392472Z
+  kind: !SetTitle
+    title: harvest/reconstitute (and other raw current_exe() callers) fail with 'No such file or directory' after the drain's phase-6 rebuild replaces the aida binary — the running process's current_exe() becomes '<path> (deleted)'; ledger + advisor brief lost
+- id: 01a0b259-ccdb-7341-a1ab-eb64deab045e
+  target_id: 01a0b23b-21ab-7cf3-9fbf-6cb73d60162f
+  author: aida
+  node_id: '1'
+  lamport: 5760
+  timestamp: 2026-09-18T02:30:24.731435181Z
+  kind: !SetPriority
+    priority: High
+- id: 01a0b259-ce0b-7181-970a-3331744d1934
+  target_id: 01a0b23b-21ab-7cf3-9fbf-6cb73d60162f
+  author: aida
+  node_id: '1'
+  lamport: 5761
+  timestamp: 2026-09-18T02:30:25.035542724Z
+  kind: !AddTag
+    tag: current-exe
+- id: 01a0b259-cec3-7741-bf48-f15eef25ab70
+  target_id: 01a0b23b-21ab-7cf3-9fbf-6cb73d60162f
+  author: aida
+  node_id: '1'
+  lamport: 5762
+  timestamp: 2026-09-18T02:30:25.219756193Z
+  kind: !AddTag
+    tag: batch:exe-0917
+clock: 5762
 node_id: '1'
