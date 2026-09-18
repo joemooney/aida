@@ -17,10 +17,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-18T20:56:01.706488436Z
+modified_at: 2026-09-18T22:59:51.815220440Z
 req_type: Task
 tags:
 - batch:followups-0918f
+- coordination
+- drain-safe
+- follow-up:TASK-160
+- mailbox
+- observability
 relationships:
 - rel_type: !Custom implemented-by
   target_id: 01a0b640-4cc4-72e0-ab7f-5cb11c514414
