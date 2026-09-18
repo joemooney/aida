@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:01:11.631455641Z
-modified_at: 2026-09-18T15:47:02.462878817Z
+modified_at: 2026-09-18T17:00:06.886695279Z
 req_type: Task
 tags:
 - forge
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-09-18T15:01:48.340370608Z
   modified_at: 2026-09-18T15:01:48.340370608Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b576-0966-79b1-b541-8d3eba97d21d
+  author: joe
+  content: '[advisor 2026-09-18 09:58] Done on the mirror (MR !2), shelved ci-red because the mirror''s verify job hit BUG-1225 (node id > 32 chars on the runner hostname). #1932 (TASK-1254) fixed that on main (d03601f294). Path to merge: sync main → the gitlab mirror (multi-hub push; docs/multi-hub-sync.md), then re-drive from the MR on GitLab (`aida queue work MR-2 --from-pr --auto-complete --no-human=both` or the product seat''s launcher) so the verify job re-runs green and the standard reviewer files a verdict; that re-drive also exercises BUG-1228 (reviewer fetch refspec on GitLab) — if it tool-exits there, BUG-1228 is the blocker and merges first. Stays on the implementer queue as awaiting-merge (a drain refuses it as fresh work, which is correct).'
+  created_at: 2026-09-18T17:00:06.886695279Z
+  modified_at: 2026-09-18T17:00:06.886695279Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
@@ -42,8 +48,8 @@ implementation_info:
 failure_reason:
   phase: ci
   phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-2: failing: verify'
-  recovery_hint: 'CI failed on run <ID> — view it: `glab ci status`. Push fixups to the same branch: `aida queue work TASK-1269 --branch task-1269 --steal`'
+  kind: watchdog
+  detail: CI on PR-2 did not reach a terminal state in time (attempt 2/2)
+  recovery_hint: CI never reached a terminal state in the wait window — it may be queued or a runner is slow, CI is not red. Check progress with `glab ci status`, then re-run auto-complete once CI settles.
   shelved_by: advisor
-  shelved_at: 2026-09-18T15:47:02.462878817Z
+  shelved_at: 2026-09-18T15:05:42.149796671Z
