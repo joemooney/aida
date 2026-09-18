@@ -1,11 +1,12 @@
 - user_id: claude-product-1
   requirement_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
-  position: -1000
+  position: -2000
   added_by: claude-product-1
   note: |-
-    Reviewer (PR-1913) requested changes: BUG-1197: constrain_requester_intake leaves the add_requirement parent field intact. tool_add_requirement then calls add_relationship on that parent, so an AIDA_SESSION_ROLE=requester MCP client can mutate an existing spec's relationship graph, violating the acceptance requirement that it cannot change any spec's relationships. Reject parent (and add a regression test) for requester intake.
-    Summary: Requester MCP intake still permits relationship mutation through the parent argument.
-  added_at: 2026-09-18T04:15:30.243857957Z
+    Reviewer (PR-1913, round 2) requested changes: BUG-1197 requires mcp-serve to remain startable for guest/requester read access. At c005eea, stakeholder_cli_action defaults Command::McpServe to Write, so AIDA_SESSION_ROLE=requester cargo run -q -p aida-cli -- mcp-serve fails with the stakeholder refusal before the server starts. Classify McpServe as allowed/read and add a CLI-level regression test for both stakeholder roles.
+    Summary: MCP call-time persona enforcement is present, but stakeholder personas can no longer start mcp-serve.
+    Keep the round-1 fix (requester intake rejects parent) intact.
+  added_at: 2026-09-18T04:37:05.043627956Z
   for_role: implementer
 - user_id: claude-product-1
   requirement_id: 01a0b201-cc15-7560-ba57-dbcdb1573710
