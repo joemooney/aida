@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:23:24.751360127Z
-modified_at: 2026-09-18T16:56:34.348088324Z
+modified_at: 2026-09-18T16:56:45.426059484Z
 req_type: Bug
 tags:
 - aida:pr:auto-queue-review
@@ -19,3 +19,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T15:23:34.612503143Z
+comments:
+- id: 01a0b572-f672-7f41-a004-4b0f36045d58
+  author: joe
+  content: 'Completed 2026-09-18 09:55 by the driver-advisor: fixed in #1932 (TASK-1254) → main d03601f294 — try_auto_queue_pr_review resolves the review forge from the detected forge kind (review_forge_for_kind) instead of hard-coding GitHub; unit test. Trailer named TASK-1254 only, so the auto-bump missed this spec.'
+  created_at: 2026-09-18T16:56:45.426059484Z
+  modified_at: 2026-09-18T16:56:45.426059484Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
