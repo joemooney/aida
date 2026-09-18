@@ -56,6 +56,7 @@ echo "classes:      ${AIDA_INTAKE_DO_NOT_APPROVE_CLASSES:-}"   # never-approve t
 echo "on_apply:     ${AIDA_INTAKE_ON_APPLY:-queue}"    # queue = stop; drain = chain a burndown
 echo "risk:         ${AIDA_INTAKE_RISK:-medium}"        # the risk ceiling for the groom step
 echo "max_approvals:${AIDA_INTAKE_MAX_APPROVALS:-∞}"   # cap on how many drafts you may approve
+echo "trivial:      ${AIDA_INTAKE_TRIVIAL_PROPOSALS:-}"     # CSV advisory tag proposals
 ```
 
 `AIDA_INTAKE_CANDIDATES` is **your fence** — the only specs you may act on. The
@@ -112,6 +113,10 @@ between `drain` and `drive`, pick `drive` — the human keeps the merge. Carry a
 short reason per mode call ("guided: carries keystone tag") so a wrong
 classification is visible in review.
 
+For each ID in `AIDA_INTAKE_TRIVIAL_PROPOSALS`, include
+`lifecycle:trivial: accept` or `lifecycle:trivial: decline` in its proposal.
+This is a normal advisor disposition: do not write the tag in propose-mode.
+
 ### 3. Output the proposal (always — this is the reviewable artifact)
 
 Render a compact table, one row per spec: `SPEC-ID · disposition · mode ·
@@ -139,6 +144,10 @@ Only when `AIDA_INTAKE_APPLY=1`:
    park-for-human. **NEVER** approve a do-not-approve class or a
    `needs-human`/`strategic` spec (they are not in your fence; do not reach
    outside it).
+
+   For each accepted `lifecycle:trivial` proposal, and only under this
+   `--apply` path, run `aida edit <ID> --add-tag lifecycle:trivial`. Declined
+   proposals leave the spec unchanged.
 
 2. **Rejections** — for each spec you proposed reject:
    ```bash

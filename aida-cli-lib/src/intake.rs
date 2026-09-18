@@ -241,6 +241,8 @@ pub struct IntakeSpec {
     pub req_type: String,
     /// The spec's tags (case-insensitive checks).
     pub tags: Vec<String>,
+    /// True when every predicted touched path is documentation or a template.
+    pub trivial_footprint: bool,
     /// Whether the spec is in the operator's DEFERRED tier (STORY-584): either
     /// the deferred view-flag is set OR it carries a legacy `deferred:*` parking
     /// tag. Deferred specs are fenced out — re-blessing the operator's deferral
@@ -255,6 +257,37 @@ pub struct IntakeSpec {
     /// spec's disposition is legible ("risk above ceiling (unknown) —
     /// under-specified …") rather than an opaque chip. trace:BUG-595 | ai:claude
     pub risk_reason: String,
+}
+
+// trace:TASK-1266 | ai:codex
+/// A normal advisor disposition suggestion, not an automatic mutation. The
+/// advisor may accept or decline it; only an `aida groom --apply` run may write
+/// the tag.
+pub fn proposes_trivial_lifecycle(spec: &IntakeSpec) -> bool {
+    spec.trivial_footprint
+        || spec.tags.iter().any(|tag| {
+            matches!(
+                tag.trim().to_ascii_lowercase().as_str(),
+                "docs-only" | "templates-only" | "papercut" | "severity:cosmetic"
+            )
+        })
+}
+
+pub fn predicted_footprint_is_trivial(paths: &std::collections::BTreeSet<String>) -> bool {
+    !paths.is_empty()
+        && paths.iter().all(|path| {
+            let normalized = path.replace('\\', "/").to_ascii_lowercase();
+            normalized.starts_with("docs/")
+                || normalized.contains("/docs/")
+                || normalized.contains("/templates/")
+                || normalized.starts_with("templates/")
+        })
+}
+
+pub fn trivial_lifecycle_proposal_line(id: &str) -> String {
+    format!(
+        "{id} · propose lifecycle:trivial (advisor may accept or decline; applied only with --apply)"
+    )
 }
 
 /// The canonical "is this spec in the deferred tier?" predicate, shared so the
@@ -595,10 +628,33 @@ mod tests {
             id: id.to_string(),
             req_type: ty.to_string(),
             tags: tag_vec,
+            trivial_footprint: false,
             deferred,
             risk,
             risk_reason: format!("{} (test)", risk.token()),
         }
+    }
+
+    // trace:TASK-1266 | ai:codex
+    #[test]
+    fn docs_only_papercut_gets_trivial_lifecycle_proposal() {
+        let candidate = spec("TASK-1", "task", &["docs-only", "papercut"], RiskLevel::Low);
+        assert!(proposes_trivial_lifecycle(&candidate));
+        assert_eq!(
+            trivial_lifecycle_proposal_line(&candidate.id),
+            "TASK-1 · propose lifecycle:trivial (advisor may accept or decline; applied only with --apply)"
+        );
+    }
+
+    #[test]
+    fn docs_or_templates_only_predicted_footprint_is_trivial() {
+        let paths = [
+            "docs/guide.md".to_string(),
+            "aida-core/templates/x.md".to_string(),
+        ]
+        .into_iter()
+        .collect();
+        assert!(predicted_footprint_is_trivial(&paths));
     }
 
     #[test]
