@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:48:11.546163776Z
-modified_at: 2026-09-18T01:02:22.373737722Z
+modified_at: 2026-09-18T01:03:54.391361344Z
 req_type: Bug
 tags:
 - drain
@@ -35,6 +35,21 @@ tags:
 - queue
 - repro
 - reviewer
+comments:
+- id: 01a0b20a-9a17-7992-a1df-329382fe90a2
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1902 [AI:claude] fix(queue): review-story lookup uses the role-fallback listing and distinguishes lookup failure from no-story (BUG-1195)
+    verdict: APPROVE + merged (drive mode)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (author = product/proxy seat; reviewer = this advisor; verdict .aida/review-verdicts/PR-1902.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, MERGEABLE, no drain running
+    reasoning: root cause matches the BUG-1193 evidence — the guard's lookup used the per-user queue_list while the plan-builder uses queue_list_with_role_fallback, so the sibling-session-filed story under joe was invisible to role:implementer; read errors were also collapsed to false. Fix routes the lookup through the role fallback, types the outcome (Found/NoEntries/NoTitleMatch/NotPickable/Failed), keeps the PR scope on Failed so a read failure never feeds the envelope guard, and names the failing check in the bail. Storage-backed test reproduces the joe-vs-role:implementer shape; source-shape guard has no newline needle.
+    merged: 2026-09-17 18:06 -07:00 → main 70c2798466; spec auto-bumped Completed. Drain binary rebuilt before the next batch (followups-0917).
+  created_at: 2026-09-18T01:03:54.391361344Z
+  modified_at: 2026-09-18T01:03:54.391361344Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b209-329f-7c20-8606-457c8775cde7
   author: aida-auto-bump
