@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:56:47.251966195Z
+modified_at: 2026-09-18T11:56:48.209720782Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -189,6 +189,17 @@ comments:
     confidence: 0.90
   created_at: 2026-09-18T11:56:47.251966195Z
   modified_at: 2026-09-18T11:56:47.251966195Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b460-58d1-7bc0-a9ee-9cfff6389ad2
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: When identical findings trigger the loop guard, the duplicate findings block is not appended again to the requirement comments; the spec remains NeedsAttention while the advisor finding and notified brief are created.
+    rationale: The escalation outcome is already required, but suppression of the duplicate durable comment is an additional observable persistence decision needed to reproduce the resulting requirement history and future round calculations.
+    source: file:bug-1213-drain-01a0b45c-efd0-7c81-b424-5ad48d2d0239.json
+    confidence: 0.86
+  created_at: 2026-09-18T11:56:48.209720782Z
+  modified_at: 2026-09-18T11:56:48.209720782Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b45e-de0b-7211-82b6-2e3d49266bf3
