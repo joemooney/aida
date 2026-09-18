@@ -68,3 +68,11 @@
   added_at: 2026-09-18T06:32:14.341996131Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b368-b826-71e3-8488-6c28257ff97e
+  position: 13000
+  added_by: role:implementer
+  note: ignore ac<6-hex> hash labels in next_ac_label; unit cases; rename BUG-1209.AC512631 → AC1
+  added_at: 2026-09-18T07:26:33.840632645Z
+  for_role: implementer
+  added_by_machine: imac
