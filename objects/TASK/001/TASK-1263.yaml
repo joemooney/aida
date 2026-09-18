@@ -13,12 +13,12 @@ description: |-
   - A unit test with a docs-only diff fixture and the four TASK-1260 candidate texts: all four are skipped with the new reason; the same texts on a code diff are kept.
   - The ledger records the skip reason; the drain still runs the step on docs PRs (advisory), it just proposes nothing.
   - docs/autonomous-drain.md [harvest] section documents docs_only_mode.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T03:47:28.286274854Z
-modified_at: 2026-09-18T05:42:26.178433951Z
+modified_at: 2026-09-18T05:48:03.730122890Z
 req_type: Task
 tags:
 - anti-slop
@@ -30,3 +30,7 @@ tags:
 - harvest
 - proxy-groomed
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T05:48:03.730122890Z
+  implemented_by: joe
