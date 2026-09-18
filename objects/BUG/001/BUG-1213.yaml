@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:55:11.244300634Z
+modified_at: 2026-09-18T11:56:24.228834050Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -154,6 +154,20 @@ comments:
   created_at: 2026-09-18T11:53:43.558122457Z
   modified_at: 2026-09-18T11:53:43.558122457Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b45f-fb24-7ba2-911a-f730968049bb
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1924 [AI:codex] fix(drain): stop unchanged rework loops (BUG-1213) — four rounds
+    verdict: APPROVE + merged (drive-mode advisor gate)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (round 1 = codex headless; rounds 2-4 = product/proxy seat fixups pushed by hand after codex no-op'd on its own spec; drain reviewer APPROVED round 4 at .aida/review-verdicts/PR-1924.json — independent of both authors; advisor gate verdict PR-1924-advisor.json)
+    gates: Build (ubuntu-latest) SUCCESS; merge-hold-gate red-as-the-hold, released at merge; MERGEABLE; no drain running
+    reasoning: (1) typed, shelvable, non-transient FailureKind::ReworkNoOp; (2) PhaseDriver::begin_rework_guard snapshots the PR head before a rework phase 1 and rework_no_op_failure shelves when it is unchanged after PrOpened (punts never reach it) — mock pins shelve-after-phase-1, never CI; (3) rework pickup leads with "ROUND N — ITEMS STILL OPEN (AUTHORITATIVE TASK)" where N = 1 + recorded findings blocks; (4) loop guard escalates (major finding + advisor brief --notify, no third requeue) only when this round's findings equal the IMMEDIATELY PREVIOUS block (A→B→A requeues); escalation subprocess via aida_exe_path(). History: r1 codex; r2 codex no-op'd on this very spec (the acceptance test for item 1) → proxy fixed the raw current_exe() + prompt test; r3 proxy fixed the A→B→A false positive; r4 proxy derived the real round. Remaining design item (content-based unchanged-head predicate) = TASK-1265, queued drain-safe.
+    merged: 2026-09-18 04:55 -07:00 → main 9171d728ec; spec auto-bumped Completed
+  created_at: 2026-09-18T11:56:24.228834050Z
+  modified_at: 2026-09-18T11:56:24.228834050Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b45e-de0b-7211-82b6-2e3d49266bf3
   author: aida-auto-bump
