@@ -29,6 +29,11 @@
 //
 // trace:BUG-775 | ai:claude
 
+// BUG-1213: every rework findings block starts with this, so the recurrence
+/// guard can find the last recorded block by prefix.
+// trace:BUG-1213 | ai:claude
+pub(crate) const FINDINGS_BLOCK_PREFIX: &str = "REVIEW FINDINGS TO ADDRESS (";
+
 use std::path::{Path, PathBuf};
 
 /// The verdict word, normalized from whatever the reviewer/skill wrote.
@@ -171,7 +176,8 @@ pub fn rework_findings_comment(
         return None;
     }
     let mut out = format!(
-        "REVIEW FINDINGS TO ADDRESS ({}):\nVerdict: {}",
+        "{}{}):\nVerdict: {}",
+        FINDINGS_BLOCK_PREFIX,
         review_ref,
         verdict.kind.label()
     );

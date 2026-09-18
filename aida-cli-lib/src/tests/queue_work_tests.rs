@@ -8,6 +8,98 @@ use super::*;
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 
+/// BUG-1213 (round 2): the loop guard fires only when the IMMEDIATELY previous
+/// findings block equals the new one. Two consecutive identical rounds (A, A)
+/// recur; A → B → A does not — the last recorded block is B, so a third round
+/// with A is progress, not a loop.
+// trace:BUG-1213 | ai:claude
+#[test]
+fn findings_recur_only_when_the_last_block_is_identical() {
+    use crate::queue_cmd::findings_recur_consecutively;
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let a = format!("{prefix}PR #7):\nVerdict: RequestChanges\n- fix A");
+    let b = format!("{prefix}PR #7):\nVerdict: RequestChanges\n- fix B");
+    let base = chrono::Utc::now();
+    let mk = |content: &str, secs: i64| {
+        let mut c = aida_core::Comment::new("reviewer".to_string(), content.to_string());
+        c.created_at = base + chrono::Duration::seconds(secs);
+        c
+    };
+    let chatter = mk("[aida:proxy-note] unrelated comment", 5);
+    assert!(!findings_recur_consecutively(&[], &a), "no history");
+    assert!(
+        findings_recur_consecutively(&[mk(&a, 1)], &a),
+        "A, A recurs"
+    );
+    assert!(
+        findings_recur_consecutively(&[mk(&a, 1), chatter.clone()], &a),
+        "non-findings comments in between are ignored"
+    );
+    assert!(
+        !findings_recur_consecutively(&[mk(&a, 1), mk(&b, 2)], &a),
+        "A, B, A: the last block is B — not a loop"
+    );
+    assert!(
+        findings_recur_consecutively(&[mk(&a, 1), mk(&b, 2), mk(&a, 3)], &a),
+        "…but A, B, A, A is"
+    );
+    // Order is by comment time, not slice position.
+    assert!(!findings_recur_consecutively(&[mk(&a, 9), mk(&b, 1)], &b));
+}
+
+/// BUG-1213 (round 3): the production pickup derives the round from the
+/// spec's recorded findings blocks — a later re-drive says its ACTUAL round,
+/// not a constant ROUND 2.
+// trace:BUG-1213 | ai:claude
+#[test]
+fn rework_pickup_round_is_derived_from_recorded_findings_blocks() {
+    use crate::queue_cmd::{derive_rework_queue_work_prompt, rework_round_from_comments};
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let block = |n: usize| format!("{prefix}PR #9):\nVerdict: RequestChanges\n- item {n}");
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+    // No findings recorded yet (first rework about to be queued) → round 2.
+    assert_eq!(rework_round_from_comments(&[]), 2);
+    // One recorded block → the pickup after it is round 2; two → round 3.
+    assert_eq!(rework_round_from_comments(&[mk(block(1))]), 2);
+    let two = vec![
+        mk(block(1)),
+        mk("[aida:proxy-note] chatter".into()),
+        mk(block(2)),
+    ];
+    assert_eq!(rework_round_from_comments(&two), 3);
+    let e = resolved("BUG-1213", entry(Uuid::now_v7(), Some("implementer"), None));
+    let plan = QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![e],
+        scope: "BUG-1213".into(),
+        review_target: None,
+        anchor_display: "BUG-1213".into(),
+        anchor_title: "title".into(),
+    };
+    let findings = block(2);
+    // Exercise the history-aware production assembly path used by
+    // `handle_queue_work`, rather than injecting a round into the formatter.
+    let prompt =
+        derive_rework_queue_work_prompt(&plan, "implementer", false, false, Some(&findings), &two);
+    assert!(prompt.starts_with("ROUND 3 — ITEMS STILL OPEN"), "{prompt}");
+    assert!(prompt.ends_with("/aida-pickup BUG-1213"), "{prompt}");
+}
+
+// trace:BUG-1213 | ai:codex
+#[test]
+fn rework_prompt_leads_with_round_and_authoritative_open_items() {
+    let prompt = rework_pickup_prompt(
+        "REVIEW FINDINGS TO ADDRESS:\n- add real CLI/MCP parity coverage",
+        "/aida-pickup BUG-1213",
+        4,
+    );
+    assert!(prompt.starts_with("ROUND 4 — ITEMS STILL OPEN (AUTHORITATIVE TASK):"));
+    assert!(
+        prompt.contains("previous round's commit is already on the PR branch and does not count")
+    );
+    assert!(prompt.ends_with("/aida-pickup BUG-1213"));
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
@@ -841,7 +933,15 @@ fn prompt_implementer_item_leads_with_review_findings() {
     };
     let findings = "REVIEW FINDINGS TO ADDRESS (PR #1637):\nFindings:\n1. fix the prompt";
     let prompt = derive_queue_work_prompt(&plan, "implementer", false, false, Some(findings));
-    assert!(prompt.starts_with(findings), "{prompt}");
+    // BUG-1213: the findings now sit under the round header ("ROUND N — ITEMS
+    // STILL OPEN"), but they still lead the prompt and precede the pickup.
+    assert!(prompt.starts_with("ROUND "), "{prompt}");
+    let findings_at = prompt.find(findings).expect("findings present");
+    let pickup_at = prompt.find("/aida-pickup").expect("pickup present");
+    assert!(
+        findings_at < pickup_at,
+        "findings must precede the pickup: {prompt}"
+    );
     assert!(prompt.ends_with("/aida-pickup BUG-814"), "{prompt}");
 }
 

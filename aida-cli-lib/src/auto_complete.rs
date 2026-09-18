@@ -424,6 +424,11 @@ pub(crate) enum FailureKind {
     /// retried (a retry would review reviewer-authored commits).
     // trace:BUG-1186 | ai:claude
     ReviewerWrote,
+    /// BUG-1213: a rework implementer exited successfully without moving the
+    /// already-open PR head. The previous round's commit cannot satisfy the
+    /// current review delta; this is a terminal attention item, not retryable.
+    // trace:BUG-1213 | ai:codex
+    ReworkNoOp,
     /// TASK-136: phase 1 ended *inconclusively* — the orchestrator could not
     /// confirm or deny a PR (a transient GH-API outage) even after the bounded
     /// `gh_verify_backoff_schedule` retry. In a *batch* drain this is shelved
@@ -505,6 +510,7 @@ impl FailureKind {
                 | Self::VerdictReject
                 // trace:BUG-1186 | ai:claude
                 | Self::ReviewerWrote
+                | Self::ReworkNoOp
                 | Self::PrVerificationInconclusive
                 | Self::Watchdog
                 | Self::CacheLocked
@@ -526,6 +532,7 @@ impl FailureKind {
             Self::VerdictRequestChanges => "verdict:request-changes",
             Self::VerdictReject => "verdict:reject",
             Self::ReviewerWrote => "reviewer-wrote",
+            Self::ReworkNoOp => "rework-no-op",
             Self::CiRed => "ci-red",
             Self::NoVerdict => "no-verdict",
             Self::NoPr => "no-pr",
@@ -1219,6 +1226,14 @@ impl OrchestrationResult {
 /// and shells out to `gh` / `cargo`.
 /// trace:STORY-246 | ai:claude
 pub(crate) trait PhaseDriver {
+    /// BUG-1213: snapshot any existing rework PR head before phase 1. Drivers
+    /// without forge/store access remain no-ops.
+    fn begin_rework_guard(&mut self) {}
+    /// After a successful implementer outcome, fail when a rework round left
+    /// the snapshotted PR head unchanged. A punt never reaches this hook.
+    fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
+        None
+    }
     /// Phase 1 — run the implementer Claude session. Returns
     /// [`ImplementerOutcome::PrOpened`] once a PR is verified, or
     /// [`ImplementerOutcome::Punted`] when a headless implementer hit a
@@ -1684,6 +1699,11 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
         (Phase::Implementer, FailureKind::MissingTool) => {
             forge_cli_missing_hint(ctx.forge, "track the PR", "re-run")
         }
+        (Phase::Implementer, FailureKind::ReworkNoOp) => format!(
+            "The rework round produced no new PR commit. Inspect the unchanged head and the \
+             quoted open findings with `aida why {spec}`; do not retry unchanged work. Either \
+             push a new fixup commit or explicitly punt the disputed finding for advisor triage."
+        ),
         (Phase::Implementer, _) => {
             let resume = ctx
                 .implementer_session
@@ -3339,6 +3359,7 @@ pub(crate) fn orchestrate_with_resume(
         // continues) or escalates it (the run ends per `escalate_mode`).
         // trace:STORY-276, STORY-306 | ai:claude
         emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        driver.begin_rework_guard();
         let phase_start = Instant::now();
         let mut retries_used = 0usize;
         loop {
@@ -3408,6 +3429,17 @@ pub(crate) fn orchestrate_with_resume(
                 }
                 Ok(ImplementerOutcome::PrOpened) => {
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
+                    if let Some(f) = driver.rework_no_op_failure() {
+                        return resolve_phase_failure(
+                            driver,
+                            Phase::Implementer,
+                            spec,
+                            json,
+                            &start,
+                            &f,
+                            durations,
+                        );
+                    }
                     emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                 }
                 // BUG-709: the implementer already merged its own PR (it ran the
@@ -5714,6 +5746,9 @@ mod tests {
         /// orchestrator must continue from this PR-only re-entry phase instead
         /// of retrying phase 1 or shelving.
         phase1_pr_recovery: Option<Phase>,
+        /// BUG-1213: successful phase 1 that nevertheless left the rework PR
+        /// at its prior head.
+        rework_no_op: bool,
     }
 
     impl MockPhaseDriver {
@@ -5754,6 +5789,7 @@ mod tests {
                 recover_review_pr: None,
                 phase1_pr_recovery: None,
                 harvest_gate_calls: 0,
+                rework_no_op: false,
             }
         }
 
@@ -5970,6 +6006,14 @@ mod tests {
     }
 
     impl PhaseDriver for MockPhaseDriver {
+        fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
+            self.rework_no_op.then(|| {
+                PhaseFailure::of(
+                    FailureKind::ReworkNoOp,
+                    "rework head abc123 unchanged; open item: fix parity",
+                )
+            })
+        }
         fn run_harvest_gate(&mut self) {
             self.harvest_gate_calls += 1;
         }
@@ -8983,6 +9027,7 @@ mod tests {
             "verdict:request-changes",
             "verdict:reject",
             "reviewer-wrote",
+            "rework-no-op",
             "ci-red",
             "tool-exit",
             "no-verdict",
@@ -9004,6 +9049,7 @@ mod tests {
             FailureKind::VerdictRequestChanges,
             FailureKind::VerdictReject,
             FailureKind::ReviewerWrote,
+            FailureKind::ReworkNoOp,
             FailureKind::PrVerificationInconclusive,
             FailureKind::Watchdog,
             FailureKind::CacheLocked,
@@ -9036,6 +9082,38 @@ mod tests {
             hint.contains("origin/bug-1177-x") && hint.contains("PR-1882"),
             "{hint}"
         );
+    }
+
+    // trace:BUG-1213 | ai:codex
+    #[test]
+    fn rework_no_op_is_shelvable_typed_and_not_transient() {
+        assert!(FailureKind::ReworkNoOp.is_shelvable());
+        assert_eq!(FailureKind::ReworkNoOp.cause_slug(), "rework-no-op");
+        assert!(!is_transient_retry_cause("rework-no-op"));
+    }
+
+    // trace:BUG-1213 | ai:codex
+    #[test]
+    fn unchanged_rework_head_shelves_after_phase1_and_never_advances_to_ci() {
+        let mut driver = MockPhaseDriver {
+            rework_no_op: true,
+            shelve_succeeds: true,
+            ..MockPhaseDriver::base()
+        };
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1213",
+            AutoCompleteVariant::Full,
+            false,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert_eq!(
+            result.failure.as_ref().map(|f| f.kind),
+            Some(FailureKind::ReworkNoOp)
+        );
+        assert!(result.shelved_reason.is_some());
+        assert_eq!(driver.calls, vec![Phase::Implementer]);
     }
 
     // TASK-1244: merge-phase lease contention gets its own recovery hint.

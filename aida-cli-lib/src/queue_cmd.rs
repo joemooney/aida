@@ -6428,17 +6428,72 @@ pub(crate) fn handle_queue_rework(
         if let Some(block) = rework_findings_block_for_spec(&root, &display_id, &spec_id) {
             let author = get_default_author();
             let comment = aida_core::Comment::new(author, block.clone());
-            let mut added = false;
+            // BUG-1213 (round 2): recurrence means the IMMEDIATELY PREVIOUS
+            // round's findings equal this round's — not "an identical block
+            // exists somewhere in history". A → B → A is progress, not a loop.
+            // trace:BUG-1213 | ai:claude
+            let mut recurred = false;
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    if !r.comments.iter().any(|c| c.content == block) {
+                    recurred = findings_recur_consecutively(&r.comments, &block);
+                    if !recurred {
                         r.add_comment(comment);
-                        added = true;
                     }
                 }
             })?;
-            if added {
+            if !recurred {
                 println!("  {} review findings captured as comment", "·".dimmed());
+            } else if current_status == RequirementStatus::NeedsAttention {
+                // BUG-1213: the same blocking findings produced two consecutive
+                // request-changes shelves. A third blind requeue is a loop, so
+                // return the spec to NeedsAttention and route an explicit
+                // advisor finding + brief instead.
+                storage.update_atomically(|s| {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                        r.status = RequirementStatus::NeedsAttention;
+                        r.modified_at = chrono::Utc::now();
+                    }
+                })?;
+                let note = format!(
+                    "Identical reviewer findings recurred twice for {display_id}; do not \
+                     requeue a third implementer round until an advisor chooses a different \
+                     implementer/seat or resolves the dispute.\n\n{block}"
+                );
+                // BUG-1199: every in-process `aida` subprocess resolves through the
+                // once-per-process resolver, never a raw executable lookup.
+                let exe = crate::aida_exe_path();
+                let finding_title = format!("Repeated unchanged review findings: {display_id}");
+                let finding = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args([
+                        "findings",
+                        "add",
+                        "--title",
+                        &finding_title,
+                        "--note",
+                        &note,
+                        "--severity",
+                        "major",
+                        "--linked-specs",
+                        &display_id,
+                        "--tags",
+                        "loop-guard,review-recurrence",
+                    ])
+                    .status()?;
+                anyhow::ensure!(finding.success(), "could not file repeated-review finding");
+                let brief = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
+                    .status()?;
+                anyhow::ensure!(
+                    brief.success(),
+                    "could not write repeated-review advisor brief"
+                );
+                println!(
+                    "  {} identical review findings recurred — escalated to advisor; not re-queued",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                );
+                return Ok(());
             }
         }
     }
@@ -7929,6 +7984,21 @@ pub(crate) fn derive_queue_work_prompt(
     guided: bool,
     review_findings: Option<&str>,
 ) -> String {
+    // Tests and non-rework callers: the first rework is round 2 by definition.
+    derive_queue_work_prompt_with_round(plan, role, plan_only, guided, review_findings, 2)
+}
+
+// BUG-1213: the real re-drive round is derived from the spec's durable
+/// history (one recorded findings block per rework) by the production caller.
+// trace:BUG-1213 | ai:claude
+pub(crate) fn derive_queue_work_prompt_with_round(
+    plan: &QueueWorkPlan,
+    role: &str,
+    plan_only: bool,
+    guided: bool,
+    review_findings: Option<&str>,
+    rework_round: usize,
+) -> String {
     let role_lower = role.to_ascii_lowercase();
     // Agent gates wear a custom role but must still produce a review verdict
     // for the orchestrator, so they reuse the review skill with a tighter
@@ -7971,7 +8041,7 @@ pub(crate) fn derive_queue_work_prompt(
     if plan.mode == QueueWorkMode::Item {
         let pickup = format!("/aida-pickup {}", plan.anchor_display);
         if let Some(findings) = review_findings {
-            return format!("{findings}\n\n{pickup}");
+            return rework_pickup_prompt(findings, &pickup, rework_round);
         }
         return pickup;
     }
@@ -7979,9 +8049,75 @@ pub(crate) fn derive_queue_work_prompt(
     // pre-flight; pass --auto-first so the skill skips its own confirm.
     let pickup = "/aida-pickup --auto-first".to_string();
     if let Some(findings) = review_findings {
-        return format!("{findings}\n\n{pickup}");
+        return rework_pickup_prompt(findings, &pickup, rework_round);
     }
     pickup
+}
+
+// BUG-1213: keep durable-history round derivation on the same path used to
+/// assemble the production pickup prompt, so callers cannot accidentally
+/// reintroduce a constant round.
+// trace:BUG-1213 | ai:codex
+pub(crate) fn derive_rework_queue_work_prompt(
+    plan: &QueueWorkPlan,
+    role: &str,
+    plan_only: bool,
+    guided: bool,
+    review_findings: Option<&str>,
+    comments: &[aida_core::Comment],
+) -> String {
+    derive_queue_work_prompt_with_round(
+        plan,
+        role,
+        plan_only,
+        guided,
+        review_findings,
+        rework_round_from_comments(comments),
+    )
+}
+
+// BUG-1213: the review-findings block that was recorded LAST on the spec
+/// (by comment time), if any.
+// trace:BUG-1213 | ai:claude
+pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&str> {
+    comments
+        .iter()
+        .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
+        .max_by_key(|c| c.created_at)
+        .map(|c| c.content.as_str())
+}
+
+// BUG-1213: the rework round a pickup is entering: the original
+/// implementation is round 1, and every recorded findings block (one per
+/// `queue rework`) opens the next round — so N recorded blocks ⇒ round N+1.
+// trace:BUG-1213 | ai:claude
+pub(crate) fn rework_round_from_comments(comments: &[aida_core::Comment]) -> usize {
+    let recorded = comments
+        .iter()
+        .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
+        .count();
+    recorded.max(1) + 1
+}
+
+// BUG-1213: do this round's findings repeat the immediately previous round's
+/// verbatim? Only then is a further blind requeue a loop. A → B → A returns
+/// false (the last recorded block is B).
+// trace:BUG-1213 | ai:claude
+pub(crate) fn findings_recur_consecutively(comments: &[aida_core::Comment], block: &str) -> bool {
+    latest_findings_block(comments).is_some_and(|last| last.trim() == block.trim())
+}
+
+/// BUG-1213: make the current review delta, rather than the original spec
+/// description or an earlier commit, the first and authoritative instruction
+/// a rework implementer sees.
+// trace:BUG-1213 | ai:codex
+pub(crate) fn rework_pickup_prompt(findings: &str, pickup: &str, round: usize) -> String {
+    format!(
+        "ROUND {round} — ITEMS STILL OPEN (AUTHORITATIVE TASK):\n{findings}\n\n\
+         The previous round's commit is already on the PR branch and does not count for this \
+         round. Produce a new commit addressing every item below, or punt explicitly naming \
+         the finding you dispute.\n\n{pickup}"
+    )
 }
 
 fn review_ref_from_verdict_filename(path: &std::path::Path) -> String {
@@ -8518,8 +8654,37 @@ pub(crate) fn handle_queue_work(
             })
         })
         .flatten();
-    let mut prompt =
-        derive_queue_work_prompt(&plan, &role, plan_only, guided, review_findings.as_deref());
+    // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
+    // the spec's recorded findings blocks (one per `queue rework`), not a
+    // constant. trace:BUG-1213 | ai:claude
+    let rework_comments = if review_findings.is_some() {
+        let spec_id = plan
+            .entries
+            .first()
+            .map(|entry| entry.spec_id.as_str())
+            .unwrap_or(plan.anchor_display.as_str());
+        storage
+            .load()
+            .ok()
+            .and_then(|store| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| spec_matches(r, spec_id))
+                    .map(|r| r.comments.clone())
+            })
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let mut prompt = derive_rework_queue_work_prompt(
+        &plan,
+        &role,
+        plan_only,
+        guided,
+        review_findings.as_deref(),
+        &rework_comments,
+    );
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {
