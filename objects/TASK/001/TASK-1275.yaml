@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:00.871774996Z
-modified_at: 2026-09-18T19:16:01.944497909Z
+modified_at: 2026-09-18T19:16:03.144504935Z
 req_type: Task
 tags:
 - discipline
@@ -29,4 +29,11 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-18T19:10:09.292574152Z
+comments:
+- id: 01a0b5f2-7dc8-7d33-8bd3-3c3ee33e6bea
+  author: joe
+  content: '[advisor] Rejected as filed — folded into TASK-1276 (product seat, same day), which carries the better rule: the split is by deliverable, not type, and the advisor''s execution_mode is the authority. My surviving refinements (mode overrides human-only in both directions; a spike with a BlockedBy dependent gets drive, not drain; discipline paragraph) were appended to TASK-1276''s acceptance.'
+  created_at: 2026-09-18T19:16:03.144504935Z
+  modified_at: 2026-09-18T19:16:03.144504935Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
