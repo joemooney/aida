@@ -8,10 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:13:42.736978554Z
-modified_at: 2026-09-18T18:20:27.666971257Z
+modified_at: 2026-09-18T18:41:24.120074337Z
 req_type: Bug
 tags:
-- aida:pr:auto-queue-review
-- papercut
-- review
+- batch:followups-0918d
 execution_mode: drain
