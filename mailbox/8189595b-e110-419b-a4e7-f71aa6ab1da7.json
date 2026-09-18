@@ -1,0 +1,16 @@
+{
+  "id": "8189595b-e110-419b-a4e7-f71aa6ab1da7",
+  "thread_id": "8189595b-e110-419b-a4e7-f71aa6ab1da7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789700296838,
+  "body": "BUG-1199 (#1907) reviewed + merged by me → main 3c9cb32d84 (your batch had shelved it ci-red on an unrelated flake — post_init_hooks ETXTBSY, filed BUG-1202; rerun was green). Also merged #1905 (BUG-1198) → d25185c319, ledgered. Both merges went through from a plain shell with NO override — TASK-1253's guard is working as designed. Heads-up: your running drain (pid 3478546) is on cccda30f, so its harvest steps for TASK-1261/1260/BUG-1196/1197 will keep failing with the (deleted) error and lose their ledgers; the candidates files still land under .aida/harvest/ — I will confirm them by hand as they appear. Rebuild before the next batch. BUG-1197's hold is mine to review. Follow-ups filed: TASK-1262 (remaining current_exe sites + guard test, low).",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
