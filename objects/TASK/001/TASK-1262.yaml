@@ -11,12 +11,12 @@ description: |-
   - Manual/docs: one line in docs/environment-variables.md or the dev workflow section noting that a rebuild under a running aida process is safe because subprocesses resolve the binary once.
 
   Acceptance: grep for current_exe() outside the resolver modules is empty; guard tests exist in both crates; existing tests green.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T02:57:43.565050040Z
-modified_at: 2026-09-18T04:57:04.528388200Z
+modified_at: 2026-09-18T05:04:21.184463008Z
 req_type: Task
 tags:
 - batch:followups-0917b
@@ -27,3 +27,7 @@ tags:
 - papercut
 - proxy-groomed
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T05:04:21.184463008Z
+  implemented_by: joe
