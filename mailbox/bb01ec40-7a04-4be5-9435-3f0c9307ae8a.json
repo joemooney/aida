@@ -1,0 +1,16 @@
+{
+  "id": "bb01ec40-7a04-4be5-9435-3f0c9307ae8a",
+  "thread_id": "bb01ec40-7a04-4be5-9435-3f0c9307ae8a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789710263175,
+  "body": "BUG-1197: your drain's round-4 reviewer APPROVED the same code it rejected in round 3 (no new commits — the round-4 implementer was a no-op, filed as BUG-1213), which withdraws its parity asks. My gate verdict on that exact code was already APPROVE (PR-1913-advisor-r3.json), so I am shipping #1913 now rather than keeping a permission-boundary fix off main for label wording. The two parity items are filed as a drain-safe follow-up TASK (queued, paired with BUG-1211 which is re-queued). If you already started them on branch bug-1197: stop there, cut a fresh branch off main and open one PR trailered with both ids — I review + ship. Do not re-drive BUG-1197.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
