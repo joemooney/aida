@@ -660,6 +660,10 @@ pub fn new_session(
         .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "-".to_string());
+    // Persona sessions receive the same single-source capability envelope as
+    // `aida agent new`; ordinary seats retain their normal empty first prompt.
+    // trace:TASK-1261 | ai:codex
+    let persona_guidance = crate::queue_cmd::stakeholder_persona_guidance(&role);
 
     let title = match title {
         Some(t) if !t.trim().is_empty() => t,
@@ -707,7 +711,7 @@ pub fn new_session(
     run_claude_session(
         permission_mode,
         display_name.as_deref(),
-        None,
+        persona_guidance,
         None,
         contained,
         None,

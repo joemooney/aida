@@ -2106,6 +2106,49 @@ fn role_guidance_for_integrator_is_first_class() {
 }
 
 #[test]
+fn stakeholder_personas_get_shared_launch_guidance_but_real_roles_do_not() {
+    let guest = default_role_guidance("guest");
+    assert!(
+        guest.contains("least-privilege stakeholder persona"),
+        "{guest}"
+    );
+    assert!(guest.contains("aida digest"), "{guest}");
+    assert!(!guest.contains("No stored role file was found"), "{guest}");
+
+    let requester = default_role_guidance("requester");
+    assert!(requester.contains("change-request|bug|user"), "{requester}");
+    assert!(requester.contains("intake:requester"), "{requester}");
+    assert!(
+        requester.contains("until an advisor approves"),
+        "{requester}"
+    );
+
+    assert!(crate::queue_cmd::stakeholder_persona_guidance("implementer").is_none());
+    assert!(default_role_guidance("implementer").contains("You are implementing"));
+}
+
+#[test]
+fn stakeholder_agent_launch_does_not_create_a_spec_lease() {
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+
+    let plan = prepare_agent_launch(
+        &project,
+        Some("requester".to_string()),
+        Some("TASK-999".to_string()),
+        "claude",
+        Some("requester-test".to_string()),
+    )
+    .unwrap();
+
+    assert!(plan.lease_id.is_none(), "persona must not acquire a lease");
+    assert!(plan.current_spec.is_none(), "persona must not own the spec");
+    assert_eq!(plan.launch_cwd, project);
+    assert!(list_leases(&plan.project_root).is_empty());
+}
+
+#[test]
 fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
     // STORY-619: even with no unread mail, the launch context must name the
     // inbox command + poll cadence so a non-Claude vendor (which has no
