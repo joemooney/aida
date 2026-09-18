@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:12:30.215313860Z
+modified_at: 2026-09-18T04:15:28.257482655Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -85,6 +85,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T04:12:29.855642879Z
   modified_at: 2026-09-18T04:12:29.855642879Z
+- id: 01a0b2b9-fb03-7a33-ac17-1b7a865d835e
+  author: joe
+  content: |-
+    Reviewer (PR-1913) requested changes: BUG-1197: constrain_requester_intake leaves the add_requirement parent field intact. tool_add_requirement then calls add_relationship on that parent, so an AIDA_SESSION_ROLE=requester MCP client can mutate an existing spec's relationship graph, violating the acceptance requirement that it cannot change any spec's relationships. Reject parent (and add a regression test) for requester intake.
+    Summary: Requester MCP intake still permits relationship mutation through the parent argument.
+  created_at: 2026-09-18T04:15:28.003347995Z
+  modified_at: 2026-09-18T04:15:28.003347995Z
 execution_mode: drive
 implementation_info:
   implemented: true
