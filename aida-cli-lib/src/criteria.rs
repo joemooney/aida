@@ -34,9 +34,9 @@ pub(crate) struct CriteriaReport {
     pub(crate) unanchored: Vec<TracedTest>,
 }
 
-/// Build the acceptance-criteria trace report: parse `## Acceptance`, scan Rust
-/// test functions for criterion-qualified trace markers, and compute both gap
-/// classes.
+/// Build the acceptance-criteria trace report: parse `## Acceptance`, scan
+/// supported test files for criterion-qualified trace markers, and compute both
+/// gap classes.
 // trace:TASK-1246 | ai:codex
 pub(crate) fn handle_criteria_command(
     project_root: &Path,
@@ -75,8 +75,8 @@ pub(crate) fn build_criteria_report(
     description: &str,
 ) -> Result<CriteriaReport> {
     let criteria = parse_acceptance_criteria(spec, description);
-    let tests = scan_rust_tests_for_criteria(project_root, spec)
-        .with_context(|| format!("scanning Rust tests under {}", project_root.display()))?;
+    let tests = scan_tests_for_criteria(project_root, spec)
+        .with_context(|| format!("scanning tests under {}", project_root.display()))?;
     Ok(criteria_report_from_parts(spec, criteria, tests))
 }
 
@@ -283,13 +283,27 @@ fn stable_text_hash(text: &str) -> String {
     format!("{:02x}{:02x}{:02x}", digest[0], digest[1], digest[2])
 }
 
-pub(crate) fn scan_rust_tests_for_criteria(root: &Path, spec: &str) -> Result<Vec<TracedTest>> {
+// Test discovery deliberately stays line-based: these scanners recognize the
+// common declaration shapes without pretending to parse each language. All
+// languages produce the same TracedTest and use the same adjacent-comment or
+// in-body marker rule. trace:TASK-1258 | ai:codex
+pub(crate) fn scan_tests_for_criteria(root: &Path, spec: &str) -> Result<Vec<TracedTest>> {
     let mut files = Vec::new();
-    collect_rust_files(root, &mut files);
+    collect_test_files(root, &mut files);
     let mut tests = Vec::new();
     for path in files {
         let content = std::fs::read_to_string(&path)?;
-        tests.extend(scan_rust_test_file(root, &path, &content, spec));
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("");
+        let found = match extension {
+            "py" => scan_python_test_file(root, &path, &content, spec),
+            "js" | "jsx" | "ts" | "tsx" => scan_javascript_test_file(root, &path, &content, spec),
+            "go" => scan_go_test_file(root, &path, &content, spec),
+            _ => scan_rust_test_file(root, &path, &content, spec),
+        };
+        tests.extend(found);
     }
     Ok(tests)
 }
@@ -302,6 +316,9 @@ pub(crate) fn extract_fn_source(path: &Path, start_line: usize) -> String {
     let Ok(content) = std::fs::read_to_string(path) else {
         return String::new();
     };
+    if path.extension().and_then(|value| value.to_str()) == Some("py") {
+        return extract_python_test_source(&content, start_line);
+    }
     let mut out = String::new();
     let mut depth: isize = 0;
     let mut started = false;
@@ -318,6 +335,25 @@ pub(crate) fn extract_fn_source(path: &Path, start_line: usize) -> String {
         if started && depth <= 0 {
             break;
         }
+    }
+    out
+}
+
+fn extract_python_test_source(content: &str, start_line: usize) -> String {
+    let lines: Vec<&str> = content.lines().collect();
+    let Some(first) = lines.get(start_line.saturating_sub(1)) else {
+        return String::new();
+    };
+    let indent = first.len() - first.trim_start().len();
+    let mut out = String::new();
+    for (offset, line) in lines.iter().skip(start_line.saturating_sub(1)).enumerate() {
+        let trimmed = line.trim_start();
+        let line_indent = line.len() - trimmed.len();
+        if offset > 0 && !trimmed.is_empty() && !trimmed.starts_with('#') && line_indent <= indent {
+            break;
+        }
+        out.push_str(line);
+        out.push('\n');
     }
     out
 }
@@ -382,6 +418,14 @@ fn item_name(trimmed: &str) -> Option<String> {
 }
 
 fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
+    collect_files(root, out, &["rs"]);
+}
+
+fn collect_test_files(root: &Path, out: &mut Vec<PathBuf>) {
+    collect_files(root, out, &["rs", "py", "js", "jsx", "ts", "tsx", "go"]);
+}
+
+fn collect_files(root: &Path, out: &mut Vec<PathBuf>, extensions: &[&str]) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
@@ -395,10 +439,163 @@ fn collect_rust_files(root: &Path, out: &mut Vec<PathBuf>) {
             ) {
                 continue;
             }
-            collect_rust_files(&path, out);
-        } else if path.extension().and_then(|s| s.to_str()) == Some("rs") {
+            collect_files(&path, out, extensions);
+        } else if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .is_some_and(|extension| extensions.contains(&extension))
+        {
             out.push(path);
         }
+    }
+}
+
+fn scan_python_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> Vec<TracedTest> {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut out = Vec::new();
+    let mut pending_traces = Vec::new();
+    let mut index = 0;
+    while index < lines.len() {
+        let line = lines[index];
+        let trimmed = line.trim_start();
+        if let Some(name) = python_test_name(trimmed) {
+            let indent = line.len() - trimmed.len();
+            let start = index + 1;
+            let mut traces = std::mem::take(&mut pending_traces);
+            traces.extend(traces_in_line(line, spec));
+            index += 1;
+            while index < lines.len() {
+                let body = lines[index];
+                let body_trimmed = body.trim_start();
+                let body_indent = body.len() - body_trimmed.len();
+                if !body_trimmed.is_empty()
+                    && !body_trimmed.starts_with('#')
+                    && body_indent <= indent
+                {
+                    break;
+                }
+                traces.extend(traces_in_line(body, spec));
+                index += 1;
+            }
+            push_traced_test(&mut out, root, path, name, start, traces);
+            continue;
+        }
+        update_pending_traces(&mut pending_traces, line, "#", spec);
+        index += 1;
+    }
+    out
+}
+
+fn python_test_name(trimmed: &str) -> Option<String> {
+    let rest = trimmed
+        .strip_prefix("def ")
+        .or_else(|| trimmed.strip_prefix("async def "))?;
+    let name: String = rest
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect();
+    name.starts_with("test_").then_some(name)
+}
+
+fn scan_javascript_test_file(
+    root: &Path,
+    path: &Path,
+    content: &str,
+    spec: &str,
+) -> Vec<TracedTest> {
+    scan_braced_test_file(root, path, content, spec, "//", javascript_test_name)
+}
+
+fn javascript_test_name(trimmed: &str) -> Option<String> {
+    let rest = trimmed
+        .strip_prefix("test(")
+        .or_else(|| trimmed.strip_prefix("it("))?;
+    let quote = rest.chars().next()?;
+    if !matches!(quote, '\'' | '"' | '`') {
+        return None;
+    }
+    let name = rest[quote.len_utf8()..].split(quote).next()?.to_string();
+    (!name.is_empty()).then_some(name)
+}
+
+fn scan_go_test_file(root: &Path, path: &Path, content: &str, spec: &str) -> Vec<TracedTest> {
+    scan_braced_test_file(root, path, content, spec, "//", go_test_name)
+}
+
+fn go_test_name(trimmed: &str) -> Option<String> {
+    let rest = trimmed.strip_prefix("func Test")?;
+    let suffix: String = rest
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect();
+    (!suffix.is_empty() && rest[suffix.len()..].trim_start().starts_with('('))
+        .then(|| format!("Test{suffix}"))
+}
+
+fn scan_braced_test_file(
+    root: &Path,
+    path: &Path,
+    content: &str,
+    spec: &str,
+    comment_prefix: &str,
+    test_name: fn(&str) -> Option<String>,
+) -> Vec<TracedTest> {
+    let mut out = Vec::new();
+    let mut pending_traces = Vec::new();
+    let mut current: Option<(String, usize, isize, Vec<String>, bool)> = None;
+    for (index, line) in content.lines().enumerate() {
+        let line_no = index + 1;
+        let trimmed = line.trim_start();
+        if current.is_none() {
+            if let Some(name) = test_name(trimmed) {
+                let delta = brace_delta(line);
+                let mut traces = std::mem::take(&mut pending_traces);
+                traces.extend(traces_in_line(line, spec));
+                current = Some((name, line_no, delta, traces, line.contains('{')));
+            } else {
+                update_pending_traces(&mut pending_traces, line, comment_prefix, spec);
+            }
+        } else if let Some((_, _, depth, traces, started)) = current.as_mut() {
+            traces.extend(traces_in_line(line, spec));
+            *depth += brace_delta(line);
+            *started |= line.contains('{');
+        }
+        if current
+            .as_ref()
+            .is_some_and(|(_, _, depth, _, started)| *started && *depth <= 0)
+        {
+            let (name, start, _, traces, _) = current.take().expect("current test");
+            push_traced_test(&mut out, root, path, name, start, traces);
+        }
+    }
+    out
+}
+
+fn update_pending_traces(pending: &mut Vec<String>, line: &str, comment_prefix: &str, spec: &str) {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with(comment_prefix) {
+        pending.extend(traces_in_line(line, spec));
+    } else {
+        pending.clear();
+    }
+}
+
+fn push_traced_test(
+    out: &mut Vec<TracedTest>,
+    root: &Path,
+    path: &Path,
+    name: String,
+    line: usize,
+    traces: Vec<String>,
+) {
+    let traces = dedupe(traces);
+    if !traces.is_empty() {
+        out.push(TracedTest {
+            name,
+            path: rel_path(root, path),
+            line,
+            traces,
+        });
     }
 }
 
@@ -518,7 +715,7 @@ fn print_human_report(report: &CriteriaReport) {
         println!();
         println!("{} {}", row.criterion.id.cyan().bold(), row.criterion.text);
         if row.tests.is_empty() {
-            println!("  {} no traced Rust tests", "untested".yellow());
+            println!("  {} no traced tests", "untested".yellow());
         } else {
             for test in &row.tests {
                 println!("  {} {}:{}", "test".green(), test.path, test.line);
@@ -661,5 +858,56 @@ mod tests {
         assert_eq!(tests[0].name, "traced");
         assert_eq!(tests[0].traces, vec!["STORY-1.A1"]);
         assert_eq!(tests[1].traces, vec!["STORY-1"]);
+    }
+
+    #[test]
+    fn language_fixtures_share_trace_attachment_rules() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture_root = root.join("src/tests/fixtures/criteria");
+        let cases = [
+            ("sample.rs", vec!["rust_above", "rust_inside"]),
+            ("sample.py", vec!["test_python_above", "test_python_inside"]),
+            ("sample.ts", vec!["typescript above", "typescript inside"]),
+            ("sample.go", vec!["TestGoAbove", "TestGoInside"]),
+        ];
+        for (file, expected) in cases {
+            let path = fixture_root.join(file);
+            let content = std::fs::read_to_string(&path).expect("fixture");
+            let tests = match path.extension().and_then(|value| value.to_str()) {
+                Some("py") => scan_python_test_file(root, &path, &content, "STORY-1"),
+                Some("ts") => scan_javascript_test_file(root, &path, &content, "STORY-1"),
+                Some("go") => scan_go_test_file(root, &path, &content, "STORY-1"),
+                _ => scan_rust_test_file(root, &path, &content, "STORY-1"),
+            };
+            assert_eq!(
+                tests
+                    .iter()
+                    .map(|test| test.name.as_str())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(tests[0].traces, vec!["STORY-1.A1"]);
+            assert_eq!(tests[1].traces, vec!["STORY-1.A2"]);
+        }
+    }
+
+    #[test]
+    fn mixed_language_tree_reports_paths_and_lines() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/criteria");
+        let tests = scan_tests_for_criteria(&root, "STORY-1").expect("scan fixtures");
+        assert_eq!(tests.len(), 8);
+        for test in tests {
+            assert!(test.path.starts_with("sample."), "{}", test.path);
+            assert!(test.line > 0);
+        }
+    }
+
+    #[test]
+    fn extracts_only_the_traced_python_test_body() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/tests/fixtures/criteria");
+        let source = extract_fn_source(&root.join("sample.py"), 6);
+        assert!(source.contains("def test_python_inside"));
+        assert!(source.contains("trace:STORY-1.A2"));
+        assert!(!source.contains("test_python_untraced"));
     }
 }
