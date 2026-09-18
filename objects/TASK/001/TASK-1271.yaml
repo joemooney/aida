@@ -1,0 +1,28 @@
+id: 01a0b5bf-fa25-7e80-b111-4bd751958e05
+spec_id: TASK-1271
+agreed_id: TASK-1271
+title: 'Mailbox latency is unobservable: expose oldest-unread age + last-seen time per recipient (aida mailbox latency / in aida awaiting --notice and statusbar) so a seat can prove it is not remiss in readin'
+description: |-
+  Operator question 2026-09-18 11:16: "when did you last read your mailbox … do we have a time sent for a mail that we can check to confirm we are not remiss?" The substrate has both halves of the answer — every message carries its sent time (shown by `aida mailbox inbox`) and each recipient has a seen watermark (`inbox` marks seen; `notice` never does) — but NO surface computes the gap. The advisor seat had four messages (10:16-10:46) sit unread for 30-60 minutes with nothing flagging it; the only tell was the operator noticing.
+
+  Add:
+  1. `aida mailbox latency [--for <agent|role>] [--json]`: per recipient, last-seen time, count of unread, age of the OLDEST unread message (now - sent_at), and the max read-latency over the last N messages (seen_at - sent_at where recorded). Human line: "advisor: last read 09:50 (87m ago) · 4 unread · oldest 63m". Record seen_at per message (or a watermark timestamp) if only a cursor exists today.
+  2. `aida awaiting --notice` (the per-turn hook line) and `aida statusbar` append `⚠ mail: oldest unread 63m` once the oldest unread exceeds a threshold ([mailbox] unread_warn_after = "15m" default) — a seat that is remiss sees it every turn.
+  3. `aida status` (the sub-second snapshot) gains the same one-liner for the active role.
+  4. Docs: docs/mailbox.md gets a "Am I reading my mail?" paragraph naming the surface and the threshold.
+
+  Acceptance: `aida mailbox latency` prints last-seen + oldest-unread age for the active role; with an unread message older than the threshold, `aida awaiting --notice` includes the ⚠ line and `aida status` shows it; unit tests on the pure age/threshold computation; TASK-160's quiet-tick contract unchanged (no unread = no line).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T18:20:52.645970995Z
+modified_at: 2026-09-18T18:20:52.645970995Z
+req_type: Task
+tags:
+- coordination
+- drain-safe
+- follow-up:TASK-160
+- mailbox
+- observability
+execution_mode: drain
