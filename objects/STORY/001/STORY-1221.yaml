@@ -2,7 +2,7 @@ id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
 spec_id: STORY-1221
 agreed_id: STORY-1221
 title: 'Typed protocols: per-requirement-type (and per-lane) protocol stored as META, injected at pickup and per turn while the lease is held, and checked at done'
-description: |
+description: |-
   Operator question (2026-09-18): agents are context-limited, so instead of hoping a model remembers how a SPIKE (or ADR, bug, docs task) is supposed to be done, AIDA should inject the type's protocol into the conversation whenever the agent works that kind of spec, and check it when the work is declared done.
 
   What exists today: the discipline pack (.aida/discipline/*.md) is read on demand and only its README is imported; CLAUDE.md is the always-loaded surface and is already large; the pickup prompt (aida queue work / aida do) injects a role-context snapshot and the plan brief, but nothing type-specific; skills quarantine specialised guidance but the agent has to know to invoke them; META requirements exist for AI prompts. The result is rules like "a spike is headless only when its output is an evidence-grounded report and an advisor reads it before anything builds on it" (TASK-1275/1276) living in an advisor's memory and a mailbox thread.
@@ -20,12 +20,19 @@ description: |
   - aida queue done on a SPIKE whose PR has no docs/spikes/*.md refuses and names the missing deliverable; --force overrides with a ledger comment.
   - Editing the META body changes what is injected on the next pickup; no binary rebuild.
   - Token cost measured: pickup prompt grows by at most the cap; CLAUDE.md does not grow.
-status: Draft
+
+  Scope decision (advisor, 2026-09-18): this story is SLICE 1 — storage + injection for the TYPE layer. Acceptance bullets 1, 2, 3, 5 and 6 above are this story's. Bullet 4 ("aida queue done … refuses") moves to TASK-1277 (slice 2, guided at the keyboard: warn-by-default gate, refuse opt-in via [protocol] enforce, --force with ledger, reviewer checklist). Lane layer, the MCP resource and headless-prompt injection move to TASK-1278 (slice 3, drain-safe). Both children are BlockedBy this story.
+  Slice-1 refinements written as criteria:
+  - Storage reuses the META type as-is (no new type); the seeded set is protocol:spike, protocol:decision, protocol:bug, protocol:doc, protocol:story, protocol:task from aida-core/templates, seeded by aida init and by aida scaffold refresh for existing projects; aida protocol show <type> --json exposes the META id and body.
+  - Precedence text (type < spec ## Acceptance) applies from slice 1: the pickup prompt shows the type protocol first, then the spec's own acceptance, each block labelled with its source; the lane layer slots between them later without reordering.
+  - The per-turn notice line is emitted only while a lease is held and only when a protocol exists for the type; a spec with no protocol adds zero lines (TASK-160 quiet contract).
+  - The 40-line cap is a constant with a test; truncation appends "… (see aida protocol show <type>)".
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T19:24:10.362741772Z
+modified_at: 2026-09-18T19:27:58.844233050Z
 req_type: Story
 tags:
 - agent-ux
@@ -37,3 +44,4 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T19:24:10.362741772Z
+execution_mode: drive
