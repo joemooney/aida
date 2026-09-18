@@ -16,12 +16,12 @@ description: |-
   - aida criteria <spec> on a mixed-language tree lists tests from all four languages with correct path:line.
   - Manual entry for aida criteria names the supported languages and the marker convention.
   - Non-goals: full AST parsing, other languages, test-runner integration.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-18T02:16:37.134550397Z
+modified_at: 2026-09-18T02:28:58.932691383Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -65,16 +65,26 @@ comments:
     Summary: Python above-test trace markers can be attributed to the preceding test
   created_at: 2026-09-18T02:16:36.895369756Z
   modified_at: 2026-09-18T02:16:36.895369756Z
+history:
+- id: 01a0b258-7d9f-70b3-b731-5ca70de3c392
+  author: aida-auto-bump
+  timestamp: 2026-09-18T02:28:58.911232140Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a0b258-7db4-7cd1-b234-d3e3408e0216
+  timestamp: 2026-09-18T02:28:58.932689854Z
+  agent: aida
+  commit_sha: 9df741559862b8a12bae527346a1943ffa34662b
+  summary: Completed via merge 9df74155
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T01:58:42.230614407Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1258 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-18T02:11:49.422805939Z
+  completed_at: 2026-09-18T02:28:58.911000969Z
+  completion_sha: 9df741559862b8a12bae527346a1943ffa34662b
