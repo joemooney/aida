@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:56:54.827970711Z
-modified_at: 2026-09-18T02:56:47.141979825Z
+modified_at: 2026-09-18T02:58:15.783185864Z
 req_type: Bug
 tags:
 - batch:exe-0917
@@ -60,6 +60,20 @@ comments:
   content: '(correction to the previous comment''s last sentence, which lost a word to shell quoting): add a source-guard test asserting that no file outside the resolver module calls std::env::current_exe() directly.'
   created_at: 2026-09-18T02:31:18.546337595Z
   modified_at: 2026-09-18T02:31:18.546337595Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b273-4c67-7351-969f-99859d1e4324
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1907 [AI:codex] fix(harvest): survive replaced executable and preserve ledger (BUG-1199)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless in the product seat's batch; the drain shelved it ci-red on an unrelated ETXTBSY flake — BUG-1202 — so the reviewer phase never ran; this advisor reviewed the diff directly; verdict .aida/review-verdicts/PR-1907.json)
+    gates: Build (ubuntu-latest) SUCCESS on rerun (the flake did not recur), merge-hold-gate SUCCESS, Cross-platform (nightly) reds informational (allow-list), merged from a plain shell under the TASK-1253 guard with no override
+    reasoning: class fix — crate::aida_exe_path() OnceLock-cached resolver (strip ' (deleted)', verify, PATH fallback) swept into nine call sites incl. harvest + reconstitute; ledger persisted to <candidates>.ledger.md before the comment write; advisor brief filed regardless; 3x retry; one-line error with io kind. Remaining raw sites + guard test → TASK-1262.
+    merged: 2026-09-17 19:56 -07:00 → main 3c9cb32d84; spec auto-bumped Completed. Note: the currently running followups-0917 drain (pid 3478546) started on cccda30f and will keep hitting the (deleted) failure in its harvest steps until a drain starts on a rebuilt binary.
+  created_at: 2026-09-18T02:58:15.783185864Z
+  modified_at: 2026-09-18T02:58:15.783185864Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b271-f21f-70f1-8a45-f037a6acfd36
