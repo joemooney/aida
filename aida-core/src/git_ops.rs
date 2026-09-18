@@ -241,6 +241,19 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
 pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     let result = git(repo, &["pull", "--rebase", remote, branch])?;
     if !result.success {
+        // A failed pull may have started a rebase and detached HEAD.  Never
+        // leave the managed store in that state: later writers could commit
+        // successfully onto the disposable rebase HEAD. trace:BUG-1229 | ai:codex
+        if rebase_in_progress(repo) {
+            let abort = git(repo, &["rebase", "--abort"])?;
+            if !abort.success {
+                anyhow::bail!(
+                    "git pull --rebase failed: {}; automatic `git rebase --abort` also failed: {}",
+                    result.stderr,
+                    abort.stderr
+                );
+            }
+        }
         anyhow::bail!("git pull --rebase failed: {}", result.stderr);
     }
     Ok(())
@@ -364,7 +377,7 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
 
 /// True when a rebase is currently in progress in `repo`.
 #[cfg(feature = "native")]
-fn rebase_in_progress(repo: &Path) -> bool {
+pub fn rebase_in_progress(repo: &Path) -> bool {
     let git_dir = match git(repo, &["rev-parse", "--git-dir"]) {
         Ok(r) if r.success => PathBuf::from(r.stdout),
         _ => return false,
@@ -375,6 +388,57 @@ fn rebase_in_progress(repo: &Path) -> bool {
         repo.join(git_dir)
     };
     git_dir.join("rebase-merge").exists() || git_dir.join("rebase-apply").exists()
+}
+
+/// Refuse mutations while a managed git store is on a disposable HEAD.
+///
+/// A rebase detaches HEAD by design. Commits made there vanish when the
+/// documented recovery command (`git rebase --abort`) restores the branch.
+/// Call this before changing any store file, not merely before committing it.
+// trace:BUG-1229 | ai:codex
+#[cfg(feature = "native")]
+pub fn ensure_store_write_safe(repo: &Path) -> Result<()> {
+    if !is_git_repo(repo) {
+        return Ok(());
+    }
+    if let Some(state) = store_worktree_issue(repo) {
+        anyhow::bail!(
+            "refusing AIDA store write: {state}. Run `git -C {} rebase --continue` to finish recovery or `git -C {} rebase --abort`, then retry the AIDA command",
+            repo.display(),
+            repo.display()
+        );
+    }
+    Ok(())
+}
+
+/// Human-readable unsafe store state, shared by write guards and diagnostics.
+// trace:BUG-1229 | ai:codex
+#[cfg(feature = "native")]
+pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
+    if !is_git_repo(repo) {
+        return None;
+    }
+    let rebasing = rebase_in_progress(repo);
+    // `rev-parse --abbrev-ref HEAD` also prints `HEAD` on an unborn but
+    // correctly attached branch. `symbolic-ref` distinguishes that harmless
+    // initialization state from a genuinely detached checkout.
+    let branch = git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .ok()
+        .filter(|result| result.success)
+        .map(|result| result.stdout);
+    let detached = branch.is_none();
+    // Production orphan stores are linked worktrees (`.git` is a pointer
+    // file). Standalone repositories are common in backend tests and embeds,
+    // so only linked stores have the canonical branch-name invariant.
+    let wrong_branch =
+        repo.join(".git").is_file() && branch.as_deref().is_some_and(|name| name != "aida-store");
+    match (detached, rebasing) {
+        (true, true) => Some("store worktree detached / rebase in progress"),
+        (true, false) => Some("store worktree detached"),
+        (false, true) => Some("store rebase in progress"),
+        (false, false) if wrong_branch => Some("store worktree is not on aida-store branch"),
+        (false, false) => None,
+    }
 }
 
 /// True when HEAD has advanced and no rebase is in progress (sanity check
@@ -5405,5 +5469,52 @@ mod tests {
         ];
         want.sort();
         assert_eq!(got, want, "no queue entry may be dropped by the merge");
+    }
+
+    // A failed plain store pull owns the rebase it started and must abort it
+    // before returning, restoring the branch checkout. trace:BUG-1229 | ai:codex
+    #[test]
+    fn failed_pull_rebase_aborts_and_restores_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        std::fs::create_dir_all(&hub).unwrap();
+        git(&hub, &["init", "--bare"]).unwrap();
+
+        let first = dir.path().join("first");
+        init(&first).unwrap();
+        configure_user(&first, "Test", "test@example.com").unwrap();
+        git(&first, &["checkout", "-b", "aida-store"]).unwrap();
+        std::fs::write(first.join("shared.yaml"), "value: seed\n").unwrap();
+        add(&first, &["shared.yaml"]).unwrap();
+        commit(&first, "seed").unwrap();
+        git(&first, &["remote", "add", "origin", hub.to_str().unwrap()]).unwrap();
+        assert!(push(&first, "origin", "aida-store").unwrap());
+        git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]).unwrap();
+
+        git(dir.path(), &["clone", hub.to_str().unwrap(), "second"]).unwrap();
+        let second = dir.path().join("second");
+        configure_user(&second, "Test", "test@example.com").unwrap();
+
+        std::fs::write(first.join("shared.yaml"), "value: remote\n").unwrap();
+        add(&first, &["shared.yaml"]).unwrap();
+        commit(&first, "remote edit").unwrap();
+        assert!(push(&first, "origin", "aida-store").unwrap());
+
+        std::fs::write(second.join("shared.yaml"), "value: local\n").unwrap();
+        add(&second, &["shared.yaml"]).unwrap();
+        commit(&second, "local edit").unwrap();
+        let local_head = head_sha(&second).unwrap();
+
+        let err = pull_rebase(&second, "origin", "aida-store")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("git pull --rebase failed"), "{err}");
+        assert!(!rebase_in_progress(&second));
+        assert_eq!(current_branch(&second).unwrap(), "aida-store");
+        assert_eq!(head_sha(&second).unwrap(), local_head);
+        assert_eq!(
+            std::fs::read_to_string(second.join("shared.yaml")).unwrap(),
+            "value: local\n"
+        );
     }
 }

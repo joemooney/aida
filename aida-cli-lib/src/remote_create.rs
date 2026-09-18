@@ -924,6 +924,10 @@ pub(crate) fn collect_release_standings(
 /// work. Never writes to a remote.
 // trace:TASK-1095 | ai:claude
 pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> Result<()> {
+    // Remote drift is not the only store-sync hazard: a failed store pull can
+    // leave the worktree on a disposable rebase HEAD. trace:BUG-1229 | ai:codex
+    let store_path = project_root.join(".aida-store");
+    let store_worktree_issue = aida_core::git_ops::store_worktree_issue(&store_path);
     // Compare only real remotes. Skip the `all` fan-out pseudo-remote (a single
     // name with multiple push URLs) — comparing it against its own members is
     // noise, not drift.
@@ -940,10 +944,13 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
         if json {
             println!(
                 "{}",
-                serde_json::json!({ "remotes": remotes, "branches": [], "diverged": false, "note": msg })
+                serde_json::json!({ "remotes": remotes, "branches": [], "diverged": false, "store_worktree_issue": store_worktree_issue, "note": msg })
             );
         } else {
             println!("{msg}");
+            if let Some(issue) = store_worktree_issue {
+                println!("{} {issue}", crate::glyph(crate::glyphs::Glyph::Warning));
+            }
         }
         return Ok(());
     }
@@ -1079,11 +1086,15 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
                 "release": release,
                 "diverged": any_diverged,
                 "behind": any_behind,
-                "release_drift": release_tag_missing || gitlab_release_missing
+                "release_drift": release_tag_missing || gitlab_release_missing,
+                "store_worktree_issue": store_worktree_issue
             })
         );
     } else {
         println!("Remote sync status  ({})", remotes.join(", "));
+        if let Some(issue) = store_worktree_issue {
+            println!("{} {issue}", crate::glyph(crate::glyphs::Glyph::Warning));
+        }
         for (branch, standings, drift) in &branch_reports {
             let verdict = remote_branch_verdict(drift);
             println!();

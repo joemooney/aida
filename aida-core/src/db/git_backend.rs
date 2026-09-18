@@ -654,6 +654,7 @@ impl GitBackend {
     /// YAML actually changed (unchanged reqs are skipped, so re-running is a
     /// no-op). trace:BUG-425 | ai:claude
     pub fn bulk_update(&self, requirements: &[Requirement], commit_subject: &str) -> Result<usize> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         let mut changed: Vec<String> = Vec::new();
         for requirement in requirements {
             if let Some(spec_id) = self.stage_requirement_update(requirement)? {
@@ -696,6 +697,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn save(&self, store: &RequirementsStore) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         // Save metadata
         let meta = Self::extract_metadata(store);
         self.save_metadata(&meta)?;
@@ -850,6 +852,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         // Record granular field ops + write the YAML via the shared helper,
         // then targeted-commit only the one YAML this op touched (when it
         // actually changed). The op-recording logic lives in
@@ -863,6 +866,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn delete_requirement(&self, id: &uuid::Uuid) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         if let Some(req) = object_store::find_by_uuid(&self.objects_root, id)? {
             if let Some(ref spec_id) = req.spec_id {
                 self.record_op(*id, crate::oplog::OpKind::Archive);
@@ -877,6 +881,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn add_requirement(&self, requirement: Requirement) -> Result<Requirement> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         let mut req = requirement;
 
         if req.spec_id.is_none() {
@@ -969,6 +974,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         let dir = self.root.join("registry/queues");
         std::fs::create_dir_all(&dir)?;
         // trace:TASK-951 — resolve the FILENAME case-insensitively (so `Joe`
@@ -1026,6 +1032,7 @@ impl DatabaseBackend for GitBackend {
         requirement_id: &uuid::Uuid,
         role: Option<&str>,
     ) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1059,6 +1066,7 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1092,6 +1100,7 @@ impl DatabaseBackend for GitBackend {
     // look up a requirement (transient I/O error) errs on the safe
     // side: keep the entry. trace:TASK-1-109 | ai:claude
     fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:TASK-951 — fold case at the lookup boundary.
         let user_id = self.resolve_queue_user(user_id);
         let path = queue_file_path(&self.root, &user_id);
@@ -1152,6 +1161,7 @@ impl DatabaseBackend for GitBackend {
     // spec archived/Completed/Rejected) from the cache, so this stays a dumb
     // set-membership prune. trace:TASK-1052 | ai:claude
     fn queue_remove_many(&self, user_id: &str, ids: &[uuid::Uuid]) -> Result<Vec<QueueEntry>> {
+        crate::git_ops::ensure_store_write_safe(&self.root)?;
         if ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1251,6 +1261,7 @@ impl<'a> BulkWriter<'a> {
     /// "{prefix}: import N requirements" — pass a context-specific prefix
     /// like "chore" or "feat(jira)".
     pub fn finish(self, commit_subject: &str) -> Result<usize> {
+        crate::git_ops::ensure_store_write_safe(&self.backend.root)?;
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
         let mut written: Vec<String> = Vec::new();
@@ -2372,5 +2383,36 @@ mod tests {
             .any(|op| matches!(&op.kind, OpKind::SetTitle { title } if title == "New Title"));
         assert!(has_addtag, "tag edit must emit AddTag");
         assert!(has_settitle, "scalar edit must still emit SetTitle");
+    }
+
+    // A writer must fail before touching disk when the store is on the
+    // disposable HEAD used by an interrupted rebase. trace:BUG-1229 | ai:codex
+    #[test]
+    fn detached_store_refuses_add_without_file_or_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join(".aida-store");
+        crate::git_ops::init(&root).unwrap();
+        crate::git_ops::configure_user(&root, "Test", "test@example.com").unwrap();
+        std::fs::write(root.join("metadata.yaml"), "name: test\n").unwrap();
+        crate::git_ops::add(&root, &["metadata.yaml"]).unwrap();
+        crate::git_ops::commit(&root, "seed").unwrap();
+        let before = crate::git_ops::head_sha(&root).unwrap();
+        let detached = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["checkout", "--detach"])
+            .status()
+            .unwrap();
+        assert!(detached.success());
+
+        let backend = GitBackend::new(&root).unwrap();
+        let mut req = Requirement::new("Must not land".into(), "guard test".into());
+        req.spec_id = Some("BUG-1229".into());
+        let err = backend.add_requirement(req).unwrap_err().to_string();
+
+        assert!(err.contains("store worktree detached"), "{err}");
+        assert!(err.contains("rebase --abort"), "{err}");
+        assert_eq!(crate::git_ops::head_sha(&root).unwrap(), before);
+        assert!(!root.join("objects/BUG/001/BUG-1229.yaml").exists());
     }
 }
