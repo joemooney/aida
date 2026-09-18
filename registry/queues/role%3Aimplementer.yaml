@@ -30,11 +30,3 @@
   added_at: 2026-09-18T16:52:59.798297408Z
   for_role: implementer
   added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b574-dcfe-7f60-bb26-5376ff183d78
-  position: 6000
-  added_by: role:implementer
-  note: route the change head-ref name through the Forge trait (GitHub refs/pull/N/head, GitLab refs/merge-requests/N/head) for the reviewer checkout + both pre-flight helpers; fix the misleading --forge hint when origin IS gitlab; unit tests per forge; this unblocks TASK-1269's GitLab re-drive
-  added_at: 2026-09-18T17:00:35.165905410Z
-  for_role: implementer
-  added_by_machine: imac
