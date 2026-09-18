@@ -45,12 +45,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:52:53.322025721Z
-modified_at: 2026-09-18T04:52:53.322025721Z
+modified_at: 2026-09-18T08:49:39.834497258Z
 req_type: Spike
 tags:
 - adoption
+- batch:followups-0918
 - discovery
 - dogfooding
 - orchestration
+- proxy-groomed
 - usage-signal
+execution_mode: drain
 human_only: true
