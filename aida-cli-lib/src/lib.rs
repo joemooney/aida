@@ -36677,7 +36677,7 @@ fn parse_gh_pr_line(stdout: &str) -> PrLookup {
 /// falls through to the backing spec as an implementer pickup.
 // trace:BUG-1186 | ai:claude
 fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64) -> bool {
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = aida_exe_path();
     let Ok(out) = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(["list", "--type", "story", "--format", "json"])
@@ -36754,7 +36754,7 @@ fn aida_subcmd_add_review_story(
     title: &str,
     description: &str,
 ) -> Option<String> {
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = aida_exe_path();
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args([
@@ -37269,7 +37269,7 @@ fn aida_subcmd_add_followup_task(
     title: &str,
     source_plan: Option<&str>,
 ) -> Option<String> {
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = aida_exe_path();
     let mut args: Vec<String> = vec![
         "add".into(),
         "--type".into(),
@@ -38086,7 +38086,7 @@ fn aida_subcmd_rel_add_implements(project_root: &std::path::Path, from: &str, to
 }
 
 fn aida_subcmd_rel_add(project_root: &std::path::Path, from: &str, to: &str, rel_type: &str) {
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = aida_exe_path();
     match std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(["rel", "add", from, to, "--type", rel_type])
@@ -38112,7 +38112,7 @@ fn aida_subcmd_rel_add(project_root: &std::path::Path, from: &str, to: &str, rel
 /// Best-effort `aida queue add <id> --for reviewer --no-scope --note <...>`.
 /// trace:STORY-66 | ai:claude
 fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &str, note: &str) {
-    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = aida_exe_path();
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args([
@@ -41388,7 +41388,7 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
     // all stdio nulled. The current binary path comes from argv[0] when
     // it's absolute (cargo dev / installed); otherwise fall back to
     // `aida` on PATH. trace:STORY-79 | ai:claude
-    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let exe = aida_exe_path();
     let _ = std::process::Command::new(exe)
         .arg("_bg-fetch")
         .arg(store_path)
@@ -48660,7 +48660,7 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
             // The auto-bump: `aida pull` promotes the spec Done → Completed
             // when the referencing commit lands on main. Its own step, never
             // chained, so a grumble in the merge cleanup can't drop it.
-            let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+            let aida = aida_exe_path();
             let pulled = std::process::Command::new(aida)
                 .current_dir(project_root)
                 .arg("pull")
@@ -51490,8 +51490,7 @@ fn apply_sweep_choice(id: &str, choice: burndown::SweepChoice) -> Result<bool> {
 /// STORY-750: run `aida <args>` as a child, INHERITING stdio so nested prompts /
 /// sessions work, and surface a non-zero exit as an error.
 fn self_invoke_aida(args: &[&str]) -> Result<()> {
-    let exe =
-        std::env::current_exe().map_err(|e| anyhow::anyhow!("locate the aida binary: {e}"))?;
+    let exe = aida_exe_path();
     let status = std::process::Command::new(exe)
         .args(args)
         .status()
@@ -68252,7 +68251,7 @@ enum InstallMethod {
 }
 
 fn detect_install_method() -> Result<InstallMethod> {
-    let exe = std::env::current_exe().context("Failed to determine current binary path")?;
+    let exe = aida_exe_path();
     let exe_str = exe.to_string_lossy();
 
     if exe_str.contains("/target/debug/") || exe_str.contains("/target/release/") {
@@ -69393,7 +69392,7 @@ fn collect_comment_ids(comments: &[Comment]) -> Vec<Uuid> {
 
 fn open_user_guide(dark_mode: bool) -> Result<()> {
     // Get the path to the docs directory relative to the executable
-    let exe_path = std::env::current_exe().context("Failed to get executable path")?;
+    let exe_path = aida_exe_path();
 
     // Try multiple possible locations for the docs
     let possible_paths = [
@@ -76028,7 +76027,7 @@ fn guarded_execution_mode_drain_message(spec: &str, mode: aida_core::ExecutionMo
 /// drain. trace:STORY-265 | ai:claude
 fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Result<()> {
     use auto_complete::PlanPreludeStep;
-    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let exe = aida_exe_path();
     let steps = auto_complete::plan_prelude_steps(spec, true, headless_implementer);
     if !json {
         eprintln!();
@@ -76876,7 +76875,7 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             );
             return handle;
         }
-        let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+        let exe = aida_exe_path();
         let result_path = find_main_worktree_root()
             .unwrap_or_else(|_| {
                 std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
@@ -78886,7 +78885,7 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             );
             return handle;
         }
-        let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+        let exe = aida_exe_path();
         let result_path = find_main_worktree_root()
             .unwrap_or_else(|_| {
                 std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
@@ -80535,7 +80534,7 @@ fn run_zen_drive(
     // `aida queue work <spec> --auto-complete --no-human <mode> [...]` — the
     // SAME full per-spec engine burndown uses (ADR-7), so the independent
     // reviewer + merge run for free (TASK-1049). resolve_aida_exe() (not raw
-    // current_exe()) survives a mid-run `cargo build` swap. The drive owns the
+    // a fresh OS executable lookup) survives a mid-run `cargo build` swap. The drive owns the
     // implement → CI → review → merge → pull sequence.
     let exe = resolve_aida_exe();
     let args = zen_drive::drive_args(&display, no_human, supervised, no_pull);
@@ -80811,7 +80810,7 @@ fn ensure_queued_for_implementer(storage: &Storage, user_id: &str, spec: &str) -
         crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
         spec
     );
-    let exe = std::env::current_exe().context("could not resolve the aida binary path")?;
+    let exe = aida_exe_path();
     let status = std::process::Command::new(exe)
         .args(auto_complete_queue_add_args(spec))
         .status()
@@ -81603,7 +81602,7 @@ fn reconcile_orchestrated_branch(
 /// (before phase 1 can rebuild) and stripping any pre-existing suffix, we
 /// stabilise the path for the whole parent process.
 ///
-/// Falls back to the bare "aida" name (PATH search) if `current_exe()`
+/// Falls back to the bare "aida" name (PATH search) if the OS lookup
 /// failed or the resolved path doesn't exist on disk.
 ///
 /// trace:BUG-217 | ai:claude
@@ -81614,7 +81613,7 @@ pub(crate) fn aida_exe_path() -> std::path::PathBuf {
         .clone()
 }
 
-// trace:BUG-1199 | ai:codex
+// trace:BUG-1199 trace:TASK-1262 | ai:codex
 fn resolve_aida_exe_from(current: Option<std::path::PathBuf>) -> std::path::PathBuf {
     if let Some(p) = current {
         // Linux's `/proc/self/exe` can return "<path> (deleted)" when the
@@ -81628,7 +81627,7 @@ fn resolve_aida_exe_from(current: Option<std::path::PathBuf>) -> std::path::Path
             return cleaned;
         }
     }
-    // Fall back to PATH search. Either current_exe() failed, or the
+    // Fall back to PATH search. Either the OS lookup failed, or the
     // resolved path no longer points at an existing file.
     std::path::PathBuf::from("aida")
 }
@@ -87741,9 +87740,7 @@ fn run_aida_db_sync_pull(store_path: &std::path::Path) -> Result<()> {
         "  {} pulling orphan-store via `aida db sync --pull` ...",
         "↻".cyan()
     );
-    let mut cmd = std::process::Command::new(
-        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida")),
-    );
+    let mut cmd = std::process::Command::new(aida_exe_path());
     cmd.args(["db", "sync", "--pull"]);
     // Force the child to look at the same store as us — avoids ambiguity
     // when queue work runs from a sibling worktree.

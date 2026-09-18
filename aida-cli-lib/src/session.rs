@@ -1123,7 +1123,7 @@ pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
 /// a stale binary that did not have the flag.
 // trace:BUG-806 | ai:claude
 pub(crate) fn drive_path_env() -> Option<std::ffi::OsString> {
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let exe_dir = crate::aida_exe_path().parent()?.to_path_buf();
     let old = std::env::var_os("PATH").unwrap_or_default();
     let mut parts = vec![exe_dir];
     parts.extend(std::env::split_paths(&old));

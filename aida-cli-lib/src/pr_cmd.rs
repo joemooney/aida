@@ -753,7 +753,7 @@ pub(crate) fn fetch_pr_info_via_gh_bin(
 /// All gh subprocess calls go through the BUG-286 retry wrapper so a
 /// sub-second network blip during `gh pr merge` doesn't abort the
 /// flow. The post-merge `aida pull` and `aida session end` are spawned
-/// as `aida` subcommands (resolved via `current_exe()`) so the wrapper
+/// as `aida` subcommands (resolved via the hardened executable resolver) so the wrapper
 /// inherits the existing pull / session-end implementations (the BUG-108
 /// cwd warning, the auto-bump scan, the live-claude refusal) without
 /// double-implementing them.
@@ -1891,7 +1891,7 @@ pub(crate) fn pr_ship_handler(
         let pull_status = match prepare_main_worktree_for_pr_ship_pull(&main_worktree) {
             Ok(()) => {
                 // Spawn `aida pull` as a subcommand. Use the hardened resolver
-                // instead of raw current_exe(): dev rebuilds can make Linux
+                // instead of a raw OS executable lookup: dev rebuilds can make Linux
                 // report "<path> (deleted)", which Command::new cannot spawn.
                 // trace:SPEC-411 | ai:codex
                 let aida_bin = pr_ship_post_merge_aida_exe();

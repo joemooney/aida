@@ -13,9 +13,9 @@ use crate::*;
 /// phase is retried next tick). With `dry_run`, each step is PRINTED, not run.
 /// trace:STORY-625 | ai:claude
 pub(crate) fn solo_cycle(dry_run: bool) -> Result<()> {
-    // BUG-562: use the hardened resolver, NOT raw current_exe(). The solo loop is
+    // BUG-562: use the hardened resolver, not a raw OS executable lookup. The solo loop is
     // long-running; a `cargo build` that swaps the binary mid-run makes Linux
-    // report current_exe() as "<path> (deleted)", which Command::new cannot spawn
+    // report the executable as "<path> (deleted)", which Command::new cannot spawn
     // — every cycle step then ENOENTs. resolve_aida_exe() falls back to the
     // on-PATH `aida` (the live binary) when the exe path is gone. trace:BUG-562
     let exe = resolve_aida_exe();

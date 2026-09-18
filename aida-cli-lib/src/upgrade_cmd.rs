@@ -193,7 +193,7 @@ pub(crate) fn upgrade_dev_mode_sibling_scan(
     yes: bool,
     diff: bool,
 ) -> Result<()> {
-    let exe = std::env::current_exe()?;
+    let exe = crate::aida_exe_path();
     println!("Current version: {}", build_banner());
     println!("Installed via:   developer build ({})", exe.display());
     println!("Note: developer build doesn't need upgrading. Looking for other installs...");
