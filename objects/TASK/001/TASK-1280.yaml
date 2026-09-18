@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:14:51.388677532Z
-modified_at: 2026-09-18T22:14:54.256914571Z
+modified_at: 2026-09-18T22:14:59.316567522Z
 req_type: Task
 tags:
 - cache
@@ -26,4 +26,8 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-18T22:14:54.256914571Z
+- rel_type: BlockedBy
+  target_id: 01a0b64f-a564-7e53-a0b0-95305e3df161
+  created_at: 2026-09-18T22:14:59.316560232Z
+  created_by: joe
 execution_mode: drain
