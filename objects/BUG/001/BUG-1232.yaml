@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-18T18:52:14.000807871Z
+modified_at: 2026-09-18T20:04:39.354268533Z
 req_type: Bug
 tags:
 - drain
@@ -29,4 +29,10 @@ comments:
   created_at: 2026-09-18T18:52:14.000807871Z
   modified_at: 2026-09-18T18:52:14.000807871Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b61e-fd3a-7b01-8267-41926335dfde
+  author: joe
+  content: 'Cause confirmed 2026-09-18 13:04 on the TASK-1270 check (mirror MR !4): with the aida:merge-hold label and a failed gate, detailed_merge_status = ci_must_pass and PUT merge_requests/4/merge returns HTTP 405 Method Not Allowed. glab renders a 405 as ''you do not have enough privileges to merge this merge request'' — the message the drain printed on MR !2, whose head pipeline had only just flipped to success when the merge phase fired (''Pipelines must succeed'' still evaluating). So it is candidate (a): the merge phase must treat 405 / ci_must_pass / ci_still_running / checking as ''wait for the head pipeline and re-read detailed_merge_status'', not as a privileges failure; glab''s text should be discarded in favour of the API''s detailed_merge_status.'
+  created_at: 2026-09-18T20:04:39.354268533Z
+  modified_at: 2026-09-18T20:04:39.354268533Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
