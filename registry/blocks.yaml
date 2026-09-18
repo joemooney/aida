@@ -485,7 +485,7 @@ blocks:
   type_prefix: STORY
   range_start: 1141
   range_end: 1240
-  next: 1195
+  next: 1196
   allocated_at: 2026-09-14T08:00:15.874152456Z
 - node_id: '1'
   owner: redacted@node.invalid
