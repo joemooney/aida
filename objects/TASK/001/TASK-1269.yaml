@@ -10,12 +10,12 @@ description: |-
   Acceptance:
   - docs/forge-providers.md gains the subsection under the GitLab section.
   - No other file changes.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:01:11.631455641Z
-modified_at: 2026-09-18T17:00:06.886695279Z
+modified_at: 2026-09-18T18:43:41.370908334Z
 req_type: Task
 tags:
 - forge
@@ -40,16 +40,24 @@ comments:
   created_at: 2026-09-18T17:00:06.886695279Z
   modified_at: 2026-09-18T17:00:06.886695279Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0b5d4-dcb4-7692-b85e-27a207690a01
+  author: aida-auto-bump
+  timestamp: 2026-09-18T18:43:41.364040313Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b5d4-dcba-7251-81f5-423da0a124eb
+  timestamp: 2026-09-18T18:43:41.370907091Z
+  agent: aida
+  commit_sha: d38109fe23d74ccffda089a39ad4ee8aee80801a
+  summary: Completed via merge d38109fe
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T15:05:27.575759360Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: watchdog
-  detail: CI on PR-2 did not reach a terminal state in time (attempt 2/2)
-  recovery_hint: CI never reached a terminal state in the wait window — it may be queued or a runner is slow, CI is not red. Check progress with `glab ci status`, then re-run auto-complete once CI settles.
-  shelved_by: advisor
-  shelved_at: 2026-09-18T15:05:42.149796671Z
+  completed_at: 2026-09-18T18:43:41.363878073Z
+  completion_sha: d38109fe23d74ccffda089a39ad4ee8aee80801a
