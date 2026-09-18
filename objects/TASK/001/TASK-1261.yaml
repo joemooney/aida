@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:55:57.292682234Z
-modified_at: 2026-09-18T03:19:32.677351060Z
+modified_at: 2026-09-18T03:21:32.231921635Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -32,6 +32,21 @@ relationships:
   target_id: 01a0b27a-c8a7-7373-af04-1ca96e2d9563
   created_at: 2026-09-18T03:06:31.575875844Z
   created_by: joe
+comments:
+- id: 01a0b288-9b47-7240-a193-a42cda42d22a
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1908 [AI:codex] fix(launcher): guide stakeholder personas without leases (TASK-1261)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless in the product seat's batch; the drain shelved it when the TASK-85 PR-N pickup could not find its queued review story — BUG-1195 reopened — so no reviewer launched; this advisor reviewed the diff directly; verdict .aida/review-verdicts/PR-1908.json)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate SUCCESS, Cross-platform (nightly) reds informational, merged from a plain shell under the TASK-1253 guard with no override
+    reasoning: persona launches (guest/requester) get a launch plan in the project checkout with no lease/worktree and never own a --spec; shared stakeholder_persona_guidance replaces "No stored role file was found" in agent new, session new and session start --launch; tests pin both personas' guidance, none for real roles, and a no-lease requester launch.
+    merged: 2026-09-17 20:19 -07:00 → main 83013185a5; spec auto-bumped Completed
+  created_at: 2026-09-18T03:21:32.231921635Z
+  modified_at: 2026-09-18T03:21:32.231921635Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b286-c837-7bd3-b057-e18e0c59d64c
   author: aida-auto-bump
