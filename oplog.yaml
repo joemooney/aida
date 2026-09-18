@@ -74530,5 +74530,30 @@ operations:
     req_type: Story
     status: Approved
     priority: Medium
-clock: 5792
+- id: 01a0b2b5-d556-7bb0-8f52-33b8ac544d0f
+  target_id: 01a0b2b5-d13b-7361-8e0a-3bdab7f18cba
+  author: aida
+  node_id: '1'
+  lamport: 5793
+  timestamp: 2026-09-18T04:10:56.214594766Z
+  kind: !Create
+    title: 'aida list --format human never truncates the Title column: long titles wrap and shred the table on a narrow terminal'
+    description: |-
+      git_backend_cmd.rs sets title_max = if show_tags { 50 } else { usize::MAX }, so the no-tags path (the default `aida list`) prints req.title at full length. A 150-char title wraps across 2-3 terminal lines and destroys the column alignment for every row after it.
+
+      Every other column is fixed-width padded (14/12/13/10), so the fix is to derive the Title budget from the actual terminal width: total_cols - (flow_width + 53) with a sane floor (~24) and a fallback when stdout is not a tty (no truncation, current behavior, since the consumer is then a pipe or a file).
+
+      crossterm is already a workspace dependency (aida-tui uses it), so crossterm::terminal::size() needs no new crate.
+
+      Workarounds today: `tput rmam` before the command (terminal-level clip, keeps color), or piping to `cut -c1-$(tput cols)` (aida drops color when not a tty, so byte-cut is safe), or `less -SR`.
+
+      Acceptance:
+      - Default `aida list --format human` at a tty fits every row in one terminal line, with an ellipsis on truncated titles.
+      - Non-tty stdout (pipe, file, --format toon/json) is unchanged.
+      - The header rule width matches the computed title column.
+      - Applies to the same table in the --tags branch (currently a hardcoded 50).
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5793
 node_id: '1'
