@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:47:04.754202553Z
-modified_at: 2026-09-17T16:47:07.303151300Z
+modified_at: 2026-09-18T15:44:20.693209396Z
 req_type: Task
 tags:
 - forge
@@ -20,3 +20,23 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-17T16:47:07.303151300Z
+comments:
+- id: 01a0b530-aad5-7b01-8390-103af2a705f7
+  author: joe
+  content: |-
+    Live validation log (2026-09-18, mirror gitlab.joemooney.com ai/aida, runner imac-docker on the dev box, docker executor over the podman socket). Branch task-1254-work / PR #1932 / mirror MR !1. Throwaway smoke spec TASK-1269 driven headless from /home/joe/ai/aida-gitlab-mirror (GitLab-origin checkout, [review] mode = delegated locally).
+
+    Check 5 (merge-hold gate on GitLab): PASS. Unlabelled gate job passed on MR !1 pipeline 280. With the aida:merge-hold label (applied via glab mr update, the same call merge_hold::sync_label makes) pipeline 282's gate failed with the scaffolded message; project setting "Pipelines must succeed" is on. `aida merge-hold clear 1` from the mirror checkout dropped the label (no local marker existed, reported as such). Pending: observe detailed_merge_status = ci_must_pass once a labelled head pipeline is terminal.
+
+    Check 1 (registration via Forge::checks_registered): PASS — the drain opened MR !2 and proceeded into the CI phase off the GitLab pipelines listing; no gh in the path.
+
+    Check 2 (CI phase watches via the trait): FAIL then FIXED. First run shelved TASK-1269 six seconds after opening the MR ('CI on PR-2 did not reach a terminal state in time') because GitLabForge::stream_ci_for_branch returned one probe when headless. Fixed on the branch (commit cac296deb7): the GitLab path now blocks on wait_for_ci_terminal. Re-run ticks every 30s ('CI still running on PR-2 (21m 5s elapsed, 1265s since progress)'). The 'since progress' clock exposes BUG-1224 (pipeline-list snapshot gives no signal during a long job); the run used AIDA_WORKER_CI_IDLE=2400.
+
+    Check 3 (per-check refinement reads GitLab jobs): in progress — MR !2's verify job will go red on BUG-1225 (its branch predates the fix), which exercises refine_red over glab jobs on the re-driven run.
+
+    Check 4 (delegated review falls back with a note): blocked on check 3 completing; BUG-1223 (auto-queue hard-coded ReviewForge::GitHub, so no Review PR-N story was filed for the trailered MR) fixed on the branch (f94e1e6c9d).
+
+    Other live findings: BUG-1225 (hostname-derived node name > 32 chars breaks aida init in the runner container; every mirror verify job red; fixed e3445e6de8), BUG-1222 (empty harvest skip label in the drain banner), BUG-1317 (auto-filed by the first shelve; superseded by the check-2 fix). bwrap-confinement passed live under this runner, so the allow_failure can be dropped. Runner ops notes are in the session memory (service config path, podman shim, concurrency).
+  created_at: 2026-09-18T15:44:20.693209396Z
+  modified_at: 2026-09-18T15:44:20.693209396Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
