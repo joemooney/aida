@@ -2,7 +2,7 @@ id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
 spec_id: BUG-1197
 agreed_id: BUG-1197
 title: 'Stakeholder persona gate is bypassable through the MCP server: aida mcp-serve is allowed under guest/requester and mcp.rs enforces none of the STORY-1110 refusals (add_requirement/update_requirement/q'
-description: |-
+description: |
   Found 2026-09-17 17:58 while the operator launched `aida agent new claude --role requester` and Claude Code prompted to enable the project's aida MCP server (.mcp.json → `aida mcp-serve`).
 
   Facts (verified in code, main f082aca337):
@@ -17,12 +17,16 @@ description: |-
   4. Interim mitigation (docs + launch guidance, TASK-1261): a persona launch should tell the session to decline the MCP server, or agent new should pass a settings overlay that disables .mcp.json for persona launches until (1) lands.
 
   Acceptance: as in (3), plus `aida agent new claude --role requester` + MCP enabled cannot change any spec's status, queue, or relationships; the refusal text is identical on both surfaces.
+
+  ## Acceptance
+  - AC1. Requester MCP intake refuses add_requirement calls that supply parent, feature, or owner, and creates no requirement when any of those grooming or graph-attachment fields is present.
+  - AC2. Requester MCP intake preserves caller-supplied tags while adding intake:requester, and a missing type defaults to change-request before the draft is created.
 status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T05:44:53.450870325Z
+modified_at: 2026-09-18T05:44:54.700171742Z
 req_type: Bug
 tags:
 - batch:followups-0917
