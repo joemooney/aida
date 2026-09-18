@@ -228,6 +228,8 @@ mod scaffold_refresh;
 // trace:STORY-262 | ai:claude
 mod schedule;
 mod schedule_cmd;
+mod schedule_ledger;
+mod schedule_predicate;
 mod schema;
 mod seats;
 mod server_cmd;
@@ -25953,6 +25955,19 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     ));
     out.push('\n');
 
+    // STORY-1226: the seat's due jobs from the `[schedule]` registry, so a
+    // freshly launched seat starts with the periodic work that applies to it
+    // — identical under every vendor (one registry, one view). Claude gets
+    // one extra line: it may mirror the jobs as in-session cron entries.
+    // trace:STORY-1226 | ai:claude
+    out.push_str("## Due Jobs\n\n");
+    out.push_str(&render_launch_due_jobs_section(
+        &plan.project_root,
+        plan.role.as_deref(),
+        config.agent_type,
+    ));
+    out.push('\n');
+
     out.push_str("## Queue Snapshot\n\n");
     if plan.current_spec.is_none() {
         if let Some(line) = queue_head_line(&plan.project_root, plan.role.as_deref()) {
@@ -26039,6 +26054,46 @@ periodically — every few prompts and between work items — since nothing nudg
 you automatically.\n",
     );
 
+    out
+}
+
+/// STORY-1226: build the launch-context `## Due Jobs` body for a spawned seat.
+///
+/// Lists the registry's seat jobs that apply to `role` — due ones as
+/// due-lines (with the `aida schedule done <job>` report-back), the rest as
+/// "next due" so the seat knows its periodic responsibilities at launch. A
+/// Claude launch also gets the hint that it may mirror the jobs as in-session
+/// cron entries; every vendor gets the same jobs and the same report-back
+/// contract, so the registry stays the single source (ADR-46).
+// trace:STORY-1226 | ai:claude
+fn render_launch_due_jobs_section(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    agent_type: &str,
+) -> String {
+    let mut out = String::new();
+    let seat = role.map(canonical_role_name);
+    let due = maintenance_schedule::due_seat_jobs(project_root, seat.as_deref());
+    if due.is_empty() {
+        out.push_str(&format!(
+            "- No scheduled seat jobs are due for `{}` at launch. Poll with `aida schedule due{}`.\n",
+            seat.as_deref().unwrap_or("any seat"),
+            seat.as_deref()
+                .map(|s| format!(" --seat {s}"))
+                .unwrap_or_default()
+        ));
+    } else {
+        out.push_str(&maintenance_schedule::render_due_jobs_block(
+            &due,
+            seat.as_deref().unwrap_or("*"),
+        ));
+    }
+    if agent_type == "claude" {
+        out.push_str(
+            "You may mirror these seat jobs as in-session cron entries (same interval, same \
+prompt); report each run with `aida schedule done <job>` so the shared ledger stays true.\n",
+        );
+    }
     out
 }
 
@@ -66622,6 +66677,27 @@ fn collect_awaiting_report(
         }
     };
 
+    // Due seat jobs from the `[schedule]` registry — the per-seat delivery
+    // channel (STORY-1226). Scoped to the session's seat when one is known;
+    // every seat otherwise (the operator orchestrating several seats sees
+    // them all, like briefs). File-only: a TOML parse plus the store ledger /
+    // local state files — never git, never the network — so it rides the
+    // per-turn notice. Substrate jobs never surface here; the tick runs them.
+    // trace:STORY-1226 | ai:claude
+    let cron = {
+        let seat = ctx
+            .role
+            .clone()
+            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
+            .filter(|s| !s.trim().is_empty())
+            .map(|r| canonical_role_name(&r));
+        let due = maintenance_schedule::due_seat_jobs(project_root, seat.as_deref());
+        awaiting_you::CronChannel {
+            due: due.len(),
+            next: due.first().map(|j| j.line(chrono::Utc::now())),
+        }
+    };
+
     // trace:STORY-1043 | ai:codex
     let unshipped_work = collect_unshipped_work_items(project_root, &summaries, no_ci, !no_ci);
     // trace:STORY-1043 | ai:codex
@@ -66639,6 +66715,7 @@ fn collect_awaiting_report(
         escalations,
         mail,
         worker_directives,
+        cron,
         shelved_total,
         unshipped_work,
         nightly_red,

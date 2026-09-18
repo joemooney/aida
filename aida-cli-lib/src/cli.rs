@@ -7777,33 +7777,75 @@ pub enum NotifyCommand {
     Status,
 }
 
-/// Native no-daemon maintenance scheduler. Reads `.aida/config.toml`
-/// `[schedule]` tasks, records local runtime state in `.aida/schedule-state.json`,
-/// and executes only AIDA's built-in maintenance command allowlist.
+/// Native no-daemon job registry (`aida schedule`, alias `aida cron`). Reads
+/// `[schedule]` jobs from `.aida/config.toml` (project) and
+/// `~/.aida/schedule.toml` (global; project wins by name). A SUBSTRATE job
+/// (`command = "session reap"`) is run by `tick` through AIDA's built-in
+/// allow-list; a SEAT job (`prompt = "..."`, `seats = ["advisor"]`) is never
+/// executed here — it becomes due and is delivered to whoever holds the seat
+/// (`aida awaiting --notice`, the pickup prompt, the launch context), who
+/// reports back with `done`. Schedules: `every = "30m"`, `on = ["PrMerged"]`,
+/// `when = "mail.oldest_unread_age > 15m"`. Runs are ledgered per job on the
+/// aida-store branch (`schedule/<job>.yaml`).
 // trace:STORY-1047 | ai:codex
+// trace:STORY-1226 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MaintenanceScheduleCommand {
-    /// Opportunistically run due maintenance tasks.
+    /// Evaluate every enabled job: run due substrate jobs, mark due seat jobs.
     Tick {
-        /// Hook path: skip tasks that need network or heavier external effects.
+        /// Hook path: skip jobs that need network or heavier external effects.
         #[clap(long)]
         hook: bool,
     },
 
-    /// Force one configured task now, or all configured enabled tasks.
+    /// Force one job now (substrate: execute; seat: print its prompt), or
+    /// every enabled substrate job.
     Run {
-        /// Configured task name.
+        /// Configured job name.
         name: Option<String>,
     },
 
-    /// List configured tasks, last run, next due, and status.
+    /// Show every configured job with kind, seats, schedule, status, last
+    /// run, next due — plus legacy `.aida/schedules.toml` cadence entries.
     Status {
         /// Emit JSON instead of a table.
         #[clap(long)]
         json: bool,
     },
 
-    /// Print crontab lines for enabled tasks.
+    /// List the merged registry (project + global) with source layer and
+    /// last reporter.
+    List {
+        /// Only jobs that apply to this seat (role), e.g. `advisor`.
+        #[clap(long, value_name = "ROLE")]
+        seat: Option<String>,
+        /// Emit JSON instead of a table.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// What is due right now: seat jobs for a seat (or every seat), plus due
+    /// substrate jobs when no seat filter is given.
+    Due {
+        /// Only seat jobs routed to this seat (role), e.g. `advisor`.
+        #[clap(long, value_name = "ROLE")]
+        seat: Option<String>,
+        /// Emit JSON instead of due-lines.
+        #[clap(long)]
+        json: bool,
+    },
+
+    /// Report a seat job as done: ledgers who/when on the aida-store branch
+    /// and clears the due flag.
+    Done {
+        /// Configured job name.
+        job: String,
+        /// Short note recorded with the run.
+        #[clap(long)]
+        note: Option<String>,
+    },
+
+    /// Print crontab lines for enabled substrate jobs with an `every`.
     EmitCron,
 }
 
@@ -10214,9 +10256,11 @@ pub enum Command {
     #[clap(subcommand)]
     Store(StoreCommand),
 
-    /// Run configured no-daemon maintenance tasks.
+    /// Per-seat job registry: substrate jobs run by the tick, seat jobs
+    /// delivered to whoever holds the seat (alias: `aida cron`).
     // trace:STORY-1047 | ai:codex
-    #[clap(subcommand)]
+    // trace:STORY-1226 | ai:claude
+    #[clap(subcommand, visible_alias = "cron")]
     Schedule(MaintenanceScheduleCommand),
 
     /// Manage personas / hats — persistent named contexts that resume

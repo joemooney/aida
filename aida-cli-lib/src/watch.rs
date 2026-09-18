@@ -396,6 +396,18 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "compete-outcome",
             format!("bake-off won by {} (spec-kind {})", winner, spec_kind),
         ),
+        // trace:STORY-1226 | ai:claude
+        EventKind::CronJobFired { job, seat } => (
+            "cron-job-fired",
+            format!("scheduled job {job} due for seat {seat}"),
+        ),
+        // trace:STORY-1226 | ai:claude
+        EventKind::CronJobFailed { job, error, .. } => (
+            "cron-job-failed",
+            format!("scheduled job {job} failed: {error}"),
+        ),
+        // trace:STORY-1226 | ai:claude
+        EventKind::MailReceived { to } => ("mail-received", format!("mail sent to {to}")),
         EventKind::Unknown => (
             "unknown",
             "unrecognized event (newer drain binary?)".to_string(),

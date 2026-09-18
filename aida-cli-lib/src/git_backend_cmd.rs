@@ -644,7 +644,11 @@ pub(crate) fn handle_git_backend_command(
             return crate::protocol_cmd::handle_protocol_command(protocol_cmd, &storage);
         }
         Command::Schedule(schedule_cmd) => {
-            return maintenance_schedule::handle_schedule_command(schedule_cmd, store_path);
+            return maintenance_schedule::handle_schedule_command(
+                schedule_cmd,
+                store_path,
+                Some(&backend),
+            );
         }
         Command::Mailbox(mailbox_cmd) => {
             // trace:STORY-493 | ai:claude — local layer only; git-canonical
