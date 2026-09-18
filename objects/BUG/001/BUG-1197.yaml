@@ -22,10 +22,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:15:28.257482655Z
+modified_at: 2026-09-18T04:17:02.101239691Z
 req_type: Bug
 tags:
 - batch:followups-0917
+- batch:night-0917
 - follow-up:STORY-1110
 - gate
 - keyboard
