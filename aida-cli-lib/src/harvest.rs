@@ -331,9 +331,24 @@ fn strip_code_fence(raw: &str) -> &str {
 pub(crate) fn next_ac_label(existing_labels: &[String]) -> String {
     let mut max = 0u32;
     for l in existing_labels {
-        let digits: String = l.chars().skip_while(|c| !c.is_ascii_digit()).collect();
-        if let Ok(n) = digits.parse::<u32>() {
-            max = max.max(n);
+        let prefix_len = l
+            .find(|c: char| !c.is_ascii_alphabetic())
+            .unwrap_or(l.len());
+        let (prefix, digits) = l.split_at(prefix_len);
+        // trace:BUG-1216 | ai:codex
+        // Unlabelled criteria receive `ac` + six hex digits as a stable content
+        // hash. Those generated IDs must not inflate the explicit AC sequence.
+        let is_hash_label = prefix.eq_ignore_ascii_case("ac")
+            && digits.len() == 6
+            && digits.chars().all(|c| c.is_ascii_hexdigit());
+        if !prefix.is_empty()
+            && !digits.is_empty()
+            && digits.chars().all(|c| c.is_ascii_digit())
+            && !is_hash_label
+        {
+            if let Ok(n) = digits.parse::<u32>() {
+                max = max.max(n);
+            }
         }
     }
     let mut n = max + 1;
@@ -363,6 +378,33 @@ pub(crate) fn append_acceptance_line(description: &str, label: &str, text: &str)
                 header_idx = Some(i);
                 break;
             }
+        }
+    }
+    // trace:BUG-1216 | ai:codex
+    // Prose-style specs commonly use a standalone `Acceptance:` marker. Keep
+    // the new criterion in that section so a later heading cannot shadow it.
+    if header_idx.is_none() {
+        if let Some(marker_idx) = lines.iter().position(|line| {
+            matches!(
+                line.trim().to_ascii_lowercase().as_str(),
+                "acceptance:" | "acceptance criteria:"
+            )
+        }) {
+            let mut insert_at = lines.len();
+            for (i, candidate) in lines.iter().enumerate().skip(marker_idx + 1) {
+                if candidate.trim().is_empty() || candidate.trim_start().starts_with('#') {
+                    insert_at = i;
+                    break;
+                }
+            }
+            let mut out: Vec<String> = lines[..insert_at].iter().map(|s| s.to_string()).collect();
+            out.push(line);
+            out.extend(lines[insert_at..].iter().map(|s| s.to_string()));
+            let mut result = out.join("\n");
+            if description.ends_with('\n') {
+                result.push('\n');
+            }
+            return result;
         }
     }
     let Some(h) = header_idx else {
@@ -1623,10 +1665,15 @@ mod tests {
     fn next_ac_label_is_one_past_the_highest_and_never_collides() {
         assert_eq!(next_ac_label(&[]), "AC1");
         assert_eq!(
-            next_ac_label(&["A1".into(), "AC3".into(), "acf00d1".into()]),
+            next_ac_label(&["A1".into(), "AC3".into(), "criterion2".into()]),
             "AC4"
         );
         assert_eq!(next_ac_label(&["AC1".into(), "ac2".into()]), "AC3");
+        assert_eq!(
+            next_ac_label(&["ac512630".into(), "acf00d1e".into()]),
+            "AC1"
+        );
+        assert_eq!(next_ac_label(&["AC2".into(), "ac512630".into()]), "AC3");
     }
 
     #[test]
@@ -1648,6 +1695,16 @@ mod tests {
         // No section → created.
         let out = append_acceptance_line("Just prose.", "AC1", "b");
         assert_eq!(out, "Just prose.\n\n## Acceptance\n- AC1. b\n");
+
+        let d = "Intro.\n\nAcceptance:\n- first\n- second\n\nNotes follow.\n";
+        let out = append_acceptance_line(d, "AC1", "third");
+        assert_eq!(
+            out,
+            "Intro.\n\nAcceptance:\n- first\n- second\n- AC1. third\n\nNotes follow.\n"
+        );
+        let parsed = crate::criteria::parse_acceptance_criteria("T-1", &out);
+        assert_eq!(parsed.len(), 3);
+        assert!(parsed.iter().any(|c| c.label == "AC1" && c.text == "third"));
     }
 
     #[test]
