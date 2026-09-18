@@ -8,9 +8,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T12:57:00.311234971Z
-modified_at: 2026-09-18T12:57:00.311234971Z
+modified_at: 2026-09-18T12:57:03.161853379Z
 req_type: Task
 tags:
 - lane-routing
 - parent:SPIKE-81
 - proxy-groomed
+relationships:
+- rel_type: Child
+  target_id: 01a0b2dc-3dca-76f0-922e-c8979fcf41af
+  created_at: 2026-09-18T12:57:03.161853379Z
