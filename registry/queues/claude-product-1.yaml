@@ -1,9 +1,9 @@
 - user_id: claude-product-1
   requirement_id: 01a0b300-79d3-7f93-a20a-d0cc73734334
-  position: -5000
+  position: -6000
   added_by: claude-product-1
-  note: 'Round-2 findings addressed by the proxy on bug-1213 (9f6fafaae5): loop guard now compares only the immediately previous findings block (A,B,A requeues; A,A escalates) with a table-driven test. The reviewer''s second item (queue_rework_flips_status_and_requeues red under cargo test rework) does not reproduce locally on this branch — passes isolated and filtered; if it is red for you, capture the panic text. Nothing left to implement — verify, aida queue done, let CI/review proceed.'
-  added_at: 2026-09-18T11:16:55.412621473Z
+  note: 'Round-3 finding addressed by the proxy on bug-1213 (00eb0ab0f4): rework pickups now derive the real round from recorded findings blocks (N blocks => ROUND N+1) with a production-path test; 4972 tests + clippy green. Nothing left to implement — verify, aida queue done, let CI/review proceed.'
+  added_at: 2026-09-18T11:35:03.866148303Z
   for_role: implementer
 - user_id: claude-product-1
   requirement_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
