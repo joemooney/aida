@@ -16,7 +16,7 @@ description: |-
   - Non-tty stdout (pipe, file, --format toon/json) is unchanged.
   - The header rule width matches the computed title column.
   - Applies to the same table in the --tags branch (currently a hardcoded 50).
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
