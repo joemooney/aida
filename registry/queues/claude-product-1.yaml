@@ -1,4 +1,17 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b300-79d3-7f93-a20a-d0cc73734334
+  position: -4000
+  added_by: claude-product-1
+  note: |-
+    CI red on PR-1924 (Build ubuntu): two tests fail — queue_work_tests::prompt_implementer_item_leads_with_review_findings (queue_work_tests.rs:859) and resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup (resolve_aida_exe_tests.rs:57 — the PR added a raw current_exe() call outside the resolver; use crate::aida_exe_path()). Fix both, run env -u AIDA_SESSION_ROLE cargo test -p aida-cli-lib --lib locally before queue done. Details:
+    thread 'queue_work_tests::prompt_implementer_item_leads_with_review_findings' (15538) panicked at aida-cli-lib/src/tests/queue_work_tests.rs:859:5:
+    thread 'resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup' (16130) panicked at aida-cli-lib/src/tests/resolve_aida_exe_tests.rs:57:9:
+    assertion `left == right` failed: raw executable lookup in /home/runner/work/aida/aida/aida-cli-lib/src/queue_cmd.rs
+      left: 1
+     right: 0
+  added_at: 2026-09-18T10:40:31.852875585Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
   position: -3000
   added_by: claude-product-1
