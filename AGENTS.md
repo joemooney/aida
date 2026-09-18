@@ -55,6 +55,8 @@ AIDA derives the canonical ID prefix from that type, for example
 codex mcp add aida -- aida mcp-serve
 codex --cd /home/joe/ai/aida
 aida show <SPEC-ID>
+aida protocol list
+aida protocol show spike
 aida list --status approved
 aida queue work <SPEC-ID>
 aida agent new codex --role implementer --spec <SPEC-ID>
@@ -68,6 +70,13 @@ aida --asciinema --cast-title "Demo" queue work --batch <name> --auto-complete
 tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
+
+Type protocols are editable META requirements tagged `protocol:<type>`. The
+interactive pickup surfaces (`queue work`, `do`, and `worktree enter`) inject
+the matching type protocol with its META id and a 40-line body cap; the
+per-turn notice repeats its one-line reminder while the spec lease is held.
+Spec acceptance overrides the type protocol. Done gates, lane overlays, MCP,
+and headless propagation are separate follow-up slices.
 
 Use `aida brief list --for-agent <agent>` (where `<agent>` is `codex` or `antigravity`) when a master/advisor session says
 there is a pickup brief. Briefs live under `.aida/agent-briefs/<agent>/`,

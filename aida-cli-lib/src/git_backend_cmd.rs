@@ -639,6 +639,10 @@ pub(crate) fn handle_git_backend_command(
             // STORY-582: inspect / prune the durable processing-record trail.
             return record_cmd::handle_record_command(record_cmd, &backend, store_path);
         }
+        Command::Protocol(protocol_cmd) => {
+            let store = backend.load()?;
+            return crate::protocol_cmd::handle_protocol_command(protocol_cmd, &store);
+        }
         Command::Schedule(schedule_cmd) => {
             return maintenance_schedule::handle_schedule_command(schedule_cmd, store_path);
         }

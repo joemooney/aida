@@ -2670,6 +2670,16 @@ pub enum RecordCommand {
     },
 }
 
+/// Inspect the editable per-requirement-type work protocols.
+// trace:STORY-1221 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum ProtocolCommand {
+    /// List every protocol currently stored as META.
+    List,
+    /// Show one protocol by requirement type (for example `spike` or `bug`).
+    Show { req_type: String },
+}
+
 /// Throwaway sandbox store for drain-testing and scenario play.
 /// The sandbox is an ordinary git-canonical store living under a temp dir; it
 /// is targeted via the `AIDA_STORE` env override, so it never touches the
@@ -8998,6 +9008,11 @@ pub enum Command {
     // trace:STORY-582 | ai:claude — plain `//` keeps the id out of `--help`.
     #[clap(subcommand, hide = true)]
     Record(RecordCommand),
+
+    /// Inspect the META-backed work protocol for each requirement type.
+    // trace:STORY-1221 | ai:codex
+    #[clap(subcommand)]
+    Protocol(ProtocolCommand),
 
     /// Throwaway sandbox store for drain-testing / scenario play. Creates a
     /// discardable git-canonical store under a temp dir; point `aida` at it

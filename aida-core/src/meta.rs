@@ -10,6 +10,72 @@ use crate::models::{
 };
 use anyhow::Result;
 
+/// Maximum number of protocol body lines carried into a pickup prompt.
+pub const PROTOCOL_PICKUP_LINE_CAP: usize = 40;
+
+/// The editable, substrate-backed protocol for a requirement type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeProtocol {
+    pub meta_id: String,
+    pub req_type: String,
+    pub body: String,
+}
+
+const DEFAULT_PROTOCOLS: &[(&str, &str)] = &[
+    ("spike", "Purpose: answer a bounded question with evidence.\nDeliverable: write the evidence-grounded report at the docs/spikes/*.md path named by the spec.\nBefore done: the report answers the question, records evidence and uncertainty, and names the recommended next step.\nReviewer: an advisor reads the report before anything builds on it.\nHuman boundary: decisions, taste calls, and credentials stay with the operator."),
+    ("bug", "Purpose: restore intended behavior and prevent recurrence.\nDeliverable: a focused fix plus a regression test.\nBefore done: reproduce or characterize the failure, make the test fail before the fix where practical, and run the relevant suite.\nReviewer: checks the root cause, regression coverage, and blast radius.\nHuman boundary: product-policy changes are decisions, not bug fixes."),
+    ("story", "Purpose: deliver the accepted user-visible capability.\nDeliverable: implementation and verification for every acceptance criterion.\nBefore done: acceptance is traceable to code or tests and relevant checks pass.\nReviewer: checks behavior, scope, compatibility, and documentation.\nHuman boundary: unresolved product or architecture forks return to the operator/advisor."),
+    ("task", "Purpose: complete the bounded technical or operational outcome.\nDeliverable: the artifact or repository change named by the spec.\nBefore done: acceptance is satisfied and relevant checks pass.\nReviewer: checks completeness, focus, and unintended side effects.\nHuman boundary: expand scope only through a new or edited requirement."),
+    ("decision", "Purpose: make and preserve an architecture decision.\nDeliverable: an ADR recording context, options, decision, and consequences.\nBefore done: status is accepted and references connect the decision to affected work.\nReviewer: checks alternatives, evidence, reversibility, and consequences.\nHuman boundary: the accountable human accepts consequential or taste-based choices."),
+    ("doc", "Purpose: keep the durable documentation true and useful.\nDeliverable: the named documentation update.\nBefore done: examples and links are verified against current behavior.\nReviewer: checks audience fit, accuracy, discoverability, and drift risk.\nHuman boundary: policy claims require their accountable owner."),
+];
+
+/// Resolve a type protocol from editable META data.
+// trace:STORY-1221 | ai:codex
+pub fn get_type_protocol(store: &RequirementsStore, req_type: &str) -> Option<TypeProtocol> {
+    let slug = format!("protocol:{}", req_type.trim().to_ascii_lowercase());
+    store.requirements.iter().find_map(|r| {
+        (r.req_type == RequirementType::Meta
+            && r.tags.iter().any(|t| t.eq_ignore_ascii_case(&slug)))
+        .then(|| TypeProtocol {
+            meta_id: r.display_id().to_string(),
+            req_type: req_type.trim().to_ascii_lowercase(),
+            body: r.description.clone(),
+        })
+    })
+}
+
+impl TypeProtocol {
+    /// Labeled pickup block. Acceptance is explicitly the higher-precedence layer.
+    pub fn pickup_block(&self) -> String {
+        let body = self
+            .body
+            .lines()
+            .take(PROTOCOL_PICKUP_LINE_CAP)
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            "## Type protocol: {} [{}]\nPrecedence: type protocol < spec acceptance\n{}",
+            self.req_type, self.meta_id, body
+        )
+    }
+
+    /// One line suitable for the per-turn notice hook.
+    pub fn notice_line(&self) -> String {
+        let summary = self
+            .body
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("follow the type protocol");
+        format!(
+            "protocol: {} [{}] — {}",
+            self.req_type,
+            self.meta_id,
+            summary.trim()
+        )
+    }
+}
+
 // ============================================================================
 // Default Prompt Templates
 // ============================================================================
@@ -251,7 +317,7 @@ pub fn seed_meta_requirements(store: &mut RequirementsStore) -> Result<()> {
         .any(|r| r.req_type == RequirementType::Meta);
 
     if has_meta {
-        // Already seeded
+        seed_type_protocols(store);
         return Ok(());
     }
 
@@ -316,7 +382,25 @@ pub fn seed_meta_requirements(store: &mut RequirementsStore) -> Result<()> {
         )?;
     }
 
+    seed_type_protocols(store);
+
     Ok(())
+}
+
+fn seed_type_protocols(store: &mut RequirementsStore) {
+    for (kind, body) in DEFAULT_PROTOCOLS {
+        let tag = format!("protocol:{kind}");
+        if store.requirements.iter().any(|r| {
+            r.req_type == RequirementType::Meta
+                && r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag))
+        }) {
+            continue;
+        }
+        let mut protocol = Requirement::new(format!("{} protocol", kind), (*body).to_string());
+        protocol.req_type = RequirementType::Meta;
+        protocol.tags.insert(tag);
+        store.add_requirement_with_id(protocol, None, Some("META"));
+    }
 }
 
 /// Check if META requirements need seeding
@@ -357,13 +441,13 @@ mod tests {
 
         assert!(!needs_meta_seeding(&store));
 
-        // Should have created 6 META requirements (1 folder + 5 prompts)
+        // Six prompt META rows plus one editable protocol per work type.
         let meta_count = store
             .requirements
             .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
-        assert_eq!(meta_count, 6);
+        assert_eq!(meta_count, 12);
 
         // Seeding again should be a no-op
         seed_meta_requirements(&mut store).unwrap();
@@ -372,7 +456,31 @@ mod tests {
             .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
-        assert_eq!(meta_count_after, 6);
+        assert_eq!(meta_count_after, 12);
+    }
+
+    #[test]
+    fn seeded_protocol_is_capped_and_live_editable() {
+        let mut store = RequirementsStore::default();
+        seed_meta_requirements(&mut store).unwrap();
+        let spike = get_type_protocol(&store, "SPIKE").unwrap();
+        assert!(spike.pickup_block().contains(&spike.meta_id));
+        assert!(spike.body.contains("docs/spikes/*.md"));
+        let row = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.tags.contains("protocol:spike"))
+            .unwrap();
+        row.description = (0..50)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let edited = get_type_protocol(&store, "spike").unwrap();
+        assert_eq!(
+            edited.pickup_block().lines().count(),
+            PROTOCOL_PICKUP_LINE_CAP + 2
+        );
+        assert!(!edited.pickup_block().contains("line 40"));
     }
 
     #[test]
