@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T22:36:01.514999594Z
+modified_at: 2026-09-18T22:45:07.181381562Z
 req_type: Story
 tags:
 - batch:followups-0918e
@@ -56,5 +56,11 @@ comments:
   content: 'Architecture sketch (Codex, 2026-09-18) — slice 1 only:\n1. Add a provider-neutral protocol module in aida-core that resolves a type protocol from META requirements using the stable tag/slug protocol:<type>, returns the META id, a <=40-line pickup block, and a one-line reminder. Resolution reads the live store each invocation so META edits require no rebuild.\n2. Seed one META protocol per supported work type during init from embedded defaults, including the spike deliverable/reviewer two-part contract. Preserve idempotency and existing-project data.\n3. Add aida protocol list/show <type> as read-only CLI projections over the same resolver.\n4. Inject the labeled type layer (type protocol < spec acceptance) into interactive pickup entry surfaces in this slice: queue work / do / worktree enter, using one shared formatter. Do not add lane, MCP, headless, or done-gate behavior (TASK-1277/1278).\n5. Extend aida awaiting --notice to print the one-line reminder only when the current session holds a spec lease; naturally disappears when the lease is cleared/done.\n6. Add focused resolver, seeding, CLI, prompt-cap, live-edit, and notice lifecycle tests; trace implementation with STORY-1221.'
   created_at: 2026-09-18T22:36:01.514999594Z
   modified_at: 2026-09-18T22:36:01.514999594Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b6b1-e5ed-7e73-98ed-c3c7ef76e049
+  author: joe
+  content: 'Implementation complete at a46e6785dd. Slice boundaries honored: no done gate (TASK-1277), and no lane/MCP/headless injection (TASK-1278). Verification: cargo check -p aida-cli-lib; cargo fmt --all -- --check; cargo test -p aida-core meta::tests (4 passed); cargo test -p aida-cli-lib --lib init_cmd (39 passed); disposable distributed-init smoke test showed six seeded protocols (META-007..012), spike show output, and immediate live META body edit reflection. Architecture sketch above still awaits advisor sign-off before PR/merge.'
+  created_at: 2026-09-18T22:45:07.181381562Z
+  modified_at: 2026-09-18T22:45:07.181381562Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
