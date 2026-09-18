@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:56:48.209720782Z
+modified_at: 2026-09-18T11:56:49.316387901Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -200,6 +200,22 @@ comments:
     confidence: 0.86
   created_at: 2026-09-18T11:56:48.209720782Z
   modified_at: 2026-09-18T11:56:48.209720782Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b460-5d24-7470-85d7-5e1eec180fd6
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:bug-1213-drain-01a0b45c-efd0-7c81-b424-5ad48d2d0239.json
+    agent: codex
+    ran-at: 2026-09-18 04:56 -07:00
+    confirmed: 3
+    declined: 0
+    skipped: 0
+    + SEM [aida:sem] comment — The displayed rework round is derived from durable spec history: the original implementation is round 1, each recorded review-findings block advances the round, and unrelated comments do not affect the count; consequently the first rework pickup is round 2.
+    + SEM [aida:sem] comment — Review-loop recurrence compares the new findings only with the most recently created prior review-findings block, ignoring intervening non-findings comments; a nonconsecutive A → B → A sequence is not treated as a loop.
+    + SEM [aida:sem] comment — When identical findings trigger the loop guard, the duplicate findings block is not appended again to the requirement comments; the spec remains NeedsAttention while the advisor finding and notified brief are created.
+  created_at: 2026-09-18T11:56:49.316387901Z
+  modified_at: 2026-09-18T11:56:49.316387901Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b45e-de0b-7211-82b6-2e3d49266bf3
