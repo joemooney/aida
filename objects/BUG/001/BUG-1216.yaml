@@ -10,12 +10,12 @@ description: |-
   Also fix BUG-1209's own label: rename BUG-1209.AC512631 → BUG-1209.AC1 in its ## Acceptance (no test traces it yet, so no trace comments to update).
 
   Acceptance: the unit cases above pass; harvesting onto a spec with only hash-labeled criteria yields AC1; BUG-1209's criterion reads AC1.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T08:49:32.841325905Z
+modified_at: 2026-09-18T09:30:55.700236932Z
 req_type: Bug
 tags:
 - batch:followups-0918
