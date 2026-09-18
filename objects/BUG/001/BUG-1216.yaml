@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T10:02:51.458387176Z
+modified_at: 2026-09-18T10:02:52.746659167Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -74,6 +74,21 @@ comments:
   created_at: 2026-09-18T09:58:33.800088345Z
   modified_at: 2026-09-18T09:58:33.800088345Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b3f8-0bca-7ff2-bfec-c4c1e964c637
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:bug-1216-drain-01a0b3f3-ac16-7180-867d-47226d08a369.json
+    agent: codex
+    ran-at: 2026-09-18 03:02 -07:00
+    confirmed: 2
+    declined: 0
+    skipped: 0
+    + AC BUG-1216.AC1 — Appending a harvested criterion to a description that uses a standalone `Acceptance:` or `Acceptance Criteria:` marker adds the criterion to that inline section without creating a second `## Acceptance` heading, and the appended criterion remains visible to `aida criteria` alongside the original inline bullets.
+    + AC BUG-1216.AC2 — When a spec contains both a `## Acceptance` section and a colon-form acceptance section, `aida criteria` returns criteria from both rather than allowing the heading form to shadow the colon-form bullets.
+  created_at: 2026-09-18T10:02:52.746659167Z
+  modified_at: 2026-09-18T10:02:52.746659167Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b3f4-342e-7921-9b9c-0f9c67dec262
   author: aida-auto-bump
