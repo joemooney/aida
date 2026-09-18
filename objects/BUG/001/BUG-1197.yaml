@@ -1,0 +1,33 @@
+id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
+spec_id: BUG-1197
+agreed_id: BUG-1197
+title: 'Stakeholder persona gate is bypassable through the MCP server: aida mcp-serve is allowed under guest/requester and mcp.rs enforces none of the STORY-1110 refusals (add_requirement/update_requirement/q'
+description: |-
+  Found 2026-09-17 17:58 while the operator launched `aida agent new claude --role requester` and Claude Code prompted to enable the project's aida MCP server (.mcp.json → `aida mcp-serve`).
+
+  Facts (verified in code, main f082aca337):
+  - enforce_stakeholder_role_capabilities (aida-cli-lib/src/lib.rs ~12028, called from run() at ~2450) is a DENY-LIST over CLI Command variants: guest refuses command_triggers_per_write_auto_push + stakeholder_command_is_build_loop; requester additionally rewrites Command::Add (type ∈ change-request/bug/user, status forced draft, tag intake:requester). Command::McpServe is on neither list, so `aida mcp-serve` starts normally under AIDA_SESSION_ROLE=guest|requester (the child inherits the env).
+  - aida-cli-lib/src/mcp.rs contains no reference to active_stakeholder_role / enforce_stakeholder_role_capabilities / role_is_stakeholder_only. MCP tool handlers (add_requirement, update_requirement, add_comment, add_relationship, queue_add, queue_work, queue_done, claim_task, post_directive, db_sync, pull, …) call internal functions directly, never through run()'s Command gate.
+  - Net: a persona session that enables the MCP server has the full write surface. STORY-1110's acceptance ("least-privilege MUST be a programmatic gate… mechanically unable to escalate") holds for the CLI path only.
+
+  Fix (keystone: permission boundary; keyboard/guided, not an unattended drain):
+  1. In mcp-serve, resolve the persona once at startup (same active_stakeholder_role) and apply the SAME envelope per tool: guest → only the read tools are listed (list/show/search/query_graph/history/list_features/status/why-class reads); requester → reads + add_requirement constrained exactly like the CLI (type allow-list, status forced draft, tag intake:requester, no queue/batch/for); every other tool is either omitted from tools/list or returns the one-line stakeholder_refusal text. Share the policy with the CLI (one function that classifies an action as read / intake / build-loop) so the two surfaces cannot drift (cf. STORY-82 parity rule).
+  2. Add McpServe to nothing — keep the server startable (reads are the persona's main use) — but make the gate live inside it.
+  3. Tests: MCP stdio suite cases — guest: add_requirement/update_requirement/queue_add refused, list/show allowed; requester: add_requirement(type=bug) → Draft + intake:requester, add_requirement(type=story) refused, update_requirement refused. A parity test asserting the set of refused MCP tools == the set of refused CLI commands for each persona.
+  4. Interim mitigation (docs + launch guidance, TASK-1261): a persona launch should tell the session to decline the MCP server, or agent new should pass a settings overlay that disables .mcp.json for persona launches until (1) lands.
+
+  Acceptance: as in (3), plus `aida agent new claude --role requester` + MCP enabled cannot change any spec's status, queue, or relationships; the refusal text is identical on both surfaces.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T00:58:55.816510526Z
+modified_at: 2026-09-18T00:58:55.816510526Z
+req_type: Bug
+tags:
+- follow-up:STORY-1110
+- gate
+- keyboard
+- mcp
+- personas
+- security
