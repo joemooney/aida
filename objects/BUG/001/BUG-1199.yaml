@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:56:54.827970711Z
-modified_at: 2026-09-18T02:30:27.343867959Z
+modified_at: 2026-09-18T02:30:44.760764591Z
 req_type: Bug
 tags:
 - batch:exe-0917
@@ -42,5 +42,11 @@ comments:
     Scope widening: this is a CLASS bug — every raw current_exe() subprocess site in a long-lived process breaks after a rebuild (harvest, reconstitute, pr_review_story_already_exists in lib.rs, the TUI's app.rs aida_exe(), …). Fix: one shared crate::aida_exe_path() that (1) strips a trailing " (deleted)" and re-validates the path exists, (2) falls back to `aida` on PATH, (3) is resolved once and cached for the process; replace all raw call sites; add a unit test for the "(deleted)" strip. Keep the ledger-persist-before-comment + brief-regardless items from the original description — they are still right (any spawn failure must not lose the audit).
   created_at: 2026-09-18T02:30:27.343867959Z
   modified_at: 2026-09-18T02:30:27.343867959Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b25a-1b18-7ec2-a43b-54271a89b459
+  author: joe
+  content: 'Implementation pointer: the hardened resolver already exists — resolve_aida_exe() (BUG-562, used by solo_cmd.rs: strips the ''(deleted)'' suffix and falls back to the on-PATH aida) and pr_ship_post_merge_aida_exe() (SPEC-411, pr_cmd.rs). Do not write a third: consolidate on resolve_aida_exe(), make harvest::aida_exe / reconstitute::aida_exe / lib.rs pr_review_story_already_exists / aida-tui app.rs aida_exe call it, then sweep the remaining raw std::env::current_exe() subprocess sites (grep shows ~36 across autoprogress, compete_cmd, drain_cmd, maintenance_schedule, supervise_cmd, supervisor, upgrade_cmd, plan_cmd, queue_cmd, session — judge each: long-lived process → must use the resolver). Add a clippy-style source guard test: no  outside the resolver module.'
+  created_at: 2026-09-18T02:30:44.760764591Z
+  modified_at: 2026-09-18T02:30:44.760764591Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
