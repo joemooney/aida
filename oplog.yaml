@@ -73625,5 +73625,21 @@ operations:
   timestamp: 2026-09-18T01:03:32.983093029Z
   kind: !SetDescription
     description: 'Follow-up from the STORY-1178 plan: a blocking harvest gate ([harvest] gate = "block") that refuses a merge when confirmed candidates are unlanded. ADR-45 made v1 advisory on purpose; blocking is design-bearing (false positives would block merges) and must wait on measured precision of the propose-only ledgers. Not drain work.'
-clock: 5733
+- id: 01a0b20e-79eb-7582-8cce-74673578d0ae
+  target_id: 01a0b1f9-6f57-7f21-b29b-f1c9f4d64b5d
+  author: aida
+  node_id: '1'
+  lamport: 5734
+  timestamp: 2026-09-18T01:08:08.299924236Z
+  kind: !AddTag
+    tag: proxy-groomed
+- id: 01a0b20e-7a7c-7bb1-ab2e-df7c14e590d1
+  target_id: 01a0b1f9-6f57-7f21-b29b-f1c9f4d64b5d
+  author: aida
+  node_id: '1'
+  lamport: 5735
+  timestamp: 2026-09-18T01:08:08.444881702Z
+  kind: !AddTag
+    tag: batch:followups-0917
+clock: 5735
 node_id: '1'

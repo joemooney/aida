@@ -26,11 +26,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:45:09.335172014Z
-modified_at: 2026-09-18T00:45:09.335172014Z
+modified_at: 2026-09-18T01:08:08.213370666Z
 req_type: Bug
 tags:
+- batch:followups-0917
 - drain-safe
 - follow-up:TASK-1237
 - picker
+- proxy-groomed
 - role
 - ux-signal
+execution_mode: drain
