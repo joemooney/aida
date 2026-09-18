@@ -76304,5 +76304,13 @@ operations:
       ## Recurse-fix
 
       Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
-clock: 5897
+- id: 01a0b449-541b-7851-83e1-96091957cc7f
+  target_id: 01a0b425-ef75-7ee2-988d-c19f546bc29f
+  author: aida
+  node_id: '1'
+  lamport: 5898
+  timestamp: 2026-09-18T11:31:39.675073671Z
+  kind: !SetTitle
+    title: 'Rework no-op guard: make the unchanged-head predicate content-based (git diff / git cherry, SHA compare as fast path) so a rebase-only or amend-only round is still a no-op'
+clock: 5898
 node_id: '1'
