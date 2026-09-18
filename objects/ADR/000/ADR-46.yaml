@@ -21,12 +21,12 @@ description: |-
 
   ## Consequences
   The registry is vendor-neutral by construction (one file, one status view); Claude additionally mirrors its seat jobs as in-session cron entries. The ledger becomes the source for "who last triaged the mailbox and when" (SPIKE-82) and for TASK-1271's latency row. STORY-1218's tick consumes the same registry and owns the installer and unattended execution. The registry lives in the tracked `[schedule]` section of .aida/config.toml (project layer) plus `~/.aida/schedule.toml` (global layer), not a separate cron.toml, so it inherits the gitignore exception, worktree inheritance and the config editing surface.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:14:22.526081517Z
-modified_at: 2026-09-18T21:21:25.953489101Z
+modified_at: 2026-09-18T22:14:10.501522646Z
 req_type: Decision
 tags:
 - adr
