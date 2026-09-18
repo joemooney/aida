@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
-  position: 13000
-  added_by: role:implementer
-  note: 'slice 1 only: META-stored protocol:<type> seeded from templates; aida protocol list/show; pickup-prompt injection (queue work / do / worktree enter) capped 40 lines citing the META id; per-turn notice line while leased; precedence labels; NO done-gate (TASK-1277) and NO lane/MCP/headless (TASK-1278); merge at advisor gate'
-  added_at: 2026-09-18T19:28:05.285644345Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b5fd-0bf7-7ae3-8e7c-306b04c7fba7
   position: 14000
   added_by: role:implementer
@@ -97,5 +89,12 @@
   added_by: role:implementer
   note: 'six small ledger/tick hardening items from the #1946 review; one test each'
   added_at: 2026-09-18T22:21:44.985836038Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
+  position: 27000
+  added_by: role:implementer
+  added_at: 2026-09-18T22:58:19.450293650Z
   for_role: implementer
   added_by_machine: imac
