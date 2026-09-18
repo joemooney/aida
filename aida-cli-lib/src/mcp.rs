@@ -869,6 +869,10 @@ struct McpServer<'a> {
     /// Active tool profile governing which tools are advertised + callable.
     /// trace:STORY-474 | ai:claude
     profile: McpProfile,
+    // trace:BUG-1197 | ai:codex
+    /// Persona envelope inherited from the launching session. Unlike an MCP
+    /// profile, this is not operator-configurable and can only narrow access.
+    stakeholder_role: Option<String>,
 }
 
 /// Helper to get the display spec_id from a Requirement
@@ -941,6 +945,7 @@ impl<'a> McpServer<'a> {
             storage,
             project_root,
             profile,
+            stakeholder_role: crate::active_stakeholder_role(),
         }
     }
 
@@ -952,6 +957,22 @@ impl<'a> McpServer<'a> {
             storage,
             project_root,
             profile,
+            stakeholder_role: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_profile_and_role(
+        storage: &'a Storage,
+        project_root: PathBuf,
+        profile: McpProfile,
+        stakeholder_role: &str,
+    ) -> Self {
+        Self {
+            storage,
+            project_root,
+            profile,
+            stakeholder_role: Some(stakeholder_role.to_string()),
         }
     }
 
@@ -1007,15 +1028,50 @@ impl<'a> McpServer<'a> {
     fn handle_tools_list(&self, id: &Value) -> JsonRpcResponse {
         // trace:STORY-474 | ai:claude — advertise only the tools the active
         // profile exposes, each tagged with the tier that admits it.
-        JsonRpcResponse::success(
-            id.clone(),
-            json!({ "tools": tool_descriptors_for_profile(self.profile) }),
-        )
+        let mut tools = tool_descriptors_for_profile(self.profile);
+        if let Some(role) = self.stakeholder_role.as_deref() {
+            if let Some(descriptors) = tools.as_array_mut() {
+                descriptors.retain(|tool| {
+                    tool.get("name")
+                        .and_then(Value::as_str)
+                        .map(|name| stakeholder_tool_allowed(role, name))
+                        .unwrap_or(false)
+                });
+            }
+        }
+        JsonRpcResponse::success(id.clone(), json!({ "tools": tools }))
     }
 
     fn handle_tools_call(&self, id: &Value, params: &Value) -> JsonRpcResponse {
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
-        let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+        let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+
+        // BUG-1197: the inherited persona is a hard boundary at call time, not
+        // merely a tools/list hint. This also protects against clients that
+        // cached a wider descriptor set before the server restarted.
+        if let Some(role) = self.stakeholder_role.as_deref() {
+            if is_known_tool(tool_name) && !stakeholder_tool_allowed(role, tool_name) {
+                return JsonRpcResponse::success(
+                    id.clone(),
+                    McpError::classify(
+                        tool_name,
+                        &crate::stakeholder_refusal_message(
+                            role,
+                            stakeholder_mcp_action_label(tool_name),
+                        ),
+                    )
+                    .to_result_value(),
+                );
+            }
+            if role == "requester" && tool_name == "add_requirement" {
+                if let Err(message) = constrain_requester_intake(&mut arguments) {
+                    return JsonRpcResponse::success(
+                        id.clone(),
+                        McpError::classify(tool_name, &message).to_result_value(),
+                    );
+                }
+            }
+        }
 
         // trace:STORY-474 | ai:claude — the profile is a real boundary, not just
         // a discovery filter: reject a tool that exists but is above the active
@@ -6054,6 +6110,84 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 // just a discovery hint: `tools/list` advertises only in-profile tools, and
 // `tools/call` REJECTS an out-of-profile tool with a stable error even if a
 // client calls it by name anyway.
+
+fn stakeholder_mcp_action(tool_name: &str) -> crate::StakeholderAction {
+    if tool_name == "add_requirement" {
+        crate::StakeholderAction::Intake
+    } else if crate::stakeholder_mcp_read_allowed(tool_name) {
+        crate::StakeholderAction::Read
+    } else {
+        crate::StakeholderAction::Write
+    }
+}
+
+fn stakeholder_tool_allowed(role: &str, tool_name: &str) -> bool {
+    crate::stakeholder_action_allowed(role, stakeholder_mcp_action(tool_name))
+}
+
+fn stakeholder_mcp_action_label(tool_name: &str) -> &'static str {
+    match tool_name {
+        "add_requirement" => "adding requirements",
+        "update_requirement" => "editing requirements",
+        name if name.starts_with("queue_") => "queue operations",
+        "add_relationship" => "relationship writes",
+        "add_comment" => "comment writes",
+        _ => "writes",
+    }
+}
+
+fn constrain_requester_intake(arguments: &mut Value) -> Result<(), String> {
+    let Some(object) = arguments.as_object_mut() else {
+        return Err("arguments must be an object".to_string());
+    };
+    // trace:BUG-1197 | ai:codex
+    // Requester intake may create a standalone draft, but it may not attach
+    // that draft to an existing graph node or assign its grooming metadata.
+    // `parent` is especially important: add_requirement materializes it as a
+    // relationship write, which would otherwise bypass the requester envelope.
+    if ["parent", "feature", "owner"]
+        .iter()
+        .any(|field| object.contains_key(*field))
+    {
+        return Err(crate::stakeholder_refusal_message(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
+    let queues_intake = object.get("queue").and_then(Value::as_bool) == Some(true)
+        || object.get("batch").is_some_and(|value| !value.is_null())
+        || object.get("for").is_some_and(|value| !value.is_null());
+    if queues_intake {
+        return Err(crate::stakeholder_refusal_message(
+            "requester",
+            "queueing intake",
+        ));
+    }
+    let type_name = match object.get("type") {
+        Some(Value::String(type_name)) => type_name.clone(),
+        Some(_) => return Err("type must be a string".to_string()),
+        None => "change-request".to_string(),
+    };
+    if !crate::requester_intake_type_allowed(&type_name) {
+        return Err(crate::stakeholder_refusal_message(
+            "requester",
+            "adding anything except change-request, bug, or user specs",
+        ));
+    }
+    object.insert("type".to_string(), json!(type_name));
+    object.insert("status".to_string(), json!("draft"));
+    let tags = object.entry("tags").or_insert_with(|| json!([]));
+    let Some(tags) = tags.as_array_mut() else {
+        return Err("tags must be an array".to_string());
+    };
+    if !tags.iter().any(|tag| {
+        tag.as_str()
+            .is_some_and(|tag| tag.eq_ignore_ascii_case("intake:requester"))
+    }) {
+        tags.push(json!("intake:requester"));
+    }
+    Ok(())
+}
 
 /// Capability tier governing which MCP tools are exposed. Ordered low→high;
 /// each tier admits every tool of the tiers below it. trace:STORY-474 | ai:claude
@@ -11417,6 +11551,237 @@ mod tests {
             result["isError"] != json!(true),
             "in-profile read was rejected: {result}"
         );
+    }
+
+    #[test]
+    fn guest_persona_lists_and_calls_only_reads() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server = McpServer::with_profile_and_role(
+            storage,
+            dir.path().to_path_buf(),
+            McpProfile::Full,
+            "guest",
+        );
+
+        let listed = server.handle_tools_list(&json!(1)).result.unwrap();
+        let names: Vec<&str> = listed["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|tool| tool["name"].as_str())
+            .collect();
+        assert!(names.contains(&"list_requirements"));
+        assert!(names.contains(&"show_requirement"));
+        for write in [
+            "add_requirement",
+            "update_requirement",
+            "queue_add",
+            "db_sync",
+            "session_start",
+            "role_enter",
+        ] {
+            assert!(!names.contains(&write), "guest advertised {write}");
+            let result = server
+                .handle_tools_call(&json!(2), &json!({"name": write, "arguments": {}}))
+                .result
+                .unwrap();
+            assert_eq!(result["structuredError"]["code"], "permission_denied");
+            assert!(result["structuredError"]["message"]
+                .as_str()
+                .unwrap()
+                .starts_with(
+                    "AIDA_SESSION_ROLE=guest is a least-privilege stakeholder role; refusing"
+                ));
+        }
+        let read = server
+            .handle_tools_call(&json!(3), &json!({"name": "list_requirements"}))
+            .result
+            .unwrap();
+        assert_ne!(read["isError"], json!(true));
+    }
+
+    #[test]
+    fn requester_persona_allows_only_constrained_intake_write() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server = McpServer::with_profile_and_role(
+            storage,
+            dir.path().to_path_buf(),
+            McpProfile::Full,
+            "requester",
+        );
+
+        let response = server
+            .handle_tools_call(
+                &json!(1),
+                &json!({
+                    "name": "add_requirement",
+                    "arguments": {
+                        "title": "Requester report",
+                        "description": "Reproduction details",
+                        "type": "bug",
+                        "status": "completed",
+                        "tags": ["external"]
+                    }
+                }),
+            )
+            .result
+            .unwrap();
+        assert_ne!(response["isError"], json!(true), "{response}");
+        let store = server.storage.load().unwrap();
+        let requirement = store.requirements.last().unwrap();
+        assert_eq!(requirement.status, RequirementStatus::Draft);
+        assert!(requirement.tags.contains("external"));
+        assert!(requirement.tags.contains("intake:requester"));
+
+        for write in ["update_requirement", "queue_add", "add_relationship"] {
+            let result = server
+                .handle_tools_call(&json!(2), &json!({"name": write, "arguments": {}}))
+                .result
+                .unwrap();
+            assert_eq!(result["structuredError"]["code"], "permission_denied");
+        }
+    }
+
+    #[test]
+    fn requester_persona_rejects_non_intake_requirement_types() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server = McpServer::with_profile_and_role(
+            storage,
+            dir.path().to_path_buf(),
+            McpProfile::Full,
+            "requester",
+        );
+        let result = server
+            .handle_tools_call(
+                &json!(1),
+                &json!({
+                    "name": "add_requirement",
+                    "arguments": {"title": "No", "description": "No", "type": "story"}
+                }),
+            )
+            .result
+            .unwrap();
+        assert_eq!(result["structuredError"]["code"], "permission_denied");
+        assert!(result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("adding anything except change-request, bug, or user specs"));
+        assert!(server.storage.load().unwrap().requirements.is_empty());
+    }
+
+    #[test]
+    fn requester_persona_rejects_relationship_and_grooming_fields_on_intake() {
+        let dir = tempdir().unwrap();
+        let cache_path = dir.path().join(".aida").join("c.yaml");
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let storage = Box::leak(Box::new(Storage::new(cache_path)));
+        let server = McpServer::with_profile_and_role(
+            storage,
+            dir.path().to_path_buf(),
+            McpProfile::Full,
+            "requester",
+        );
+
+        for field in ["parent", "feature", "owner"] {
+            let result = server
+                .handle_tools_call(
+                    &json!(1),
+                    &json!({
+                        "name": "add_requirement",
+                        "arguments": {
+                            "title": "Requester report",
+                            "description": "Reproduction details",
+                            field: "STORY-1"
+                        }
+                    }),
+                )
+                .result
+                .unwrap();
+            assert_eq!(result["structuredError"]["code"], "permission_denied");
+            assert!(result["structuredError"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("setting parent, feature, or owner during intake"));
+        }
+        assert!(server.storage.load().unwrap().requirements.is_empty());
+    }
+
+    #[test]
+    fn stakeholder_mcp_policy_covers_every_descriptor_via_shared_actions() {
+        for tool in tool_descriptors().as_array().unwrap() {
+            let name = tool["name"].as_str().unwrap();
+            let action = stakeholder_mcp_action(name);
+            assert_eq!(
+                stakeholder_tool_allowed("guest", name),
+                crate::stakeholder_action_allowed("guest", action)
+            );
+            assert_eq!(
+                stakeholder_tool_allowed("requester", name),
+                crate::stakeholder_action_allowed("requester", action)
+            );
+            assert_eq!(
+                stakeholder_tool_allowed("requester", name),
+                crate::stakeholder_mcp_read_allowed(name) || name == "add_requirement"
+            );
+        }
+
+        for read in [
+            "list_requirements",
+            "show_requirement",
+            "search_requirements",
+            "query_graph",
+            "list_features",
+            "history",
+            "read_inbox",
+            "list_punts",
+            "read_punt",
+            "list_findings",
+            "list_active_leases",
+            "list_directives",
+            "list_briefs",
+            "read_brief",
+            "queue_list",
+            "queue_next",
+            "queue_progress",
+            "cache_status",
+            "schema",
+            "status_unified",
+            "usage_query",
+            "plan_verify",
+            "plan_helpers",
+            "ultraplan_assemble",
+            "goal_derive",
+        ] {
+            assert!(
+                crate::stakeholder_mcp_read_allowed(read),
+                "missing read: {read}"
+            );
+        }
+        for write in [
+            "db_sync",
+            "fetch",
+            "pull",
+            "queue_work",
+            "session_start",
+            "session_end",
+            "session_manifest",
+            "role_enter",
+            "role_end",
+        ] {
+            assert!(
+                !crate::stakeholder_mcp_read_allowed(write),
+                "unsafe read: {write}"
+            );
+        }
     }
 
     /// Resolution order for the non-env layers (override > config > default).

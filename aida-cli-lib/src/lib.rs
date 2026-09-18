@@ -346,12 +346,13 @@ use crate::cli::{
     BriefCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand,
     DepsCommand, DevCommand, DrainCommand, FindingsCommand, FocusCommand, GitHubCommand,
     GitLabCommand, GlyphCommand, GraphCommand, HeadlessCommand, HistoryCommand, IdentityCommand,
-    JiraCommand, LoadCommand, McpCommand, MemoriesCommand, NodeCommand, OrchestratorCommand,
-    OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand, QueueCommand,
-    RelationshipCommand, ReleaseCommand, ReviewCommand, RoleCommand, RolePromptCommand,
-    RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand, SkillCommand,
-    SoloAction, SpecCommand, StackCommand, TeamCommand, TerminalCommand, TraceCommand,
-    UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand, WorktreePoolCommand, ZenCommand,
+    JiraCommand, LoadCommand, MailboxCommand, McpCommand, MemoriesCommand, NodeCommand,
+    OrchestratorCommand, OutputFormat, PlanCommand, PrCommand, PuntsCommand, QuestionsCommand,
+    QueueCommand, RelationshipCommand, ReleaseCommand, ReviewCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, SessionCommand, SessionManifestCommand,
+    SkillCommand, SoloAction, SpecCommand, StackCommand, TeamCommand, TerminalCommand,
+    TraceCommand, UpgradeCommand, UsageCommand, WorkerCommand, WorktreeCommand,
+    WorktreePoolCommand, ZenCommand,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12123,17 +12124,81 @@ fn command_triggers_per_write_auto_push(command: &Command) -> bool {
     }
 }
 
-fn active_stakeholder_role() -> Option<String> {
+pub(crate) fn active_stakeholder_role() -> Option<String> {
     std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .map(|role| canonical_role_name(role.trim()))
         .filter(|role| role == "guest" || role == "requester")
 }
 
-fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
-    anyhow::anyhow!(
+pub(crate) fn stakeholder_refusal_message(role: &str, action: &str) -> String {
+    format!(
         "AIDA_SESSION_ROLE={role} is a least-privilege stakeholder role; refusing {action}. Ask an advisor to groom, route, or approve it."
     )
+}
+
+fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
+    anyhow::anyhow!(stakeholder_refusal_message(role, action))
+}
+
+// trace:BUG-1197 | ai:codex
+/// Shared capability vocabulary for the CLI and MCP stakeholder envelopes.
+/// Keeping this decision independent of either transport prevents a new write
+/// path from silently widening guest/requester authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StakeholderAction {
+    Read,
+    Intake,
+    Write,
+}
+
+pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) -> bool {
+    match role {
+        "guest" => action == StakeholderAction::Read,
+        "requester" => matches!(action, StakeholderAction::Read | StakeholderAction::Intake),
+        _ => true,
+    }
+}
+
+/// Tools that stakeholder personas may use as reads. This is deliberately
+/// narrower than the MCP `read-only` profile: that profile also contains
+/// command-producing helpers whose returned commands can mutate shared state.
+// trace:BUG-1197 | ai:codex
+pub(crate) fn stakeholder_mcp_read_allowed(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "list_requirements"
+            | "show_requirement"
+            | "search_requirements"
+            | "query_graph"
+            | "list_features"
+            | "history"
+            | "read_inbox"
+            | "list_punts"
+            | "read_punt"
+            | "list_findings"
+            | "list_active_leases"
+            | "list_directives"
+            | "list_briefs"
+            | "read_brief"
+            | "queue_list"
+            | "queue_next"
+            | "queue_progress"
+            | "cache_status"
+            | "schema"
+            | "status_unified"
+            | "usage_query"
+            | "plan_verify"
+            | "plan_helpers"
+            | "ultraplan_assemble"
+            | "goal_derive"
+    )
+}
+
+pub(crate) fn requester_intake_type_allowed(type_name: &str) -> bool {
+    parse_requirement_type(type_name)
+        .map(|req_type| requester_add_type_allowed(&req_type))
+        .unwrap_or(false)
 }
 
 fn parse_requester_add_type(raw: Option<&str>) -> Result<RequirementType> {
@@ -12175,11 +12240,14 @@ fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
     let Some(role) = active_stakeholder_role() else {
         return Ok(());
     };
-    match role.as_str() {
+    enforce_stakeholder_role_capabilities_for_role(command, &role)
+}
+
+fn enforce_stakeholder_role_capabilities_for_role(command: &mut Command, role: &str) -> Result<()> {
+    match role {
         "guest" => {
-            if command_triggers_per_write_auto_push(command)
-                || stakeholder_command_is_build_loop(command)
-            {
+            let action = stakeholder_cli_action(command);
+            if !stakeholder_action_allowed("guest", action) {
                 return Err(stakeholder_refusal(
                     "guest",
                     stakeholder_action_label(command),
@@ -12218,9 +12286,8 @@ fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
                 add_csv_tag(tags, "intake:requester");
                 return Ok(());
             }
-            if command_triggers_per_write_auto_push(command)
-                || stakeholder_command_is_build_loop(command)
-            {
+            let action = stakeholder_cli_action(command);
+            if !stakeholder_action_allowed("requester", action) {
                 return Err(stakeholder_refusal(
                     "requester",
                     stakeholder_action_label(command),
@@ -12232,22 +12299,105 @@ fn enforce_stakeholder_role_capabilities(command: &mut Command) -> Result<()> {
     Ok(())
 }
 
-fn stakeholder_command_is_build_loop(command: &Command) -> bool {
-    matches!(
+#[cfg(test)]
+mod stakeholder_cli_policy_tests {
+    use super::*;
+
+    fn guest_refusal(args: &[&str]) -> anyhow::Error {
+        let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+        enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
+            .expect_err("guest command must be refused")
+    }
+
+    #[test]
+    fn guest_refuses_db_sync() {
+        assert!(guest_refusal(&["aida", "db", "sync"])
+            .to_string()
+            .contains("refusing database writes"));
+    }
+
+    #[test]
+    fn guest_refuses_session_start() {
+        assert!(
+            guest_refusal(&["aida", "session", "start", "--owns", "BUG-1197"])
+                .to_string()
+                .contains("refusing writes")
+        );
+    }
+
+    #[test]
+    fn guest_allows_mcp_and_coordination_reads() {
+        for args in [
+            &["aida", "mcp-serve"][..],
+            &["aida", "awaiting", "--no-ci"][..],
+            &["aida", "queue", "list"][..],
+            &["aida", "mailbox", "inbox", "--peek"][..],
+        ] {
+            let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+            enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
+                .unwrap_or_else(|err| panic!("guest read {args:?} was refused: {err}"));
+        }
+    }
+
+    #[test]
+    fn guest_refuses_role_enter() {
+        assert!(guest_refusal(&["aida", "role", "enter", "advisor"])
+            .to_string()
+            .contains("refusing writes"));
+    }
+}
+
+fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
+    if matches!(command, Command::Add { .. }) {
+        StakeholderAction::Intake
+    } else if matches!(
         command,
-        Command::Queue(QueueCommand::Add { .. })
-            | Command::Queue(QueueCommand::Work { .. })
-            | Command::Queue(QueueCommand::Done { .. })
-            | Command::Queue(QueueCommand::Advance { .. })
-            | Command::Queue(QueueCommand::Rework { .. })
-            | Command::Queue(QueueCommand::Integrate { .. })
-            | Command::Zen { .. }
-            | Command::Do { .. }
-            | Command::Ship { .. }
-            | Command::Integrate { .. }
-            | Command::Pr(_)
-            | Command::Db(DbCommand::MergeGate)
-    )
+        Command::Why { .. }
+            | Command::List { .. }
+            | Command::Show { .. }
+            | Command::Status { .. }
+            | Command::Graph { .. }
+            | Command::Search { .. }
+            | Command::Digest { .. }
+            | Command::History { .. }
+            | Command::McpServe
+            | Command::Awaiting { .. }
+            | Command::Queue(QueueCommand::List { .. })
+            | Command::Queue(QueueCommand::Next { .. })
+            | Command::Queue(QueueCommand::Progress { .. })
+            | Command::Mailbox(MailboxCommand::Inbox { .. })
+            | Command::Mailbox(MailboxCommand::Thread { .. })
+            | Command::Brief {
+                cmd: Some(BriefCommand::List { .. } | BriefCommand::Read { .. }),
+                ..
+            }
+            | Command::Findings {
+                cmd: None | Some(FindingsCommand::List { .. }),
+            }
+            | Command::Punts(PuntsCommand::List { .. } | PuntsCommand::Read { .. })
+            | Command::Worker(WorkerCommand::Directives { .. })
+            | Command::Comment(CommentCommand::List { .. })
+            | Command::Role(
+                RoleCommand::List
+                    | RoleCommand::Show { .. }
+                    | RoleCommand::Active
+                    | RoleCommand::Current { .. },
+            )
+            | Command::Session(SessionCommand::Leases { .. } | SessionCommand::Show { .. })
+            | Command::Schema { .. }
+            | Command::Cache(CacheCommand::Status)
+            | Command::Usage { .. }
+            | Command::Plan(PlanCommand::Verify { fix: false, .. })
+            | Command::Plan(PlanCommand::Helpers { append: None, .. })
+            | Command::Ultraplan { .. }
+            | Command::Goal { .. }
+            | Command::Criteria { .. }
+            | Command::HelpAll
+    ) {
+        StakeholderAction::Read
+    } else {
+        StakeholderAction::Write
+    }
 }
 
 fn stakeholder_action_label(command: &Command) -> &'static str {
