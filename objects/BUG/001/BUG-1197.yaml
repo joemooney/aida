@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:12:28.859117957Z
+modified_at: 2026-09-18T04:12:30.215313860Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -75,6 +75,16 @@ comments:
     Finish with aida queue done BUG-1197.
   created_at: 2026-09-18T04:12:28.595589224Z
   modified_at: 2026-09-18T04:12:28.595589224Z
+- id: 01a0b2b7-431f-7b53-8dc7-4788dd654905
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1913-advisor):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1197 CHANGES REQUESTED at the drive gate. The shape is right (shared StakeholderAction policy in lib.rs; MCP persona resolved once at construction; tools/list filtered AND tools/call hard-refused; requester add_requirement constrained exactly like the CLI; descriptor-wide parity test). The defect is the DEFINITION of Read: stakeholder_mcp_action treats tool_min_profile(name) == ReadOnly as Read, and the STORY-474 ReadOnly arm (mcp.rs tool_min_profile, through the `"schema" => ReadOnly` line) also contains db_sync, fetch, session_start, session_end, role_enter, role_end, queue_work, session_manifest, plan_* — so a guest over MCP may push/pull the shared store (db_sync), create a session lease (session_start), or enter a role. The CLI side has the same hole by construction (stakeholder_cli_action = Read unless auto-push-write or build-loop; aida db sync / session start / role enter are neither). STORY-1110 acceptance: guest is REFUSED every write and personas hold no lease (TASK-1261). Fix in the shared policy, not per surface: Read must be an explicit allow-list — the STORY-1110 read verbs (why, list, show, status, graph, search, digest, history) plus the read-side coordination reads (read_inbox, list/read briefs, punts, findings, directives, leases, queue_list/queue_next/queue_progress peeks, cache_status, schema, status_unified, usage_query, plan_verify/plan_helpers/ultraplan_assemble/goal_derive) — and everything not on the list is Write for a persona (db_sync, fetch-with-push, session_*, role_*, queue_work). Apply the same list to the CLI classifier (Command::Db(_), Session(_), Role(_) → Write for personas). Keep the parity test but assert against the explicit list, and add cases: guest db_sync / session_start / role_enter refused on MCP; guest `aida db sync` / `session start` refused on the CLI.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-18T04:12:29.855642879Z
+  modified_at: 2026-09-18T04:12:29.855642879Z
 execution_mode: drive
 implementation_info:
   implemented: true
