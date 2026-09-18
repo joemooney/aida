@@ -18,12 +18,12 @@ description: |-
   - (advisor refinement 2026-09-18, folded in from TASK-1275) Mode is the authority in BOTH directions: execution_mode = drive on a spike also overrides the type's human-only default (the wave runs implementer → CI → review and holds the merge for the advisor), so a spike never needs --no-human-only by hand once groomed.
   - (advisor refinement 2026-09-18) aida groom proposes DRIVE, not drain, for a report-shaped spike that has at least one BlockedBy dependent (something will be built on its conclusions, so an advisor reads the report before it merges); drain only when nothing depends on it yet. The reason line names the dependent.
   - (advisor refinement 2026-09-18) .aida/discipline/backlog-grooming.md (master under aida-core/templates/.aida/discipline/) gains a short "Spikes" paragraph: split by deliverable not type; report + acceptance + evidence path → drain/drive per the dependent rule; decision, taste call, or credentials → operator; bulk-queue still excludes spikes.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:10:19.307148033Z
-modified_at: 2026-09-18T22:31:46.679641392Z
+modified_at: 2026-09-18T22:31:55.322889623Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -76,8 +76,25 @@ comments:
   created_at: 2026-09-18T22:31:46.679641392Z
   modified_at: 2026-09-18T22:31:46.679641392Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b6a5-d0ba-79a2-81b8-c15ba4e676c1
+  author: aida-auto-bump
+  timestamp: 2026-09-18T22:31:55.322120148Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b6a5-d0ba-79a2-81b8-c163b48e144e
+  timestamp: 2026-09-18T22:31:55.322889029Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1276-2026-09-18T223149Z.md
+  commit_sha: ae6e4a65655a5b7d24d2be6cf927225c8728418c
+  summary: Completed via merge ae6e4a65
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T22:15:39.304201211Z
   implemented_by: joe
+  completed_at: 2026-09-18T22:31:55.321899758Z
+  completion_sha: ae6e4a65655a5b7d24d2be6cf927225c8728418c
