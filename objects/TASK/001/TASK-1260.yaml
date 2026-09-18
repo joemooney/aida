@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:54:17.365890248Z
-modified_at: 2026-09-18T03:17:18.722570975Z
+modified_at: 2026-09-18T03:17:20.333670469Z
 req_type: Task
 tags:
 - architecture
@@ -43,6 +43,15 @@ relationships:
   target_id: 01a0b281-dd6b-7442-8ccf-9bf585f683be
   created_at: 2026-09-18T03:14:15.766655083Z
   created_by: joe
+comments:
+- id: 01a0b284-c258-7b62-86aa-feba2ca2de41
+  author: joe
+  content: |-
+    Reviewer (PR-1909) requested changes: docs/architecture/roles-seats-and-personas.md:68 says queue user resolution is --user → AIDA_USER → USER → default, but aida-cli-lib/src/identity_guard.rs implements --user → AIDA_USER → USER → USERNAME → default. Document the USERNAME fallback so the identity model matches the code.
+    aida-core/templates/.aida/discipline/machinery-glossary.md:187 links to /docs/architecture/roles-seats-and-personas.md. On GitHub that site-root URL leaves the repository; use a repository-relative path from the scaffolded glossary (for example ../../../../docs/architecture/roles-seats-and-personas.md, if that is the intended generated layout) or another verified portable target.
+    Summary: Documentation is accurate in substance but contains one identity-precedence error and one broken repository link.
+  created_at: 2026-09-18T03:17:20.088585247Z
+  modified_at: 2026-09-18T03:17:20.088585247Z
 execution_mode: drain
 implementation_info:
   implemented: true
