@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:54:45.098506480Z
+modified_at: 2026-09-18T01:55:43.933933048Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -55,6 +55,20 @@ comments:
   created_at: 2026-09-18T01:54:45.098506480Z
   modified_at: 2026-09-18T01:54:45.098506480Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b23a-0cbd-72e2-b977-6e5fee923134
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1904 fix(pr): scope drive merge guard to owned work (TASK-1253)
+    verdict: APPROVE + merged (drive-mode advisor gate)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless; drain reviewer APPROVED at .aida/review-verdicts/PR-1904.json; advisor gate verdict at PR-1904-advisor.json)
+    gates: Build (ubuntu-latest) SUCCESS; merge-hold-gate red-as-the-hold, released at merge; MERGEABLE; merge-lease taken (followups-0917 drain live on TASK-1258)
+    reasoning: the guard now blocks when the CALLER is a drive seat (AIDA_HEADLESS, or AIDA_AUTO_COMPLETE — verified set on every phase child incl. supervised, so BUG-716 stays covered — or the cwd lease scope is an in-phase member) or when the PR is drive-owned (drain-state member pr / hold reason naming an in-phase spec); an unrelated reviewed PR from a plain shell merges under the merge-lease. Override kept; refusal names the condition; pure decision fn with truth-table tests. Note: commit subject lacks the [AI:codex] prefix (convention slip, AIDA_COMMIT_STRICT unset) — not blocking.
+    merged: 2026-09-17 18:58 -07:00 → main cccda30fa0; spec auto-bumped Completed
+  created_at: 2026-09-18T01:55:43.933933048Z
+  modified_at: 2026-09-18T01:55:43.933933048Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b238-25db-7232-b12d-5f7f0e34634a
   author: aida-auto-bump
