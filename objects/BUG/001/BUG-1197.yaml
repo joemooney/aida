@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T03:47:28.252416056Z
+modified_at: 2026-09-18T03:47:58.834269846Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -48,5 +48,11 @@ comments:
     Sign-off requested before implementation because this changes MCP tool visibility/call authorization and shared lifecycle policy (Sketch-First Protocol). trace:BUG-1197 | ai:codex
   created_at: 2026-09-18T03:46:45.379648747Z
   modified_at: 2026-09-18T03:46:45.379648747Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b2a0-d0f2-7c52-be0b-d6cccaa18b21
+  author: joe
+  content: 'Implementation sketch (ai:codex): introduce one shared stakeholder capability classifier in lib.rs (read/intake/write) used by the CLI gate and MCP gate. Resolve guest/requester once when McpServer is constructed; filter tools/list by role; reject direct tools/call with the existing stakeholder_refusal wording; normalize requester add_requirement arguments to allowed type + Draft + intake:requester before dispatch. Add focused MCP tests for guest/read behavior, requester constrained intake, mutation refusals, and parity across every descriptor. This preserves mcp-serve startup/read access and composes with existing MCP profiles.'
+  created_at: 2026-09-18T03:47:58.834269846Z
+  modified_at: 2026-09-18T03:47:58.834269846Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
