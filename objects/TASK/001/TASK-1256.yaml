@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:49:45.229676914Z
-modified_at: 2026-09-18T01:03:24.020989973Z
+modified_at: 2026-09-18T01:03:25.947784262Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
@@ -16,3 +16,6 @@ relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T19:49:50.020434934Z
+deferred: true
+deferred_at: 2026-09-18T01:03:25.947784262Z
+deferred_until: '[aida:sem] comments exceed ~50 across the store or a query needs a typed SEM record (aida list --type / graph edges) that marker-grep cannot answer'
