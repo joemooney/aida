@@ -1,7 +1,8 @@
 use anyhow::{bail, Result};
 
 use aida_core::{
-    get_type_protocol, seed_missing_type_protocols, RequirementType, RequirementsStore, Storage,
+    get_type_protocol, resolve_protocol, seed_missing_type_protocols, Requirement, RequirementType,
+    RequirementsStore, Storage,
 };
 
 use crate::cli::ProtocolCommand;
@@ -19,14 +20,17 @@ pub(crate) fn handle_protocol_command(cmd: &ProtocolCommand, storage: &Storage) 
                 }
             }
         }
-        ProtocolCommand::Show { req_type } => {
-            let Some(protocol) = get_type_protocol(&store, req_type) else {
+        ProtocolCommand::Show { req_type, lane } => {
+            let Some(protocol) = resolve_protocol(&store, req_type, lane.as_deref()) else {
                 bail!("no type protocol found for `{req_type}`; run `aida protocol list`");
             };
-            println!(
-                "protocol: {} [{}]\n{}",
-                protocol.req_type, protocol.meta_id, protocol.body
-            );
+            if lane.is_some() && protocol.lane_protocol.is_none() {
+                bail!(
+                    "no lane protocol found for `{}`",
+                    lane.as_deref().unwrap_or_default()
+                );
+            }
+            print!("{}", protocol.render());
         }
         ProtocolCommand::Seed => {
             let seeded = seed_missing_type_protocols(&mut store);
@@ -53,4 +57,23 @@ pub(crate) fn protocol_for_requirement(
     req_type: &RequirementType,
 ) -> Option<aida_core::TypeProtocol> {
     get_type_protocol(store, &req_type.to_string())
+}
+
+pub(crate) fn resolved_protocol_for_requirement(
+    store: &RequirementsStore,
+    req: &Requirement,
+) -> Option<aida_core::ResolvedProtocol> {
+    let lane = if crate::presence::is_keystone_class(
+        &req.req_type.to_string(),
+        req.tags.iter().map(String::as_str),
+    ) {
+        Some("keystone")
+    } else if req.req_type == RequirementType::Spike {
+        Some("research")
+    } else if req.req_type == RequirementType::Doc {
+        Some("docs")
+    } else {
+        None
+    };
+    resolve_protocol(store, &req.req_type.to_string(), lane)
 }

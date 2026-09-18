@@ -21,6 +21,14 @@ pub struct TypeProtocol {
     pub body: String,
 }
 
+/// A type protocol optionally overlaid by a lane protocol.
+// trace:TASK-1278 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedProtocol {
+    pub type_protocol: TypeProtocol,
+    pub lane_protocol: Option<TypeProtocol>,
+}
+
 const DEFAULT_PROTOCOLS: &[(&str, &str)] = &[
     ("spike", "Purpose: answer a bounded question with evidence.\nDeliverable: write the evidence-grounded report at the docs/spikes/*.md path named by the spec.\nBefore done: the report answers the question, records evidence and uncertainty, and names the recommended next step.\nReviewer: an advisor reads the report before anything builds on it.\nHuman boundary: decisions, taste calls, and credentials stay with the operator."),
     ("bug", "Purpose: restore intended behavior and prevent recurrence.\nDeliverable: a focused fix plus a regression test.\nBefore done: reproduce or characterize the failure, make the test fail before the fix where practical, and run the relevant suite.\nReviewer: checks the root cause, regression coverage, and blast radius.\nHuman boundary: product-policy changes are decisions, not bug fixes."),
@@ -28,6 +36,12 @@ const DEFAULT_PROTOCOLS: &[(&str, &str)] = &[
     ("task", "Purpose: complete the bounded technical or operational outcome.\nDeliverable: the artifact or repository change named by the spec.\nBefore done: acceptance is satisfied and relevant checks pass.\nReviewer: checks completeness, focus, and unintended side effects.\nHuman boundary: expand scope only through a new or edited requirement."),
     ("decision", "Purpose: make and preserve an architecture decision.\nDeliverable: an ADR recording context, options, decision, and consequences.\nBefore done: status is accepted and references connect the decision to affected work.\nReviewer: checks alternatives, evidence, reversibility, and consequences.\nHuman boundary: the accountable human accepts consequential or taste-based choices."),
     ("doc", "Purpose: keep the durable documentation true and useful.\nDeliverable: the named documentation update.\nBefore done: examples and links are verified against current behavior.\nReviewer: checks audience fit, accuracy, discoverability, and drift risk.\nHuman boundary: policy claims require their accountable owner."),
+];
+
+const DEFAULT_LANE_PROTOCOLS: &[(&str, &str)] = &[
+    ("research", "Deliver evidence with source provenance and explicit uncertainty.\nDo not turn findings into product or architecture decisions; surface those to the advisor."),
+    ("docs", "Treat current behavior and checked examples as the source of truth.\nOptimize for the named audience, discoverability, and resistance to drift."),
+    ("keystone", "Keep consequential architecture, security, and policy forks explicit.\nRecord the sketch and obtain the required advisor/operator sign-off before shipping."),
 ];
 
 /// Resolve a type protocol from editable META data.
@@ -43,6 +57,64 @@ pub fn get_type_protocol(store: &RequirementsStore, req_type: &str) -> Option<Ty
             body: r.description.clone(),
         })
     })
+}
+
+/// Resolve `protocol:lane:<lane>` from editable META data.
+pub fn get_lane_protocol(store: &RequirementsStore, lane: &str) -> Option<TypeProtocol> {
+    let lane = lane.trim().to_ascii_lowercase();
+    let slug = format!("protocol:lane:{lane}");
+    store.requirements.iter().find_map(|r| {
+        (r.req_type == RequirementType::Meta
+            && r.tags.iter().any(|t| t.eq_ignore_ascii_case(&slug)))
+        .then(|| TypeProtocol {
+            meta_id: r.display_id().to_string(),
+            req_type: lane.clone(),
+            body: r.description.clone(),
+        })
+    })
+}
+
+pub fn resolve_protocol(
+    store: &RequirementsStore,
+    req_type: &str,
+    lane: Option<&str>,
+) -> Option<ResolvedProtocol> {
+    Some(ResolvedProtocol {
+        type_protocol: get_type_protocol(store, req_type)?,
+        lane_protocol: lane.and_then(|name| get_lane_protocol(store, name)),
+    })
+}
+
+impl ResolvedProtocol {
+    /// Canonical CLI/MCP text. The 40-line cap applies across both layers.
+    pub fn render(&self) -> String {
+        let mut lines = self
+            .type_protocol
+            .body
+            .lines()
+            .map(|line| format!("[type] {line}"))
+            .collect::<Vec<_>>();
+        if let Some(lane) = &self.lane_protocol {
+            lines.extend(lane.body.lines().map(|line| format!("[lane] {line}")));
+        }
+        lines.truncate(PROTOCOL_PICKUP_LINE_CAP);
+        let lane = self
+            .lane_protocol
+            .as_ref()
+            .map(|p| format!(" + lane:{} [{}]", p.req_type, p.meta_id))
+            .unwrap_or_default();
+        format!(
+            "protocol: {} [{}]{}\nPrecedence: type < lane < spec acceptance\n{}\n",
+            self.type_protocol.req_type,
+            self.type_protocol.meta_id,
+            lane,
+            lines.join("\n")
+        )
+    }
+
+    pub fn pickup_block(&self) -> String {
+        format!("## Resolved protocol\n{}", self.render().trim_end())
+    }
 }
 
 impl TypeProtocol {
@@ -405,6 +477,20 @@ pub fn seed_missing_type_protocols(store: &mut RequirementsStore) -> usize {
         store.add_requirement_with_id(protocol, None, Some("META"));
         seeded += 1;
     }
+    for (lane, body) in DEFAULT_LANE_PROTOCOLS {
+        let tag = format!("protocol:lane:{lane}");
+        if store.requirements.iter().any(|r| {
+            r.req_type == RequirementType::Meta
+                && r.tags.iter().any(|t| t.eq_ignore_ascii_case(&tag))
+        }) {
+            continue;
+        }
+        let mut protocol = Requirement::new(format!("{lane} lane protocol"), (*body).to_string());
+        protocol.req_type = RequirementType::Meta;
+        protocol.tags.insert(tag);
+        store.add_requirement_with_id(protocol, None, Some("META"));
+        seeded += 1;
+    }
     seeded
 }
 
@@ -452,7 +538,7 @@ mod tests {
             .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
-        assert_eq!(meta_count, 12);
+        assert_eq!(meta_count, 15);
 
         // Seeding again should be a no-op
         seed_meta_requirements(&mut store).unwrap();
@@ -461,7 +547,7 @@ mod tests {
             .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
-        assert_eq!(meta_count_after, 12);
+        assert_eq!(meta_count_after, 15);
     }
 
     #[test]
@@ -489,7 +575,47 @@ mod tests {
     }
 
     #[test]
-    fn seed_missing_protocols_preserves_two_and_adds_four() {
+    // trace:TASK-1278 | ai:codex
+    fn resolved_protocol_merges_type_then_lane_and_caps_the_combined_body() {
+        let mut store = RequirementsStore::default();
+        seed_meta_requirements(&mut store).unwrap();
+        let type_row = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.tags.contains("protocol:spike"))
+            .unwrap();
+        type_row.description = (0..30)
+            .map(|n| format!("type {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let lane_row = store
+            .requirements
+            .iter_mut()
+            .find(|r| r.tags.contains("protocol:lane:research"))
+            .unwrap();
+        lane_row.description = (0..20)
+            .map(|n| format!("lane {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let rendered = resolve_protocol(&store, "spike", Some("research"))
+            .unwrap()
+            .render();
+        assert!(rendered.contains("Precedence: type < lane < spec acceptance"));
+        assert!(rendered.find("[type] type 29").unwrap() < rendered.find("[lane] lane 0").unwrap());
+        assert!(rendered.contains("[lane] lane 9"));
+        assert!(!rendered.contains("[lane] lane 10"));
+        assert_eq!(
+            rendered
+                .lines()
+                .filter(|line| line.starts_with("[type]") || line.starts_with("[lane]"))
+                .count(),
+            PROTOCOL_PICKUP_LINE_CAP
+        );
+    }
+
+    #[test]
+    fn seed_missing_protocols_preserves_two_and_adds_remaining_type_and_lane_rows() {
         let mut store = RequirementsStore::default();
         for kind in ["spike", "bug"] {
             let mut protocol = Requirement::new(
@@ -501,7 +627,7 @@ mod tests {
             store.add_requirement_with_id(protocol, None, Some("META"));
         }
 
-        assert_eq!(seed_missing_type_protocols(&mut store), 4);
+        assert_eq!(seed_missing_type_protocols(&mut store), 7);
         assert_eq!(seed_missing_type_protocols(&mut store), 0);
         assert_eq!(
             get_type_protocol(&store, "spike").unwrap().body,

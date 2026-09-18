@@ -2677,7 +2677,12 @@ pub enum ProtocolCommand {
     /// List every protocol currently stored as META.
     List,
     /// Show one protocol by requirement type (for example `spike` or `bug`).
-    Show { req_type: String },
+    Show {
+        req_type: String,
+        /// Overlay an optional lane protocol (research, docs, or keystone).
+        #[clap(long)]
+        lane: Option<String>,
+    },
     /// Idempotently add any missing built-in type protocols to this store.
     Seed,
 }

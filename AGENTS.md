@@ -57,6 +57,7 @@ codex --cd /home/joe/ai/aida
 aida show <SPEC-ID>
 aida protocol list
 aida protocol show spike
+aida protocol show spike --lane research
 aida list --status approved
 aida queue work <SPEC-ID>
 aida agent new codex --role implementer --spec <SPEC-ID>
@@ -71,12 +72,13 @@ tests/test_mcp_stdio.sh --skip-agent-contract
 tests/test_mcp_doc_consistency.sh
 ```
 
-Type protocols are editable META requirements tagged `protocol:<type>`. The
-interactive pickup surfaces (`queue work`, `do`, and `worktree enter`) inject
-the matching type protocol with its META id and a 40-line body cap; the
-per-turn notice repeats its one-line reminder while the spec lease is held.
-Spec acceptance overrides the type protocol. Done gates, lane overlays, MCP,
-and headless propagation are separate follow-up slices.
+Type protocols are editable META requirements tagged `protocol:<type>`; the
+optional lane overlay uses `protocol:lane:<lane>` (`research`, `docs`, or
+`keystone`). Pickup and headless implementer/reviewer prompts inject the merged
+protocol with a shared 40-line body cap and labeled precedence `type < lane <
+spec acceptance`; the per-turn notice repeats the compact type reminder while
+the spec lease is held. MCP-native clients can read the byte-identical text at
+`aida://protocol/<type>` or `aida://protocol/<type>/<lane>`.
 
 Use `aida brief list --for-agent <agent>` (where `<agent>` is `codex` or `antigravity`) when a master/advisor session says
 there is a pickup brief. Briefs live under `.aida/agent-briefs/<agent>/`,
