@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b5e0-4eab-7c03-acdd-7250d89e58fe
-  position: 10000
-  added_by: role:implementer
-  note: post-mortem report under docs/spikes/; evidence by ABSOLUTE PATH in the main checkout (.aida/events.jsonl, .aida/mailbox/); counts from events, not narrative; merge at advisor gate
-  added_at: 2026-09-18T19:07:18.772797300Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b5ed-3eab-76c2-8f47-a49b9399a824
   position: 12000
   added_by: role:implementer
