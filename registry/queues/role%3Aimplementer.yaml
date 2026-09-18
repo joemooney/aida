@@ -30,3 +30,11 @@
   added_at: 2026-09-18T16:52:58.599522757Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b50c-7578-7001-b850-429004fcd1ac
+  position: 5000
+  added_by: role:implementer
+  note: 'lifecycle:trivial-class: add the ''harvest'' label to LifecycleSkip''s rendered skip list; unit test per flag'
+  added_at: 2026-09-18T16:52:59.798297408Z
+  for_role: implementer
+  added_by_machine: imac
