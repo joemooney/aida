@@ -75183,5 +75183,31 @@ operations:
   timestamp: 2026-09-18T06:02:27.462870396Z
   kind: !SetStatus
     status: Completed
-clock: 5835
+- id: 01a0b32d-2020-7f71-b275-cf79e1047f0f
+  target_id: 01a0b32d-1c35-76d0-b66d-804c0dd73475
+  author: aida
+  node_id: '1'
+  lamport: 5836
+  timestamp: 2026-09-18T06:21:14.144878532Z
+  kind: !Create
+    title: 'Review PR-1916: [AI:codex] fix(list): fit human titles to terminal width (BUG-1207)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b31e`) for branch `bug-1207`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1916>
+      - Branch: `bug-1207` → `main`
+
+      ## Covers
+
+      - BUG-1207
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1916` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5836
 node_id: '1'
