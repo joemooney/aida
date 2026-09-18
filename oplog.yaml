@@ -75699,5 +75699,21 @@ operations:
   timestamp: 2026-09-18T08:49:31.031182272Z
   kind: !SetStatus
     status: Completed
-clock: 5863
+- id: 01a0b3b4-e8ff-7df3-8760-df6430694420
+  target_id: 01a0b368-b826-71e3-8488-6c28257ff97e
+  author: aida
+  node_id: '1'
+  lamport: 5864
+  timestamp: 2026-09-18T08:49:32.927249906Z
+  kind: !AddTag
+    tag: batch:followups-0918
+- id: 01a0b3b4-e994-7802-bd99-dd78339158ac
+  target_id: 01a0b368-b826-71e3-8488-6c28257ff97e
+  author: aida
+  node_id: '1'
+  lamport: 5865
+  timestamp: 2026-09-18T08:49:33.076642677Z
+  kind: !AddTag
+    tag: proxy-groomed
+clock: 5865
 node_id: '1'

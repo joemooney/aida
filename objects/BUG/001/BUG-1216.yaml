@@ -15,14 +15,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T07:27:47.394515954Z
+modified_at: 2026-09-18T08:49:32.841325905Z
 req_type: Bug
 tags:
+- batch:followups-0918
 - criteria
 - drain-safe
 - follow-up:TASK-1247
 - harvest
 - papercut
+- proxy-groomed
 comments:
 - id: 01a0b36a-0ec2-77a2-a80d-0ea08bb0e04f
   author: joe
