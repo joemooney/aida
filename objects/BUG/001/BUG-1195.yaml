@@ -22,12 +22,12 @@ description: |-
   - The repro command above resolves PR-1901 to the reviewer route (or the test-equivalent fixture) with no bail.
   - A lookup failure is logged with its cause and never shelves the spec as tool-exit; a genuine no-story case still bails as today.
   - Regression test covering the sibling-worktree-filed story + the drain user id.
-status: Completed
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:48:11.546163776Z
-modified_at: 2026-09-18T01:03:54.391361344Z
+modified_at: 2026-09-18T03:10:44.413256599Z
 req_type: Bug
 tags:
 - drain
