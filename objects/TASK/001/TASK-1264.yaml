@@ -11,12 +11,12 @@ description: |-
   Pairs naturally with BUG-1211 (CLI requester --parent/--feature/--owner refusal, shared field const) — do both in one PR if convenient; trailer both ids.
 
   Acceptance: identical refusal text per operation across surfaces (test); the parity table test exists and passes for both personas; existing stakeholder tests green.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:44:14.015312083Z
-modified_at: 2026-09-18T10:22:35.752138360Z
+modified_at: 2026-09-18T10:22:41.843093362Z
 req_type: Task
 tags:
 - batch:followups-0918
@@ -47,8 +47,24 @@ comments:
   created_at: 2026-09-18T10:22:35.752138360Z
   modified_at: 2026-09-18T10:22:35.752138360Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b40a-30ac-7e90-8ce1-39c11f56ec8c
+  author: aida-auto-bump
+  timestamp: 2026-09-18T10:22:41.836383589Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b40a-30b3-7a31-ac56-e5c0673426c7
+  timestamp: 2026-09-18T10:22:41.843092424Z
+  agent: aida
+  commit_sha: 03f7839f3e3bbd2e0929a670f13fa94111922d49
+  summary: Completed via merge 03f7839f
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T10:07:41.006922192Z
   implemented_by: joe
+  completed_at: 2026-09-18T10:22:41.836245935Z
+  completion_sha: 03f7839f3e3bbd2e0929a670f13fa94111922d49
