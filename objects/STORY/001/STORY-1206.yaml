@@ -1,0 +1,26 @@
+id: 01a0b3bc-f678-74a3-8f47-0b1a33d62710
+spec_id: STORY-1206
+agreed_id: STORY-1206
+title: 'Review PR-1920: [AI:codex] fix(personas): align requester intake fields (BUG-1211)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b3af`) for branch `bug-1211`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1920>
+  - Branch: `bug-1211` → `main`
+
+  ## Covers
+
+  - BUG-1211
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1920` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T08:58:20.664767661Z
+modified_at: 2026-09-18T08:58:20.664767661Z
+req_type: Story
