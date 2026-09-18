@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-16T05:58:41.121982551Z
-modified_at: 2026-09-18T15:23:34.612503143Z
+modified_at: 2026-09-18T15:32:38.274960259Z
 req_type: Epic
 tags:
 - forge gitlab github parity epic-35 aida:forge
@@ -78,3 +78,6 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b51d-80cf-7c33-b81a-d6c65a329f9a
   created_at: 2026-09-18T15:23:34.612503143Z
+- rel_type: Parent
+  target_id: 01a0b525-a8b2-79e3-a00a-f7e5d16f2bcb
+  created_at: 2026-09-18T15:32:38.274960259Z
