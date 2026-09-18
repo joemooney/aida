@@ -47327,6 +47327,7 @@ fn handle_autopilot_inspect(
         let has_plan = !find_plan_files_for_spec(&project_root, &disp).is_empty();
         let (risk, risk_reason) = backlog::classify_risk_with_reason(req, has_plan);
         let tags: Vec<String> = req.tags.iter().cloned().collect();
+        let predicted_files = backlog::collect_spec_files(&project_root, &disp);
         let deferred = intake::is_deferred(req.deferred, &tags);
         let action = if is_draft {
             autopilot::ActionClass::Approve
@@ -47338,6 +47339,7 @@ fn handle_autopilot_inspect(
             id: disp,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
             tags,
+            trivial_footprint: intake::predicted_footprint_is_trivial(&predicted_files),
             deferred,
             risk,
             risk_reason,
@@ -47733,6 +47735,7 @@ fn handle_intake_command(
         // (a fenced spec shows WHY, not just an opaque chip). trace:BUG-595
         let (risk, risk_reason) = backlog::classify_risk_with_reason(req, has_plan);
         let tags: Vec<String> = req.tags.iter().cloned().collect();
+        let predicted_files = backlog::collect_spec_files(&project_root, &disp);
         // BUG-561: mirror the `aida list` honor-both deferred predicate
         // (STORY-584) so the operator's deferral shelf is fenced out, not
         // re-blessed. trace:BUG-561 | ai:claude
@@ -47741,6 +47744,7 @@ fn handle_intake_command(
             id: disp,
             req_type: format!("{:?}", req.req_type).to_ascii_lowercase(),
             tags,
+            trivial_footprint: intake::predicted_footprint_is_trivial(&predicted_files),
             deferred,
             risk,
             risk_reason,
@@ -47788,6 +47792,14 @@ fn handle_intake_command(
         eligible.len(),
         eligible.join(", ").cyan()
     );
+    let trivial_proposals: Vec<String> = specs
+        .iter()
+        .filter(|spec| eligible.contains(&spec.id) && intake::proposes_trivial_lifecycle(spec))
+        .map(|spec| spec.id.clone())
+        .collect();
+    for id in &trivial_proposals {
+        println!("  {}", intake::trivial_lifecycle_proposal_line(id));
+    }
     if !fenced.is_empty() {
         println!(
             "  {} {} fenced out (do-not-approve class / needs-human / keystone / deferred / tag / risk):",
@@ -47858,6 +47870,7 @@ fn handle_intake_command(
         .env("AIDA_SESSION_ROLE", "advisor")
         .env("AIDA_INTAKE_APPLY", if apply { "1" } else { "0" })
         .env("AIDA_INTAKE_CANDIDATES", eligible.join(","))
+        .env("AIDA_INTAKE_TRIVIAL_PROPOSALS", trivial_proposals.join(","))
         .env(
             "AIDA_INTAKE_DISPOSITION_BIAS",
             cfg.disposition_bias.as_str(),

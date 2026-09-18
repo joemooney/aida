@@ -1542,6 +1542,7 @@ mod tests {
             id: "TASK-KEY".to_string(),
             req_type: "task".to_string(),
             tags,
+            trivial_footprint: false,
             deferred: false,
             risk: RiskLevel::Low,
             risk_reason: String::new(),

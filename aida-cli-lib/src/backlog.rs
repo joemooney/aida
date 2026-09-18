@@ -124,6 +124,48 @@ impl PairVerdict {
     }
 }
 
+// trace:TASK-1266 | ai:codex
+fn serialize_lane_proposal(batch: Option<&str>) -> String {
+    let name = batch.unwrap_or("NAME");
+    format!(
+        "Proposal: run `aida queue work --batch {name} --auto-complete --single-branch` \
+         (add `--sequential` when member order matters)."
+    )
+}
+
+fn serialize_pairs<'a>(
+    reqs: &'a [Requirement],
+    project_root: &Path,
+) -> Vec<(&'a Requirement, &'a Requirement, Vec<String>)> {
+    let files: Vec<BTreeSet<String>> = reqs
+        .iter()
+        .map(|req| collect_spec_files(project_root, display_id(req)))
+        .collect();
+    let mut pairs = Vec::new();
+    for i in 0..reqs.len() {
+        for j in (i + 1)..reqs.len() {
+            if let PairVerdict::Serialize { shared } = classify_pair_overlap(&files[i], &files[j]) {
+                pairs.push((&reqs[i], &reqs[j], shared));
+            }
+        }
+    }
+    pairs
+}
+
+fn print_serialize_lane_proposals(reqs: &[Requirement], batch: Option<&str>) {
+    let project_root = find_project_root().unwrap_or_else(|_| PathBuf::from("."));
+    for (a, b, shared) in serialize_pairs(reqs, &project_root) {
+        println!(
+            "  {} {} + {} share {}",
+            "lane".red().bold(),
+            display_id(a),
+            display_id(b),
+            shared.join(", ").dimmed()
+        );
+        println!("    {}", serialize_lane_proposal(batch));
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub(crate) struct BacklogListRow {
     pub spec_id: String,
@@ -931,6 +973,7 @@ fn handle_groom(
         for req in &to_groom {
             print_groom_line(req, batch);
         }
+        print_serialize_lane_proposals(&to_groom, batch);
         let suffix = batch
             .map(|n| format!(", each tagged `batch:{}`", n))
             .unwrap_or_default();
@@ -963,6 +1006,7 @@ fn handle_groom(
         updated += 1;
         print_groom_line(req, batch);
     }
+    print_serialize_lane_proposals(&to_groom, batch);
 
     println!();
     let drain_cmd = match batch {
@@ -1643,6 +1687,15 @@ mod tests {
             }
             other => panic!("expected Serialize, got {other:?}"),
         }
+    }
+
+    // trace:TASK-1266 | ai:codex
+    #[test]
+    fn serialize_lane_renderer_prints_single_branch_cluster_command_verbatim() {
+        assert_eq!(
+            serialize_lane_proposal(Some("docs")),
+            "Proposal: run `aida queue work --batch docs --auto-complete --single-branch` (add `--sequential` when member order matters)."
+        );
     }
 
     #[test]
