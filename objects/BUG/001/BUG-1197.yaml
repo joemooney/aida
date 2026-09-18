@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:57:35.690800199Z
+modified_at: 2026-09-18T04:57:37.253764166Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -133,6 +133,17 @@ comments:
   created_at: 2026-09-18T04:43:06.739903319Z
   modified_at: 2026-09-18T04:43:06.739903319Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b2e0-91f1-7cd2-a053-dd5b8640112e
+  author: joe
+  content: |-
+    Reviewer (PR-1913, round 3) requested changes: BUG-1197 acceptance requires identical refusal text across CLI and MCP, but stakeholder_mcp_action_label defaults db_sync and other denied tools to 'writes' while stakeholder_action_label renders the equivalent CLI command as 'database writes' (and has other operation-specific labels). Share the action label/classification across transports or provide an explicit parity mapping.
+    The requested parity test is absent: stakeholder_mcp_policy_covers_every_descriptor_via_shared_actions only compares the MCP decision to the same shared action it was derived from, so it cannot detect CLI/MCP classification or refusal-text drift. Add a test that compares corresponding CLI commands and MCP tools for both personas, including exact refusal strings.
+    Summary: Persona gating works, but the required CLI/MCP refusal-text parity and parity test are incomplete.
+
+    This is the THIRD review round; each round fixed only the previous finding. Before running `aida queue done`, verify EVERY acceptance bullet of the spec against the code, not just this finding. Keep the round-1 fix (requester intake rejects parent) and the round-2 fix (mcp-serve stays startable for guest/requester) intact. Spec acceptance for reference:
+    Acceptance: as in (3), plus `aida agent new claude --role requester` + MCP enabled cannot change any spec's status, queue, or relationships; the refusal text is identical on both surfaces."
+  created_at: 2026-09-18T04:57:37.009260987Z
+  modified_at: 2026-09-18T04:57:37.009260987Z
 execution_mode: drive
 implementation_info:
   implemented: true
