@@ -1,0 +1,30 @@
+id: 01a0b269-201b-77d1-b260-7ecad9095433
+spec_id: BUG-1202
+agreed_id: BUG-1202
+title: 'Flaky test: post_init_hooks_run_executable_sh_files_in_lexical_order_with_context fails with ''Text file busy (os error 26)'' — hook script exec races a concurrent fork holding the just-written fd'
+description: |-
+  Seen 2026-09-17 19:44 on PR #1907 (BUG-1199, which does not touch init_cmd) — CI run 35300146585, Build (ubuntu-latest):
+    post-init hook 00-first.sh failed to run: Text file busy (os error 26)
+    post-init hooks: 1 ok, 1 failed
+    assertion left == right failed: 2 — left: Some("2") right: Some("1")   (aida-cli-lib/src/init_cmd.rs:2334)
+  The same test passed on main minutes earlier (#1905's run). Classic Linux ETXTBSY: the test writes an executable script and the hook runner execs it while another test thread's fork() still holds the write fd open (inherited across fork until exec), so the kernel refuses to exec a file open for writing. Non-deterministic under cargo's parallel test threads.
+
+  Fix (product, not just the test): the post-init hook runner (init_cmd.rs, the code that runs .aida/hooks/post-init/*.sh in lexical order) should tolerate ETXTBSY the way pr_cmd::command_output_retrying_etxtbsy already does for gh — retry with a short backoff on os error 26 — since real users hit the same race when a scaffold writes hooks and runs them in one command. Reuse/move that helper to a shared spot rather than duplicating. In the test, also drop the file handle explicitly (or write via a tempfile + rename) before exec so the test itself cannot self-race.
+
+  Acceptance:
+  - Hook runner retries ETXTBSY (bounded, e.g. 5 × 50ms) and only then reports failure; unit test simulates the error kind through the helper.
+  - The named test no longer holds an open write fd when the runner execs.
+  - 20 consecutive `cargo test -p aida-cli-lib --lib post_init_hooks` runs pass.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T02:47:09.083547722Z
+modified_at: 2026-09-18T02:47:09.083547722Z
+req_type: Bug
+tags:
+- ci
+- drain-safe
+- etxtbsy
+- flaky-test
+- init
