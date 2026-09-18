@@ -1874,7 +1874,15 @@ pub(crate) fn handle_git_backend_command(
                         );
                     }
                 }
-                println!("\n{} requirements", reqs.len());
+                println!(
+                    "\n{}",
+                    list_human_count_footer(
+                        reqs.len(),
+                        total_after_filters,
+                        *limit,
+                        default_open_lens,
+                    )
+                );
                 print_hidden_hints();
                 print_deferred_triggers(*deferred, &reqs);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
@@ -1895,7 +1903,15 @@ pub(crate) fn handle_git_backend_command(
                     print_empty_list_hint();
                 } else {
                     render_list_fields_table(&reqs, &selected, &row_routing);
-                    println!("\n{} requirements", reqs.len());
+                    println!(
+                        "\n{}",
+                        list_human_count_footer(
+                            reqs.len(),
+                            total_after_filters,
+                            *limit,
+                            default_open_lens,
+                        )
+                    );
                     print_hidden_hints();
                     print_deferred_triggers(*deferred, &reqs);
                     maybe_print_whats_left_tip(status.as_deref(), &reqs);
@@ -2096,7 +2112,15 @@ pub(crate) fn handle_git_backend_command(
                         }
                     }
                 }
-                println!("\n{} requirements", reqs.len());
+                println!(
+                    "\n{}",
+                    list_human_count_footer(
+                        reqs.len(),
+                        total_after_filters,
+                        *limit,
+                        default_open_lens,
+                    )
+                );
                 print_hidden_hints();
                 print_deferred_triggers(*deferred, &reqs);
                 maybe_print_whats_left_tip(status.as_deref(), &reqs);
