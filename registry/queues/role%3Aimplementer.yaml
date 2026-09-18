@@ -14,3 +14,11 @@
   added_at: 2026-09-18T16:52:51.300244376Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b535-55a8-7ba1-b7b2-65e1c8d2047a
+  position: 3000
+  added_by: role:implementer
+  note: 'route the run/pipeline id through the Forge (GitLab: newest pipeline id for the branch) or drop the ''on run <ID>'' clause when unknown'
+  added_at: 2026-09-18T16:52:54.415907679Z
+  for_role: implementer
+  added_by_machine: imac
