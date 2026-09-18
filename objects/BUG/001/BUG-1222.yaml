@@ -8,11 +8,8 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:04:47.736441019Z
-modified_at: 2026-09-18T16:52:44.229725433Z
+modified_at: 2026-09-18T18:41:22.220102266Z
 req_type: Bug
 tags:
-- aida:queue:work
-- orchestrator
-- papercut
-- severity:cosmetic
+- batch:followups-0918d
 execution_mode: drain
