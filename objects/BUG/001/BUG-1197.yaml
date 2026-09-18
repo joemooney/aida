@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:17:02.101239691Z
+modified_at: 2026-09-18T04:21:11.651728698Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -93,6 +93,12 @@ comments:
     Summary: Requester MCP intake still permits relationship mutation through the parent argument.
   created_at: 2026-09-18T04:15:28.003347995Z
   modified_at: 2026-09-18T04:15:28.003347995Z
+- id: 01a0b2bf-3963-7390-a3e2-3fc747cb6e6d
+  author: joe
+  content: 'Addressed PR #1913 advisor finding: stakeholder MCP reads now use an explicit persona allow-list independent of STORY-474 profiles; CLI persona classification is explicit/default-deny. Added guest regressions for MCP db_sync/session_start/role_enter and CLI db sync/session start.'
+  created_at: 2026-09-18T04:21:11.651728698Z
+  modified_at: 2026-09-18T04:21:11.651728698Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
