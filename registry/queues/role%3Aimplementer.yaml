@@ -70,3 +70,11 @@
   added_at: 2026-09-18T19:21:54.994046968Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5f9-e094-7182-8c67-8be0b9ed5dfe
+  position: 13000
+  added_by: role:implementer
+  note: 'slice 1 only: META-stored protocol:<type> seeded from templates; aida protocol list/show; pickup-prompt injection (queue work / do / worktree enter) capped 40 lines citing the META id; per-turn notice line while leased; precedence labels; NO done-gate (TASK-1277) and NO lane/MCP/headless (TASK-1278); merge at advisor gate'
+  added_at: 2026-09-18T19:28:05.285644345Z
+  for_role: implementer
+  added_by_machine: imac
