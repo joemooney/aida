@@ -76544,5 +76544,17 @@ operations:
   timestamp: 2026-09-18T12:53:45.669616922Z
   kind: !SetStatus
     status: Completed
-clock: 5915
+- id: 01a0b497-6045-74a1-8596-a6f6cc86ab7a
+  target_id: 01a0b497-537d-7d73-8798-4cbafa492c28
+  author: aida
+  node_id: '1'
+  lamport: 5916
+  timestamp: 2026-09-18T12:56:54.597590396Z
+  kind: !Create
+    title: 'Groom proposes lanes: serialize verdicts print the --single-branch cluster command; docs-only/papercut specs get a lifecycle:trivial proposal'
+    description: 'SPIKE-81 lane 1 + lane 2 fix. (1) In backlog.rs, where classify_pair_overlap yields PairVerdict::Serialize{shared}, replace the ''serialize / do not parallelize'' rendering with a proposal that prints the exact command: aida queue work --batch NAME --auto-complete --single-branch (add --sequential when member order matters) and, under --apply, tags the pair''s batch so the hint is durable. (2) aida groom proposes lifecycle:trivial for specs whose predicted footprint is docs-only / templates-only or that carry papercut / severity:cosmetic, as a normal disposition the advisor accepts or declines; never auto-applied without --apply. Acceptance: a groom dry-run over two overlapping specs prints the --single-branch command verbatim; a docs-only papercut spec gets a lifecycle:trivial proposal line; unit tests for both renderers; no change to drain behaviour.'
+    req_type: Task
+    status: Approved
+    priority: Medium
+clock: 5916
 node_id: '1'
