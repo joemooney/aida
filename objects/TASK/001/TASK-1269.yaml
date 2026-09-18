@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:01:11.631455641Z
-modified_at: 2026-09-18T18:43:41.370908334Z
+modified_at: 2026-09-18T18:45:46.047237382Z
 req_type: Task
 tags:
 - forge
@@ -39,6 +39,19 @@ comments:
   content: '[advisor 2026-09-18 09:58] Done on the mirror (MR !2), shelved ci-red because the mirror''s verify job hit BUG-1225 (node id > 32 chars on the runner hostname). #1932 (TASK-1254) fixed that on main (d03601f294). Path to merge: sync main → the gitlab mirror (multi-hub push; docs/multi-hub-sync.md), then re-drive from the MR on GitLab (`aida queue work MR-2 --from-pr --auto-complete --no-human=both` or the product seat''s launcher) so the verify job re-runs green and the standard reviewer files a verdict; that re-drive also exercises BUG-1228 (reviewer fetch refspec on GitLab) — if it tool-exits there, BUG-1228 is the blocker and merges first. Stays on the implementer queue as awaiting-merge (a drain refuses it as fresh work, which is correct).'
   created_at: 2026-09-18T17:00:06.886695279Z
   modified_at: 2026-09-18T17:00:06.886695279Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b5d6-c3bf-7750-ad45-dd5451aa572b
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1936 [AI:codex] docs(forge): record live GitLab drain validation (TASK-1269)
+    verdict: APPROVE + merged (auto-bumped Done → Completed at d38109f)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (headless Codex implementer on the mirror MR !2; headless reviewer approved r2 there; product seat carried the commit to GitHub; this advisor read the diff; verdict at .aida/review-verdicts/PR-1936.json)
+    gates: required Build (ubuntu-latest) = success at 8727aa2f; merge-hold-gate = success; MERGEABLE/CLEAN; merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: docs-only 7-line subsection in docs/forge-providers.md; no live drain owned the PR (BUG-1224 drain in phase 1 on its own spec; the mirror run for this spec ended on a CI watchdog with the MR closed by design so both mains stay identical). The GitLab-side smoke is what this spec was for; the drain-lifecycle gaps it surfaced are already filed (BUG-1222/1224/1227/1228/1229/1230).
+    timestamp: 2026-09-18T11:46-07:00
+  created_at: 2026-09-18T18:45:46.047237382Z
+  modified_at: 2026-09-18T18:45:46.047237382Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b5d4-dcb4-7692-b85e-27a207690a01
