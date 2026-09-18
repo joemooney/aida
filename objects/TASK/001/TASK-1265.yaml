@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:53:00.149541934Z
-modified_at: 2026-09-18T11:31:39.582853388Z
+modified_at: 2026-09-18T11:31:41.134792835Z
 req_type: Task
 tags:
 - drain
@@ -24,4 +24,11 @@ tags:
 - loop-guard
 - orchestrator
 - rework
+comments:
+- id: 01a0b449-59ce-7d00-926d-54c5f0eaa4c5
+  author: joe
+  content: 'Scope narrowed 2026-09-18 04:33 (advisor): item 1 (computed round number) moved back into BUG-1213 round 4 because the drain reviewer holds it as an acceptance requirement of that spec. This task is now only item 2: the content-based unchanged-head predicate.'
+  created_at: 2026-09-18T11:31:41.134792835Z
+  modified_at: 2026-09-18T11:31:41.134792835Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
