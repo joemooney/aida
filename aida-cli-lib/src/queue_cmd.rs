@@ -6439,6 +6439,55 @@ pub(crate) fn handle_queue_rework(
             })?;
             if added {
                 println!("  {} review findings captured as comment", "·".dimmed());
+            } else if current_status == RequirementStatus::NeedsAttention {
+                // BUG-1213: the same blocking findings produced two consecutive
+                // request-changes shelves. A third blind requeue is a loop, so
+                // return the spec to NeedsAttention and route an explicit
+                // advisor finding + brief instead.
+                storage.update_atomically(|s| {
+                    if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                        r.status = RequirementStatus::NeedsAttention;
+                        r.modified_at = chrono::Utc::now();
+                    }
+                })?;
+                let note = format!(
+                    "Identical reviewer findings recurred twice for {display_id}; do not \
+                     requeue a third implementer round until an advisor chooses a different \
+                     implementer/seat or resolves the dispute.\n\n{block}"
+                );
+                let exe = std::env::current_exe().context("resolve aida executable")?;
+                let finding_title = format!("Repeated unchanged review findings: {display_id}");
+                let finding = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args([
+                        "findings",
+                        "add",
+                        "--title",
+                        &finding_title,
+                        "--note",
+                        &note,
+                        "--severity",
+                        "major",
+                        "--linked-specs",
+                        &display_id,
+                        "--tags",
+                        "loop-guard,review-recurrence",
+                    ])
+                    .status()?;
+                anyhow::ensure!(finding.success(), "could not file repeated-review finding");
+                let brief = std::process::Command::new(&exe)
+                    .current_dir(&root)
+                    .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
+                    .status()?;
+                anyhow::ensure!(
+                    brief.success(),
+                    "could not write repeated-review advisor brief"
+                );
+                println!(
+                    "  {} identical review findings recurred — escalated to advisor; not re-queued",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                );
+                return Ok(());
             }
         }
     }
@@ -7971,7 +8020,7 @@ pub(crate) fn derive_queue_work_prompt(
     if plan.mode == QueueWorkMode::Item {
         let pickup = format!("/aida-pickup {}", plan.anchor_display);
         if let Some(findings) = review_findings {
-            return format!("{findings}\n\n{pickup}");
+            return rework_pickup_prompt(findings, &pickup, 2);
         }
         return pickup;
     }
@@ -7979,9 +8028,22 @@ pub(crate) fn derive_queue_work_prompt(
     // pre-flight; pass --auto-first so the skill skips its own confirm.
     let pickup = "/aida-pickup --auto-first".to_string();
     if let Some(findings) = review_findings {
-        return format!("{findings}\n\n{pickup}");
+        return rework_pickup_prompt(findings, &pickup, 2);
     }
     pickup
+}
+
+/// BUG-1213: make the current review delta, rather than the original spec
+/// description or an earlier commit, the first and authoritative instruction
+/// a rework implementer sees.
+// trace:BUG-1213 | ai:codex
+pub(crate) fn rework_pickup_prompt(findings: &str, pickup: &str, round: usize) -> String {
+    format!(
+        "ROUND {round} — ITEMS STILL OPEN (AUTHORITATIVE TASK):\n{findings}\n\n\
+         The previous round's commit is already on the PR branch and does not count for this \
+         round. Produce a new commit addressing every item below, or punt explicitly naming \
+         the finding you dispute.\n\n{pickup}"
+    )
 }
 
 fn review_ref_from_verdict_filename(path: &std::path::Path) -> String {

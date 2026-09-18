@@ -82928,6 +82928,10 @@ struct RealPhaseDriver {
     // trace:BUG-908 | ai:codex
     retry_implementer_worktree: Option<std::path::PathBuf>,
     retry_implementer_branch: Option<String>,
+    /// BUG-1213: `(PR, head, authoritative review delta)` captured immediately
+    /// before a rework implementer runs. `None` for ordinary first-pass work.
+    // trace:BUG-1213 | ai:codex
+    rework_guard: Option<(u32, String, String)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -83190,6 +83194,7 @@ impl RealPhaseDriver {
             empty_launch_retries_used: 0,
             retry_implementer_worktree: None,
             retry_implementer_branch: None,
+            rework_guard: None,
         }
     }
 
@@ -84625,6 +84630,50 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     // trace:BUG-770 | ai:claude
     fn events_root(&self) -> Option<std::path::PathBuf> {
         Some(self.project_root.clone())
+    }
+
+    // trace:BUG-1213 | ai:codex
+    fn begin_rework_guard(&mut self) {
+        self.rework_guard = None;
+        let Some(verdict) = review_verdict::read_recorded_verdict(&self.project_root, &self.spec)
+        else {
+            return;
+        };
+        if !verdict.kind.blocks_done() {
+            return;
+        }
+        let Ok(crate::forge::ChangeLookup::Found(change)) =
+            crate::forge::forge_for(&self.project_root).change_for_spec(&self.spec)
+        else {
+            return;
+        };
+        let pr = change.id as u32;
+        let Some(head) = pr_head_sha_best_effort(self, pr) else {
+            return;
+        };
+        let reason = review_verdict::rework_findings_comment(
+            &self.spec,
+            &format!("PR #{}", change.id),
+            &verdict,
+        )
+        .unwrap_or_else(|| "blocking review findings remain open".to_string());
+        self.rework_guard = Some((pr, head, reason));
+    }
+
+    // trace:BUG-1213 | ai:codex
+    fn rework_no_op_failure(&mut self) -> Option<auto_complete::PhaseFailure> {
+        let (pr, before, reason) = self.rework_guard.as_ref()?;
+        let after = pr_head_sha_best_effort(self, *pr)?;
+        if !before.trim().eq_ignore_ascii_case(after.trim()) {
+            return None;
+        }
+        Some(auto_complete::PhaseFailure::of(
+            auto_complete::FailureKind::ReworkNoOp,
+            format!(
+                "rework implementer left PR-{pr} head `{}` unchanged; the previous round's commit does not count. Authoritative open items:\n{reason}",
+                before.trim()
+            ),
+        ))
     }
 
     fn run_implementer(

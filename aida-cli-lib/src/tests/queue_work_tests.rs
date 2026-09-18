@@ -8,6 +8,21 @@ use super::*;
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 
+// trace:BUG-1213 | ai:codex
+#[test]
+fn rework_prompt_leads_with_round_and_authoritative_open_items() {
+    let prompt = rework_pickup_prompt(
+        "REVIEW FINDINGS TO ADDRESS:\n- add real CLI/MCP parity coverage",
+        "/aida-pickup BUG-1213",
+        4,
+    );
+    assert!(prompt.starts_with("ROUND 4 — ITEMS STILL OPEN (AUTHORITATIVE TASK):"));
+    assert!(
+        prompt.contains("previous round's commit is already on the PR branch and does not count")
+    );
+    assert!(prompt.ends_with("/aida-pickup BUG-1213"));
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
