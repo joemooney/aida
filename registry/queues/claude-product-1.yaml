@@ -1,7 +1,1 @@
-- user_id: claude-product-1
-  requirement_id: 01a0b5ce-6f5d-7be3-b693-e98175dbb944
-  position: 1000
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1944 (verified against cross-platform run 35398204071, windows-latest still red): Cross-platform run 35398204071 at head f6e106502e8ea5d6e889505642a2d7e2600a7dce failed on windows-latest: reconstitute::tests::scratch_gc_expires_old_runs_and_keeps_only_the_newest panicked at reconstitute.rs:658 because File::set_times returned Access is denied (OS code 5). Use a Windows directory-mtime method that grants the required attribute-write access (or filetime on the path), while keeping the test enabled on Windows.  Approach hint: on Windows a directory handle cannot take set_times even with backup semantics — set the mtime on a marker FILE inside the scratch dir (or on the dir via the filetime crate''s set_file_mtime, which uses SetFileTime on a handle opened with FILE_FLAG_BACKUP_SEMANTICS + FILE_WRITE_ATTRIBUTES) and make the gc predicate read that; add the test on both a fresh and an old dir and keep it portable per scripts/check-portability.sh.'
-  added_at: 2026-09-18T21:57:38.883724738Z
-  for_role: implementer
+[]
