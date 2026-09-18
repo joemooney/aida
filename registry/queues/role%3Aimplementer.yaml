@@ -6,14 +6,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b5cd-a76d-7a80-b832-7f46598aff98
-  position: 16000
-  added_by: role:implementer
-  note: 'GitLab merge phase: drive on detailed_merge_status (wait-and-reread for ci_must_pass/ci_still_running/checking/preparing/405; shelve-with-status for the rest); never surface glab wrapper text; fixture tests per class'
-  added_at: 2026-09-18T20:22:30.392239841Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b640-4cc4-72e0-ab7f-5cb11c514414
   position: 17000
   added_by: role:implementer
