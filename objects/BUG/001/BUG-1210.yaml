@@ -23,12 +23,12 @@ description: |-
   - Piped or redirected output is byte-identical to today (no ANSI), so `aida drain status | grep` and the TOON/json shapes are unaffected.
   - The status colours match the TASK-269 palette rather than introducing a second vocabulary for the same concepts.
   - drain_state.rs unit tests pass with and without CLICOLOR_FORCE=1 in the environment.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:23:28.223098146Z
-modified_at: 2026-09-18T07:43:53.415165326Z
+modified_at: 2026-09-18T07:43:59.693304903Z
 req_type: Bug
 tags:
 - aida:drain
@@ -43,3 +43,7 @@ relationships:
   created_at: 2026-09-18T07:43:53.415161235Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T07:43:59.693304903Z
+  implemented_by: joe
