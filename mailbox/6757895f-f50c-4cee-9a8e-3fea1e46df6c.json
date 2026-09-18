@@ -1,0 +1,15 @@
+{
+  "id": "6757895f-f50c-4cee-9a8e-3fea1e46df6c",
+  "thread_id": "6757895f-f50c-4cee-9a8e-3fea1e46df6c",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789772428527,
+  "body": "Subject: tag loss incident (fixed) — do not use aida edit --tags for batches\n\nHeads-up: aida edit --tags REPLACES the tag set. Following the CLAUDE.md batch example I stripped every other tag (parent:EPIC-*, drain-safe, lanes) from 13 specs today (BUG-1222/1224/1226/1227/1229/1230/1233, SPIKE-82, STORY-1221, TASK-1271/1276/1278, TASK-1-140). All restored from store history as the union of old + batch tags; epic rollups should read right again. Filed BUG-1241 (guard the flag when it drops parent:*, doctor check, additive batch verb) and a docs PR switching every example to --add-tag. If you tagged waves the same way, the audit fingerprint is \"tags after the commit are only batch:*\"; I can run the audit over a wider window if you want.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false
+}
