@@ -1,1 +1,11 @@
-[]
+- user_id: role:implementer
+  requirement_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
+  position: 1000
+  added_by: role:implementer
+  note: |-
+    [rework] PR #1913 CHANGES REQUESTED — two findings, one from the drain reviewer and one from the advisor gate (.aida/review-verdicts/PR-1913.json + PR-1913-advisor.json). Fix both in the SAME PR (push fixups to the #1913 head branch):
+    (A) Reviewer: constrain_requester_intake leaves the add_requirement `parent` argument intact, and tool_add_requirement then calls add_relationship on that parent — a requester over MCP can mutate an existing spec's relationship graph. Reject `parent` (and `feature`/`owner` if they write to other specs) for requester intake with the stakeholder refusal text; regression test.
+    (B) Advisor: the shared policy's definition of Read is wrong on BOTH surfaces. MCP: stakeholder_mcp_action treats tool_min_profile == ReadOnly as Read, and that STORY-474 arm also contains db_sync, fetch, session_start, session_end, session_manifest, role_enter, role_end, queue_work — so a guest can push/pull the store, take a session lease, or enter a role. CLI: stakeholder_cli_action = Read unless auto-push-write or build-loop, so `aida db sync`, `aida session start`, `aida role enter` pass for a guest too. STORY-1110: guest is refused EVERY write; TASK-1261: personas hold no lease. Make Read an explicit allow-list in the shared policy — STORY-1110's read verbs (why, list, show, status, graph, search, digest, history) plus read-side coordination reads (read_inbox, list/read briefs, punts, findings, directives, list_active_leases/session_leases/session_status, queue_list/queue_next/queue_progress, cache_status, schema, status_unified, usage_query, plan_verify/plan_helpers/ultraplan_assemble/goal_derive) — and treat everything else as Write for a persona on both surfaces (db_sync, fetch, session_start/end, role_enter/end, queue_work, Command::Db/Session/Role on the CLI). Keep the descriptor-wide parity test but assert against the explicit list; add cases: guest db_sync / session_start / role_enter refused over MCP; guest `aida db sync` / `session start` / `role enter` refused on the CLI.
+    Finish with aida queue done BUG-1197.
+  added_at: 2026-09-18T04:12:31.244211753Z
+  for_role: implementer
