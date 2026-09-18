@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T09:34:08.219146771Z
+modified_at: 2026-09-18T09:42:52.662461126Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -43,4 +43,6 @@ comments:
   created_at: 2026-09-18T09:34:08.219146771Z
   modified_at: 2026-09-18T09:34:08.219146771Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+test_coverage_notes: Added regression cases for hash-only and mixed labels, colon-form append preserving all criteria, and mixed inline/heading parser union. Targeted aida-cli-lib tests and cargo fmt check pass.
+implementation_summary: Harvest now ignores generated ac<6-hex> IDs when allocating explicit AC numbers, appends into standalone colon-style acceptance sections, and unions inline plus headed sections during parsing so existing criteria cannot be shadowed.
 execution_mode: drain
