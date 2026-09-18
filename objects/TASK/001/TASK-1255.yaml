@@ -17,7 +17,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:27:34.355844642Z
+modified_at: 2026-09-18T01:28:04.581940339Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -48,6 +48,17 @@ comments:
     - AC skipped (matches a deny keyword) — Scratch cleanup removes only directories under ~/.aida/reconstitute and leaves non-directory entries, including ordinary files, untouched.
   created_at: 2026-09-18T01:27:26.018813186Z
   modified_at: 2026-09-18T01:27:26.018813186Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b220-bae5-7693-8723-65144b0d15e1
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: Harvest candidate files under a project's gitignored .aida/harvest/ directory have no automatic retention cleanup; they remain until manually reviewed because they may contain unconfirmed proposals.
+    rationale: The requirement asks that the retention choice be recorded but does not make the choice; the diff establishes durable manual-retention semantics that affect user-visible disk state and proposal workflow.
+    source: file:task-1255-drain-01a0b21f-d3cd-79f2-9c2f-10cf08179b5a.json
+    confidence: 0.98
+  created_at: 2026-09-18T01:28:04.581940339Z
+  modified_at: 2026-09-18T01:28:04.581940339Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b220-449c-7650-9cde-17fab8f7ad69
