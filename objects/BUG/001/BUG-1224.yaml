@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:32:19.250009247Z
-modified_at: 2026-09-18T18:58:06.565742390Z
+modified_at: 2026-09-18T19:01:07.383598642Z
 req_type: Bug
 tags:
 - batch:followups-0918d
@@ -26,6 +26,21 @@ comments:
   content: 'Reproduced live a second time (2026-09-18 11:14, drain run 7 on TASK-1269 / mirror MR !2): the idle clock climbed to 2400 s while the verify job was actively compiling (pipeline 292, verify running 29 min under a shared runner), the wait returned NoSignal and the orchestrator printed ''CI state unavailable — proceeding without a CI gate'' and went straight to the reviewer phase with CI still running. Raising AIDA_WORKER_CI_IDLE only postpones it. Confirms the fix must count a running job as progress (or fold job start/duration into the snapshot).'
   created_at: 2026-09-18T18:14:21.935273531Z
   modified_at: 2026-09-18T18:14:21.935273531Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b5e4-d2b7-7281-9c1f-54fcf2603cae
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1937
+    agent: codex
+    ran-at: 2026-09-18 12:01 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1224-drain-01a0b5e4-65dc-7fe1-87c0-208ba97729f5.json
+    ? SEM (0.93) — GitLab CI progress snapshots augment the pipeline-list payload with the jobs payload for only the newest pipeline on the watched branch.
+  created_at: 2026-09-18T19:01:07.383598642Z
+  modified_at: 2026-09-18T19:01:07.383598642Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
