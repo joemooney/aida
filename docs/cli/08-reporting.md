@@ -212,7 +212,7 @@ The dividing lines: `status` is *now*, everything else is *over a window*. `hist
 - JSON — the full report (matches, untested criteria, unanchored tests, candidates file) for scripts and trend tracking.
 - Dry run — print the probe brief; useful to confirm it carries no source before spending an agent run.
 
-**Gotchas.** Two headless agent runs per probe (regenerate, then judge). Judging is agent-based, so treat the score as a heuristic and read the reasons. Isolation is by construction of the brief plus an empty working directory, not a sandbox: a tool-using agent that ignores its instructions could still look around, so the guard is the brief (a test pins that it carries no test source).
+**Gotchas.** Two headless agent runs per probe (regenerate, then judge). Judging is agent-based, so treat the score as a heuristic and read the reasons. Isolation is by construction of the brief plus an empty working directory, not a sandbox: a tool-using agent that ignores its instructions could still look around, so the guard is the brief (a test pins that it carries no test source). Probe artifacts live under `~/.aida/reconstitute/`; each run removes directories older than seven days and retains at most the newest 20 runs per machine. Harvest candidates live under the project's gitignored `.aida/harvest/` directory and are retained until manually reviewed because they may contain unconfirmed proposals.
 
 **Chains with** — `aida criteria <ID>` first, then `aida reconstitute <ID>`, then `aida harvest <ID> --from <candidates-file>` to land what the store was missing, then trace the new criteria from tests.
 

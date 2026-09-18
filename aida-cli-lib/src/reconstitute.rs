@@ -19,6 +19,7 @@
 // trace:TASK-1248 | ai:claude
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use colored::Colorize;
@@ -26,6 +27,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::criteria::{CriteriaReport, TracedTest};
 use crate::harvest::{Candidate, CandidateKind};
+
+const SCRATCH_RUN_LIMIT: usize = 20;
+const SCRATCH_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReconstituteOptions {
@@ -406,11 +410,19 @@ pub(crate) fn handle_reconstitute_command(
     let context = store_only_context(project_root, store, req, &display);
 
     // Scratch dir OUTSIDE the project (so find_project_root cannot climb back in).
+    // trace:TASK-1255 | ai:codex
+    let scratch_root = dirs_home().join(".aida").join("reconstitute");
+    std::fs::create_dir_all(&scratch_root)?;
+    // Leave room for this run so a successful probe never leaves more than the
+    // configured machine-wide limit behind.
+    prune_scratch_runs(
+        &scratch_root,
+        SCRATCH_RUN_LIMIT.saturating_sub(1),
+        SCRATCH_MAX_AGE,
+        SystemTime::now(),
+    )?;
     let run_id = uuid::Uuid::now_v7().to_string();
-    let scratch = dirs_home()
-        .join(".aida")
-        .join("reconstitute")
-        .join(format!("{}-{run_id}", display.to_ascii_lowercase()));
+    let scratch = scratch_root.join(format!("{}-{run_id}", display.to_ascii_lowercase()));
     std::fs::create_dir_all(&scratch)?;
     let probe_out = scratch.join("regenerated.json");
     let prompt = build_probe_prompt(&display, &context, &criteria_ids, &symbols, &probe_out);
@@ -599,6 +611,32 @@ fn dirs_home() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
 }
 
+/// Remove expired scratch runs, then retain at most `keep` of the newest
+/// remaining directories. Files and symlinks in the root are left untouched.
+fn prune_scratch_runs(root: &Path, keep: usize, max_age: Duration, now: SystemTime) -> Result<()> {
+    let mut runs = Vec::new();
+    for entry in std::fs::read_dir(root)
+        .with_context(|| format!("failed to inspect scratch root {}", root.display()))?
+    {
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+        if metadata.is_dir() {
+            runs.push((metadata.modified().unwrap_or(UNIX_EPOCH), entry.path()));
+        }
+    }
+    runs.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+
+    for (index, (modified, path)) in runs.into_iter().enumerate() {
+        let expired = now.duration_since(modified).is_ok_and(|age| age > max_age);
+        if expired || index >= keep {
+            std::fs::remove_dir_all(&path).with_context(|| {
+                format!("failed to remove stale scratch run {}", path.display())
+            })?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -725,5 +763,46 @@ mod tests {
         let p = build_match_prompt("S", &pairs, Path::new("matches.json"));
         assert!(p.contains("## S.AC1") && p.contains("#### real_a") && p.contains("#### regen_a"));
         assert!(p.contains("matched|partial|missing"));
+    }
+
+    #[test]
+    fn scratch_gc_expires_old_runs_and_keeps_only_the_newest() {
+        let root = tempfile::tempdir().unwrap();
+        let now = SystemTime::now();
+        for index in 0..5 {
+            let run = root.path().join(format!("run-{index}"));
+            std::fs::create_dir(&run).unwrap();
+            let modified = now - Duration::from_secs((index as u64 + 1) * 60);
+            std::fs::File::open(&run)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(modified))
+                .unwrap();
+        }
+        let expired = root.path().join("expired");
+        std::fs::create_dir(&expired).unwrap();
+        std::fs::File::open(&expired)
+            .unwrap()
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(now - SCRATCH_MAX_AGE - Duration::from_secs(1)),
+            )
+            .unwrap();
+        let marker = root.path().join("leave-me.txt");
+        std::fs::write(&marker, "not a run directory").unwrap();
+
+        prune_scratch_runs(root.path(), 3, SCRATCH_MAX_AGE, now).unwrap();
+
+        let mut remaining = std::fs::read_dir(root.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        remaining.sort();
+        assert_eq!(remaining, ["run-0", "run-1", "run-2"]);
+        assert!(
+            marker.exists(),
+            "non-directory entries are not scratch runs"
+        );
     }
 }

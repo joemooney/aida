@@ -33,9 +33,8 @@ use serde::{Deserialize, Serialize};
 pub(crate) const HARVEST_MARKER: &str = "[aida:harvest]";
 pub(crate) const SEM_MARKER: &str = "[aida:sem]";
 
-/// `[harvest]` config — the calibration surface for the selectivity filter.
-/// Strict by default (anti-slop); loosen on evidence.
 // TASK-1249 / ADR-45: whether the drain runs the advisory harvest step.
+/// Controls whether drains run the advisory harvest step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HarvestGate {
     /// Run after the review gates, propose-only (default).
@@ -44,6 +43,8 @@ pub(crate) enum HarvestGate {
     Off,
 }
 
+/// `[harvest]` config — the calibration surface for the selectivity filter.
+/// Strict by default (anti-slop); loosen on evidence.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct HarvestConfig {
     /// `[harvest] gate = "advisory" | "off"`.

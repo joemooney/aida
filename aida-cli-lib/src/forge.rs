@@ -4043,7 +4043,6 @@ mod tests {
         assert_eq!(glab_ci_state_from_status("weird"), CiState::None);
     }
 
-    #[test]
     // STORY-1166: GitLab registration + per-check row mapping are pure.
     #[test]
     fn glab_registration_and_job_rows_map_to_forge_neutral_shapes() {
