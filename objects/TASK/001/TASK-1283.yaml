@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-18T23:40:08.070346228Z
+modified_at: 2026-09-18T23:40:09.756556347Z
 req_type: Task
 tags:
 - drain-safe
@@ -23,4 +23,8 @@ tags:
 - parent:EPIC-28
 - protocol
 - test-coverage
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-18T23:40:09.756556347Z
 execution_mode: drain
