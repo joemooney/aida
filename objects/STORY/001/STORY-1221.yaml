@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T22:45:07.181381562Z
+modified_at: 2026-09-18T22:52:33.257179502Z
 req_type: Story
 tags:
 - batch:followups-0918e
@@ -63,4 +63,14 @@ comments:
   created_at: 2026-09-18T22:45:07.181381562Z
   modified_at: 2026-09-18T22:45:07.181381562Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b6b8-b469-7383-8689-83489f2cbf9e
+  author: joe
+  content: |-
+    [advisor:sketch-signoff] Signed off 2026-09-18 15:58 with ONE required addition before the PR opens.
+    Sketch items 1-6 match slice 1 as groomed: provider-neutral resolver in aida-core over META rows tagged protocol:<type>, live-read per invocation, 40-line cap with the META id cited, precedence label type protocol < spec acceptance, aida protocol list/show, injection at queue work / do / worktree enter, one-line notice only while a lease is held, no done-gate, no lane/MCP/headless.
+    Required addition (it is in this story's acceptance: "seeded by aida init AND by aida scaffold refresh for existing projects"): seeding currently runs only inside store creation (seed_type_protocols on the new-store path), so an EXISTING project never gets the protocol METAs — this repo has zero META rows today and would keep having zero, which means the dogfood repo cannot exercise the feature. Add an idempotent seed-missing pass (create only the protocol:<type> METAs whose slug is absent; never overwrite an edited body) and reach it from aida scaffold refresh / aida init --refresh (and, cheapest, a bare `aida protocol seed`). One test: a store with two of six protocols present gains exactly the missing four and the two existing bodies are untouched.
+    Then open the PR (drive: it holds for my gate; apply the aida:merge-hold label by hand until BUG-1236 lands) and run aida queue done STORY-1221.
+  created_at: 2026-09-18T22:52:33.257179502Z
+  modified_at: 2026-09-18T22:52:33.257179502Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
