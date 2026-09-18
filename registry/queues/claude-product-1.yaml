@@ -1,0 +1,8 @@
+- user_id: claude-product-1
+  requirement_id: 01a0b5e1-fa69-7c72-90bc-61dae621ab11
+  position: 1000
+  added_by: claude-product-1
+  note: auto-queued by `session end` (01a0b5d3); covers 1 spec
+  added_at: 2026-09-18T18:58:09.056088476Z
+  for_role: reviewer
+  added_by_machine: imac
