@@ -3,20 +3,36 @@ spec_id: BUG-1198
 agreed_id: BUG-1198
 title: 'aida harvest --from is not idempotent: confirming an already-confirmed candidates file lands duplicate acceptance criteria and duplicate [aida:sem] comments'
 description: 'Observed 2026-09-17 18:33 on TASK-1255: the drain''s propose-only harvest (TASK-1249) wrote task-1255-drain-<id>.json; the advisor confirmed it at 18:28 (AC1 + one [aida:sem] comment); the proxy confirmed the same file again at 18:33 without checking the ledger, which appended an identical AC2 and a second identical [aida:sem] comment. Two gaps: (1) aida harvest --from <file> has no memory of a prior confirmation of that file; (2) the landing step never checks whether an identical criterion text / SEM decision already exists on the spec. Fix: (a) after a successful --from confirm, mark the file consumed (rename to <name>.confirmed.json or write a sidecar) and refuse to confirm a consumed file, pointing at the ledger; (b) make landing idempotent — an AC whose text already appears in ## Acceptance (whitespace/case-insensitive) is reported as ''already present as ACn'' and not appended; a SEM whose decision text already exists in an [aida:sem] comment is not re-added; the ledger records these as ''already-present''. Acceptance: confirming the same file twice leaves the spec unchanged on the second run and the second ledger says so; append_acceptance_line-level dedupe has a unit test; a consumed file is refused with the ledger pointer.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:34:58.860989851Z
-modified_at: 2026-09-18T01:43:24.684754508Z
+modified_at: 2026-09-18T02:44:57.572954737Z
 req_type: Bug
 tags:
 - follow-up:TASK-1249
 - harvest
 - proxy-groomed
 - reconstitution
+history:
+- id: 01a0b267-1e5d-7e42-be2c-d44f18f4590c
+  author: aida-auto-bump
+  timestamp: 2026-09-18T02:44:57.565913701Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b267-1e64-7721-8d94-e31ac39920e9
+  timestamp: 2026-09-18T02:44:57.572953620Z
+  agent: aida
+  commit_sha: d25185c3194c526c659f1e885d768a6b62419c5c
+  summary: Completed via merge d25185c3
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T01:43:24.684754508Z
   implemented_by: joe
+  completed_at: 2026-09-18T02:44:57.565797745Z
+  completion_sha: d25185c3194c526c659f1e885d768a6b62419c5c
