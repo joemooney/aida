@@ -33,7 +33,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-18T19:07:40.761243762Z
+modified_at: 2026-09-18T19:07:46.853974181Z
 req_type: Story
 tags:
 - autonomy
@@ -54,4 +54,18 @@ relationships:
   target_id: 01a0b5e0-4eab-7c03-acdd-7250d89e58fe
   created_at: 2026-09-18T19:07:40.761228219Z
   created_by: joe
+comments:
+- id: 01a0b5ea-eb25-7f43-aede-d7b958354de8
+  author: joe
+  content: |-
+    [advisor:groom] Approved, high, GUIDED mode, blocked by SPIKE-82. This is a keystone: a scheduler-run process that launches drains on its own is the autonomy substrate itself, so it is built at the keyboard with the operator (STORY-1166 / TASK-1244 class), never in an unattended drain. Three refinements written into the acceptance (lock-path parity with BUG-538, --dry-run as the runbook preflight, defaults sourced from SPIKE-82).
+
+    Advisor position on the design, for the guided session:
+    - Agreed: systemd user timer default (OnUnitInactiveSec = no overlap, journal, controlled PATH, linger), cron as the portable fallback, and NO LLM inside the tick. The tick reads the substrate and forks an advisor (aida advisor watch --once) only when aida awaiting is non-empty — the ADR-26 shape.
+    - Smallest valuable slice if the guided session must cut: (1) launch-when-lock-free for drain-mode entries + ShiftTick event + install --systemd-user; (2) mailbox-latency escalation once TASK-1271 lands; (3) supervise + reap composition last — both verbs already exist and can be chained by the timer unit's ExecStart until the tick owns them.
+    - Hard floor that must survive any cut: drive/guided/operator/decide specs are never launched by the tick; a live lock is never forced.
+    The interactive seats keep their event Monitors for real-time reaction; the tick is the guarantee of progress when no seat is awake.
+  created_at: 2026-09-18T19:07:46.853974181Z
+  modified_at: 2026-09-18T19:07:46.853974181Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
