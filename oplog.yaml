@@ -73617,5 +73617,13 @@ operations:
   timestamp: 2026-09-18T01:03:27.746624777Z
   kind: !SetDescription
     description: 'Follow-up from the STORY-1178 plan: a lifecycle flag (reconstitutable) a spec earns by passing aida reconstitute at a threshold score. Design-bearing: needs the probe''s precision to be trusted first (score is heuristic, agent-judged) and a decision on where the flag lives (status vs view-flag like archived/deferred). Not drain work.'
-clock: 5732
+- id: 01a0b20a-4677-74a1-9213-8675960f06f4
+  target_id: 01a0b0eb-713d-7fc0-a1fb-744879586ea8
+  author: aida
+  node_id: '1'
+  lamport: 5733
+  timestamp: 2026-09-18T01:03:32.983093029Z
+  kind: !SetDescription
+    description: 'Follow-up from the STORY-1178 plan: a blocking harvest gate ([harvest] gate = "block") that refuses a merge when confirmed candidates are unlanded. ADR-45 made v1 advisory on purpose; blocking is design-bearing (false positives would block merges) and must wait on measured precision of the propose-only ledgers. Not drain work.'
+clock: 5733
 node_id: '1'

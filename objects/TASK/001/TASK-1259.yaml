@@ -2,13 +2,13 @@ id: 01a0b0eb-713d-7fc0-a1fb-744879586ea8
 spec_id: TASK-1259
 agreed_id: TASK-1259
 title: Slice 4 blocking mode (`[harvest] gate = "block"`) once precision is proven
-description: ''
+description: 'Follow-up from the STORY-1178 plan: a blocking harvest gate ([harvest] gate = "block") that refuses a merge when confirmed candidates are unlanded. ADR-45 made v1 advisory on purpose; blocking is design-bearing (false positives would block merges) and must wait on measured precision of the propose-only ledgers. Not drain work.'
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:15.101376618Z
-modified_at: 2026-09-17T19:50:15.101376618Z
+modified_at: 2026-09-18T01:03:32.893413420Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
