@@ -24,7 +24,7 @@ description: |-
   - All three human footer sites covered (plain, --show-tags, and the third render branch).
   - The human denominator label matches the TOON one for the same query (open lens vs matched).
   - TOON / --json / --short output unchanged.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
