@@ -219,6 +219,10 @@ impl LifecycleSkip {
         if self.no_build {
             parts.push("build");
         }
+        // trace:BUG-1222 | ai:codex
+        if self.no_harvest {
+            parts.push("harvest");
+        }
         Some(format!("skipping {}", parts.join(" + ")))
     }
 }
@@ -6358,18 +6362,32 @@ mod tests {
         );
     }
 
+    // trace:BUG-1222 | ai:codex
     #[test]
-    fn lifecycle_skip_banner_summary_lists_skipped_phases() {
-        let skip = LifecycleSkip {
-            no_ci_wait: true,
-            no_review: true,
-            no_build: false,
-            no_harvest: false,
-            express: false,
-        };
+    fn lifecycle_skip_banner_summary_names_each_skipped_phase() {
+        for (tag, expected) in [
+            ("lifecycle:no-ci-wait", "skipping CI wait"),
+            ("lifecycle:no-review", "skipping reviewer"),
+            ("lifecycle:no-build", "skipping build"),
+            ("lifecycle:no-harvest", "skipping harvest"),
+        ] {
+            assert_eq!(
+                LifecycleSkip::from_tags([tag]).banner_summary().as_deref(),
+                Some(expected),
+                "banner label for {tag}"
+            );
+        }
+
         assert_eq!(
-            skip.banner_summary().as_deref(),
-            Some("skipping CI wait + reviewer")
+            LifecycleSkip::from_tags([
+                "lifecycle:no-ci-wait",
+                "lifecycle:no-review",
+                "lifecycle:no-build",
+                "lifecycle:no-harvest",
+            ])
+            .banner_summary()
+            .as_deref(),
+            Some("skipping CI wait + reviewer + build + harvest")
         );
     }
 
