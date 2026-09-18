@@ -183,7 +183,8 @@ emphasizes its operational place and cardinality.
 A fileless, non-routable least-privilege gate activated with
 `AIDA_SESSION_ROLE=guest|requester`: `guest` is read-only and `requester` adds
 Draft-only intake. A persona is discoverable in `aida role list` but has no
-seat, history, or lease. See the [identity model](/docs/architecture/roles-seats-and-personas.md).
+seat, history, or lease. See
+`docs/architecture/roles-seats-and-personas.md` in the AIDA repository.
 
 ### worktree
 

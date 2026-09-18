@@ -12,7 +12,7 @@ the shell identity used to select a queue. They are deliberately not aliases.
 | Role (seat) | `~/.aida/roles/<name>.toml` or project `.aida/roles/` | `aida role enter <name>` or a launcher-selected role | Yes, with `aida queue add --for <role>` | Yes, within that role's authority | Yes | Yes |
 | Stakeholder persona (gate) | No role file or history | Set `AIDA_SESSION_ROLE=guest` or `AIDA_SESSION_ROLE=requester` | No | `guest`: no; `requester`: Draft intake only | No | Yes, in a separate discovery-only section |
 | Session | `.aida/sessions/<id>.toml` lease plus its worktree metadata | `aida session start` or `aida queue work` | No; it consumes routed work | Through its role | It is the lease-owning unit | No |
-| User ID | Queue entries plus the current shell environment; not a role file | `--user`, then `AIDA_USER`, then `$USER`, then `default` | Queue key, not a routing target | No authority by itself | No | No |
+| User ID | Queue entries plus the current shell environment; not a role file | `--user`, then `AIDA_USER`, then `$USER`, then `$USERNAME` (Windows), then `default` | Queue key, not a routing target | No authority by itself | No | No |
 
 ## Role: a seat in the build loop
 
@@ -68,11 +68,11 @@ own build-loop work.
 ## User ID: the queue key
 
 The user ID identifies whose queue a command reads or mutates. Resolution is
-`--user` override, then `AIDA_USER`, then `$USER`, then `default`. It is shell
-identity—not the active role, team-roster identity, node ID, or email. Matching
-is case-insensitive while stored/displayed casing is preserved. `BUG-89`
-unified queue-side resolution, and `TASK-951` made identity comparisons
-case-insensitive.
+`--user` override, then `AIDA_USER`, then `$USER`, then `$USERNAME` on Windows,
+then `default`. It is shell identity—not the active role, team-roster identity,
+node ID, or email. Matching is case-insensitive while stored/displayed casing
+is preserved. `BUG-89` unified queue-side resolution, and `TASK-951` made
+identity comparisons case-insensitive.
 
 For concise definitions, see the scaffolded
 [machinery glossary](../../aida-core/templates/.aida/discipline/machinery-glossary.md).
