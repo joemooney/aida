@@ -1,0 +1,26 @@
+id: 01a0b2dd-cc77-7182-afca-1a210942dbd0
+spec_id: BUG-1211
+agreed_id: BUG-1211
+title: CLI requester intake accepts --parent / --feature / --owner — a requester can attach its Draft to an existing spec (a relationship write) on the CLI while the MCP side (BUG-1197 r3) refuses the same f
+description: |-
+  Found during the advisor gate review of #1913 (BUG-1197 round 3, 2026-09-17 21:55). The MCP side now refuses add_requirement with parent/feature/owner for a requester ("setting parent, feature, or owner during intake"), because a parent materializes as a relationship write onto an existing spec. The CLI requester Add rewrite in enforce_stakeholder_role_capabilities_for_role (lib.rs) constrains interactive/queue/batch/for/type/status/tags but does NOT touch parent/feature/owner, so `AIDA_SESSION_ROLE=requester aida add --type bug --parent EPIC-5 …` still links the new Draft under EPIC-5 (and `--feature`/`--owner` set grooming metadata). Pre-existing gap from STORY-1110's CLI gate, not a #1913 regression; filed separately so #1913 could land without a fourth round.
+
+  Fix: in the requester Add arm, refuse when parent / feature / owner is set, with the same refusal text as MCP ("setting parent, feature, or owner during intake"); share the field list with mcp.rs constrain_requester_intake (one const) so the two surfaces cannot drift; add the CLI test next to guest_refuses_db_sync (requester `aida add --type bug --parent X` refused; plain `aida add --type bug` still lands Draft + intake:requester).
+
+  Acceptance: the CLI test above; a parity test asserting the CLI and MCP intake-field deny-lists are the same constant; existing stakeholder tests green.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T04:54:35.383232444Z
+modified_at: 2026-09-18T04:54:35.383232444Z
+req_type: Bug
+tags:
+- batch:followups-0917b
+- cli
+- drain-safe
+- follow-up:BUG-1197
+- gate
+- parity
+- personas
+- requester
