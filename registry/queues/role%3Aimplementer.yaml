@@ -52,11 +52,3 @@
   added_at: 2026-09-18T04:35:31.165502072Z
   for_role: implementer
   added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b2dd-cc77-7182-afca-1a210942dbd0
-  position: 10000
-  added_by: role:implementer
-  note: '8-line CLI parity fix: refuse --parent/--feature/--owner in the requester add arm; share the deny-list const with mcp.rs; CLI test + parity test'
-  added_at: 2026-09-18T04:54:43.953068315Z
-  for_role: implementer
-  added_by_machine: imac
