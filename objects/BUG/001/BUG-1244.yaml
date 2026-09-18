@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-18T23:41:13.677938849Z
+modified_at: 2026-09-18T23:41:16.742657613Z
 req_type: Bug
 tags:
 - drain
@@ -28,4 +28,8 @@ tags:
 - parent:EPIC-28
 - queue-done
 - worktree
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-18T23:41:16.742657613Z
 execution_mode: drive
