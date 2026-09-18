@@ -73780,5 +73780,17 @@ operations:
   timestamp: 2026-09-18T01:34:50.157993777Z
   kind: !SetDescription
     description: ''
-clock: 5747
+- id: 01a0b227-4580-7322-a73d-de599fc086a9
+  target_id: 01a0b227-0d2c-77b0-b96d-e355b1a45b7f
+  author: aida
+  node_id: '1'
+  lamport: 5748
+  timestamp: 2026-09-18T01:35:13.280777254Z
+  kind: !Create
+    title: 'aida harvest --from is not idempotent: confirming an already-confirmed candidates file lands duplicate acceptance criteria and duplicate [aida:sem] comments'
+    description: 'Observed 2026-09-17 18:33 on TASK-1255: the drain''s propose-only harvest (TASK-1249) wrote task-1255-drain-<id>.json; the advisor confirmed it at 18:28 (AC1 + one [aida:sem] comment); the proxy confirmed the same file again at 18:33 without checking the ledger, which appended an identical AC2 and a second identical [aida:sem] comment. Two gaps: (1) aida harvest --from <file> has no memory of a prior confirmation of that file; (2) the landing step never checks whether an identical criterion text / SEM decision already exists on the spec. Fix: (a) after a successful --from confirm, mark the file consumed (rename to <name>.confirmed.json or write a sidecar) and refuse to confirm a consumed file, pointing at the ledger; (b) make landing idempotent — an AC whose text already appears in ## Acceptance (whitespace/case-insensitive) is reported as ''already present as ACn'' and not appended; a SEM whose decision text already exists in an [aida:sem] comment is not re-added; the ledger records these as ''already-present''. Acceptance: confirming the same file twice leaves the spec unchanged on the second run and the second ledger says so; append_acceptance_line-level dedupe has a unit test; a consumed file is refused with the ledger pointer.'
+    req_type: Bug
+    status: Approved
+    priority: Medium
+clock: 5748
 node_id: '1'
