@@ -21,12 +21,12 @@ description: |-
   - `aida role enter` picker: choosing guest/requester never errors; the shell ends up with AIDA_SESSION_ROLE set to the persona (A) or the persona is not selectable (B).
   - `aida role enter requester` (explicit) behaves the same way; the error/help for a genuinely unknown name is unchanged.
   - Unit test on the picker's row source: personas are either tagged as persona rows or absent.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:45:09.335172014Z
-modified_at: 2026-09-18T03:34:14.508983628Z
+modified_at: 2026-09-18T03:34:21.676607020Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -58,8 +58,25 @@ comments:
   created_at: 2026-09-18T03:34:14.508983628Z
   modified_at: 2026-09-18T03:34:14.508983628Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b294-58eb-70b3-a9b6-0fcc5ad769c0
+  author: aida-auto-bump
+  timestamp: 2026-09-18T03:34:21.675930013Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b294-58ec-7fa0-9b4e-624fc36306b7
+  timestamp: 2026-09-18T03:34:21.676606324Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1196-2026-09-18T033416Z.md
+  commit_sha: 8efca45ceed1dccde5d4b44dbfbfeed1531fa09e
+  summary: Completed via merge 8efca45c
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T03:23:37.903930417Z
   implemented_by: joe
+  completed_at: 2026-09-18T03:34:21.675788330Z
+  completion_sha: 8efca45ceed1dccde5d4b44dbfbfeed1531fa09e
