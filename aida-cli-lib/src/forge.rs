@@ -1754,11 +1754,21 @@ impl Forge for GitLabForge {
     }
     // trace:STORY-1166 | ai:claude
     fn ci_progress_snapshot(&self, branch: &str) -> String {
-        self.glab_api_get("projects/:id/pipelines", &[("ref", branch)])
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-            .unwrap_or_default()
+        let Ok(pipelines) = self.glab_api_get("projects/:id/pipelines", &[("ref", branch)]) else {
+            return String::new();
+        };
+        if !pipelines.status.success() {
+            return String::new();
+        }
+        let pipelines = String::from_utf8_lossy(&pipelines.stdout).to_string();
+        let jobs = newest_glab_pipeline_id(&pipelines)
+            .and_then(|id| {
+                self.glab_api_get(&format!("projects/:id/pipelines/{id}/jobs"), &[])
+                    .ok()
+            })
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).to_string());
+        glab_ci_progress_snapshot(&pipelines, jobs.as_deref())
     }
     fn kind(&self) -> ForgeKind {
         ForgeKind::GitLab
@@ -2803,6 +2813,24 @@ fn newest_glab_pipeline(arr: &[serde_json::Value]) -> Option<&serde_json::Value>
             ad.cmp(bd)
         })
     })
+}
+
+/// Build the GitLab idle-watch fingerprint from the pipeline list and the
+/// newest pipeline's jobs. GitLab updates a running job's `duration` even when
+/// its status does not transition, so including the job payload keeps a long
+/// single-job pipeline from looking idle. The pipeline-only fallback preserves
+/// the previous signal when the jobs endpoint is temporarily unavailable.
+// trace:BUG-1224 | ai:codex
+pub(crate) fn glab_ci_progress_snapshot(pipelines: &str, jobs: Option<&str>) -> String {
+    match jobs {
+        Some(jobs) => format!("{pipelines}\n{jobs}"),
+        None => pipelines.to_string(),
+    }
+}
+
+fn newest_glab_pipeline_id(body: &str) -> Option<u64> {
+    let arr = serde_json::from_str::<Vec<serde_json::Value>>(body.trim()).ok()?;
+    newest_glab_pipeline(&arr)?.get("id")?.as_u64()
 }
 
 /// Map a `glab api -X GET projects/:id/pipelines` invocation (TASK-962) to a
@@ -4125,6 +4153,25 @@ mod tests {
             newest.get("status").and_then(|v| v.as_str()),
             Some("success")
         );
+    }
+
+    // trace:BUG-1224 | ai:codex
+    #[test]
+    fn gitlab_progress_snapshot_changes_as_running_job_duration_advances() {
+        let pipelines = r#"[{"id":42,"status":"running"}]"#;
+        let after_one_minute = r#"[{"id":9,"name":"verify","status":"running","started_at":"2026-09-18T17:00:00Z","duration":60.0}]"#;
+        let after_fifteen_minutes = r#"[{"id":9,"name":"verify","status":"running","started_at":"2026-09-18T17:00:00Z","duration":900.0}]"#;
+
+        assert_ne!(
+            glab_ci_progress_snapshot(pipelines, Some(after_one_minute)),
+            glab_ci_progress_snapshot(pipelines, Some(after_fifteen_minutes))
+        );
+        assert_eq!(
+            glab_ci_progress_snapshot(pipelines, None),
+            pipelines,
+            "a jobs API failure retains the pipeline-level progress signal"
+        );
+        assert_eq!(newest_glab_pipeline_id(pipelines), Some(42));
     }
 
     // trace:TASK-1254 | ai:claude
