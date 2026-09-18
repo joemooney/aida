@@ -6428,16 +6428,20 @@ pub(crate) fn handle_queue_rework(
         if let Some(block) = rework_findings_block_for_spec(&root, &display_id, &spec_id) {
             let author = get_default_author();
             let comment = aida_core::Comment::new(author, block.clone());
-            let mut added = false;
+            // BUG-1213 (round 2): recurrence means the IMMEDIATELY PREVIOUS
+            // round's findings equal this round's — not "an identical block
+            // exists somewhere in history". A → B → A is progress, not a loop.
+            // trace:BUG-1213 | ai:claude
+            let mut recurred = false;
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    if !r.comments.iter().any(|c| c.content == block) {
+                    recurred = findings_recur_consecutively(&r.comments, &block);
+                    if !recurred {
                         r.add_comment(comment);
-                        added = true;
                     }
                 }
             })?;
-            if added {
+            if !recurred {
                 println!("  {} review findings captured as comment", "·".dimmed());
             } else if current_status == RequirementStatus::NeedsAttention {
                 // BUG-1213: the same blocking findings produced two consecutive
@@ -8033,6 +8037,25 @@ pub(crate) fn derive_queue_work_prompt(
         return rework_pickup_prompt(findings, &pickup, 2);
     }
     pickup
+}
+
+// BUG-1213: the review-findings block that was recorded LAST on the spec
+/// (by comment time), if any.
+// trace:BUG-1213 | ai:claude
+pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&str> {
+    comments
+        .iter()
+        .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
+        .max_by_key(|c| c.created_at)
+        .map(|c| c.content.as_str())
+}
+
+// BUG-1213: do this round's findings repeat the immediately previous round's
+/// verbatim? Only then is a further blind requeue a loop. A → B → A returns
+/// false (the last recorded block is B).
+// trace:BUG-1213 | ai:claude
+pub(crate) fn findings_recur_consecutively(comments: &[aida_core::Comment], block: &str) -> bool {
+    latest_findings_block(comments).is_some_and(|last| last.trim() == block.trim())
 }
 
 /// BUG-1213: make the current review delta, rather than the original spec

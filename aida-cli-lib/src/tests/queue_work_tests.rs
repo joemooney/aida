@@ -8,6 +8,45 @@ use super::*;
 use aida_core::{QueueEntry, Relationship, Requirement, RequirementType};
 use uuid::Uuid;
 
+/// BUG-1213 (round 2): the loop guard fires only when the IMMEDIATELY previous
+/// findings block equals the new one. Two consecutive identical rounds (A, A)
+/// recur; A → B → A does not — the last recorded block is B, so a third round
+/// with A is progress, not a loop.
+// trace:BUG-1213 | ai:claude
+#[test]
+fn findings_recur_only_when_the_last_block_is_identical() {
+    use crate::queue_cmd::findings_recur_consecutively;
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let a = format!("{prefix}PR #7):\nVerdict: RequestChanges\n- fix A");
+    let b = format!("{prefix}PR #7):\nVerdict: RequestChanges\n- fix B");
+    let base = chrono::Utc::now();
+    let mk = |content: &str, secs: i64| {
+        let mut c = aida_core::Comment::new("reviewer".to_string(), content.to_string());
+        c.created_at = base + chrono::Duration::seconds(secs);
+        c
+    };
+    let chatter = mk("[aida:proxy-note] unrelated comment", 5);
+    assert!(!findings_recur_consecutively(&[], &a), "no history");
+    assert!(
+        findings_recur_consecutively(&[mk(&a, 1)], &a),
+        "A, A recurs"
+    );
+    assert!(
+        findings_recur_consecutively(&[mk(&a, 1), chatter.clone()], &a),
+        "non-findings comments in between are ignored"
+    );
+    assert!(
+        !findings_recur_consecutively(&[mk(&a, 1), mk(&b, 2)], &a),
+        "A, B, A: the last block is B — not a loop"
+    );
+    assert!(
+        findings_recur_consecutively(&[mk(&a, 1), mk(&b, 2), mk(&a, 3)], &a),
+        "…but A, B, A, A is"
+    );
+    // Order is by comment time, not slice position.
+    assert!(!findings_recur_consecutively(&[mk(&a, 9), mk(&b, 1)], &b));
+}
+
 // trace:BUG-1213 | ai:codex
 #[test]
 fn rework_prompt_leads_with_round_and_authoritative_open_items() {
