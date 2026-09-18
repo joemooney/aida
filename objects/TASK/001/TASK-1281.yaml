@@ -1,0 +1,28 @@
+id: 01a0b69c-4ef9-7a32-b7ff-5561773fe56f
+spec_id: TASK-1281
+agreed_id: TASK-1281
+title: 'aida schedule follow-ups from the #1946 review: ledger write failure must not re-run the job every tick; drop the unreachable FiresTask hint; should_write keeps a second seat''s done; episode first_tru'
+description: |-
+  Non-blocking findings from the independent review of PR #1946 (STORY-1226), verified by symbol:
+  1. tick_core / record_outcome: the ledger write is ?-propagated after the substrate command ran and before save_state; if the store git add/commit fails (index.lock, mid-rebase) the local mirror is never saved and the job re-runs every tick (min_gap 60 s) until git recovers. Make the ledger write best-effort with a warning; the local mirror stays authoritative for re-run suppression.
+  2. run_with_executor FiresTask arm prints a hint naming a non-existent verb and is unreachable because run_now validates against load_registry, which excludes legacy tasks. Delete the arm or fix the hint to `run`.
+  3. schedule_ledger::should_write: two seats reporting done on the same job within 60 s with the same result — same_clock neutralises last_by too, so the second reporter is dropped. Treat a last_by.seat change as a real change.
+  4. apply_condition always writes first_true == fired_at; the episode triple is degenerate until pre-fire hysteresis exists. Either record first_true at the first true evaluation or drop the field until it means something.
+  5. A substrate `when` job produces two store commits per firing (episode via write_cas_opts, then record_outcome). Fold into one mutate.
+  6. Concurrent ticks from two sessions' hooks can both fire a when/on substrate job (min_gap reads last_tick_at, written only at end). Idempotency covers correctness; add a cheap tick lock or write last_tick_at at start.
+  Acceptance: one test per item; no change to the registry format or the CLI surface.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T22:21:32.281544450Z
+modified_at: 2026-09-18T22:21:32.281544450Z
+req_type: Task
+tags:
+- cron
+- drain-safe
+- follow-up:STORY-1226
+- ledger
+- parent:EPIC-62
+- schedule
+execution_mode: drain
