@@ -38546,6 +38546,18 @@ fn is_review_session_branch(branch: &str) -> bool {
 /// `pr_number` / `covered_specs` are `None` at the call sites that run
 /// before those facts are known.
 // trace:BUG-776 | ai:claude
+/// BUG-1223: map the detected forge onto the review-side forge enum. GitLab
+/// keeps its own arm; GitHub and pure-git both take the GitHub arm (pure-git
+/// has no PR concept and is filtered out earlier by the synthetic change id).
+/// Pure so the mapping is unit-testable.
+// trace:BUG-1223 | ai:claude
+fn review_forge_for_kind(kind: crate::forge::ForgeKind) -> ReviewForge {
+    match kind {
+        crate::forge::ForgeKind::GitLab => ReviewForge::GitLab,
+        _ => ReviewForge::GitHub,
+    }
+}
+
 fn auto_queue_skip_reason(
     has_origin_remote: bool,
     pr_number: Option<u64>,
@@ -38711,7 +38723,15 @@ fn try_auto_queue_pr_review(
     // "referenced" (body content / trace comments). Only delivered IDs count
     // toward "covers N specs" or get an `implements` relation — referenced
     // IDs are informational (spot-check for regressions).
-    let (base, head) = pr_base_head(project_root, ReviewForge::GitHub, pr.number)
+    // BUG-1223: this used to hard-code `ReviewForge::GitHub`, so on a GitLab
+    // project the base/head lookup ran `gh pr view` against the wrong forge,
+    // the fallback range covered nothing, and a trailered MR was reported as
+    // "carries no `(REQ-ID)` trailers" — no `Review PR-N` story, so the
+    // drain's reviewer phase had nothing to pick up. Resolve the forge the
+    // same way the review-prompt path does (config `[forge]`, else origin).
+    // trace:BUG-1223 trace:TASK-1254 | ai:claude
+    let review_forge = review_forge_for_kind(crate::forge::resolve_forge_kind(project_root));
+    let (base, head) = pr_base_head(project_root, review_forge, pr.number)
         .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
     let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
     let mut spec_ids: Vec<String> = Vec::new();

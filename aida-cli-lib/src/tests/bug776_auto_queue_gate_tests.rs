@@ -66,3 +66,16 @@ fn a_real_pr_is_not_skipped_before_its_coverage_is_known() {
     // must let a real PR through so the coverage scan can run.
     assert_eq!(auto_queue_skip_reason(true, Some(1577), None), None);
 }
+
+// trace:BUG-1223 | ai:claude
+#[test]
+fn auto_queue_review_forge_follows_detected_kind() {
+    assert!(matches!(
+        review_forge_for_kind(crate::forge::ForgeKind::GitLab),
+        ReviewForge::GitLab
+    ));
+    assert!(matches!(
+        review_forge_for_kind(crate::forge::ForgeKind::GitHub),
+        ReviewForge::GitHub
+    ));
+}
