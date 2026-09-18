@@ -76011,5 +76011,31 @@ operations:
       ## Acceptance
       - AC1. Appending a harvested criterion to a description that uses a standalone `Acceptance:` or `Acceptance Criteria:` marker adds the criterion to that inline section without creating a second `## Acceptance` heading, and the appended criterion remains visible to `aida criteria` alongside the original inline bullets.
       - AC2. When a spec contains both a `## Acceptance` section and a colon-form acceptance section, `aida criteria` returns criteria from both rather than allowing the heading form to shadow the colon-form bullets.
-clock: 5884
+- id: 01a0b406-0893-7bf3-b90f-cf9b9377399e
+  target_id: 01a0b406-043b-7f51-8cbf-ff16c3c08b52
+  author: aida
+  node_id: '1'
+  lamport: 5885
+  timestamp: 2026-09-18T10:18:09.427205856Z
+  kind: !Create
+    title: 'Review PR-1923: [AI:codex] fix(personas): unify CLI and MCP refusal labels (TASK-1264)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b3f6`) for branch `task-1264`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1923>
+      - Branch: `task-1264` → `main`
+
+      ## Covers
+
+      - TASK-1264
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1923` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5885
 node_id: '1'
