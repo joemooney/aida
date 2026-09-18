@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:54:17.365890248Z
-modified_at: 2026-09-18T03:41:52.308216109Z
+modified_at: 2026-09-18T03:47:05.135711917Z
 req_type: Task
 tags:
 - architecture
@@ -57,6 +57,25 @@ comments:
   content: '[rework] PR #1909 RequestChanges (drain reviewer; both findings verified by the advisor): (1) docs/architecture/roles-seats-and-personas.md user-ID resolution omits the USERNAME fallback — the code (identity_guard.rs, and CLAUDE.md''s Queue identity section) is --user → AIDA_USER → USER → USERNAME (Windows) → default; fix the prose and the table row. (2) aida-core/templates/.aida/discipline/machinery-glossary.md links the identity model as a site-root URL (/docs/architecture/…) which leaves the repo on GitHub and is wrong once scaffolded into a downstream project''s .aida/discipline/; use a plain "docs/architecture/roles-seats-and-personas.md (in the AIDA repo)" reference or the repo URL, not a root-relative path — the glossary is copied into other projects. Push the fixups to the #1909 head branch; finish with aida queue done TASK-1260.'
   created_at: 2026-09-18T03:24:20.795898135Z
   modified_at: 2026-09-18T03:24:20.795898135Z
+- id: 01a0b29f-ff2f-7b43-b53b-ca630153e99c
+  author: joe
+  content: |-
+    [aida:harvest]
+    source: PR-1909 (drain propose-only run 01a0b29a; the drain's own ledger write failed on the pre-BUG-1199 binary)
+    agent: codex
+    mode: advisor disposition of the drain proposal
+    proposed: 4
+    confirmed: 0
+    declined: 4 (by the advisor, 2026-09-17 20:47 -07:00)
+    reason: this PR is documentation. All four candidates restate facts the store already records — requester intake envelope (STORY-1110 acceptance), queue user-id precedence + case-insensitive matching (BUG-89 / TASK-951), personas in a discovery-only role list section (TASK-1237), session = one role + one scope via a lease (machinery glossary) — so none is a semantic decision this diff MADE. Landing them as [aida:sem] on a docs task would duplicate the record (the anti-slop bar). Candidates file left in place unconfirmed: .aida/harvest/task-1260-drain-01a0b29a-bba1-73f1-ba75-e6364833340b.json
+    - SEM declined — requester may create only change-request/bug/user; forced Draft; tagged for intake
+    - SEM declined — queue user identity precedence --user → AIDA_USER → USER → USERNAME → default; case-insensitive compare
+    - SEM declined — personas in a separate discovery-only role list section
+    - SEM declined — a session binds one role to one scope via lease + worktree
+    calibration note: the harvest filter treated "described in this doc" as "established by this diff" — a docs-PR heuristic (skip candidates whose text appears in the diff's prose with no code change) would have filtered all four. Worth folding into the [harvest] selectivity rules.
+  created_at: 2026-09-18T03:47:05.135711917Z
+  modified_at: 2026-09-18T03:47:05.135711917Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b29b-392d-7371-9984-adfed8d7b705
   author: aida-auto-bump
