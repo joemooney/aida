@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:54:35.383232444Z
-modified_at: 2026-09-18T04:58:16.135841201Z
+modified_at: 2026-09-18T04:58:17.025631369Z
 req_type: Bug
 tags:
 - batch:followups-0917b
@@ -24,6 +24,11 @@ tags:
 - parity
 - personas
 - requester
+relationships:
+- rel_type: !Custom related
+  target_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
+  created_at: 2026-09-18T04:58:17.025627141Z
+  created_by: joe
 comments:
 - id: 01a0b2e1-2ac7-70b3-9d3c-6e77dcb6582d
   author: joe
