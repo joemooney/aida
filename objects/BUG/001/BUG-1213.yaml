@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T10:43:14.406408776Z
+modified_at: 2026-09-18T10:44:44.165647793Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -67,6 +67,12 @@ comments:
     Finish with aida queue done BUG-1213.
   created_at: 2026-09-18T10:41:17.665113603Z
   modified_at: 2026-09-18T10:41:17.665113603Z
+- id: 01a0b41e-5e05-7001-9619-d89f4278dea9
+  author: joe
+  content: '[advisor] Round 2 (03:42-03:44) reproduced this very bug on its own PR: the headless implementer found round 1''s commit dc98557cf on bug-1213, reported "Completed … Branch is clean and synchronized", ran queue done, and pushed NOTHING — PR #1924 still has one commit and CI is still red on the two tests named in the round-2 reason. Dequeued from the implementer queue (a third codex round would repeat) and handed to the product seat to implement round 2 directly on branch bug-1213; the advisor reviews at the hold. This incident is the acceptance test for item 1 of this spec.'
+  created_at: 2026-09-18T10:44:44.165647793Z
+  modified_at: 2026-09-18T10:44:44.165647793Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
