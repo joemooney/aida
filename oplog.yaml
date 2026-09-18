@@ -73641,5 +73641,21 @@ operations:
   timestamp: 2026-09-18T01:08:08.444881702Z
   kind: !AddTag
     tag: batch:followups-0917
-clock: 5735
+- id: 01a0b20e-7ffa-7c52-83a1-192e5bde56b1
+  target_id: 01a0b203-526c-7233-acb4-578e984cafa4
+  author: aida
+  node_id: '1'
+  lamport: 5736
+  timestamp: 2026-09-18T01:08:09.850457836Z
+  kind: !AddTag
+    tag: proxy-groomed
+- id: 01a0b20e-808b-7e73-93df-9850dbb4a378
+  target_id: 01a0b203-526c-7233-acb4-578e984cafa4
+  author: aida
+  node_id: '1'
+  lamport: 5737
+  timestamp: 2026-09-18T01:08:09.995681255Z
+  kind: !AddTag
+    tag: batch:followups-0917
+clock: 5737
 node_id: '1'

@@ -16,12 +16,15 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:55:57.292682234Z
-modified_at: 2026-09-18T00:55:57.292682234Z
+modified_at: 2026-09-18T01:08:09.765027512Z
 req_type: Task
 tags:
+- batch:followups-0917
 - drain-safe
 - follow-up:TASK-1237
 - launcher
 - papercut
 - personas
+- proxy-groomed
 - ux-signal
+execution_mode: drain
