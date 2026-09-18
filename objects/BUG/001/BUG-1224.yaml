@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:32:19.250009247Z
-modified_at: 2026-09-18T16:52:35.035492438Z
+modified_at: 2026-09-18T18:14:21.935273531Z
 req_type: Bug
 tags:
 - ci-wait
@@ -20,4 +20,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T15:32:38.274960259Z
+comments:
+- id: 01a0b5ba-03ef-7023-a8ed-c3022f7f1cac
+  author: joe
+  content: 'Reproduced live a second time (2026-09-18 11:14, drain run 7 on TASK-1269 / mirror MR !2): the idle clock climbed to 2400 s while the verify job was actively compiling (pipeline 292, verify running 29 min under a shared runner), the wait returned NoSignal and the orchestrator printed ''CI state unavailable — proceeding without a CI gate'' and went straight to the reviewer phase with CI still running. Raising AIDA_WORKER_CI_IDLE only postpones it. Confirms the fix must count a running job as progress (or fold job start/duration into the snapshot).'
+  created_at: 2026-09-18T18:14:21.935273531Z
+  modified_at: 2026-09-18T18:14:21.935273531Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
