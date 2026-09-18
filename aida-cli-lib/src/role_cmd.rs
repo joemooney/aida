@@ -175,6 +175,15 @@ fn handle_role_enter(
     no_resume: bool,
     no_title: bool,
 ) -> Result<()> {
+    // BUG-1196: stakeholder personas are shell identities, not persisted role
+    // files or build seats.  Handle an explicit persona before role lookup so
+    // it has the same outcome as choosing that tagged row in the picker.
+    // trace:BUG-1196 | ai:codex
+    if let Some(persona) = name.and_then(stakeholder_persona_name) {
+        emit_persona_enter_eval(project_root, persona);
+        return Ok(());
+    }
+
     // TASK-644: resolve the role name. When the name is omitted, or names a
     // role that doesn't exist, fall back to an interactive picker — but ONLY
     // when stdin is a TTY. The primary caller is `eval "$(aida role enter)"`,
@@ -185,7 +194,13 @@ fn handle_role_enter(
         explicit => {
             if std::io::stdin().is_terminal() {
                 match pick_role_interactively(project_root, explicit)? {
-                    Some(chosen) => chosen,
+                    Some(chosen) => {
+                        if let Some(persona) = stakeholder_persona_name(&chosen) {
+                            emit_persona_enter_eval(project_root, persona);
+                            return Ok(());
+                        }
+                        chosen
+                    }
                     None => return Ok(()), // cancelled — stdout stays empty, eval is a no-op
                 }
             } else {
@@ -248,6 +263,33 @@ fn handle_role_enter(
         Some(&registry_entry),
     );
     Ok(())
+}
+
+fn stakeholder_persona_name(name: &str) -> Option<&'static str> {
+    if name.eq_ignore_ascii_case("guest") {
+        Some("guest")
+    } else if name.eq_ignore_ascii_case("requester") {
+        Some("requester")
+    } else {
+        None
+    }
+}
+
+/// Activate a least-privilege stakeholder persona in the calling shell without
+/// creating/loading a role file, registering a build seat, or acquiring a
+/// lease. The informational line remains shell code for compatibility with
+/// wrappers that predate the dedicated eval channel.
+fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str) {
+    let _eval = crate::shell_eval::EvalBlock::open();
+    println!("# aida role enter — {persona} (stakeholder persona)");
+    println!("export AIDA_SESSION_ROLE='{persona}'");
+    println!("unset AIDA_SESSION_PURPOSE");
+    println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    println!(
+        "echo '{} Entered stakeholder persona: {} — least-privilege; not a build seat'",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        persona
+    );
 }
 
 /// STORY-821: after a successful interactive role-enter, offer to resume a
@@ -1049,6 +1091,15 @@ fn handle_role_scaffold() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-1196 | ai:codex
+    #[test]
+    fn stakeholder_persona_names_bypass_role_file_lookup() {
+        assert_eq!(stakeholder_persona_name("guest"), Some("guest"));
+        assert_eq!(stakeholder_persona_name("REQUESTER"), Some("requester"));
+        assert_eq!(stakeholder_persona_name("implementer"), None);
+        assert_eq!(stakeholder_persona_name("unknown"), None);
+    }
     use clap::Parser;
 
     fn role_cache_fixture() -> (tempfile::TempDir, uuid::Uuid) {
