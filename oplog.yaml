@@ -73689,5 +73689,31 @@ operations:
   timestamp: 2026-09-18T01:08:13.127311254Z
   kind: !AddTag
     tag: batch:followups-0917
-clock: 5741
+- id: 01a0b21b-f0eb-7110-b2f2-bd769a40c7e0
+  target_id: 01a0b21b-ece5-7d30-8f4f-e219daa7936f
+  author: aida
+  node_id: '1'
+  lamport: 5742
+  timestamp: 2026-09-18T01:22:50.731199770Z
+  kind: !Create
+    title: 'Review PR-1903: [AI:codex] fix(reconstitution): bound probe scratch retention (TASK-1255)'
+    description: |
+      Auto-filed by `aida session end` (backup trigger) (session `01a0b20d`) for branch `task-1255`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1903>
+      - Branch: `task-1255` → `main`
+
+      ## Covers
+
+      - TASK-1255
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1903` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5742
 node_id: '1'
