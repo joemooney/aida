@@ -1,0 +1,26 @@
+id: 01a0b27a-c8a7-7373-af04-1ca96e2d9563
+spec_id: STORY-1196
+agreed_id: STORY-1196
+title: 'Review PR-1908: [AI:codex] fix(launcher): guide stakeholder personas without leases (TASK-1261)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b27a`) for branch `task-1261`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1908>
+  - Branch: `task-1261` → `main`
+
+  ## Covers
+
+  - TASK-1261
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1908` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T03:06:26.343168413Z
+modified_at: 2026-09-18T03:06:26.343168413Z
+req_type: Story
