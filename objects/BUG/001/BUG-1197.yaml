@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T05:44:52.534035462Z
+modified_at: 2026-09-18T05:44:53.450870325Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -202,6 +202,17 @@ comments:
     confidence: 0.96
   created_at: 2026-09-18T05:44:52.534035462Z
   modified_at: 2026-09-18T05:44:52.534035462Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b30b-d9ca-73a3-92a5-c1d58638adca
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: The stakeholder MCP read envelope is an explicit allowlist that includes coordination and inspection tools such as inbox, punts, findings, leases, directives, briefs, queue inspection, schema/cache/usage status, plan verification/helpers, ultraplan assembly, and goal derivation, while excluding fetch, pull, database sync, session lifecycle, and role lifecycle tools even if another MCP profile classifies them as read-only.
+    rationale: The requirement names only a smaller illustrative read set. The diff establishes a narrower persona-specific boundary than the general MCP read-only profile, and clients can observe the exact distinction through tools/list and tools/call.
+    source: file:bug-1197-drain-01a0b308-6402-7aa1-8316-5d5994ee2e9b.json
+    confidence: 0.91
+  created_at: 2026-09-18T05:44:53.450870325Z
+  modified_at: 2026-09-18T05:44:53.450870325Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b30a-6c62-7893-825a-1ebfe0e2ca76
