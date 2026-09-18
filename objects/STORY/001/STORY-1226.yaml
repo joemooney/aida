@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T21:02:30.387265855Z
+modified_at: 2026-09-18T21:03:02.138121092Z
 req_type: Story
 tags:
 - keyboard-gate
@@ -59,8 +59,8 @@ relationships:
 comments:
 - id: 01a0b653-f3f3-7442-b6d1-70d9f68ba05e
   author: joe
-  content: '[advisor:groom] Approved, high, GUIDED (keyboard): it dispatches work to seats across vendors, so the operator sets the default job set and the delivery posture. Related to STORY-1218 (not blocked by it): the registry + ledger + schedule kinds + Claude/Codex delivery ship first; the tick becomes the unattended runner of substrate jobs and owns . Operator''s trigger/condition idea folded into acceptance as the  (event) and  (condition) schedule kinds with once-until-cleared semantics, events sourced from the existing events.jsonl. Design floor kept: seat jobs never launch drains or merge; substrate jobs are idempotent and silent when idle. Sequencing suggestion for the keyboard: STORY-1218 slice 1 (launch-when-lock-free + installer) and STORY-1226 slice 1 (registry + ledger + delivery) are independent and can be two short guided sessions in either order; the mailbox-triage seat job replaces the advisor''s hand-made session cron on day one.'
+  content: '[advisor:groom] Approved, high, GUIDED (keyboard): it dispatches work to seats across vendors, so the operator sets the default job set and the delivery posture. Related to STORY-1218 (not blocked by it): the registry + ledger + schedule kinds + Claude/Codex delivery ship first; the tick becomes the unattended runner of substrate jobs and owns the install verb. Operator''s trigger/condition idea folded into acceptance as the on (event) and when (condition) schedule kinds with once-until-cleared semantics, events sourced from the existing events.jsonl. Design floor kept: seat jobs never launch drains or merge; substrate jobs are idempotent and silent when idle. Sequencing suggestion for the keyboard: STORY-1218 slice 1 (launch-when-lock-free + installer) and STORY-1226 slice 1 (registry + ledger + delivery) are independent and can be two short guided sessions in either order; the mailbox-triage seat job replaces the advisor''s hand-made session cron on day one.'
   created_at: 2026-09-18T21:02:30.387265855Z
-  modified_at: 2026-09-18T21:02:30.387265855Z
+  modified_at: 2026-09-18T21:03:02.138120976Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
