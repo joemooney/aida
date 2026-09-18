@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T05:43:19.907371896Z
+modified_at: 2026-09-18T05:44:40.036333467Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -178,6 +178,20 @@ comments:
   created_at: 2026-09-18T05:41:46.761630346Z
   modified_at: 2026-09-18T05:41:46.761630346Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b30b-a564-7a51-94f8-8b8e6c17ab53
+  author: joe
+  content: |-
+    [aida:proxy-approval]
+    pr: #1913 [AI:codex] fix(mcp): enforce stakeholder persona gate (BUG-1197)
+    verdict: APPROVE + merged (drive-mode advisor gate, round 4)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (implementer = codex headless across four rounds in two drains; drain reviewer APPROVED round 4 at .aida/review-verdicts/PR-1913.json; advisor gate verdicts PR-1913-advisor{,-r2,-r3}.json — r3 = APPROVE on this exact code)
+    gates: Build (ubuntu-latest) SUCCESS, merge-hold-gate red-as-the-hold released at merge, MERGEABLE/CLEAN, merge-lease taken (batch followups-0917b live on TASK-1263)
+    reasoning: the persona gate is now enforced on both surfaces from ONE shared policy (StakeholderAction Read/Intake/Write): MCP resolves the persona once at server construction, filters tools/list AND hard-refuses tools/call against an explicit 25-tool read allow-list (db_sync/fetch/pull/queue_work/session_*/role_* are Write); requester add_requirement is constrained like the CLI and additionally refuses parent/feature/owner (a relationship write); the CLI classifier defaults to Write with a read list mirroring the MCP allow-list plus mcp-serve; tests cover guest/requester on both surfaces. History: r1 missed the parent field (reviewer) and defined Read as not-a-known-write (advisor); r2 fixed MCP Read but over-narrowed the CLI (refused mcp-serve) and still missed parent; r3 fixed both; r4 was a no-op implementer pass (BUG-1213) that the reviewer then approved. Split out as follow-ups: TASK-1264 (identical refusal labels + a real CLI↔MCP parity table test) and BUG-1211 (CLI requester --parent/--feature/--owner), both queued drain-safe.
+    merged: 2026-09-17 22:45 -07:00 → main e8c29cf518; spec auto-bumped Completed
+  created_at: 2026-09-18T05:44:40.036333467Z
+  modified_at: 2026-09-18T05:44:40.036333467Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b30a-6c62-7893-825a-1ebfe0e2ca76
   author: aida-auto-bump
