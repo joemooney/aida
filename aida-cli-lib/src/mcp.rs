@@ -1057,7 +1057,7 @@ impl<'a> McpServer<'a> {
                         tool_name,
                         &crate::stakeholder_refusal_message(
                             role,
-                            stakeholder_mcp_action_label(tool_name),
+                            crate::stakeholder_action_label(stakeholder_mcp_action(tool_name)),
                         ),
                     )
                     .to_result_value(),
@@ -6117,23 +6117,22 @@ fn stakeholder_mcp_action(tool_name: &str) -> crate::StakeholderAction {
     } else if crate::stakeholder_mcp_read_allowed(tool_name) {
         crate::StakeholderAction::Read
     } else {
-        crate::StakeholderAction::Write
+        // trace:TASK-1264 | ai:codex
+        match tool_name {
+            "update_requirement" => crate::StakeholderAction::EditRequirement,
+            name if name.starts_with("queue_") => crate::StakeholderAction::Queue,
+            "db_sync" => crate::StakeholderAction::Database,
+            name if name.starts_with("session_") => crate::StakeholderAction::Session,
+            name if name.starts_with("role_") => crate::StakeholderAction::Role,
+            "add_relationship" => crate::StakeholderAction::Relationship,
+            "add_comment" => crate::StakeholderAction::Comment,
+            _ => crate::StakeholderAction::Write,
+        }
     }
 }
 
 fn stakeholder_tool_allowed(role: &str, tool_name: &str) -> bool {
     crate::stakeholder_action_allowed(role, stakeholder_mcp_action(tool_name))
-}
-
-fn stakeholder_mcp_action_label(tool_name: &str) -> &'static str {
-    match tool_name {
-        "add_requirement" => "adding requirements",
-        "update_requirement" => "editing requirements",
-        name if name.starts_with("queue_") => "queue operations",
-        "add_relationship" => "relationship writes",
-        "add_comment" => "comment writes",
-        _ => "writes",
-    }
 }
 
 fn constrain_requester_intake(arguments: &mut Value) -> Result<(), String> {
@@ -8334,6 +8333,7 @@ fn _force_use() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
     use std::sync::Arc;
     use std::thread;
     use tempfile::tempdir;
@@ -11781,6 +11781,62 @@ mod tests {
                 !crate::stakeholder_mcp_read_allowed(write),
                 "unsafe read: {write}"
             );
+        }
+    }
+
+    #[test]
+    fn stakeholder_cli_and_mcp_policy_have_operation_parity() {
+        // trace:TASK-1264 | ai:codex
+        let cases: &[(&[&str], Option<&str>)] = &[
+            (&["aida", "db", "sync"], Some("db_sync")),
+            (
+                &["aida", "session", "start", "--owns", "X"],
+                Some("session_start"),
+            ),
+            (&["aida", "role", "enter", "advisor"], Some("role_enter")),
+            (&["aida", "queue", "add", "X"], Some("queue_add")),
+            (
+                &["aida", "edit", "X", "--title", "y"],
+                Some("update_requirement"),
+            ),
+            (&["aida", "list"], Some("list_requirements")),
+            (&["aida", "mcp-serve"], None),
+        ];
+
+        for role in ["guest", "requester"] {
+            for (argv, mcp_tool) in cases {
+                let mut cli = crate::Cli::try_parse_from(*argv)
+                    .unwrap_or_else(|err| panic!("invalid parity argv {argv:?}: {err}"));
+                let cli_action = crate::stakeholder_cli_action(&cli.command);
+                let cli_result =
+                    crate::enforce_stakeholder_role_capabilities_for_role(&mut cli.command, role);
+                let cli_allowed = cli_result.is_ok();
+                let mcp_allowed = mcp_tool
+                    .map(|tool| stakeholder_tool_allowed(role, tool))
+                    .unwrap_or(true);
+
+                assert_eq!(
+                    cli_allowed, mcp_allowed,
+                    "allow/refuse mismatch for {role}, CLI {argv:?}, MCP {mcp_tool:?}"
+                );
+
+                if let (Err(cli_error), Some(tool)) = (cli_result, mcp_tool) {
+                    let mcp_error = crate::stakeholder_refusal_message(
+                        role,
+                        crate::stakeholder_action_label(stakeholder_mcp_action(tool)),
+                    );
+                    assert_eq!(
+                        cli_error.to_string(),
+                        mcp_error,
+                        "refusal text mismatch for {role}, CLI {argv:?}, MCP {tool}"
+                    );
+                    assert_eq!(
+                        cli_action,
+                        stakeholder_mcp_action(tool),
+                        "shared operation mismatch for CLI {argv:?}, MCP {tool}"
+                    );
+                }
+            }
         }
     }
 

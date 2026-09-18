@@ -12148,6 +12148,7 @@ fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
 }
 
 // trace:BUG-1197 | ai:codex
+// trace:TASK-1264 | ai:codex
 /// Shared capability vocabulary for the CLI and MCP stakeholder envelopes.
 /// Keeping this decision independent of either transport prevents a new write
 /// path from silently widening guest/requester authority.
@@ -12155,6 +12156,20 @@ fn stakeholder_refusal(role: &str, action: &str) -> anyhow::Error {
 pub(crate) enum StakeholderAction {
     Read,
     Intake,
+    EditRequirement,
+    Queue,
+    Database,
+    MergeGate,
+    Session,
+    Role,
+    Relationship,
+    Comment,
+    Type,
+    Trace,
+    Finding,
+    Question,
+    Configuration,
+    BuildLoop,
     Write,
 }
 
@@ -12163,6 +12178,28 @@ pub(crate) fn stakeholder_action_allowed(role: &str, action: StakeholderAction) 
         "guest" => action == StakeholderAction::Read,
         "requester" => matches!(action, StakeholderAction::Read | StakeholderAction::Intake),
         _ => true,
+    }
+}
+
+pub(crate) fn stakeholder_action_label(action: StakeholderAction) -> &'static str {
+    match action {
+        StakeholderAction::Read => "reads",
+        StakeholderAction::Intake => "adding requirements",
+        StakeholderAction::EditRequirement => "editing requirements",
+        StakeholderAction::Queue => "queue operations",
+        StakeholderAction::Database => "database writes",
+        StakeholderAction::MergeGate => "merge-gate writes",
+        StakeholderAction::Session => "session writes",
+        StakeholderAction::Role => "role writes",
+        StakeholderAction::Relationship => "relationship writes",
+        StakeholderAction::Comment => "comment writes",
+        StakeholderAction::Type => "type writes",
+        StakeholderAction::Trace => "trace writes",
+        StakeholderAction::Finding => "finding writes",
+        StakeholderAction::Question => "question writes",
+        StakeholderAction::Configuration => "configuration writes",
+        StakeholderAction::BuildLoop => "build-loop execution",
+        StakeholderAction::Write => "writes",
     }
 }
 
@@ -12256,7 +12293,7 @@ fn enforce_stakeholder_role_capabilities_for_role(command: &mut Command, role: &
             if !stakeholder_action_allowed("guest", action) {
                 return Err(stakeholder_refusal(
                     "guest",
-                    stakeholder_action_label(command),
+                    stakeholder_action_label(action),
                 ));
             }
         }
@@ -12314,7 +12351,7 @@ fn enforce_stakeholder_role_capabilities_for_role(command: &mut Command, role: &
             if !stakeholder_action_allowed("requester", action) {
                 return Err(stakeholder_refusal(
                     "requester",
-                    stakeholder_action_label(command),
+                    stakeholder_action_label(action),
                 ));
             }
         }
@@ -12345,7 +12382,7 @@ mod stakeholder_cli_policy_tests {
         assert!(
             guest_refusal(&["aida", "session", "start", "--owns", "BUG-1197"])
                 .to_string()
-                .contains("refusing writes")
+                .contains("refusing session writes")
         );
     }
 
@@ -12367,7 +12404,7 @@ mod stakeholder_cli_policy_tests {
     fn guest_refuses_role_enter() {
         assert!(guest_refusal(&["aida", "role", "enter", "advisor"])
             .to_string()
-            .contains("refusing writes"));
+            .contains("refusing role writes"));
     }
 
     #[test]
@@ -12438,29 +12475,27 @@ fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
     ) {
         StakeholderAction::Read
     } else {
-        StakeholderAction::Write
-    }
-}
-
-fn stakeholder_action_label(command: &Command) -> &'static str {
-    match command {
-        Command::Add { .. } => "adding requirements",
-        Command::Edit { .. } => "editing requirements",
-        Command::Queue(_) => "queue operations",
-        Command::Db(DbCommand::MergeGate) => "merge-gate writes",
-        Command::Db(_) => "database writes",
-        Command::Rel(_) => "relationship writes",
-        Command::Comment(_) => "comment writes",
-        Command::Type(_) => "type writes",
-        Command::Trace(_) => "trace writes",
-        Command::Findings { .. } => "finding writes",
-        Command::Questions { .. } => "question writes",
-        Command::Config(_) => "configuration writes",
-        Command::Zen { .. }
-        | Command::Do { .. }
-        | Command::Ship { .. }
-        | Command::Integrate { .. } => "build-loop execution",
-        _ => "writes",
+        match command {
+            Command::Add { .. } => StakeholderAction::Intake,
+            Command::Edit { .. } => StakeholderAction::EditRequirement,
+            Command::Queue(_) => StakeholderAction::Queue,
+            Command::Db(DbCommand::MergeGate) => StakeholderAction::MergeGate,
+            Command::Db(_) => StakeholderAction::Database,
+            Command::Session(_) => StakeholderAction::Session,
+            Command::Role(_) => StakeholderAction::Role,
+            Command::Rel(_) => StakeholderAction::Relationship,
+            Command::Comment(_) => StakeholderAction::Comment,
+            Command::Type(_) => StakeholderAction::Type,
+            Command::Trace(_) => StakeholderAction::Trace,
+            Command::Findings { .. } => StakeholderAction::Finding,
+            Command::Questions { .. } => StakeholderAction::Question,
+            Command::Config(_) => StakeholderAction::Configuration,
+            Command::Zen { .. }
+            | Command::Do { .. }
+            | Command::Ship { .. }
+            | Command::Integrate { .. } => StakeholderAction::BuildLoop,
+            _ => StakeholderAction::Write,
+        }
     }
 }
 
