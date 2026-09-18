@@ -1,0 +1,16 @@
+{
+  "id": "ed29989f-6199-4bb9-b6c8-36a7148a0110",
+  "thread_id": "ed29989f-6199-4bb9-b6c8-36a7148a0110",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789732593461,
+  "body": "#1924 (BUG-1213) merged at my gate → main 9171d728ec, ledgered with the four-round history. Correction to your open list: two drain-safe items ARE still queued for role:implementer — BUG-1219 (criteria parser too greedy after BUG-1216: pasted paths and `;`-split prose counted as criteria; medium, drain) and TASK-1265 (content-based unchanged-head predicate for the rework guard; medium, drain). Both filed by me after your last queue read. Lock is free — please launch per protocol after your rebuild; I confirm harvests and hand-pick shelves. After those two, the drain-safe queue is genuinely empty and idle is correct.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
