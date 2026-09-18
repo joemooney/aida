@@ -5024,12 +5024,28 @@ pub(crate) fn handle_queue_command(
                     // reviewer (/aida-review, PR-scoped lease — no spec
                     // ownership). Resolve to the backing spec only when there is
                     // no review story to pick up. trace:STORY-501 | ai:claude
-                    let review_queued = parse_review_scope(s)
-                        .map(|(forge, n)| queued_review_story_for_pr(storage, &user_id, forge, n))
-                        .unwrap_or(false);
-                    if review_queued {
+                    // BUG-1195: the lookup is typed — a read FAILURE keeps the PR
+                    // scope (the review-story pickup retries its own lookup) and
+                    // never feeds the envelope guard; only a genuine no-story
+                    // outcome resolves to the backing spec or, under the
+                    // envelope, bails with the failing check named.
+                    // trace:BUG-1195 | ai:claude
+                    let lookup = parse_review_scope(s)
+                        .map(|(forge, n)| queued_review_story_for_pr(storage, &user_id, forge, n));
+                    let lookup_failed = matches!(&lookup, Some(ReviewStoryLookup::Failed(_)));
+                    if let Some(ReviewStoryLookup::Failed(cause)) = &lookup {
+                        eprintln!(
+                            "  {} review-story lookup for {s} failed ({cause}) — keeping the PR scope so the review pickup can retry",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                        );
+                    }
+                    if lookup.as_ref().is_some_and(|l| l.is_found()) || lookup_failed {
                         None
                     } else if orchestrator_review_envelope_for_pr(pr) {
+                        let why = lookup
+                            .as_ref()
+                            .map(|l| l.describe())
+                            .unwrap_or_else(|| "the scope is not a PR/MR reference".to_string());
                         // BUG-1186 / ADR-40: the orchestrator's review phase set
                         // the review envelope for THIS PR. Falling back to the
                         // backing spec here swaps the seat — an implementer
@@ -5038,7 +5054,7 @@ pub(crate) fn handle_queue_command(
                         // trace:BUG-1186 | ai:claude
                         anyhow::bail!(
                             "review envelope is set for PR-{pr} but no pickable review story is \
-                             queued — refusing to fall back to an implementer pickup of the \
+                             queued ({why}) — refusing to fall back to an implementer pickup of the \
                              backing spec. Queue a fresh review round (`aida pr auto-queue-review \
                              --branch <pr-head-branch>`) and retry"
                         );

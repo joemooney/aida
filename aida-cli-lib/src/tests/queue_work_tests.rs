@@ -2324,17 +2324,20 @@ fn queued_review_story_for_pr_detects_queued_story() {
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
     queue_review_story(&storage, &root);
-    assert!(queued_review_story_for_pr(
-        &storage,
-        "u",
-        ReviewForge::GitHub,
-        457
-    ));
-    assert!(!queued_review_story_for_pr(
-        &storage,
-        "u",
-        ReviewForge::GitHub,
-        999
+    assert!(queued_review_story_for_pr(&storage, "u", ReviewForge::GitHub, 457).is_found());
+    assert!(!queued_review_story_for_pr(&storage, "u", ReviewForge::GitHub, 999).is_found());
+    // BUG-1195 / BUG-1193: the story was queued by user `u` (a sibling
+    // worktree session); the drain's reviewer child looks it up as
+    // `role:implementer`. The role-routed entry must be found through the
+    // same role fallback the plan-builder uses — this was the "no pickable
+    // review story" shelve.
+    assert_eq!(
+        queued_review_story_for_pr(&storage, "role:implementer", ReviewForge::GitHub, 457),
+        ReviewStoryLookup::Found("STORY-901".to_string())
+    );
+    assert!(matches!(
+        queued_review_story_for_pr(&storage, "role:implementer", ReviewForge::GitHub, 999),
+        ReviewStoryLookup::NoTitleMatch { .. }
     ));
 }
 

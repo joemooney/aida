@@ -859,6 +859,95 @@ mod task_1244_drain_merge_lease_tests {
 }
 
 #[cfg(test)]
+mod bug_1195_review_story_lookup_tests {
+    use super::*;
+
+    fn story(title: &str, status: aida_core::RequirementStatus) -> aida_core::Requirement {
+        let mut r = aida_core::Requirement::new(title.to_string(), String::new());
+        r.req_type = aida_core::RequirementType::Story;
+        r.status = status;
+        r.spec_id = Some("STORY-1191".to_string());
+        r
+    }
+    fn entry(user: &str, id: uuid::Uuid) -> aida_core::QueueEntry {
+        aida_core::QueueEntry {
+            user_id: user.to_string(),
+            requirement_id: id,
+            position: 1000,
+            added_by: user.to_string(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some("reviewer".to_string()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        }
+    }
+
+    // BUG-1195 / BUG-1193 shape: the review story was filed by a sibling
+    // worktree session under `joe`, the drain looks it up as
+    // `role:implementer`. The role-fallback listing hands the classifier the
+    // foreign entry; it must be Found — not "no story".
+    #[test]
+    fn review_story_filed_by_another_user_is_found_through_the_role_route() {
+        let s = story(
+            "Review PR-1901: [AI:codex] fix(tests): normalize review envelope source guard (BUG-1193)",
+            aida_core::RequirementStatus::Approved,
+        );
+        let store = RequirementsStore {
+            requirements: vec![s.clone()],
+            ..Default::default()
+        };
+        let foreign = vec![entry("joe", s.id)];
+        assert_eq!(
+            classify_review_story_lookup(&foreign, &store, ReviewForge::GitHub, 1901),
+            ReviewStoryLookup::Found("STORY-1191".to_string())
+        );
+        assert!(matches!(
+            classify_review_story_lookup(&foreign, &store, ReviewForge::GitHub, 1900),
+            ReviewStoryLookup::NoTitleMatch { entries: 1 }
+        ));
+        assert_eq!(
+            classify_review_story_lookup(&[], &store, ReviewForge::GitHub, 1901),
+            ReviewStoryLookup::NoEntries
+        );
+        let done = story("Review PR-1901: x", aida_core::RequirementStatus::Done);
+        let store = RequirementsStore {
+            requirements: vec![done.clone()],
+            ..Default::default()
+        };
+        match classify_review_story_lookup(
+            &[entry("joe", done.id)],
+            &store,
+            ReviewForge::GitHub,
+            1901,
+        ) {
+            ReviewStoryLookup::NotPickable { story, reason } => {
+                assert_eq!(story, "STORY-1191");
+                assert!(reason.contains("awaiting merge"), "{reason}");
+            }
+            other => panic!("expected NotPickable, got {other:?}"),
+        }
+        assert!(ReviewStoryLookup::Failed("boom".into())
+            .describe()
+            .contains("lookup failed"));
+    }
+
+    /// Source-shape guard: the lookup reads the queue through the role
+    /// fallback (the plan-builder's view), never the bare per-user list.
+    #[test]
+    fn review_story_lookup_uses_the_role_fallback_listing() {
+        let src = include_str!("lib.rs");
+        let start = src
+            .find(concat!("fn queued_review_story_for_pr", "("))
+            .unwrap();
+        let body = &src[start..start + 1200];
+        assert!(body.contains(concat!("queue_list_with_role_", "fallback(")));
+        assert!(!body.contains(concat!("storage.queue_", "list(")));
+    }
+}
+
+#[cfg(test)]
 mod bug_1173_detection_hold_tests {
     // BUG-1173 regression guard (source assertion — this repo's idiom for "don't re-add X",
     // cf. check-removed-flags.sh). PR-detection (`set_pr_number`) must stamp the LOCAL
@@ -72070,31 +72159,111 @@ fn reduce_to_most_specific_specs(store: &RequirementsStore, specs: &[String]) ->
 /// `resolve_queue_work_plan`'s review-story pickup (TASK-85) so it routes to the
 /// reviewer (`/aida-review` on a PR-scoped lease) instead of an implementer
 /// pickup that re-implements the spec. trace:STORY-501 | ai:claude
+// BUG-1195: what looking up a pickable review story for one PR/MR found.
+/// The variants are the diagnosis: a caller can tell "no story" (a genuine
+/// gap) from "the lookup itself failed" (a transient store/queue read), and
+/// the bail message names which check fell through.
+// trace:BUG-1195 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewStoryLookup {
+    /// A queued, pickable `Review PR-n:` story (its display id).
+    Found(String),
+    /// Nothing queued for this user or the reviewer role at all.
+    NoEntries,
+    /// Entries exist but none is a review story for this PR.
+    NoTitleMatch { entries: usize },
+    /// The review story exists but is not pickable (Done / terminal / blocked).
+    NotPickable { story: String, reason: String },
+    /// The queue or store could not be read — NOT evidence of a missing story.
+    Failed(String),
+}
+
+impl ReviewStoryLookup {
+    pub(crate) fn is_found(&self) -> bool {
+        matches!(self, Self::Found(_))
+    }
+    pub(crate) fn describe(&self) -> String {
+        match self {
+            Self::Found(id) => format!("review story {id} is queued and pickable"),
+            Self::NoEntries => "no queue entries for this user or the reviewer role".to_string(),
+            Self::NoTitleMatch { entries } => format!(
+                "{entries} queue entr{} but none is a review story for this change",
+                if *entries == 1 { "y" } else { "ies" }
+            ),
+            Self::NotPickable { story, reason } => {
+                format!("review story {story} is queued but not pickable: {reason}")
+            }
+            Self::Failed(cause) => format!("the review-story lookup failed: {cause}"),
+        }
+    }
+}
+
+// BUG-1195: pure classification over the entries the caller could see.
+// trace:BUG-1195 | ai:claude
+pub(crate) fn classify_review_story_lookup(
+    entries: &[aida_core::QueueEntry],
+    store: &RequirementsStore,
+    forge: ReviewForge,
+    n: u64,
+) -> ReviewStoryLookup {
+    if entries.is_empty() {
+        return ReviewStoryLookup::NoEntries;
+    }
+    let mut not_pickable: Option<(String, String)> = None;
+    for e in entries {
+        let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+            continue;
+        };
+        if !review_title_matches(&req.title, forge, n) {
+            continue;
+        }
+        let policy = queue_cmd::queue_fresh_pickup_policy(req, store, false);
+        if matches!(policy, queue_cmd::QueueFreshPickup::Pickable) {
+            return ReviewStoryLookup::Found(req.display_id());
+        }
+        if not_pickable.is_none() {
+            not_pickable = Some((
+                req.display_id(),
+                queue_cmd::queue_fresh_pickup_reason_label(&policy)
+                    .unwrap_or_else(|| format!("{policy:?}")),
+            ));
+        }
+    }
+    match not_pickable {
+        Some((story, reason)) => ReviewStoryLookup::NotPickable { story, reason },
+        None => ReviewStoryLookup::NoTitleMatch {
+            entries: entries.len(),
+        },
+    }
+}
+
+/// Is a pickable `Review PR-n:` story queued for this user OR routed to the
+// reviewer role by any user? BUG-1195: reads the queue through the same
+/// role-fallback the plan-builder uses (`queue_list_with_role_fallback`), so
+/// a story filed by a sibling worktree session under a different user id —
+/// the BUG-1193 shape — is found here exactly as `queue work <STORY>` finds
+/// it. Read failures surface as `Failed`, never as "no story".
+// trace:BUG-1195 | ai:claude
 fn queued_review_story_for_pr(
     storage: &Storage,
     user_id: &str,
     forge: ReviewForge,
     n: u64,
-) -> bool {
-    let Ok(entries) = storage.queue_list(user_id, /* include_completed */ false) else {
-        return false;
+) -> ReviewStoryLookup {
+    let entries = match queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        Some("reviewer"),
+        /* include_completed */ false,
+    ) {
+        Ok(e) => e,
+        Err(e) => return ReviewStoryLookup::Failed(format!("queue read: {e:#}")),
     };
-    let Ok(store) = storage.load() else {
-        return false;
+    let store = match storage.load() {
+        Ok(s) => s,
+        Err(e) => return ReviewStoryLookup::Failed(format!("store load: {e:#}")),
     };
-    entries.iter().any(|e| {
-        store
-            .requirements
-            .iter()
-            .find(|r| r.id == e.requirement_id)
-            .map(|req| {
-                matches!(
-                    queue_cmd::queue_fresh_pickup_policy(req, &store, false),
-                    queue_cmd::QueueFreshPickup::Pickable
-                ) && review_title_matches(&req.title, forge, n)
-            })
-            .unwrap_or(false)
-    })
+    classify_review_story_lookup(&entries, &store, forge, n)
 }
 
 /// BUG-440: outcome of choosing a single review target from a PR's spec sets.
