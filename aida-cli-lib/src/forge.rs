@@ -4127,7 +4127,6 @@ mod tests {
         );
     }
 
-    #[test]
     // trace:TASK-1254 | ai:claude
     #[test]
     fn gitlab_stream_keeps_waiting_only_on_in_progress_probe() {

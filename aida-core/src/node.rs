@@ -383,11 +383,32 @@ pub fn default_node_name(hostname: &str, user: &str, seq: &str) -> String {
     // its build container `runner-<id>-project-N-concurrent-0-default-1`
     // (49 chars) and every CI `aida init` died on it. Shorten the HOST
     // component (the only unbounded one; user + seq stay intact so the name
-    // remains attributable), keeping a stable prefix. trace:BUG-1225 | ai:claude
+    // remains attributable): a stable prefix plus a 6-hex FNV-1a digest of the
+    // full slug, so two long hostnames that share a prefix (runner slots
+    // `…-concurrent-0-…` vs `…-concurrent-4-…`) still derive DIFFERENT names.
+    // trace:BUG-1225 | ai:claude
     let fixed = name.len() - host.len();
-    let budget = MAX_NODE_ID_LEN.saturating_sub(fixed).max(1);
-    let short: String = host.chars().take(budget).collect();
-    join(short.trim_end_matches('-'))
+    let budget = MAX_NODE_ID_LEN.saturating_sub(fixed);
+    let digest = fnv1a_hex6(&host);
+    let short = if budget > digest.len() + 2 {
+        let prefix: String = host.chars().take(budget - digest.len() - 1).collect();
+        format!("{}-{digest}", prefix.trim_end_matches('-'))
+    } else {
+        digest.chars().take(budget.max(1)).collect()
+    };
+    join(&short)
+}
+
+/// Six lowercase-hex chars of the FNV-1a (64-bit) digest of `s`. Stable across
+/// runs and platforms; used only to disambiguate shortened node names.
+// trace:BUG-1225 | ai:claude
+fn fnv1a_hex6(s: &str) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.as_bytes() {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{:06x}", h & 0xff_ffff)
 }
 
 impl NodeRegistryEntry {
@@ -1558,22 +1579,28 @@ registered = "2026-05-09T00:00:00Z"
 
     // ---- STORY-652: friendly node name + owner identity ----
 
-    #[test]
     // trace:BUG-1225 | ai:claude
     #[test]
     fn default_node_name_fits_the_node_id_limit_for_long_hostnames() {
-        let host = "runner-ugtjdiaar-project-2-concurrent-0-default-1";
-        let name = default_node_name(host, "root", "1");
-        assert!(
-            name.len() <= MAX_NODE_ID_LEN,
-            "{name} is {} chars",
-            name.len()
-        );
-        assert!(validate_node_id(&name).is_ok(), "{name}");
-        assert!(name.starts_with("runner-ugtjdiaar"), "{name}");
-        assert!(name.ends_with("-root-1"), "{name}");
+        let host0 = "runner-ugtjdiaar-project-2-concurrent-0-default-1";
+        let host4 = "runner-ugtjdiaar-project-2-concurrent-4-default-1";
+        let name0 = default_node_name(host0, "root", "1");
+        let name4 = default_node_name(host4, "root", "1");
+        for name in [&name0, &name4] {
+            assert!(
+                name.len() <= MAX_NODE_ID_LEN,
+                "{name} is {} chars",
+                name.len()
+            );
+            assert!(validate_node_id(name).is_ok(), "{name}");
+            assert!(name.starts_with("runner-ugtjdiaar"), "{name}");
+            assert!(name.ends_with("-root-1"), "{name}");
+        }
+        // Collision-resistant: the two runner slots share the whole prefix the
+        // budget keeps, and still derive different names (hash suffix).
+        assert_ne!(name0, name4);
         // Deterministic: the same host always shortens the same way.
-        assert_eq!(name, default_node_name(host, "root", "1"));
+        assert_eq!(name0, default_node_name(host0, "root", "1"));
         // Short names are untouched.
         assert_eq!(default_node_name("imac", "joe", "1"), "imac-joe-1");
     }
