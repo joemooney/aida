@@ -13,12 +13,12 @@ description: |-
   - With .aida-store deliberately left mid-rebase, `aida add` fails loudly naming the state and the fix (or repairs and lands the write on the branch); integration test covers it.
   - `aida remote status` and `aida doctor` report "store worktree detached / rebase in progress".
   - The store pull --rebase failure path leaves the worktree on the branch (its own rebase aborted) — test.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:03:25.350681063Z
-modified_at: 2026-09-18T21:27:29.713332033Z
+modified_at: 2026-09-18T21:32:43.275836270Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -58,8 +58,25 @@ comments:
   created_at: 2026-09-18T21:27:29.713332033Z
   modified_at: 2026-09-18T21:27:29.713332033Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b66f-9d8b-7b70-8e64-fc7d830943b1
+  author: aida-auto-bump
+  timestamp: 2026-09-18T21:32:43.275062544Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b66f-9d8b-7b70-8e64-fc834445bdf4
+  timestamp: 2026-09-18T21:32:43.275835736Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1229-2026-09-18T212731Z.md
+  commit_sha: 80be03fdd28a8b601836d8a391c5e32f4962b824
+  summary: Completed via merge 80be03fd
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T21:08:02.557237301Z
   implemented_by: joe
+  completed_at: 2026-09-18T21:32:43.274899260Z
+  completion_sha: 80be03fdd28a8b601836d8a391c5e32f4962b824
