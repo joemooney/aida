@@ -11,12 +11,12 @@ description: |-
   Pairs naturally with BUG-1211 (CLI requester --parent/--feature/--owner refusal, shared field const) — do both in one PR if convenient; trailer both ids.
 
   Acceptance: identical refusal text per operation across surfaces (test); the parity table test exists and passes for both personas; existing stakeholder tests green.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:44:14.015312083Z
-modified_at: 2026-09-18T08:49:35.192953807Z
+modified_at: 2026-09-18T10:01:05.553002787Z
 req_type: Task
 tags:
 - batch:followups-0918
