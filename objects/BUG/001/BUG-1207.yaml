@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T06:25:39.445270288Z
+modified_at: 2026-09-18T06:25:41.027850195Z
 req_type: Bug
 tags:
 - aida:list
@@ -34,6 +34,19 @@ relationships:
   target_id: 01a0b32d-1c35-76d0-b66d-804c0dd73475
   created_at: 2026-09-18T06:21:19.293451261Z
   created_by: joe
+comments:
+- id: 01a0b331-31ab-7ac1-bb93-5b38cfe06807
+  author: joe
+  content: |-
+    [rework ROUND 2 — items still open; the previous commit on this branch is already on the PR and does NOT count. Produce a NEW commit that changes these, or punt naming the finding you dispute.]
+    PR #1916 RequestChanges (drain reviewer, .aida/review-verdicts/PR-1916.json):
+    1. --show-origin: the title budget still subtracts the default 53-column fixed prefix, but --show-origin's fixed columns consume 56; at 120 cols the header/rows overflow and the divider is 3 short of the title boundary. Compute the fixed-prefix width from the columns actually rendered for the active flag set (one function that returns the prefix width for {default, --show-origin, --tags, combinations}) and derive the title budget from it.
+    2. --tags: the title takes the entire remaining width and the tag chips are appended after it, so tagged rows still overflow. Reserve the chip width (or a capped chip budget) before computing the title budget so title + chips <= terminal width.
+    3. Tests: add rendered-table coverage that asserts every row/header/divider length <= width for default, --show-origin, --tags, --show-origin --tags, at a couple of widths (80, 120), and that the non-TTY path is untouched (no truncation). Use the existing table renderer with an injected width rather than a real terminal.
+    Also: if you added a new crate for terminal width, prefer the workspace crossterm (already a dependency elsewhere) so no new external dep enters the graph; keep the non-TTY fallback exactly as before.
+    Finish with aida queue done BUG-1207.
+  created_at: 2026-09-18T06:25:40.779957788Z
+  modified_at: 2026-09-18T06:25:40.779957788Z
 execution_mode: drain
 implementation_info:
   implemented: true
