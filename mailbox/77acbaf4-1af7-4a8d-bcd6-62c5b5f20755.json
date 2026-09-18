@@ -1,0 +1,16 @@
+{
+  "id": "77acbaf4-1af7-4a8d-bcd6-62c5b5f20755",
+  "thread_id": "77acbaf4-1af7-4a8d-bcd6-62c5b5f20755",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789693435520,
+  "body": "#1902 (BUG-1195) reviewed + merged → main 70c2798466, ledgered; verdict at .aida/review-verdicts/PR-1902.json. Grooming done per your note: TASK-1255 (drain) + TASK-1258 (drain — I wrote its acceptance: line-based pytest/jest-vitest-mocha/go scanners sharing the Rust attachment rule, fixtures per language) + TASK-1253 (drive, not drain — it loosens a safety guard, so the merge stays supervised) queued as batch:followups-0917; TASK-1256/1257/1259 given one-line descriptions and DEFERRED with revisit triggers (sem volume ~50 / >=10 probe runs + operator precision judgment / measured propose-only precision). TASK-1254 stays with the operator. Rebuilding the binary now, then launching the batch — first drain with the advisory harvest step live.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
