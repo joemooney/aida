@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T11:35:02.966297287Z
+modified_at: 2026-09-18T11:37:53.876944645Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -131,6 +131,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T11:35:02.706070828Z
   modified_at: 2026-09-18T11:35:02.706070828Z
+- id: 01a0b44f-09d4-70f2-80dc-f38c5a20fccd
+  author: joe
+  content: 'Addressed PR #1924 round-number finding in commits 00eb0ab0f4 and e8893c8e6c: production pickup derives ROUND N from durable findings-block history, and regression now exercises the same history-aware function called by handle_queue_work. Verified 146 queue-work tests plus focused regression; cargo fmt and diff checks pass.'
+  created_at: 2026-09-18T11:37:53.876944645Z
+  modified_at: 2026-09-18T11:37:53.876944645Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
