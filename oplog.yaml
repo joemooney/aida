@@ -76730,5 +76730,24 @@ operations:
   timestamp: 2026-09-18T14:16:29.241949821Z
   kind: !SetStatus
     status: Completed
-clock: 5930
+- id: 01a0b509-2d4d-7c71-a485-f0fc0820695e
+  target_id: 01a0b509-294f-7161-9118-0f06398da104
+  author: aida
+  node_id: '1'
+  lamport: 5931
+  timestamp: 2026-09-18T15:01:12.653768670Z
+  kind: !Create
+    title: 'GitLab drain smoke: record the live validation in docs/forge-providers.md'
+    description: |-
+      Throwaway smoke spec for TASK-1254 (live GitLab drain validation). It exists only so a headless drain can run end-to-end against the self-hosted GitLab mirror; the code change is deliberately trivial and docs-only.
+
+      Change: in docs/forge-providers.md, add a short subsection under the GitLab provider section titled "Live validation (2026-09-18)" with two or three sentences stating that a headless --auto-complete --no-human=both drain was run against the self-hosted mirror (gitlab.joemooney.com, project ai/aida) with the scaffolded merge-hold-gate job wired into .gitlab-ci.yml, and that CI registration, the CI watch, per-job red refinement and the merge-hold gate were exercised there. Keep it to plain prose; no SPEC-IDs in the doc body. Do not touch any other file.
+
+      Acceptance:
+      - docs/forge-providers.md gains the subsection under the GitLab section.
+      - No other file changes.
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5931
 node_id: '1'
