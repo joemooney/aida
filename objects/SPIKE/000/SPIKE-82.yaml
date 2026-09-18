@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T22:12:38.103412720Z
+modified_at: 2026-09-18T22:14:40.150834061Z
 req_type: Spike
 tags:
 - batch:followups-0918e
@@ -80,6 +80,19 @@ comments:
   created_at: 2026-09-18T22:05:44.812862195Z
   modified_at: 2026-09-18T22:05:44.812862195Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b696-0516-7fe2-9962-b2d440dcdf1b
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1945 [AI:codex] docs(spikes): analyze overnight drain success (SPIKE-82)
+    verdict: APPROVE + merged (auto-bumped Done → Completed at d2d868b)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (headless codex implementer in wave followups-0918e; the drain's headless reviewer APPROVED — .aida/review-verdicts/PR-1945.json; this advisor read the full report and RECOMPUTED every headline count — PR-1945-advisor.json)
+    gates: required Build (ubuntu-latest) = success at 17a3d0db; merge-hold marker present and released via aida pr ship (explicit review-merge); label applied by hand at 15:02 (BUG-1236 workaround); merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: counts reproduce exactly from .aida/events.jsonl for 2026-09-18T01:00Z..15:00Z (PrMerged 17, SpecShelved 15 = 10/3/2, QueueDrained 7, AdvisorEscalated 4, 24 specs) and git log --first-parent = 28; hypotheses graded with evidence limits stated; the 18:00 runbook is an operator checklist; the eight no-awake-seat gaps are STORY-1218's inputs. STORY-1218 is now unblocked (guided, keyboard).
+    timestamp: 2026-09-18T15:16-07:00
+  created_at: 2026-09-18T22:14:40.150834061Z
+  modified_at: 2026-09-18T22:14:40.150834061Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b694-2856-7392-b003-97fb7058d382
   author: aida-auto-bump
