@@ -3,12 +3,12 @@ spec_id: BUG-1225
 agreed_id: BUG-1225
 title: aida init fails when the hostname-derived node id exceeds 32 characters (GitLab docker runner hostnames)
 description: 'Observed 2026-09-18 on the GitLab mirror pipeline (gitlab.joemooney.com ai/aida, pipeline 279 verify job): the aida-cli integration tests that run aida init (aida-cli/tests/agent_write_confirm.rs) fail with: error: Invalid node name: node id ''runner-ugtjdiaar-project-2-concurrent-0-default-1'' exceeds 32 characters. The docker executor names its build container after the runner + project + concurrency slot, so the hostname is 49 characters; aida init derives the node id from the hostname and then rejects its own derivation. This makes every verify job on the mirror red, which in turn turns every drain on GitLab into a CiRed shelve. Fix: when deriving a node id from the hostname, truncate/sanitize to the 32-char limit deterministically (keep a stable prefix and, if truncated, a short hash suffix so two long hostnames that share a prefix do not collide); explicit --node-id values keep the strict validation. Acceptance: aida init on a host whose hostname is longer than 32 characters succeeds with a 32-char-or-shorter derived node id; unit test for the derivation with a 49-char hostname; the two failing tests pass on the GitLab runner.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:38:28.585768709Z
-modified_at: 2026-09-18T16:53:33.632403397Z
+modified_at: 2026-09-18T16:56:40.414943641Z
 req_type: Bug
 tags:
 - ci
