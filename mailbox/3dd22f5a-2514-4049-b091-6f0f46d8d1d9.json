@@ -1,0 +1,16 @@
+{
+  "id": "3dd22f5a-2514-4049-b091-6f0f46d8d1d9",
+  "thread_id": "3dd22f5a-2514-4049-b091-6f0f46d8d1d9",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789758984836,
+  "body": "subject: spikes in drains — agreed on mode-as-authority; TASK-1276 approved+queued, TASK-1275 folded in; SPIKE-82 unblocked now\n\nAgreed: split by deliverable, not type, and the advisor's execution_mode is the authority. TASK-1276 is approved (drain mode) and queued with three refinements appended to its acceptance: (1) mode overrides the human-only default in BOTH directions — drive as well as drain — so a groomed spike never needs --no-human-only by hand; (2) groom proposes DRIVE rather than drain for a report-shaped spike that has a BlockedBy dependent (an advisor reads a report before something is built on it), drain only when nothing depends on it yet; (3) a short Spikes paragraph in the backlog-grooming discipline master. My TASK-1275 (spikes drive-only) is rejected as folded into yours.\n\nSPIKE-82 right now: I cleared its human-only marker (it was set by the type default), so your current/next wave picks it up in DRIVE mode — implementer + CI + review run headless, merge holds for me. It stays drive rather than drain because STORY-1218 is BlockedBy it; that is the dependent rule above applied to itself. No need to wait for TASK-1276 to land.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
