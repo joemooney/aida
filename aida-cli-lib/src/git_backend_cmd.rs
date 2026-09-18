@@ -12,6 +12,40 @@ use crate::*;
 
 const PROXY_APPROVAL_MARKER: &str = "[aida:proxy-approval]";
 
+// trace:BUG-1207 | ai:codex
+fn list_title_width(terminal_width: Option<usize>, flow_width: usize) -> usize {
+    terminal_width
+        .map(|width| width.saturating_sub(flow_width + 53).max(24))
+        .unwrap_or(usize::MAX)
+}
+
+fn terminal_list_title_width(flow_width: usize) -> usize {
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        return usize::MAX;
+    }
+    let width = crossterm::terminal::size()
+        .ok()
+        .map(|(columns, _)| usize::from(columns));
+    list_title_width(width, flow_width)
+}
+
+#[cfg(test)]
+mod list_title_width_tests {
+    use super::list_title_width;
+
+    #[test]
+    fn derives_title_width_from_terminal_and_flow_columns() {
+        assert_eq!(list_title_width(Some(120), 0), 67);
+        assert_eq!(list_title_width(Some(120), 2), 65);
+    }
+
+    #[test]
+    fn keeps_a_sane_floor_and_preserves_non_tty_output() {
+        assert_eq!(list_title_width(Some(60), 0), 24);
+        assert_eq!(list_title_width(None, 0), usize::MAX);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 struct ProxyApprovalEntry {
     spec_id: String,
@@ -1919,7 +1953,6 @@ pub(crate) fn handle_git_backend_command(
                 // chips have room without breaking word-wrap on narrow
                 // terminals; chip set itself is truncated to 3 with a
                 // "+N more" suffix. trace:TASK-569 | ai:claude
-                let title_max = if *show_tags { 50 } else { usize::MAX };
                 // TASK-670: the leading work-routing column. `flow_prefix` is
                 // "<glyph> " (2 visible cols) per row when the column is shown,
                 // else "". `flow_header` reserves the same 2 cols in the header
@@ -1937,6 +1970,12 @@ pub(crate) fn handle_git_backend_command(
                     ""
                 };
                 let flow_width = flow_header.len();
+                let title_max = terminal_list_title_width(flow_width);
+                let title_column_width = if title_max == usize::MAX {
+                    24
+                } else {
+                    title_max
+                };
                 let flow_prefix = |r: &aida_core::RequirementSummary| -> String {
                     if !show_flow {
                         return String::new();
@@ -1971,16 +2010,24 @@ pub(crate) fn handle_git_backend_command(
                 let with_assignee = |title: &str, r: &aida_core::RequirementSummary| -> String {
                     match r.assignee.as_deref() {
                         Some(a) if !a.is_empty() => {
-                            format!("{} {}", title, format!("@{a}").cyan())
+                            let suffix = format!("@{a}");
+                            let title_width = title_max.saturating_sub(suffix.chars().count() + 1);
+                            format!("{} {}", truncate(title, title_width), suffix.cyan())
                         }
-                        _ => title.to_string(),
+                        _ => truncate(title, title_max),
                     }
                 };
                 if *show_origin {
                     if *show_tags {
                         println!(
-                            "{}{:<12} {:<14} {:<12} {:<13} {:<50} Tags",
-                            flow_header, "ID", "Origin ID", "Type", "Status", "Title"
+                            "{}{:<12} {:<14} {:<12} {:<13} {:<width$} Tags",
+                            flow_header,
+                            "ID",
+                            "Origin ID",
+                            "Type",
+                            "Status",
+                            "Title",
+                            width = title_column_width,
                         );
                     } else {
                         println!(
@@ -1988,10 +2035,7 @@ pub(crate) fn handle_git_backend_command(
                             flow_header, "ID", "Origin ID", "Type", "Status"
                         );
                     }
-                    println!(
-                        "{}",
-                        "─".repeat(flow_width + if *show_tags { 113 } else { 81 })
-                    );
+                    println!("{}", "─".repeat(flow_width + 53 + title_column_width));
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -2021,7 +2065,7 @@ pub(crate) fn handle_git_backend_command(
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
                             println!(
-                                "{}{:<12} {}{:<12} {} {:<50} {}",
+                                "{}{:<12} {}{:<12} {} {:<width$} {}",
                                 flow,
                                 display_id,
                                 origin_cell,
@@ -2029,6 +2073,7 @@ pub(crate) fn handle_git_backend_command(
                                 status_cell,
                                 title_cell,
                                 tags_cell.dimmed(),
+                                width = title_column_width,
                             );
                         } else {
                             println!(
@@ -2045,8 +2090,14 @@ pub(crate) fn handle_git_backend_command(
                 } else {
                     if *show_tags {
                         println!(
-                            "{}{:<14} {:<12} {:<13} {:<10} {:<50} Tags",
-                            flow_header, "ID", "Type", "Status", "Priority", "Title"
+                            "{}{:<14} {:<12} {:<13} {:<10} {:<width$} Tags",
+                            flow_header,
+                            "ID",
+                            "Type",
+                            "Status",
+                            "Priority",
+                            "Title",
+                            width = title_column_width,
                         );
                     } else {
                         println!(
@@ -2054,10 +2105,7 @@ pub(crate) fn handle_git_backend_command(
                             flow_header, "ID", "Type", "Status", "Priority"
                         );
                     }
-                    println!(
-                        "{}",
-                        "─".repeat(flow_width + if *show_tags { 111 } else { 77 })
-                    );
+                    println!("{}", "─".repeat(flow_width + 53 + title_column_width));
                     for req in &reqs {
                         let display_id = req
                             .agreed_id
@@ -2074,7 +2122,7 @@ pub(crate) fn handle_git_backend_command(
                             let title_cell = truncate(&req.title, title_max);
                             let tags_cell = format_tags_inline(&req.tags, 3);
                             println!(
-                                "{}{:<14} {:<12} {} {:<10} {:<50} {}",
+                                "{}{:<14} {:<12} {} {:<10} {:<width$} {}",
                                 flow,
                                 display_id,
                                 req.req_type,
@@ -2082,6 +2130,7 @@ pub(crate) fn handle_git_backend_command(
                                 req.priority,
                                 title_cell,
                                 tags_cell.dimmed(),
+                                width = title_column_width,
                             );
                         } else {
                             println!(
