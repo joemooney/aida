@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b300-79d3-7f93-a20a-d0cc73734334
+  position: -4000
+  added_by: claude-product-1
+  note: 'Proxy pushed the two CI fixups to bug-1213 (0bec0b70d8): escalation subprocess now uses aida_exe_path(); BUG-814 prompt test aligned with the ROUND header. 4970 lib tests + clippy green locally. Nothing left to implement — verify, run aida queue done, and let CI/review proceed.'
+  added_at: 2026-09-18T10:51:26.123735903Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
   position: -3000
   added_by: claude-product-1
