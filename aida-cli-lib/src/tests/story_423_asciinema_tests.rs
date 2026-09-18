@@ -519,44 +519,48 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
     }
 }
 
-// STORY-692: the express-tier filing tags `batch:express`, queues
-// (status approved + the Add `queue: true` path), and crucially carries NO
-// `lifecycle:*` skip tag — so the full CI + reviewer + build gate runs. The
-// trivial tier, by contrast, rides `batch:fasttrack` + `lifecycle:no-review`.
-// Pinned against the shared `fasttrack_lane_filing` helper the handler uses,
-// so the invariant can't drift without this test catching it.
-// trace:STORY-692 | ai:claude
+// trace:TASK-1267 | ai:codex
 #[test]
-fn fasttrack_express_files_approved_queued_with_batch_express_no_lifecycle() {
-    // Express tier: batch:express + NO lifecycle skip (full gate).
-    let (bucket, lane_tags) = fasttrack_lane_filing(true);
-    assert_eq!(
-        bucket, "express",
-        "express tier rides the batch:express bucket"
-    );
-    assert!(
-        lane_tags.is_none(),
-        "express tier must carry NO lifecycle:* skip tag — got {lane_tags:?}"
-    );
+fn fasttrack_express_is_drain_alias_without_lane_tags() {
+    let (bucket, lane_tags, mode) = fasttrack_lane_filing(true);
+    assert_eq!(bucket, None, "the alias must not emit batch:express");
+    assert_eq!(lane_tags, None);
+    assert_eq!(mode.as_deref(), Some("drain"));
 
-    // Trivial tier (default): batch:fasttrack + lifecycle:no-review.
-    let (bucket, lane_tags) = fasttrack_lane_filing(false);
-    assert_eq!(bucket, "fasttrack");
+    let (bucket, lane_tags, mode) = fasttrack_lane_filing(false);
+    assert_eq!(bucket.as_deref(), Some("fasttrack"));
     assert_eq!(lane_tags.as_deref(), Some("lifecycle:no-review"));
+    assert_eq!(mode, None);
 }
 
-// STORY-692: the express invariant, stated as the negative the design names —
-// the express tier never sets ANY `lifecycle:*` skip tag (no-review,
-// no-ci-wait, no-build, trivial). "Fast because reliably routed, not because
-// less gated." trace:STORY-692
+// trace:TASK-1267 | ai:codex
 #[test]
-fn fasttrack_express_carries_no_lifecycle_skip_tag() {
-    let (_bucket, lane_tags) = fasttrack_lane_filing(true);
-    let tags = lane_tags.unwrap_or_default();
-    assert!(
-        !tags.contains("lifecycle:"),
-        "express tier must not skip any lifecycle phase — got tags {tags:?}"
-    );
+fn add_accepts_creation_time_execution_mode() {
+    match Cli::try_parse_from([
+        "aida",
+        "add",
+        "drain this work",
+        "--status",
+        "approved",
+        "--queue",
+        "--mode",
+        "drain",
+    ])
+    .unwrap()
+    .command
+    {
+        Command::Add {
+            status,
+            queue,
+            mode,
+            ..
+        } => {
+            assert_eq!(status.as_deref(), Some("approved"));
+            assert!(queue);
+            assert_eq!(mode.as_deref(), Some("drain"));
+        }
+        other => panic!("expected add, got {other:?}"),
+    }
 }
 
 // TASK-905: the lane stage projection maps fixture lane items onto the

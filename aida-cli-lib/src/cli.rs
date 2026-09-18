@@ -4737,8 +4737,8 @@ pub enum AutopilotCommand {
 pub enum FasttrackCommand {
     /// Show each lane item's stage: requested to shipped.
     ///
-    /// A derived projection over the `batch:fasttrack` / `batch:express` lane
-    /// buckets — no new store. Each item's stage
+    /// A derived projection over the current fasttrack bucket plus legacy
+    /// fasttrack tags — no new store. Each item's stage
     /// (requested / accepted / queued / running / blocked / punted / shipped /
     /// rejected) is read off its existing status, queue membership, active
     /// lease, punt ledger, and merged state. Cache-fast: it reuses the same
@@ -7928,6 +7928,12 @@ pub enum Command {
         #[clap(long, value_name = "N", allow_hyphen_values = true)]
         weight: Option<f32>,
 
+        /// Set the execution mode for the new requirement (drain, drive,
+        /// guided, operator, or decide). Advisor-authority write.
+        // trace:TASK-1267 | ai:codex
+        #[clap(long = "mode", value_name = "MODE")]
+        mode: Option<String>,
+
         /// File, approve, AND enqueue in one shot — places the new spec on the
         /// queue right after creating it, equivalent to a follow-up `aida
         /// backlog groom`. Only an Approved spec is enqueueable: pass with
@@ -7958,29 +7964,20 @@ pub enum Command {
 
     /// File a small change into the fasttrack lane in one shot
     ///
-    /// Two tiers on one lane. The default **trivial** tier is the
-    /// low-ceremony entry for genuinely trivial work — a doc tweak, a
-    /// one-line UX papercut, a string fix. Files the spec Approved, queues
-    /// it, and tags it for the fasttrack bucket (`batch:fasttrack` +
-    /// `lifecycle:no-review`) so the human-review round-trip is skipped.
-    ///
-    /// The **express** tier (`--express`) is for an easy bug or a small
-    /// single-purpose feature: same one-shot Approved + queued filing, but
-    /// tagged `batch:express` and carrying NO lifecycle skip — so the full
-    /// CI + reviewer + build gate runs. Fast because it is reliably routed,
-    /// not because it is less gated.
+    /// The fasttrack lane is for genuinely trivial work — a doc tweak, a
+    /// one-line UX papercut, or a string fix. It files the spec Approved,
+    /// queues it, and tags it `batch:fasttrack` + `lifecycle:no-review`.
     ///
     /// This is a thin wrapper over `aida add ... --status approved --queue`
     /// — it owns the lane's filing convention in one place so the
     /// `/aida-fasttrack` skill can call it instead of re-typing the tags.
     ///
-    /// CI is NOT skipped in either tier. The trivial tier drops the
-    /// human-review ceremony only; the express tier keeps every gate.
+    /// CI is never skipped. The lane drops only the human-review ceremony.
     // trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
     // trace:TASK-905 | ai:claude — `status` subcommand added below; the bare
     // `aida fasttrack <title>` filing form stays the default (title optional so
     // `aida fasttrack status` parses as the subcommand, not a titled file).
-    // trace:STORY-692 | ai:claude — `--express` files batch:express + full gate.
+    // trace:TASK-1267 | ai:codex — `--express` is a mode=drain alias.
     #[clap(args_conflicts_with_subcommands = true)]
     Fasttrack {
         /// One-line description of the small change (becomes the title).
@@ -7995,11 +7992,11 @@ pub enum Command {
         #[clap(long, default_value = "task")]
         r#type: String,
 
-        /// File into the express tier: an easy bug or small feature that gets
-        /// the FULL CI + reviewer + build gate (tagged `batch:express`, no
-        /// lifecycle skip), rather than the trivial tier's review-skipped
-        /// default. Fast because reliably routed, not because less gated.
-        // trace:STORY-692 | ai:claude — plain `//` keeps the marker out of `--help`.
+        /// Deprecated compatibility alias: file Approved + queued with
+        /// execution mode `drain` and no fasttrack lifecycle tag. This flag
+        /// will be removed in a future release; prefer `aida add ... --status
+        /// approved --queue --mode drain`.
+        // trace:TASK-1267 | ai:codex
         #[clap(long)]
         express: bool,
 

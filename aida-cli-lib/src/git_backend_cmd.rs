@@ -2279,13 +2279,10 @@ pub(crate) fn handle_git_backend_command(
         // the entire add+queue path. The lane skips human review only; CI still
         // gates merge (lifecycle:no-review, never no-ci-wait). trace:TASK-777
         //
-        // STORY-692: `--express` files the EXPRESS tier instead — same
-        // one-shot Approved + queued filing, but tagged `batch:express` and
-        // carrying NO `lifecycle:*` tag, so the full CI + reviewer + build gate
-        // runs (TASK-907 forces the full gate for batch:express anyway). The
-        // express tier is fast because it is reliably routed, not because it is
-        // less gated. Reuses the same Add+queue path; only the bucket tag and
-        // the (absent) lifecycle skip differ from the trivial tier. trace:STORY-692
+        // TASK-1267: `--express` remains for one compatibility release, but it
+        // now delegates to ordinary Approved + queued intake with mode=drain.
+        // It creates no batch:express tag. Existing tagged specs remain
+        // readable by the drain compatibility path in auto_complete.rs.
         Command::Fasttrack {
             title,
             r#type,
@@ -2307,11 +2304,7 @@ pub(crate) fn handle_git_backend_command(
                      For the lane view, run `aida fasttrack status`."
                 )
             })?;
-            // STORY-692: the express tier rides batch:express with NO lifecycle
-            // skip (full gate); the trivial tier rides batch:fasttrack +
-            // lifecycle:no-review (review skipped). One axis differs.
-            // trace:STORY-692 | ai:claude
-            let (batch_bucket, lane_tags) = fasttrack_lane_filing(*express);
+            let (batch_bucket, lane_tags, mode) = fasttrack_lane_filing(*express);
             let add = Command::Add {
                 title: Some(title.clone()),
                 title_positional: None,
@@ -2333,12 +2326,13 @@ pub(crate) fn handle_git_backend_command(
                 human_only: false,
                 no_human_only: false,
                 queue: true,
-                batch: Some(batch_bucket),
+                batch: batch_bucket,
                 // BUG-528: route to the implementer queue by default (the
                 // common target for filed work). trace:BUG-528 | ai:claude
                 r#for: None,
                 // trace:FR-283 | ai:claude
                 weight: None,
+                mode,
             };
             return handle_git_backend_command(store_path, &add);
         }
@@ -2366,6 +2360,7 @@ pub(crate) fn handle_git_backend_command(
             r#for,
             // trace:FR-283 | ai:claude
             weight,
+            mode,
             ..
         } => {
             // TASK-725: newcomer-friendly capture — `aida add "do X"`. The
@@ -2610,6 +2605,20 @@ pub(crate) fn handle_git_backend_command(
                     anyhow::bail!("--weight must be a finite number (got {w})");
                 }
                 req.weight = Some(*w);
+            }
+            // A creation-time execution mode is the same advisor routing
+            // judgment as `aida edit --mode`; validate it before persisting.
+            // trace:TASK-1267 | ai:codex
+            if let Some(m) = mode {
+                if !has_advisor_authority() {
+                    anyhow::bail!(
+                        "--mode sets the advisor's routing classification and needs advisor authority"
+                    );
+                }
+                req.execution_mode = Some(
+                    m.parse::<aida_core::ExecutionMode>()
+                        .map_err(|e: String| anyhow::anyhow!(e))?,
+                );
             }
             if let Some(p) = prefix {
                 req.prefix_override = Some(p.to_uppercase());
