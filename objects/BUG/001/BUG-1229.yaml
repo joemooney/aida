@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:03:25.350681063Z
-modified_at: 2026-09-18T20:56:12.369044163Z
+modified_at: 2026-09-18T21:00:33.075479017Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -26,4 +26,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T17:03:31.919853091Z
+comments:
+- id: 01a0b652-29b3-7410-93a9-c18a41b51dcf
+  author: joe
+  content: 'Implementation sketch (architecture-signoff surface): centralize an unsafe-store predicate in git_ops (detached HEAD and rebase markers); invoke it before every GitBackend mutation, including bulk flushes, so failure precedes filesystem changes; make pull_rebase abort any rebase it started before returning failure; expose the same predicate in doctor and remote status; document recovery in multi-hub sync. Regression coverage proves detached add produces no object/commit and conflicting pull restores the branch. Implementation is committed only after validation; merge remains held for advisor review.'
+  created_at: 2026-09-18T21:00:33.075479017Z
+  modified_at: 2026-09-18T21:00:33.075479017Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
