@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b03a-f985-7572-ba0d-cccdad0ed9c8
-  position: 2000
-  added_by: role:implementer
-  note: 'drive (supervised merge — it loosens a safety guard): refuse only when the caller is the drive''s own seat (orchestrator env / drive-owned worktree or lease) or the PR is the drive''s own in-flight PR; unrelated reviewed PR from a plain shell proceeds under the merge-lease; keep AIDA_PR_SHIP_ALLOW_IN_DRIVE=1; refusal text names the condition; 3 unit cases'
-  added_at: 2026-09-18T01:03:19.758053807Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
   position: 3000
   added_by: role:implementer
