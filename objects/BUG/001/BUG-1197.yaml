@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:37:06.026101945Z
+modified_at: 2026-09-18T04:37:08.072529336Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -118,6 +118,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T04:37:03.830471739Z
   modified_at: 2026-09-18T04:37:03.830471739Z
+- id: 01a0b2cd-d069-7202-bea9-acf9c3153e2f
+  author: joe
+  content: |-
+    [rework round 3] PR #1913 CHANGES REQUESTED again — drain reviewer (.aida/review-verdicts/PR-1913.json) + advisor gate (PR-1913-advisor-r2.json) agree. Round 2 fixed finding B on the MCP side correctly (explicit stakeholder_mcp_read_allowed allow-list, default-to-Write) — keep that. Two gaps remain; fix both in the SAME PR (push fixups to the #1913 head branch):
+    (A) STILL OPEN from round 1: constrain_requester_intake leaves `parent` (and `feature`/`owner`) on add_requirement intact, and tool_add_requirement then writes a relationship onto that parent — a requester can mutate an existing spec's graph. Reject those fields for requester intake with the stakeholder refusal text + a regression test that add_requirement with parent is refused and the store is unchanged.
+    (B') The CLI Read list is too narrow. Default-to-Write is right, but with only Why/List/Show/Status/Graph/Search/Digest/History as Read a persona is refused `aida mcp-serve` (which defeats the MCP gate this PR adds — the server enforces its own envelope and must be startable), and also aida awaiting, queue list/next/progress, mailbox inbox/read, brief list/read, findings list, punts list/read, directives list, comment list, role list/show/active/current, session leases/status, schema, cache status, usage, plan verify/helpers, ultraplan, goal, criteria, help. Make the CLI Read set mirror the MCP allow-list (one shared read-verb list or a parity test between the two) plus McpServe, and pin with tests: guest MAY run `aida mcp-serve`, `aida awaiting`, `aida queue list`, `aida mailbox inbox`; guest may NOT run `aida db sync`, `aida session start`, `aida role enter`.
+    Finish with aida queue done BUG-1197.
+  created_at: 2026-09-18T04:37:07.817683347Z
+  modified_at: 2026-09-18T04:37:07.817683347Z
 execution_mode: drive
 implementation_info:
   implemented: true
