@@ -28,10 +28,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:23:28.223098146Z
-modified_at: 2026-09-18T04:23:28.223098146Z
+modified_at: 2026-09-18T04:35:27.011511453Z
 req_type: Bug
 tags:
 - aida:drain
+- batch:followups-0917b
 - papercut
+- proxy-groomed
 - surface-parity
 - ux
+execution_mode: drain
