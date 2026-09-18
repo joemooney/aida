@@ -21,7 +21,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-18T02:12:31.453842650Z
+modified_at: 2026-09-18T02:12:32.647386148Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -42,6 +42,16 @@ comments:
   content: '[rework] PR #1906 RequestChanges (drain reviewer, verified by the advisor against scan_python_test_file in the diff): the test-body loop continues on ANY line starting with ''#'', regardless of indent, so an outdented `# trace:SPEC.ACn` comment directly above the NEXT `def test_…` is swallowed into the previous test''s traces before the loop breaks at the def — the documented directly-above convention misattributes the marker. Fix in the SAME PR (push fixups to the #1906 head branch): end the body when a comment line''s indent is <= the def''s indent (an outdented comment is not body), keep indented `#` comments as body, then let pending-trace handling attach the outdented marker to the following test. Add a regression fixture with two consecutive Python tests where the second carries an above-marker, and assert the first test''s traces do not include it. Check the Go and JS/TS scanners for the same shape (a comment between two tests at the outer indent). Finish with aida queue done TASK-1258.'
   created_at: 2026-09-18T02:12:31.219219475Z
   modified_at: 2026-09-18T02:12:31.219219475Z
+- id: 01a0b249-7013-7520-bca7-87705dd4cf64
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1906):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. In scan_python_test_file, the current test body loop does not stop on an outdented comment. For def test_first(): ... followed by # trace:TASK-1258.A1 and then def test_second(): ..., the marker is collected into test_first before the scanner breaks at test_second, so the documented directly-above marker convention misattributes the trace. Stop the prior body at outdented comments (while preserving indented body comments), then let pending-trace handling attach the marker to test_second; add a regression fixture/test with consecutive Python tests.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-18T02:12:32.403104445Z
+  modified_at: 2026-09-18T02:12:32.403104445Z
 execution_mode: drain
 implementation_info:
   implemented: true
