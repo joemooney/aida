@@ -16,20 +16,23 @@ description: |
   6. What was fragile: it all depended on two interactive sessions staying alive and awake (context compaction, one hour of unread advisor mail per their own audit); a single drain lock relaunched by an agent noticing; pgrep-based liveness that self-matched once; a shared machine.
 
   Output: a dated report under docs/spikes/ that (a) states which hypotheses held with the event counts, (b) writes the overnight runbook as a checklist an operator can follow at 18:00 (queue + tag + protocol mail + launch + monitors), and (c) lists the substrate gaps that would let the runbook run with NO interactive seat awake — feeding the night-shift tick story.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T18:56:13.641442177Z
+modified_at: 2026-09-18T19:07:16.221604182Z
 req_type: Spike
 tags:
 - autonomy
+- doc-only
 - orchestrator
 - parent:EPIC-62
+- post-mortem
 - reliability
 relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-18T18:56:13.641442177Z
+execution_mode: drive
 human_only: true
