@@ -74143,5 +74143,17 @@ operations:
   timestamp: 2026-09-18T02:56:48.965264730Z
   kind: !SetStatus
     status: Rejected
-clock: 5770
+- id: 01a0b272-42c8-74e2-89c1-3f7201c423e0
+  target_id: 01a0b272-3d29-7783-a906-c41aff761ca6
+  author: aida
+  node_id: '1'
+  lamport: 5771
+  timestamp: 2026-09-18T02:57:07.784577329Z
+  kind: !Create
+    title: 'Flaky test: init_cmd post_init_hooks_run_executable_sh_files_in_lexical_order_with_context fails intermittently on CI (first line ''2'' instead of ''1''); passes locally and on re-run'
+    description: 'Observed once on 2026-09-17 in CI run 35300146585 for PR-1907 (BUG-1199): assertion at aida-cli-lib/src/init_cmd.rs:2334 failed with first_line starting ''2'' — i.e. order.txt''s first line came from hook 2, not hook 1, although run_post_init_hooks_from_dir sorts the hook list. The same job passed on gh run rerun --failed with no code change, and the test passes locally on main. Not caused by the PR (it changed exe resolution, not hook ordering). Suspects: the fixture hooks append to order.txt via shell redirection and hook 1''s write may be lost/reordered under CI load, or the test''s fixture read_dir ordering assumption; instrument before guessing. Effect: the drain shelved BUG-1199 as ci-red for a flake and needed a manual rerun. Acceptance: root cause identified with evidence (not a retry loop); the test is deterministic under load (e.g. hooks write distinct files or the harness serializes hook output); no recurrence over 20 CI runs. Recurrence count: 1 (promote from observation to real bug at 3).'
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 5771
 node_id: '1'
