@@ -1,6 +1,10 @@
 # Environment variables
 
 The canonical reference for every `AIDA_*` environment variable AIDA reads.
+
+Long-running AIDA processes resolve their subprocess binary once, so rebuilding
+AIDA while a TUI, supervisor, or drain is running is safe.
+
 Until now these were documented piecemeal — scattered across `CLAUDE.md`,
 per-feature docs, and source comments. This chapter is the single place to look
 up *what a variable does, its default, who sets it, and its scope*.

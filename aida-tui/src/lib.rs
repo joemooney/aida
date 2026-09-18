@@ -40,6 +40,7 @@ mod dashboard;
 // trace:STORY-681 | ai:claude
 mod dispatch;
 mod event;
+mod exe_path;
 mod help;
 mod intent;
 mod launcher;

@@ -175,9 +175,7 @@ pub(crate) fn activate_reexec_target(
 // trace:BUG-760 | ai:claude
 fn resolve_activate_reexec(repo: &std::path::Path) -> Option<std::path::PathBuf> {
     let guard_set = std::env::var_os("AIDA_DEV_ACTIVATE_REEXEC").is_some();
-    let current_exe = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.canonicalize().ok());
+    let current_exe = crate::aida_exe_path().canonicalize().ok();
     let probe = |profile: &str| {
         let p = repo.join("target").join(profile).join("aida");
         let mtime = std::fs::metadata(&p).and_then(|m| m.modified()).ok()?;

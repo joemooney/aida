@@ -13,7 +13,7 @@
 //! the CLI table and the TUI glyph can never disagree.
 //!
 //! This replaced the earlier BUG-676 hotfix, which shelled out to a ~1.3s
-//! `aida ps --json` subprocess (resolved via `current_exe()`) and mapped its
+//! `aida ps --json` subprocess (resolved via the running executable) and mapped its
 //! JSON. The verdict is identical; the subprocess (and its ~287MB cold-start)
 //! is gone.
 //!

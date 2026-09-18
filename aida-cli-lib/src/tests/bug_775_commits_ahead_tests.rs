@@ -457,11 +457,7 @@ fn absent_or_garbage_records_fall_through() {
 #[test]
 fn drive_path_env_leads_with_the_current_exe_dir() {
     let p = crate::session::drive_path_env().expect("path assembles");
-    let exe_dir = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .to_path_buf();
+    let exe_dir = super::aida_exe_path().parent().unwrap().to_path_buf();
     let first = std::env::split_paths(&p).next().unwrap();
     assert_eq!(
         first, exe_dir,

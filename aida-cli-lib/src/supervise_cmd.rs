@@ -578,9 +578,7 @@ fn compute_drift(
 /// failure just means the --execute path relies on queue-add dupe tolerance.
 fn queued_spec_ids() -> std::collections::HashSet<String> {
     let mut set = std::collections::HashSet::new();
-    let Ok(exe) = std::env::current_exe() else {
-        return set;
-    };
+    let exe = crate::aida_exe_path();
     let Ok(out) = std::process::Command::new(exe)
         .args(["queue", "list", "--json"])
         .output()
@@ -635,9 +633,7 @@ fn is_spec_id(s: &str) -> bool {
 /// Queue one spec for the implementer. Tolerates the "already queued" outcome
 /// (returns false so it is not reported as a fresh realign).
 fn queue_add_implementer(spec: &str) -> bool {
-    let Ok(exe) = std::env::current_exe() else {
-        return false;
-    };
+    let exe = crate::aida_exe_path();
     std::process::Command::new(exe)
         .args(["queue", "add", spec, "--for", "implementer", "--no-scope"])
         .output()
@@ -647,9 +643,7 @@ fn queue_add_implementer(spec: &str) -> bool {
 
 /// Print the `aida awaiting` human-decision surface (best-effort).
 fn print_awaiting_surface() {
-    let Ok(exe) = std::env::current_exe() else {
-        return;
-    };
+    let exe = crate::aida_exe_path();
     if let Ok(out) = std::process::Command::new(exe).args(["awaiting"]).output() {
         let text = String::from_utf8_lossy(&out.stdout);
         if !text.trim().is_empty() {

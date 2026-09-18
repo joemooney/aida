@@ -1335,7 +1335,7 @@ impl ExitKind {
 /// The `aida` binary to host / shell out to — the currently-running
 /// executable, so a dev build hosts (and queries) the same dev build.
 pub(crate) fn aida_exe() -> PathBuf {
-    std::env::current_exe().unwrap_or_else(|_| PathBuf::from("aida"))
+    crate::exe_path::aida_exe_path()
 }
 
 /// Build the `aida queue work` argv (program + args) a hosted tab spawns, plus

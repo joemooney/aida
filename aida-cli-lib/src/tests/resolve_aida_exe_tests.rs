@@ -5,7 +5,7 @@ use super::{
 
 #[test]
 fn returns_a_path() {
-    // In the test binary, current_exe() resolves to the test runner.
+    // In the test binary, the OS executable lookup resolves to the test runner.
     // The function should return that path (it exists) — not the
     // "aida" fallback.
     let exe = resolve_aida_exe();
@@ -31,6 +31,38 @@ fn handles_deleted_suffix_via_string_strip() {
     );
 }
 
+/// Keep every production subprocess on the process-wide hardened resolver.
+// trace:TASK-1262 | ai:codex
+#[test]
+fn no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup() {
+    fn visit(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                visit(&path, files);
+            } else if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                files.push(path);
+            }
+        }
+    }
+
+    let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    visit(&src_dir, &mut files);
+    let needle = concat!("current_", "exe()");
+    for path in files {
+        let source = std::fs::read_to_string(&path).unwrap();
+        let count = source.matches(needle).count();
+        let allowed = usize::from(path == src_dir.join("lib.rs"));
+        assert_eq!(
+            count,
+            allowed,
+            "raw executable lookup in {}",
+            path.display()
+        );
+    }
+}
+
 #[test]
 fn deleted_executable_path_uses_replacement_at_clean_path() {
     let dir = tempfile::tempdir().unwrap();
@@ -47,7 +79,7 @@ fn deleted_executable_path_uses_replacement_at_clean_path() {
 
 #[test]
 fn pr_ship_post_merge_subcommands_do_not_require_path_lookup() {
-    // In tests, current_exe() resolves to this test binary. pr_ship's
+    // In tests, the OS executable lookup resolves to this test binary. pr_ship's
     // post-merge `pull` / `session end` path should therefore use an
     // existing executable path, not the bare "aida" PATH fallback.
     // trace:SPEC-411 | ai:codex
