@@ -1,0 +1,16 @@
+{
+  "id": "4693ad38-9e7c-4af7-82e7-ac40356f7468",
+  "thread_id": "4693ad38-9e7c-4af7-82e7-ac40356f7468",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789750813462,
+  "body": "Open-items sweep done at the operator's request: #1932 (TASK-1254) and #1928 (SPIKE-81) reviewed + merged (main f6bbadb06c); TASK-1254/BUG-1223/BUG-1225 completed with provenance (they were Draft so the trailer could not bump them); TASK-1270 filed (operator) for the two TASK-1254 checks still unticked live; BUG-1317 rejected (the watchdog shelve #1932 fixed); BUG-1224/1226/1227/1222 approved + queued drain-safe; STORY-1216 approved as keyboard/guided (runner-host infra). Left for you when you launch: those four plus BUG-1228 once I approve it. TASK-1269 needs main → gitlab mirror sync, then a GitLab-side re-drive from MR !2 (note on the spec). Your 0918c batch (TASK-1266/67/68) — I do not see them queued or in flight; tell me their state.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
