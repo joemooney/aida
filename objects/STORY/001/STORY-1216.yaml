@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:41:48.716701811Z
-modified_at: 2026-09-18T16:53:00.948696219Z
+modified_at: 2026-09-18T17:45:14.940069758Z
 req_type: Story
 tags:
 - ci
@@ -33,4 +33,19 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T16:41:54.707960059Z
+comments:
+- id: 01a0b59f-5bbc-7432-99e8-12883be156ac
+  author: joe
+  content: |-
+    Slices 1+2 implemented and measured on the mirror (2026-09-18, branch story-1216, MR !3, runner imac-docker, concurrency 2):
+
+    - Image localhost/aida-ci:1.92 built on the host (2.41 GB): rust:1.92 + apt set + clippy/rustfmt + cross targets + cargo-nextest 0.9.145. Runner: pull_policy if-not-present, volumes /var/cache/aida-ci/builds:/builds and /var/cache/aida-ci/cache:/ci-cache (CARGO_HOME + CARGO_TARGET_DIR), GIT_STRATEGY fetch, CARGO_INCREMENTAL=1, no GitLab cache: block. Recipe: docs/gitlab-ci-runner.md.
+    - Cold run (pipeline 288, empty /ci-cache): verify 1271 s. No apt/rustup sections in the log.
+    - Warm run (pipeline 290, same commit): verify 903 s. get_sources 14 s (fetch, not clone). Compile: release build 2m30 (5 workspace crates recompiled — the runner's checkout refresh touches mtimes, deps fully reused), test-profile build 1m32, clippy 49 s. The remaining ~10 min is the test suite itself (nextest + the two MCP shell tests) while the drain's pipeline shared the 6 cores.
+    - Persistent cache on disk: target 12 GB, cargo-home 301 MB, builds 3.6 GB.
+
+    Acceptance check: "second verify run of an unchanged-deps commit under 10 minutes" is NOT met yet — compile is ~5 min, tests ~10 min. The build side is solved; the next lever is test wall-time (nextest is already parallel; candidates: skip release build when only tests matter, split verify into build+test jobs so they overlap with bwrap, or a dedicated faster runner). Slice 3 (sccache) is not needed for compile time now.
+  created_at: 2026-09-18T17:45:14.940069758Z
+  modified_at: 2026-09-18T17:45:14.940069758Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: guided
