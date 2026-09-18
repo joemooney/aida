@@ -30,6 +30,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 use crate::{drain_lock, process_probe};
@@ -987,17 +988,25 @@ fn glyph(g: crate::glyphs::Glyph) -> &'static str {
 /// The glyph + state description for one member row.
 fn member_line(member: &DrainMember) -> String {
     let (glyph, desc) = match member.state.as_str() {
-        STATE_COMPLETED => (glyph(crate::glyphs::Glyph::Check), "completed".to_string()),
-        STATE_FAILED => (glyph(crate::glyphs::Glyph::Cross), "failed".to_string()),
+        STATE_COMPLETED => (
+            glyph(crate::glyphs::Glyph::Check),
+            "completed".green().to_string(),
+        ),
+        STATE_FAILED => (
+            glyph(crate::glyphs::Glyph::Cross),
+            "failed".red().to_string(),
+        ),
         // `○` (U+25CB) is not a registry glyph — left as a literal marker.
-        STATE_QUEUED => ("○", "queued".to_string()),
+        STATE_QUEUED => ("○", "queued".dimmed().to_string()),
         // `in-phase-N` — the member currently running.
         other => (
             glyph(crate::glyphs::Glyph::FlowActive),
             other
                 .strip_prefix("in-phase-")
                 .map(|n| format!("phase {n}"))
-                .unwrap_or_else(|| other.to_string()),
+                .unwrap_or_else(|| other.to_string())
+                .cyan()
+                .to_string(),
         ),
     };
     let pr = member.pr.map(|n| format!("   PR-{n}")).unwrap_or_default();
@@ -1015,10 +1024,10 @@ fn member_line_with_pacing(
     if member.is_running() {
         if let Some(phase) = &state.current_phase {
             line = format!(
-                "  {} {:<13} phase {}",
+                "  {} {:<13} {}",
                 glyph(crate::glyphs::Glyph::FlowActive),
                 member.spec,
-                phase
+                format!("phase {phase}").cyan()
             );
         }
         let mut bits = Vec::new();
@@ -1034,15 +1043,30 @@ fn member_line_with_pacing(
         }
         if let Some((last_at, _source)) = last_activity_time(project_root, state, &member.spec) {
             if let Some(age) = duration_between(&last_at, now) {
-                bits.push(format!("last output {} ago", format_duration_short(age)));
-                if quiet_warn_minutes > 0
-                    && age >= Duration::from_secs(quiet_warn_minutes.saturating_mul(60))
-                {
-                    bits.push(format!(
+                let warn = Duration::from_secs(quiet_warn_minutes.saturating_mul(60));
+                let last_output = format!("last output {} ago", format_duration_short(age));
+                if quiet_warn_minutes > 0 && age >= warn {
+                    // BUG-1210: make the pacing signal progressively urgent:
+                    // yellow at the configured threshold, red at twice it.
+                    // trace:BUG-1210 | ai:codex
+                    let severe = age >= warn.saturating_mul(2);
+                    bits.push(if severe {
+                        last_output.red().to_string()
+                    } else {
+                        last_output.yellow().to_string()
+                    });
+                    let quiet = format!(
                         "{} quiet {}",
                         glyph(crate::glyphs::Glyph::Warning),
                         format_duration_short(age)
-                    ));
+                    );
+                    bits.push(if severe {
+                        quiet.red().to_string()
+                    } else {
+                        quiet.yellow().to_string()
+                    });
+                } else {
+                    bits.push(last_output);
                 }
             }
         }
@@ -1190,9 +1214,14 @@ fn render_human_inner(
 
     if stale {
         out.push_str(&format!(
-            "{} Stale drain-state file — orchestrator (pid {}) is no longer running.\n",
-            glyph(crate::glyphs::Glyph::Warning),
-            state.orchestrator_pid
+            "{}\n",
+            format!(
+                "{} Stale drain-state file — orchestrator (pid {}) is no longer running.",
+                glyph(crate::glyphs::Glyph::Warning),
+                state.orchestrator_pid
+            )
+            .red()
+            .bold()
         ));
         out.push_str("  The drain crashed or was killed without cleaning up.\n\n");
     }
@@ -1202,11 +1231,15 @@ fn render_human_inner(
         if stale { "Last" } else { "Active" },
         scope
     ));
-    out.push_str(&format!("  {}\n", state.command));
+    out.push_str(&format!("  {}\n", state.command.dimmed()));
     out.push_str(&format!(
-        "  orchestrator pid {} · started {}\n\n",
-        state.orchestrator_pid,
-        fmt_local(&state.started_at)
+        "  {}\n\n",
+        format!(
+            "orchestrator pid {} · started {}",
+            state.orchestrator_pid,
+            fmt_local(&state.started_at)
+        )
+        .dimmed()
     ));
 
     let quiet_warn_minutes = drain_quiet_warn_minutes(project_root);
@@ -1926,7 +1959,10 @@ mod tests {
 
         let out = render_human_inner(&state, false, None, now);
 
-        assert!(out.contains("completed ·"));
+        // Keep this assertion stable when CLICOLOR_FORCE=1 inserts a reset
+        // between the coloured state word and the pacing separator.
+        assert!(out.contains("completed"));
+        assert!(out.contains(" ·"));
         assert!(out.contains("(27m)"));
         assert!(out.contains("elapsed 42m"));
         assert!(out.contains("last ship: STORY-301"));
