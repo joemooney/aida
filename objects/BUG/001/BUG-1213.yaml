@@ -1,0 +1,32 @@
+id: 01a0b300-79d3-7f93-a20a-d0cc73734334
+spec_id: BUG-1213
+agreed_id: BUG-1213
+title: 'Drain rework re-drive can pass phase 1 with ZERO new commits: the headless implementer mistakes the previous round''s pushed fixup for the current rework reason and exits ''addressed''; the drain advance'
+description: |-
+  Observed 2026-09-17 22:26-22:30 on BUG-1197 (PR #1913) in batch followups-0917b, round 4. The rework reason (aida queue rework --reason, 21:59) named three NEW items (refusal-text parity, a real CLI↔MCP parity test, the CLI --parent hole). The codex implementer (headless log bug-1197-01a0b2fa-…jsonl) inspected origin/bug-1197, found round 3's commit (d61cd2048, rebased to ae8c6ad9d), and reported: "Addressed and pushed in commit d61cd2048b: … Branch is clean and synchronized with origin/bug-1197" — i.e. it matched the ROUND-3 findings, did no new work, wrote a 'verification' comment on the spec, and ended phase 1 with no commit ahead of the previous head. The drain accepted that as a successful implementer phase (spec Done, PR unchanged), moved to CI (already green for that head) and phase 3, where the reviewer will re-issue the identical RequestChanges. Round 3 → round 4 therefore burned a full cycle producing nothing; without intervention the pattern repeats indefinitely (the reviewer re-requests, rework re-queues, the implementer re-declares 'addressed').
+
+  The prompt already carries "Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes" — a rule in a prompt, which is exactly what failed (substrate-as-bouncer).
+
+  Fix (orchestrator, programmatic):
+  1. On a REWORK re-drive (spec was Done/has a PR and carries a [rework] reason newer than the PR head), record the PR head SHA before phase 1; after phase 1, if the head is unchanged AND no punt was filed, do NOT advance — shelve with a new typed cause `rework-no-op` (NeedsAttention, not transient, never retried) whose message quotes the rework reason and names the unchanged head. Reuse the BUG-1186 pre/post head-SHA machinery (reviewer-wrote) — same probe, opposite predicate.
+  2. Feed the rework reason to the implementer as the AUTHORITATIVE task (not the spec description) on a re-drive: the pickup prompt should lead with "ROUND N — items still open: …" and state that the previous round's commit is already on the branch and does not count.
+  3. Loop guard: if the same spec shelves on verdict:request-changes twice in a row with the reviewer findings unchanged (same finding text hash), escalate to the advisor via a finding + brief instead of re-queuing — a human/advisor decides whether to hand it to a different implementer or seat.
+
+  Acceptance:
+  - A re-drive whose phase 1 leaves the PR head unchanged and files no punt shelves as rework-no-op (unit-tested through the mock PhaseDriver like reviewer-wrote); the drain never advances to review on an unchanged head after a rework.
+  - The rework pickup prompt leads with the round number and the still-open items (source-shape or prompt-builder test).
+  - Two consecutive identical RequestChanges on one spec produce an advisor escalation finding, not a third re-queue.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T05:32:27.987414901Z
+modified_at: 2026-09-18T05:32:27.987414901Z
+req_type: Bug
+tags:
+- drain
+- implementer
+- keyboard
+- loop-guard
+- orchestrator
+- rework
