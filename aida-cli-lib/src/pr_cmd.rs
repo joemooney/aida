@@ -2494,52 +2494,6 @@ pub(crate) fn repo_has_ci_workflows(project_root: &std::path::Path) -> bool {
     pr_ship::workflow_files_indicate_ci(names.iter().map(String::as_str))
 }
 
-/// Run a `Command` to completion, retrying transient `ETXTBSY`
-/// ("Text file busy", `os error 26`) spawn failures.
-///
-/// BUG-463: on Linux, `exec`ing a file fails with `ETXTBSY` while *any*
-/// process still holds that file open for writing. In a parallel test
-/// runner (or any multi-threaded program), one thread that writes an
-/// executable script can have its still-open writable fd transiently
-/// inherited by an unrelated child process a sibling thread `fork`/`exec`s
-/// between that fd's `open` and `close`. The borrowing child keeps the
-/// file "busy" until it exits, so the writer's own `exec` of the
-/// just-written script races and flakes with `ETXTBSY`. The condition is
-/// short-lived (the borrowing child exits in milliseconds), so a bounded
-/// retry-with-backoff turns the flake into a deterministic success. This
-/// also hardens the real `gh` exec (e.g. a freshly-written `gh` wrapper)
-/// at negligible cost.
-/// trace:BUG-463 | ai:claude
-///
-/// `libc` is a `cfg(unix)`-only dependency and `ETXTBSY` is a Unix-only errno
-/// (Windows can never produce it on spawn), so the errno check is behind a
-/// cfg-gated helper — a real check on unix, a compile-time `false` elsewhere —
-/// to keep the Windows build green. trace:BUG-468 | ai:claude
-#[cfg(unix)]
-pub(crate) fn is_etxtbsy(e: &std::io::Error) -> bool {
-    e.raw_os_error() == Some(libc::ETXTBSY)
-}
-#[cfg(not(unix))]
-pub(crate) fn is_etxtbsy(_e: &std::io::Error) -> bool {
-    false
-}
-pub(crate) fn command_output_retrying_etxtbsy(
-    cmd: &mut std::process::Command,
-) -> std::io::Result<std::process::Output> {
-    const MAX_ATTEMPTS: u32 = 50;
-    let mut attempt = 0u32;
-    loop {
-        match cmd.output() {
-            Ok(out) => return Ok(out),
-            Err(e) if is_etxtbsy(&e) && attempt < MAX_ATTEMPTS => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(2));
-            }
-            Err(e) => return Err(e),
-        }
-    }
-}
-
 // trace:BUG-344 | ai:codex
 /// STORY-1166: test harness — the production path is `Forge::checks_registered`
 /// (GitHub impl) driven by `ci_gate::wait_for_checks_to_register`; this keeps
@@ -2561,7 +2515,7 @@ pub(crate) fn wait_for_pr_checks_to_register_with_gh(
         command
             .current_dir(project_root)
             .args(["pr", "checks", &pr]);
-        let out = command_output_retrying_etxtbsy(&mut command)
+        let out = crate::process_retry::command_output_retrying_etxtbsy(&mut command)
             .with_context(|| format!("could not invoke `gh pr checks {pr_number}`"))?;
         if pr_ship::classify_gh_pr_checks_registration(
             pr_number,

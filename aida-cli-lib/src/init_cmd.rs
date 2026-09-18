@@ -124,14 +124,18 @@ fn run_post_init_hooks_from_dir(
     let mut ok = 0usize;
     let mut failed = 0usize;
     for hook in hooks {
-        let status = std::process::Command::new(&hook)
+        // A newly written executable can transiently return ETXTBSY if a
+        // concurrent fork inherited its writable fd. Retry before reporting
+        // the hook as failed. trace:BUG-1202 | ai:codex
+        let mut command = std::process::Command::new(&hook);
+        command
             .current_dir(&context.project_root)
             .env("AIDA_INIT_PROJECT_ROOT", &context.project_root)
             .env("AIDA_INIT_PROJECT_NAME", &context.project_name)
             .env("AIDA_INIT_LANG", &context.lang)
             .env("AIDA_INIT_REMOTE_URL", &context.remote_url)
-            .env("AIDA_INIT_FORGE", &context.forge)
-            .status();
+            .env("AIDA_INIT_FORGE", &context.forge);
+        let status = crate::process_retry::command_status_retrying_etxtbsy(&mut command);
         match status {
             Ok(status) if status.success() => ok += 1,
             Ok(status) => {
@@ -2252,6 +2256,8 @@ mod task_510_init_scaffold_task_tests {
     #[cfg(unix)]
     #[test]
     fn post_init_hooks_run_executable_sh_files_in_lexical_order_with_context() {
+        use std::io::Write;
+
         let tmp = TempDir::new().unwrap();
         let root = tmp.path().join("project");
         let hooks = tmp.path().join("home/.aida/init.d");
@@ -2259,19 +2265,19 @@ mod task_510_init_scaffold_task_tests {
         std::fs::create_dir_all(&hooks).unwrap();
 
         let first = hooks.join("00-first.sh");
-        std::fs::write(
-            &first,
-            "#!/bin/sh\nprintf '1:%s:%s:%s:%s:%s:%s\\n' \"$PWD\" \"$AIDA_INIT_PROJECT_ROOT\" \"$AIDA_INIT_PROJECT_NAME\" \"$AIDA_INIT_LANG\" \"$AIDA_INIT_REMOTE_URL\" \"$AIDA_INIT_FORGE\" >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n",
-        )
-        .unwrap();
+        let mut first_file = std::fs::File::create(&first).unwrap();
+        first_file
+            .write_all(b"#!/bin/sh\nprintf '1:%s:%s:%s:%s:%s:%s\\n' \"$PWD\" \"$AIDA_INIT_PROJECT_ROOT\" \"$AIDA_INIT_PROJECT_NAME\" \"$AIDA_INIT_LANG\" \"$AIDA_INIT_REMOTE_URL\" \"$AIDA_INIT_FORGE\" >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n")
+            .unwrap();
+        drop(first_file);
         make_executable(&first);
 
         let second = hooks.join("10-second.sh");
-        std::fs::write(
-            &second,
-            "#!/bin/sh\nprintf '2\\n' >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n",
-        )
-        .unwrap();
+        let mut second_file = std::fs::File::create(&second).unwrap();
+        second_file
+            .write_all(b"#!/bin/sh\nprintf '2\\n' >> \"$AIDA_INIT_PROJECT_ROOT/order.txt\"\n")
+            .unwrap();
+        drop(second_file);
         make_executable(&second);
 
         let ignored = hooks.join("05-ignored.sh");
