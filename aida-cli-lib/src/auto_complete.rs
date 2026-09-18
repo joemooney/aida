@@ -464,6 +464,12 @@ pub(crate) enum FailureKind {
     /// rather than a generic tool exit.
     // trace:BUG-1063 | ai:codex
     HeadlessWait,
+    /// BUG-1218: the stale-base auto-rebase refused to force-push because the
+    /// live remote contains commits the rebased branch does not incorporate.
+    /// This requires operator reconciliation and must never spend a transient
+    /// retry (which would deterministically hit the same guard again).
+    // trace:BUG-1218 | ai:codex
+    StaleBaseRefused,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -507,6 +513,7 @@ impl FailureKind {
                 | Self::LaunchNoOutput
                 // trace:BUG-1063 | ai:codex
                 | Self::HeadlessWait
+                | Self::StaleBaseRefused
                 | Self::Failed
         )
     }
@@ -531,6 +538,7 @@ impl FailureKind {
             | Self::PrVerificationInconclusive
             | Self::LaunchNoOutput => "environmental",
             Self::HeadlessWait => "headless-wait",
+            Self::StaleBaseRefused => "stale-base-refused",
             Self::Failed => "tool-exit",
         }
     }
@@ -578,7 +586,7 @@ impl Verdict {
 /// layer that broke. The hint is derived separately via [`recovery_hint`] so
 /// it can be unit-tested independent of the driver.
 /// trace:STORY-246 | ai:claude
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PhaseFailure {
     pub(crate) reason: String,
     pub(crate) kind: FailureKind,
@@ -1646,6 +1654,13 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                  headless runs have no next turn. Re-run it and poll waits in <=60s \
                  bounded steps that print state, then write the phase result before exit: \
                  `aida queue rework {spec} --work`."
+            );
+        }
+        FailureKind::StaleBaseRefused => {
+            return format!(
+                "The stale-base auto-rebase refused to overwrite remote commits that are not \
+                 incorporated by patch-id. Follow the fetch + rebase recovery printed in the \
+                 failure detail, then re-run the review: `aida queue work PR-{pr} --steal`."
             );
         }
         _ => {}

@@ -125,6 +125,23 @@ pub(crate) enum PrRebaseMode {
     Interactive,
 }
 
+/// Preserve the actionable refusal text after the disposable rebase worktree
+/// is removed. Best-effort: cleanup must still happen if logging fails.
+// trace:BUG-1218 | ai:codex
+fn preserve_pr_rebase_diagnostic(project_root: &std::path::Path, n: u64, detail: &str) {
+    use std::io::Write;
+    let dir = project_root.join(".aida").join("logs");
+    if std::fs::create_dir_all(&dir).is_ok() {
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join(format!("pr-rebase-{n}.log")))
+        {
+            let _ = writeln!(file, "{}\n", detail.trim());
+        }
+    }
+}
+
 /// BUG-289: build the `aida pr rebase` fetch-failure message. When git's
 /// stderr shows the branch is checked out in a worktree (the pr-N reviewer
 /// worktree), surface a clear, actionable hint — end the lease or remove the
@@ -471,6 +488,9 @@ pub(crate) fn pr_rebase_handler(
                 cmd,
                 wt_path.display()
             );
+            if !matches!(mode, PrRebaseMode::Interactive) {
+                cleanup_worktree();
+            }
             anyhow::bail!("smoke check failed");
         }
     }
@@ -557,15 +577,16 @@ pub(crate) fn pr_rebase_handler(
     match force_push_guard(&wt_path, "origin", &info.head_ref, &origin_base) {
         pr_rebase::ForcePushGuard::Safe => {}
         pr_rebase::ForcePushGuard::Unincorporated { commits } => {
+            let detail = pr_rebase::force_push_block_message(&info.head_ref, &commits);
             eprintln!(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-                pr_rebase::force_push_block_message(&info.head_ref, &commits)
+                detail
             );
-            eprintln!(
-                "  {}",
-                format!("Worktree left at {} for inspection.", wt_path.display()).dimmed()
-            );
+            // BUG-1218: an autonomous retry must not inherit a checked-out
+            // pr-N branch. The full guard recipe above is the durable diagnostic.
+            preserve_pr_rebase_diagnostic(&project_root, n, &detail);
+            cleanup_worktree();
             anyhow::bail!("force-push refused: remote has un-incorporated commits");
         }
         pr_rebase::ForcePushGuard::Inconclusive { reason } => {
@@ -574,10 +595,7 @@ pub(crate) fn pr_rebase_handler(
                 crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
                 pr_rebase::force_push_inconclusive_message(&info.head_ref, &reason)
             );
-            eprintln!(
-                "  {}",
-                format!("Worktree left at {} for inspection.", wt_path.display()).dimmed()
-            );
+            cleanup_worktree();
             anyhow::bail!("force-push refused: could not verify remote (fail-closed)");
         }
     }
@@ -611,6 +629,9 @@ pub(crate) fn pr_rebase_handler(
              Pull the new tip and re-run."
                 .dimmed()
         );
+        if !matches!(mode, PrRebaseMode::Interactive) {
+            cleanup_worktree();
+        }
         anyhow::bail!("push failed");
     }
 
@@ -2902,8 +2923,12 @@ pub(crate) fn preflight_stale_base_check_with_info(
         .arg(project_root)
         .args(["fetch", "origin", "--prune"])
         .status();
-    let pr_local_branch = format!("pr-{n}");
-    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    // BUG-1218: reviewer probes must not update the conventional pr-N branch:
+    // a stale/sibling worktree may have it checked out. A per-process scratch
+    // ref is safe to fetch and is deleted after the probe.
+    // trace:BUG-1218 | ai:codex
+    let pr_local_branch = format!("refs/aida/preflight/pr-{n}-{}", std::process::id());
+    let pr_refspec = format!("+refs/pull/{n}/head:{pr_local_branch}");
     let pr_fetch = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -2966,12 +2991,13 @@ pub(crate) fn preflight_stale_base_check_with_info(
         Err(_) => ConflictPrediction::Unknown,
     };
 
-    Ok(classify_stale_base(
-        behind,
-        &pr_files,
-        &base_files,
-        prediction,
-    ))
+    let outcome = classify_stale_base(behind, &pr_files, &base_files, prediction);
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["update-ref", "-d", &pr_local_branch])
+        .status();
+    Ok(outcome)
 }
 
 /// Files touched by `git log --name-only --pretty=format:` over a range.
@@ -3067,8 +3093,9 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
         .arg(project_root)
         .args(["fetch", "origin", "--prune"])
         .status();
-    let pr_local_branch = format!("pr-{n}");
-    let pr_refspec = format!("+refs/pull/{n}/head:refs/heads/{pr_local_branch}");
+    // trace:BUG-1218 | ai:codex
+    let pr_local_branch = format!("refs/aida/preflight/pr-{n}-{}", std::process::id());
+    let pr_refspec = format!("+refs/pull/{n}/head:{pr_local_branch}");
     let pr_fetch = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -3084,10 +3111,13 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
     }
 
     let changed = files_in_range(project_root, &format!("{origin_base}..{pr_local_branch}"));
-    Ok(classify_intermediate_only_with_gitignore(
-        project_root,
-        &changed,
-    ))
+    let outcome = classify_intermediate_only_with_gitignore(project_root, &changed);
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["update-ref", "-d", &pr_local_branch])
+        .status();
+    Ok(outcome)
 }
 
 /// Run the pure classifier with a `git check-ignore`-backed gitignore
