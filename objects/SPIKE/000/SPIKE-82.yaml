@@ -21,15 +21,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T19:15:57.778406448Z
+modified_at: 2026-09-18T19:50:33.898062549Z
 req_type: Spike
 tags:
-- autonomy
-- doc-only
-- orchestrator
-- parent:EPIC-62
-- post-mortem
-- reliability
+- batch:followups-0918e
 relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
