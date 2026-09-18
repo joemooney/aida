@@ -17,12 +17,12 @@ description: |-
   Acceptance:
   - Simulated comment-add failure in propose_only → ledger persisted next to the candidates file, brief filed, error line ≤ 2 lines naming the io error; drain continues to merge.
   - Existing propose-only ledger test extended; a unit test for the persisted-ledger path.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T01:56:54.827970711Z
-modified_at: 2026-09-18T02:47:35.777750809Z
+modified_at: 2026-09-18T02:56:47.141979825Z
 req_type: Bug
 tags:
 - batch:exe-0917
@@ -61,16 +61,26 @@ comments:
   created_at: 2026-09-18T02:31:18.546337595Z
   modified_at: 2026-09-18T02:31:18.546337595Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0b271-f21f-70f1-8a45-f037a6acfd36
+  author: aida-auto-bump
+  timestamp: 2026-09-18T02:56:47.135281694Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b271-f225-7f13-a392-650341dab4ce
+  timestamp: 2026-09-18T02:56:47.141979035Z
+  agent: aida
+  commit_sha: 3c9cb32d84a9d815db30fa6f822aaea55904ed3a
+  summary: Completed via merge 3c9cb32d
+  punted:
+  - 'punted: CI is red on PR-1907: failing: Build (ubuntu-latest)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T02:38:45.320218999Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1907: failing: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35300146572 — view it: `gh run view 35300146572`. Push fixups to the same branch: `aida queue work BUG-1199 --branch bug-1199 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-18T02:44:24.654556317Z
+  completed_at: 2026-09-18T02:56:47.135088268Z
+  completion_sha: 3c9cb32d84a9d815db30fa6f822aaea55904ed3a
