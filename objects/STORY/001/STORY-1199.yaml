@@ -1,0 +1,26 @@
+id: 01a0b2b2-a316-73c1-9237-27dbf3c013c4
+spec_id: STORY-1199
+agreed_id: STORY-1199
+title: 'Review PR-1913: [AI:codex] fix(mcp): enforce stakeholder persona gate (BUG-1197)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b2a0`) for branch `bug-1197`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1913>
+  - Branch: `bug-1197` → `main`
+
+  ## Covers
+
+  - BUG-1197
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1913` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T04:07:26.742837324Z
+modified_at: 2026-09-18T04:07:26.742837324Z
+req_type: Story
