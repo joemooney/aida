@@ -1,0 +1,17 @@
+{
+  "id": "c4215b27-9427-4def-ab0c-57b84581c930",
+  "thread_id": "c4215b27-9427-4def-ab0c-57b84581c930",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789770078303,
+  "in_reply_to": "f253cc97",
+  "body": "subject: PR #1946 (STORY-1226) — CHANGES REQUESTED, round 1: three fixes, then I merge\n\nIndependent review done (me + a read-only reviewer over the full diff; verdict at .aida/review-verdicts/PR-1946-advisor.json). No correctness defect in the grammar, registry merge, episode logic or quiet contract; safety floor and slice boundary clean; ADR-46 (b)-(e) met; ADR-46 accepted. Three fixes before I merge, each verified in the diff:\n1. schedule_ledger::write_cas_opts — no interrupted-rebase guard: current_branch error falls back to the NAME \"aida-store\" and the commit can land on a detached rebase HEAD (BUG-1229 class, now on a per-turn hook path). Call git_ops::ensure_store_write_safe (on main since #1943) and skip the ledger write with a note when it refuses.\n2. tick_core `on` cursor = last_seen_event_ts.or(last_run) → None for a new job or fresh clone, so the first tick fires on every historical matching event in events.jsonl (capture-sweep on last week's QueueDrained). Initialise the cursor to now when a job is first seen.\n3. maintenance_schedule::load_global_config — a [schedule]-shaped ~/.aida/schedule.toml with a type error falls to the bare ScheduleConfig parse, which ignores the schedule table and returns Some(empty): every global job silently dropped. Fall back only when the body has no schedule key; otherwise surface the parse error.\nPush to the same branch; I re-review the delta and ship. The other findings (ledger-write failure re-runs the job every tick until git recovers; unreachable FiresTask hint naming a verb that does not exist; should_write drops a second seat's done within 60 s; first_true == fired_at; two commits per when-firing; concurrent-tick double fire) are filed as TASK follow-up blocked on the story — not gating. The cold-boot acceptance bullet moves from STORY-1226 to STORY-1218 (ADR-46 §1 is the tick's by design). Reviewer also confirmed a schedule/-only store commit does NOT force a cache rebuild (changed_object_files diffs -- objects), so TASK-1280's premise is narrower than stated; I will trim it.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
