@@ -73556,5 +73556,50 @@ operations:
   timestamp: 2026-09-18T01:03:18.351044648Z
   kind: !AddTag
     tag: batch:followups-0917
-clock: 5726
+- id: 01a0b20a-1725-7f43-926a-51c411e94865
+  target_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+  author: aida
+  node_id: '1'
+  lamport: 5727
+  timestamp: 2026-09-18T01:03:20.869170821Z
+  kind: !SetDescription
+    description: |-
+      Follow-up from the STORY-1178 plan (auto-filed; acceptance written by the advisor 2026-09-17). aida criteria / harvest / reconstitute v1 find traced tests by scanning Rust #[test] fns (criteria.rs scan_rust_tests_for_criteria / scan_rust_test_file). Downstream AIDA projects are not all Rust, so the trace:SPEC.ACn convention is invisible there.
+
+      Scope: extend the test scanner to the three most common non-Rust shapes, keeping the SAME marker convention (a `trace:<SPEC>.<label>` token on the comment line(s) directly above the test, or inside its body):
+      - Python: pytest — `def test_*` at module level or inside a class; `# trace:` comments.
+      - JavaScript/TypeScript: `test(`, `it(` (jest/vitest/mocha) with the name string; `// trace:` comments.
+      - Go: `func TestXxx(t *testing.T)`; `// trace:` comments.
+      Detection by file extension (.py / .js .jsx .ts .tsx / .go); Rust stays the default. Language scanners share one TracedTest shape and one "marker above or inside" attachment rule (the BUG-1189 semantics: a blank/non-comment line breaks attachment). No new deps — line-based parsing like the Rust scanner, not a full parser.
+
+      Acceptance:
+      - A fixture per language under aida-cli-lib/src/tests/fixtures/criteria/ with above-marker, in-body-marker, and no-marker tests; unit tests assert the traced set per fixture and that the Rust fixtures are unchanged.
+      - aida criteria <spec> on a mixed-language tree lists tests from all four languages with correct path:line.
+      - Manual entry for aida criteria names the supported languages and the marker convention.
+      - Non-goals: full AST parsing, other languages, test-runner integration.
+- id: 01a0b20a-17b4-7492-abb7-7cd48d8be86d
+  target_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+  author: aida
+  node_id: '1'
+  lamport: 5728
+  timestamp: 2026-09-18T01:03:21.012102599Z
+  kind: !AddTag
+    tag: criteria
+- id: 01a0b20a-1841-7473-8db7-27a9826c9467
+  target_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+  author: aida
+  node_id: '1'
+  lamport: 5729
+  timestamp: 2026-09-18T01:03:21.153636951Z
+  kind: !AddTag
+    tag: drain-safe
+- id: 01a0b20a-18ce-7b31-ba46-b66a73606f26
+  target_id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
+  author: aida
+  node_id: '1'
+  lamport: 5730
+  timestamp: 2026-09-18T01:03:21.294709600Z
+  kind: !AddTag
+    tag: batch:followups-0917
+clock: 5730
 node_id: '1'

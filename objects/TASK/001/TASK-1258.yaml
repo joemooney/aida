@@ -2,17 +2,34 @@ id: 01a0b0eb-4c0e-79c3-8d61-c770e18226ef
 spec_id: TASK-1258
 agreed_id: TASK-1258
 title: Multi-language test scanning (v1 scans Rust `#[test]` fns)
-description: ''
+description: |-
+  Follow-up from the STORY-1178 plan (auto-filed; acceptance written by the advisor 2026-09-17). aida criteria / harvest / reconstitute v1 find traced tests by scanning Rust #[test] fns (criteria.rs scan_rust_tests_for_criteria / scan_rust_test_file). Downstream AIDA projects are not all Rust, so the trace:SPEC.ACn convention is invisible there.
+
+  Scope: extend the test scanner to the three most common non-Rust shapes, keeping the SAME marker convention (a `trace:<SPEC>.<label>` token on the comment line(s) directly above the test, or inside its body):
+  - Python: pytest — `def test_*` at module level or inside a class; `# trace:` comments.
+  - JavaScript/TypeScript: `test(`, `it(` (jest/vitest/mocha) with the name string; `// trace:` comments.
+  - Go: `func TestXxx(t *testing.T)`; `// trace:` comments.
+  Detection by file extension (.py / .js .jsx .ts .tsx / .go); Rust stays the default. Language scanners share one TracedTest shape and one "marker above or inside" attachment rule (the BUG-1189 semantics: a blank/non-comment line breaks attachment). No new deps — line-based parsing like the Rust scanner, not a full parser.
+
+  Acceptance:
+  - A fixture per language under aida-cli-lib/src/tests/fixtures/criteria/ with above-marker, in-body-marker, and no-marker tests; unit tests assert the traced set per fixture and that the Rust fixtures are unchanged.
+  - aida criteria <spec> on a mixed-language tree lists tests from all four languages with correct path:line.
+  - Manual entry for aida criteria names the supported languages and the marker convention.
+  - Non-goals: full AST parsing, other languages, test-runner integration.
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:05.582548155Z
-modified_at: 2026-09-17T19:50:05.582548155Z
+modified_at: 2026-09-18T01:03:20.780344789Z
 req_type: Task
 tags:
+- batch:followups-0917
+- criteria
+- drain-safe
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
 relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T19:50:09.170233479Z
+execution_mode: drain
