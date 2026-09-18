@@ -74722,5 +74722,21 @@ operations:
     req_type: Bug
     status: Approved
     priority: Medium
-clock: 5803
+- id: 01a0b2cc-17a5-75f2-bf2b-84b3a3b80e4f
+  target_id: 01a0b272-ce8d-7ca2-98e1-d0aab82ebd4d
+  author: aida
+  node_id: '1'
+  lamport: 5804
+  timestamp: 2026-09-18T04:35:14.981853403Z
+  kind: !AddTag
+    tag: batch:followups-0917b
+- id: 01a0b2cc-1896-7492-b5b3-da02081de757
+  target_id: 01a0b272-ce8d-7ca2-98e1-d0aab82ebd4d
+  author: aida
+  node_id: '1'
+  lamport: 5805
+  timestamp: 2026-09-18T04:35:15.222292318Z
+  kind: !AddTag
+    tag: proxy-groomed
+clock: 5805
 node_id: '1'
