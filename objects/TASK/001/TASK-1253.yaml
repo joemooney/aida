@@ -14,12 +14,12 @@ description: |-
   - Same shell, `aida pr ship A` (the drive's own PR) is refused with the drive-owned reason.
   - From inside a drive-launched session (orchestrator env set), `aida pr ship <any>` is refused with the seat reason.
   - Unit tests for the three cases; refusal text names the condition.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:35:29.506278820Z
+modified_at: 2026-09-18T01:36:08.287031939Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -36,3 +36,7 @@ comments:
   modified_at: 2026-09-18T01:35:29.506278820Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T01:36:08.287031939Z
+  implemented_by: joe
