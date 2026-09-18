@@ -1,7 +1,7 @@
 id: 01a0b572-0b9c-7941-8126-58dbaef33621
 spec_id: TASK-1270
 agreed_id: TASK-1270
-title: 'GitLab live validation — the two TASK-1254 checks not yet exercised on the mirror: a labelled MR is blocked by aida-merge-hold-gate + ''Pipelines must succeed'', and [review] mode = delegated logs the n'
+title: 'GitLab live validation — the one TASK-1254 check not yet exercised on the mirror: a labelled MR is blocked by aida-merge-hold-gate + ''Pipelines must succeed'', then released via merge-hold clear'
 description: |-
   #1932 (TASK-1254) landed the gate wiring and two live-run fixes, and its test plan ticked three of the five checks live on gitlab.joemooney.com ai/aida (unlabelled gate passes on MR !1 pipeline 280; re-driven headless drain blocks in the CI phase and ticks; cargo test via CI). Two remain unticked and need the operator's mirror (glab auth to the self-hosted instance):
   1. Label an MR aida:merge-hold → aida-merge-hold-gate fails (pipelines 282/283) AND the project's "Pipelines must succeed" setting refuses the merge until the label is cleared; then clear via aida merge-hold clear and confirm the gate re-runs green and the merge proceeds (the GitLab twin of the BUG-1180/ADR-39 path).
@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:55:45.308822317Z
-modified_at: 2026-09-18T16:55:48.236123034Z
+modified_at: 2026-09-18T17:01:04.037866751Z
 req_type: Task
 tags:
 - follow-up:TASK-1254
@@ -26,4 +26,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T16:55:48.236123034Z
+comments:
+- id: 01a0b576-e8a5-7591-82f7-fe6a7723d080
+  author: joe
+  content: 'Narrowed 2026-09-18 10:00 (advisor): BUG-1228''s evidence from the same live drive records that the delegated-mode fallback note WAS observed (''the delegated-mode fallback note itself was correct — check 4 of TASK-1254''), so check 2 there is done. Only the labelled-gate block + release check remains.'
+  created_at: 2026-09-18T17:01:04.037866751Z
+  modified_at: 2026-09-18T17:01:04.037866751Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator

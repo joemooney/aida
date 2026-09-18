@@ -77031,5 +77031,16 @@ operations:
   timestamp: 2026-09-18T17:00:24.821052108Z
   kind: !SetStatus
     status: Approved
+<<<<<<< Updated upstream
+=======
+- id: 01a0b576-914a-7092-a855-d93cf5a28547
+  target_id: 01a0b572-0b9c-7941-8126-58dbaef33621
+  author: aida
+  node_id: '1'
+  lamport: 5955
+  timestamp: 2026-09-18T17:00:41.674332011Z
+  kind: !SetTitle
+    title: 'GitLab live validation — the one TASK-1254 check not yet exercised on the mirror: a labelled MR is blocked by aida-merge-hold-gate + ''Pipelines must succeed'', then released via merge-hold clear'
+>>>>>>> Stashed changes
 clock: 5955
 node_id: '1'
