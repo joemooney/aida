@@ -1,0 +1,37 @@
+id: 01a0b64f-a564-7e53-a0b0-95305e3df161
+spec_id: STORY-1226
+agreed_id: STORY-1226
+title: 'aida cron: per-seat periodic job registry + ledger (substrate jobs run by the scheduler tick, seat jobs delivered to whoever holds the role, vendor-neutral)'
+description: |
+  Operator idea (2026-09-18): an aida cron that manages and specifies which periodic jobs each seat runs (mailbox read check, dead-session reaping, doctor, queue gc, mail-latency alerts), so a newly launched agent is populated with the entries that apply to its seat, and the substrate knows whether a job is overdue. Today these live in one Claude session's memory (the advisor created a session-only cron for aida awaiting --notice by hand; it dies with the session) and in a product-seat Monitor.
+
+  Design, in two halves so it is vendor-neutral by construction:
+  1. Registry + ledger (substrate). .aida/cron.toml (scaffolded by aida init, tracked) lists jobs: name, seats it applies to, interval, kind, command. Two kinds:
+     - substrate: no LLM needed (aida session reap, aida doctor --quiet, aida queue gc --for implementer, aida awaiting --notice, aida mailbox latency, aida store gc). These are run by the system scheduler tick (STORY-1218 aida shift tick, or cron/systemd via aida cron install) regardless of whether any agent is alive.
+     - seat: needs the seat's judgment (advisor: triage mailbox every 30m, groom drafts hourly; product: capture sweep at session end; integrator: merge sweep). These are delivered to whoever holds the role.
+     Every run is ledgered per job (last_run, by which seat/session, result) so aida cron status shows due / overdue per seat, and TASK-1271's mailbox latency becomes one row of the same report.
+  2. Delivery per vendor, same registry:
+     - Claude Code: aida agent new claude --role X and the SessionStart hook read the registry and create the seat's jobs as in-session cron entries (CronCreate) with the job's prompt; a job's run reports back via aida cron done <job>.
+     - Codex / Antigravity / any headless agent: no in-session scheduler, so due-ness is computed by the substrate and surfaced — the pickup prompt and the per-turn notice (.codex/hooks.json) carry "due: mailbox-triage (every 30m, last 47m ago) → run: aida mailbox inbox" — and aida cron run <job> executes a substrate job or prints the seat job's prompt for the agent to act on now. The system tick can also cold-boot a headless seat for an overdue seat job (fork-from-live is Claude-only; codex exec / claude -p are the vendor-neutral fallback).
+     - No job may exist only for one vendor; the registry is the single source and aida cron status is identical under both.
+  3. Precedence and safety: jobs are per-seat, not per-agent; a seat job never launches a drain or merges (that is the tick's and the gates' business); substrate jobs are idempotent and quiet when nothing to do.
+
+  Acceptance:
+  - aida cron list / status / due --seat <role> / run <job> / done <job> / install (--systemd-user | --cron) exist; aida init scaffolds a default cron.toml with reap, doctor, queue gc, awaiting notice, mailbox latency (substrate) and mailbox-triage, groom-drafts (advisor seat).
+  - Launching a Claude advisor via aida agent new populates its in-session cron from the registry; launching a Codex advisor shows the same jobs as due-lines in its pickup prompt and per-turn notice.
+  - A seat job overdue past its interval appears in aida awaiting for that seat and in aida status; a substrate job never appears there (the tick runs it).
+  - The ledger answers "who last triaged the mailbox and when" for the night-shift post-mortem (SPIKE-82).
+  - Works with STORY-1218: the tick runs substrate jobs; aida cron is the registry both consult.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T20:57:48.132153187Z
+modified_at: 2026-09-18T20:57:48.132153187Z
+req_type: Story
+tags:
+- multivendor
+- parent:EPIC-62
+- reliability
+- seats
+- substrate-first
