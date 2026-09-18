@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:37:01.376612920Z
+modified_at: 2026-09-18T04:37:02.863453395Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -99,6 +99,14 @@ comments:
   created_at: 2026-09-18T04:21:11.651728698Z
   modified_at: 2026-09-18T04:21:11.651728698Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b2cd-bc1f-78d1-828d-d5ceb2d56329
+  author: joe
+  content: |-
+    Reviewer (PR-1913, round 2) requested changes: BUG-1197 requires mcp-serve to remain startable for guest/requester read access. At c005eea, stakeholder_cli_action defaults Command::McpServe to Write, so AIDA_SESSION_ROLE=requester cargo run -q -p aida-cli -- mcp-serve fails with the stakeholder refusal before the server starts. Classify McpServe as allowed/read and add a CLI-level regression test for both stakeholder roles.
+    Summary: MCP call-time persona enforcement is present, but stakeholder personas can no longer start mcp-serve.
+    Keep the round-1 fix (requester intake rejects parent) intact.
+  created_at: 2026-09-18T04:37:02.623022068Z
+  modified_at: 2026-09-18T04:37:02.623022068Z
 execution_mode: drive
 implementation_info:
   implemented: true
