@@ -26,13 +26,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:54:17.365890248Z
-modified_at: 2026-09-18T00:54:17.365890248Z
+modified_at: 2026-09-18T01:08:11.335638227Z
 req_type: Task
 tags:
 - architecture
+- batch:followups-0917
 - docs
 - drain-safe
 - follow-up:TASK-1237
 - glossary
 - personas
+- proxy-groomed
 - roles
+execution_mode: drain
