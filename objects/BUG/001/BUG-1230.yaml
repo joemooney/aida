@@ -3,12 +3,12 @@ spec_id: BUG-1230
 agreed_id: BUG-1230
 title: aida pr auto-queue-review says 'already has a Review PR-N story queued — skipping' when the story exists but is NOT in the reviewer queue
 description: 'Observed 2026-09-18 (TASK-1254 live drain on the GitLab mirror). After a store recovery restored the Review PR-2 story file (STORY-1241) but not its queue entry, the drain''s reviewer phase refused: ''review envelope is set for PR-2 but no pickable review story is queued (8 queue entries but none is a review story for this change)''. Following the printed help, aida pr auto-queue-review --branch task-1269 replied ''PR #2 already has a Review PR-2 story queued — skipping'' and queued nothing, because pr_review_story_already_exists checks only that an open review story with that title exists, not that it sits in the reviewer queue. The two surfaces disagree and the user is stuck until they run aida queue add STORY-N --for reviewer by hand. Fix: the idempotency check should require BOTH an open story AND a queue entry for it; if the story exists but is unqueued, (re)queue it and say so. Acceptance: story present + unqueued → auto-queue-review queues it (no duplicate story); story present + queued → skip as today; test on the pure decision.'
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:13:42.736978554Z
-modified_at: 2026-09-18T20:16:57.880889036Z
+modified_at: 2026-09-18T20:17:03.841667871Z
 req_type: Bug
 tags:
 - batch:followups-0918d
@@ -18,3 +18,7 @@ relationships:
   created_at: 2026-09-18T20:16:57.880880941Z
   created_by: joe
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T20:17:03.841667871Z
+  implemented_by: joe
