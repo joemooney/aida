@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T17:03:25.350681063Z
-modified_at: 2026-09-18T21:24:56.067929926Z
+modified_at: 2026-09-18T21:27:29.713332033Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -36,6 +36,27 @@ comments:
   content: 'Implementation sketch (architecture-signoff surface): centralize an unsafe-store predicate in git_ops (detached HEAD and rebase markers); invoke it before every GitBackend mutation, including bulk flushes, so failure precedes filesystem changes; make pull_rebase abort any rebase it started before returning failure; expose the same predicate in doctor and remote status; document recovery in multi-hub sync. Regression coverage proves detached add produces no object/commit and conflicting pull restores the branch. Implementation is committed only after validation; merge remains held for advisor review.'
   created_at: 2026-09-18T21:00:33.075479017Z
   modified_at: 2026-09-18T21:00:33.075479017Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b66a-d4b1-7252-81a7-86fa744baad0
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1943
+    agent: codex
+    ran-at: 2026-09-18 14:27 -07:00
+    mode: propose-only (drain)
+    proposed: 6
+    skipped: 1
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1229-drain-01a0b66a-7a8c-7441-83ae-9f7cf570381e.json
+    ? AC (0.97) — For a detached store, a refused write leaves both HEAD and the object filesystem unchanged.
+    ? AC (0.95) — A linked `.aida-store` worktree attached to any branch other than `aida-store` is treated as unsafe and store writes are refused, even when no rebase is active.
+    ? AC (0.90) — `aida remote status --json` always includes a `store_worktree_issue` field, containing the detected unsafe-state description or null, including when no remote is configured.
+    ? SEM (0.88) — An unborn but symbolically attached HEAD is not classified as detached, and standalone Git repositories are not required to be on the `aida-store` branch; the branch-name invariant applies only to linked worktrees.
+    ? AC (0.96) — When an AIDA-started pull rebase fails and automatic abort succeeds, the original local branch, HEAD commit, and working-tree content are restored before the failure is returned; if automatic abort itself fails, the returned error reports both failures.
+    ? SEM (0.82) — The doctor unsafe-store finding is not auto-healable and directs the operator to explicitly continue or abort the rebase before retrying.
+    - AC skipped (matches a deny keyword) — Every Git-backed store mutation entry point—including bulk updates/import completion, full saves, requirement add/update/delete, and queue add/remove/reorder/clear—refuses an unsafe store worktree before changing any store file.
+  created_at: 2026-09-18T21:27:29.713332033Z
+  modified_at: 2026-09-18T21:27:29.713332033Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
