@@ -13,7 +13,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:55:45.308822317Z
-modified_at: 2026-09-18T19:50:53.332079144Z
+modified_at: 2026-09-18T20:13:34.298965403Z
 req_type: Task
 tags:
 - follow-up:TASK-1254
@@ -33,4 +33,17 @@ comments:
   created_at: 2026-09-18T17:01:04.037866751Z
   modified_at: 2026-09-18T17:01:04.037866751Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b627-26da-74f2-9ef0-cab1b5a21f99
+  author: joe
+  content: |-
+    Check exercised live 2026-09-18 12:50-13:13 on gitlab.joemooney.com ai/aida, using a throwaway MR !4 (source hold-check-src → target hold-check-base, both cut from GitHub main at adc8625cd, so no merge touched the mirror's main):
+
+    1. MR created with the aida:merge-hold label. Pipeline 295: aida-merge-hold-gate FAILED (label present), bwrap + verify green; pipeline terminal = failed. GitLab: detailed_merge_status = ci_must_pass. PUT /merge_requests/4/merge → HTTP 405 Method Not Allowed. So with "Pipelines must succeed" on, the labelled MR cannot merge — not through the UI, not through the API.
+    2. aida merge-hold clear 4 from the GitLab-origin checkout dropped the label (it reported no local marker, as expected for a label applied outside a drive, and cleared the label anyway). Pipeline 296 re-run: gate passed in seconds, verify green in ~8 min on the STORY-1216 warm cache; detailed_merge_status = mergeable. PUT merge (squash) → merged, squash commit 4d5745b7a3 into hold-check-base.
+    3. Side finding: the 405 is what glab renders as "you do not have enough privileges to merge this merge request" — the message the drain printed on MR !2 this morning; recorded as the confirmed cause on BUG-1232 (merge phase must wait on detailed_merge_status, not trust glab's text).
+
+    Cleanup: MR !4 merged into and MR !3 closed on the mirror, throwaway branches deleted, mirror main fast-forwarded to GitHub main (adc8625cd on both).
+  created_at: 2026-09-18T20:13:34.298965403Z
+  modified_at: 2026-09-18T20:13:34.298965403Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: operator
