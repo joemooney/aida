@@ -10,12 +10,12 @@ description: |-
   2. Content-based no-op predicate: RealPhaseDriver::rework_no_op_failure compares the PR head SHA captured in begin_rework_guard with the head after phase 1. An implementer that only rebases onto main, or amends without changing the tree, moves the SHA with no new work and slips past the guard (the BUG-1207 round-4 shape, where the auto-rebase had already changed the head). Make the predicate: no-op when `git diff <before> <after>` is empty (tree-identical) OR when `git cherry <before> <after>` reports no `+` commits (nothing patch-unique after the snapshot); keep the SHA equality as the fast path. Reuse the patch-id helpers the force-push guard already has (pr_rebase / branch_unshipped_patch_count_default). Tests: fixture repo where the branch is rebased with no new commit → no-op; a genuine new commit → not a no-op.
 
   Acceptance: both tests green; the existing rework_no_op_is_shelvable and unchanged_rework_head_shelves tests unchanged; prompt header shows the computed round.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:53:00.149541934Z
-modified_at: 2026-09-18T12:31:46.297903541Z
+modified_at: 2026-09-18T12:31:56.969128296Z
 req_type: Task
 tags:
 - batch:followups-0918b
@@ -51,8 +51,24 @@ comments:
   created_at: 2026-09-18T12:31:46.297903541Z
   modified_at: 2026-09-18T12:31:46.297903541Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b480-8622-7f03-9c15-048ec0454717
+  author: aida-auto-bump
+  timestamp: 2026-09-18T12:31:56.962256658Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b480-8629-7d30-86cb-fe69f4b2b8a0
+  timestamp: 2026-09-18T12:31:56.969126681Z
+  agent: aida
+  commit_sha: 6d2823c28ecae05cc56507a6d4e0e7bf0c3ad375
+  summary: Completed via merge 6d2823c2
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T12:16:48.562527036Z
   implemented_by: joe
+  completed_at: 2026-09-18T12:31:56.962100527Z
+  completion_sha: 6d2823c28ecae05cc56507a6d4e0e7bf0c3ad375
