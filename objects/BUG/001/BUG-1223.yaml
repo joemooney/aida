@@ -1,0 +1,17 @@
+id: 01a0b51d-80cf-7c33-b81a-d6c65a329f9a
+spec_id: BUG-1223
+agreed_id: BUG-1223
+title: Session-end auto-queue-review hardcodes ReviewForge::GitHub, so a GitLab MR's commit range yields no trailers and no Review MR story is filed
+description: 'Observed 2026-09-18 during the TASK-1254 live drain on the GitLab mirror: the implementer commit on MR !2 carries the (TASK-1269) trailer, yet end_implementer_session printed ''auto-queue: PR #2 carries no (REQ-ID) trailers in its commit range — no reviewer story was filed''. Cause: the auto-queue call site passes ReviewForge::GitHub to pr_base_head unconditionally (aida-cli-lib/src/lib.rs, the pr_base_head call inside the auto-queue path near auto_queue_skip_reason), so on a GitLab project the base/head lookup runs gh pr view against the wrong forge and the fallback range covers nothing. The other call site (the review-prompt path) already resolves the forge properly. Fix: derive the ReviewForge from resolve_forge_kind(project_root) at the auto-queue call site; add a unit test that the GitLab kind maps to the mr-N fallback head. Acceptance: on a GitLab-origin checkout, ending an implementer session with an open MR whose commits carry a (REQ-ID) trailer files the ''Review PR-N'' story; the GitHub path is unchanged.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T15:23:24.751360127Z
+modified_at: 2026-09-18T15:23:24.751360127Z
+req_type: Bug
+tags:
+- aida:pr:auto-queue-review
+- forge
+- gitlab
+- parent:EPIC-68
