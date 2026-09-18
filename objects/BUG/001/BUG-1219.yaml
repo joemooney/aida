@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:02:43.295938213Z
-modified_at: 2026-09-18T12:57:37.684490921Z
+modified_at: 2026-09-18T12:57:38.530130058Z
 req_type: Bug
 tags:
 - batch:followups-0918b
@@ -82,6 +82,21 @@ comments:
     confidence: 0.91
   created_at: 2026-09-18T12:57:37.684490921Z
   modified_at: 2026-09-18T12:57:37.684490921Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b498-0be2-7281-8dfa-2292f57bc273
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: file:bug-1219-drain-01a0b493-fe70-7f02-8da2-b6c9596bc832.json
+    agent: codex
+    ran-at: 2026-09-18 05:57 -07:00
+    confirmed: 2
+    declined: 0
+    skipped: 0
+    + SEM [aida:sem] comment — Standalone colon-form acceptance markers are matched case-insensitively (for example, `ACCEPTANCE:` and `acceptance criteria:` are recognized).
+    + SEM [aida:sem] comment — Markdown task-list items (`- [ ]`, `- [x]`, and `- [X]`) are accepted as criteria bullets, and the checkbox token is omitted from the criterion text.
+  created_at: 2026-09-18T12:57:38.530130058Z
+  modified_at: 2026-09-18T12:57:38.530130058Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b494-7b1d-7e70-833d-7ce9278f3d59
