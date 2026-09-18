@@ -74259,5 +74259,17 @@ operations:
     req_type: Bug
     status: Approved
     priority: High
-clock: 5775
+- id: 01a0b27e-37ff-7760-be2a-c163c3fcca02
+  target_id: 01a0b27e-32bc-7843-bd79-5e62318efe1b
+  author: aida
+  node_id: '1'
+  lamport: 5776
+  timestamp: 2026-09-18T03:10:11.455227500Z
+  kind: !Create
+    title: role (seat)
+    description: A persistent named workflow position in the AIDA build loop, backed by a role file and eligible for queue routing and leased sessions. Role names the workflow context; seat emphasizes its operational place and cardinality. See docs/architecture/roles-seats-and-personas.md. trace:TASK-1260
+    req_type: Term
+    status: Completed
+    priority: Medium
+clock: 5776
 node_id: '1'
