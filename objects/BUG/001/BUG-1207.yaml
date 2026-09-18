@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:10:55.163831878Z
-modified_at: 2026-09-18T06:51:31.750547061Z
+modified_at: 2026-09-18T07:05:49.362375Z
 req_type: Bug
 tags:
 - aida:list
@@ -70,4 +70,4 @@ failure_reason:
   detail: reviewer verdict is RequestChanges — not Approved
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1207 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-18T06:24:59.607717468Z
+  shelved_at: 2026-09-18T07:05:49.362375Z
