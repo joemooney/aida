@@ -18,12 +18,12 @@ description: |-
   - `aida criteria BUG-1218` lists only its real criteria (the two harvested ACs, relabelled AC1/AC2, plus any genuine bullets).
   - BUG-1209 shows its five originals plus the harvested criterion; no `## Acceptance` duplicate.
   - next_ac_label cases from BUG-1216 stay green.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:02:43.295938213Z
-modified_at: 2026-09-18T12:03:45.529787019Z
+modified_at: 2026-09-18T12:34:21.960581163Z
 req_type: Bug
 tags:
 - batch:followups-0918b
