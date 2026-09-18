@@ -70,3 +70,11 @@
   added_at: 2026-09-18T19:10:14.581075708Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5ed-3eab-76c2-8f47-a49b9399a824
+  position: 13000
+  added_by: role:implementer
+  note: mode overrides spike human-only default (drain AND drive); research-lane pickup contract; groom classifier report-shaped→drain (or drive when a BlockedBy dependent exists) / decision-shaped→operator; discipline paragraph; tests
+  added_at: 2026-09-18T19:16:19.637061169Z
+  for_role: implementer
+  added_by_machine: imac
