@@ -331,7 +331,11 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
         // the manual path; we never force-resolve files without a known union
         // rule.
         for path in &conflicted {
-            if !is_spec_object_path(path) && !is_oplog_path(path) && !is_queue_registry_path(path) {
+            if !is_spec_object_path(path)
+                && !is_oplog_path(path)
+                && !is_queue_registry_path(path)
+                && !is_schedule_ledger_path(path)
+            {
                 let _ = git(repo, &["rebase", "--abort"]);
                 anyhow::bail!(
                     "conflict in non-mergeable path `{path}` — cannot auto-merge; falling back to manual resolution"
@@ -344,6 +348,9 @@ pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result
                 resolve_oplog_conflict(repo, path)
             } else if is_queue_registry_path(path) {
                 resolve_queue_conflict(repo, path)
+            } else if is_schedule_ledger_path(path) {
+                // trace:STORY-1226 | ai:claude
+                resolve_schedule_ledger_conflict(repo, path)
             } else {
                 resolve_spec_conflict(repo, path)
             };
@@ -674,6 +681,21 @@ fn is_registry_nodes_path(path: &str) -> bool {
     p == "registry/nodes.toml" || p.ends_with("/registry/nodes.toml")
 }
 
+/// True when `path` is a per-job schedule ledger (`schedule/<job>.yaml`,
+/// STORY-1226). Resolved last-writer-wins on merge.
+// trace:STORY-1226 | ai:claude
+fn is_schedule_ledger_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    let rel = p
+        .rsplit_once("/schedule/")
+        .map(|(_, r)| r)
+        .or_else(|| p.strip_prefix("schedule/"));
+    match rel {
+        Some(r) => !r.contains('/') && r.ends_with(".yaml"),
+        None => false,
+    }
+}
+
 /// True when a merge is currently in progress in `repo` (MERGE_HEAD exists).
 #[cfg(feature = "native")]
 fn merge_in_progress(repo: &Path) -> bool {
@@ -727,6 +749,7 @@ pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StoreP
             && !is_queue_registry_path(path)
             && !is_registry_blocks_path(path)
             && !is_registry_nodes_path(path)
+            && !is_schedule_ledger_path(path)
         {
             let _ = git(repo, &["merge", "--abort"]);
             anyhow::bail!(
@@ -745,6 +768,8 @@ pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StoreP
             resolve_blocks_conflict(repo, path)
         } else if is_registry_nodes_path(path) {
             resolve_nodes_conflict(repo, path)
+        } else if is_schedule_ledger_path(path) {
+            resolve_schedule_ledger_conflict(repo, path)
         } else {
             resolve_spec_conflict(repo, path)
         };
@@ -834,6 +859,71 @@ fn resolve_nodes_conflict(repo: &Path, path: &str) -> Result<String> {
         "auto-unioned node roster: {} node(s)",
         merged.nodes.len()
     ))
+}
+
+/// Resolve a conflicted `schedule/<job>.yaml` (STORY-1226 per-job run
+/// ledger) **last-writer-wins**: the side whose latest timestamp
+/// (`last_run` / `due_since` / episode `fired_at` / `cleared_at`) is newer is
+/// taken whole; a tie keeps ours. A ledger is a run record, not a union — two
+/// clones that both ran the job simply agree the later run is the truth.
+// trace:STORY-1226 | ai:claude
+#[cfg(feature = "native")]
+fn resolve_schedule_ledger_conflict(repo: &Path, path: &str) -> Result<String> {
+    let ours = git_show_stage(repo, 2, path)?;
+    let theirs = git_show_stage(repo, 3, path)?;
+    let (winner, text) = pick_last_writer(ours.as_deref(), theirs.as_deref());
+    let abs = repo.join(path);
+    if let Some(parent) = abs.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    crate::write_atomic(&abs, text.as_bytes()).with_context(|| format!("write merged {path}"))?;
+    Ok(format!(
+        "schedule ledger `{path}`: kept {winner} (last writer wins)"
+    ))
+}
+
+/// The pure half of the schedule-ledger resolver: given both sides' YAML,
+/// return (`"ours"` | `"theirs"`, winning text). Missing side → the other
+/// wins; unparseable timestamps sort as "never"; tie → ours.
+// trace:STORY-1226 | ai:claude
+pub fn pick_last_writer(ours: Option<&str>, theirs: Option<&str>) -> (&'static str, String) {
+    fn latest_stamp(yaml: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+        let v: serde_yaml::Value = serde_yaml::from_str(yaml).ok()?;
+        let mut best: Option<chrono::DateTime<chrono::Utc>> = None;
+        let mut consider = |node: Option<&serde_yaml::Value>| {
+            if let Some(serde_yaml::Value::String(s)) = node {
+                if let Ok(t) = chrono::DateTime::parse_from_rfc3339(s) {
+                    let t = t.with_timezone(&chrono::Utc);
+                    if best.is_none_or(|b| t > b) {
+                        best = Some(t);
+                    }
+                }
+            }
+        };
+        consider(v.get("last_run"));
+        consider(v.get("due_since"));
+        consider(v.get("cold_boot_at"));
+        if let Some(ep) = v.get("episode") {
+            consider(ep.get("first_true"));
+            consider(ep.get("fired_at"));
+            consider(ep.get("cleared_at"));
+        }
+        best
+    }
+    match (ours, theirs) {
+        (None, None) => ("ours", String::new()),
+        (Some(o), None) => ("ours", o.to_string()),
+        (None, Some(t)) => ("theirs", t.to_string()),
+        (Some(o), Some(t)) => {
+            let so = latest_stamp(o);
+            let st = latest_stamp(t);
+            if st > so {
+                ("theirs", t.to_string())
+            } else {
+                ("ours", o.to_string())
+            }
+        }
+    }
 }
 
 /// Pull (merge) from remote.
@@ -5296,6 +5386,69 @@ mod tests {
         let nodes = NodeRegistry::load(&repo.join("registry/nodes.toml")).unwrap();
         assert_eq!(nodes.nodes.len(), 2);
         assert!(repo.join("objects/TASK/000/TASK-1.yaml").exists());
+    }
+
+    // trace:STORY-1226 | ai:claude
+    #[test]
+    fn pick_last_writer_prefers_newer_stamp_and_ties_to_ours() {
+        let older = "job: x\nlast_run: 2026-09-18T10:00:00Z\nresult: ok\n";
+        let newer = "job: x\nlast_run: 2026-09-18T11:00:00Z\nresult: failed:2\n";
+        assert_eq!(pick_last_writer(Some(older), Some(newer)).0, "theirs");
+        assert_eq!(pick_last_writer(Some(newer), Some(older)).0, "ours");
+        assert_eq!(pick_last_writer(Some(older), Some(older)).0, "ours");
+        // Episode / due stamps count too.
+        let due = "job: x\nlast_run: 2026-09-18T10:00:00Z\ndue_since: 2026-09-18T12:00:00Z\n";
+        assert_eq!(pick_last_writer(Some(newer), Some(due)).0, "theirs");
+        // A missing side loses.
+        assert_eq!(pick_last_writer(None, Some(older)).0, "theirs");
+        assert_eq!(pick_last_writer(Some(older), None).0, "ours");
+        assert!(is_schedule_ledger_path("schedule/mailbox-triage.yaml"));
+        assert!(!is_schedule_ledger_path("schedule/nested/x.yaml"));
+        assert!(!is_schedule_ledger_path("objects/TASK/000/TASK-1.yaml"));
+    }
+
+    /// Two clones that both wrote `schedule/<job>.yaml` must auto-resolve on
+    /// merge (last writer wins) instead of parking the store pull forever.
+    // trace:STORY-1226 | ai:claude
+    #[test]
+    fn merge_union_auto_resolves_schedule_ledger_last_writer_wins() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        let write = |text: &str| {
+            std::fs::create_dir_all(repo.join("schedule")).unwrap();
+            std::fs::write(repo.join("schedule/session-reap.yaml"), text).unwrap();
+        };
+        write("job: session-reap\nlast_run: 2026-09-18T09:00:00Z\nresult: ok\n");
+        add(&repo, &["schedule/session-reap.yaml"]).unwrap();
+        commit(&repo, "base").unwrap();
+
+        git(&repo, &["checkout", "-b", "other-tip"]).unwrap();
+        write("job: session-reap\nlast_run: 2026-09-18T11:00:00Z\nresult: failed:2\n");
+        add(&repo, &["schedule/session-reap.yaml"]).unwrap();
+        commit(&repo, "other clone ran at 11:00").unwrap();
+
+        git(&repo, &["checkout", "-"]).unwrap();
+        write("job: session-reap\nlast_run: 2026-09-18T10:00:00Z\nresult: ok\n");
+        add(&repo, &["schedule/session-reap.yaml"]).unwrap();
+        commit(&repo, "this clone ran at 10:00").unwrap();
+
+        let outcome = merge_union_auto(&repo, "other-tip", "reconcile").unwrap();
+        match outcome {
+            StorePullOutcome::AutoMerged { notes } => {
+                assert!(
+                    notes
+                        .iter()
+                        .any(|n| n.contains("schedule ledger") && n.contains("theirs")),
+                    "{notes:?}"
+                );
+            }
+            StorePullOutcome::Clean => panic!("diverged ledgers must conflict then resolve"),
+        }
+        let merged = std::fs::read_to_string(repo.join("schedule/session-reap.yaml")).unwrap();
+        assert!(merged.contains("11:00:00Z"), "newer run wins: {merged}");
+        assert!(!merge_in_progress(&repo));
     }
 
     /// A colliding union (two hubs dispensed overlapping ranges) must abort
