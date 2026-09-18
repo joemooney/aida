@@ -20,6 +20,14 @@
 
 aida-merge-hold-gate:
   stage: test
+  # Self-contained: override any project-wide `default:` so the gate never
+  # inherits a heavy build image, a cargo/npm cache restore, or an apt
+  # before_script. `needs: []` lets it run immediately instead of waiting
+  # for earlier stages. trace:TASK-1254 | ai:claude
+  image: alpine:latest
+  before_script: []
+  cache: []
+  needs: []
   rules:
     - if: '$CI_MERGE_REQUEST_IID' # only on merge-request pipelines
   script:

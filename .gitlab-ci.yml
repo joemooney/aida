@@ -36,10 +36,19 @@ variables:
 
 default:
   image: rust:latest
+  # Warm-build cache shared across branches/MRs (keyed on Cargo.lock, so a
+  # dependency bump starts a fresh cache and unchanged deps reuse the old one).
+  # Was keyed per branch, which made every new MR build from scratch. With a
+  # single docker-executor runner the cache lives on that runner host.
+  # trace:TASK-1254 | ai:claude
   cache:
-    key: "cargo-$CI_COMMIT_REF_SLUG"
+    key:
+      files:
+        - Cargo.lock
+      prefix: cargo
     paths:
       - .cargo/registry/
+      - .cargo/git/
       - target/
   before_script:
     - apt-get update
