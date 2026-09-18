@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:26:03.945081691Z
-modified_at: 2026-09-18T23:38:02.268979201Z
+modified_at: 2026-09-18T23:39:04.804615756Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -47,6 +47,12 @@ comments:
   content: 'Implemented PR #1948 round-2 finding on story-1221 branch: existing stores now seed missing protocol META rows through refresh/init refresh/explicit seed.'
   created_at: 2026-09-18T23:24:04.762581453Z
   modified_at: 2026-09-18T23:24:04.762581453Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b6e3-4ce4-7371-b4c4-7e53e321b3ff
+  author: joe
+  content: 'State correction (product seat, 2026-09-18 16:40): this spec was flipped to Done by the drain because commit c25ba5c on PR #1948 (STORY-1221) carried a BUG-1236 attribution; the reviewer confirmed that PR does not implement BUG-1236 (no label-at-open, no sync failure surfacing, no --fix, no doctor check). Resetting to Approved so it is picked up on its own.'
+  created_at: 2026-09-18T23:39:04.804615756Z
+  modified_at: 2026-09-18T23:39:04.804615756Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 failure_reason:
