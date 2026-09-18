@@ -1,0 +1,16 @@
+{
+  "id": "f253cc97-af78-4747-b422-021752e79a2e",
+  "thread_id": "f253cc97-af78-4747-b422-021752e79a2e",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789769398280,
+  "body": "Subject: PR #1946 — STORY-1226 aida cron (guided) at your gate\n\nSTORY-1226 is implemented as PR #1946 and moved to Done; PR labelled aida:merge-hold by hand (guided = human merge; BUG-1236 means the label is not applied automatically yet). Decisions are on ADR-46 (dual delivery with hourly cold-boot by the tick, store-object ledger, project+global registry, typed predicate grammar, and — after the code map found two schedulers — GROW aida schedule with cron as its alias rather than a third scheduler). Plan: docs/plans/2026-09-18-story-1226-aida-cron.md. Local run: 5011 cli-lib tests green, fmt/clippy clean, throwaway e2e; GitHub CI on the head is running. Implementation summary + deviations are a comment on the story. Two existing-code defects it found are filed: BUG-1238 (verify-interface-changes.py watches the wrong cli.rs path since STORY-772, gate never arms) and BUG-1239 (awaiting --notice blocks on an open stdin pipe).\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
