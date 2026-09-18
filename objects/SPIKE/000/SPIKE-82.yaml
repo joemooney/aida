@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:11.435264766Z
-modified_at: 2026-09-18T19:07:16.221604182Z
+modified_at: 2026-09-18T19:07:17.658074050Z
 req_type: Spike
 tags:
 - autonomy
@@ -34,5 +34,18 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-18T18:56:13.641442177Z
+comments:
+- id: 01a0b5ea-791a-7351-850f-4c75f16f9af4
+  author: joe
+  content: |-
+    [advisor:groom] Approved, high, drive mode (implementer runs headless; merge at the advisor's gate because the report's claims get checked there). Sequencing agreed with the product seat: this spike lands BEFORE STORY-1218 is built.
+
+    Implementer notes:
+    - The evidence lives in the MAIN checkout, not your worktree: /home/joe/ai/aida/.aida/events.jsonl (636 KB, window 2026-09-17T18:00 to 2026-09-18T08:00 local = 2026-09-18T01:00Z..15:00Z), the mailbox under /home/joe/ai/aida/.aida/mailbox/ (thread with the 21:38 protocol mail), the batch tags followups-0917/0917b/0918/0918b/0918c via aida queue progress --batch and aida history events. Read them by absolute path.
+    - Advisor-side data point for hypothesis 6: the advisor seat's last mailbox read was 09:50; four messages sent 10:16-10:46 sat unread until 11:18 (30-60 min each). No cron existed; a session-scoped 10-minute tick was added at 11:20 as a stop-gap. TASK-1271 (mailbox latency surface) is queued.
+    - Output: docs/spikes/2026-09-18-night-shift-post-mortem.md with (a) hypothesis verdicts with counts, (b) the 18:00 runbook checklist, (c) the substrate-gap list feeding STORY-1218. Counts must come from the events file, not from the narrative in the spec.
+  created_at: 2026-09-18T19:07:17.658074050Z
+  modified_at: 2026-09-18T19:07:17.658074050Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 human_only: true
