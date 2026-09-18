@@ -76818,6 +76818,14 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
+- id: 01a0b531-eb95-75c1-8303-7d13a8ce7f86
+  target_id: 01a0b50d-5fa2-75a2-9a1c-e68fc7c4bf68
+  author: aida
+  node_id: '1'
+  lamport: 5933
+  timestamp: 2026-09-18T15:45:42.805816915Z
+  kind: !SetStatus
+    status: Rejected
 - id: 01a0b525-b8c4-7b63-a1a8-690c322a7358
   target_id: 01a0b525-a8b2-79e3-a00a-f7e5d16f2bcb
   author: aida
@@ -76842,5 +76850,5 @@ operations:
     req_type: Bug
     status: Draft
     priority: High
-clock: 5936
+clock: 5937
 node_id: '1'
