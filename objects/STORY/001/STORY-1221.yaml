@@ -32,7 +32,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T19:28:07.813165879Z
+modified_at: 2026-09-18T19:28:09.967902489Z
 req_type: Story
 tags:
 - agent-ux
@@ -55,5 +55,9 @@ relationships:
 - rel_type: Blocks
   target_id: 01a0b5fc-ec4d-7493-a755-33abd4c39528
   created_at: 2026-09-18T19:28:07.813162626Z
+  created_by: joe
+- rel_type: Blocks
+  target_id: 01a0b5fd-0bf7-7ae3-8e7c-306b04c7fba7
+  created_at: 2026-09-18T19:28:09.967897568Z
   created_by: joe
 execution_mode: drive
