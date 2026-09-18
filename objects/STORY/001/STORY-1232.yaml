@@ -1,0 +1,26 @@
+id: 01a0b6c3-78d6-7573-ba47-f61427ba7390
+spec_id: STORY-1232
+agreed_id: STORY-1232
+title: 'Review PR-1950: [AI:codex] fix(gitlab): gate drain merge on detailed status (BUG-1232)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b6bd`) for branch `bug-1232`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1950>
+  - Branch: `bug-1232` → `main`
+
+  ## Covers
+
+  - BUG-1232
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1950` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T23:04:18.902680244Z
+modified_at: 2026-09-18T23:04:18.902680244Z
+req_type: Story
