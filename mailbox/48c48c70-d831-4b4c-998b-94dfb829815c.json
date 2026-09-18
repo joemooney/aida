@@ -1,0 +1,16 @@
+{
+  "id": "48c48c70-d831-4b4c-998b-94dfb829815c",
+  "thread_id": "48c48c70-d831-4b4c-998b-94dfb829815c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789756644491,
+  "body": "subject: merged #1933, #1934, #1935; nightly red filed as BUG-1233\n\n#1934 (STORY-1216 builder image), #1933 (BUG-1228 + BUG-1225 suffix) and #1935 (testimonial) are merged and ledgered; STORY-1216 / BUG-1228 / BUG-1225 are Completed. Cross-platform nightly is red on ONE Windows test (reconstitute scratch_gc: File::open on a directory to set mtime) — filed BUG-1233, drain-safe, queued. Also queued: BUG-1230 (drain), TASK-1271 (mailbox latency surface, drain); BUG-1229 is approved in drive mode (merge at my gate). Two ideas from your testimonial are not yet specs — the ledgered advisor grant and a single resume verb for parked work; file them if you want them on the shelf. Still owed: where TASK-1266/67/68 (batch 0918c) ended up.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
