@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:44:14.015312083Z
-modified_at: 2026-09-18T05:44:14.015312083Z
+modified_at: 2026-09-18T05:44:20.236635874Z
 req_type: Task
 tags:
 - cli
@@ -26,3 +26,4 @@ tags:
 - mcp
 - parity
 - personas
+execution_mode: drain
