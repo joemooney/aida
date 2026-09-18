@@ -2,7 +2,7 @@ id: 01a0b5e0-7244-7451-89a9-f8c561574633
 spec_id: STORY-1218
 agreed_id: STORY-1218
 title: 'aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer'
-description: |
+description: |-
   Goal: make the overnight window repeatable without depending on an interactive agent being awake. The 2026-09-17/18 night worked because a product-seat session relaunched drain waves whenever the lock freed and an advisor session gated merges; both were LLM sessions holding a Monitor. The one-hour unread-mail gap the advisor found in its own audit is the failure mode: the loop moves only while an agent notices.
 
   Proposal: a deterministic, LLM-free tick command run by a system scheduler, composing surfaces that already exist (aida supervise for transient re-drives per ADR-26, aida session reap, aida awaiting --notice, the drain lock, aida advisor watch --once for the presence-gated fork):
@@ -25,15 +25,19 @@ description: |
   - Mailbox latency above the threshold raises the configured notification once, not every tick.
   - aida shift install --systemd-user produces a working timer on this box; docs/autonomous-drain.md gains a "night shift" section that is the runbook.
   - Off by default; opt-in per project via [shift] enabled = true.
-status: Draft
+  - (advisor refinement 2026-09-18) The tick launches a wave through the SAME lock path as a manual `aida queue work` (one drain per repo, BUG-538): a tick that finds the lock held by a live pid is a no-op; a stale lock (dead pid) is released and logged as a ShiftTick event with the recovered pid, never force-launched over a live one.
+  - (advisor refinement 2026-09-18) `aida shift tick --dry-run` prints the exact wave command, the specs it would include, the guards evaluated (lock, load ceiling, human-gated wave in flight, [shift] enabled) and the mailbox-latency verdict, and exits 0 without writing; this output is the runbook's preflight step and is covered by a test on a fixture queue.
+  - (advisor refinement 2026-09-18) Built after SPIKE-82 lands: the wave-size default, the max-failures default and the guard list are taken from the spike's confirmed hypotheses, cited in the story's plan file.
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:56:20.548044413Z
-modified_at: 2026-09-18T18:56:27.313367689Z
+modified_at: 2026-09-18T19:07:37.981580573Z
 req_type: Story
 tags:
 - autonomy
+- keyboard-gate
 - orchestrator
 - parent:EPIC-62
 - reliability
@@ -46,3 +50,4 @@ relationships:
   target_id: 01a0b5e0-4eab-7c03-acdd-7250d89e58fe
   created_at: 2026-09-18T18:56:27.313363058Z
   created_by: joe
+execution_mode: guided
