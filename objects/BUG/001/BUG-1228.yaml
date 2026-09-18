@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:58:49.982734868Z
-modified_at: 2026-09-18T17:00:24.695174013Z
+modified_at: 2026-09-18T18:19:00.307363514Z
 req_type: Bug
 tags:
 - forge
@@ -20,4 +20,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T16:58:53.310120782Z
+comments:
+- id: 01a0b5be-4353-7213-aa4b-953d597f14f0
+  author: joe
+  content: 'Dequeued 2026-09-18 11:19 by the driver-advisor: the fix is already on PR #1933 (one forge detector; forge-aware refs/merge-requests/N/head refspecs). Completes when #1933 merges.'
+  created_at: 2026-09-18T18:19:00.307363514Z
+  modified_at: 2026-09-18T18:19:00.307363514Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
