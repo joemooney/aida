@@ -655,7 +655,7 @@ fn queue_work_head_skips_done_and_picks_next_fresh_item() {
         ("BUG-1018", RequirementStatus::Approved),
     ]);
 
-    let plan = resolve_queue_work_plan(&storage, "u", None, None, false, true, false)
+    let plan = resolve_queue_work_plan(&storage, "u", None, None, false, true, false, None)
         .expect("head pickup should skip Done and pick the next fresh item");
 
     assert_eq!(plan.anchor_display, "BUG-1018");
@@ -666,9 +666,18 @@ fn queue_work_explicit_done_refuses_with_awaiting_merge_hint() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let (_dir, storage) = queued_status_fixture(&[("BUG-1017", RequirementStatus::Done)]);
 
-    let err = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, true, false)
-        .expect_err("explicit Done pickup must refuse fresh work")
-        .to_string();
+    let err = resolve_queue_work_plan(
+        &storage,
+        "u",
+        Some("BUG-1017"),
+        None,
+        false,
+        true,
+        false,
+        None,
+    )
+    .expect_err("explicit Done pickup must refuse fresh work")
+    .to_string();
 
     assert!(err.contains("Done"), "error should name Done: {err}");
     assert!(
@@ -686,16 +695,34 @@ fn queue_work_explicit_needs_attention_requires_force() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
     let (_dir, storage) = queued_status_fixture(&[("BUG-1017", RequirementStatus::NeedsAttention)]);
 
-    let err = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, true, false)
-        .expect_err("NeedsAttention pickup must refuse without force")
-        .to_string();
+    let err = resolve_queue_work_plan(
+        &storage,
+        "u",
+        Some("BUG-1017"),
+        None,
+        false,
+        true,
+        false,
+        None,
+    )
+    .expect_err("NeedsAttention pickup must refuse without force")
+    .to_string();
     assert!(
         err.contains("needs-triage"),
         "error should name triage: {err}"
     );
 
-    let plan = resolve_queue_work_plan(&storage, "u", Some("BUG-1017"), None, false, false, true)
-        .expect("force should allow a deliberate NeedsAttention claim");
+    let plan = resolve_queue_work_plan(
+        &storage,
+        "u",
+        Some("BUG-1017"),
+        None,
+        false,
+        false,
+        true,
+        None,
+    )
+    .expect("force should allow a deliberate NeedsAttention claim");
     assert_eq!(plan.anchor_display, "BUG-1017");
 }
 
@@ -2215,6 +2242,9 @@ fn auto_complete_head_names_sibling_role_queue_and_honors_role_override() {
 // trace:TASK-547 | ai:antigravity
 #[test]
 fn resolve_queue_work_plan_auto_queues_when_not_strict() {
+    // BUG-1195: this test mutates AIDA_SESSION_ROLE — serialize with the other
+    // env-mutating tests instead of racing them.
+    let _guard = crate::test_env::env_lock();
     let prior_role = std::env::var("AIDA_SESSION_ROLE").ok();
     std::env::remove_var("AIDA_SESSION_ROLE");
     let dir = tempfile::tempdir().unwrap();
@@ -2237,6 +2267,7 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
         true,
         false,
         false,
+        None,
     );
     assert!(res.is_err());
     let err = res.unwrap_err().to_string();
@@ -2256,6 +2287,7 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
         false,
         true,
         false,
+        None,
     )
     .expect("dry-run should resolve a plan without persisting");
     assert_eq!(res.mode, QueueWorkMode::Item);
@@ -2275,6 +2307,7 @@ fn resolve_queue_work_plan_auto_queues_when_not_strict() {
         false,
         false,
         false,
+        None,
     )
     .expect("auto-queue should succeed and return plan");
     assert_eq!(res.mode, QueueWorkMode::Item);
@@ -2351,8 +2384,17 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
     let root = dir.path().join("aida-store");
     let storage = Storage::new(&root);
     queue_review_story(&storage, &root);
-    let plan = resolve_queue_work_plan(&storage, "u", Some("PR-457"), None, false, false, false)
-        .expect("PR-N with a queued review story resolves to a plan");
+    let plan = resolve_queue_work_plan(
+        &storage,
+        "u",
+        Some("PR-457"),
+        None,
+        false,
+        false,
+        false,
+        None,
+    )
+    .expect("PR-N with a queued review story resolves to a plan");
     assert!(
         plan.review_target.is_some(),
         "PR-N pickup must set review_target so it routes to the reviewer"
@@ -2361,6 +2403,68 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
         derive_queue_work_prompt(&plan, "reviewer", false, false, None),
         "/aida-review --pr 457"
     );
+}
+
+/// BUG-1195 (round 2): the advisor's shell repro. The review story was queued
+/// by user `u` and routed to `reviewer`; the pickup runs as a DIFFERENT user
+/// with the shell's `AIDA_SESSION_ROLE=advisor`. A PR-N scope must read the
+/// reviewer route regardless of that env role, so the story is found.
+#[test]
+fn resolve_queue_work_plan_pr_n_finds_reviewer_routed_story_across_users_and_env_role() {
+    let _guard = crate::test_env::env_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    let storage = Storage::new(&root);
+    queue_review_story(&storage, &root);
+    let prev = std::env::var_os("AIDA_SESSION_ROLE");
+    std::env::set_var("AIDA_SESSION_ROLE", "advisor");
+    let plan = resolve_queue_work_plan(
+        &storage,
+        "role:implementer",
+        Some("PR-457"),
+        None,
+        false,
+        true,
+        false,
+        Some("reviewer"),
+    );
+    // Also without any --role: the PR scope alone implies the reviewer route.
+    let plan_no_hint = resolve_queue_work_plan(
+        &storage,
+        "role:implementer",
+        Some("PR-457"),
+        None,
+        false,
+        true,
+        false,
+        None,
+    );
+    match prev {
+        Some(v) => std::env::set_var("AIDA_SESSION_ROLE", v),
+        None => std::env::remove_var("AIDA_SESSION_ROLE"),
+    }
+    let plan = plan.expect("PR-N resolves through the reviewer route for another user");
+    assert!(plan.review_target.is_some());
+    assert_eq!(plan.anchor_display, "STORY-901");
+    assert!(plan_no_hint
+        .expect("PR scope implies reviewer")
+        .review_target
+        .is_some());
+    // A missing story still bails, and the bail names the dropped filter.
+    let err = resolve_queue_work_plan(
+        &storage,
+        "u",
+        Some("PR-999"),
+        None,
+        false,
+        true,
+        false,
+        None,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("no queued review story for PR-999"), "{err}");
+    assert!(err.contains("none is a review story"), "{err}");
 }
 
 /// TASK-630 (BUG-250 criterion 5): the held-state re-entry decision is a pure

@@ -6802,6 +6802,9 @@ pub(crate) fn resolve_queue_work_plan(
     // mutating nothing. trace:TASK-1053 | ai:claude
     dry_run: bool,
     force_needs_attention: bool,
+    // BUG-1195: the explicit `--role` (if any) — the routing role for a
+    // non-review scope; ignored for PR/MR scopes, which imply `reviewer`.
+    role_hint: Option<&str>,
 ) -> Result<QueueWorkPlan> {
     // A `--for <role>` routing lands in the ROUTING user's queue file, so a
     // pickup that read only our own file could not work a spec a peer routed
@@ -6812,8 +6815,19 @@ pub(crate) fn resolve_queue_work_plan(
     // trace:BUG-900 | ai:codex
     let session_role_for_work =
         queue_role_fallback::session_role_env().unwrap_or_else(|| "implementer".to_string());
-    let work_fallback_role =
-        queue_role_fallback::fallback_role(None, Some(session_role_for_work.as_str()));
+    // BUG-1195 (round 2): a `PR-N` / `MR-N` scope IS a review by construction,
+    // so the cross-user routing it reads through is the reviewer route — not
+    // whatever role the calling shell happens to carry. A dry-run from an
+    // advisor shell (`AIDA_SESSION_ROLE=advisor`) used to derive `advisor`
+    // here, never merged the reviewer-routed story another user had filed,
+    // and reported "no queued review story" while `queue work STORY-N`
+    // resolved fine. An explicit `--role` still wins for non-review scopes.
+    // trace:BUG-1195 | ai:claude
+    let work_fallback_role = if arg.and_then(parse_review_scope).is_some() {
+        Some("reviewer".to_string())
+    } else {
+        queue_role_fallback::fallback_role(role_hint, Some(session_role_for_work.as_str()))
+    };
     let mut entries = queue_role_fallback::queue_list_with_role_fallback(
         storage,
         user_id,
@@ -7119,9 +7133,14 @@ pub(crate) fn resolve_queue_work_plan(
         match matches.len() {
             0 => {
                 let label = format_review_label(forge, n);
+                // BUG-1195: name the filter that dropped it — the same
+                // classifier the review-envelope guard uses.
+                let why =
+                    crate::classify_review_story_lookup(&entries, &store, forge, n).describe();
                 anyhow::bail!(
-                    "no queued review story for {} — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    "no queued review story for {} ({}) — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
                     label,
+                    why,
                     n,
                     n
                 );
@@ -8244,6 +8263,7 @@ pub(crate) fn handle_queue_work(
         strict,
         dry_run,
         force || force_claim,
+        role_override,
     ) {
         Ok(plan) => plan,
         Err(e) => match arg.filter(|_| resume.is_some()) {
@@ -10441,6 +10461,7 @@ fn preview_queue_work_drain(
             /* strict */ false,
             /* dry_run */ true,
             /* force_needs_attention */ false,
+            /* role_hint */ None,
         )?;
         println!("  target: {}", plan.anchor_display);
         let status = plan
