@@ -1,4 +1,14 @@
 - user_id: role:implementer
+  requirement_id: 01a0b2bf-39f2-7f91-9f14-69d808dd20fe
+  position: -2000
+  added_by: role:implementer
+  note: |-
+    [rework ROUND 2 — one item still open; the previous commit on this branch is already on the PR and does NOT count. Produce a NEW commit, or punt naming the finding you dispute.]
+    PR #1917 RequestChanges (drain reviewer, .aida/review-verdicts/PR-1917.json): `aida list --format human --limit 0` is accepted, truncates N matched rows to zero, and prints only "No requirements found." with no disclosure. Handle the empty human-render path: when an explicit --limit truncated a non-empty match set to zero, print the same footer shape as the non-zero case ("0 of N open — truncated by --limit 0" or the renderer's existing count-of-total form) instead of the no-results message; the genuine no-match case keeps "No requirements found.". Add a regression test in bug_1209_list_limit_footer_tests for --limit 0 with N>0 matches (footer discloses N) and for a true empty match (no footer). Consider whether --limit 0 should be rejected by clap (value_parser range 1..) — if you choose rejection instead, say so and test the error text; either is acceptable, silent emptiness is not.
+    Finish with aida queue done BUG-1209.
+  added_at: 2026-09-18T06:45:51.263097754Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a0b2b5-d13b-7361-8e0a-3bdab7f18cba
   position: -1000
   added_by: role:implementer
