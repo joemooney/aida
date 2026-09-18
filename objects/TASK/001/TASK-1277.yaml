@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:26.797150984Z
-modified_at: 2026-09-18T19:27:26.797150984Z
+modified_at: 2026-09-18T19:27:28.540348491Z
 req_type: Task
 tags:
 - agent-ux
@@ -29,4 +29,8 @@ tags:
 - parent:EPIC-28
 - protocol:slice-2
 - substrate-as-bouncer
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-18T19:27:28.540348491Z
 execution_mode: guided
