@@ -21,12 +21,12 @@ description: |-
   - Editing the META body changes what is injected on the next pickup; no binary rebuild.
   - Token cost measured: pickup prompt grows by at most the cap; CLAUDE.md does not grow.
   - Vendor parity (operator requirement 2026-09-18): every injection channel and the done-check work identically for a Codex seat — pickup prompt, .codex/hooks.json per-turn notice, headless codex exec prompts, and AGENTS.md pointer — with no channel that exists only for Claude; the acceptance run is executed once under each vendor.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T19:50:36.036521659Z
+modified_at: 2026-09-18T22:35:00.576185133Z
 req_type: Story
 tags:
 - batch:followups-0918e
