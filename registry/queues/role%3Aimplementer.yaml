@@ -9,20 +9,6 @@
   added_at: 2026-09-18T06:45:51.263097754Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a0b2b5-d13b-7361-8e0a-3bdab7f18cba
-  position: -1000
-  added_by: role:implementer
-  note: |-
-    [rework ROUND 2 — items still open; the previous commit on this branch is already on the PR and does NOT count. Produce a NEW commit that changes these, or punt naming the finding you dispute.]
-    PR #1916 RequestChanges (drain reviewer, .aida/review-verdicts/PR-1916.json):
-    1. --show-origin: the title budget still subtracts the default 53-column fixed prefix, but --show-origin's fixed columns consume 56; at 120 cols the header/rows overflow and the divider is 3 short of the title boundary. Compute the fixed-prefix width from the columns actually rendered for the active flag set (one function that returns the prefix width for {default, --show-origin, --tags, combinations}) and derive the title budget from it.
-    2. --tags: the title takes the entire remaining width and the tag chips are appended after it, so tagged rows still overflow. Reserve the chip width (or a capped chip budget) before computing the title budget so title + chips <= terminal width.
-    3. Tests: add rendered-table coverage that asserts every row/header/divider length <= width for default, --show-origin, --tags, --show-origin --tags, at a couple of widths (80, 120), and that the non-TTY path is untouched (no truncation). Use the existing table renderer with an injected width rather than a real terminal.
-    Also: if you added a new crate for terminal width, prefer the workspace crossterm (already a dependency elsewhere) so no new external dep enters the graph; keep the non-TTY fallback exactly as before.
-    Finish with aida queue done BUG-1207.
-  added_at: 2026-09-18T06:25:43.055236330Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a0b206-0bc8-7a72-928a-9a03e2f22d06
   position: 0
   added_by: role:implementer
