@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T05:32:27.987414901Z
-modified_at: 2026-09-18T10:43:00.797638421Z
+modified_at: 2026-09-18T10:43:14.406408776Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -79,4 +79,4 @@ failure_reason:
   detail: 'CI is red on PR-1924: failing: Build (ubuntu-latest)'
   recovery_hint: 'CI failed on run 35335320599 — view it: `gh run view 35335320599`. Push fixups to the same branch: `aida queue work BUG-1213 --branch bug-1213 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-18T10:39:31.876041956Z
+  shelved_at: 2026-09-18T10:43:14.406408776Z
