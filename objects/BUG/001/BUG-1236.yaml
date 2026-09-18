@@ -1,0 +1,31 @@
+id: 01a0b669-85a9-7cc2-99c2-df1c38792633
+spec_id: BUG-1236
+agreed_id: BUG-1236
+title: 'Supervised (drive) PRs get the merge-hold MARKER but not the GitHub LABEL: sync_label swallows gh failures and only runs at merge time, so the required merge-hold-gate check passes on held PRs'
+description: |
+  Observed 2026-09-18 14:25 on wave followups-0918e: BUG-1229 (execution_mode = drive) reached the drain's merge point; aida merge-hold list shows the marker ("PR #1943 BUG-1229 is marked drive — auto-merge refused") but the GitHub PR carried NO aida:merge-hold label, so the required merge-hold-gate check read PASS on a supervised PR. The same is true retroactively for the drive-mode PRs #1895 and #1897 from 2026-09-17 (labels empty at merge time). Layer 1 (the in-process merge_change refusal on the marker, BUG-1167) held; Layer 2 (the branch-protection check keyed on the label, ADR-37) was never engaged, so a raw gh pr merge or the GitHub UI could have merged a held PR.
+
+  Cause, from the code: merge_hold::sync_label runs `gh pr edit <n> --add-label aida:merge-hold` with stdout and stderr sent to /dev/null and the status ignored, so any failure (auth/env in the headless orchestrator, a missing label, a transient API error) is silent; and it is only called from merge_wave_pr at the merge-execution point and from the clear paths — a supervised PR is unlabelled for its whole life until the wave reaches the merge step. The label exists in the repo (created for BUG-1197) and the identical command succeeded by hand at 14:26.
+
+  Fix:
+  1. Apply the hold at PR-open time for any supervised spec (drive/guided/operator/decide/unset), not only at merge execution: write the marker AND sync the label where the drain / aida pr create opens the PR.
+  2. sync_label must surface failure: capture stderr, log a warning naming the command, retry once, and record the outcome on the marker file (label: applied|failed); aida merge-hold list shows a "label" column and `aida merge-hold list --fix` re-syncs any marker whose label is missing.
+  3. A doctor check (or the tick) that flags open PRs with a marker but no label, and vice versa.
+
+  Acceptance:
+  - A drive-mode spec driven by the batch drain has the label on its PR within seconds of the PR opening (assert via gh pr view --json labels in the live test); merge-hold-gate reads FAIL until cleared.
+  - sync_label failure prints a warning with gh's stderr and marks the hold as label-unsynced; aida merge-hold list shows it; --fix repairs it.
+  - Unit test on the pure command builder stays; new test that a failed status yields the unsynced state rather than silence.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T21:26:03.945081691Z
+modified_at: 2026-09-18T21:26:03.945081691Z
+req_type: Bug
+tags:
+- forge
+- merge-hold
+- orchestrator
+- parent:EPIC-28
+- security
