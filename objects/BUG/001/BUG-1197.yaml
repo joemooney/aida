@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T04:57:37.253764166Z
+modified_at: 2026-09-18T04:58:10.802593693Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -144,6 +144,16 @@ comments:
     Acceptance: as in (3), plus `aida agent new claude --role requester` + MCP enabled cannot change any spec's status, queue, or relationships; the refusal text is identical on both surfaces."
   created_at: 2026-09-18T04:57:37.009260987Z
   modified_at: 2026-09-18T04:57:37.009260987Z
+- id: 01a0b2e1-14f3-71c2-9577-964c14de4915
+  author: joe
+  content: |-
+    [rework round 4] PR #1913 — the security substance is now correct (advisor gate APPROVED r3 in .aida/review-verdicts/PR-1913-advisor-r3.json); the drain reviewer (PR-1913.json) requested two PARITY items the BUG-1197 acceptance asks for, and the advisor folds in a third so this is the last round. Fix all three in the SAME PR; add "(BUG-1211)" to the commit trailer alongside (BUG-1197) so both close on merge:
+    1. Refusal-text parity: stakeholder_mcp_action_label defaults denied MCP tools to "writes" while the CLI stakeholder_action_label says "database writes" / other operation-specific labels for the equivalent command. Share ONE label function across transports (map MCP tool → the same StakeholderAction label the CLI uses: db_sync → "database writes", session_* → "session writes", role_* → "role writes", queue_* → "queue operations", add_relationship → "relationship writes", add_comment → "comment writes", update_requirement → "editing requirements", add_requirement → "adding requirements") so the refusal string is byte-identical on both surfaces for the same operation.
+    2. A REAL parity test: the current stakeholder_mcp_policy_covers_every_descriptor_via_shared_actions compares the MCP decision to the shared action it was derived from (tautological). Add a table of (CLI argv, MCP tool) pairs — e.g. (["aida","db","sync"], "db_sync"), (["aida","session","start","--owns","X"], "session_start"), (["aida","role","enter","advisor"], "role_enter"), (["aida","queue","add","X"], "queue_add"), (["aida","edit","X","--title","y"], "update_requirement"), (["aida","list"], "list_requirements"), (["aida","mcp-serve"], none) — and for guest AND requester assert the allow/refuse decision matches and, when refused, the refusal text is identical.
+    3. BUG-1211 (folded in): the CLI requester Add arm still accepts --parent / --feature / --owner, which link the Draft to an existing spec (a relationship write) — the exact hole r3 closed on MCP. Refuse them in the CLI arm with the same text ("setting parent, feature, or owner during intake"), share the field list as one const with mcp.rs constrain_requester_intake, and add the CLI test next to guest_refuses_db_sync (requester `aida add --type bug --parent X` refused; plain `aida add --type bug` still lands Draft + intake:requester).
+    Finish with aida queue done BUG-1197.
+  created_at: 2026-09-18T04:58:10.547707509Z
+  modified_at: 2026-09-18T04:58:10.547707509Z
 execution_mode: drive
 implementation_info:
   implemented: true
