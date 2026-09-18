@@ -1,0 +1,18 @@
+id: 01a0b6bf-7c91-70a3-86a2-af570fb16c29
+spec_id: BUG-1241
+agreed_id: BUG-1241
+title: CLAUDE.md's batch-tag example uses aida edit --tags, which REPLACES the tag set — 13 specs lost their parent:/lane tags in one day; make batch tagging non-destructive and warn on tag loss
+description: 'Observed 2026-09-18: the product seat tagged drain waves all day with aida edit <id> --tags batch:followups-0918d/e/f, exactly as CLAUDE.md''s Batch tags paragraph says (set via aida edit <id> --tags batch:NAME). --tags replaces the existing tag set (its own help says so; --add-tag/--remove-tag are the partial edits), so 13 specs (BUG-1222, BUG-1224, BUG-1226, BUG-1227, BUG-1229, BUG-1230, BUG-1233, SPIKE-82, STORY-1221, TASK-1271, TASK-1276, TASK-1278, TASK-1-140) lost every other tag including parent:EPIC-68 / parent:EPIC-28 / parent:EPIC-62 links, drain-safe, lane and severity tags. Restored from the store history by union. Fix: (1) CLAUDE.md and docs/autonomous-drain.md examples use --add-tag batch:NAME; (2) aida edit --tags refuses (or asks at a TTY / warns headless) when the new set DROPS a parent:* or batch:* tag unless --replace-tags is passed; (3) a first-class aida batch add <NAME> <ids...> / aida queue add --batch NAME that only adds the tag, so a wave never needs the raw flag; (4) aida doctor check for specs whose parent:* tag vanished in the last N days (git log diff), since epic rollups silently break. Acceptance: the documented batch example is additive; --tags that drops a parent:* tag warns and needs --replace-tags; the doctor check lists the 13 ids from this incident on a fixture.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T22:59:57.713122119Z
+modified_at: 2026-09-18T22:59:57.713122119Z
+req_type: Bug
+tags:
+- cli
+- data-loss
+- docs
+- papercut
+- tag-conventions
