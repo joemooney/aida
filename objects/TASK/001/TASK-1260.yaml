@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:54:17.365890248Z
-modified_at: 2026-09-18T03:17:20.333670469Z
+modified_at: 2026-09-18T03:24:21.048957120Z
 req_type: Task
 tags:
 - architecture
@@ -52,6 +52,11 @@ comments:
     Summary: Documentation is accurate in substance but contains one identity-precedence error and one broken repository link.
   created_at: 2026-09-18T03:17:20.088585247Z
   modified_at: 2026-09-18T03:17:20.088585247Z
+- id: 01a0b28b-2dbb-7873-8ad5-a5caaadde5ed
+  author: joe
+  content: '[rework] PR #1909 RequestChanges (drain reviewer; both findings verified by the advisor): (1) docs/architecture/roles-seats-and-personas.md user-ID resolution omits the USERNAME fallback — the code (identity_guard.rs, and CLAUDE.md''s Queue identity section) is --user → AIDA_USER → USER → USERNAME (Windows) → default; fix the prose and the table row. (2) aida-core/templates/.aida/discipline/machinery-glossary.md links the identity model as a site-root URL (/docs/architecture/…) which leaves the repo on GitHub and is wrong once scaffolded into a downstream project''s .aida/discipline/; use a plain "docs/architecture/roles-seats-and-personas.md (in the AIDA repo)" reference or the repo URL, not a root-relative path — the glossary is copied into other projects. Push the fixups to the #1909 head branch; finish with aida queue done TASK-1260.'
+  created_at: 2026-09-18T03:24:20.795898135Z
+  modified_at: 2026-09-18T03:24:20.795898135Z
 execution_mode: drain
 implementation_info:
   implemented: true
