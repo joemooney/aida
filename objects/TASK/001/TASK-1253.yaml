@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:36:08.287031939Z
+modified_at: 2026-09-18T01:46:32.301146291Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -28,6 +28,11 @@ tags:
 - merge-lock
 - pr-ship
 - ux-signal
+relationships:
+- rel_type: !Custom implemented-by
+  target_id: 01a0b231-8dd1-78d2-928a-0a4858dfd56f
+  created_at: 2026-09-18T01:46:32.301141043Z
+  created_by: joe
 comments:
 - id: 01a0b227-84e2-74e3-a4dd-aa229926509e
   author: joe
