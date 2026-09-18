@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:59:57.713122119Z
-modified_at: 2026-09-18T23:02:39.735146288Z
+modified_at: 2026-09-18T23:02:40.811656209Z
 req_type: Bug
 tags:
 - cli
@@ -18,4 +18,11 @@ tags:
 - papercut
 - tag-conventions
 - tags
+comments:
+- id: 01a0b6c1-f9ab-7bd1-b783-bfc10299f5dd
+  author: joe
+  content: '[advisor:groom] Approved, high, DRAIN. Docs half is PR #1949 (round 1 requested: keep CLAUDE.md/glossary edits, revert the two dated docs/plans hunks — one of them rewrote a list FILTER into a non-existent flag). Code half for the drain: aida edit --tags must not silently drop structural tags — when the replacement set would remove any parent:*, batch:*, lane/severity/lifecycle:* or aida:* tag, refuse with the dropped list and the --add-tag/--remove-tag fix (or --force to replace anyway, recorded in the commit subject); aida doctor gains a check for specs whose parent relationship exists but whose parent:* tag is missing (and vice versa) with --heal to re-add the tag. Tests: the refuse path, the --force path, and the doctor check. Restored tags on the 13 specs were spot-checked by the advisor.'
+  created_at: 2026-09-18T23:02:40.811656209Z
+  modified_at: 2026-09-18T23:02:40.811656209Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
