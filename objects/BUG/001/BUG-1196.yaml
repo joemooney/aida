@@ -21,12 +21,12 @@ description: |-
   - `aida role enter` picker: choosing guest/requester never errors; the shell ends up with AIDA_SESSION_ROLE set to the persona (A) or the persona is not selectable (B).
   - `aida role enter requester` (explicit) behaves the same way; the error/help for a genuinely unknown name is unchanged.
   - Unit test on the picker's row source: personas are either tagged as persona rows or absent.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:45:09.335172014Z
-modified_at: 2026-09-18T03:16:28.563906676Z
+modified_at: 2026-09-18T03:23:37.903930417Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -37,3 +37,7 @@ tags:
 - role
 - ux-signal
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-18T03:23:37.903930417Z
+  implemented_by: joe
