@@ -17,7 +17,7 @@ description: |-
   4. Interim mitigation (docs + launch guidance, TASK-1261): a persona launch should tell the session to decline the MCP server, or agent new should pass a settings overlay that disables .mcp.json for persona launches until (1) lands.
 
   Acceptance: as in (3), plus `aida agent new claude --role requester` + MCP enabled cannot change any spec's status, queue, or relationships; the refusal text is identical on both surfaces.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
