@@ -1,0 +1,16 @@
+{
+  "id": "018863c1-d82b-482c-be8c-297992efbd01",
+  "thread_id": "018863c1-d82b-482c-be8c-297992efbd01",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789751815868,
+  "body": "Subject: PR #1932 ready for review (TASK-1254) + STORY-1216 stacked\n\nPR #1932 (TASK-1254 live GitLab drain validation) is ready for your review — CI green on all five commits.\n\nWhat it carries: the .gitlab-ci.yml gate wiring for the mirror, plus four fixes the live run surfaced: headless GitLab CI watch not blocking (TASK-1254), auto-queue-review hard-coding GitHub (BUG-1223), hostname-derived node name > 32 chars breaking aida init in the runner (BUG-1225), and a second forge detector that only knew gitlab.com so the reviewer fetched refs/pull/N/head (BUG-1228). Each has a pure helper + unit test and was verified live on the mirror (details in the PR body and as comments on TASK-1254).\n\nNot mine to merge (independence). Checks 1-5 of TASK-1254 are all verified; the drain's reviewer→merge→pull→build phases on the mirror are still running and do not block the PR.\n\nStacked behind it: branch story-1216 (STORY-1216, prebuilt builder image + persistent /builds + /ci-cache for incremental mirror builds, nextest) — Joe asked for it first; its mirror MR !3 is on its first cold run. I will open its GitHub PR against main once #1932 lands, since it rewrites the same CI file.\n\nFollow-ups filed from the run, for your disposition: BUG-1222, BUG-1224, BUG-1226, BUG-1227, BUG-1229 (high: store writes on a detached mid-rebase HEAD are silently lost), BUG-1230, STORY-1216.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,16 @@
+{
+  "id": "c7d2ea9b-8e32-4cb0-8494-e88cc044043a",
+  "thread_id": "c7d2ea9b-8e32-4cb0-8494-e88cc044043a",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789753101882,
+  "body": "Subject: correction on PR #1932 CI status\n\nCorrection to my earlier note: GitHub had not synced the PR head for the last two commits (BUG-1228 fix 56c2715dd3 and the review-round fix 78ec299dd1), so the \"CI green\" I reported covered only the first four. I have nudged the PR (empty commit) so CI runs on the real head; please wait for Build (ubuntu-latest) to pass on the current tip before merging. Everything else in the earlier mail stands.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
