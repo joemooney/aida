@@ -6114,7 +6114,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 fn stakeholder_mcp_action(tool_name: &str) -> crate::StakeholderAction {
     if tool_name == "add_requirement" {
         crate::StakeholderAction::Intake
-    } else if tool_min_profile(tool_name) == McpProfile::ReadOnly {
+    } else if crate::stakeholder_mcp_read_allowed(tool_name) {
         crate::StakeholderAction::Read
     } else {
         crate::StakeholderAction::Write
@@ -11561,7 +11561,14 @@ mod tests {
             .collect();
         assert!(names.contains(&"list_requirements"));
         assert!(names.contains(&"show_requirement"));
-        for write in ["add_requirement", "update_requirement", "queue_add"] {
+        for write in [
+            "add_requirement",
+            "update_requirement",
+            "queue_add",
+            "db_sync",
+            "session_start",
+            "role_enter",
+        ] {
             assert!(!names.contains(&write), "guest advertised {write}");
             let result = server
                 .handle_tools_call(&json!(2), &json!({"name": write, "arguments": {}}))
@@ -11672,7 +11679,56 @@ mod tests {
             );
             assert_eq!(
                 stakeholder_tool_allowed("requester", name),
-                tool_min_profile(name) == McpProfile::ReadOnly || name == "add_requirement"
+                crate::stakeholder_mcp_read_allowed(name) || name == "add_requirement"
+            );
+        }
+
+        for read in [
+            "list_requirements",
+            "show_requirement",
+            "search_requirements",
+            "query_graph",
+            "list_features",
+            "history",
+            "read_inbox",
+            "list_punts",
+            "read_punt",
+            "list_findings",
+            "list_active_leases",
+            "list_directives",
+            "list_briefs",
+            "read_brief",
+            "queue_list",
+            "queue_next",
+            "queue_progress",
+            "cache_status",
+            "schema",
+            "status_unified",
+            "usage_query",
+            "plan_verify",
+            "plan_helpers",
+            "ultraplan_assemble",
+            "goal_derive",
+        ] {
+            assert!(
+                crate::stakeholder_mcp_read_allowed(read),
+                "missing read: {read}"
+            );
+        }
+        for write in [
+            "db_sync",
+            "fetch",
+            "pull",
+            "queue_work",
+            "session_start",
+            "session_end",
+            "session_manifest",
+            "role_enter",
+            "role_end",
+        ] {
+            assert!(
+                !crate::stakeholder_mcp_read_allowed(write),
+                "unsafe read: {write}"
             );
         }
     }
