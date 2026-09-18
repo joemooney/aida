@@ -26,14 +26,10 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T19:29:17.892625489Z
+modified_at: 2026-09-18T19:50:36.036521659Z
 req_type: Story
 tags:
-- agent-ux
-- context-budget
-- discipline
-- parent:EPIC-28
-- substrate-as-bouncer
+- batch:followups-0918e
 relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
