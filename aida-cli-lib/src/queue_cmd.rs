@@ -629,6 +629,22 @@ pub(crate) fn role_is_stakeholder_only(role: &str) -> bool {
     matches!(canonical_role_name(role).as_str(), "guest" | "requester")
 }
 
+// trace:TASK-1261 | ai:codex
+/// Launch guidance for least-privilege stakeholder personas. Kept here beside
+/// the persona classifier so every launcher presents the same capability
+/// envelope.
+pub(crate) fn stakeholder_persona_guidance(role: &str) -> Option<&'static str> {
+    match canonical_role_name(role).as_str() {
+        "guest" => Some(
+            "You are a least-privilege stakeholder persona, not a build seat. You may inspect the project with `aida why`, `aida list`, `aida status`, `aida graph`, `aida search`, and `aida digest`. Mutating, approval, queue, status-edit, merge, lease, and worktree operations are refused; the gate's hint directs you to ask an advisor. You do not hold a spec lease or implementation worktree.",
+        ),
+        "requester" => Some(
+            "You are a least-privilege stakeholder persona, not a build seat. You may inspect the project with `aida why`, `aida list`, `aida status`, `aida graph`, `aida search`, and `aida digest`. You may also file intake with `aida add --type change-request|bug|user`; it always lands Draft and is tagged `intake:requester` for an advisor's grooming pass. Other mutating, approval, queue, status-edit, merge, lease, and worktree operations are refused; the gate's hint directs you to file a Draft request or ask an advisor. Nothing you file is worked until an advisor approves and routes it.",
+        ),
+        _ => None,
+    }
+}
+
 // trace:STORY-1002 | ai:codex
 pub(crate) fn queue_mutation_destination_json(
     action: &str,

@@ -24925,6 +24925,32 @@ fn prepare_agent_launch(
     agent_type: &str,
     custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
+    // Persona launches never turn an optional `--spec` into ownership. They
+    // stay in the project checkout and carry no lease/worktree.
+    // trace:TASK-1261 | ai:codex
+    if role
+        .as_deref()
+        .is_some_and(queue_cmd::role_is_stakeholder_only)
+    {
+        let name = agent_registry::generate_or_validate_name(
+            project_root,
+            agent_type,
+            role.as_deref(),
+            custom_name.as_deref(),
+        )?;
+        ensure_agent_launch_cwd_not_git_metadata(project_root)?;
+        return Ok(AgentLaunchPlan {
+            project_root: project_root.to_path_buf(),
+            launch_cwd: project_root.to_path_buf(),
+            role,
+            role_instance: RoleInstanceKind::Driver,
+            current_spec: None,
+            name,
+            lease_id: None,
+            native_session_id: agent_native_session_id_for_new(agent_type),
+            resumed_from: None,
+        });
+    }
     match spec {
         Some(spec) => {
             if let Some(existing) = list_leases(project_root)
@@ -25377,6 +25403,9 @@ fn prepare_agent_launch_dry(
     custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
     let plan_role = role;
+    let persona = plan_role
+        .as_deref()
+        .is_some_and(queue_cmd::role_is_stakeholder_only);
     let role_instance = resolve_role_instance_for_launch(
         project_root,
         plan_role.as_deref(),
@@ -25395,7 +25424,8 @@ fn prepare_agent_launch_dry(
         launch_cwd: project_root.to_path_buf(),
         role: plan_role,
         role_instance,
-        current_spec: spec,
+        // Personas may discuss a supplied spec but never own it.
+        current_spec: if persona { None } else { spec },
         name,
         lease_id: None,
         native_session_id: agent_native_session_id_for_new(agent_type),
@@ -25693,6 +25723,9 @@ fn role_guidance_for(project_root: &std::path::Path, role: &str) -> String {
 /// machine's role files shadowing them.
 // trace:STORY-718 | ai:claude
 fn default_role_guidance(role: &str) -> String {
+    if let Some(guidance) = queue_cmd::stakeholder_persona_guidance(role) {
+        return guidance.to_string();
+    }
     match role {
         "advisor" | "dialog" => "You are advising the operator. Triage punts/findings, route implementation, clarify design forks, and avoid changing code unless explicitly asked.".to_string(),
         "implementer" => "You are implementing. Read the assigned spec/brief, work in the supervised worktree, keep changes bounded to acceptance, run relevant tests, commit with the spec trailer, and finish with `aida pr ship`.".to_string(),
@@ -29778,6 +29811,23 @@ fn session_start(
     // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
     // trace:BUG-75 | ai:claude
     let project_root = find_main_worktree_root()?;
+    // Stakeholder personas are conversations, not build seats. Launch them in
+    // the current checkout with the shared persona envelope and never create a
+    // spec worktree or lease. trace:TASK-1261 | ai:codex
+    if launch_claude
+        && launch_role
+            .as_deref()
+            .is_some_and(queue_cmd::role_is_stakeholder_only)
+    {
+        return session::new_session(
+            launch_title,
+            launch_permission_mode,
+            launch_role,
+            launch_name,
+            launch_contained,
+            launch_set_title,
+        );
+    }
     let invoking_root = find_project_root().unwrap_or_else(|_| project_root.clone());
     let invoked_from_linked_worktree = invoking_root
         .canonicalize()
