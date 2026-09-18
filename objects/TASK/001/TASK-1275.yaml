@@ -1,0 +1,28 @@
+id: 01a0b5ec-f6a7-7f30-9323-e3ebad715234
+spec_id: TASK-1275
+agreed_id: TASK-1275
+title: 'Spikes default to drive mode: groom and queue add never put a spike in an unattended drain; bulk-queue keeps excluding them; the rule lands in backlog-grooming.md'
+description: |-
+  Advisor decision 2026-09-18 (question raised while grooming SPIKE-82): may a spike ever be a drain candidate?
+
+  Rule: a spike is dispatchable to a headless implementer ONLY in drive mode (merge at the advisor's gate), and only when (a) its output is a report grounded in machine-readable evidence (events file, git log, telemetry, a benchmark) rather than a design recommendation, and (b) nothing downstream is built on its conclusions before an advisor has read them. Design/decision spikes (SPIKE-10 subsystem advisors, SPIKE-76 multivendor shape) stay at the keyboard: their value is the conversation, and a cold-boot model's recommendation flowing straight into an implementation is the failure the drive gate exists to stop. Bulk-queue (aida groom --apply) keeps excluding spikes entirely (.aida/discipline/backlog-grooming.md risk table).
+
+  Make the substrate the bouncer:
+  1. aida groom: a spike's proposed execution_mode is always drive (never drain), with the reasoning line saying so; --apply never queues a spike.
+  2. aida queue add <SPIKE> and aida do <SPIKE>: if the spec is a spike with execution_mode drain (or unset), refuse with the rule and the fix (aida edit <ID> --mode drive); --force overrides for the rare evidence-only spike an advisor wants to fully automate.
+  3. .aida/discipline/backlog-grooming.md (master under aida-core/templates/.aida/discipline/) gains a short "Spikes" paragraph with the two-part test above.
+  Acceptance: unit tests on the groom proposal (spike → drive) and the queue-add refusal + --force path; discipline master updated and scaffolded copy in sync; no change to non-spike behaviour.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-18T19:10:00.871774996Z
+modified_at: 2026-09-18T19:10:00.871774996Z
+req_type: Task
+tags:
+- discipline
+- drain-safe
+- groom
+- parent:EPIC-62
+- queue
+execution_mode: drain
