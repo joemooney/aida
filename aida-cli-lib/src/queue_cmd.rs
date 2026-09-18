@@ -7984,6 +7984,21 @@ pub(crate) fn derive_queue_work_prompt(
     guided: bool,
     review_findings: Option<&str>,
 ) -> String {
+    // Tests and non-rework callers: the first rework is round 2 by definition.
+    derive_queue_work_prompt_with_round(plan, role, plan_only, guided, review_findings, 2)
+}
+
+// BUG-1213: the real re-drive round is derived from the spec's durable
+/// history (one recorded findings block per rework) by the production caller.
+// trace:BUG-1213 | ai:claude
+pub(crate) fn derive_queue_work_prompt_with_round(
+    plan: &QueueWorkPlan,
+    role: &str,
+    plan_only: bool,
+    guided: bool,
+    review_findings: Option<&str>,
+    rework_round: usize,
+) -> String {
     let role_lower = role.to_ascii_lowercase();
     // Agent gates wear a custom role but must still produce a review verdict
     // for the orchestrator, so they reuse the review skill with a tighter
@@ -8026,7 +8041,7 @@ pub(crate) fn derive_queue_work_prompt(
     if plan.mode == QueueWorkMode::Item {
         let pickup = format!("/aida-pickup {}", plan.anchor_display);
         if let Some(findings) = review_findings {
-            return rework_pickup_prompt(findings, &pickup, 2);
+            return rework_pickup_prompt(findings, &pickup, rework_round);
         }
         return pickup;
     }
@@ -8034,7 +8049,7 @@ pub(crate) fn derive_queue_work_prompt(
     // pre-flight; pass --auto-first so the skill skips its own confirm.
     let pickup = "/aida-pickup --auto-first".to_string();
     if let Some(findings) = review_findings {
-        return rework_pickup_prompt(findings, &pickup, 2);
+        return rework_pickup_prompt(findings, &pickup, rework_round);
     }
     pickup
 }
@@ -8048,6 +8063,18 @@ pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&
         .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
         .max_by_key(|c| c.created_at)
         .map(|c| c.content.as_str())
+}
+
+// BUG-1213: the rework round a pickup is entering: the original
+/// implementation is round 1, and every recorded findings block (one per
+/// `queue rework`) opens the next round — so N recorded blocks ⇒ round N+1.
+// trace:BUG-1213 | ai:claude
+pub(crate) fn rework_round_from_comments(comments: &[aida_core::Comment]) -> usize {
+    let recorded = comments
+        .iter()
+        .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
+        .count();
+    recorded.max(1) + 1
 }
 
 // BUG-1213: do this round's findings repeat the immediately previous round's
@@ -8605,8 +8632,37 @@ pub(crate) fn handle_queue_work(
             })
         })
         .flatten();
-    let mut prompt =
-        derive_queue_work_prompt(&plan, &role, plan_only, guided, review_findings.as_deref());
+    // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
+    // the spec's recorded findings blocks (one per `queue rework`), not a
+    // constant. trace:BUG-1213 | ai:claude
+    let rework_round = if review_findings.is_some() {
+        let spec_id = plan
+            .entries
+            .first()
+            .map(|entry| entry.spec_id.as_str())
+            .unwrap_or(plan.anchor_display.as_str());
+        storage
+            .load()
+            .ok()
+            .and_then(|store| {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| spec_matches(r, spec_id))
+                    .map(|r| rework_round_from_comments(&r.comments))
+            })
+            .unwrap_or(2)
+    } else {
+        2
+    };
+    let mut prompt = derive_queue_work_prompt_with_round(
+        &plan,
+        &role,
+        plan_only,
+        guided,
+        review_findings.as_deref(),
+        rework_round,
+    );
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
     if role.eq_ignore_ascii_case("reviewer") {

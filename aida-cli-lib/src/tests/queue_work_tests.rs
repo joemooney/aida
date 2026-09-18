@@ -47,6 +47,48 @@ fn findings_recur_only_when_the_last_block_is_identical() {
     assert!(!findings_recur_consecutively(&[mk(&a, 9), mk(&b, 1)], &b));
 }
 
+/// BUG-1213 (round 3): the production pickup derives the round from the
+/// spec's recorded findings blocks — a later re-drive says its ACTUAL round,
+/// not a constant ROUND 2.
+// trace:BUG-1213 | ai:claude
+#[test]
+fn rework_pickup_round_is_derived_from_recorded_findings_blocks() {
+    use crate::queue_cmd::{derive_queue_work_prompt_with_round, rework_round_from_comments};
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let block = |n: usize| format!("{prefix}PR #9):\nVerdict: RequestChanges\n- item {n}");
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+    // No findings recorded yet (first rework about to be queued) → round 2.
+    assert_eq!(rework_round_from_comments(&[]), 2);
+    // One recorded block → the pickup after it is round 2; two → round 3.
+    assert_eq!(rework_round_from_comments(&[mk(block(1))]), 2);
+    let two = vec![
+        mk(block(1)),
+        mk("[aida:proxy-note] chatter".into()),
+        mk(block(2)),
+    ];
+    assert_eq!(rework_round_from_comments(&two), 3);
+    let e = resolved("BUG-1213", entry(Uuid::now_v7(), Some("implementer"), None));
+    let plan = QueueWorkPlan {
+        mode: QueueWorkMode::Item,
+        entries: vec![e],
+        scope: "BUG-1213".into(),
+        review_target: None,
+        anchor_display: "BUG-1213".into(),
+        anchor_title: "title".into(),
+    };
+    let findings = block(2);
+    let prompt = derive_queue_work_prompt_with_round(
+        &plan,
+        "implementer",
+        false,
+        false,
+        Some(&findings),
+        rework_round_from_comments(&two),
+    );
+    assert!(prompt.starts_with("ROUND 3 — ITEMS STILL OPEN"), "{prompt}");
+    assert!(prompt.ends_with("/aida-pickup BUG-1213"), "{prompt}");
+}
+
 // trace:BUG-1213 | ai:codex
 #[test]
 fn rework_prompt_leads_with_round_and_authoritative_open_items() {
