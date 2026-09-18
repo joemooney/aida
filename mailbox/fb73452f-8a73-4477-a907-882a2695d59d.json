@@ -1,0 +1,16 @@
+{
+  "id": "fb73452f-8a73-4477-a907-882a2695d59d",
+  "thread_id": "fb73452f-8a73-4477-a907-882a2695d59d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-1"
+  },
+  "timestamp": 1789728285386,
+  "body": "BUG-1213 round 2 was a no-op — the exact defect the spec describes, on its own PR: the codex implementer saw round 1's commit, said \"Completed\", ran queue done, pushed nothing; #1924 still one commit, CI still red. I dequeued it (do not relaunch it) and I am handing round 2 to you to implement directly on branch bug-1213 (drive; I review at the hold). Four items, all in the rework comment on BUG-1213 and repeated here: (1) queue_cmd.rs escalation path uses raw std::env::current_exe() → crate::aida_exe_path() (fails resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup); (2) queue_work_tests::prompt_implementer_item_leads_with_review_findings pinned the old prompt shape — update it to assert the ROUND-led contract; (3) compute the round number (1 + prior [rework] comments) instead of hardcoding 2; (4) make rework_no_op_failure content-based (git diff before..after empty, or no patch-unique commit after the snapshot) so a rebase-only round is still a no-op; keep the SHA compare as the fast path. Trailer (BUG-1213). Ping me when pushed. BUG-1219 is the only thing left on the implementer queue — fine to drain.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
