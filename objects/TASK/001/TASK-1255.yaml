@@ -2,13 +2,25 @@ id: 01a0b09a-4dae-7683-a834-20d4dc91b564
 spec_id: TASK-1255
 agreed_id: TASK-1255
 title: 'Cosmetic follow-ups from the advisor review of #1894/#1895/#1897: duplicated #[test] attribute, HarvestGate doc-comment misattribution, reconstitute scratch-dir GC'
-description: ''
+description: |-
+  Three non-blocking nits noted during the independent advisor review on 2026-09-17; fix together as one small PR.
+
+  1. aida-cli-lib/src/forge.rs (from #1894 / STORY-1166): the test glab_registration_and_job_rows_map_to_forge_neutral_shapes carries TWO #[test] attributes (one above the comment line, one below). Remove the stray one.
+
+  2. aida-cli-lib/src/harvest.rs (from #1897 / TASK-1249): the /// doc comment "[harvest] config — the calibration surface for the selectivity filter. Strict by default (anti-slop); loosen on evidence." now sits above the new HarvestGate enum (a // TASK-1249 line was inserted between it and HarvestConfig), so rustdoc attaches it to the wrong item. Move it back onto HarvestConfig and give HarvestGate its own one-liner.
+
+  3. aida-cli-lib/src/reconstitute.rs (from #1895 / TASK-1248): every run creates ~/.aida/reconstitute/<spec>-<uuid>/ (regenerated.json + matches.json) and nothing removes it. Add a bounded GC: keep the newest N (default 20) per machine or delete runs older than 7 days at the start of each probe, and mention the location + retention in the aida reconstitute manual entry. Same consideration for .aida/harvest/*.json candidates files (gitignored; probably fine to keep — note the decision in the manual either way).
+
+  Acceptance: cargo test -p aida-cli-lib --lib green; rustdoc for HarvestConfig/HarvestGate reads correctly; a probe run leaves at most N scratch dirs behind; manual updated.
+
+  ## Acceptance
+  - AC1. Scratch-run pruning applies both retention bounds: it removes run directories older than seven days and, among the rest, retains only the newest entries needed to keep the machine-wide total at 20 after the new probe directory is created.
 status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T18:21:37.582451279Z
-modified_at: 2026-09-18T01:34:50.068475893Z
+modified_at: 2026-09-18T01:35:39.640738590Z
 req_type: Task
 tags:
 - batch:followups-0917
