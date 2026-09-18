@@ -21,12 +21,12 @@ description: |-
   - Glossary has seat + stakeholder persona entries; aida memories check / scaffold refresh pick them up (template change only).
   - TERM-N specs exist for both terms with the Related links.
   - aida plan verify style check: every file/symbol the page cites exists (permissions.rs persona gate, role_is_stakeholder_only, role_cmd.rs picker).
-status: Done
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:54:17.365890248Z
-modified_at: 2026-09-18T03:16:21.050626865Z
+modified_at: 2026-09-18T03:17:18.722570975Z
 req_type: Task
 tags:
 - architecture
