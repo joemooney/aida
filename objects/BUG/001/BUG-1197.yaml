@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T00:58:55.816510526Z
-modified_at: 2026-09-18T05:44:40.036333467Z
+modified_at: 2026-09-18T05:44:52.534035462Z
 req_type: Bug
 tags:
 - batch:followups-0917
@@ -191,6 +191,17 @@ comments:
     merged: 2026-09-17 22:45 -07:00 → main e8c29cf518; spec auto-bumped Completed
   created_at: 2026-09-18T05:44:40.036333467Z
   modified_at: 2026-09-18T05:44:40.036333467Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b30b-d636-7b03-ad3b-d4ec279f1ef2
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: Stakeholder MCP authorization is enforced both by removing forbidden tools from tools/list and by returning permission_denied when a known forbidden tool is called directly, including from a previously cached descriptor set.
+    rationale: The requirement permits either omission or refusal; the implementation establishes both discovery-time narrowing and an independent call-time boundary, which is externally observable and materially stronger.
+    source: file:bug-1197-drain-01a0b308-6402-7aa1-8316-5d5994ee2e9b.json
+    confidence: 0.96
+  created_at: 2026-09-18T05:44:52.534035462Z
+  modified_at: 2026-09-18T05:44:52.534035462Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b30a-6c62-7893-825a-1ebfe0e2ca76
