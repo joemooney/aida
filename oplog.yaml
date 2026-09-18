@@ -76568,5 +76568,17 @@ operations:
     req_type: Task
     status: Approved
     priority: Low
-clock: 5917
+- id: 01a0b497-9508-7672-a368-35f8d69942d0
+  target_id: 01a0b497-90f0-70b1-9246-c71a6762d3e8
+  author: aida
+  node_id: '1'
+  lamport: 5918
+  timestamp: 2026-09-18T12:57:08.104836709Z
+  kind: !Create
+    title: queue progress --batch and next[] hints name the --single-branch cluster command when the batch carries serialize verdicts
+    description: 'SPIKE-81 general recommendation (carrier 2): a completed capability survives its spec closing only if hints surface it. When aida queue progress --batch NAME (and aida show on a member) finds groom serialize verdicts among the batch members, print a next-step line with the exact cluster command (--single-branch, plus --sequential when order matters). Acceptance: a batch with at least one serialize verdict shows the hint; a batch without shows nothing new; snapshot test of the hint text.'
+    req_type: Task
+    status: Approved
+    priority: Low
+clock: 5918
 node_id: '1'
