@@ -859,6 +859,63 @@ mod task_1244_drain_merge_lease_tests {
 }
 
 #[cfg(test)]
+mod bug_1205_ci_phase_fallthrough_tests {
+    use super::*;
+
+    #[test]
+    fn headless_lease_conflict_is_decided_from_the_substrate() {
+        assert_eq!(
+            lease_conflict_decision(false, false),
+            LeaseConflictDecision::Prompt
+        );
+        assert_eq!(
+            lease_conflict_decision(false, true),
+            LeaseConflictDecision::Prompt
+        );
+        assert_eq!(
+            lease_conflict_decision(true, false),
+            LeaseConflictDecision::AutoEnd
+        );
+        assert_eq!(
+            lease_conflict_decision(true, true),
+            LeaseConflictDecision::Refuse
+        );
+    }
+
+    /// Source-shape guard: the CI phase's informational-only red must NOT
+    /// return early — it falls through to the shared post-probe steps (ending
+    /// the implementer session). Needles are split so this file cannot match
+    /// its own literals.
+    #[test]
+    fn informational_red_falls_through_to_the_green_steps() {
+        let src = include_str!("lib.rs");
+        let start = src
+            .find(concat!(
+                "fn finish_ci",
+                "(&mut self) -> Result<(), auto_complete::PhaseFailure>"
+            ))
+            .expect("finish_ci present");
+        let end = src[start..]
+            .find(concat!("    fn ", "run_reviewer("))
+            .map(|e| start + e)
+            .unwrap_or(src.len());
+        let body = &src[start..end];
+        let red_arm = body.find(concat!("CiProbe::", "Red {")).expect("Red arm");
+        let not_failure = body[red_arm..]
+            .find(concat!("is not a ", "failure"))
+            .map(|i| red_arm + i)
+            .expect("not-a-failure note");
+        let window = &body[not_failure..not_failure + 400];
+        assert!(
+            !window.contains(concat!("return ", "Ok(())")),
+            "early return is back"
+        );
+        assert!(body.contains(concat!("let refined_", "green")));
+        assert!(body.contains(concat!("self.end_implementer_", "session()")));
+    }
+}
+
+#[cfg(test)]
 mod bug_1195_review_story_lookup_tests {
     use super::*;
 
@@ -28050,6 +28107,27 @@ fn collect_ancestor_store(
 /// work while its holder is live — a dead/stale claim is ignored by every gate
 /// (no crash-deadlock).
 // trace:BUG-637 | ai:claude
+// BUG-1205: what to do when a PR's source branch is held by another lease.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LeaseConflictDecision {
+    /// A human is at the keyboard — offer the four options.
+    Prompt,
+    /// Headless and the lease's session is gone — end it and continue.
+    AutoEnd,
+    /// Headless and the lease is LIVE — refuse with a typed message.
+    Refuse,
+}
+
+// BUG-1205: pure decision for the lease-held pre-flight in `session_start`.
+// trace:BUG-1205 | ai:claude
+pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> LeaseConflictDecision {
+    match (headless, lease_live) {
+        (false, _) => LeaseConflictDecision::Prompt,
+        (true, false) => LeaseConflictDecision::AutoEnd,
+        (true, true) => LeaseConflictDecision::Refuse,
+    }
+}
+
 fn lease_is_live<'a>(
     live_sessions: &'a [process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
@@ -30110,80 +30188,130 @@ fn session_start(
                 .collect();
             if !conflicting.is_empty() {
                 let l = &conflicting[0];
-                eprintln!();
-                eprintln!(
-                    "{} PR-{}'s source branch `{}` is held by lease {}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    n,
-                    source_branch.yellow(),
-                    l.id.yellow()
-                );
-                eprintln!("    role:     {}", l.role.as_deref().unwrap_or("(unset)"));
-                eprintln!("    worktree: {}", l.worktree_path.display());
-                eprintln!();
-                eprintln!(
-                    "    Any `gh pr checkout {}` from the new session will fail with \
+                // BUG-1205: there is nobody to answer the prompt under a
+                // headless drain (or any non-TTY caller). Decide from the
+                // substrate: a lease whose owning process is gone is ended
+                // automatically (the option a human would pick); a LIVE lease
+                // refuses with a typed message instead of a silent cancel.
+                // trace:BUG-1205 | ai:claude
+                let headless = std::env::var_os("AIDA_HEADLESS").is_some()
+                    || !std::io::IsTerminal::is_terminal(&std::io::stdin());
+                let live_sessions = process_probe::probe_live_claude_sessions();
+                let is_live = lease_is_live(&live_sessions, chrono::Utc::now())(l);
+                let decision = lease_conflict_decision(headless, is_live);
+                match decision {
+                    LeaseConflictDecision::AutoEnd => {
+                        eprintln!(
+                            "{} PR-{}'s source branch `{}` is held by lease {} whose session has exited — ending it so the review can check out the branch",
+                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                            n,
+                            source_branch,
+                            l.id
+                        );
+                        let ended = std::process::Command::new(crate::aida_exe_path())
+                            .current_dir(&project_root)
+                            .args(["session", "end", &l.id, "--yes", "--skip-ci"])
+                            .stdin(std::process::Stdio::null())
+                            .status()
+                            .map(|st| st.success())
+                            .unwrap_or(false);
+                        if !ended {
+                            anyhow::bail!(
+                                "could not end dead lease {} holding `{}` — run `aida session end {} --force` and retry",
+                                l.id,
+                                source_branch,
+                                l.id
+                            );
+                        }
+                    }
+                    LeaseConflictDecision::Refuse => {
+                        anyhow::bail!(
+                            "PR-{}'s source branch `{}` is held by LIVE lease {} ({}, worktree {}) and there is no terminal to choose an action — end that session or wait for it, then retry",
+                            n,
+                            source_branch,
+                            l.id,
+                            l.role.as_deref().unwrap_or("(unset)"),
+                            l.worktree_path.display()
+                        );
+                    }
+                    LeaseConflictDecision::Prompt => {}
+                }
+                if decision != LeaseConflictDecision::AutoEnd {
+                    eprintln!();
+                    eprintln!(
+                        "{} PR-{}'s source branch `{}` is held by lease {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        n,
+                        source_branch.yellow(),
+                        l.id.yellow()
+                    );
+                    eprintln!("    role:     {}", l.role.as_deref().unwrap_or("(unset)"));
+                    eprintln!("    worktree: {}", l.worktree_path.display());
+                    eprintln!();
+                    eprintln!(
+                        "    Any `gh pr checkout {}` from the new session will fail with \
                      `branch already used by worktree`.",
-                    n
-                );
-                eprintln!();
-                eprintln!("    Options:");
-                eprintln!("      1. End that session: `aida session end {}`", l.id);
-                eprintln!(
+                        n
+                    );
+                    eprintln!();
+                    eprintln!("    Options:");
+                    eprintln!("      1. End that session: `aida session end {}`", l.id);
+                    eprintln!(
                     "      2. Force-end (kills any live claude there): `aida session end {} --force`",
                     l.id
                 );
-                eprintln!("      3. Proceed anyway (auto-checkout will need manual fixup)");
-                eprintln!("      4. Cancel — let me handle it manually (no changes made)");
-                eprintln!();
-                use std::io::Write;
-                eprint!("    Choice [1/2/3/4, Ctrl+C or empty to cancel]: ");
-                let _ = std::io::stderr().flush();
-                let mut ans = String::new();
-                // TASK-34: treat read_line errors (Ctrl+D / closed stdin) as
-                // a cancel rather than bubbling up an unrelated I/O error.
-                // trace:TASK-34 | ai:claude
-                let read = std::io::stdin().read_line(&mut ans);
-                let cancel_clean = || -> ! {
+                    eprintln!("      3. Proceed anyway (auto-checkout will need manual fixup)");
+                    eprintln!("      4. Cancel — let me handle it manually (no changes made)");
                     eprintln!();
-                    eprintln!(
-                        "{} cancelled — no changes made; re-run when ready.",
-                        crate::glyph(crate::glyphs::Glyph::Check).dimmed()
-                    );
-                    std::process::exit(1);
-                };
-                if read.is_err() {
-                    cancel_clean();
-                }
-                match ans.trim() {
-                    "1" => {
-                        anyhow::bail!(
+                    use std::io::Write;
+                    eprint!("    Choice [1/2/3/4, Ctrl+C or empty to cancel]: ");
+                    let _ = std::io::stderr().flush();
+                    let mut ans = String::new();
+                    // TASK-34: treat read_line errors (Ctrl+D / closed stdin) as
+                    // a cancel rather than bubbling up an unrelated I/O error.
+                    // trace:TASK-34 | ai:claude
+                    let read = std::io::stdin().read_line(&mut ans);
+                    let cancel_clean = || -> ! {
+                        eprintln!();
+                        eprintln!(
+                            "{} cancelled — no changes made; re-run when ready.",
+                            crate::glyph(crate::glyphs::Glyph::Check).dimmed()
+                        );
+                        std::process::exit(1);
+                    };
+                    if read.is_err() {
+                        cancel_clean();
+                    }
+                    match ans.trim() {
+                        "1" => {
+                            anyhow::bail!(
                             "stopping so you can `aida session end {}`; re-run this command after",
                             l.id
                         );
-                    }
-                    "2" => {
-                        anyhow::bail!(
+                        }
+                        "2" => {
+                            anyhow::bail!(
                             "stopping; run `aida session end {} --force` then re-run this command",
                             l.id
                         );
-                    }
-                    "3" => {
-                        eprintln!(
+                        }
+                        "3" => {
+                            eprintln!(
                             "{} proceeding — `gh pr checkout {}` from the new session will need manual fixup",
                             "→".dimmed(),
                             n
                         );
-                    }
-                    // TASK-34: cancel path — accepts the explicit `4`, plus
-                    // empty input / q / x as common "get me out of here"
-                    // signals. Spec calls for exit 1 with no state changes.
-                    // trace:TASK-34 | ai:claude
-                    "4" | "" | "q" | "Q" | "x" | "X" | "cancel" | "Cancel" => {
-                        cancel_clean();
-                    }
-                    other => {
-                        anyhow::bail!("unrecognized choice {:?} — aborting", other);
+                        }
+                        // TASK-34: cancel path — accepts the explicit `4`, plus
+                        // empty input / q / x as common "get me out of here"
+                        // signals. Spec calls for exit 1 with no state changes.
+                        // trace:TASK-34 | ai:claude
+                        "4" | "" | "q" | "Q" | "x" | "X" | "cancel" | "Cancel" => {
+                            cancel_clean();
+                        }
+                        other => {
+                            anyhow::bail!("unrecognized choice {:?} — aborting", other);
+                        }
                     }
                 }
             }
@@ -84859,7 +84987,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // and shelve CiRed only for a REAL failing check. GitHub only;
                 // other forges keep the coarse verdict.
                 // trace:BUG-1180 | ai:claude
-                {
+                //
+                // BUG-1205: an informational-only red is treated EXACTLY like
+                // Green — it must fall through to the shared post-probe steps
+                // (end the implementer session, auto-queue the review, …).
+                // Returning early here left the implementer lease held and the
+                // headless reviewer died on the "branch held by lease" prompt.
+                // trace:BUG-1205 | ai:claude
+                let refined_green = {
                     let hold_present =
                         merge_hold::read_hold(&self.project_root, pr_number as u64).is_some();
                     let refine_change = crate::forge::ChangeRef {
@@ -84885,7 +85020,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                     r.describe(pr_number as u64),
                                 );
                             }
-                            return Ok(());
+                            true
                         }
                         Ok(r) if !r.is_real() => {
                             self.ci_run_id = latest_run_id_for_branch(&branch);
@@ -84907,14 +85042,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 ),
                             ));
                         }
-                        Err(_) => {} // no per-check rows on this forge — coarse verdict
+                        Err(_) => false, // no per-check rows on this forge — coarse verdict
                     }
+                };
+                if !refined_green {
+                    self.ci_run_id = latest_run_id_for_branch(&branch);
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::CiRed,
+                        format!("CI is red on PR-{pr_number}: {failed_summary}"),
+                    ));
                 }
-                self.ci_run_id = latest_run_id_for_branch(&branch);
-                return Err(auto_complete::PhaseFailure::of(
-                    auto_complete::FailureKind::CiRed,
-                    format!("CI is red on PR-{pr_number}: {failed_summary}"),
-                ));
+                // Treated as Green from here: the post-probe steps below run.
             }
             CiProbe::PrNoChecks { pr_number } => {
                 self.set_pr_number(pr_number);
