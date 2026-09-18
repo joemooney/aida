@@ -75433,5 +75433,24 @@ operations:
 
       ## Acceptance
       - AC512631. When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
-clock: 5845
+- id: 01a0b368-beef-7983-9c49-39bf6f2d61ec
+  target_id: 01a0b368-b826-71e3-8488-6c28257ff97e
+  author: aida
+  node_id: '1'
+  lamport: 5846
+  timestamp: 2026-09-18T07:26:21.423402004Z
+  kind: !Create
+    title: harvest next_ac_label treats content-hash criterion labels (ac<6-hex>) as numbers — a spec with unlabeled acceptance bullets gets a harvested AC named like BUG-1209.AC512631 instead of AC1
+    description: |-
+      Observed 2026-09-18 00:26: `aida harvest BUG-1209 --from <drain file> --yes-all` landed the confirmed criterion as BUG-1209.AC512631. BUG-1209's ## Acceptance bullets were unlabeled, so parse_acceptance_criteria gives them content-hash ids (ac<6-hex>, e.g. ac512630). harvest::next_ac_label computes "one past the highest existing number" by taking every label, skipping leading non-digits and parsing the rest as u32 — for a hash label like ac512630 that yields 512630, so the next explicit label became AC512631. Cosmetic but ugly and it poisons every later harvest on that spec (the next one will be AC512632…), and it makes trace:SPEC.ACn comments unreadable.
+
+      Fix: in next_ac_label, ignore hash-style labels when computing the max — a label matches the hash form when it is `ac` + exactly 6 hex chars (case-insensitive) and is not of the form <letters><decimal digits> with the digits being the whole tail; simplest: only consider labels whose tail after the alphabetic prefix is all decimal digits AND whose prefix is not exactly "ac" with a 6-char hex tail. Add cases to next_ac_label_is_one_past_the_highest_and_never_collides: existing ["ac512630","acf00d1e"] → "AC1"; ["AC2","ac512630"] → "AC3". Optionally: `aida criteria` could show hash labels dimmed with a hint to label criteria explicitly.
+
+      Also fix BUG-1209's own label: rename BUG-1209.AC512631 → BUG-1209.AC1 in its ## Acceptance (no test traces it yet, so no trace comments to update).
+
+      Acceptance: the unit cases above pass; harvesting onto a spec with only hash-labeled criteria yields AC1; BUG-1209's criterion reads AC1.
+    req_type: Bug
+    status: Approved
+    priority: Low
+clock: 5846
 node_id: '1'
