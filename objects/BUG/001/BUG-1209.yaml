@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T07:08:46.956802025Z
+modified_at: 2026-09-18T07:22:06.051398901Z
 req_type: Bug
 tags:
 - aida:list
@@ -66,6 +66,21 @@ comments:
   content: 'Addressed PR #1917 review: empty human render paths now disclose explicit truncation, including --limit 0; added zero-limit regression assertions and manually verified the rebuilt CLI prints 0 of 15 open requirements. cargo fmt check and targeted 5-test suite pass.'
   created_at: 2026-09-18T07:08:46.956802025Z
   modified_at: 2026-09-18T07:08:46.956802025Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b364-d963-7280-a14e-5681d48b772a
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1917
+    agent: codex
+    ran-at: 2026-09-18 00:22 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1209-drain-01a0b364-7549-7303-a342-0cf21e16163f.json
+    ? AC (0.93) — When `aida list --limit 0` has matching requirements, human output retains `No requirements found.` and additionally prints a `0 of M open requirements` or `0 of M matched requirements` truncation footer; when the filtered query genuinely has no matches, no count footer is added.
+  created_at: 2026-09-18T07:22:06.051398901Z
+  modified_at: 2026-09-18T07:22:06.051398901Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
