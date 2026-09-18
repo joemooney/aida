@@ -4220,6 +4220,8 @@ fn run() -> Result<()> {
             // FR-283: the numeric weight is git-canonical only; the deprecated
             // centralized backend ignores it. trace:FR-283 | ai:claude
             weight: _,
+            // TASK-1267: execution modes are git-canonical only.
+            mode: _,
         } => {
             // TASK-725: positional title (`aida add "do X"`) — --title wins.
             let title = title.clone().or_else(|| title_positional.clone());
@@ -27517,23 +27519,18 @@ fn in_flight_lease_scopes(project_root: &std::path::Path) -> HashSet<String> {
     in_flight_lease_role_map(project_root).into_keys().collect()
 }
 
-// STORY-692: the filing convention for the two fasttrack tiers, in ONE place.
-// Returns `(batch_bucket, lane_tags)` for an `aida fasttrack` filing given the
-// `--express` flag. Kept side-effect-free so the tier invariant is unit-tested
-// without a store or queue:
-//   - trivial (default): `batch:fasttrack` + `lifecycle:no-review` (review
-//     skipped; CI still gates).
-//   - express (`--express`): `batch:express` + NO `lifecycle:*` tag — the full
-//     CI + reviewer + build gate runs (TASK-907 forces it for batch:express).
-//     Fast because reliably routed, not because less gated.
-// trace:STORY-692 | ai:claude — see docs/plans/2026-06-26-task-0438-fasttrack-lane.md
-fn fasttrack_lane_filing(express: bool) -> (String, Option<String>) {
+// TASK-1267: `--express` is a one-release compatibility alias for ordinary
+// mode=drain intake. It deliberately emits no batch:express or lifecycle tag.
+// The default fasttrack filing convention is unchanged.
+// trace:TASK-1267 | ai:codex
+fn fasttrack_lane_filing(express: bool) -> (Option<String>, Option<String>, Option<String>) {
     if express {
-        ("express".to_string(), None)
+        (None, None, Some("drain".to_string()))
     } else {
         (
-            "fasttrack".to_string(),
+            Some("fasttrack".to_string()),
             Some("lifecycle:no-review".to_string()),
+            None,
         )
     }
 }
@@ -27651,7 +27648,7 @@ fn project_fasttrack_stage(
 /// `aida fasttrack status` — the lane stage projection.
 ///
 /// Cache-fast: it reuses `backend.list_summaries` (the same projection
-/// `aida list` reads) for the `batch:fasttrack` and `batch:express` buckets, and
+/// `aida list` reads) for the current fasttrack and legacy express buckets, and
 /// the cheap queue-dir scan + live-lease probe + punt-ledger read the list view
 /// already uses for its routing glyphs — NOT the full-store `aida status` scan.
 // trace:TASK-905 | ai:claude
@@ -27670,6 +27667,7 @@ fn handle_fasttrack_status(
     let mut seen: HashSet<Uuid> = HashSet::new();
     for (bucket, tag) in [
         ("fasttrack", "batch:fasttrack"),
+        // trace:TASK-1267 | ai:codex — read-only legacy compatibility.
         ("express", "batch:express"),
     ] {
         let filter = aida_core::ListFilter {
@@ -27741,10 +27739,7 @@ fn handle_fasttrack_status(
     }
 
     if rows.is_empty() {
-        println!(
-            "{}",
-            "No fasttrack-lane items (batch:fasttrack / batch:express).".yellow()
-        );
+        println!("{}", "No fasttrack-lane items.".yellow());
         return Ok(());
     }
 
