@@ -31431,6 +31431,61 @@ fn branch_unshipped_patch_count_default(repo: &std::path::Path, branch: &str) ->
     )
 }
 
+/// Whether `after` contains work that is patch-unique relative to `before`.
+///
+/// A changed SHA alone is not evidence of rework: amend and rebase rewrite
+/// commit identities. Excluding the current default branch keeps a pure rebase
+/// onto a newer main from looking like newly-authored work.
+// trace:TASK-1265 | ai:codex
+fn rework_heads_content_changed(repo: &std::path::Path, before: &str, after: &str) -> Option<bool> {
+    let before = before.trim();
+    let after = after.trim();
+    if before.eq_ignore_ascii_case(after) {
+        return Some(false);
+    }
+
+    let tree_diff = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["diff", "--quiet", before, after])
+        .status()
+        .ok()?;
+    match tree_diff.code() {
+        Some(0) => return Some(false),
+        Some(1) => {}
+        _ => return None,
+    }
+
+    let default_ref = resolve_default_branch_ref(repo)?;
+    let exclude_default = format!("^{default_ref}");
+    let range = format!("{before}...{after}");
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "rev-list",
+            "--cherry-pick",
+            "--right-only",
+            &range,
+            &exclude_default,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(!String::from_utf8_lossy(&out.stdout).trim().is_empty())
+}
+
+// trace:TASK-1265 | ai:codex
+fn rework_no_op_message(pr: u32, before: &str, after: &str, reason: &str, round: usize) -> String {
+    format!(
+        "ROUND {round} rework implementer added no patch-unique work to PR-{pr} (head `{}` → `{}`); the previous round's commit does not count. Authoritative open items:\n{reason}",
+        before.trim(),
+        after.trim()
+    )
+}
+
 /// Count how many commits `branch` is ahead of the repo's DEFAULT branch, and
 /// say WHY when the answer can't be produced.
 ///
@@ -82928,10 +82983,11 @@ struct RealPhaseDriver {
     // trace:BUG-908 | ai:codex
     retry_implementer_worktree: Option<std::path::PathBuf>,
     retry_implementer_branch: Option<String>,
-    /// BUG-1213: `(PR, head, authoritative review delta)` captured immediately
-    /// before a rework implementer runs. `None` for ordinary first-pass work.
-    // trace:BUG-1213 | ai:codex
-    rework_guard: Option<(u32, String, String)>,
+    /// BUG-1213 / TASK-1265: `(PR, head, authoritative review delta, round)`
+    /// captured immediately before a rework implementer runs. `None` for
+    /// ordinary first-pass work.
+    // trace:BUG-1213 trace:TASK-1265 | ai:codex
+    rework_guard: Option<(u32, String, String, usize)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -84657,22 +84713,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &verdict,
         )
         .unwrap_or_else(|| "blocking review findings remain open".to_string());
-        self.rework_guard = Some((pr, head, reason));
+        let round = load_store_for_lookup(&self.project_root)
+            .and_then(|store| {
+                store
+                    .get_requirement_by_spec_id(&self.spec)
+                    .map(|req| queue_cmd::rework_round_from_comments(&req.comments))
+            })
+            .unwrap_or(2);
+        self.rework_guard = Some((pr, head, reason, round));
     }
 
     // trace:BUG-1213 | ai:codex
     fn rework_no_op_failure(&mut self) -> Option<auto_complete::PhaseFailure> {
-        let (pr, before, reason) = self.rework_guard.as_ref()?;
+        let (pr, before, reason, round) = self.rework_guard.as_ref()?;
         let after = pr_head_sha_best_effort(self, *pr)?;
-        if !before.trim().eq_ignore_ascii_case(after.trim()) {
+        if rework_heads_content_changed(&self.project_root, before, &after) != Some(false) {
             return None;
         }
         Some(auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::ReworkNoOp,
-            format!(
-                "rework implementer left PR-{pr} head `{}` unchanged; the previous round's commit does not count. Authoritative open items:\n{reason}",
-                before.trim()
-            ),
+            rework_no_op_message(*pr, before, &after, reason, *round),
         ))
     }
 
@@ -88525,3 +88585,8 @@ mod bug_777_stale_lease_recovery_tests;
 #[cfg(test)]
 #[path = "tests/task_1175_queue_insertion_order_tests.rs"]
 mod task_1175_queue_insertion_order_tests;
+
+// trace:TASK-1265 | ai:codex
+#[cfg(test)]
+#[path = "tests/task_1265_rework_no_op_tests.rs"]
+mod task_1265_rework_no_op_tests;
