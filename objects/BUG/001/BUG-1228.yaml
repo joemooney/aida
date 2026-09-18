@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T16:58:49.982734868Z
-modified_at: 2026-09-18T16:58:49.982734868Z
+modified_at: 2026-09-18T16:58:53.310120782Z
 req_type: Bug
 tags:
 - forge
@@ -16,3 +16,7 @@ tags:
 - orchestrator
 - parent:EPIC-68
 - review
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-18T16:58:53.310120782Z
