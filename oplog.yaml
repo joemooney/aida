@@ -75255,5 +75255,31 @@ operations:
     req_type: Bug
     status: Draft
     priority: Medium
-clock: 5837
+- id: 01a0b337-1f8c-7d21-9ed7-9c9ea934f35c
+  target_id: 01a0b337-1b82-73a0-a98d-4dd74da2cb82
+  author: aida
+  node_id: '1'
+  lamport: 5838
+  timestamp: 2026-09-18T06:32:09.356312094Z
+  kind: !Create
+    title: 'Review PR-1917: [AI:codex] fix(list): disclose explicit limit truncation (BUG-1209)'
+    description: |
+      Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0b331`) for branch `bug-1209`.
+
+      - PR: <https://github.com/joemooney/aida/pull/1917>
+      - Branch: `bug-1209` → `main`
+
+      ## Covers
+
+      - BUG-1209
+
+      ## Acceptance
+
+      - Generate a structured review prompt with `aida review prompt --pr 1917` and verify each spec's acceptance criteria.
+      - Approve and merge, or request changes by spec id.
+      - Mark this story `completed` once the PR is merged.
+    req_type: Story
+    status: Approved
+    priority: Medium
+clock: 5838
 node_id: '1'
