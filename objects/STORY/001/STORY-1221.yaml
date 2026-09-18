@@ -9,7 +9,7 @@ description: |-
 
   Proposal: a typed protocol, one per requirement type (and optionally per lane: research, docs, keystone), stored in the substrate and loaded at the moments that matter.
   1. Storage: a protocol is a META requirement (editable, versioned in the store, exportable with the tree) with a stable slug (protocol:spike, protocol:decision, protocol:bug, protocol:doc, protocol:story, protocol:task) and a short body: purpose, deliverable shape, what must exist before done, what the reviewer checks, what stays human. aida init seeds defaults from aida-core/templates (the spike two-part test is the first one); projects edit them like META-002.
-  2. Injection, budget-aware: (a) aida queue work / aida do / aida worktree enter prepend the protocol body (capped, e.g. 40 lines) to the pickup prompt for the spec's type and lane; (b) the per-turn UserPromptSubmit notice (aida awaiting --notice) adds one line while the session holds a lease on a spec — "protocol: spike — deliverable docs/spikes/<date>-<slug>.md; advisor reads before anything builds on it" — so a compacted session re-learns it every turn at ~1 line of cost; (c) the MCP server exposes aida://protocol/<type> for MCP-native clients; (d) headless drains put it in the implementer and reviewer prompts.
+  2. Injection, budget-aware: (a) aida queue work / aida do / aida worktree enter prepend the protocol body (capped, e.g. 40 lines) to the pickup prompt for the spec's type and lane; (b) the per-turn notice hook (aida awaiting --notice, wired for Claude in settings.json AND for Codex in .codex/hooks.json per TASK-1181; any other vendor gets it through the pickup prompt and the aida command banners) adds one line while the session holds a lease on a spec — "protocol: spike — deliverable docs/spikes/<date>-<slug>.md; advisor reads before anything builds on it" — so a compacted session re-learns it every turn at ~1 line of cost; (c) the MCP server exposes aida://protocol/<type> for MCP-native clients; (d) headless drains put it in the implementer and reviewer prompts.
   3. Check at done: aida queue done / aida pr create run the protocol's machine-checkable items (a file matching the deliverable glob exists in the diff; an ADR has status accepted and a references edge; a bug PR touches a test) and refuse with the missing item named; the reviewer prompt carries the same checklist so review rounds cite it.
   4. Precedence: type protocol < lane protocol < the spec's own ## Acceptance; the injected text says which layer each line came from.
 
@@ -20,19 +20,13 @@ description: |-
   - aida queue done on a SPIKE whose PR has no docs/spikes/*.md refuses and names the missing deliverable; --force overrides with a ledger comment.
   - Editing the META body changes what is injected on the next pickup; no binary rebuild.
   - Token cost measured: pickup prompt grows by at most the cap; CLAUDE.md does not grow.
-
-  Scope decision (advisor, 2026-09-18): this story is SLICE 1 — storage + injection for the TYPE layer. Acceptance bullets 1, 2, 3, 5 and 6 above are this story's. Bullet 4 ("aida queue done … refuses") moves to TASK-1277 (slice 2, guided at the keyboard: warn-by-default gate, refuse opt-in via [protocol] enforce, --force with ledger, reviewer checklist). Lane layer, the MCP resource and headless-prompt injection move to TASK-1278 (slice 3, drain-safe). Both children are BlockedBy this story.
-  Slice-1 refinements written as criteria:
-  - Storage reuses the META type as-is (no new type); the seeded set is protocol:spike, protocol:decision, protocol:bug, protocol:doc, protocol:story, protocol:task from aida-core/templates, seeded by aida init and by aida scaffold refresh for existing projects; aida protocol show <type> --json exposes the META id and body.
-  - Precedence text (type < spec ## Acceptance) applies from slice 1: the pickup prompt shows the type protocol first, then the spec's own acceptance, each block labelled with its source; the lane layer slots between them later without reordering.
-  - The per-turn notice line is emitted only while a lease is held and only when a protocol exists for the type; a spec with no protocol adds zero lines (TASK-160 quiet contract).
-  - The 40-line cap is a constant with a test; truncation appends "… (see aida protocol show <type>)".
+  - Vendor parity (operator requirement 2026-09-18): every injection channel and the done-check work identically for a Codex seat — pickup prompt, .codex/hooks.json per-turn notice, headless codex exec prompts, and AGENTS.md pointer — with no channel that exists only for Claude; the acceptance run is executed once under each vendor.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T19:28:09.967902489Z
+modified_at: 2026-09-18T19:29:17.892625489Z
 req_type: Story
 tags:
 - agent-ux
