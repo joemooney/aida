@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T15:01:11.631455641Z
-modified_at: 2026-09-18T15:05:42.149796671Z
+modified_at: 2026-09-18T15:47:02.462878817Z
 req_type: Task
 tags:
 - forge
@@ -42,8 +42,8 @@ implementation_info:
 failure_reason:
   phase: ci
   phase_index: 2
-  kind: watchdog
-  detail: CI on PR-2 did not reach a terminal state in time (attempt 2/2)
-  recovery_hint: CI never reached a terminal state in the wait window — it may be queued or a runner is slow, CI is not red. Check progress with `glab ci status`, then re-run auto-complete once CI settles.
+  kind: ci-red
+  detail: 'CI is red on PR-2: failing: verify'
+  recovery_hint: 'CI failed on run <ID> — view it: `glab ci status`. Push fixups to the same branch: `aida queue work TASK-1269 --branch task-1269 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-18T15:05:42.149796671Z
+  shelved_at: 2026-09-18T15:47:02.462878817Z
