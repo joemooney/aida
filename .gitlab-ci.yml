@@ -77,11 +77,10 @@ verify:
 
 # STORY-612 live OS-wrap confinement gate. Security boundary — proves
 # write-inside-OK / write-outside-blocked under a real bubblewrap run. Needs
-# unprivileged userns; `allow_failure` until the runner's capabilities are
-# confirmed (then make it a hard gate, mirroring GitHub).
+# unprivileged userns. Confirmed passing live on the self-hosted docker-executor
+# runner (TASK-1254, 2026-09-18), so it is a hard gate here, mirroring GitHub.
 bwrap-confinement:
   stage: verify
-  allow_failure: true
   rules:
     - if: $CI_MERGE_REQUEST_IID
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
