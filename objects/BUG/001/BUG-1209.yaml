@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T04:21:11.794027533Z
-modified_at: 2026-09-18T06:45:47.540289406Z
+modified_at: 2026-09-18T06:45:48.957225919Z
 req_type: Bug
 tags:
 - aida:list
@@ -42,6 +42,15 @@ relationships:
   target_id: 01a0b337-1b82-73a0-a98d-4dd74da2cb82
   created_at: 2026-09-18T06:32:13.286078109Z
   created_by: joe
+comments:
+- id: 01a0b343-a024-7140-a1bb-6938b3ca5f65
+  author: joe
+  content: |-
+    [rework ROUND 2 — one item still open; the previous commit on this branch is already on the PR and does NOT count. Produce a NEW commit, or punt naming the finding you dispute.]
+    PR #1917 RequestChanges (drain reviewer, .aida/review-verdicts/PR-1917.json): `aida list --format human --limit 0` is accepted, truncates N matched rows to zero, and prints only "No requirements found." with no disclosure. Handle the empty human-render path: when an explicit --limit truncated a non-empty match set to zero, print the same footer shape as the non-zero case ("0 of N open — truncated by --limit 0" or the renderer's existing count-of-total form) instead of the no-results message; the genuine no-match case keeps "No requirements found.". Add a regression test in bug_1209_list_limit_footer_tests for --limit 0 with N>0 matches (footer discloses N) and for a true empty match (no footer). Consider whether --limit 0 should be rejected by clap (value_parser range 1..) — if you choose rejection instead, say so and test the error text; either is acceptable, silent emptiness is not.
+    Finish with aida queue done BUG-1209.
+  created_at: 2026-09-18T06:45:48.708507565Z
+  modified_at: 2026-09-18T06:45:48.708507565Z
 execution_mode: drain
 implementation_info:
   implemented: true
