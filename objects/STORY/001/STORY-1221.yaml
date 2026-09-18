@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:24:07.188644832Z
-modified_at: 2026-09-18T23:36:49.112916462Z
+modified_at: 2026-09-18T23:40:16.107866613Z
 req_type: Story
 tags:
 - agent-ux
@@ -115,6 +115,12 @@ comments:
     timestamp: 2026-09-18T16:36-07:00
   created_at: 2026-09-18T23:36:49.112916462Z
   modified_at: 2026-09-18T23:36:49.112916462Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b6e4-636b-7db0-a210-27096f8ddeed
+  author: joe
+  content: '[aida:proxy-approval:correction] The #1948 merge at 16:35 landed TWO MINUTES BEFORE the drain''s headless reviewer wrote its round-2 verdict (16:37, .aida/review-verdicts/PR-1948.json: CHANGES REQUESTED). The advisor saw STORY-1221 shelved after round 1 and treated round 2 as advisor-only, without checking the orchestrator''s child processes — the wave''s BUG-1236 implementer had in fact pushed the rework onto story-1221 and the BUG-1236 reviewer phase was reviewing #1948. That is a merge over an in-flight review; the independence rule held (advisor did not author), the in-flight-review gate did not. Triage of the two round-2 findings: (1) the BUG-1236 attribution in c25ba5c1 is moot — the product seat reset BUG-1236 to Approved at 16:40 and it is picked up on its own; (2) missing CLI-level tests for pickup injection and the notice lease lifecycle is a valid coverage gap in merged code, not a correctness defect — filed and queued as a follow-up task (see the tests follow-up filed 16:44). No revert: the merged behaviour was reviewed by the advisor in both rounds and the round-2 finding asks for tests, not changes.'
+  created_at: 2026-09-18T23:40:16.107866613Z
+  modified_at: 2026-09-18T23:40:16.107866613Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b6df-b9d3-73b0-a7ba-9b2d728cee22
