@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T16:37:30.117300118Z
-modified_at: 2026-09-18T01:56:21.510203225Z
+modified_at: 2026-09-18T01:56:22.649384626Z
 req_type: Task
 tags:
 - batch:followups-0917
@@ -90,6 +90,17 @@ comments:
     confidence: 0.96
   created_at: 2026-09-18T01:56:21.510203225Z
   modified_at: 2026-09-18T01:56:21.510203225Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b23a-a3f9-7b23-8411-026e4db6b533
+  author: harvest
+  content: |
+    [aida:sem]
+    decision: A merge hold identifies a PR as drive-owned when its stored reason text contains the spec ID of any in-phase drive member.
+    rationale: The requirement says an active merge-hold owned by the drive should match, but the diff establishes the externally consequential ownership test: textual containment of an in-phase spec ID in the hold reason.
+    source: file:task-1253-drain-01a0b236-74e3-7110-88fd-45a107fded0d.json
+    confidence: 0.93
+  created_at: 2026-09-18T01:56:22.649384626Z
+  modified_at: 2026-09-18T01:56:22.649384626Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b238-25db-7232-b12d-5f7f0e34634a
