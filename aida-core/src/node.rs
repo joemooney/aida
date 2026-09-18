@@ -27,12 +27,17 @@ use crate::dispenser::IdMode;
 /// `[A-Za-z0-9][A-Za-z0-9_-]*`, length 1–32. Returns Err with a human-
 /// readable message on rejection.
 /// trace:STORY-41 | ai:claude
+pub const MAX_NODE_ID_LEN: usize = 32;
+
 pub fn validate_node_id(id: &str) -> Result<(), String> {
     if id.is_empty() {
         return Err("node id must not be empty".into());
     }
-    if id.len() > 32 {
-        return Err(format!("node id '{}' exceeds 32 characters", id));
+    if id.len() > MAX_NODE_ID_LEN {
+        return Err(format!(
+            "node id '{}' exceeds {} characters",
+            id, MAX_NODE_ID_LEN
+        ));
     }
     let mut chars = id.chars();
     let first = chars.next().unwrap();
@@ -361,15 +366,28 @@ pub fn slug_component(s: &str) -> String {
 /// `imac-joe-1`). Each component is slugged; empty components are dropped so a
 /// missing user or host still yields a sensible name. trace:STORY-652
 pub fn default_node_name(hostname: &str, user: &str, seq: &str) -> String {
-    [
-        slug_component(hostname),
-        slug_component(user),
-        slug_component(seq),
-    ]
-    .into_iter()
-    .filter(|c| !c.is_empty())
-    .collect::<Vec<_>>()
-    .join("-")
+    let join = |host: &str| {
+        [host.to_string(), slug_component(user), slug_component(seq)]
+            .into_iter()
+            .filter(|c| !c.is_empty())
+            .collect::<Vec<_>>()
+            .join("-")
+    };
+    let host = slug_component(hostname);
+    let name = join(&host);
+    if name.len() <= MAX_NODE_ID_LEN {
+        return name;
+    }
+    // BUG-1225: the default must satisfy `validate_node_id` (≤ 32 chars) or
+    // `aida init` rejects its own derivation — a GitLab docker runner names
+    // its build container `runner-<id>-project-N-concurrent-0-default-1`
+    // (49 chars) and every CI `aida init` died on it. Shorten the HOST
+    // component (the only unbounded one; user + seq stay intact so the name
+    // remains attributable), keeping a stable prefix. trace:BUG-1225 | ai:claude
+    let fixed = name.len() - host.len();
+    let budget = MAX_NODE_ID_LEN.saturating_sub(fixed).max(1);
+    let short: String = host.chars().take(budget).collect();
+    join(short.trim_end_matches('-'))
 }
 
 impl NodeRegistryEntry {
@@ -1539,6 +1557,26 @@ registered = "2026-05-09T00:00:00Z"
     }
 
     // ---- STORY-652: friendly node name + owner identity ----
+
+    #[test]
+    // trace:BUG-1225 | ai:claude
+    #[test]
+    fn default_node_name_fits_the_node_id_limit_for_long_hostnames() {
+        let host = "runner-ugtjdiaar-project-2-concurrent-0-default-1";
+        let name = default_node_name(host, "root", "1");
+        assert!(
+            name.len() <= MAX_NODE_ID_LEN,
+            "{name} is {} chars",
+            name.len()
+        );
+        assert!(validate_node_id(&name).is_ok(), "{name}");
+        assert!(name.starts_with("runner-ugtjdiaar"), "{name}");
+        assert!(name.ends_with("-root-1"), "{name}");
+        // Deterministic: the same host always shortens the same way.
+        assert_eq!(name, default_node_name(host, "root", "1"));
+        // Short names are untouched.
+        assert_eq!(default_node_name("imac", "joe", "1"), "imac-joe-1");
+    }
 
     #[test]
     fn default_node_name_is_host_user_seq() {

@@ -5,7 +5,7 @@
 //! subject covering no specs on EVERY session end of a remote-less repo.
 // trace:BUG-776 | ai:claude
 
-use super::auto_queue_skip_reason;
+use super::{auto_queue_skip_reason, review_forge_for_kind, ReviewForge};
 
 #[test]
 fn no_origin_remote_skips_the_auto_file() {
