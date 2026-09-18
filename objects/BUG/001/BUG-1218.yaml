@@ -36,12 +36,12 @@ description: |-
   /home/joe/ai/aida/.claude/worktrees/agent-a942df7439695a8aa  d9f9eceb8c [worktree-agent-a942df7439695a8aa] locked
   /home/joe/ai/aida/.claude/worktrees/agent-ab76dad2f2712ef43  d9f9eceb8c [worktree-agent-ab76dad2f2712ef43] locked
   /home/joe/ai/aida/.claude/worktrees/agent-ada058a96e1aba25f  d9f9eceb8c [worktree-agent-ada058a96e1aba25f] locked has no pr-rebase-N entry and no pr-N branch is left checked out; the member parks with a typed stale-base cause and the recovery text; the reviewer's checkout tolerates a stale pr-N branch. Repro fixture: a PR whose remote branch has a commit not in the local pr-N ref.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:40:43.479253932Z
-modified_at: 2026-09-18T09:30:49.623727759Z
+modified_at: 2026-09-18T09:32:15.746680470Z
 req_type: Bug
 tags:
 - batch:followups-0918
@@ -74,8 +74,25 @@ comments:
   created_at: 2026-09-18T09:30:49.623727759Z
   modified_at: 2026-09-18T09:30:49.623727759Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b3dc-0401-7a70-82fd-f4ca5e04253a
+  author: aida-auto-bump
+  timestamp: 2026-09-18T09:32:15.746021955Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b3dc-0402-7732-94ce-f704fdb60120
+  timestamp: 2026-09-18T09:32:15.746679842Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1218-2026-09-18T093050Z.md
+  commit_sha: c486a5c48a5b1562e8f43a0caad65c48dd939508
+  summary: Completed via merge c486a5c4
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T09:17:05.213877703Z
   implemented_by: joe
+  completed_at: 2026-09-18T09:32:15.745851235Z
+  completion_sha: c486a5c48a5b1562e8f43a0caad65c48dd939508
