@@ -15,14 +15,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T10:53:00.149541934Z
-modified_at: 2026-09-18T11:31:41.134792835Z
+modified_at: 2026-09-18T12:03:43.026458026Z
 req_type: Task
 tags:
+- batch:followups-0918b
 - drain
 - drain-safe
 - follow-up:BUG-1213
 - loop-guard
 - orchestrator
+- proxy-groomed
 - rework
 comments:
 - id: 01a0b449-59ce-7d00-926d-54c5f0eaa4c5
