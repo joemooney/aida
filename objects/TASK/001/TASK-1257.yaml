@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:49:56.148171627Z
-modified_at: 2026-09-18T01:03:27.656230621Z
+modified_at: 2026-09-18T01:03:29.418775056Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
@@ -16,3 +16,6 @@ relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T19:49:59.749967893Z
+deferred: true
+deferred_at: 2026-09-18T01:03:29.418775056Z
+deferred_until: aida reconstitute has run on >=10 specs with a recorded score trend and the operator judges the heuristic match precise enough to gate a flag on
