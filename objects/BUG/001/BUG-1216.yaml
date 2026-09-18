@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T07:26:19.686650551Z
-modified_at: 2026-09-18T07:27:46.004732778Z
+modified_at: 2026-09-18T07:27:47.394515954Z
 req_type: Bug
 tags:
 - criteria
@@ -23,4 +23,16 @@ tags:
 - follow-up:TASK-1247
 - harvest
 - papercut
+comments:
+- id: 01a0b36a-0ec2-77a2-a80d-0ea08bb0e04f
+  author: joe
+  content: |-
+    ROOT CAUSE CORRECTED (advisor, 2026-09-18 00:30, verified on BUG-1209's description): two defects, one incident.
+    1. BUG-1209's description has an `Acceptance:` colon-style section (line 16) with five unlabeled bullets. Before the harvest wrote, parse_acceptance_criteria parsed those five as hash-labeled criteria (ac<6-hex>), so next_ac_label took the max of their digit tails (ac512630 → 512630) and produced AC512631 — the label bug as originally filed.
+    2. append_acceptance_line only recognises `#`-heading sections ("## Acceptance"/"acceptance criteria"), so it appended a NEW `## Acceptance` heading (line 23) below the colon section. After the write, `aida criteria BUG-1209` lists ONLY the new criterion — the parser prefers the heading section and the five original bullets are now invisible (they were the spec's real acceptance). That is a silent loss of criteria coverage on every colon-style spec the harvest touches, which is most specs filed via `aida add --description` prose.
+    Fix (both): (a) append_acceptance_line must detect the colon form (`Acceptance:` / `Acceptance criteria:` on its own line followed by bullets) and append inside it — or normalise it to the heading form in place, carrying the existing bullets — never create a second section; (b) the criteria parser should either union both forms or error loudly when both exist; (c) next_ac_label ignores ac<6-hex> hash labels when computing the next number. Tests: colon-form fixture → harvested line lands in the same section and all original bullets still parse; two-form fixture → parser returns the union (or a diagnostic); the label cases from the original description.
+    Repair BUG-1209 by hand in the fix PR: fold the AC512631 line into the colon section as `- AC1. …` (or convert the whole section to `## Acceptance` with the five originals labelled A1..A5 and the new one AC1).
+  created_at: 2026-09-18T07:27:47.394515954Z
+  modified_at: 2026-09-18T07:27:47.394515954Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
