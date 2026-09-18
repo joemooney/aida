@@ -856,7 +856,15 @@ fn prompt_implementer_item_leads_with_review_findings() {
     };
     let findings = "REVIEW FINDINGS TO ADDRESS (PR #1637):\nFindings:\n1. fix the prompt";
     let prompt = derive_queue_work_prompt(&plan, "implementer", false, false, Some(findings));
-    assert!(prompt.starts_with(findings), "{prompt}");
+    // BUG-1213: the findings now sit under the round header ("ROUND N — ITEMS
+    // STILL OPEN"), but they still lead the prompt and precede the pickup.
+    assert!(prompt.starts_with("ROUND "), "{prompt}");
+    let findings_at = prompt.find(findings).expect("findings present");
+    let pickup_at = prompt.find("/aida-pickup").expect("pickup present");
+    assert!(
+        findings_at < pickup_at,
+        "findings must precede the pickup: {prompt}"
+    );
     assert!(prompt.ends_with("/aida-pickup BUG-814"), "{prompt}");
 }
 

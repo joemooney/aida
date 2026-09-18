@@ -6455,7 +6455,9 @@ pub(crate) fn handle_queue_rework(
                      requeue a third implementer round until an advisor chooses a different \
                      implementer/seat or resolves the dispute.\n\n{block}"
                 );
-                let exe = std::env::current_exe().context("resolve aida executable")?;
+                // BUG-1199: every in-process `aida` subprocess resolves through the
+                // once-per-process resolver, never a raw executable lookup.
+                let exe = crate::aida_exe_path();
                 let finding_title = format!("Repeated unchanged review findings: {display_id}");
                 let finding = std::process::Command::new(&exe)
                     .current_dir(&root)
