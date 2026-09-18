@@ -30,3 +30,11 @@
   added_at: 2026-09-18T16:52:59.798297408Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b579-10a6-7ca1-8a98-6efbb6063865
+  position: 6000
+  added_by: role:implementer
+  note: 'drive (merge held for the advisor): store write path must FAIL CLOSED when .aida-store is detached / has a rebase-merge or rebase-apply dir — refuse the write with the recovery recipe (rebase --continue/--abort, then retry) instead of committing onto a detached HEAD; aida cache/status should surface ''store mid-rebase''; tests: detached-HEAD fixture → write refused, nothing committed; cross-hub docs updated'
+  added_at: 2026-09-18T18:20:21.190626359Z
+  for_role: implementer
+  added_by_machine: imac
