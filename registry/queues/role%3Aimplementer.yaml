@@ -54,3 +54,11 @@
   added_at: 2026-09-18T18:21:07.755485734Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5ce-6f5d-7be3-b693-e98175dbb944
+  position: 9000
+  added_by: role:implementer
+  note: test-only Windows portability fix in reconstitute.rs scratch_gc test; verify via gh workflow run cross-platform.yml
+  added_at: 2026-09-18T18:36:55.951334462Z
+  for_role: implementer
+  added_by_machine: imac
