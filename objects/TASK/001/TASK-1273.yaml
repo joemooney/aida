@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-18T18:29:49.442668763Z
+modified_at: 2026-09-18T18:29:51.900121924Z
 req_type: Task
 tags:
 - ci
@@ -16,3 +16,7 @@ tags:
 - gitlab
 - parent:EPIC-68
 - testing
+relationships:
+- rel_type: Child
+  target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
+  created_at: 2026-09-18T18:29:51.900121924Z
