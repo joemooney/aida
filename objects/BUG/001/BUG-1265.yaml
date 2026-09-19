@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T17:22:20.111278721Z
+modified_at: 2026-09-19T17:29:35.374629748Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -134,6 +134,6 @@ failure_reason:
   phase_index: 2
   kind: ci-red
   detail: 'CI is red on PR-1966: failing: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35454018484 — view it: `gh run view 35454018484`. Push fixups to the same branch: `aida queue work BUG-1265 --branch bug-1265 --steal`'
+  recovery_hint: 'CI failed on run 35457897792 — view it: `gh run view 35457897792`. Push fixups to the same branch: `aida queue work BUG-1265 --branch bug-1265 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-19T16:15:15.049037108Z
+  shelved_at: 2026-09-19T17:29:35.374629748Z
