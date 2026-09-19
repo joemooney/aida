@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:21:32.281544450Z
-modified_at: 2026-09-19T11:04:56.071656108Z
+modified_at: 2026-09-19T11:16:56.750489974Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -65,6 +65,24 @@ comments:
   content: 'PR #1963 review round 2: seat-job CAS now persists the fired predicate episode alongside due_since/due_reason. Added regression covering true tick -> done clears due -> still-true tick remains debounced.'
   created_at: 2026-09-19T11:04:56.071656108Z
   modified_at: 2026-09-19T11:04:56.071656108Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b962-372e-7302-a7a9-70d910166024
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1963
+    agent: codex
+    ran-at: 2026-09-19 04:16 -07:00
+    mode: propose-only (drain)
+    proposed: 4
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1281-drain-01a0b961-da1e-79b3-8b70-b02b738aa85e.json
+    ? SEM (0.98) — If a schedule tick is already running, a concurrent tick does not wait or fail; it succeeds without evaluating jobs and reports `schedule tick: another tick is already running`.
+    ? SEM (0.96) — Manual `aida schedule run` ignores legacy `FiresTask` jobs and emits no line for them, including when the legacy job is selected by name.
+    ? SEM (0.99) — Condition episode records contain only `fired_at` and optional `cleared_at`; the serialized `first_true` field is removed rather than populated earlier.
+    ? AC (0.96) — For a seat-targeted `when` job, marking the delivery done clears `due_since` and `due_reason` but leaves the condition episode open; later ticks do not redeliver the job while the predicate remains true.
+  created_at: 2026-09-19T11:16:56.750489974Z
+  modified_at: 2026-09-19T11:16:56.750489974Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
