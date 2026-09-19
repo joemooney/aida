@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:43:46.744452633Z
-modified_at: 2026-09-19T07:15:53.465618859Z
+modified_at: 2026-09-19T13:22:32.213965788Z
 req_type: Bug
 tags:
 - ci-wait
@@ -39,4 +39,10 @@ comments:
   content: 'Second shape of the same defect, 2026-09-19 00:15 on TASK-1285 / PR #1959: the drain shelved ''CI is red on PR-1959: merge-hold-gate'' while the marker for #1959 existed (aida merge-hold list shows it) and Build (ubuntu-latest) was still PENDING. The coarse red was the hold gate; refine_red must have returned Err (the per-check rows read via gh failed transiently), and finish_ci''s Err arm keeps the coarse verdict (''no per-check rows on this forge'') — a branch meant for forges without rows, not for a GitHub API blip. Fix scope for this bug therefore includes: in finish_ci, distinguish ''forge has no rows'' (keep coarse) from ''row read failed'' (retry with backoff, then shelve ci-unavailable), and never shelve ci-red on a hold-gate-only red while the marker exists.'
   created_at: 2026-09-19T07:15:53.465618859Z
   modified_at: 2026-09-19T07:15:53.465618859Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b9d5-3295-7ab0-a4c0-9d7c9e76d856
+  author: joe
+  content: 'Third occurrence 2026-09-19 12:46 (TASK-1285 / PR #1959, run 35443522933): shelved ''CI is red on PR-1959: merge-hold-gate'' when that was the ONLY red check and Build (ubuntu-latest) had passed. The marker for #1959 exists, so the gate red IS the hold — the drain''s own message even says ''releasing at merge''. A hold-gate-only red with the marker present must never produce a ci-red shelve; the spec is Done and ready for the advisor''s gate. This is the cheapest half of the fix: classify before shelving, independent of the transient-probe half.'
+  created_at: 2026-09-19T13:22:32.213965788Z
+  modified_at: 2026-09-19T13:22:32.213965788Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
