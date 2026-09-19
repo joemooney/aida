@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T10:04:08.082290615Z
+modified_at: 2026-09-19T10:11:14.740545222Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -128,6 +128,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T10:04:07.828772244Z
   modified_at: 2026-09-19T10:04:07.828772244Z
+- id: 01a0b926-10b4-7690-8720-f218ac817588
+  author: joe
+  content: |-
+    [advisor round 3 — disposition on the reviewer's finding] The drain reviewer (PR-1956.json, 03:02) reads the spec literally: "branch name OR a target-referencing commit since merge-base, otherwise refuse", and notes ids.is_empty() → accept. The literal rule is wrong for one real path and I own the wording: queue done from the main checkout with NO commits since merge-base (docs-only work, or a PR opened from another worktree) is legitimate and is exactly what aida-cli/tests/agent_write_confirm.rs and journey.rs exercise — round 1 went red on it. Settled rule (acceptance is being edited to match):
+    - Branch names a DIFFERENT spec → refuse (as implemented).
+    - Branch names the target (incl. slice/node-qualified forms) → accept.
+    - Branch names no spec (main, master, pr-N, batch-*, single-branch/*, feature/*): look at commits since merge-base with the default branch. No commits → accept. Commits exist and at least one references the target (subject/trailer) → accept. Commits exist, NONE reference the target, and at least one references a different spec → refuse ("branch carries SPEC-X work, not SPEC-Y"). Commits exist and reference no spec at all → accept (untagged chores).
+    - --force overrides any refusal and is recorded in the store commit subject.
+    Tests to add: main with no commits → accept; pr-1948 with commits naming STORY-1221 while finishing BUG-1236 → refuse; feature/x with untagged commits → accept; --force path. That closes the reviewer's finding without re-breaking the integration tests. One commit; then I ship.
+  created_at: 2026-09-19T10:11:14.740545222Z
+  modified_at: 2026-09-19T10:11:14.740545222Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
