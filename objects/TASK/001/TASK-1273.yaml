@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:49.442668763Z
-modified_at: 2026-09-19T16:39:19.969716420Z
+modified_at: 2026-09-19T16:39:21.657527981Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -22,4 +22,11 @@ relationships:
 - rel_type: Child
   target_id: 01a0a8cb-c2e1-7263-a1ef-99626e4b5180
   created_at: 2026-09-18T18:29:51.900121924Z
+comments:
+- id: 01a0ba89-6539-7321-89e3-2196e4024a22
+  author: joe
+  content: '[advisor:groom] Approved and RAISED to high, DRAIN. Raised because this is the check that would have caught the four GitHub assumptions TASK-1254 found live, and BUG-1228 proved the class is still open: a second forge passes its unit tests and fails on first contact with a real forge. SPIKE-82''s gap list and the LLM testimonial both name a per-forge live smoke test as the first thing to add; it is cheap relative to what it prevents. Scope guards: (1) it must exercise the TRAIT path end to end — open_change, the CI watch, a recorded verdict, merge_change — not gh/glab directly, because the trait is the thing under test; (2) assert the lifecycle EVENTS (SpecShelved kinds, CiTerminal, PhaseDonePr), since the four defects showed up as wrong events before they showed up as wrong outcomes; (3) it runs on the nightly cadence, never on PR CI, and a red nightly files against the forge spec rather than blocking anyone. One question for the operator, not for you to guess: the mirror credentials this job needs are a CI secret on a self-hosted runner — confirm with Joe how they are provisioned before wiring it, and do not put a token anywhere near a spec or a commit.'
+  created_at: 2026-09-19T16:39:21.657527981Z
+  modified_at: 2026-09-19T16:39:21.657527981Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
