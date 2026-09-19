@@ -563,6 +563,22 @@ impl Storage {
         Ok(())
     }
 
+    /// Save a mutation with an explicit audit subject when the canonical store
+    /// is git-backed. Non-git stores retain their normal save semantics.
+    // trace:BUG-1252 | ai:codex
+    pub fn save_with_commit_subject(
+        &self,
+        store: &RequirementsStore,
+        commit_subject: &str,
+    ) -> Result<()> {
+        if self.file_path.is_dir() {
+            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            backend.bulk_update(&store.requirements, commit_subject)?;
+            return Ok(());
+        }
+        self.save(store)
+    }
+
     /// Saves requirements to a SQLite database file
     fn save_sqlite(&self, store: &RequirementsStore) -> Result<()> {
         use crate::db::{DatabaseBackend, SqliteBackend};

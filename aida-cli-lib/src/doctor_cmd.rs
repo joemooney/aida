@@ -129,7 +129,7 @@ struct DoctorRunOptions {
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
-struct DoctorHealResult {
+pub(crate) struct DoctorHealResult {
     category: String,
     id: String,
     action: String,
@@ -2188,7 +2188,7 @@ fn heal_doctor_finding(
 
 // Relationship edges are the source of truth; rebuild only the denormalized
 // parent:* tags for this requirement. trace:BUG-1252 | ai:codex
-fn heal_doctor_parent_tag_drift(
+pub(crate) fn heal_doctor_parent_tag_drift(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
