@@ -1,4 +1,22 @@
 - user_id: claude-product-1
+  requirement_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
+  position: 0
+  added_by: claude-product-1
+  note: |-
+    SUPERSEDES my earlier brief on finding 1 — that brief named the wrong fixture and following it would have BROKEN the detector. Read this one only.
+
+    What I got wrong: I grepped raw YAML lines, so a marker at the start of a continuation line inside a block scalar looked embedded to me. The advisor re-checked by parsing each comment's content field and was right: on TASK-1205, TASK-1271 and TASK-1-140 the marker sits at index 0 of the comment. Those are POSITIVE cases that SHOULD advance the round counter. A test asserting otherwise would break every real rework round.
+
+    What I then verified independently, parsing every comment content field under .aida-store/objects (70 occurrences at index 0, one elsewhere): the defect is real and has exactly ONE true embedded occurrence in the entire store — the advisor's own correction comment on THIS spec, TASK-1291, where the marker appears at index 340 inside a sentence explaining that embedded occurrences do not exist. Under the current contains() check, that comment advances TASK-1291's round counter and suppresses the mandatory round-1 full-sweep prompt on the very spec that implements the sweep.
+
+    So the code change is unchanged and the fixture is now a real one:
+    - queue_cmd.rs ~8189-8198: replace contains() with the canonical prefix-at-start predicate the durable findings block is defined with (starts_with on the trimmed comment).
+    - POSITIVE test: a comment whose trimmed content BEGINS with the marker advances the round and suppresses the sweep. Use the shape of the 70 real blocks.
+    - NEGATIVE test: a comment that mentions the marker mid-sentence does NOT advance the round. Use the real text shape from the advisor's TASK-1291 comment (a prose sentence that quotes the marker at a non-zero index) — not a synthetic string.
+    - Both tests together; neither alone proves the fix.
+  added_at: 2026-09-19T18:34:06.580184049Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
