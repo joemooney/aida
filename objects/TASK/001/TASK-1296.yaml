@@ -1,0 +1,38 @@
+id: 01a0bb79-0a89-7bc2-8209-676c2c237cbc
+spec_id: TASK-1296
+agreed_id: TASK-1296
+title: 'A Review-PR spec resolves when its PR reaches a terminal state: merged closes it Completed, closed-unmerged closes it Rejected — today six sat Approved against dead PRs and inflated the queue depth us'
+description: |-
+  Observed 2026-09-19 by the product seat, verified by the advisor against the forge rather than against spec text.
+
+  Six Review-PR specs sat Approved and routed to reviewer, each requesting review of a PR that had already terminated:
+    STORY-1234 → PR 1952  CLOSED, never merged
+    STORY-1238 → PR 1949  MERGED 04:55
+    STORY-1240 → PR 1957  MERGED 10:44
+    STORY-1343 → PR 1964  MERGED 13:21
+    STORY-1344 → PR 1956  MERGED 14:12
+    STORY-1345 → PR 1965  MERGED 15:25
+  Six of the eight reviewer-routed queue entries were dead. I swept them by hand today (five Completed, one Rejected), which is the wrong remedy for something that will recur on every merge.
+
+  Why aida queue gc does not catch them: gc prunes entries whose TARGET spec is archived, Completed or Rejected. For a Review-PR spec the review spec ITSELF is the Approved thing, so gc correctly leaves it alone. The gap is lifecycle, not garbage collection.
+
+  Why it costs more than tidiness: queue depth is a number seats use to decide whether to launch a wave, and dead reviewer entries inflate it. On 2026-09-19 the queue read nineteen deep while the drain could act on three of them — a separate defect, but the inflated depth made the discrepancy harder to see rather than easier.
+
+  Fix, modelled on a mechanism that already exists: `aida pull` auto-bumps Done → Completed when a commit referencing the spec lands on the default branch. Do the same for review specs against PR state — when a Review-PR spec's PR is observed terminal, resolve the spec (merged → Completed, closed-unmerged → Rejected) and drop its queue entry, recording which PR and which terminal state on the spec so the trail survives. The natural hook is the same post-merge pull path, plus the drain's own merge step which already knows the PR it just merged.
+
+  Acceptance: after a PR merges, its Review-PR spec reaches Completed and leaves the reviewer queue without a human edit; a PR closed unmerged resolves its review spec Rejected with the reason recorded; a review spec whose PR is still open is untouched; the six ids above are the regression fixture; no change to aida queue gc's existing target-spec rule.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:01:07.081451092Z
+modified_at: 2026-09-19T21:01:07.081451092Z
+req_type: Task
+tags:
+- batch:followups-0918i
+- drain-safe
+- lifecycle
+- parent:EPIC-28
+- queue
+- reviewer
+execution_mode: drain
