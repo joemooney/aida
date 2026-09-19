@@ -23,18 +23,21 @@ description: |
   - The convention exists in the discipline pack with the TASK-1291 example.
   - The criteria gate distinguishes three states for a criterion: traced, untraced, and post-deployment (cannot be traced by construction); the third does not block done and says why.
   - A spec carrying a post-deployment criterion is reported with the suggested split, naming the follow-up spec shape.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:17:26.788188477Z
-modified_at: 2026-09-19T18:17:39.517346688Z
+modified_at: 2026-09-19T21:31:25.615010498Z
 req_type: Task
 tags:
 - acceptance
+- batch:followups-0918i
 - discipline
+- drain-safe
 - from:session-capture-0919
 - parent:EPIC-28
+- parent:EPIC-62
 - spec-authoring
 relationships:
 - rel_type: Child
@@ -48,3 +51,4 @@ relationships:
   target_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
   created_at: 2026-09-19T18:17:39.517341627Z
   created_by: joe
+execution_mode: drain
