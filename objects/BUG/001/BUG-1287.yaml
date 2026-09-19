@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-19T21:05:59.058325197Z
+modified_at: 2026-09-19T21:06:00.699339238Z
 req_type: Bug
 tags:
 - from:aida-monitor
@@ -50,3 +50,7 @@ tags:
 - parent:EPIC-62
 - reaper
 - worktree
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-19T21:06:00.699339238Z
