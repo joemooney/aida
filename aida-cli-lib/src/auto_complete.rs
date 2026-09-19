@@ -1244,6 +1244,18 @@ pub(crate) trait PhaseDriver {
     /// design-fork and punted the spec to `NeedsAttention` (STORY-276).
     fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure>;
 
+    /// BUG-1244: freeze the PR proved by phase 1 for this orchestration run.
+    /// Later phases may probe forge state, but may not silently switch to a PR
+    /// discovered from an inherited/sibling branch.
+    // trace:BUG-1244 | ai:codex
+    fn capture_phase_done_pr(&mut self) {}
+    fn phase_done_pr_number(&self) -> Option<u32> {
+        self.review_pr_number()
+    }
+    fn requires_phase_done_pr(&self) -> bool {
+        false
+    }
+
     /// BUG-1244: phase 1 must be operating in the target spec's own worktree.
     /// Real drivers validate the lease's live branch; mocks default to valid.
     // trace:BUG-1244 | ai:codex
@@ -3357,6 +3369,7 @@ pub(crate) fn orchestrate_with_resume(
             );
         }
         credited = spec.to_string();
+        driver.capture_phase_done_pr();
     } else {
         // BUG-657: refuse to drive a spec that is already terminal (Completed or
         // Rejected) BEFORE spawning the implementer. The implementer would exit 1
@@ -3410,6 +3423,7 @@ pub(crate) fn orchestrate_with_resume(
             match driver.run_implementer() {
                 Err(f) => {
                     if let Some(reentry_phase) = driver.recover_phase1_failure_with_open_pr(&f) {
+                        driver.capture_phase_done_pr();
                         durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
                         emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                         start_phase = reentry_phase;
@@ -3467,11 +3481,13 @@ pub(crate) fn orchestrate_with_resume(
                         // The advisor resolved the fork and the implementer resumed
                         // with a PR — the pipeline continues to CI.
                         PuntFlow::Proceed => {
+                            driver.capture_phase_done_pr();
                             emit_done(Phase::Implementer, spec, json, start.elapsed().as_millis());
                         }
                     }
                 }
                 Ok(ImplementerOutcome::PrOpened) => {
+                    driver.capture_phase_done_pr();
                     durations.push((Phase::Implementer, phase_start.elapsed().as_millis()));
                     if let Some(f) = driver.rework_no_op_failure() {
                         return resolve_phase_failure(
@@ -3676,7 +3692,46 @@ pub(crate) fn orchestrate_with_resume(
         let mut retries_used = 0usize;
         loop {
             // trace:STORY-975 | ai:codex
-            if driver.review_pr_number().is_none() {
+            let bound_pr = driver.phase_done_pr_number();
+            let review_pr = driver.review_pr_number();
+            if driver.requires_phase_done_pr() && bound_pr.is_none() {
+                let f = PhaseFailure::of(
+                    FailureKind::NoPr,
+                    format!(
+                        "no PhaseDonePr was recorded for this {spec} run — refusing to launch a reviewer"
+                    ),
+                );
+                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Reviewer,
+                    spec,
+                    json,
+                    &start,
+                    &f,
+                    durations,
+                );
+            }
+            if driver.requires_phase_done_pr() && review_pr.is_some() && review_pr != bound_pr {
+                let f = PhaseFailure::of(
+                    FailureKind::NoPr,
+                    format!(
+                        "review PR {:?} does not match this run's PhaseDonePr {:?} for {spec} — refusing cross-spec review",
+                        review_pr, bound_pr
+                    ),
+                );
+                durations.push((Phase::Reviewer, phase_start.elapsed().as_millis()));
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Reviewer,
+                    spec,
+                    json,
+                    &start,
+                    &f,
+                    durations,
+                );
+            }
+            if review_pr.is_none() {
                 if driver.recover_missing_review_pr().is_some() {
                     continue;
                 }
@@ -5796,6 +5851,11 @@ mod tests {
         /// BUG-1244: selected phase-1 worktree/branch, when a test needs to
         /// exercise the cross-spec isolation gate.
         workspace: Option<(String, String)>,
+        /// BUG-1244: run-local phase-1 PR marker; `suppress_phase_done_pr`
+        /// models the recurrence where branch lookup found a sibling PR but
+        /// this run never emitted PhaseDonePr.
+        phase_done_pr: Option<u32>,
+        suppress_phase_done_pr: bool,
     }
 
     impl MockPhaseDriver {
@@ -5838,6 +5898,8 @@ mod tests {
                 harvest_gate_calls: 0,
                 rework_no_op: false,
                 workspace: None,
+                phase_done_pr: None,
+                suppress_phase_done_pr: false,
             }
         }
 
@@ -6054,6 +6116,17 @@ mod tests {
     }
 
     impl PhaseDriver for MockPhaseDriver {
+        fn capture_phase_done_pr(&mut self) {
+            if !self.suppress_phase_done_pr {
+                self.phase_done_pr = self.pr_number;
+            }
+        }
+        fn phase_done_pr_number(&self) -> Option<u32> {
+            self.phase_done_pr
+        }
+        fn requires_phase_done_pr(&self) -> bool {
+            self.suppress_phase_done_pr
+        }
         fn implementer_workspace(&self) -> Option<(String, String)> {
             self.workspace.clone()
         }
@@ -6506,6 +6579,25 @@ mod tests {
             .failure
             .as_ref()
             .is_some_and(|f| f.reason.contains("story-1221")));
+    }
+
+    #[test]
+    fn reviewer_refuses_when_this_run_has_no_phase_done_pr() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.suppress_phase_done_pr = true;
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1244",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Reviewer));
+        assert!(!driver.calls.contains(&Phase::Reviewer));
+        assert!(result
+            .failure
+            .as_ref()
+            .is_some_and(|failure| failure.reason.contains("PhaseDonePr")));
     }
 
     // --- STORY-975: transient whole-phase self-retry ----------------------

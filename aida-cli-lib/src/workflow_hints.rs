@@ -277,31 +277,29 @@ pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: 
     force || skip_pr_check
 }
 
-/// BUG-1244: `queue done` may only finish work from the target spec's branch.
-/// Commit subjects are deliberately not sufficient: the incident that prompted
-/// this guard had a sibling branch whose commit trailer named both specs even
-/// though its diff implemented only the sibling. Shared branches remain an
-/// explicit, ledgered `--force` operation at the command boundary.
+/// BUG-1244: refuse only when the branch itself names a *different* spec.
+/// Default branches and shared batch/cluster branches intentionally carry no
+/// spec id and are valid places to finish queued work. Commit subjects are not
+/// ownership evidence: the incident branch explicitly named STORY-1221 while
+/// the command attempted to finish BUG-1236.
 // trace:BUG-1244 | ai:codex
 pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
-    fn key(value: &str) -> String {
-        value
-            .trim()
-            .to_ascii_lowercase()
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-            .collect::<String>()
-            .split('-')
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join("-")
+    let normalized = branch
+        .trim_start_matches("refs/heads/")
+        .to_ascii_lowercase();
+    if normalized.starts_with("batch/")
+        || normalized.starts_with("cluster/")
+        || normalized.starts_with("single-branch/")
+    {
+        return true;
     }
-    let branch = key(branch.trim_start_matches("refs/heads/"));
-    let spec = key(spec);
-    branch == spec
-        || branch.starts_with(&format!("{spec}-"))
-        || branch.ends_with(&format!("-{spec}"))
-        || branch.contains(&format!("-{spec}-"))
+    let re = regex::Regex::new(r"(?i)(?:^|[^a-z0-9])([a-z]+-\d+(?:-\d+)*)(?:$|[^0-9])")
+        .expect("valid branch spec regex");
+    let ids: Vec<String> = re
+        .captures_iter(branch)
+        .map(|capture| capture[1].to_ascii_uppercase())
+        .collect();
+    ids.is_empty() || ids.iter().all(|id| id.eq_ignore_ascii_case(spec))
 }
 
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
@@ -1268,6 +1266,13 @@ mod tests {
     #[test]
     fn queue_done_ownership_refuses_sibling_branch_even_if_commit_could_name_target() {
         assert!(!branch_belongs_to_spec("story-1221", "BUG-1236"));
-        assert!(!branch_belongs_to_spec("feature/unrelated", "BUG-1236"));
+        assert!(!branch_belongs_to_spec("batch-story-1221", "BUG-1236"));
+    }
+
+    #[test]
+    fn queue_done_ownership_allows_default_and_non_spec_branches() {
+        for branch in ["main", "master", "batch/followups-0918h", "cluster/one"] {
+            assert!(branch_belongs_to_spec(branch, "BUG-1236"), "{branch}");
+        }
     }
 }

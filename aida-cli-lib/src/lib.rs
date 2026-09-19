@@ -83534,6 +83534,10 @@ struct RealPhaseDriver {
     branch: Option<String>,
     implementer_lease: Option<String>,
     pr_number: Option<u32>,
+    /// BUG-1244: PR proven by phase 1 (or explicitly seeded resume) for this
+    /// run. CI/reviewer probes must remain on this PR.
+    // trace:BUG-1244 | ai:codex
+    phase_done_pr: Option<u32>,
     ci_run_id: Option<String>,
     /// Cached aida binary path, resolved once at construction. Re-resolving
     /// per-call broke in BUG-217 when the implementer's phase-1 `cargo build`
@@ -83880,6 +83884,7 @@ impl RealPhaseDriver {
             branch: None,
             implementer_lease: None,
             pr_number: None,
+            phase_done_pr: None,
             ci_run_id: None,
             aida_exe: resolve_aida_exe(),
             no_human,
@@ -85327,6 +85332,17 @@ fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
+    fn capture_phase_done_pr(&mut self) {
+        self.phase_done_pr = self.pr_number;
+    }
+
+    fn phase_done_pr_number(&self) -> Option<u32> {
+        self.phase_done_pr
+    }
+
+    fn requires_phase_done_pr(&self) -> bool {
+        true
+    }
     // The initial driver cwd is diagnostic until the phase lease is minted;
     // retries/resumes carry the exact selected worktree and branch here.
     // trace:BUG-1244 | ai:codex
@@ -85338,8 +85354,26 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             (Some(worktree), Some(branch)) => {
                 Some((worktree.display().to_string(), branch.clone()))
             }
-            _ => current_branch_at(&self.project_root)
-                .map(|branch| (self.project_root.display().to_string(), branch)),
+            _ => list_leases(&self.project_root)
+                .into_iter()
+                .filter(|lease| lease.scope.eq_ignore_ascii_case(&self.spec))
+                .max_by_key(|lease| lease.started_at)
+                .map(|lease| {
+                    (
+                        lease.worktree_path.display().to_string(),
+                        lease.branch.clone(),
+                    )
+                })
+                .or_else(|| {
+                    dirs::home_dir().map(|home| {
+                        (
+                            crate::worktree::default_worktree_path(&home, &self.spec)
+                                .display()
+                                .to_string(),
+                            crate::worktree::default_branch(&self.spec),
+                        )
+                    })
+                }),
         }
     }
     /// BUG-770: the real driver already knows the project it is driving, so it
@@ -85368,6 +85402,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         else {
             return;
         };
+        let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
+            .map(|meta| meta.body)
+            .unwrap_or_default();
+        if !queue_cmd::rework_pr_head_matches_spec(
+            &self.spec,
+            &change.branch,
+            change.title.as_deref().unwrap_or_default(),
+            &body,
+        ) {
+            return;
+        }
         let pr = change.id as u32;
         let Some(head) = pr_head_sha_best_effort(self, pr) else {
             return;
@@ -85391,6 +85436,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
     // trace:BUG-1213 | ai:codex
     fn rework_no_op_failure(&mut self) -> Option<auto_complete::PhaseFailure> {
         let (pr, before, reason, round) = self.rework_guard.as_ref()?;
+        if self.phase_done_pr != Some(*pr) {
+            return None;
+        }
         let after = pr_head_sha_best_effort(self, *pr)?;
         if rework_heads_content_changed(&self.project_root, before, &after) != Some(false) {
             return None;
@@ -85446,13 +85494,22 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             .no_human
             .map(|m| m.wants_headless_implementer())
             .unwrap_or(false);
+        // BUG-1244: pin even the first attempt to the selected spec workspace.
+        // Leaving these unset let queue-work inherit a sibling's live cwd/lease.
+        let intended_workspace = self.implementer_workspace();
+        let intended_path = intended_workspace
+            .as_ref()
+            .map(|(path, _)| std::path::Path::new(path));
+        let intended_branch = intended_workspace
+            .as_ref()
+            .map(|(_, branch)| branch.as_str());
         let args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
             self.steal,
             self.force_claim || self.retry_implementer_worktree.is_some(),
-            self.retry_implementer_branch.as_deref(),
-            self.retry_implementer_worktree.as_deref(),
+            intended_branch,
+            intended_path,
             headless_impl,
             self.permission_mode.as_deref(),
         );
