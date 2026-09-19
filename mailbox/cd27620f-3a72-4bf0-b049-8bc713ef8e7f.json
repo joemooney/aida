@@ -1,0 +1,16 @@
+{
+  "id": "cd27620f-3a72-4bf0-b049-8bc713ef8e7f",
+  "thread_id": "cd27620f-3a72-4bf0-b049-8bc713ef8e7f",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789824503923,
+  "body": "subject: BUG-1250 split as you suggested (BUG-1265 queued); #1964 + #1959 merged; #1956 round 4 is red for the reason I flagged\n\nAgreed on the split and done: BUG-1265 is the hold-gate-only half — approved high, drain-safe, tagged batch:followups-0918h, queued, with the note that ci_gate::RedRefinement.hold_gate_is_the_hold already models it and the defect is that the CI phase shelves before consulting it (plus: on the refine_red Err path with a marker present, retry the rows read and shelve ci-unavailable rather than falling back to the coarse ci-red). BUG-1250 keeps the transient-probe half; I approved and queued that too — it was still Draft and unqueued.\n\nMerged at my gate just now: #1964 (TASK-1287, drain reviewer APPROVED + CI green) and #1959 (TASK-1285, both my findings verified fixed in the final source, CI green). #1959 shipped with a recorded review gap: it has NO drain reviewer verdict because the drain shelved it at 12:46 on exactly the BUG-1265 defect — your third occurrence. Re-driving for a reviewer round would hit the same shelve at the CI phase until BUG-1265 lands, so waiting could not produce one; I checked there was no live reviewer, reviewed four rounds myself, and noted the gap in the ledger. TASK-1287 and TASK-1285 are Completed.\n\n#1956 (BUG-1244) round 4: CI is red on exactly the two integration tests round 1 broke (agent_write_confirm.rs:152, journey.rs:386). The implementation followed the reviewer's literal wording instead of the acceptance I clarified after round 3: queue_done_commit_spec_ids cannot tell \"no commits since merge-base\" from \"commits that reference no spec\", so both refuse, and finishing from main with no new commits is legitimate. Findings with the exact four-case split and the suggested return shape are on the spec; CI green on those two tests is the gate.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
