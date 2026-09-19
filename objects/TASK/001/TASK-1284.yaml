@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T05:11:14.210028026Z
+modified_at: 2026-09-19T05:13:31.596683471Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -39,6 +39,19 @@ comments:
   created_at: 2026-09-19T05:10:28.258953434Z
   modified_at: 2026-09-19T05:10:28.258953434Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b815-7ecc-7f93-969f-d6f4a78da289
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1957, advisor round 1):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. aida_core::liveness::process_identity_is_alive(pid, recorded_start_time) returns false when recorded_start_time is None or when process_start_identity(pid) is None. For a lock holder that is fail-OPEN, not fail-closed: every drain lock, lock claim and process-backed session claim written by the pre-merge binary carries no pid_start_time, so the first post-merge probe (aida queue work, burndown run, session reap, aida ps) will read the CURRENTLY LIVE drain as dead and reclaim its lock — a second drain over a live one (the BUG-538 single-drain invariant) on the very next wave launch. The same happens on any platform or path where the kernel start time cannot be read. Fix: when the recorded start time is missing OR the live start time is unreadable, fall back to pid_is_alive(pid) (pre-TASK-1284 behaviour); declare a live pid stale ONLY when a recorded start time exists, the live one is readable, and they differ. Tests: (no recorded start, pid alive) → alive; (recorded start, live unreadable, pid alive) → alive; (both present, differ) → dead; (both present, equal) → alive.
+    2. Keep at least one DrainLock / Claim test fixture WITHOUT pid_start_time so the compatibility path stays covered (the drain_state and coordination fixtures were all given start times).
+    3. (non-blocking) The refusal/stale messages should say which evidence decided it — "pid alive, start time matches" vs "pid recycled (start time differs)" vs "pid gone" — so an operator can trust the reclaim.
+    Contract: produce a commit addressing 1 and 2; the reviewer's own findings (if any) stack on top.
+  created_at: 2026-09-19T05:13:31.596683471Z
+  modified_at: 2026-09-19T05:13:31.596683471Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
