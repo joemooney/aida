@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T10:04:06.847505634Z
+modified_at: 2026-09-19T10:04:08.082290615Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -118,6 +118,16 @@ comments:
   content: 'Reviewer round 3 on PR #1956 (portability fixed; one fail-open left): aida-cli-lib/src/workflow_hints.rs: branch_belongs_to_spec returns true when ids.is_empty(), so branches such as pr-1948, main, or arbitrary feature branches are accepted for every target without verifying any since-merge-base commit references that target. BUG-1244 requires branch-name ownership OR a target-referencing commit, otherwise refusal. Add the missing commit-evidence gate and command-level unit coverage for both refusal and the explicit --force override.  Concretely: in workflow_hints::branch_belongs_to_spec, when the branch name carries no spec id, do NOT return true — scan the commits since the merge-base with the default branch for a (SPEC-ID) trailer or trace: reference to the target and accept only then; otherwise refuse with the existing message and the --force escape. Tests: pr-1948-style branch with no target-referencing commit → refused; same branch with one commit referencing the target → accepted; --force on the refused case → proceeds and ledgers. Keep the two integration tests green and the ratchet clean.'
   created_at: 2026-09-19T10:04:06.596099110Z
   modified_at: 2026-09-19T10:04:06.596099110Z
+- id: 01a0b91f-8d14-7f00-a2a6-79020e65d10b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1956):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. aida-cli-lib/src/workflow_hints.rs: branch_belongs_to_spec returns true when ids.is_empty(), so branches such as pr-1948, main, or arbitrary feature branches are accepted for every target without verifying any since-merge-base commit references that target. BUG-1244 requires branch-name ownership OR a target-referencing commit, otherwise refusal. Add the missing commit-evidence gate and command-level unit coverage for both refusal and the explicit --force override.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T10:04:07.828772244Z
+  modified_at: 2026-09-19T10:04:07.828772244Z
 execution_mode: drive
 implementation_info:
   implemented: true
