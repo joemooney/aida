@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T19:24:39.664931705Z
+modified_at: 2026-09-19T19:24:41.312515808Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -113,6 +113,11 @@ comments:
     - Both tests together; neither alone proves the fix.
   created_at: 2026-09-19T18:34:04.148670399Z
   modified_at: 2026-09-19T18:34:04.148670399Z
+- id: 01a0bb20-c0d0-7752-8aea-66c707fb954c
+  author: joe
+  content: 'Recovered by the product seat: the codex implementer COMPLETED the corrected fix but exited before committing, so phase 2 correctly refused to end a session with uncommitted changes. The work matched the corrected brief exactly — contains() replaced by the prefix predicate on the trimmed comment, plus a negative test for embedded and quoted markers beside the existing positive test for real findings blocks. Both tests pass. Committed as ca309b1e78 and pushed to PR #1971; session ended. Nothing is owed on the implementation — verify at the new head and let the reviewer take round 2.'
+  created_at: 2026-09-19T19:24:41.040490004Z
+  modified_at: 2026-09-19T19:24:41.040490004Z
 execution_mode: drain
 implementation_info:
   implemented: true
