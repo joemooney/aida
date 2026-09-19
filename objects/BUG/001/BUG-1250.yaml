@@ -16,12 +16,12 @@ description: |
   3. Unit test on the pure decision (transient error → keep polling; N consecutive hard failures → shelve, never proceed), plus a fixture test for the gh connect-error stderr.
 
   Acceptance: with a PR whose required check is pending, injecting a transient gh failure into the probe keeps the drain in the CI wait and it later reads the real verdict; a persistent failure shelves the spec as ci-unavailable; no path reaches the reviewer while a required check is pending.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:43:46.744452633Z
-modified_at: 2026-09-19T13:24:34.257719126Z
+modified_at: 2026-09-19T14:29:24.399914233Z
 req_type: Bug
 tags:
 - batch:followups-0918h
