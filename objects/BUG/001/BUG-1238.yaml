@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:22.273637876Z
-modified_at: 2026-09-19T05:57:30.947419444Z
+modified_at: 2026-09-19T05:57:32.426449824Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -42,6 +42,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T04:26:11.762011544Z
   modified_at: 2026-09-19T04:26:11.762011544Z
+- id: 01a0b83d-c98e-7520-9de9-707307af40cb
+  author: joe
+  content: 'Reviewer round 2 on PR #1954 (gate exit now correct): BUG-1238: replace or supplement the mocked main() test with a subprocess test against a temporary synthetic Git diff touching aida-cli-lib/src/cli.rs; assert exit 1 for a referenced unmarked spec and exit 0 for a referenced spec marked via docs:impacted or interface_changes, as requested in the prior rework finding.  Concretely: in tests/test_verify_interface_changes.py add a test that creates a temporary git repo (git init, a base commit with a stub aida-cli-lib/src/cli.rs, a second commit modifying it), runs docs/cli/verify-interface-changes.py as a subprocess against that repo with the spec-marker lookup pointed at a temp fixture (unmarked spec → assert returncode 1; spec marked docs:impacted or interface_changes → assert returncode 0). Keep the mocked-main test; the subprocess test is the acceptance.'
+  created_at: 2026-09-19T05:57:32.174228732Z
+  modified_at: 2026-09-19T05:57:32.174228732Z
 execution_mode: drain
 implementation_info:
   implemented: true
