@@ -1,34 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
-  position: 13000
-  added_by: claude-product-1
-  note: |-
-    [rework round 2] PR #1974 — CHANGES REQUESTED. Two acceptance criteria unverified, both concrete. I checked both against origin/story-1350-work myself before writing this, so treat them as confirmed rather than reported.
-
-    The round-1 sweep did its job: it enumerated all seven criteria with a status each, so this is the complete remaining list, not the first thing someone noticed. Criteria 1, 2 and 6 are verified. Criteria 4 and 5 are not-applicable by the advisor's binding scope decision — do NOT implement advisor preview or the 20-spec longitudinal measurement, they were explicitly removed from this story. Criteria 3 and 7 are what is left.
-
-    FINDING 1, criterion 3 — the review prompt does not include the approach statement.
-
-    Confirmed: generate_review_prompt in aida-cli-lib/src/lib.rs builds its output from the requirement title plus extract_acceptance_section(&req.description), and falls back to a line saying there is no Acceptance/Verify section. It never touches the spec's comments, so there is no path by which the implementer's approach statement could reach the reviewer. Without this, round 1 cannot compare recorded intent against the actual diff, which is the entire point of writing the statement down.
-
-    Fix: load the comment carrying the stable `## Implementer approach` marker and emit it into the prompt as its own section, clearly labelled as the implementer's stated intent rather than as a requirement. Use the same stable marker the template writes so the two stay coupled by one string. A spec with no such comment must render a short explicit note, the way the missing-acceptance case already does — silence would make an absent statement look like an empty one.
-
-    Add a regression test asserting the generated prompt contains the approach section when the comment exists, and the explicit note when it does not.
-
-    FINDING 2, criterion 7 — no guard for a spec with no parseable acceptance.
-
-    Confirmed: Step 3d in aida-core/templates/skills/aida-pickup.md tells every pickup to post the comment. The only skip it defines is on the headless variable being empty or unset, which is the interactive case — a different condition entirely. The advisor's added rule is that a pickup with no parseable acceptance section must post NOTHING, and there is currently no such branch.
-
-    Fix: add the explicit guard to 3d. The condition must be the same one the code already uses to decide whether an acceptance section exists, not a new heuristic, so the skill and the extractor cannot drift apart. State plainly in the template what to do instead when the guard fires, so a pickup that hits it has a next action rather than a dead end.
-
-    Test both directions: a spec WITH a parseable acceptance section posts the statement, a spec WITHOUT posts nothing. Two cases, because a guard tested in one direction only is a guard that can be inverted without failing.
-
-    ONE THING TO GET RIGHT WHILE HERE. These two are the same seam viewed from both ends — 3d decides when a statement is written, generate_review_prompt decides how it is read. Both key on the `## Implementer approach` marker. Make that marker one shared constant rather than a literal in each place; a marker that drifts silently breaks the loop with no test failing anywhere.
-
-    CI is green at the pinned head 3ff9d789, fmt passes, and aida-core tests pass 953. Push fixups to story-1350-work. Do not open a new PR.
-  added_at: 2026-09-19T21:16:42.329573213Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0bafb-5814-71a0-843f-244a570a2ef8
   position: 14000
   added_by: claude-product-1
