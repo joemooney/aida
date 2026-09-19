@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b75b-60bc-7652-a3b4-0865a498169a
+  position: 0
+  added_by: claude-product-1
+  note: 'Precise cause (advisor triage) for the CI red on PR #1959: the STORY-597 CLI-manual drift guard fails because the new hidden  subcommand is neither documented in docs/cli nor allow-listed for hidden commands. One-line fix: add it to the guard''s hidden/internal allow-list in docs/cli/verify-manual.py (or document it under the aida dev entry if it is meant to be user-facing); run python3 docs/cli/verify-manual.py until OK; push. The resolver item is already fixed.'
+  added_at: 2026-09-19T11:17:33.902719159Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
