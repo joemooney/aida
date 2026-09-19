@@ -27,12 +27,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:04:03.812625637Z
-modified_at: 2026-09-19T21:04:03.812625637Z
+modified_at: 2026-09-19T21:54:05.542817340Z
 req_type: Spike
 tags:
+- advisor-owned
 - codegraph
 - competitive-refresh
 - dogfooding
 - ecosystem-watch
 - positioning
+execution_mode: operator
 human_only: true
