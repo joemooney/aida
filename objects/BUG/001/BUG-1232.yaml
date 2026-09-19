@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-19T01:16:21.357654868Z
+modified_at: 2026-09-19T01:16:22.794258100Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -52,6 +52,11 @@ comments:
   content: 'Reviewer round 1 on PR #1950: aida-cli-lib/src/forge.rs:2545 classifies GitLab''s documented detailed_merge_status=unchecked as Blocked. unchecked means Git has not yet computed mergeability, so a fresh MR can be shelved immediately instead of entering the bounded reread loop; classify it as Wait and cover it in the transient-status test. | aida-cli-lib/src/forge.rs:2091 maps MergeMethod::Rebase to squash=false and calls the ordinary /merge endpoint, yet returns method=Rebase. The previous glab path passed --rebase. Preserve the Forge merge-method contract (or explicitly reject unsupported rebase) rather than silently performing a normal merge.'
   created_at: 2026-09-18T23:18:11.713537147Z
   modified_at: 2026-09-18T23:18:11.713537147Z
+- id: 01a0b73c-608f-7812-900f-37261a211ef5
+  author: joe
+  content: 'Round 3 fix already pushed by the product seat (f1dbc3fe64: unchecked → Wait; Rebase refused explicitly with recovery hint; tests added). Verify tests, push nothing if clean, and let the reviewer take round 3.'
+  created_at: 2026-09-19T01:16:22.543887361Z
+  modified_at: 2026-09-19T01:16:22.543887361Z
 execution_mode: drain
 implementation_info:
   implemented: true
