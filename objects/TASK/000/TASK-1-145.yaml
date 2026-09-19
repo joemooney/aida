@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T18:31:50.729905333Z
-modified_at: 2026-09-19T18:42:31.665576320Z
+modified_at: 2026-09-19T18:47:52.317535806Z
 req_type: Task
 tags:
 - ci-guard
@@ -34,3 +34,9 @@ comments:
   created_at: 2026-09-19T18:42:31.665576320Z
   modified_at: 2026-09-19T18:42:31.665576320Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0baff-0cfd-7972-a121-f5afde637faa
+  author: joe
+  content: 'Re-diagnosed by the advisor and confirmed: this is NOT doc drift. Running docs/cli/verify-manual.py against current main exits 0 with all four checks green, and the three cited flags are present in the current binary (mailbox send --stdin, mailbox send --body-file, schedule tick --hook). The red came from TASK-1289''s own preflight guard checking a STALE binary: verify-manual.py compares the manual against the installed binary''s --help output, so a worktree whose source adds or renames a flag fails the guard until the binary is rebuilt. Dismissing as a finding; the real defect is folded into TASK-1289''s rework brief as a design requirement.'
+  created_at: 2026-09-19T18:47:52.317535806Z
+  modified_at: 2026-09-19T18:47:52.317535806Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
