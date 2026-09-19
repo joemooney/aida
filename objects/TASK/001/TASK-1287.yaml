@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:38:23.425004816Z
-modified_at: 2026-09-19T06:12:05.257766158Z
+modified_at: 2026-09-19T06:12:27.140844392Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -25,8 +25,8 @@ relationships:
 comments:
 - id: 01a0b84b-1c09-7cb3-8ef2-ff7836d38bf1
   author: joe
-  content: '[advisor:groom] Re-groomed 23:12: taken off the drain queue and set to DRIVE — the product seat is building this by hand (an  verb that writes the marker, mirrors the label and records the sync state, plus ship treating label-only as a releasable hold). Must land as a NEW PR from main with the (TASK-1287) trailer: #1958 is already merged, so pushing to bug-1236-keyboard does nothing. Merge at the advisor gate.'
+  content: '[advisor:groom] Re-groomed 23:12: taken off the drain queue and set to DRIVE — the product seat is building this by hand (an aida merge-hold add <pr> [--reason] verb that writes the marker, mirrors the label and records the sync state, plus aida pr ship treating a label-only hold as a releasable supervised hold). Must land as a NEW PR from origin/main with the (TASK-1287) trailer: #1958 is already merged, so pushing to bug-1236-keyboard does nothing. Merge at the advisor gate.'
   created_at: 2026-09-19T06:12:05.257766158Z
-  modified_at: 2026-09-19T06:12:05.257766158Z
+  modified_at: 2026-09-19T06:12:27.140844212Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
