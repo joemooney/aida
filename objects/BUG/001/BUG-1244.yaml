@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T06:49:52.904074360Z
+modified_at: 2026-09-19T06:49:54.202532360Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -99,6 +99,16 @@ comments:
   content: 'Round 2 fixed the two integration tests; CI now fails the Rust portability ratchet (run 35427171838): new non-portable test assumptions — aida-cli-lib/src/auto_complete.rs:6565: tmp literal: driver.workspace = Some(("/tmp/aida-story-1221".to_string(), "story-1221".to_string()));  Move the code behind #[cfg(unix)] / #[cfg(target_os = "linux")], make it portable, or shrink/regenerate the baseline only for existing debt. ##[error]Process completed with exit code 1. . Replace hard-coded unix paths/separators in the new tests with tempdir + PathBuf joins (or cfg-gate a genuinely unix-only assertion), then run scripts/check-portability.sh --check-allowlist-growth origin/main locally until it is clean. Do not add entries to scripts/portability-allowlist.txt.'
   created_at: 2026-09-19T06:49:52.653592270Z
   modified_at: 2026-09-19T06:49:52.653592270Z
+- id: 01a0b86d-ba14-7ff1-9a9b-eca5174c97dd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1956-advisor):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1244 at 55a4f569. Round-1 items landed: (3) PhaseDonePr binding — capture_phase_done_pr freezes the phase-1 PR per run and the reviewer phase refuses with FailureKind::NoPr when the run has none or when review_pr_number differs from it (test reviewer_refuses_when_this_run_has_no_phase_done_pr); (1) implementer_workspace now resolves from the spec's own lease (or the default worktree path/branch) instead of the driver cwd, and the phase-1 args are pinned to it even on the first attempt; (5) rework recovery checks rework_pr_head_matches_spec before adopting a discovered PR, and rework_no_op_failure ignores a PR that is not this run's; (4) covered by test resolved_queue_entry_uses_current_spec_status_after_reopen (status is joined from the spec). One finding remains on (2), the queue-done ownership rule that caused the round-1 CI red: branch_belongs_to_spec now allows main/master and batch/|cluster/|single-branch/ prefixes and refuses when any extracted id differs — but the id regex ([a-z]+-\d+(?:-\d+)*) treats ANY word-dash-digits as a spec id, so `pr-1948` (the reviewer worktree branch pr_rebase_handler creates) reads as PR-1948, `batch-followups-0918h` reads as FOLLOWUPS-0918, and a slice branch `task-1189-4` reads as TASK-1189-4 ≠ TASK-1189: queue done from those is refused. Required: extract only ids whose prefix is an AIDA requirement-type prefix (BUG, TASK, STORY, SPIKE, EPIC, ADR, FR, NFR, CR, …; derive from RequirementType, do not hand-list), and match on the numeric core so slice suffixes (task-1189-4 for TASK-1189) and node-qualified agreed ids (TASK-1-127) are accepted; tests for pr-1948 vs STORY-1231, batch-followups-0918h, task-1189-4, bug-1244-keyboard (accept) and story-1221 vs BUG-1236 (refuse). Ship after that commit, the drain reviewer's verdict and required Build = success.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T06:49:53.940764719Z
+  modified_at: 2026-09-19T06:49:53.940764719Z
 execution_mode: drive
 implementation_info:
   implemented: true
