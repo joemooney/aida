@@ -14,12 +14,12 @@ description: |-
   A side branch is defensible for ad-hoc work; for a branch that backs an open PR it is never what the caller wants, because the round's commits must land where the PR points.
 
   Acceptance: with a local branch behind its remote and an open PR, the launcher fast-forwards and reports it; with a genuinely diverged local branch, it refuses naming the realign command and creates no <branch>-work; an explicit side-branch request still works; unit test on the pure decision (behind / diverged / equal / no-PR) and a fixture test that no -work branch is created on the PR path.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T16:22:43.229723018Z
+modified_at: 2026-09-19T16:22:46.261297170Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -49,3 +49,7 @@ comments:
   modified_at: 2026-09-19T16:21:56.521467162Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-19T16:22:46.261297170Z
+  implemented_by: joe
