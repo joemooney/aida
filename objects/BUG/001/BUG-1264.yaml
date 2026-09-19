@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T13:41:33.728078164Z
+modified_at: 2026-09-19T13:41:35.314935146Z
 req_type: Bug
 tags:
 - alias
@@ -50,6 +50,11 @@ comments:
   created_at: 2026-09-19T13:22:54.303315380Z
   modified_at: 2026-09-19T13:22:54.303315380Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b9e6-a2c4-71b1-ac2e-b891f4e6c217
+  author: joe
+  content: 'Reviewer round 1 on PR #1965 (alias resolution itself accepted): Add a regression test that queues a missing UUID, invokes batch member resolution, verifies the visible unresolvable-member skip diagnostic, and asserts that an actionable SpecSkipped event is emitted with the expected reason.  Concretely: add a test that stages a batch whose member id resolves to nothing (a queued entry for an id with no store object — a stale UUID), runs the batch member resolution, and asserts BOTH the human-visible skip line naming the member and an emitted SpecSkipped event carrying the reason; keep the existing aliased-fixture test green.'
+  created_at: 2026-09-19T13:41:35.044942555Z
+  modified_at: 2026-09-19T13:41:35.044942555Z
 execution_mode: drive
 implementation_info:
   implemented: true
