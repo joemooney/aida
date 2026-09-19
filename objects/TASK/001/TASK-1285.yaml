@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T07:15:58.342666939Z
+modified_at: 2026-09-19T07:15:59.833491456Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -73,6 +73,11 @@ comments:
   created_at: 2026-09-19T07:13:20.230252169Z
   modified_at: 2026-09-19T07:13:20.230252169Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b885-9ddb-72f2-8972-9a95c57d6fa1
+  author: joe
+  content: 'The ci-red shelve at 00:15 was a misclassification (BUG-1250 shape 2): the only red was the merge-hold gate with the marker present while Build was pending. The round-2 fix (aida_exe_path() instead of raw current_exe) is on PR #1959; verify resolve_aida_exe tests pass, push nothing if clean, and let the CI wait + reviewer run again.'
+  created_at: 2026-09-19T07:15:59.579787198Z
+  modified_at: 2026-09-19T07:15:59.579787198Z
 execution_mode: drive
 implementation_info:
   implemented: true
