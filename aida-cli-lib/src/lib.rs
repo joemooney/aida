@@ -55222,10 +55222,8 @@ fn handle_worktree_enter(
     if let Ok(main_root) = find_main_worktree_root() {
         if let Ok(store) = Storage::new(main_root.join(".aida-store")).load() {
             if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg)) {
-                if let Some(protocol) =
-                    protocol_cmd::protocol_for_requirement(&store, &req.req_type)
-                {
-                    eprintln!("\n{}\n", protocol.pickup_block());
+                if let Some(block) = protocol_cmd::pickup_block_for_requirement(&store, req) {
+                    eprintln!("\n{}\n", block);
                 }
             }
         }
@@ -66692,17 +66690,8 @@ fn handle_awaiting_command(
             .map(|lease| lease.scope)
         {
             if let Ok(store) = backend.load() {
-                if let Some(req) = store.requirements.iter().find(|r| {
-                    r.display_id().eq_ignore_ascii_case(&scope)
-                        || r.spec_id
-                            .as_deref()
-                            .is_some_and(|id| id.eq_ignore_ascii_case(&scope))
-                }) {
-                    if let Some(protocol) =
-                        protocol_cmd::protocol_for_requirement(&store, &req.req_type)
-                    {
-                        println!("{}", protocol.notice_line());
-                    }
+                if let Some(line) = protocol_cmd::notice_line_for_scope(&store, Some(&scope)) {
+                    println!("{line}");
                 }
             }
         }
@@ -80543,8 +80532,8 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
     // prompt propagation belongs to TASK-1278).
     // trace:STORY-1221 | ai:codex
     if std::env::var("AIDA_HEADLESS").ok().as_deref() != Some("1") {
-        if let Some(protocol) = protocol_cmd::protocol_for_requirement(&store, &req.req_type) {
-            eprintln!("{}\n", protocol.pickup_block());
+        if let Some(block) = protocol_cmd::pickup_block_for_requirement(&store, req) {
+            eprintln!("{}\n", block);
         }
     }
     eprintln!(

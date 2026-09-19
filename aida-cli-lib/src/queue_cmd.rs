@@ -8733,11 +8733,7 @@ pub(crate) fn handle_queue_work(
             .unwrap_or(plan.anchor_display.as_str());
         if let Ok(store) = storage.load() {
             if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
-                if let Some(protocol) =
-                    crate::protocol_cmd::resolved_protocol_for_requirement(&store, req)
-                {
-                    prompt = format!("{}\n\n{}", protocol.pickup_block(), prompt);
-                }
+                prompt = crate::protocol_cmd::prepend_resolved_pickup_protocol(&store, req, prompt);
             }
         }
     }
