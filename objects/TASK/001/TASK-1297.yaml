@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:47.445199182Z
-modified_at: 2026-09-19T21:01:55.053768314Z
+modified_at: 2026-09-19T21:31:03.777300026Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -36,4 +36,11 @@ relationships:
   target_id: 01a0b963-50a1-73f1-87dd-de8bdc6a0d4d
   created_at: 2026-09-19T21:01:55.053764026Z
   created_by: joe
+comments:
+- id: 01a0bb94-74e1-7611-b339-132ae9c516e0
+  author: joe
+  content: '[advisor] Evidence carried over from BUG-1284 (rejected as a duplicate of this spec; we filed the same finding from two directions within ten minutes): measured throughput across 2026-09-19 was 0.75 merges per hour with roughly 75 percent of wall-clock idle, while the role:implementer queue held nineteen entries, sixteen of them approved, routed and groomed with an execution_mode, and the drain could act on three. That is the cost of the silence in a number, and it is better evidence than anything I put in the original filing — use it in the spec body.'
+  created_at: 2026-09-19T21:31:03.777300026Z
+  modified_at: 2026-09-19T21:31:03.777300026Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
