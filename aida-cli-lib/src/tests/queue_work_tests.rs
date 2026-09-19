@@ -100,6 +100,73 @@ fn rework_prompt_leads_with_round_and_authoritative_open_items() {
     assert!(prompt.ends_with("/aida-pickup BUG-1213"));
 }
 
+/// TASK-1291: round 1 makes every acceptance decision and every defect
+/// explicit; later rounds retain the established compact review prompt.
+// trace:TASK-1291 | ai:codex
+#[test]
+fn round_one_reviewer_prompt_requires_a_complete_sweep_only_once() {
+    let first = reviewer_prompt_for_round(1291, 1);
+    assert!(first.starts_with("/aida-review --pr 1291"));
+    assert!(first.contains("enumerate EVERY acceptance criterion"));
+    assert!(first.contains("one status line per criterion"));
+    assert!(first.contains("list EVERY defect you find, not only the first"));
+    assert!(first.contains("`findings` array must carry the complete"));
+
+    assert_eq!(reviewer_prompt_for_round(1291, 2), "/aida-review --pr 1291");
+    assert_eq!(reviewer_prompt_for_round(1291, 7), "/aida-review --pr 1291");
+}
+
+// trace:TASK-1291 | ai:codex
+#[test]
+fn reviewer_round_is_derived_from_all_recorded_findings_blocks() {
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+    assert_eq!(review_round_from_comments(&[]), 1);
+    assert_eq!(
+        review_round_from_comments(&[
+            mk(format!("{prefix}PR #12):\n- first batch")),
+            mk("unrelated note".into()),
+            mk(format!("{prefix}PR #12):\n- second batch")),
+        ]),
+        3
+    );
+}
+
+/// TASK-1291: discussion that quotes or embeds the durable marker is not a
+/// completed review and must not suppress the mandatory round-1 sweep.
+// trace:TASK-1291 | ai:codex
+#[test]
+fn reviewer_round_ignores_embedded_or_quoted_findings_markers() {
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+
+    assert_eq!(
+        review_round_from_comments(&[
+            mk(format!("Discussion mentions {prefix}PR #12) as an example")),
+            mk(format!("> {prefix}PR #12):\n> quoted from another review")),
+        ]),
+        1
+    );
+}
+
+/// TASK-1291: every durable-history consumer shares the exact same
+/// prefix-at-byte-zero classification; quoted examples are neither latest
+/// findings nor completed rework rounds.
+// trace:TASK-1291 | ai:codex
+#[test]
+fn all_review_history_helpers_reject_noncanonical_marker_placement() {
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+    let comments = vec![
+        mk(format!("preamble: {prefix}PR #12):\nFindings:\n1. example")),
+        mk(format!("> {prefix}PR #12):\n> quoted example")),
+    ];
+
+    assert!(latest_findings_block(&comments).is_none());
+    assert_eq!(rework_round_from_comments(&comments), 2);
+    assert_eq!(review_round_from_comments(&comments), 1);
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
@@ -940,7 +1007,7 @@ fn prompt_reviewer_pr_passes_number() {
     let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
     assert_eq!(
         derive_queue_work_prompt(&plan, "reviewer", false, false, None),
-        "/aida-review --pr 11"
+        reviewer_prompt_for_round(11, 1)
     );
 }
 
@@ -2670,7 +2737,7 @@ fn resolve_queue_work_plan_pr_n_with_review_story_routes_to_reviewer() {
     );
     assert_eq!(
         derive_queue_work_prompt(&plan, "reviewer", false, false, None),
-        "/aida-review --pr 457"
+        reviewer_prompt_for_round(457, 1)
     );
 }
 
