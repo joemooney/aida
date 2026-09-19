@@ -1,0 +1,36 @@
+id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
+spec_id: PRIN-4
+agreed_id: PRIN-4
+title: A diagnostic must be unable to drift away from the decision it explains
+description: |
+  A decision and the explanation that accompanies it fail differently. The decision is load-bearing, so when it breaks something stops working and someone notices. The explanation is not load-bearing, so when it breaks nothing stops working and nobody notices. Left alone, every diagnostic in a system drifts toward being wrong while the decision beside it stays right, and the drift is invisible by construction.
+
+  This matters more in an autonomous system than in a supervised one. When a human is watching each step, a degraded explanation costs a moment of confusion. When an agent is acting on the explanation unattended, or a human is triaging a shelf of parked work hours later with nothing but the record, the explanation IS the interface. A correct decision with a lost reason is not a partial success; for the reader it is indistinguishable from an arbitrary one.
+
+  THE RULE. A diagnostic must be structurally unable to drift away from the decision it explains. Prefer, in order:
+  1. The explanation is derived from the same object as the decision, so they cannot disagree.
+  2. The explanation is carried in a typed field that the compiler requires, so it cannot be dropped.
+  3. A test fails when the explanation stops matching the decision.
+  Prose matched by a consumer, a field a producer may omit, and a string assembled separately from the thing it describes are all forms of the same defect, however correct they look today.
+
+  THE THREE INSTANCES that named this class, all found on 2026-09-19, all with the decision correct and the diagnostic broken:
+
+  BUG-1295 — the consumer classified orchestrator failures by matching the producer's prose. Six producer sites, one consumer, nothing enforcing correspondence. A wording change silently drops both the typed failure cause and the manual-recovery recipe attached to it, and reclassifies a safety refusal as a generic error.
+
+  BUG-1298 — a red-CI shelve named the wrong workflow run in its recovery hint, sending the reader to a run containing no failure. The detail line named the right check; only the run id was resolved separately, so the two could disagree. The shelve verdict itself was correct, which is why nothing alerted.
+
+  BUG-1299 — a watchdog retry reached the operator as the bare word watchdog, because SpecShelved has a detail field and SpecRetried does not. The reason was produced and then met a struct with nowhere to put it. Two watchdog trips with opposite remedies collapse to one indistinguishable word.
+
+  WHAT THE THREE SHARE, and what to look for. The decision stays right. Nothing fails. No test covers it, because tests assert the decision. The degradation is only visible to someone who follows the explanation and finds it does not lead anywhere, which in an unattended system is nobody. When adding or reviewing any failure path, ask where the explanation comes from, whether it can disagree with the decision, and what would fail if it did. If the answer to the last is nothing, that is the defect.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T23:11:47.618183122Z
+modified_at: 2026-09-19T23:11:47.618183122Z
+req_type: Principle
+tags:
+- diagnostic-decay
+- from:session-0919
+- observability
+- orchestrator
