@@ -6,12 +6,12 @@ description: |-
   Follow-up named by the STORY-1226 implementation (PR #1946): each schedule ledger update is a store object commit (schedule/<job>.yaml on the aida-store branch, CAS loop, 60 s debounce per job). Every commit advances the store HEAD, so the next cache-backed read (aida list/status/awaiting --notice) detects a HEAD mismatch and rebuilds .aida/cache.db. With several every-jobs firing per tick, the cache rebuilds on almost every read, which defeats STORY-707's sub-second reads and adds load on the per-turn hook path.
 
   Fix: the tick stages all ledger updates it produces and commits them ONCE at the end of the tick (one store commit per tick regardless of job count); the per-job debounce stays as the inner bound. Consider a cache fast-path that treats a HEAD advance whose diff touches only schedule/ objects as not requiring a full rebuild (incremental: reload only the ledger projection). Acceptance: a tick that fires N jobs produces exactly one aida-store commit; aida cache status after such a tick shows either no rebuild needed (fast-path) or one rebuild, never N; test on the batching with N=3 fake jobs; aida usage p95 for awaiting --notice does not regress with three every-jobs configured.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:14:51.388677532Z
-modified_at: 2026-09-19T11:05:37.799466312Z
+modified_at: 2026-09-19T13:05:25.076241394Z
 req_type: Task
 tags:
 - batch:followups-0918h
