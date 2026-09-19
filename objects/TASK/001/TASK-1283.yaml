@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-19T02:52:58.247176909Z
+modified_at: 2026-09-19T03:08:44.588456596Z
 req_type: Task
 tags:
 - batch:followups-0918g
@@ -80,6 +80,21 @@ comments:
   content: 'Round 3 review fix: removed the out-of-scope queue done lease-file deletion and changed the CLI regression to exercise the established aida session end lease-release path. Focused task_1283_protocol_cli suite passes (3/3).'
   created_at: 2026-09-19T02:52:58.247176909Z
   modified_at: 2026-09-19T02:52:58.247176909Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b7a3-40ac-7c02-8903-9735cc89e914
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1953
+    agent: codex
+    ran-at: 2026-09-18 20:08 -07:00
+    mode: propose-only (drain)
+    proposed: 1
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1283-drain-01a0b7a2-d8e1-7310-8ff6-85c200eac81d.json
+    ? SEM (0.96) — For spike requirements, the `queue work` pickup prompt resolves and includes the `research` lane protocol overlay, identified by `lane:research`, in addition to the type protocol.
+  created_at: 2026-09-19T03:08:44.588456596Z
+  modified_at: 2026-09-19T03:08:44.588456596Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
