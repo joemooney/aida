@@ -30,7 +30,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T19:10:02.267130221Z
-modified_at: 2026-09-19T19:24:25.460723269Z
+modified_at: 2026-09-19T19:24:27.368950296Z
 req_type: Task
 tags:
 - discipline
@@ -69,4 +69,17 @@ comments:
     Factual note for TASK-1291's fix, not for this document: main's existing detector already does it correctly — queue_cmd.rs:8199 and :8211 use c.content.starts_with(FINDINGS_BLOCK_PREFIX). So the contains() defect is a divergence in the NEW code from a canonical predicate that already exists a few hundred lines away. That strengthens the reviewer's finding and gives the fix its exact target.
   created_at: 2026-09-19T19:21:51.629395233Z
   modified_at: 2026-09-19T19:21:51.629395233Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bb20-8b68-7163-bcfb-dbbc004fe849
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1973 [AI:claude] docs(discipline): review independence as a property of method (TASK-1295)
+    verdict: APPROVE + merged
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes on the writing (the product seat authored it; I reviewed and verified the narrative). Noted for the record: the EPISODE it documents is mine as much as theirs, so I reviewed the text rather than the conclusion — the conclusion I had already argued. The check that mattered was factual accuracy of the account, which I re-derived.
+    gates: required Build (ubuntu-latest) = success at 684752f4; merge-hold released via aida pr ship; aida pull ran post-merge
+    FIRST FIELD USE OF TASK-1287: the release line read "releasing supervised merge-hold on PR-1973 (explicit review-merge) — aida:merge-hold label present (no local marker)". This PR carried the label with no marker file, which until this morning required me to run aida merge-hold clear by hand, wait for the gate to re-run, and ship again. TASK-1287 merged at 06:21 today and just paid for itself on the first hand-labelled PR to reach the gate.
+    timestamp: 2026-09-19T12:24-07:00
+  created_at: 2026-09-19T19:24:27.368950296Z
+  modified_at: 2026-09-19T19:24:27.368950296Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
