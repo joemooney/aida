@@ -17,7 +17,7 @@ description: |
   - The guard list is read from config, defaults to the CI set, and an unknown/missing guard is skipped with a note rather than failing closed.
   - lifecycle:no-preflight skips the phase and says so in the drain banner.
   - Unit test on the pure decision (which guards ran, which failed, open/refuse).
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
