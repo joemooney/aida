@@ -3133,6 +3133,7 @@ fn run() -> Result<()> {
     } = &cli.command
     {
         emit_notice_time_line();
+        arm_notice_deadline();
     }
 
     // STORY-696: `aida ps` is the GLOBAL running-work table — the project-wide
@@ -66867,6 +66868,21 @@ fn emit_notice_time_line() {
     // Local time, matching the trial hook's `%A %Y-%m-%d %H:%M %Z` shape.
     let when = now.format("%A %Y-%m-%d %H:%M %Z").to_string();
     println!("{}", format_notice_time_line(&when, &label));
+}
+
+/// Enforce the per-turn notice's fail-open latency contract across the whole
+/// dispatch path. Most notice reads are deliberately cheap, but cache refresh,
+/// lease discovery, or an unusually large protocol store can still stall after
+/// this early dispatch point. A detached watchdog bounds all of those paths and
+/// exits successfully because the notice is advisory; the always-on time line
+/// has already been emitted before this is armed.
+// trace:BUG-1239 | ai:codex
+fn arm_notice_deadline() {
+    const NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);
+    std::thread::spawn(|| {
+        std::thread::sleep(NOTICE_DEADLINE);
+        std::process::exit(0);
+    });
 }
 
 /// PURE: the notice's always-on leading line. Separated so the exact contract

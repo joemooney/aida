@@ -299,7 +299,7 @@ fn awaiting_notice_does_not_read_an_open_stdin_pipe() {
     let mut child = aida(&p.repo, &p.home)
         .args(["awaiting", "--notice"])
         .stdin(Stdio::piped())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .expect("spawn awaiting --notice");
@@ -311,6 +311,12 @@ fn awaiting_notice_does_not_read_an_open_stdin_pipe() {
     loop {
         if let Some(status) = child.try_wait().expect("poll awaiting --notice") {
             assert!(status.success(), "awaiting --notice failed: {status}");
+            let stdout = child.stdout.take().expect("piped stdout");
+            let output = std::io::read_to_string(stdout).expect("read notice stdout");
+            assert!(
+                output.starts_with("Current date/time:"),
+                "notice did not emit its fail-open time line: {output:?}"
+            );
             break;
         }
         if Instant::now() >= deadline {
