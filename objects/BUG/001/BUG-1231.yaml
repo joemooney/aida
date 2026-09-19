@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:39.919772314Z
-modified_at: 2026-09-19T22:02:23.806654459Z
+modified_at: 2026-09-19T22:02:55.666432721Z
 req_type: Bug
 tags:
 - agent-ux
@@ -51,6 +51,29 @@ comments:
     Everything else on the PR looks untouched by this — the failure is at 1m35s, so nothing got as far as running tests. Push fixups to bug-1231-work. Do not open a new PR.
   created_at: 2026-09-19T22:02:23.543335170Z
   modified_at: 2026-09-19T22:02:23.543335170Z
+- id: 01a0bbb1-a132-76c2-a42f-9126f0704ff5
+  author: joe
+  content: |-
+    [advisor:triage] Shelved ci-red on PR #1976, and it is a straightforward compile error in this spec's own code. Drain-safe to rework; no human decision needed.
+
+    THE FAILURE, from run 35471997271 (the CI workflow, not the run the hint names):
+      error[E0063]: missing field subject in initializer of aida_core::mailbox::Message
+
+    NOT A STALE BASE, which was my first hypothesis and is wrong. I checked both halves: the subject field has been on Message since #832 (STORY-585), so it is not newly arrived, and PR #1976 is zero commits behind origin/main, so the branch is current. This is the branch's own code constructing a Message without a field the struct has always required. Rebasing would change nothing; the fix is in the initializer.
+
+    Requeued for the implementer.
+
+    SEPARATELY, THE RECOVERY HINT POINTED AT THE WRONG RUN and I want that recorded rather than absorbed. The shelve said:
+
+      CI is red on PR-1976: Build (ubuntu-latest)
+      hint: CI failed on run 35471997274 - view it: gh run view 35471997274
+
+    Run 35471997274 is the Cross-platform (nightly) workflow, whose jobs are Build (windows-latest) and Build (macos-latest), both still pending. It does not contain Build (ubuntu-latest) at all. The failing check is in run 35471997271, the CI workflow. An implementer following the hint literally would open a run showing nothing wrong and have to work out for itself that it was sent to the wrong place.
+
+    The shelve VERDICT was correct — the required check genuinely failed — so this is a diagnostic defect, not a false shelve. Filed separately so it does not get lost inside this spec's fix.
+  created_at: 2026-09-19T22:02:55.666432721Z
+  modified_at: 2026-09-19T22:02:55.666432721Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
 implementation_info:
   implemented: true
