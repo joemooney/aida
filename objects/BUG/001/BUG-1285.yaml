@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:51:12.872457642Z
-modified_at: 2026-09-19T20:51:12.872457642Z
+modified_at: 2026-09-19T20:51:14.623974242Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -30,4 +30,8 @@ tags:
 - orchestrator
 - parent:EPIC-62
 - self-recovery
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-19T20:51:14.623974242Z
 execution_mode: drain
