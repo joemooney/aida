@@ -3,12 +3,12 @@ spec_id: TASK-1285
 agreed_id: TASK-1285
 title: 'Version pinning + rebuild handoff for a running wave: the drain records the binary SHA it started on, refuses a mid-wave binary swap, and hands off to a rebuilt binary at a phase boundary'
 description: 'SPIKE-82 gap 7. Today the drain prints ''your aida binary is now behind HEAD — run cargo build'' after every merge it makes, but a rebuild of target/release under a live wave replaces the binary the orchestrator and its child phases invoke mid-flight (the 2026-07-18 stale-debug-binary incident and today''s rule ''never make build-fast under a live drain''). Proposal: the wave records the binary SHA + mtime at launch (in the drain lock / drain state); aida dev status and aida ps show it; make build-fast (and aida dev activate) refuse or warn when a live wave is on the binary being replaced unless --after-wave is passed, which parks the rebuild until QueueDrained and then runs it; optionally the wave itself re-execs onto the rebuilt binary at the next spec boundary when the new SHA is an ancestor-compatible build. Acceptance: the lock records the SHA; a rebuild attempt under a live wave is refused with the wave id; --after-wave runs after the wave ends (event-driven, not polled); a test covers the refusal decision.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T12:46:17.477735762Z
+modified_at: 2026-09-19T13:26:23.442523931Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -113,16 +113,29 @@ comments:
   content: 'Precise cause (advisor triage) for the CI red on PR #1959: the STORY-597 CLI-manual drift guard fails because the new hidden "dev build-guard" subcommand is neither documented under docs/cli nor allow-listed as hidden/internal. One-line fix: add "dev build-guard" to the hidden-command allow-list in docs/cli/verify-manual.py (or document it under the aida dev entry if it is meant to be user-facing); run python3 docs/cli/verify-manual.py until it prints OK; push. The resolver item is already fixed; ignore my earlier generic brief.'
   created_at: 2026-09-19T11:17:57.860532294Z
   modified_at: 2026-09-19T11:17:57.860532294Z
+history:
+- id: 01a0b9d8-b9cb-7f00-8f71-f7ac2380d6ef
+  author: aida-auto-bump
+  timestamp: 2026-09-19T13:26:23.435666190Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b9d8-b9d2-72c2-baf0-9dc7538650bf
+  timestamp: 2026-09-19T13:26:23.442519441Z
+  agent: implementer
+  commit_sha: 68f2d0bb8387240ffe2cbaa80a30b59e06d4a414
+  summary: Completed via merge 68f2d0bb
+  punted:
+  - 'punted: CI is red on PR-1959: `merge-hold-gate` is red because PR-1959 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1959: merge-hold-gate'
+  - 'punted: CI is red on PR-1959: `merge-hold-gate` is red because PR-1959 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1959: merge-hold-gate'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T05:30:08.224798669Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1959: merge-hold-gate'
-  recovery_hint: 'CI failed on run 35443522933 — view it: `gh run view 35443522933`. Push fixups to the same branch: `aida queue work TASK-1285 --branch task-1285 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T12:46:17.477735762Z
+  completed_at: 2026-09-19T13:26:23.435357813Z
+  completion_sha: 68f2d0bb8387240ffe2cbaa80a30b59e06d4a414
