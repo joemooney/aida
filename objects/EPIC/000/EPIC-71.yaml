@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:38:35.944935297Z
-modified_at: 2026-09-19T17:39:10.047241001Z
+modified_at: 2026-09-19T21:33:01.900882087Z
 req_type: Epic
 tags:
 - cost
@@ -44,3 +44,10 @@ relationships:
   target_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
   created_at: 2026-09-19T17:39:10.047231770Z
   created_by: joe
+comments:
+- id: 01a0bb96-424c-7b03-8cb1-af24e0233886
+  author: joe
+  content: '[advisor:groom] Accepted as the container for the operator''s cost-observability request. Status stays Draft by design — an epic''s status is a read-only rollup of its children (BUG-626) and will move on its own as slices land. First slice SPIKE-83 is approved, DRIVE, queued in followups-0918i. Sequencing I want held to: the spike''s REPORT decides what the later slices are, so no collector, schema or surface is filed against this epic until it lands and I have read it. The reason is the same one the spike itself is built on — today''s capture is coarse and silently zero most of the time, and building attribution on top of a source we have not yet explained would bake the zeros in. Two framings worth keeping in the epic as slices get filed: cost must be attributable to a ROUND, not only a spec, because today''s evidence says the rework tail is where spend concentrates (40 shelves across 19 specs, worst case five rounds for one spec); and the per-message usage both vendors already write to disk is the source of truth to reach for, since it needs collecting rather than inventing.'
+  created_at: 2026-09-19T21:33:01.900882087Z
+  modified_at: 2026-09-19T21:33:01.900882087Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
