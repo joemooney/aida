@@ -1387,6 +1387,18 @@ fn queue_work_identity_preserves_node_qualified_spec_id() {
     assert_eq!(resolved.spec_id, "TASK-1-127");
 }
 
+/// BUG-1244: queue rows carry routing only; pickup status is always joined
+/// from the current requirement. A stale prior `Done` plan must not suppress a
+/// spec an operator reset to Approved for fresh work.
+// trace:BUG-1244 | ai:codex
+#[test]
+fn resolved_queue_entry_uses_current_spec_status_after_reopen() {
+    let mut r = req("BUG-1244", None, RequirementType::Bug);
+    r.set_status_from_str("Approved");
+    let resolved = build_resolved_entry(entry(r.id, Some("implementer"), None), &r);
+    assert_eq!(resolved.status_at_plan, "Approved");
+}
+
 /// BUG-366: the "awaiting review" hint must be an unambiguous reviewer
 /// pickup, not a bare `aida queue work PR-N` that invites implementer-drain
 // flags the PR-N path can't resolve. trace:BUG-366 | ai:claude

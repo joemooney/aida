@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-106 | ai:claude
 
+use aida_core::RequirementType;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 
@@ -275,6 +276,131 @@ fn queue_drained_hint_lines(
 pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: bool) -> bool {
     let _ = yes;
     force || skip_pr_check
+}
+
+/// BUG-1244: branch-name ownership is positive evidence, not an absence of
+/// contradictory evidence. An unscoped branch must be checked against its
+/// since-merge-base commits by the queue-done command.
+// trace:BUG-1244 | ai:codex
+pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
+    let Some((target_prefix, target_numeric_core)) = requirement_id_parts(spec) else {
+        return false;
+    };
+    let re = regex::Regex::new(r"(?i)([a-z]+)-(\d+(?:-\d+)*)").expect("valid branch spec regex");
+    let ids: Vec<(String, String)> = re
+        .captures_iter(branch)
+        .filter_map(|capture| {
+            let whole = capture.get(0)?;
+            let starts_at_boundary =
+                whole.start() == 0 || !branch.as_bytes()[whole.start() - 1].is_ascii_alphanumeric();
+            let ends_at_boundary = whole.end() == branch.len()
+                || !branch.as_bytes()[whole.end()].is_ascii_alphanumeric();
+            if !starts_at_boundary || !ends_at_boundary {
+                return None;
+            }
+            let prefix = capture[1].to_ascii_uppercase();
+            RequirementType::ALL
+                .iter()
+                .any(|req_type| req_type.default_prefix() == prefix)
+                .then(|| (prefix, capture[2].to_string()))
+        })
+        .collect();
+    !ids.is_empty()
+        && ids.iter().all(|(prefix, numeric_core)| {
+            prefix == &target_prefix
+                && (numeric_core == &target_numeric_core
+                    || numeric_core
+                        .strip_prefix(&target_numeric_core)
+                        .is_some_and(|suffix| suffix.starts_with('-')))
+        })
+}
+
+fn branch_names_requirement(branch: &str) -> bool {
+    let re = regex::Regex::new(r"(?i)([a-z]+)-(\d+(?:-\d+)*)").expect("valid branch spec regex");
+    let found = re.captures_iter(branch).any(|capture| {
+        let Some(whole) = capture.get(0) else {
+            return false;
+        };
+        let bounded = (whole.start() == 0
+            || !branch.as_bytes()[whole.start() - 1].is_ascii_alphanumeric())
+            && (whole.end() == branch.len()
+                || !branch.as_bytes()[whole.end()].is_ascii_alphanumeric());
+        bounded
+            && RequirementType::ALL
+                .iter()
+                .any(|req_type| req_type.default_prefix() == capture[1].to_ascii_uppercase())
+    });
+    found
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum QueueDoneOwnership {
+    Proceed,
+    Refuse(String),
+    Forced(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueDoneCommitEvidence {
+    pub(crate) commits_seen: usize,
+    pub(crate) spec_ids: Vec<String>,
+}
+
+/// A target-named branch passes. On an unscoped branch, readable commit
+/// evidence refuses only when commits exclusively name other requirements;
+/// `--force` is the ledgered override.
+// trace:BUG-1244 | ai:codex
+pub(crate) fn queue_done_ownership(
+    branch: &str,
+    spec: &str,
+    commit_evidence: Option<&QueueDoneCommitEvidence>,
+    force: bool,
+) -> QueueDoneOwnership {
+    if branch_belongs_to_spec(branch, spec) {
+        return QueueDoneOwnership::Proceed;
+    }
+    let foreign_branch = branch_names_requirement(branch);
+    if !foreign_branch {
+        if let Some(evidence) = commit_evidence {
+            if evidence.commits_seen == 0
+                || evidence.spec_ids.is_empty()
+                || evidence
+                    .spec_ids
+                    .iter()
+                    .any(|id| id.eq_ignore_ascii_case(spec))
+            {
+                return QueueDoneOwnership::Proceed;
+            }
+        }
+    }
+    let evidence = if foreign_branch {
+        "the branch names a different requirement".to_string()
+    } else if commit_evidence.is_none() {
+        "since-merge-base commit evidence could not be read".to_string()
+    } else {
+        let commit_spec_ids = &commit_evidence.expect("checked above").spec_ids;
+        format!(
+            "since-merge-base commits reference {}, not the target",
+            commit_spec_ids.join(", ")
+        )
+    };
+    let reason = format!("branch `{branch}` is not owned by {spec}: {evidence}");
+    if force {
+        QueueDoneOwnership::Forced(reason)
+    } else {
+        QueueDoneOwnership::Refuse(reason)
+    }
+}
+
+fn requirement_id_parts(spec: &str) -> Option<(String, String)> {
+    let re =
+        regex::Regex::new(r"(?i)^([a-z]+)-(\d+(?:-\d+)*)$").expect("valid canonical spec id regex");
+    let capture = re.captures(spec)?;
+    let prefix = capture[1].to_ascii_uppercase();
+    RequirementType::ALL
+        .iter()
+        .any(|req_type| req_type.default_prefix() == prefix)
+        .then(|| (prefix, capture[2].to_string()))
 }
 
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
@@ -1226,5 +1352,115 @@ mod tests {
             |_, _| panic!("pr lookup must not run when nothing is ahead"),
         );
         assert_eq!(result, QueueDoneGateDiagnose::Proceed);
+    }
+
+    #[test]
+    fn queue_done_ownership_accepts_target_branch_variants() {
+        assert!(branch_belongs_to_spec("bug-1244", "BUG-1244"));
+        assert!(branch_belongs_to_spec("fix/bug-1244-drain", "BUG-1244"));
+        assert!(branch_belongs_to_spec("bug-1244-keyboard", "BUG-1244"));
+        assert!(branch_belongs_to_spec("task-1189-4", "TASK-1189"));
+        assert!(branch_belongs_to_spec("task-1-127", "TASK-1-127"));
+        assert!(branch_belongs_to_spec(
+            "refs/heads/joe-bug-1244",
+            "BUG-1244"
+        ));
+    }
+
+    #[test]
+    fn queue_done_ownership_refuses_sibling_branch_even_if_commit_could_name_target() {
+        assert!(!branch_belongs_to_spec("story-1221", "BUG-1236"));
+        assert!(!branch_belongs_to_spec("batch-story-1221", "BUG-1236"));
+        assert!(!branch_belongs_to_spec("task-1189", "TASK-1189-4"));
+        assert!(!branch_belongs_to_spec("bug-1236-story-1221", "BUG-1236"));
+    }
+
+    #[test]
+    fn queue_done_ownership_allows_default_and_non_spec_branches() {
+        for branch in [
+            "main",
+            "master",
+            "pr-1948",
+            "batch-followups-0918h",
+            "batch/followups-0918h",
+            "cluster/one",
+        ] {
+            assert!(!branch_belongs_to_spec(branch, "BUG-1236"), "{branch}");
+            assert_eq!(
+                queue_done_ownership(
+                    branch,
+                    "BUG-1236",
+                    Some(&QueueDoneCommitEvidence {
+                        commits_seen: 0,
+                        spec_ids: vec![],
+                    }),
+                    false,
+                ),
+                QueueDoneOwnership::Proceed
+            );
+            assert_eq!(
+                queue_done_ownership(
+                    branch,
+                    "BUG-1236",
+                    Some(&QueueDoneCommitEvidence {
+                        commits_seen: 1,
+                        spec_ids: vec!["BUG-1236".into()],
+                    }),
+                    false,
+                ),
+                QueueDoneOwnership::Proceed
+            );
+        }
+    }
+
+    #[test]
+    fn queue_done_command_pr_branch_refuses_foreign_spec_evidence() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["STORY-1221".into()],
+        };
+        let outcome = queue_done_ownership("pr-1948", "BUG-1236", Some(&evidence), false);
+        let QueueDoneOwnership::Refuse(reason) = outcome else {
+            panic!("queue done must refuse, got {outcome:?}");
+        };
+        assert!(reason.contains("STORY-1221"), "{reason}");
+        assert!(reason.contains("BUG-1236"), "{reason}");
+    }
+
+    #[test]
+    fn queue_done_command_foreign_branch_cannot_borrow_target_commit() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["STORY-1221".into(), "BUG-1236".into()],
+        };
+        assert!(matches!(
+            queue_done_ownership("story-1221", "BUG-1236", Some(&evidence), false,),
+            QueueDoneOwnership::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn queue_done_command_allows_untagged_commits() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 2,
+            spec_ids: vec![],
+        };
+        assert_eq!(
+            queue_done_ownership("feature/no-spec", "BUG-1236", Some(&evidence), false),
+            QueueDoneOwnership::Proceed
+        );
+    }
+
+    #[test]
+    fn queue_done_command_force_explicitly_overrides_unreadable_evidence() {
+        assert!(matches!(
+            queue_done_ownership("main", "BUG-1236", None, false),
+            QueueDoneOwnership::Refuse(_)
+        ));
+        let outcome = queue_done_ownership("main", "BUG-1236", None, true);
+        let QueueDoneOwnership::Forced(reason) = outcome else {
+            panic!("--force must produce a recorded override, got {outcome:?}");
+        };
+        assert!(reason.contains("could not be read"), "{reason}");
     }
 }

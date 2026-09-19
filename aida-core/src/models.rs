@@ -780,6 +780,32 @@ impl fmt::Display for RequirementType {
 }
 
 impl RequirementType {
+    /// Every built-in requirement type. Consumers that need to recognize
+    /// canonical type prefixes should derive them from this list and
+    /// [`RequirementType::default_prefix`] rather than maintaining a second
+    /// prefix table.
+    pub const ALL: [RequirementType; 19] = [
+        RequirementType::Functional,
+        RequirementType::NonFunctional,
+        RequirementType::System,
+        RequirementType::User,
+        RequirementType::ChangeRequest,
+        RequirementType::Bug,
+        RequirementType::Epic,
+        RequirementType::Story,
+        RequirementType::Task,
+        RequirementType::Spike,
+        RequirementType::Sprint,
+        RequirementType::Folder,
+        RequirementType::Meta,
+        RequirementType::Principle,
+        RequirementType::Vision,
+        RequirementType::Constraint,
+        RequirementType::Decision,
+        RequirementType::Term,
+        RequirementType::Doc,
+    ];
+
     /// The built-in short prefix for this type, used in agreed-id format
     /// (`<PREFIX>-<SEQ>`) and as the default block-allocation key. Stateless
     /// — does not consult any per-store override. For per-store config-aware
