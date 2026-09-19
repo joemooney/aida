@@ -11,7 +11,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:14:51.388677532Z
-modified_at: 2026-09-19T10:54:33.748041883Z
+modified_at: 2026-09-19T10:58:36.651713663Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -65,4 +65,4 @@ failure_reason:
   detail: reviewer verdict is RequestChanges — not Approved
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1280 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-19T07:35:55.322124835Z
+  shelved_at: 2026-09-19T10:58:36.651713663Z
