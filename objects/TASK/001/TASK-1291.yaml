@@ -17,12 +17,12 @@ description: |-
   - A round-1 verdict for a multi-criterion spec lists a status line per criterion.
   - Round-2+ prompts are unchanged apart from carrying the prior findings (today's behaviour).
   - (advisor 2026-09-19) The post-deployment measurement that stood here has MOVED to its own follow-up spec, blocked by this one. It could not be satisfied before this change ships and twenty specs flow through it, so as an acceptance criterion on THIS spec it was a deadlock by construction: unverifiable at every round, forever. Nothing about the effectiveness of this change is verifiable at merge time; only its behaviour is.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T19:18:25.978813902Z
+modified_at: 2026-09-19T19:24:39.664931705Z
 req_type: Task
 tags:
 - batch:followups-0918h
