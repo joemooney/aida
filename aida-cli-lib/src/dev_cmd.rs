@@ -20,15 +20,7 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             debug,
             release,
             auto,
-            after_wave,
-        } => handle_dev_activate(
-            repo.as_deref(),
-            profile.as_deref(),
-            *debug,
-            *release,
-            *auto,
-            *after_wave,
-        ),
+        } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
         DevCommand::BuildGuard {
             profile,
             after_wave,
@@ -614,7 +606,6 @@ fn handle_dev_activate(
     debug_flag: bool,
     release_flag: bool,
     auto_flag: bool,
-    after_wave: bool,
 ) -> Result<()> {
     let repo = resolve_aida_repo(repo_arg)?;
 
@@ -669,7 +660,6 @@ fn handle_dev_activate(
         resolve_activation_request(cli_request, env_pin.as_deref().filter(|s| !s.is_empty()));
 
     let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, effective_request)?;
-    guard_binary_change(&repo, &bin_dir.join("aida"), after_wave, true)?;
     let stale = alternate_build_is_newer(&repo, profile);
     let ps1_marker = if stale { "*" } else { "" };
 
@@ -815,14 +805,13 @@ fn handle_dev_activate(
     Ok(())
 }
 
-/// Refuse replacing/switching away from the binary pinned by a live wave, or
+/// Refuse replacing the binary pinned by a live wave, or
 /// park on the event stream until that wave emits QueueDrained.
 // trace:TASK-1285 | ai:codex
 fn guard_binary_change(
     repo: &std::path::Path,
     target: &std::path::Path,
     after_wave: bool,
-    activation: bool,
 ) -> Result<()> {
     let main_root = crate::find_main_worktree_root().unwrap_or_else(|_| repo.to_path_buf());
     let Some(lock) = crate::drain_lock::read_pid_live_lock(&main_root) else {
@@ -834,7 +823,7 @@ fn guard_binary_change(
     let pinned = std::path::PathBuf::from(&lock.binary_path)
         .canonicalize()
         .unwrap_or_else(|_| std::path::PathBuf::from(&lock.binary_path));
-    if !binary_change_conflicts(&pinned, &target, activation) {
+    if !binary_change_conflicts(&pinned, &target) {
         return Ok(());
     }
     let wave = if lock.wave_id.is_empty() {
@@ -850,12 +839,8 @@ fn guard_binary_change(
     Ok(())
 }
 
-fn binary_change_conflicts(
-    pinned: &std::path::Path,
-    target: &std::path::Path,
-    activation: bool,
-) -> bool {
-    activation || pinned == target
+fn binary_change_conflicts(pinned: &std::path::Path, target: &std::path::Path) -> bool {
+    pinned == target
 }
 
 fn handle_dev_build_guard(profile: &str, after_wave: bool) -> Result<()> {
@@ -864,7 +849,6 @@ fn handle_dev_build_guard(profile: &str, after_wave: bool) -> Result<()> {
         &repo,
         &repo.join("target").join(profile).join("aida"),
         after_wave,
-        false,
     )
 }
 
@@ -875,16 +859,10 @@ mod task_1285_tests {
     #[test]
     fn rebuild_refusal_decision_only_blocks_the_pinned_binary() {
         let pinned = std::path::Path::new("/repo/target/release/aida");
-        assert!(binary_change_conflicts(pinned, pinned, false));
+        assert!(binary_change_conflicts(pinned, pinned));
         assert!(!binary_change_conflicts(
             pinned,
             std::path::Path::new("/repo/target/debug/aida"),
-            false,
-        ));
-        assert!(binary_change_conflicts(
-            pinned,
-            std::path::Path::new("/repo/target/debug/aida"),
-            true,
         ));
     }
 }
@@ -926,9 +904,7 @@ fn handle_dev_status() -> Result<()> {
             println!(
                 "Wave binary:  {} @ {}",
                 short_sha(&lock.binary_sha),
-                lock.binary_mtime_secs
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|| "?".into())
+                format_binary_mtime(lock.binary_mtime_secs)
             );
         }
     }
@@ -1128,6 +1104,16 @@ fn wave_label(lock: &crate::drain_lock::DrainLock) -> String {
 
 fn short_sha(sha: &str) -> &str {
     sha.get(..sha.len().min(8)).unwrap_or(sha)
+}
+
+fn format_binary_mtime(mtime_secs: Option<u64>) -> String {
+    mtime_secs
+        .and_then(|secs| std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs)))
+        .map(|time| {
+            let local: chrono::DateTime<chrono::Local> = time.into();
+            local.format("%Y-%m-%d %H:%M:%S").to_string()
+        })
+        .unwrap_or_else(|| "?".into())
 }
 
 /// The three states a caller's shell wrapper can be in, from the binary's point
