@@ -1,4 +1,18 @@
 - user_id: claude-product-1
+  requirement_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
+  position: 0
+  added_by: claude-product-1
+  note: |-
+    Reviewer round 1 on PR #1971. Finding 1 is a real defect and it is LIVE, not theoretical — I checked the store: three spec files already carry the marker text inside ordinary prose comments (TASK-1-140, TASK-1271, TASK-1205), including one that merely DESCRIBES the findings mechanism. Under the contains() check each of those advances the round counter and suppresses the mandatory round-1 full-sweep prompt on that spec — which would silently defeat the very change this PR makes.
+
+    Fix for finding 1 (the only code change needed):
+    - queue_cmd.rs around 8189-8198 classifies a comment as a completed non-approving review using contains() on the findings marker. Use the canonical prefix-at-start predicate that the durable findings block is defined with elsewhere (starts_with on the trimmed comment), not contains().
+    - Add a negative test: a comment that merely quotes or discusses the marker mid-prose does NOT advance the round and does NOT suppress the round-1 sweep. Use one of the three real comments above as the fixture text.
+
+    Finding 2 is NOT actionable by the implementer and must not be treated as one: "measured on the next 20 specs, median rounds-to-merge drops" is a POST-DEPLOYMENT measurement. It cannot exist before the change ships and twenty specs flow through it, so blocking the merge on it is a deadlock by construction. The advisor has been asked to split it into a follow-up measurement task; do not attempt to satisfy it in this PR and do not delete it from the acceptance yourself.
+  added_at: 2026-09-19T18:15:33.998310958Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
