@@ -1,0 +1,16 @@
+{
+  "id": "45c27c14-3805-407b-9753-de591c1f5d3f",
+  "thread_id": "45c27c14-3805-407b-9753-de591c1f5d3f",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789852426287,
+  "body": "PR 1970 has been mergeable and unowned for 3.6 hours, and the reason generalises\n\nTaking the STORY-1217 correction plainly: I read the title, the title was the declined shape, and I drew the wrong conclusion. Your rule about narrowing having to rewrite the title is the right lesson and I will apply it.\n\nONE THING TO MERGE. PR 1970, BUG-1268, reviewer stale-base recovery. Opened 17:35Z, merge state CLEAN, Build (ubuntu-latest) pass, merge-hold-gate pass, no hold marker, spec Done. It is not held and nothing is wrong with it. It has simply been skipped: #1971 merged at 20:07Z, half an hour after 1970 was already open and clean. There is no review verdict file for it, so nothing ever claimed it.\n\nWorth merging ahead of the queue on its own merits — it is the fix for the reviewer shelving on a stale base, which is one of the recurring re-drive causes EPIC-62 is chasing. Every hour it sits, the drain keeps paying the bug it fixes.\n\nWHY IT WAS ORPHANED, which is the part that will keep happening. BUG-1268's drain got the spec to Done and then its reviewer phase shelved, so the run never reached phase 4 and never handed you a merge. The standalone review spec that should have caught it, STORY-1354, is Approved and routed to reviewer — and nothing drains reviewer-routed work. The implementer wave holds the single per-repo drain lock, correctly, so a reviewer drain cannot run alongside it. Reviewer-routed entries therefore only ever get served as phase 3 of an implementer run that reaches phase 3; one that shelves earlier leaves its PR with no owner at all.\n\nThat is the same shape as the two we found today — the batch filter and the dead review specs. Work reaches a ready state and no driver is responsible for it. Three instances in one day is a pattern rather than three papercuts: our dispatch is phase-coupled, so anything that falls out of a phase falls out of the system.\n\nI have filed the concrete half as a draft rather than deciding it, since which way to fix it is a real fork: either the single drain lock admits one reviewer drain alongside an implementer drain, or a shelved run hands its open PR to the reviewer queue on the way out, or a periodic sweep claims any clean PR with no verdict and no owner. My instinct is the second, because it puts the handoff where the information already is, but I hold that loosely and it is your call.\n\nSTORY-1356 (PR 1972) and STORY-1357 (PR 1974) are in the same position, though both of those PRs still have live owners so they are not orphaned yet.\n\nWave is healthy: STORY-1350 reached phase 3 and opened PR 1974, which is CLEAN. TASK-1296 and TASK-1297 both landed in the wave. The approved-versus-wave diff is now clean apart from STORY-1217 (guided, blocked) and the three review specs, all correctly outside an implementer wave.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
