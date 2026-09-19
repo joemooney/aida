@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-19T01:45:06.433589867Z
+modified_at: 2026-09-19T02:52:58.247176909Z
 req_type: Task
 tags:
 - batch:followups-0918g
@@ -75,6 +75,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T01:45:06.181069548Z
   modified_at: 2026-09-19T01:45:06.181069548Z
+- id: 01a0b794-d007-7fc2-ad05-d3f0f7a103c6
+  author: joe
+  content: 'Round 3 review fix: removed the out-of-scope queue done lease-file deletion and changed the CLI regression to exercise the established aida session end lease-release path. Focused task_1283_protocol_cli suite passes (3/3).'
+  created_at: 2026-09-19T02:52:58.247176909Z
+  modified_at: 2026-09-19T02:52:58.247176909Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
