@@ -1,0 +1,30 @@
+id: 01a0bae7-ab56-7773-8c55-26640fcc3e39
+spec_id: TASK-1294
+agreed_id: TASK-1294
+title: 'Measure whether the round-1 full sweep actually reduced rounds-to-merge: median rounds per spec over the 20 specs after TASK-1291 lands, against the 2026-09-18/19 baseline'
+description: |-
+  Split out of TASK-1291 by the advisor 2026-09-19, because it is POST-DEPLOYMENT by construction and cannot be an acceptance criterion on the spec that ships the change.
+
+  Question: did requiring an exhaustive first-round reviewer sweep actually reduce the number of rounds a spec takes to merge, or did it only move the cost into a longer first round?
+
+  Baseline, already measured and not to be re-derived: over 2026-09-18 12:00 to 2026-09-19 09:30, 40 shelves across 19 specs — 26 verdict:request-changes, 10 ci-red, 4 tool-exit — with worst tails of five rounds (BUG-1244) and four (TASK-1285, BUG-1265, TASK-1271, BUG-1232). Source: .aida/events.jsonl, SpecShelved events in that window, counted per spec.
+
+  Method: once TASK-1291 is merged, take the next 20 specs that reach Completed. For each, count SpecShelved events between its first RunStarted and its PrMerged. Report median and distribution against the baseline, and split the shelve causes the same three ways, since a drop in verdict:request-changes with ci-red unchanged is the specific effect this change predicts. Note the confound honestly: TASK-1289 (pre-flight guards) and TASK-1290 (criteria gate) target the other two categories and may land inside the same window, so attribute by CAUSE rather than by total, and say so if the windows overlap.
+
+  Acceptance: a dated report comment on this spec giving median rounds-to-merge before and after with the per-cause split, the spec ids in the sample, and an explicit statement of which other changes landed inside the measurement window. A null or negative result is a valid outcome and must be reported as such rather than re-cut until it looks positive.
+
+  Convention this exists to honour: an acceptance criterion that can only be measured after shipping belongs on a follow-up spec, never on the spec that ships the change.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T18:22:19.990265168Z
+modified_at: 2026-09-19T18:22:19.990265168Z
+req_type: Task
+tags:
+- drain-safe
+- follow-up:TASK-1291
+- measurement
+- parent:EPIC-62
+- reviewer
+execution_mode: drain
