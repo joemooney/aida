@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:50:55.275336868Z
-modified_at: 2026-09-19T21:31:00.183433105Z
+modified_at: 2026-09-19T21:31:02.525172263Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -41,3 +41,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T20:50:57.479605628Z
+comments:
+- id: 01a0bb94-6ffd-79a0-b85e-7c7f7c96c88b
+  author: joe
+  content: '[advisor:triage] Rejected as a DUPLICATE of TASK-1297, which I filed at 14:00 from the product seat''s 13:50 mail describing the same incident — we filed the same finding from two directions within ten minutes. TASK-1297 is approved high, drain-safe, queued in followups-0918i, and carries the same framing (the filter is not the defect, the silence is; a mis-pointed launcher and an empty backlog both render as ''nothing left to ship''), plus the link to BUG-1264 as the same shape a day earlier and the requirement that the counts be correct under the role fallback. ONE THING FROM THIS SPEC IS BETTER AND I MOVED IT: the measured throughput figure — 0.75 merges per hour with 75 percent of wall-clock idle — is harder evidence than anything in TASK-1297, so it belongs there. Nothing else here is lost.'
+  created_at: 2026-09-19T21:31:02.525172263Z
+  modified_at: 2026-09-19T21:31:02.525172263Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
