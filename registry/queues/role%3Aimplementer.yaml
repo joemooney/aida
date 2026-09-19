@@ -188,3 +188,11 @@
   added_at: 2026-09-19T21:20:41.842654542Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb84-f45e-7502-a8d3-5fc93152a275
+  position: 107000
+  added_by: role:implementer
+  note: 'drive: PRIMARY = shelve path hands the open PR to the reviewer queue with the stop reason; BACKSTOP = bounded sweep claiming clean+unowned+unverdicted PRs, homed in STORY-1218''s tick, using the TASK-1284 identity check; REJECTED = relaxing the single drain lock; sweep claims for review, never merges'
+  added_at: 2026-09-19T21:23:35.807191460Z
+  for_role: implementer
+  added_by_machine: imac
