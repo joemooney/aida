@@ -84232,8 +84232,12 @@ impl RealPhaseDriver {
         if self.no_auto_rebase {
             return Err("disabled");
         }
-        if self.no_human != Some(auto_complete::NoHumanMode::Both) {
-            return Err("not-fully-headless");
+        // BUG-1268: reviewer-only headless runs have nobody available to
+        // perform the mechanical recovery either. The safety boundary is a
+        // headless reviewer, not whether phase 1 was also headless.
+        // trace:BUG-1268 | ai:codex
+        if self.no_human.is_none() {
+            return Err("not-headless");
         }
         if attempted {
             return Err("retry-limit");
@@ -84290,7 +84294,20 @@ impl RealPhaseDriver {
                         detail.trim().to_string(),
                     ));
                 }
-                self.record_auto_rebase(pr_number, "conflict");
+                if detail.contains("rebase aborted due to conflicts")
+                    || detail.contains("rebase hit") && detail.contains("conflict")
+                {
+                    self.record_auto_rebase(pr_number, "conflict");
+                    let recipe = format!(
+                        "{}\n\nManual recovery: `aida pr rebase {pr_number} --interactive`",
+                        detail.trim()
+                    );
+                    return Err(auto_complete::PhaseFailure::of(
+                        auto_complete::FailureKind::StaleBaseConflict,
+                        recipe,
+                    ));
+                }
+                self.record_auto_rebase(pr_number, "failed");
                 Err(auto_complete::PhaseFailure::new(detail.trim().to_string()))
             }
             Err(e) => {
@@ -84314,7 +84331,11 @@ impl RealPhaseDriver {
                 match self.attempt_phase3_auto_rebase(pr_number as u64) {
                     Ok(()) => return Phase3StaleOverlapAction::Proceed,
                     Err(failure)
-                        if failure.kind == auto_complete::FailureKind::StaleBaseRefused =>
+                        if matches!(
+                            failure.kind,
+                            auto_complete::FailureKind::StaleBaseRefused
+                                | auto_complete::FailureKind::StaleBaseConflict
+                        ) =>
                     {
                         return Phase3StaleOverlapAction::Refuse(failure);
                     }
