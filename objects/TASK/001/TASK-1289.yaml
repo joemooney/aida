@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T19:39:51.158197359Z
+modified_at: 2026-09-19T19:39:52.418802103Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -554,6 +554,16 @@ comments:
   content: 'Mis-shelved, no code owed: PR #1972 has Build (ubuntu-latest) PASSING and merge-hold-gate as its only red — the hold gate IS the hold for a drive spec. That is exactly the BUG-1265 case, which merged at 19:14 UTC, twenty-five minutes AFTER this wave''s orchestrator started on its binary. A running wave keeps the binary it launched with (the subject of TASK-1285), so this wave still carries the pre-fix classifier. The next relaunch rebuilds from main and will not repeat it. Re-drive as-is; the two real items from round 1 (express override must clear no_preflight; binary-dependent guards must run against a binary built from the worktree source) still stand.'
   created_at: 2026-09-19T19:39:50.892816098Z
   modified_at: 2026-09-19T19:39:50.892816098Z
+- id: 01a0bb2e-a7d9-7252-b78f-460ba075d753
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1972):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1289: LifecycleSkip::from_tags clears no_ci_wait/no_review/no_build when batch:express is present, but does not clear the newly added no_preflight flag. Thus tags [batch:express, lifecycle:no-preflight] skip implementer preflight even though the express contract says every lifecycle short-circuit is overridden and the full gate is enforced. Clear no_preflight in the express override and extend lifecycle_skip_express_tier_forces_full_gate to cover it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T19:39:52.153767618Z
+  modified_at: 2026-09-19T19:39:52.153767618Z
 execution_mode: drive
 implementation_info:
   implemented: true
