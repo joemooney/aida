@@ -132,3 +132,11 @@
   added_at: 2026-09-19T16:51:01.724763112Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba9e-f4f2-79b2-8a58-7df3a9234667
+  position: 83000
+  added_by: role:implementer
+  note: 'drive: split dispatch/disposition/integrity-floor with a named predicate each; audit all 31 has_advisor_authority sites, classified in the PR body, ambiguous ones STAY advisor for the advisor''s ruling; floors untouched and marked; MUST prove with a test that an undisposed spec on the queue is not drained by --batch'
+  added_at: 2026-09-19T17:12:00.261181180Z
+  for_role: implementer
+  added_by_machine: imac
