@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-19T17:51:22.005744095Z
+modified_at: 2026-09-19T17:53:53.262571562Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -77,4 +77,15 @@ comments:
   created_at: 2026-09-19T17:51:22.005744095Z
   modified_at: 2026-09-19T17:51:22.005744095Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bacd-a06e-7403-ad28-59a97e7a3242
+  author: joe
+  content: |-
+    Sharpest version of the evidence (advisor, verified against the run): CI run 35458563676 CONCLUDED SUCCESS at 17:46:49. The shelve fired at 17:46:08. The drain gave up forty-one seconds before its own CI went green. That one line is the whole bug report.
+
+    Second confirmed detail: with DEFAULT_CI_IDLE_SECS at 600 and this repo's PR CI at 9-10 min median with p75 at 9.9 min, the window sits BELOW p75 — more than a quarter of runs trip it before any queue delay is counted.
+
+    Product-seat note on the config amendment, which matters more than it looks: ci_idle_window_secs() reads AIDA_WORKER_CI_IDLE and nothing else — there is no config path (ci_idle_timeout.rs:126-130). So the mitigation currently in use, a launcher exporting the env var, is itself a MEMORY-backed rule: every present and future launch site must remember to set it, and any that forgets shelves healthy work. That is exactly the failure mode STORY-1351 documents (memory 0 for 3, substrate 6 for 6) and it argues for the config knob being part of THIS fix rather than a follow-up: a value in .aida/config.toml protects every launch path — the advisor's, a human's, the shift tick's and the launcher's — without anyone remembering anything.
+  created_at: 2026-09-19T17:53:53.262571562Z
+  modified_at: 2026-09-19T17:53:53.262571562Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
