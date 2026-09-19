@@ -15,15 +15,17 @@ description: |
   - No "missing" cell remains for product/advisor/implementer/reviewer under Codex; "degraded" cells have a filed spec each.
   - CI fails when a hook is wired for one vendor and not the other.
   - The dogfood wave under a Codex advisor merges at least one drain-mode spec with the merge gated by that Codex advisor.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-18T19:29:04.330022232Z
+modified_at: 2026-09-19T16:40:07.876494553Z
 req_type: Task
 tags:
+- batch:followups-0918i
 - codex
+- drive
 - multivendor
 - parent:EPIC-56
 - roles
@@ -32,3 +34,4 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-09-18T19:29:04.330022232Z
+execution_mode: drive
