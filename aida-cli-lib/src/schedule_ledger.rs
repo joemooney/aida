@@ -345,6 +345,124 @@ pub(crate) fn write_cas_opts(
     )
 }
 
+/// Three-way field merge for a batched ledger write: a field the tick changed
+/// (`next` differs from `base`) takes the tick's value; every other field keeps
+/// whatever is on disk NOW (`fresh`), which may be a concurrent writer's update
+/// made since the tick loaded `base`. Pure.
+// trace:TASK-1280 | ai:claude
+pub(crate) fn reapply_delta(
+    base: Option<&JobLedger>,
+    next: &JobLedger,
+    fresh: Option<&JobLedger>,
+) -> JobLedger {
+    let Some(fresh) = fresh else {
+        return next.clone();
+    };
+    let base = base.cloned().unwrap_or_else(|| JobLedger::new(&next.job));
+    let mut out = fresh.clone();
+    macro_rules! take_if_changed {
+        ($($field:ident),* $(,)?) => {$(
+            if next.$field != base.$field {
+                out.$field = next.$field.clone();
+            }
+        )*};
+    }
+    take_if_changed!(
+        last_run,
+        last_by,
+        result,
+        note,
+        due_since,
+        due_reason,
+        episode,
+        cold_boot_at
+    );
+    out
+}
+
+/// Persist all ledger changes produced by one scheduler tick in one store
+/// commit. The per-job debounce is still evaluated independently; only the
+/// surviving files are staged.
+// trace:TASK-1280 | ai:codex
+pub(crate) fn write_batch_cas_opts(
+    store_root: &Path,
+    base: &BTreeMap<String, JobLedger>,
+    next: &BTreeMap<String, JobLedger>,
+    push: bool,
+) -> Result<usize> {
+    use aida_core::git_ops;
+
+    // Review round 1 on #1962: never save the pre-tick snapshot wholesale. On
+    // every attempt (including after a rejected push + rebase) re-apply only
+    // the fields THIS tick changed (next vs base) onto the freshly loaded
+    // ledger, so a concurrent writer's change to another field (a seat's
+    // `schedule done`, a cold-boot stamp) is preserved. trace:TASK-1280 | ai:claude
+    let changed = |current: &BTreeMap<String, JobLedger>| {
+        next.iter()
+            .map(|(job, ledger)| {
+                let merged = reapply_delta(base.get(job), ledger, current.get(job));
+                (job.clone(), merged)
+            })
+            .filter(|(job, merged)| should_write(current.get(job), merged))
+            .collect::<Vec<_>>()
+    };
+
+    if !is_git_checkout(store_root) {
+        let writes = changed(&load_all(store_root));
+        for (_, ledger) in &writes {
+            save(store_root, ledger)?;
+        }
+        return Ok(writes.len());
+    }
+    if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
+        eprintln!("  schedule ledgers not written this tick: {err}");
+        return Ok(0);
+    }
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let local_only = !push || !git_ops::has_remote(store_root, "origin");
+
+    for attempt in 0..MAX_RETRIES {
+        if attempt > 0 && !local_only {
+            git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
+        }
+        let writes = changed(&load_all(store_root));
+        if writes.is_empty() {
+            return Ok(0);
+        }
+        for (_, ledger) in &writes {
+            save(store_root, ledger)?;
+        }
+        let rels = writes
+            .iter()
+            .map(|(job, _)| ledger_rel(job))
+            .collect::<Vec<_>>();
+        let refs = rels.iter().map(String::as_str).collect::<Vec<_>>();
+        git_ops::add(store_root, &refs)?;
+        let msg = format!("schedule: tick ({} jobs)", writes.len());
+        if !git_ops::commit(store_root, &msg)? || local_only {
+            return Ok(writes.len());
+        }
+        match git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => return Ok(writes.len()),
+            Ok(false) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+            }
+            Err(e) => {
+                eprintln!(
+                    "note: schedule tick committed locally; push failed ({e}) — it uploads on the next `aida push`"
+                );
+                return Ok(writes.len());
+            }
+        }
+    }
+    anyhow::bail!(
+        "could not write the schedule tick after {MAX_RETRIES} attempts (store push kept being rejected)"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -520,5 +638,32 @@ mod tests {
         .unwrap();
         assert!(!wrote, "a mid-rebase store must not be written");
         assert!(load(root, "mailbox-triage").is_none());
+    }
+
+    // trace:TASK-1280 | ai:claude
+    #[test]
+    fn batch_retry_reapplies_only_the_ticks_delta_over_a_concurrent_update() {
+        let base = JobLedger::new("mailbox-triage");
+        // The tick marked the job due.
+        let mut next = base.clone();
+        next.due_since = Some(at(10, 0));
+        next.due_reason = Some("every 30m".into());
+        // Meanwhile another writer reported a run and left a note.
+        let mut fresh = base.clone();
+        fresh.last_run = Some(at(9, 30));
+        fresh.note = Some("done by advisor".into());
+        let merged = reapply_delta(Some(&base), &next, Some(&fresh));
+        assert_eq!(merged.due_since, Some(at(10, 0)), "tick's change applied");
+        assert_eq!(merged.due_reason.as_deref(), Some("every 30m"));
+        assert_eq!(merged.last_run, Some(at(9, 30)), "concurrent change kept");
+        assert_eq!(merged.note.as_deref(), Some("done by advisor"));
+        // No ledger on disk yet → the tick's snapshot is the whole truth.
+        assert_eq!(reapply_delta(Some(&base), &next, None), next);
+        // A field the tick did NOT change never overwrites the fresh value,
+        // even when base and next both carry a stale copy of it.
+        let mut stale_next = next.clone();
+        stale_next.note = base.note.clone();
+        let merged = reapply_delta(Some(&base), &stale_next, Some(&fresh));
+        assert_eq!(merged.note.as_deref(), Some("done by advisor"));
     }
 }

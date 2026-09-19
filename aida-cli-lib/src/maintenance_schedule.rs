@@ -665,6 +665,7 @@ where
 {
     let store = store_root(project_root);
     let ledgers = schedule_ledger::load_all(&store);
+    let mut staged_ledgers = ledgers.clone();
     let mut touched = false;
     let mut lines = Vec::new();
 
@@ -745,7 +746,6 @@ where
             }
         }
 
-        let mut fired_condition = false;
         if let (Some(expr), Some(snap)) = (&task.when, snap.as_ref()) {
             let is_true = match schedule_predicate::eval(expr, snap) {
                 Ok(v) => v,
@@ -754,17 +754,12 @@ where
                     false
                 }
             };
-            let mut prospective = ledger
-                .cloned()
-                .unwrap_or_else(|| schedule_ledger::JobLedger::new(&task.name));
-            let transition = schedule_ledger::apply_condition(&mut prospective, is_true, now);
+            let staged = staged_ledgers
+                .entry(task.name.clone())
+                .or_insert_with(|| JobLedger::new(&task.name));
+            let transition = schedule_ledger::apply_condition(staged, is_true, now);
             if transition == EpisodeTransition::Fired {
-                fired_condition = true;
                 triggers.push(Trigger::Condition);
-            } else if transition == EpisodeTransition::Cleared {
-                schedule_ledger::write_cas_opts(&store, &task.name, !hook, |l| {
-                    schedule_ledger::apply_condition(l, false, now);
-                })?;
             }
         }
 
@@ -788,14 +783,13 @@ where
                     stderr: e.to_string(),
                 });
                 touched = true;
-                record_outcome(
-                    project_root,
-                    state,
-                    task,
+                record_outcome_local(project_root, state, task, now, &outcome);
+                apply_outcome_ledger(
+                    staged_ledgers
+                        .entry(task.name.clone())
+                        .or_insert_with(|| JobLedger::new(&task.name)),
                     now,
                     &outcome,
-                    !hook,
-                    fired_condition,
                 );
                 lines.push(format!(
                     "schedule tick: {} {}",
@@ -811,13 +805,11 @@ where
                     continue;
                 }
                 let seat_label = task.seats.join(",");
-                schedule_ledger::write_cas_opts(&store, &task.name, !hook, |l| {
-                    if fired_condition {
-                        schedule_ledger::apply_condition(l, true, now);
-                    }
-                    l.due_since = Some(now);
-                    l.due_reason = Some(reason.clone());
-                })?;
+                let staged = staged_ledgers
+                    .entry(task.name.clone())
+                    .or_insert_with(|| JobLedger::new(&task.name));
+                staged.due_since = Some(now);
+                staged.due_reason = Some(reason.clone());
                 events::emit(
                     project_root,
                     &Event::new(
@@ -837,6 +829,13 @@ where
             }
             JobKind::FiresTask => {}
         }
+    }
+    if let Err(err) =
+        schedule_ledger::write_batch_cas_opts(&store, &ledgers, &staged_ledgers, !hook)
+    {
+        eprintln!(
+            "warning: schedule ledgers were not written: {err}; local run state was retained"
+        );
     }
     if touched {
         state.last_tick_at = Some(now);
@@ -883,7 +882,17 @@ where
                     stderr: e.to_string(),
                 });
                 ran_any = true;
-                record_outcome(project_root, state, task, now, &outcome, true, false);
+                record_outcome_local(project_root, state, task, now, &outcome);
+                if let Err(err) =
+                    schedule_ledger::write_cas(&store_root(project_root), &task.name, |ledger| {
+                        apply_outcome_ledger(ledger, now, &outcome);
+                    })
+                {
+                    eprintln!(
+                        "warning: schedule ledger for '{}' was not written: {err}; local run state was retained",
+                        task.name
+                    );
+                }
                 lines.push(format!(
                     "schedule run: {} {}",
                     task.name,
@@ -1577,17 +1586,15 @@ fn quiet_now(task: &Task) -> bool {
         .is_some_and(|quiet| quiet.contains(Local::now().time()))
 }
 
-/// Record a substrate run: local mirror + store ledger (debounced) + failure
-/// log / event.
-// trace:STORY-1226 | ai:claude
-fn record_outcome(
+/// Record the local mirror plus any failure log/event. The caller stages the
+/// store ledger separately so a tick can batch every job into one commit.
+// trace:TASK-1280 | ai:codex
+fn record_outcome_local(
     project_root: &Path,
     state: &mut ScheduleState,
     task: &Task,
     now: DateTime<Utc>,
     outcome: &TaskOutcome,
-    push: bool,
-    fired_condition: bool,
 ) {
     let entry = state.tasks.entry(task.name.clone()).or_default();
     entry.last_run_at = Some(now);
@@ -1615,6 +1622,10 @@ fn record_outcome(
             ),
         );
     }
+}
+
+// trace:TASK-1280 | ai:codex
+fn apply_outcome_ledger(ledger: &mut JobLedger, now: DateTime<Utc>, outcome: &TaskOutcome) {
     let result = if outcome.status == 0 {
         "ok".to_string()
     } else {
@@ -1627,21 +1638,9 @@ fn record_outcome(
             .filter(|s| !s.is_empty()),
         vendor: Some("tick".to_string()),
     };
-    let ledger_result =
-        schedule_ledger::write_cas_opts(&store_root(project_root), &task.name, push, |l| {
-            if fired_condition {
-                schedule_ledger::apply_condition(l, true, now);
-            }
-            l.last_run = Some(now);
-            l.last_by = Some(by.clone());
-            l.result = Some(result.clone());
-        });
-    if let Err(err) = ledger_result {
-        eprintln!(
-            "warning: schedule ledger for '{}' was not written: {err}; local run state was retained",
-            task.name
-        );
-    }
+    ledger.last_run = Some(now);
+    ledger.last_by = Some(by);
+    ledger.result = Some(result);
 }
 
 fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
@@ -1978,6 +1977,51 @@ mod tests {
         assert!(try_tick_lock(tmp.path()).unwrap().is_none());
         drop(first);
         assert!(try_tick_lock(tmp.path()).unwrap().is_some());
+    }
+
+    // A chatty tick advances the store once, regardless of job count.
+    // trace:TASK-1280 | ai:codex
+    #[test]
+    fn tick_batches_three_job_ledgers_into_one_store_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        std::fs::create_dir_all(&store).unwrap();
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&store)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.name", "AIDA Test"]);
+        git(&["config", "user.email", "aida@example.invalid"]);
+
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let out = tick_with_executor(
+            tmp.path(),
+            config(vec![
+                task("one", "1h", "cache verify"),
+                task("two", "1h", "queue gc"),
+                task("three", "1h", "session reap"),
+            ]),
+            &mut state,
+            at(12),
+            false,
+            ok_exec(Rc::clone(&seen)),
+        )
+        .unwrap();
+
+        assert_eq!(out.len(), 3);
+        assert_eq!(git(&["rev-list", "--count", "HEAD"]), "1");
+        assert_eq!(schedule_ledger::load_all(&store).len(), 3);
     }
 
     #[test]
