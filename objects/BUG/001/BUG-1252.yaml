@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T04:57:08.937913149Z
+modified_at: 2026-09-19T04:57:10.943030077Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -25,4 +25,8 @@ tags:
 - parent:EPIC-28
 - split-from:BUG-1241
 - tags
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-19T04:57:10.943030077Z
 execution_mode: drain
