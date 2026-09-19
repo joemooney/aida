@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-18T22:59:51.815220440Z
+modified_at: 2026-09-19T00:40:11.100402253Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -47,6 +47,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-18T20:55:59.294927591Z
   modified_at: 2026-09-18T20:55:59.294927591Z
+- id: 01a0b71b-3e5c-7be0-81ce-375eab64955c
+  author: joe
+  content: 'Round 2 review fix: MCP read_inbox mark_seen now records per-message receipts before advancing the watermark; regression coverage verifies receipts populate max read-latency history and unread clearing remains intact.'
+  created_at: 2026-09-19T00:40:11.100402253Z
+  modified_at: 2026-09-19T00:40:11.100402253Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
