@@ -505,6 +505,25 @@ pub fn pid_is_alive(pid: u32) -> bool {
     pid_is_alive_impl(pid)
 }
 
+/// Return the kernel-reported start time for `pid` as a canonical timestamp.
+/// Together with the PID this is a stable process identity: if the OS recycles
+/// a PID, the new process necessarily has a different start time.
+// trace:TASK-1284 | ai:codex
+pub fn process_start_identity(pid: u32) -> Option<String> {
+    process_start_time(pid).map(|time| time.to_rfc3339())
+}
+
+/// True only when both parts of a recorded process identity still match.
+/// Records written before start-time identities were introduced deliberately
+/// fail closed: PID existence alone cannot distinguish a recycled PID.
+// trace:TASK-1284 | ai:codex
+pub fn process_identity_is_alive(pid: u32, recorded_start_time: Option<&str>) -> bool {
+    recorded_start_time
+        .zip(process_start_identity(pid).as_deref())
+        .map(|(recorded, actual)| recorded == actual)
+        .unwrap_or(false)
+}
+
 /// BUG-613: liveness must be O(1), not a full process-table walk. The old
 /// implementation built a fresh `sysinfo::System` and refreshed EVERY process
 /// (and, on Linux, every thread via `/proc/<pid>/task/<tid>/...`) just to test
@@ -1167,6 +1186,16 @@ mod tests {
     #[test]
     fn pid_is_alive_true_for_self() {
         assert!(pid_is_alive(std::process::id()));
+    }
+
+    #[test]
+    fn process_identity_rejects_same_pid_with_different_start_time() {
+        let pid = std::process::id();
+        assert!(process_start_identity(pid).is_some());
+        assert!(!process_identity_is_alive(
+            pid,
+            Some("1970-01-01T00:00:01+00:00")
+        ));
     }
 
     #[test]

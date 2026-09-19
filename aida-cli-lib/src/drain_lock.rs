@@ -146,6 +146,11 @@ fn register_atexit_cleanup(path: &Path) {
 pub(crate) struct DrainLock {
     /// PID of the drain process holding the lock.
     pub(crate) pid: u32,
+    /// Kernel process start timestamp, paired with `pid` to
+    /// reject recycled PIDs. Missing only on locks written by older binaries.
+    // trace:TASK-1284 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) pid_start_time: Option<String>,
     /// RFC3339 UTC timestamp of when the lock was taken.
     pub(crate) started_at_utc: String,
     /// The command that launched the drain (e.g. `burndown run --status approved`).
@@ -197,7 +202,7 @@ pub(crate) fn decide_lock(
     now: DateTime<Utc>,
     stale_secs: u64,
     force: bool,
-    is_alive: impl Fn(u32) -> bool,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> LockDecision {
     if force {
         return LockDecision::Acquire;
@@ -205,7 +210,7 @@ pub(crate) fn decide_lock(
     let Some(lock) = existing else {
         return LockDecision::Acquire;
     };
-    let pid_dead = !is_alive(lock.pid);
+    let pid_dead = !is_alive(lock.pid, lock.pid_start_time.as_deref());
     let aged_out = lock.age_secs(now).map(|a| a > stale_secs).unwrap_or(false);
     if pid_dead || aged_out {
         LockDecision::Acquire
@@ -229,7 +234,8 @@ fn read_lock(path: &Path) -> Option<DrainLock> {
 // trace:TASK-1194 | ai:codex
 pub(crate) fn read_pid_live_lock(project_root: &Path) -> Option<DrainLock> {
     let lock = read_lock(&drain_lock_path(project_root))?;
-    process_probe::pid_is_alive(lock.pid).then_some(lock)
+    process_probe::process_identity_is_alive(lock.pid, lock.pid_start_time.as_deref())
+        .then_some(lock)
 }
 
 /// Resolve the staleness horizon from `AIDA_DRAIN_LOCK_STALE_SECS`, falling
@@ -312,7 +318,7 @@ pub(crate) fn acquire_drain_lock_with_specs(
     // trace:BUG-748 | ai:codex
     if borrow_requested() {
         if let LockStatus::Running(lock) =
-            classify_lock(existing.clone(), process_probe::pid_is_alive)
+            classify_lock(existing.clone(), process_probe::process_identity_is_alive)
         {
             return Ok(DrainGuard {
                 path,
@@ -375,7 +381,7 @@ pub(crate) fn acquire_drain_lock_with_specs(
         Utc::now(),
         stale_secs(),
         forced,
-        process_probe::pid_is_alive,
+        process_probe::process_identity_is_alive,
     ) {
         LockDecision::Refuse(holder) => {
             anyhow::bail!(
@@ -429,6 +435,7 @@ pub(crate) fn acquire_drain_lock_with_specs(
             }
             let record = DrainLock {
                 pid: std::process::id(),
+                pid_start_time: process_probe::process_start_identity(std::process::id()),
                 started_at_utc: Utc::now().to_rfc3339(),
                 command: command.to_string(),
                 host: hostname(),
@@ -514,18 +521,21 @@ pub(crate) enum LockStatus {
 pub(crate) fn probe_lock(project_root: &Path) -> LockStatus {
     classify_lock(
         read_lock(&drain_lock_path(project_root)),
-        process_probe::pid_is_alive,
+        process_probe::process_identity_is_alive,
     )
 }
 
 /// Pure classifier: split from [`probe_lock`] so the three paths
 /// (none / running / stale) are unit-testable without a real lock or pid.
 /// trace:TASK-806 | ai:claude
-fn classify_lock(existing: Option<DrainLock>, is_alive: impl Fn(u32) -> bool) -> LockStatus {
+fn classify_lock(
+    existing: Option<DrainLock>,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
+) -> LockStatus {
     match existing {
         None => LockStatus::None,
         Some(lock) => {
-            if is_alive(lock.pid) {
+            if is_alive(lock.pid, lock.pid_start_time.as_deref()) {
                 LockStatus::Running(lock)
             } else {
                 LockStatus::Stale(lock)
@@ -614,6 +624,7 @@ mod tests {
     fn lock(pid: u32, started_at_utc: &str) -> DrainLock {
         DrainLock {
             pid,
+            pid_start_time: Some("1970-01-01T00:01:40+00:00".to_string()),
             started_at_utc: started_at_utc.to_string(),
             command: "queue work --auto-complete".to_string(),
             host: "testhost".to_string(),
@@ -680,7 +691,7 @@ mod tests {
 
     #[test]
     fn no_existing_lock_acquires() {
-        let d = decide_lock(None, now(), 1800, false, |_| true);
+        let d = decide_lock(None, now(), 1800, false, |_, _| true);
         assert_eq!(d, LockDecision::Acquire);
     }
 
@@ -688,7 +699,7 @@ mod tests {
     fn live_fresh_lock_refuses() {
         // started 60s ago, pid alive → refuse.
         let l = lock(4242, "2026-06-14T11:59:00Z");
-        let d = decide_lock(Some(l.clone()), now(), 1800, false, |_| true);
+        let d = decide_lock(Some(l.clone()), now(), 1800, false, |_, _| true);
         assert_eq!(d, LockDecision::Refuse(l));
     }
 
@@ -696,7 +707,7 @@ mod tests {
     fn dead_pid_lock_reclaims() {
         // pid dead → reclaim even though it's fresh.
         let l = lock(4242, "2026-06-14T11:59:30Z");
-        let d = decide_lock(Some(l), now(), 1800, false, |_| false);
+        let d = decide_lock(Some(l), now(), 1800, false, |_, _| false);
         assert_eq!(d, LockDecision::Acquire);
     }
 
@@ -704,14 +715,14 @@ mod tests {
     fn aged_out_lock_reclaims_even_when_pid_alive() {
         // started 3600s ago > 1800 horizon, pid alive → reclaim (pid-recycle backstop).
         let l = lock(4242, "2026-06-14T11:00:00Z");
-        let d = decide_lock(Some(l), now(), 1800, false, |_| true);
+        let d = decide_lock(Some(l), now(), 1800, false, |_, _| true);
         assert_eq!(d, LockDecision::Acquire);
     }
 
     #[test]
     fn force_overrides_a_live_fresh_lock() {
         let l = lock(4242, "2026-06-14T11:59:00Z");
-        let d = decide_lock(Some(l), now(), 1800, true, |_| true);
+        let d = decide_lock(Some(l), now(), 1800, true, |_, _| true);
         assert_eq!(d, LockDecision::Acquire);
     }
 
@@ -719,11 +730,11 @@ mod tests {
     fn unparseable_timestamp_falls_back_to_pid_liveness() {
         // age unknown → only pid liveness decides. Alive → refuse.
         let l = lock(4242, "not-a-timestamp");
-        let alive = decide_lock(Some(l.clone()), now(), 1800, false, |_| true);
+        let alive = decide_lock(Some(l.clone()), now(), 1800, false, |_, _| true);
         assert_eq!(alive, LockDecision::Refuse(l));
         // Dead → reclaim.
         let l2 = lock(4242, "not-a-timestamp");
-        let dead = decide_lock(Some(l2), now(), 1800, false, |_| false);
+        let dead = decide_lock(Some(l2), now(), 1800, false, |_, _| false);
         assert_eq!(dead, LockDecision::Acquire);
     }
 
@@ -782,6 +793,7 @@ mod tests {
         // A lock recording a pid that is not alive, written "just now".
         let dead = DrainLock {
             pid: 999_999_999,
+            pid_start_time: Some("1970-01-01T00:00:01+00:00".to_string()),
             started_at_utc: Utc::now().to_rfc3339(),
             command: "crashed drain".to_string(),
             host: "ghost".to_string(),
@@ -805,6 +817,7 @@ mod tests {
         // Simulate a successor stomping the file with a different pid.
         let successor = DrainLock {
             pid: std::process::id().wrapping_add(1),
+            pid_start_time: Some("1970-01-01T00:00:01+00:00".to_string()),
             started_at_utc: Utc::now().to_rfc3339(),
             command: "successor".to_string(),
             host: "h".to_string(),
@@ -870,14 +883,14 @@ mod tests {
 
     #[test]
     fn classify_lock_none_when_no_file() {
-        assert_eq!(classify_lock(None, |_| true), LockStatus::None);
+        assert_eq!(classify_lock(None, |_, _| true), LockStatus::None);
     }
 
     #[test]
     fn classify_lock_running_when_pid_alive() {
         let l = lock(4242, "2026-06-14T11:59:00Z");
         assert_eq!(
-            classify_lock(Some(l.clone()), |_| true),
+            classify_lock(Some(l.clone()), |_, _| true),
             LockStatus::Running(l)
         );
     }
@@ -886,7 +899,18 @@ mod tests {
     fn classify_lock_stale_when_pid_dead() {
         let l = lock(4242, "2026-06-14T11:59:00Z");
         assert_eq!(
-            classify_lock(Some(l.clone()), |_| false),
+            classify_lock(Some(l.clone()), |_, _| false),
+            LockStatus::Stale(l)
+        );
+    }
+
+    #[test]
+    fn classify_lock_stale_when_pid_was_recycled() {
+        let l = lock(4242, "2026-06-14T11:59:00Z");
+        assert_eq!(
+            classify_lock(Some(l.clone()), |pid, start| {
+                pid == 4242 && start == Some("different-start")
+            }),
             LockStatus::Stale(l)
         );
     }

@@ -1587,6 +1587,7 @@ mod tests {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let lock = drain_lock::DrainLock {
             pid,
+            pid_start_time: Some("2026-09-05T11:59:59+00:00".to_string()),
             started_at_utc: "2026-09-05T12:00:00+00:00".to_string(),
             command: "aida queue work --auto-complete".to_string(),
             host: "test-host".to_string(),
@@ -2192,6 +2193,7 @@ mod tests {
     fn burndown_lock() -> crate::drain_lock::DrainLock {
         crate::drain_lock::DrainLock {
             pid: 3_822_683,
+            pid_start_time: Some("2026-07-19T11:29:59+00:00".to_string()),
             started_at_utc: "2026-07-19T11:30:00+00:00".to_string(),
             command: "burndown run (status=approved)".to_string(),
             host: "devbox".to_string(),

@@ -402,6 +402,15 @@ carries this (BUG-233):
 | `AIDA_EXIT_SENTINEL=<path>` | orchestrator → every phase child | file the skill `touch`es as its last action so the orchestrator reaps the idle REPL (TASK-329) |
 | `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=<ms>` | AIDA → every headless child | the bounded turn-end background-wait ceiling, set by the LAUNCHER so a hand-typed launch behaves identically to a daemonized one (TASK-1169) |
 
+### Checking whether a drain is alive
+
+Use `aida ps` or `aida burndown status`; for low-level diagnosis, inspect
+`.aida/drain.lock`. The lock records both the holder PID and its kernel process
+start time, and AIDA validates the pair. Do not use `pgrep` or command-name
+matching: wrapper command lines can contain the search text, launch paths can
+change `argv[0]`, and a PID can be recycled. None of those name-based signals
+prove that the process which acquired the lease is still running.
+
 ### Integration waits belong to the launcher, not to an agent turn (TASK-1169)
 
 A headless `claude -p` session reaps its background tasks when the turn ends,
