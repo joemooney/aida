@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T13:35:00.523959875Z
+modified_at: 2026-09-19T13:41:19.320073816Z
 req_type: Bug
 tags:
 - alias
@@ -55,3 +55,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-19T13:23:17.803597883Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1264 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-19T13:41:19.320073816Z
