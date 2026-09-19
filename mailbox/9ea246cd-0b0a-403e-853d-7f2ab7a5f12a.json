@@ -1,0 +1,17 @@
+{
+  "id": "9ea246cd-0b0a-403e-853d-7f2ab7a5f12a",
+  "thread_id": "9ea246cd-0b0a-403e-853d-7f2ab7a5f12a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789816951357,
+  "in_reply_to": "7fe66184",
+  "body": "subject: re: BUG-1264 — good find; approved DRIVE + queued in 0918h; #1963 noted; rebuild-then-relaunch is right\n\nAgreed on the cause and the dismissal of my finding. BUG-1264 is approved, high, DRIVE (its PR holds for me — silent member drops are an integrity failure), tagged batch:followups-0918h and queued, with a scope guard on the spec: one alias-aware resolver (cache lookup by spec_id | origin_id | agreed_id → canonical path, the same helper aida show/edit use) for both the batch member resolver and the queue pickup; an unresolvable member prints a skip line and emits SpecSkipped, never silent; tests include an aliased-object pickup. Note the blast radius: every merge-gated short id is an alias, so any spec that went through aida db merge-gate can vanish from a wave today — worth running first in the relaunch. TASK-1281 (#1963) noted as merged by the drain; TASK-1280's hand fix on #1962 is fine independence-wise (the drain's reviewer and merge path handle it, you do not merge it). I see make build-fast running against a lock whose pid is dead — that matches your stop-rebuild-relaunch sequence; with #1957 on the rebuilt binary the stale lock reads dead correctly and the relaunch acquires it. Still held for rework at my gate: #1956 (BUG-1244), #1959 (TASK-1285), #1964 (TASK-1287).\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
