@@ -77662,11 +77662,20 @@ fn resolve_batch_members(
     )>,
 > {
     let store = storage.load()?;
-    let entries = storage.queue_list(user_id, false)?;
     let want = format!("batch:{}", batch_name);
     let session_role = std::env::var("AIDA_SESSION_ROLE").ok();
     let (role_filter, _only_unrouted) =
         resolve_queue_role_filter(role, false, session_role.as_deref());
+    // Batch drains must see the same cross-user role-routed queue as ordinary
+    // pickup. Otherwise an item filed in a person's queue for `implementer`
+    // disappears when the drain identity is the synthetic role user.
+    // trace:BUG-1264 | ai:codex
+    let entries = queue_role_fallback::queue_list_with_role_fallback(
+        storage,
+        user_id,
+        role_filter.as_deref(),
+        false,
+    )?;
     let mut members: Vec<(
         aida_core::QueueEntry,
         String,
@@ -77677,11 +77686,34 @@ fn resolve_batch_members(
         if !entry_matches_role_filter(entry.for_role.as_deref(), role_filter.as_deref(), false) {
             continue;
         }
-        let Some(req) = store
-            .requirements
-            .iter()
-            .find(|r| r.id == entry.requirement_id)
-        else {
+        // Resolve each queue UUID through the targeted backend path instead of
+        // assuming the full-store projection contains an object at a path
+        // derived from its current display id. Merge-gate aliases can leave the
+        // authoritative YAML under the node-qualified/origin id.
+        // trace:BUG-1264 | ai:codex
+        let Some(req) = storage.resolve_queued_requirement(&entry.requirement_id)? else {
+            let member = entry.requirement_id.to_string();
+            let reason = "requirement id does not resolve to a stored object";
+            eprintln!(
+                "  {} batch:{} — skipping unresolvable member {}: {}",
+                crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                batch_name,
+                member,
+                reason,
+            );
+            if let Ok(root) = find_project_root() {
+                let (_, run_uuid) = drain_state::current_context(&root);
+                events::emit(
+                    &root,
+                    &events::Event::new(
+                        Some(member),
+                        run_uuid,
+                        events::EventKind::SpecSkipped {
+                            reason: reason.to_string(),
+                        },
+                    ),
+                );
+            }
             continue;
         };
         if !req.tags.iter().any(|t| t.eq_ignore_ascii_case(&want)) {
@@ -77693,7 +77725,7 @@ fn resolve_batch_members(
         // headless drains also skip guided/operator/decide members; those
         // modes require the keyboard path.
         if let Some(reason_label) = queue_cmd::queue_fresh_pickup_reason_label(
-            &queue_cmd::queue_drain_pickup_policy(req, &store, false),
+            &queue_cmd::queue_drain_pickup_policy(&req, &store, false),
         ) {
             eprintln!(
                 "  {} batch:{} — skipping un-pickable member {} ({})",

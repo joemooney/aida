@@ -101,6 +101,14 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         recovery_hint: Option<String>,
     },
+    /// A queued member could not be resolved to its authoritative spec object.
+    /// Actionable because silently absorbing it can falsely report a drain as
+    /// complete while work remains queued.
+    // trace:BUG-1264 | ai:codex
+    SpecSkipped {
+        /// Why the member could not be dispatched.
+        reason: String,
+    },
     /// A transient phase failure spent retry budget and is being re-driven.
     /// Actionable: an overnight watcher should know the drain recovered itself.
     // trace:STORY-975 | ai:codex
@@ -261,6 +269,7 @@ impl EventKind {
             | EventKind::CiTerminal { .. }
             | EventKind::PhaseDonePr { .. }
             | EventKind::SpecShelved { .. }
+            | EventKind::SpecSkipped { .. }
             | EventKind::SpecRetried { .. }
             | EventKind::PuntFiled { .. }
             | EventKind::AdvisorEscalated { .. }
@@ -286,6 +295,7 @@ impl EventKind {
             EventKind::CiTerminal { .. } => "CiTerminal",
             EventKind::PhaseDonePr { .. } => "PhaseDonePr",
             EventKind::SpecShelved { .. } => "SpecShelved",
+            EventKind::SpecSkipped { .. } => "SpecSkipped",
             EventKind::SpecRetried { .. } => "SpecRetried",
             EventKind::SpecReDriven { .. } => "SpecReDriven",
             EventKind::ReclassifiedNeedsHuman { .. } => "ReclassifiedNeedsHuman",
@@ -313,6 +323,7 @@ impl EventKind {
             "CiTerminal",
             "PhaseDonePr",
             "SpecShelved",
+            "SpecSkipped",
             "SpecRetried",
             "SpecReDriven",
             "ReclassifiedNeedsHuman",
@@ -748,6 +759,10 @@ mod tests {
             kind: "ci-red".into(),
             detail: None,
             recovery_hint: None,
+        }
+        .is_actionable());
+        assert!(EventKind::SpecSkipped {
+            reason: "missing object".into(),
         }
         .is_actionable());
         assert!(EventKind::PhaseDonePr { pr: 1207 }.is_actionable());
