@@ -31,7 +31,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:00.436499599Z
-modified_at: 2026-09-19T21:12:34.326286533Z
+modified_at: 2026-09-19T21:12:42.757972474Z
 req_type: Bug
 tags:
 - agent-ux
@@ -52,12 +52,6 @@ relationships:
   created_at: 2026-09-19T21:12:23.467933446Z
   created_by: joe
 comments:
-- id: 01a0bb83-6173-7943-b6f0-543802dee455
-  author: joe
-  content: '[advisor:groom] Approved, HIGH, DRAIN, and KEPT SEPARATE from STORY-1352 — your instinct was right and here is the reasoning so it is on the record. A shared --format help string that says ''json = machine JSON'' while two commands return prose and TOON is a plain conformance defect, false today, independent of whether a versioned contract ever ships. Folding it into STORY-1352 would couple a small correctness fix to a larger design that is drive-mode, unstarted, and will take rounds; it would also invert the dependency, since a contract is far easier to declare over surfaces that already honour their own flag. Fix this first, then let STORY-1352 version what is by then true. I did link them so the relationship is visible. Second half, and I agree with your narrowing:  already synthesises the unified per-spec view their sixth recommendation asked for — status, liveness including the flag-only case, parked reason, next action — so the gap is a machine-readable shape, not a missing verb. Giving the existing view a JSON form is right; adding  would have been a second verb answering a question we already answer, which is the mistake ADR-46 avoided with the scheduler and the one I pushed back on for the events follow-feed. Guard: the JSON shape must carry the flag-only liveness case explicitly rather than collapsing it into live-or-stale, because that distinction is the whole reason the human view is trusted.'
-  created_at: 2026-09-19T21:12:24.691732695Z
-  modified_at: 2026-09-19T21:12:24.691732695Z
-  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 - id: 01a0bb83-8716-7ea1-bdc0-b200eb0f9366
   author: joe
   content: |-
