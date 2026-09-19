@@ -8,12 +8,12 @@ description: |
   Also affected: my tag-loss audit on 2026-09-18 found the same spec under TASK-1-140, and aida queue list shows it as TASK-163 — the two surfaces disagree.
 
   Fix: every id → object resolution in the orchestrator's batch/queue path must go through the same alias-aware resolver the CLI uses (cache lookup by spec_id OR origin_id → canonical YAML path), and a member that cannot be resolved must be reported ("skipping un-resolvable member X") rather than dropped silently. Acceptance: a queued, batch-tagged spec whose object lives under its origin_id is picked up by aida queue work --batch; an unresolvable member prints a skip line and emits a SpecSkipped event; unit test on the resolver with an aliased fixture.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T15:20:47.995814976Z
+modified_at: 2026-09-19T15:25:17.922329574Z
 req_type: Bug
 tags:
 - alias
@@ -83,16 +83,27 @@ comments:
   created_at: 2026-09-19T15:20:47.995814976Z
   modified_at: 2026-09-19T15:20:47.995814976Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0ba45-96e1-7173-9b75-fca4cc5351b8
+  author: aida-auto-bump
+  timestamp: 2026-09-19T15:25:17.921174969Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ba45-96e2-7183-b7e7-553da456186b
+  timestamp: 2026-09-19T15:25:17.922327908Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1264-2026-09-19T152050Z.md
+  commit_sha: 81877d9935c35471bd635bdad0926a1b1d13d679
+  summary: Completed via merge 81877d99
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T13:23:17.803597883Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1264 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T13:41:19.320073816Z
+  completed_at: 2026-09-19T15:25:17.920885855Z
+  completion_sha: 81877d9935c35471bd635bdad0926a1b1d13d679
