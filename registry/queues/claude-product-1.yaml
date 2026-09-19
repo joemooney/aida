@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b82c-4241-7c50-9257-5f1f3f8101b7
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 1 on PR #1964: TASK-1287 acceptance requires a fixture PR with an aida:merge-hold label and no marker to ship in one aida pr ship invocation while printing the supervised-release line. The PR only tests classify_red(label-only) and label JSON parsing; add a handler/fixture test that exercises the full release, gate re-run, and merge path, while retaining the no-label/no-marker behavior.  Concretely: add a pr_ship handler test with a FakeForge (see ci_gate''s FakeForge pattern) whose check rows return only merge-hold-gate=fail with the label present and no marker file: assert the supervised-release line is printed, sync_label(false) is invoked, the gate re-run is awaited (bounded), and merge_change is called once; a second case with neither label nor marker must take the unchanged path (no release line, no label call). Also fix the trace comments on the add verb from #1960 to cite TASK-1288 (comment on this spec).'
+  added_at: 2026-09-19T09:17:55.740448306Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
