@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T11:18:08.801389466Z
+modified_at: 2026-09-19T11:18:11.158706616Z
 req_type: Bug
 tags:
 - alias
@@ -21,3 +21,7 @@ tags:
 - orchestrator
 - parent:EPIC-28
 - queue
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-19T11:18:11.158706616Z
