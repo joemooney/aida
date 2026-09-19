@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:01.811098746Z
-modified_at: 2026-09-19T16:40:07.876494553Z
+modified_at: 2026-09-19T16:40:11.780470901Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -34,4 +34,22 @@ relationships:
 - rel_type: Child
   target_id: 019f1045-2667-7460-9ff3-f203df44eb21
   created_at: 2026-09-18T19:29:04.330022232Z
+comments:
+- id: 01a0ba8a-2904-71d1-9ef4-ca6911907bbe
+  author: joe
+  content: |-
+    [advisor:groom] Approved, high, DRIVE (merge at the advisor gate).
+
+    This is an operator requirement, and the gap it names is real and visible in this very session: the implementer and reviewer seats have run under Codex all day (vendor: codex in every drain event), while the two COORDINATION seats — product and advisor — have both been Claude for two days straight. So the vendor-neutrality claim is proven exactly where it is cheapest to prove and unproven where it matters most.
+
+    Scope guard, because this task can sprawl: split it as AUDIT first, FIXES second, and land them separately.
+     (a) AUDIT — enumerate what a product or advisor seat actually touches and mark each Claude-shaped or neutral: the memory pack (a Claude Code directory convention), the statusline, the skills/commands packs, session start/end hooks, the per-turn notice relay, in-session cron, fork-from-live, and the launcher's role-context snapshot. Output is a table of surface → neutral / Claude-only / has-a-Codex-equivalent, with the file that decides it. That half is report-shaped and could have been drain if it stood alone.
+     (b) FIXES — each Claude-only surface a coordination seat genuinely needs gets a neutral equivalent or an explicit "this seat cannot do X under Codex, here is the degradation". Those changes touch the dispatch layer, which is why the whole task is drive.
+
+    Two things I want the audit to answer specifically, because I would not trust an assertion either way without them: can a Codex advisor seat hold the MERGE GATE — read a verdict file, read required-check state, run aida pr ship, write a proxy-approval ledger — with no Claude-only dependency; and can a Codex product seat LAUNCH and supervise a wave (drain lock, event watch, relaunch) without fork-from-live, which is Claude-only by construction. If either answer is no, that is the finding, and it is more valuable than a passing audit.
+
+    Do NOT prove parity by running a wave with both coordination seats on Codex while this session holds the advisor gate — that would be two advisors. If a live proof is wanted, it is an operator-scheduled exercise, not something a drain arranges for itself.
+  created_at: 2026-09-19T16:40:11.780470901Z
+  modified_at: 2026-09-19T16:40:11.780470901Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
