@@ -830,7 +830,9 @@ where
             JobKind::FiresTask => {}
         }
     }
-    if let Err(err) = schedule_ledger::write_batch_cas_opts(&store, &staged_ledgers, !hook) {
+    if let Err(err) =
+        schedule_ledger::write_batch_cas_opts(&store, &ledgers, &staged_ledgers, !hook)
+    {
         eprintln!(
             "warning: schedule ledgers were not written: {err}; local run state was retained"
         );
