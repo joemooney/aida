@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-19T17:11:57.998128163Z
+modified_at: 2026-09-19T21:17:50.339717086Z
 req_type: Story
 tags:
 - authority
@@ -77,4 +77,17 @@ comments:
   created_at: 2026-09-19T17:11:57.998128163Z
   modified_at: 2026-09-19T17:11:57.998128163Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bb88-5983-7242-99e0-9760a1e7cbee
+  author: joe
+  content: |-
+    Two live instances from 2026-09-19, product seat, for whoever implements this. Evidence only — the advisor owns whether these become acceptance criteria.
+
+    1. DISPATCH REFUSED AS DISPOSITION. `aida queue add STORY-1350 --for implementer --user role:implementer` refused with "queuing work for execution needs advisor authority (advisor role or an interactive session)". STORY-1350 was already Approved by the advisor, already routed to implementer, already groomed execution_mode drain, and had already been driven once by the current wave; it had just shelved on a RequestChanges round and needed to go back on the same queue for the same role. No disposition is being made by that command — the disposition happened at approval. The refusal message is also slightly misleading: it offers "file the spec for advisor triage instead", which is not the shape of the need.
+
+    2. THE WORKAROUND IS WORSE THAN THE REFUSAL. The only route available to a non-advisor seat is to set AIDA_SESSION_ROLE=advisor. That succeeds, and it makes the audit trail say the advisor queued it. A seat that must impersonate another seat to do its own job produces a false record — and that record is what the approval ledger EPIC-69 is building would read. Whatever this spec builds, the non-advisor dispatch path must be distinguishable in the trail from an advisor act, not merely permitted.
+
+    3. THE LINE THAT HELD. A genuine disposition on the same day, promoting TASK-168 from NeedsAttention to Approved, was refused by the same predicate and asking the advisor was correct — they verified the cleanup independently and reset it in two minutes. So the gate is right about that case and wrong about case 1, and both go through `for_target_requires_dispatch_authority`. The distinction to encode is not who is asking but whether the act changes a spec's disposition or only where an already-disposed spec sits.
+  created_at: 2026-09-19T21:17:50.339717086Z
+  modified_at: 2026-09-19T21:17:50.339717086Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
