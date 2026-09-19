@@ -13,13 +13,6 @@
   added_at: 2026-09-19T01:16:25.039735342Z
   for_role: implementer
 - user_id: claude-product-1
-  requirement_id: 01a0b5bf-fa25-7e80-b111-4bd751958e05
-  position: 0
-  added_by: claude-product-1
-  note: Round 2 commit (record MCP read receipts) is on the branch and the PR was rebased onto main by the product seat (conflict in the --notice path resolved by keeping both the protocol line and the latency warning). Re-run tests, push nothing if clean, and let the reviewer take round 3.
-  added_at: 2026-09-19T01:16:20.052864145Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
