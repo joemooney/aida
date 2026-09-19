@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:21:32.281544450Z
-modified_at: 2026-09-19T07:57:21.385143763Z
+modified_at: 2026-09-19T11:04:56.071656108Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -60,6 +60,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T07:57:21.131267332Z
   modified_at: 2026-09-19T07:57:21.131267332Z
+- id: 01a0b957-3807-76d0-a851-7f72ea84c310
+  author: joe
+  content: 'PR #1963 review round 2: seat-job CAS now persists the fired predicate episode alongside due_since/due_reason. Added regression covering true tick -> done clears due -> still-true tick remains debounced.'
+  created_at: 2026-09-19T11:04:56.071656108Z
+  modified_at: 2026-09-19T11:04:56.071656108Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
