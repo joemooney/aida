@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:26.124728352Z
-modified_at: 2026-09-19T08:27:08.740008647Z
+modified_at: 2026-09-19T08:51:43.957925521Z
 req_type: Bug
 tags:
 - agent-ux
@@ -59,6 +59,23 @@ comments:
   content: 'Round 2: moved the one-second notice watchdog ahead of time-line/session filesystem bookkeeping so the bound covers the entire notice path; separated the test''s strict <2s contract assertion from a 3s reap/diagnostic deadline. Verified 5 consecutive isolated runs, full task_1283_protocol_cli suite, and cargo fmt check.'
   created_at: 2026-09-19T08:27:08.740008647Z
   modified_at: 2026-09-19T08:27:08.740008647Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b8dd-44d5-74d1-9d8c-321cb71d08d4
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1955
+    agent: codex
+    ran-at: 2026-09-19 01:51 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1239-drain-01a0b8dc-fa27-7631-93ec-e07108df7c40.json
+    ? AC (0.98) — `aida awaiting --notice` terminates successfully no later than one second after notice dispatch begins, even if local notice work such as cache refresh, lease discovery, protocol-store reads, or session/turn-clock bookkeeping stalls.
+    ? SEM (0.97) — The compact `aida awaiting --notice` view omits the unshipped-work channel, while full awaiting/status views continue to include it.
+    ? SEM (0.94) — Hook-driven notice session metadata is supplied through `AIDA_HOOK_PAYLOAD`; direct `aida awaiting --notice` invocations without valid metadata still emit the time line but do not register a session-start key.
+  created_at: 2026-09-19T08:51:43.957925521Z
+  modified_at: 2026-09-19T08:51:43.957925521Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
