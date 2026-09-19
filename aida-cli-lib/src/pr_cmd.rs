@@ -1567,6 +1567,7 @@ pub(crate) fn pr_ship_handler(
     // or a sibling beat us to the merge) there is nothing to watch or merge.
     // Skip straight to the idempotent pull + cleanup so the re-run exits 0
     // instead of erroring out of a no-op `gh pr merge`. trace:BUG-574 | ai:claude
+    let mut label_only_hold = false;
     if already_merged {
         eprintln!(
             "  {} PR-{} is already merged — nothing to ship; running post-merge sync + cleanup",
@@ -1626,11 +1627,14 @@ pub(crate) fn pr_ship_handler(
         let mut red_detail: Option<String> = None;
         if matches!(ci_result, Ok(crate::forge::CiState::Failed)) {
             let hold_present = crate::merge_hold::read_hold(&hold_root, pr_number).is_some();
+            label_only_hold = !hold_present
+                && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
             match crate::ci_gate::refine_red(
                 &hold_root,
                 forge.as_ref(),
                 &watch_change,
                 hold_present,
+                label_only_hold,
                 std::time::Duration::from_secs(20 * 60),
                 std::time::Duration::from_secs(15),
             ) {
@@ -1759,7 +1763,11 @@ pub(crate) fn pr_ship_handler(
         // session's merge_change — never clear, so they stay refused. This is
         // the client-side release; the server-side required-check (ADR-37 layer
         // 2) still governs a raw `gh pr merge`. trace:BUG-1167 | ai:claude
-        if let Some(reason) = crate::merge_hold::read_hold(&hold_root, pr_number) {
+        let marker_reason = crate::merge_hold::read_hold(&hold_root, pr_number);
+        if marker_reason.is_some() || label_only_hold {
+            let reason = marker_reason
+                .as_deref()
+                .unwrap_or("aida:merge-hold label present (no local marker)");
             eprintln!(
                 "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -1767,7 +1775,12 @@ pub(crate) fn pr_ship_handler(
                 reason,
             );
             let _ = crate::merge_hold::clear_hold(&hold_root, pr_number);
-            crate::merge_hold::sync_label(&hold_root, pr_number, false);
+            if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
+                eprintln!(
+                    "  {} could not remove the merge-hold label ({err}) — branch protection will keep the merge closed",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
             // BUG-1180: removing the label re-runs `merge-hold-gate`; the
             // squash-merge below would be refused by branch protection until it
             // reports green, so wait for it (bounded) before merging.

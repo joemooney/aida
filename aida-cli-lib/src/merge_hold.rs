@@ -106,6 +106,65 @@ pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
 // trace:BUG-1167 | ai:claude
 pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
 
+/// Whether the forge change currently carries the Layer-2 merge-hold label.
+///
+/// This is intentionally a live forge read rather than marker metadata: an
+/// operator may add the label directly, leaving no Layer-1 marker to inspect.
+/// Errors are returned so callers keep their existing fail-closed behavior.
+// trace:TASK-1287 | ai:codex
+pub(crate) fn label_present(project_root: &Path, pr: u64) -> Result<bool, String> {
+    let kind = crate::forge::resolve_forge_kind(project_root);
+    let (cli, args): (&str, Vec<String>) = match kind {
+        crate::forge::ForgeKind::GitHub => (
+            "gh",
+            vec![
+                "pr".into(),
+                "view".into(),
+                pr.to_string(),
+                "--json".into(),
+                "labels".into(),
+                "--jq".into(),
+                format!("any(.labels[]; .name == \"{HOLD_LABEL}\")"),
+            ],
+        ),
+        crate::forge::ForgeKind::GitLab => (
+            "glab",
+            vec![
+                "mr".into(),
+                "view".into(),
+                pr.to_string(),
+                "--output".into(),
+                "json".into(),
+            ],
+        ),
+        crate::forge::ForgeKind::None => return Ok(false),
+    };
+    let (ok, stdout) = run_forge_cli_stdout(project_root, cli, &args)?;
+    if !ok {
+        return Err(format!("`{cli} {}` failed", args.join(" ")));
+    }
+    match kind {
+        crate::forge::ForgeKind::GitHub => Ok(stdout.trim().eq_ignore_ascii_case("true")),
+        crate::forge::ForgeKind::GitLab => labels_json_contains(&stdout, HOLD_LABEL),
+        crate::forge::ForgeKind::None => Ok(false),
+    }
+}
+
+fn labels_json_contains(json: &str, wanted: &str) -> Result<bool, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(|e| format!("could not parse forge labels: {e}"))?;
+    let labels = value
+        .get("labels")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "forge response did not contain a labels array".to_string())?;
+    Ok(labels.iter().any(|label| {
+        label
+            .as_str()
+            .or_else(|| label.get("name").and_then(|v| v.as_str()))
+            == Some(wanted)
+    }))
+}
+
 /// BUG-1236: whether the `aida:merge-hold` label on the change mirrors the
 /// marker. Recorded on the marker's second line so `aida merge-hold list`
 /// can show it without a network call and `--fix` can re-sync it.
@@ -249,6 +308,22 @@ fn run_forge_cli(
     ))
 }
 
+fn run_forge_cli_stdout(
+    project_root: &Path,
+    cli: &str,
+    args: &[String],
+) -> Result<(bool, String), String> {
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(args)
+        .output()
+        .map_err(|e| format!("could not run {cli}: {e}"))?;
+    Ok((
+        out.status.success(),
+        String::from_utf8_lossy(&out.stdout).to_string(),
+    ))
+}
+
 /// The CLI + argv for mirroring the merge-hold label on a change, per forge —
 /// kept pure so the routing is unit-testable. `None` = no forge to label
 /// (pure-git).
@@ -324,6 +399,17 @@ mod tests {
             sync_label_command(ForgeKind::None, 42, true).is_none(),
             "pure-git has no forge to label"
         );
+    }
+
+    #[test]
+    fn parses_gitlab_label_shapes() {
+        assert!(
+            labels_json_contains(r#"{"labels":["bug","aida:merge-hold"]}"#, HOLD_LABEL).unwrap()
+        );
+        assert!(
+            labels_json_contains(r#"{"labels":[{"name":"aida:merge-hold"}]}"#, HOLD_LABEL).unwrap()
+        );
+        assert!(!labels_json_contains(r#"{"labels":["bug"]}"#, HOLD_LABEL).unwrap());
     }
 
     #[test]
