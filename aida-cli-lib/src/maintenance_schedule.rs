@@ -821,7 +821,7 @@ where
             JobKind::FiresTask => {}
         }
     }
-    schedule_ledger::write_batch_cas_opts(&store, &staged_ledgers, !hook)?;
+    schedule_ledger::write_batch_cas_opts(&store, &ledgers, &staged_ledgers, !hook)?;
     if touched {
         state.last_tick_at = Some(now);
         save_state(project_root, state)?;
