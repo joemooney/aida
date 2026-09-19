@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T19:42:24.422183229Z
+modified_at: 2026-09-19T20:07:29.328501329Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -123,6 +123,22 @@ comments:
   content: 'Round 2 acceptance resolution (2026-09-19): reviewer finding 2 cites the former post-deployment 20-spec measurement criterion. The owning spec''s Acceptance section now explicitly moves that measurement to related follow-up TASK-1294 because TASK-1291 must merge before twenty post-deployment specs can exist. No median is claimed or fabricated here; TASK-1294 is the durable measurement obligation. Round 2 also centralizes the canonical findings-block prefix-at-start predicate and verifies all durable-history consumers reject embedded/quoted markers.'
   created_at: 2026-09-19T19:42:24.422183229Z
   modified_at: 2026-09-19T19:42:24.422183229Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb47-f130-7f53-b44d-49c612b5fb55
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1971
+    agent: codex
+    ran-at: 2026-09-19 13:07 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1291-drain-01a0bb47-b777-7281-b8cc-a301c1e8b049.json
+    ? SEM (0.96) — The next reviewer round is one plus the number of canonical durable review-findings blocks already recorded in the requirement comments; if the requirement store cannot be loaded or the requirement cannot be found, the review defaults to round 1.
+    ? SEM (0.98) — A comment counts as durable review history only when its content begins at byte zero with the canonical review-findings marker; comments that merely embed or quote that marker do not advance reviewer or rework rounds and are not eligible as the latest findings block.
+  created_at: 2026-09-19T20:07:29.328501329Z
+  modified_at: 2026-09-19T20:07:29.328501329Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
