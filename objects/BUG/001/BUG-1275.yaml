@@ -22,18 +22,21 @@ description: |
   - The default idle window is documented against the measured CI p95, with the measurement cited.
 
   Immediate mitigation until this lands: launchers export AIDA_WORKER_CI_IDLE well above the CI ceiling (2400 has been used successfully for slow GitLab drains).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-19T17:47:18.032158627Z
+modified_at: 2026-09-19T17:51:19.527700354Z
 req_type: Bug
 tags:
+- batch:followups-0918i
 - ci-wait
+- drive
 - from:live-0919
 - orchestrator
 - parent:EPIC-62
+- regression
 - regression-interaction
 - throughput
 relationships:
@@ -48,3 +51,4 @@ relationships:
   target_id: 01a0b7fa-42b8-7911-bdfb-1815f831c1f2
   created_at: 2026-09-19T17:47:18.032154363Z
   created_by: joe
+execution_mode: drive
