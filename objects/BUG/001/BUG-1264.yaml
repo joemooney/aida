@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T14:57:05.256251615Z
+modified_at: 2026-09-19T15:20:47.995814976Z
 req_type: Bug
 tags:
 - alias
@@ -66,6 +66,22 @@ comments:
   content: 'Addressed PR-1965 review finding in b28652118a: added regression coverage for an orphaned queue UUID, including visible skip diagnostic and actionable SpecSkipped event assertions. Focused batch tests pass; cargo fmt --check and git diff --check pass. aida pr ship deferred merge to the orchestrated independent reviewer.'
   created_at: 2026-09-19T14:57:05.256251615Z
   modified_at: 2026-09-19T14:57:05.256251615Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba41-787b-7d91-ae00-064af8ef04f3
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1965
+    agent: codex
+    ran-at: 2026-09-19 08:20 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1264-drain-01a0ba41-2b82-7db1-80b5-96034ac165bc.json
+    ? AC (0.96) — A batch drain running under a synthetic role identity discovers eligible role-routed queue entries even when those entries are owned by a different user queue.
+    ? SEM (0.90) — SpecSkipped is an actionable event, and the watcher exposes it with the event label 'spec-skipped' and the description 'queued member skipped: <reason>'.
+  created_at: 2026-09-19T15:20:47.995814976Z
+  modified_at: 2026-09-19T15:20:47.995814976Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
