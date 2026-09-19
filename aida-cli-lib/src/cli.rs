@@ -2278,10 +2278,6 @@ pub enum DevCommand {
         // trace:TASK-1158 | ai:claude
         #[clap(long, conflicts_with_all = ["debug", "release"])]
         auto: bool,
-
-        /// Wait for the live drain wave to finish before switching binaries.
-        #[clap(long)]
-        after_wave: bool,
     },
 
     /// Internal pre-build safety gate used by `make build-fast`.

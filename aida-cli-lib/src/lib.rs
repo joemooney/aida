@@ -57489,7 +57489,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
             "live wave {wave} · binary {} · mtime {}",
             truncate(&lock.binary_sha, 8),
             lock.binary_mtime_secs
-                .map(|v| v.to_string())
+                .and_then(|secs| {
+                    std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(secs))
+                })
+                .map(|time| {
+                    let local: chrono::DateTime<chrono::Local> = time.into();
+                    local.format("%Y-%m-%d %H:%M:%S").to_string()
+                })
                 .unwrap_or_else(|| "?".into())
         );
     }
