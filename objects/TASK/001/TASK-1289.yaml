@@ -17,12 +17,12 @@ description: |
   - The guard list is read from config, defaults to the CI set, and an unknown/missing guard is skipped with a note rather than failing closed.
   - lifecycle:no-preflight skips the phase and says so in the drain banner.
   - Unit test on the pure decision (which guards ran, which failed, open/refuse).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T16:37:38.910370391Z
+modified_at: 2026-09-19T18:15:00.883171610Z
 req_type: Task
 tags:
 - batch:followups-0918h
