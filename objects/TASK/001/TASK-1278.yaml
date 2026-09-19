@@ -3,12 +3,12 @@ spec_id: TASK-1278
 agreed_id: TASK-1278
 title: 'Typed protocols slice 3: lane layer (research, docs, keystone) + MCP resource aida://protocol/<type> + headless implementer/reviewer prompt injection'
 description: 'Child of STORY-1221 (typed protocols). After the story lands storage + pickup/notice injection for the TYPE layer, this task adds: (1) the optional LANE layer (protocol:lane:research, protocol:lane:docs, protocol:lane:keystone) with precedence type < lane < spec ## Acceptance and each injected line tagged with its layer; (2) the MCP resource aida://protocol/<type> (and /<type>/<lane>) mirroring aida protocol show, so MCP-native clients see the same text; (3) headless drains prepend the resolved protocol (same 40-line cap) to the implementer and reviewer prompts. Acceptance: aida protocol show spike --lane research prints the merged text with layer tags; the MCP resource returns byte-identical text to the CLI; a headless drain''s implementer prompt file (.aida/headless-logs) shows the protocol header; the cap holds; unit tests on precedence merge and cap.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:27:34.903795856Z
-modified_at: 2026-09-19T00:06:17.133827361Z
+modified_at: 2026-09-19T00:06:25.438970732Z
 req_type: Task
 tags:
 - agent-ux
@@ -75,8 +75,25 @@ comments:
   created_at: 2026-09-19T00:06:17.133827361Z
   modified_at: 2026-09-19T00:06:17.133827361Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b6fc-559e-77e3-8282-72ef76222d51
+  author: aida-auto-bump
+  timestamp: 2026-09-19T00:06:25.438260610Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b6fc-559e-77e3-8282-72fe4db5fba7
+  timestamp: 2026-09-19T00:06:25.438970210Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1278-2026-09-19T000618Z.md
+  commit_sha: 5ee459734592fb6c7eeeb7a5a65ec2cd63b4e410
+  summary: Completed via merge 5ee45973
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T23:50:13.829807796Z
   implemented_by: joe
+  completed_at: 2026-09-19T00:06:25.438043262Z
+  completion_sha: 5ee459734592fb6c7eeeb7a5a65ec2cd63b4e410
