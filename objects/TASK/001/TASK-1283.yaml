@@ -10,12 +10,12 @@ description: |-
   2. Notice lifecycle: `aida awaiting --notice` adds the one-line protocol reminder only while the current worktree holds a lease on the spec; zero lines with no lease; the line disappears after `queue done` / lease release (TASK-160 quiet contract).
   3. Seed path from the CLI: `aida protocol seed` on a store with two of six protocols adds four and is idempotent (the core test exists; add the CLI-level one).
   Acceptance: `cargo test -p aida-cli-lib --lib protocol` discovers and passes at least 6 tests covering the three groups; no behaviour change.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-19T03:08:44.588456596Z
+modified_at: 2026-09-19T03:08:51.448971120Z
 req_type: Task
 tags:
 - batch:followups-0918g
@@ -96,17 +96,29 @@ comments:
   created_at: 2026-09-19T03:08:44.588456596Z
   modified_at: 2026-09-19T03:08:44.588456596Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b7a3-5b78-73d0-ad4c-4f34c4c96c94
+  author: aida-auto-bump
+  timestamp: 2026-09-19T03:08:51.448243241Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b7a3-5b78-73d0-ad4c-4f4e7adc4033
+  timestamp: 2026-09-19T03:08:51.448970203Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1283-2026-09-19T030846Z.md
+  commit_sha: 3c8b1f74be5befd8954be8d5410876fa3177920d
+  summary: Completed via merge 3c8b1f74
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T01:01:18.511156036Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1283 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T01:44:33.140526337Z
+  completed_at: 2026-09-19T03:08:51.447991289Z
+  completion_sha: 3c8b1f74be5befd8954be8d5410876fa3177920d
 interface_changes: {}
