@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T20:45:34.489598091Z
+modified_at: 2026-09-19T20:45:36.120964446Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -599,6 +599,34 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T20:36:40.725767178Z
   modified_at: 2026-09-19T20:36:40.725767178Z
+- id: 01a0bb6a-d4e1-74e2-b84e-74722ec1b658
+  author: joe
+  content: |-
+    [rework round 4] PR #1972 — CHANGES REQUESTED, one finding, and it is the spec's own headline invariant.
+
+    THE DEFECT. In aida-cli-lib/src/implementer_preflight.rs, execute() maps every way a RESOLVED guard can fail to run onto GuardResult::Skipped, and decide() refuses only on GuardResult::Failed. So a guard that was found in the CI workflow but could not be executed lets PreflightDecision::Open through. That is the exact fail-open this spec exists to close: a PR publishes while the guard that would have stopped it never ran.
+
+    THREE SITES, all inside the closure in execute(), all currently returning Skipped, all of which must return Failed:
+
+    1. Timeout. The `Ok(None)` arm: "timed out after {}s". The guard was found and started; we simply do not know the answer. Unknown is not pass.
+    2. Command-start failure. The `Err(err)` arm: "could not start ({err})". Same reasoning.
+    3. Worktree binary unavailable. The `guard_uses_aida(&guard)` branch that returns Skipped with "worktree binary unavailable, so binary-dependent guard was not authoritative". This one is not in the reviewer's sentence but it is the same class and it is the most dangerous of the three: if build_worktree_binary fails, EVERY aida-dependent guard skips at once and the PR opens with nothing checked. In the implementer phase a failed build of the worktree you just wrote is itself a reason not to publish. Refuse.
+
+    WHAT MUST STAY SKIPPED. ResolvedGuard::Skipped — the guard was never resolved at all: unknown configured name, CI workflow missing, CI workflow unreadable, no matching CI guard (the four construction sites around lines 96, 102, 127 and the early return at the top of the closure). Skipping a guard that does not exist is correct and must not change; the reviewer said so explicitly. The line the fix draws is resolved-but-did-not-run versus never-resolved.
+
+    SHAPE OF THE FIX. Do not widen decide() to treat Skipped as failure — that would sweep the legitimate four in with the three. Change the three return sites to GuardResult::Failed { name, output } with an output string that says which of the three happened and keeps the existing "binary: {binary_label}" annotation, so the refusal message tells the implementer what to do next.
+
+    TESTS.
+    - The existing timeout test currently asserts Skipped with a note containing "timed out" and "binary:". Rewrite it to assert decide() returns Refuse and that the failed entry names the guard.
+    - Add a command-start-failure case. A guard whose command names a binary that does not exist is enough to drive the Err arm.
+    - Add a binary-unavailable case covering site 3 for a guard where guard_uses_aida is true.
+    - Keep or add a case proving all four never-resolved paths still yield Skipped and still Open, so the distinction is pinned rather than assumed.
+
+    Round 3 added the "binary: {label}" annotation to these arms but left the open/refuse semantics untouched, which is why the finding survived. The annotation is fine; keep it.
+
+    Push fixups to task-1289-work. Do not open a new PR.
+  created_at: 2026-09-19T20:45:35.841347242Z
+  modified_at: 2026-09-19T20:45:35.841347242Z
 execution_mode: drive
 implementation_info:
   implemented: true
