@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T17:46:14.414097260Z
+modified_at: 2026-09-19T17:58:19.209641368Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -45,4 +45,10 @@ comments:
   created_at: 2026-09-19T16:37:30.016101755Z
   modified_at: 2026-09-19T16:37:30.016101755Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bad1-af49-7330-9382-9defc91599c0
+  author: joe
+  content: 'Implemented in ceb0873930. Round 1 now receives an exhaustive acceptance-criterion/status-line and all-defects contract; the orchestrator derives the round from durable review-findings history, and round 2+ retains the prior prompt unchanged. Verification: 130 queue_work_tests passed; cargo fmt --all -- --check and git diff --check passed. The prospective next-20-spec median comparison begins after this change ships and should be appended here as follow-up evidence.'
+  created_at: 2026-09-19T17:58:19.209641368Z
+  modified_at: 2026-09-19T17:58:19.209641368Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
