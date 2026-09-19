@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T04:58:33.627303190Z
+modified_at: 2026-09-19T05:03:17.579914008Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -42,6 +42,19 @@ comments:
     Repair applied at the gate: #1952 retitled to TASK-1283 (the spec that actually asked for those tests); after this run's reviewer finishes, BUG-1236's queue entry is removed and re-added fresh and the spec reset to Approved so the next pickup implements BUG-1236 itself.
   created_at: 2026-09-19T00:23:40.327329078Z
   modified_at: 2026-09-19T00:23:40.327329078Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b80c-204b-7243-97f3-3f3ec84f66d1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1956, advisor round 1 — CI red, no drain reviewer ran):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. CI red is caused by the new guard itself: workflow_hints::branch_belongs_to_spec returns false for `main`, so `queue done` run from the main checkout (aida-cli/tests/agent_write_confirm.rs::queue_done_non_interactive_without_yes_marks_done_not_cancelled and aida-cli/tests/journey.rs::agent_journey_toon_list_search_queue_done_and_status both do exactly that) is refused. Change the rule to: refuse ONLY when the branch names a DIFFERENT spec — extract [A-Z]+-\d+ ids from the branch name; if any id is present and none equals the target, refuse; if no spec id is present (main, master, feature/foo, batch-followups-0918h, single-branch cluster names), allow. Apply the same rule in the phase-1 workspace check. Add tests for main, a batch branch and a sibling spec branch.
+    2. Acceptance items missing: (3) the CI and reviewer phases must resolve the PR from THIS run's PhaseDonePr event, never from a branch inherited from a sibling, and must punt when no PR exists for this spec; (4) a queue entry whose status is Done while the spec is Approved/InProgress is treated as a FRESH pickup (or `aida edit --status` resets the entry) — this is what produced recurrence 2; (5) the rework brief attached at pickup is keyed to a PR this spec's run opened, not to the last verdict file written under this spec's phase.
+    3. The acceptance's drain banner (worktree + branch at phase-1 start) only prints a real workspace on retry/resume; on the first attempt implementer_workspace() returns the project root + current branch, which is the misleading case. Print the minted lease's worktree and branch once the lease exists (or omit the line until then) rather than the driver cwd.
+    Contract: produce at least one commit addressing 1 (the red) and as much of 2-3 as fits; if items 2(3)-(5) are split into a follow-up, say so and file it as a child BlockedBy nothing.
+  created_at: 2026-09-19T05:03:17.579914008Z
+  modified_at: 2026-09-19T05:03:17.579914008Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
