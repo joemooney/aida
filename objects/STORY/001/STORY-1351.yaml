@@ -1,0 +1,46 @@
+id: 01a0ba8d-d592-7360-a4a8-c145527da34e
+spec_id: STORY-1351
+agreed_id: STORY-1351
+title: 'Seat handoff pack: make product/advisor reliability survive a cold session by moving each learned behaviour into a gate, a scheduled job or a role file — not memory'
+description: |
+  Goal: a NEW product or advisor session, started cold on any vendor, reaches the same reliable behaviour as the 2026-09-17/19 sessions without being told anything by the operator.
+
+  The evidence that shapes this spec. Over 2026-09-18/19 the behaviours that never failed were SUBSTRATE-backed; the ones that failed repeatedly were MEMORY-backed, even when the memory existed and was correct:
+  - Substrate, 6 for 6: the merge-hold marker refused every supervised auto-merge; the drain lock prevented double launches; the stale-base check refused reviewers against stale code; queue rework briefs carried findings across sessions intact; the standing launcher relaunched waves with no agent awake; phase 2 refused to push a worktree on a branch it was not driving (which caught a stranded commit).
+  - Memory, 0 for 3: "read the inbox before writing a status" was in the memory pack and was violated four times over six hours until the operator relayed a complaint; "verify a PR is still open before pushing" was WRITTEN as a memory at 10:00 and the same mistake was repeated at 23:10; "do not park work on a stale premise" was written and violated 20 minutes later.
+  Conclusion: seat reliability must not be delivered as prose a session is asked to remember. Each learned behaviour belongs in the most durable channel that can carry it.
+
+  The four channels, most durable first, and what belongs in each:
+  1. A GATE in code — behaviour that must hold even for a session that never heard of the rule. Already done for merges, locks, stale bases. Candidates from this window: refuse a push to a branch whose PR is merged (cost two stranded commits); refuse/realign a diverged local branch before a pickup (BUG-1270, merged).
+  2. A SCHEDULED JOB — the recurring duties, now deliverable since STORY-1226 shipped the per-seat registry: advisor mailbox-triage every 30m, product wave-relaunch when the lock frees and the queue is non-empty, shelf-triage on QueueDrained. Today these were a human-authored monitor and a hand-made cron that both die with the session.
+  3. A ROLE FILE + DISCIPLINE DOC delivered at launch — vendor-neutral (the session-start hook reads ~/.aida/roles/<role>.toml for Claude AND Codex). This is where the things that are genuinely judgement, not mechanism, belong, and where the gap is today:
+     - the operating protocol BETWEEN the seats (who launches waves, who gates merges, who writes rework briefs, who never merges their own code) — it currently exists only in a mailbox thread from 2026-09-17 21:38
+     - the rework-brief craft: read the verdict file, extract the finding, write a brief naming the file, the failing test and the concrete change, requeue on the role queue — repeated ~25 times in this window and written down nowhere
+     - the recovery playbooks: stale base -> rebase AND realign the local branch; stranded commit on a <branch>-work branch; a misclassified hold-gate shelve; store divergence -> reconcile
+  4. MEMORY — last resort, Claude-only, per-machine. Keep it for personal calibration, not for protocol.
+
+  Scope of this spec:
+  - Author the product and advisor role files with the operating protocol and the escalation rules, in ~/.aida/roles/ and the scaffolded templates, so aida init ships them.
+  - Add .aida/discipline/ docs for the rework-brief craft and the recovery playbooks, linked from the role files (read on demand, not loaded into every context).
+  - Register the seat cron jobs from channel 2 in the scaffolded [schedule] defaults.
+  - Extend `aida agent new --role X --show-context` so the launch snapshot shows: the seat's protocol summary, its due seat jobs, what is at its gate, and the one command that answers "what do I do next".
+
+  Acceptance (the test that matters):
+  - A fresh session for the advisor seat, started with the memory pack DISABLED, on Claude and again on Codex, can state from its launch context alone: what it gates, what it must never do, how it writes a rework brief, and what is waiting for it — verified by reading its first reply, recorded on this spec.
+  - The recurring duties appear as due seat jobs within one tick of launch rather than requiring the session to remember them.
+  - No behaviour listed in channel 1 or 2 is delivered as prose in the role file (they are cross-checked: anything mechanised is deleted from the prose).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:44:12.562647785Z
+modified_at: 2026-09-19T16:44:12.562647785Z
+req_type: Story
+tags:
+- from:failure-analysis-0919
+- multivendor
+- parent:EPIC-62
+- reliability
+- roles
+- seats
+- substrate-as-bouncer
