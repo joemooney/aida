@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T05:23:51.278016646Z
+modified_at: 2026-09-19T06:53:03.884102985Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -67,6 +67,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T05:23:51.001632984Z
   modified_at: 2026-09-19T05:23:51.001632984Z
+- id: 01a0b870-a00c-7753-a2fd-1c65ed8c63dd
+  author: joe
+  content: 'Round 3: changed process identity liveness to fall back to PID-only when the recorded start time is absent or the live start time is unreadable; only differing present timestamps mark a live PID stale. Added deterministic coverage for all four cases and retained a legacy drain-lock JSON fixture without pid_start_time. Targeted core and drain-state tests pass.'
+  created_at: 2026-09-19T06:53:03.884102985Z
+  modified_at: 2026-09-19T06:53:03.884102985Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
