@@ -6,12 +6,12 @@ description: |-
   Follow-up named by the STORY-1226 implementation (PR #1946): each schedule ledger update is a store object commit (schedule/<job>.yaml on the aida-store branch, CAS loop, 60 s debounce per job). Every commit advances the store HEAD, so the next cache-backed read (aida list/status/awaiting --notice) detects a HEAD mismatch and rebuilds .aida/cache.db. With several every-jobs firing per tick, the cache rebuilds on almost every read, which defeats STORY-707's sub-second reads and adds load on the per-turn hook path.
 
   Fix: the tick stages all ledger updates it produces and commits them ONCE at the end of the tick (one store commit per tick regardless of job count); the per-job debounce stays as the inner bound. Consider a cache fast-path that treats a HEAD advance whose diff touches only schedule/ objects as not requiring a full rebuild (incremental: reload only the ledger projection). Acceptance: a tick that fires N jobs produces exactly one aida-store commit; aida cache status after such a tick shows either no rebuild needed (fast-path) or one rebuild, never N; test on the batching with N=3 fake jobs; aida usage p95 for awaiting --notice does not regress with three every-jobs configured.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:14:51.388677532Z
-modified_at: 2026-09-19T13:05:25.076241394Z
+modified_at: 2026-09-19T13:09:41.593130799Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -58,16 +58,27 @@ comments:
   content: 'Round-2 fix pushed by the product seat to PR #1962: write_batch_cas_opts now takes the pre-tick base and re-applies only the tick''s delta (reapply_delta, field-wise three-way merge) onto the freshly loaded ledger on every retry; test with a concurrent last_run/note update. Verify tests, push nothing if clean, and let the reviewer take round 3.'
   created_at: 2026-09-19T11:05:37.546132177Z
   modified_at: 2026-09-19T11:05:37.546132177Z
+history:
+- id: 01a0b9c9-7052-7f91-aff2-0dd5198089a5
+  author: aida-auto-bump
+  timestamp: 2026-09-19T13:09:41.586278842Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b9c9-7059-7363-b79d-31d950663c15
+  timestamp: 2026-09-19T13:09:41.593129893Z
+  agent: aida
+  commit_sha: 0899758e5b0fe59f5d03bf82e1cf61d471f2f11b
+  summary: Completed via merge 0899758e
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T07:21:52.287468839Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1280 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T10:58:36.651713663Z
+  completed_at: 2026-09-19T13:09:41.586060323Z
+  completion_sha: 0899758e5b0fe59f5d03bf82e1cf61d471f2f11b
