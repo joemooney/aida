@@ -13,12 +13,12 @@ description: |-
   2. queue done <SPEC> must verify the branch it is finishing belongs to SPEC: the branch name or at least one commit since merge-base must reference SPEC, and the diff must not be attributable only to another spec's trailer; otherwise refuse with the mismatch named (--force for the rare deliberate shared branch, ledgered).
   3. The CI and reviewer phases must bind to the PR opened for THIS spec (PhaseDonePr for this run) — never resolve a PR by branch name inherited from a sibling; if no PR exists for the spec, punt/shelve, do not review another spec's PR under this spec's name (and do not write that spec's verdict file).
   Acceptance: unit tests for the queue-done ownership check (refuse / --force paths); an orchestrator test where a member's worktree is a sibling's branch punts instead of committing; a test that the reviewer phase refuses when the run has no PhaseDonePr for its spec; the drain banner names the worktree + branch it is operating on at phase 1 start.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T04:45:10.644522447Z
+modified_at: 2026-09-19T04:52:24.352799359Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -44,3 +44,7 @@ comments:
   modified_at: 2026-09-19T00:23:40.327329078Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-19T04:52:24.352799359Z
+  implemented_by: joe
