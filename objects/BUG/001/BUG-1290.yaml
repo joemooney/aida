@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:25.301380079Z
-modified_at: 2026-09-19T21:11:50.110857699Z
+modified_at: 2026-09-19T21:52:19.312580765Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -66,4 +66,30 @@ comments:
   created_at: 2026-09-19T21:11:50.110857699Z
   modified_at: 2026-09-19T21:11:50.110857699Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bba7-eb70-7b23-b202-b64dc5de3d3a
+  author: joe
+  content: |-
+    FINGERPRINT FOR FINDING THE DUPLICATE EMITTER, measured 2026-09-19. This turns "name the two call sites" from a search into a lookup.
+
+    In every one of the 292 spurious back-to-back pairs in the feed, the SECOND event has NO `seat` field. 292 of 292, no exceptions. The first event of the pair carries a seat 172 times and lacks one 120 times.
+
+      spurious back-to-back pairs examined: 292
+        FIRST  event of the pair: seat present 172, absent 120
+        SECOND event of the pair: seat present 0, absent 292
+
+    `seat` on EventKind::PhaseEntered is Option<String> with skip_serializing_if = "Option::is_none" (aida-cli-lib/src/events.rs:70), so an emitter passing None omits the field entirely rather than writing null. The spurious emitter therefore never populates seat, while the legitimate one does whenever a seat is known.
+
+    Live example from BUG-1234's run today:
+
+      21:35:36  PhaseEntered idx=3 slug=reviewer vendor=codex seat=reviewer
+      21:35:48  PhaseEntered idx=3 slug=reviewer vendor=codex
+
+    Same phase, same run, twelve seconds apart, identical but for the seat.
+
+    Caution on how to use this. The absence of `seat` is a fingerprint of the spurious emitter, NOT a valid runtime filter — 120 first-of-pair events also lack it, because seat is legitimately unknown for some phases (phase 1 implementer carries vendor but no seat). Do not implement the fix as "drop PhaseEntered events with no seat". Use the fingerprint to LOCATE the second emit site, then remove the duplicate emission at its source, as the acceptance already requires.
+
+    This does not change the spec's conclusion about dedup — suppressing repeated (spec, run_uuid, phase) would still swallow the 121 legitimate retry re-entries. It only makes step 1 cheap.
+  created_at: 2026-09-19T21:52:19.312580765Z
+  modified_at: 2026-09-19T21:52:19.312580765Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
