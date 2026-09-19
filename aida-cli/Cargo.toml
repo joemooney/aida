@@ -30,6 +30,7 @@ tui = ["aida-cli-lib/tui"]
 # Black-box integration tests under tests/ spawn the built binary
 # (CARGO_BIN_EXE_aida) in throwaway project dirs.
 tempfile = "3.8"
+aida-core = { version = "0.15", path = "../aida-core" }
 
 [package.metadata.features]
 # Note: The "remote" feature enables gRPC client functionality

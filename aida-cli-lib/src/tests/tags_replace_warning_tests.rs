@@ -120,7 +120,7 @@ fn doctor_detects_and_heals_all_thirteen_incident_specs() {
     parent.spec_id = Some("EPIC-28".into());
     let parent_id = parent.id;
     store.requirements.push(parent);
-    let incident_ids: Vec<String> = [
+    let mut incident_ids: Vec<String> = [
         "BUG-1222",
         "BUG-1224",
         "BUG-1226",
@@ -138,6 +138,7 @@ fn doctor_detects_and_heals_all_thirteen_incident_specs() {
     .into_iter()
     .map(str::to_string)
     .collect();
+    incident_ids.sort();
     for id in &incident_ids {
         let mut child = Requirement::new(format!("incident {id}"), String::new());
         child.spec_id = Some(id.clone());
