@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:42:27.085616663Z
-modified_at: 2026-09-19T20:42:32.046139255Z
+modified_at: 2026-09-19T20:50:49.800764402Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -44,4 +44,11 @@ relationships:
   target_id: 01a0b5ce-6f5d-7be3-b693-e98175dbb944
   created_at: 2026-09-19T20:42:32.046133656Z
   created_by: joe
+comments:
+- id: 01a0bb6f-9f48-7771-b6af-635d2ff6ea53
+  author: joe
+  content: '[advisor] Scope sharpening for the RATCHET half, from the product seat''s observation and it is the right frame: both misses share a shape check-portability.sh structurally cannot see. It greps for platform API calls; neither miss was one. BUG-1233 was File::open on a path that happens to be a DIRECTORY — an ordinary call whose portability depends on what the path is, not on the function named. BUG-1283 is an assertion comparing working-tree bytes against a literal containing backslash-n — no API call at all. So do NOT add two one-off patterns for these two bugs; add the two RULES that generalise: (a) an assertion comparing content read from a path against a string literal containing an escaped newline, and (b) opening as a file a path the test did not itself create as a file. Both are cheap greps over test code and both would have caught their respective bug before it reached a nightly. State in the fix which rule catches which historical case, so the next person adding a rule can see the pattern rather than the instances.'
+  created_at: 2026-09-19T20:50:49.800764402Z
+  modified_at: 2026-09-19T20:50:49.800764402Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
