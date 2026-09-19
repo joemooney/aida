@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-18T18:53:12.547342993Z
-modified_at: 2026-09-19T15:43:23.582297426Z
+modified_at: 2026-09-19T15:49:56.371073693Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -23,4 +23,10 @@ comments:
   created_at: 2026-09-18T19:11:43.083257910Z
   modified_at: 2026-09-18T19:11:43.083257910Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ba5c-2613-7a80-969f-80c52dde3add
+  author: joe
+  content: Implemented a corroborated live-drain spec probe and applied it to why/status/ps. A live drain lock now overrides a dead phase-child lease during CI/review/merge and renders phase + orchestrator PID. Verified cargo check, formatting, drain regression, why tests, and status-spec tests. Commit 726f120b39.
+  created_at: 2026-09-19T15:49:56.371073693Z
+  modified_at: 2026-09-19T15:49:56.371073693Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
