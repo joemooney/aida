@@ -1538,6 +1538,31 @@ impl Storage {
         )
     }
 
+    /// Resolve a queued requirement by stable UUID through the targeted
+    /// backend lookup. Git-canonical projects use the cache-backed resolver,
+    /// which maps UUID to the embedded spec id before locating the YAML and
+    /// retains an authoritative full-scan fallback for legacy aliases.
+    // trace:BUG-1264 | ai:codex
+    pub fn resolve_queued_requirement(
+        &self,
+        requirement_id: &uuid::Uuid,
+    ) -> Result<Option<crate::models::Requirement>> {
+        use crate::db::DatabaseBackend;
+
+        if self.is_sqlite() {
+            return crate::db::SqliteBackend::new(&self.file_path)?.get_requirement(requirement_id);
+        }
+        if self.file_path.is_dir() {
+            let cache_path = crate::db::CachedGitBackend::default_cache_path(&self.file_path);
+            return crate::db::CachedGitBackend::open(&self.file_path, &cache_path)?
+                .get_requirement(requirement_id);
+        }
+        anyhow::bail!(
+            "queued requirement resolution requires SQLite or git-canonical storage — got {:?}",
+            self.file_path
+        )
+    }
+
     /// List queue entries for a user
     pub fn queue_list(
         &self,

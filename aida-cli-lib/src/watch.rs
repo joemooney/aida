@@ -330,6 +330,10 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 crate::auto_complete_telemetry::failure_cause_label(Some(kind))
             ),
         ),
+        // trace:BUG-1264 | ai:codex
+        EventKind::SpecSkipped { reason } => {
+            ("spec-skipped", format!("queued member skipped: {reason}"))
+        }
         // trace:STORY-975 | ai:codex
         EventKind::SpecRetried {
             phase,
