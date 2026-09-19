@@ -513,15 +513,39 @@ pub fn process_start_identity(pid: u32) -> Option<String> {
     process_start_time(pid).map(|time| time.to_rfc3339())
 }
 
-/// True only when both parts of a recorded process identity still match.
-/// Records written before start-time identities were introduced deliberately
-/// fail closed: PID existence alone cannot distinguish a recycled PID.
+/// True when the PID is alive unless both the recorded and live kernel start
+/// times are available and differ. Missing start-time data degrades to the
+/// pre-TASK-1284 PID-only check so legacy lock holders are never reclaimed
+/// merely because their record predates process identities or the platform
+/// cannot report a live start time.
 // trace:TASK-1284 | ai:codex
 pub fn process_identity_is_alive(pid: u32, recorded_start_time: Option<&str>) -> bool {
-    recorded_start_time
-        .zip(process_start_identity(pid).as_deref())
-        .map(|(recorded, actual)| recorded == actual)
-        .unwrap_or(false)
+    process_identity_is_alive_with(
+        pid,
+        recorded_start_time,
+        pid_is_alive,
+        process_start_identity,
+    )
+}
+
+fn process_identity_is_alive_with(
+    pid: u32,
+    recorded_start_time: Option<&str>,
+    is_pid_alive: impl FnOnce(u32) -> bool,
+    live_start_time: impl FnOnce(u32) -> Option<String>,
+) -> bool {
+    if !is_pid_alive(pid) {
+        return false;
+    }
+
+    let Some(recorded) = recorded_start_time else {
+        return true;
+    };
+
+    match live_start_time(pid) {
+        Some(actual) => recorded == actual,
+        None => true,
+    }
 }
 
 /// BUG-613: liveness must be O(1), not a full process-table walk. The old
@@ -1189,12 +1213,42 @@ mod tests {
     }
 
     #[test]
-    fn process_identity_rejects_same_pid_with_different_start_time() {
-        let pid = std::process::id();
-        assert!(process_start_identity(pid).is_some());
-        assert!(!process_identity_is_alive(
-            pid,
-            Some("1970-01-01T00:00:01+00:00")
+    fn process_identity_accepts_alive_legacy_record_without_start_time() {
+        assert!(process_identity_is_alive_with(
+            42,
+            None,
+            |_| true,
+            |_| panic!("legacy records do not require a kernel start-time probe"),
+        ));
+    }
+
+    #[test]
+    fn process_identity_accepts_alive_pid_when_live_start_time_is_unreadable() {
+        assert!(process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| true,
+            |_| None,
+        ));
+    }
+
+    #[test]
+    fn process_identity_rejects_alive_pid_with_different_start_time() {
+        assert!(!process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| true,
+            |_| Some("2026-09-18T12:00:01+00:00".to_string()),
+        ));
+    }
+
+    #[test]
+    fn process_identity_accepts_alive_pid_with_equal_start_time() {
+        assert!(process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| true,
+            |_| Some("2026-09-18T12:00:00+00:00".to_string()),
         ));
     }
 
