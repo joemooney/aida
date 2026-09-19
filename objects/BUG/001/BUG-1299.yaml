@@ -34,14 +34,17 @@ description: |
   6. Existing SpecRetried consumers keep working — the field is additive and optional.
 
   Filed by the product seat; the watchdog LIMITS themselves are a separate question and are deliberately not touched here. This spec is about being able to tell which limit fired.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-19T23:04:09.399924377Z
+modified_at: 2026-09-19T23:11:13.424311757Z
 req_type: Bug
 tags:
+- batch:followups-0918i
+- diagnostic-decay
+- drain-safe
 - events
 - from:session-0919
 - observability
@@ -52,3 +55,4 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T23:04:09.399924377Z
+execution_mode: drain
