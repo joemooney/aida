@@ -15,10 +15,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:54:24.074021232Z
-modified_at: 2026-09-19T21:54:24.074021232Z
+modified_at: 2026-09-19T21:54:33.539474010Z
 req_type: Story
 tags:
 - codegraph
 - deferred
 - ecosystem-watch
 - memory-lane
+deferred: true
+deferred_at: 2026-09-19T21:54:33.539474010Z
+deferred_until: SPIKE-84 answers question 4 — whether a local codegraph install makes a bounded slice worth filing; do not scope before that report
