@@ -97,12 +97,13 @@ pub(crate) const EXPRESS_TIER_TAG: &str = "batch:express";
 ///
 /// The express tier (`batch:express`) is the inverse: it carries no
 /// short-circuit at all and its trust contract is that it NEVER silently
-/// downgrades its gate. When `express` is set, all three skips are forced off
+/// downgrades its gate. When `express` is set, all lifecycle skips are forced off
 /// regardless of any `lifecycle:*` tag also present on the spec.
 /// trace:STORY-442 | ai:codex
 // trace:TASK-907 | ai:claude
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct LifecycleSkip {
+    pub(crate) no_preflight: bool,
     pub(crate) no_ci_wait: bool,
     pub(crate) no_review: bool,
     pub(crate) no_build: bool,
@@ -127,6 +128,7 @@ impl LifecycleSkip {
                 "lifecycle:no-ci-wait" => skip.no_ci_wait = true,
                 "lifecycle:no-review" => skip.no_review = true,
                 "lifecycle:no-build" => skip.no_build = true,
+                "lifecycle:no-preflight" => skip.no_preflight = true,
                 // trace:TASK-1249 | ai:claude
                 "lifecycle:no-harvest" => skip.no_harvest = true,
                 "lifecycle:trivial" => {
@@ -146,6 +148,8 @@ impl LifecycleSkip {
         // would otherwise downgrade the gate, so an express spec can never
         // silently ship under a reduced gate.
         if skip.express {
+            // trace:TASK-1289 | ai:codex
+            skip.no_preflight = false;
             skip.no_ci_wait = false;
             skip.no_review = false;
             skip.no_build = false;
@@ -154,7 +158,11 @@ impl LifecycleSkip {
     }
 
     pub(crate) fn is_empty(self) -> bool {
-        !self.no_ci_wait && !self.no_review && !self.no_build && !self.no_harvest
+        !self.no_preflight
+            && !self.no_ci_wait
+            && !self.no_review
+            && !self.no_build
+            && !self.no_harvest
     }
 
     /// TASK-525: the active short-circuit tokens (`no-ci-wait`, `no-review`,
@@ -163,6 +171,9 @@ impl LifecycleSkip {
     /// Empty when no skip is active. trace:TASK-525 | ai:claude
     pub(crate) fn active_tokens(self) -> Vec<String> {
         let mut v = Vec::new();
+        if self.no_preflight {
+            v.push("no-preflight".to_string());
+        }
         if self.no_ci_wait {
             v.push("no-ci-wait".to_string());
         }
@@ -187,6 +198,7 @@ pub(crate) const RECOGNIZED_LIFECYCLE_TAGS: &[&str] = &[
     "lifecycle:no-ci-wait",
     "lifecycle:no-review",
     "lifecycle:no-build",
+    "lifecycle:no-preflight",
     "lifecycle:no-harvest",
     "lifecycle:trivial",
 ];
@@ -210,6 +222,9 @@ impl LifecycleSkip {
             return None;
         }
         let mut parts = Vec::new();
+        if self.no_preflight {
+            parts.push("implementer preflight");
+        }
         if self.no_ci_wait {
             parts.push("CI wait");
         }
@@ -6400,12 +6415,24 @@ mod tests {
         assert_eq!(
             skip,
             LifecycleSkip {
+                no_preflight: false,
                 no_ci_wait: true,
                 no_review: true,
                 no_build: true,
                 no_harvest: false,
                 express: false,
             }
+        );
+    }
+
+    #[test]
+    fn lifecycle_no_preflight_is_recognized_and_named_in_banner() {
+        let skip = LifecycleSkip::from_tags(["LIFECYCLE:NO-PREFLIGHT"]);
+        assert!(skip.no_preflight);
+        assert_eq!(skip.active_tokens(), vec!["no-preflight".to_string()]);
+        assert_eq!(
+            skip.banner_summary().as_deref(),
+            Some("skipping implementer preflight")
         );
     }
 
@@ -6419,6 +6446,7 @@ mod tests {
         // Plain express → marked, nothing skipped.
         let skip = LifecycleSkip::from_tags([EXPRESS_TIER_TAG]);
         assert!(skip.express, "batch:express sets the express marker");
+        assert!(!skip.no_preflight);
         assert!(!skip.no_ci_wait);
         assert!(!skip.no_review);
         assert!(!skip.no_build);
@@ -6437,10 +6465,14 @@ mod tests {
             "lifecycle:trivial",
             EXPRESS_TIER_TAG,
             "lifecycle:no-review",
+            "lifecycle:no-preflight",
         ]);
         assert!(conflicting.express);
         assert!(
-            !conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+            !conflicting.no_preflight
+                && !conflicting.no_ci_wait
+                && !conflicting.no_review
+                && !conflicting.no_build,
             "express overrides any lifecycle:* short-circuit — full gate enforced"
         );
 

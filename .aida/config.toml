@@ -42,6 +42,17 @@ vendor = "codex"
 # STORY-975: retry a transient phase failure once before parking NeedsAttention.
 retry_transient = 1
 
+# TASK-1289: names resolve to the command bodies in ci.yml, so local preflight
+# cannot silently drift from CI when a guard command changes.
+[preflight]
+guards = [
+  "Check formatting",
+  "Run clippy",
+  "Check Rust test portability ratchet",
+  "CLI-manual drift-guard (every command documented)",
+  "Doc-intent gate (surface changes mark doc-impact)",
+]
+
 # Contained-launch egress allowlist (BUG-1178 workaround): the native sandbox
 # PROMPTS on a new network domain, and a dontAsk launch auto-denies that prompt —
 # which is why `gh` / `git fetch` got a 403 inside the contained advisor. Pre-allow
