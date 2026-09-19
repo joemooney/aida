@@ -1,0 +1,50 @@
+id: 01a0bbe9-818d-7f62-a04f-1781238842c1
+spec_id: BUG-1299
+agreed_id: BUG-1299
+title: 'A watchdog retry reaches the operator as the bare word watchdog: SpecRetried has no detail field, so a stalled session and a productive one that ran out of clock are indistinguishable'
+description: |
+  A retry discards the failure detail that a shelve preserves, so the commonest transient failure — the watchdog — reaches the operator as the bare word "watchdog" with no way to tell which trip fired. The two trips have opposite remedies.
+
+  OBSERVED 2026-09-19 on TASK-1274. The implementer phase ran productively for 45 minutes, making four commits, and was stopped at 23:02:14 UTC — 23 seconds after its headless log's last write. All that reached the operator was:
+
+    event:     {"event":"SpecRetried","phase":"implementer","cause":"watchdog","attempt":2,"max":2}
+    drain log: transient implementer failure (watchdog); retrying phase 1 attempt 2/2
+
+  Neither says which trip fired, what the limit was, or how close the run came to it.
+
+  THE DETAIL EXISTS AND IS THROWN AWAY. `exit_signal::ExitOutcome::WatchdogTripped(reason)` carries a reason string. The handler in aida-cli-lib/src/lib.rs around line 85837 formats it into a PhaseFailure message. On the SHELVE path that survives: EventKind::SpecShelved has `detail` and `recovery_hint` fields (events.rs:92-103) and both are populated. On the RETRY path it is dropped: EventKind::SpecRetried (events.rs:115-127) has `phase`, `cause`, `attempt`, `max` and two model fields — and no `detail`. The reason is discarded at the event boundary, and the drain's own console line prints only the cause word.
+
+  WHY THE DISTINCTION MATTERS OPERATIONALLY. `watchdog_verdict_with_ci_wait` (auto_complete.rs:849) has two trips with nothing in common:
+
+    WatchdogTrip::NoProgress — no commit or file change in the worktree for the no-progress limit. The session is stuck. The remedy is to find out why it stalled.
+    WatchdogTrip::Ceiling    — wall-clock exceeded the absolute ceiling. The session may be working perfectly. The remedy is to raise the budget for that class of spec, or split the spec.
+
+  Reading "watchdog" alone, an operator cannot tell a stuck session from a productive one that ran out of clock, and the two lead in opposite directions. In this instance the evidence points to the ceiling — four commits, log written 23 seconds before the stop — which means a healthy session was killed for being long, and the drain then spent a second full attempt on it. That is the expensive reading and nothing in the output distinguishes it from the cheap one.
+
+  This is the same family as BUG-1295 and BUG-1298: the decision stays correct while the diagnostic that explains it degrades or disappears. Here it is not degradation but omission at a schema boundary.
+
+  PROPOSED: give SpecRetried the same `detail` field SpecShelved has, populated from the same PhaseFailure message, and print it on the drain's retry line. Separately, make the watchdog reason name its trip and its limit rather than being free prose, so `detail` is useful to a machine as well as a reader.
+
+  ACCEPTANCE
+  1. EventKind::SpecRetried carries an optional `detail`, populated from the failure that caused the retry, serialized like SpecShelved's (absent on legacy lines, skipped when None).
+  2. The drain's retry console line includes the detail, not only the cause word.
+  3. A watchdog trip's reason names which trip fired and the limit that was crossed — for example "ceiling: 2700s wall-clock exceeded" or "no-progress: no worktree change for 600s".
+  4. A test asserts a watchdog-caused retry produces an event whose detail distinguishes the two trips.
+  5. The TASK-1274 retry is the regression fixture: a productive session stopped by the ceiling must be distinguishable from a stalled one in the feed alone.
+  6. Existing SpecRetried consumers keep working — the field is additive and optional.
+
+  Filed by the product seat; the watchdog LIMITS themselves are a separate question and are deliberately not touched here. This spec is about being able to tell which limit fired.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T23:03:57.581552445Z
+modified_at: 2026-09-19T23:03:57.581552445Z
+req_type: Bug
+tags:
+- events
+- from:session-0919
+- observability
+- orchestrator
+- parent:EPIC-62
+- watchdog
