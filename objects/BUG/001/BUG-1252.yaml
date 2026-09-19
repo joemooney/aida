@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T11:57:50.819289485Z
+modified_at: 2026-09-19T12:11:35.419320505Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -75,6 +75,23 @@ comments:
   content: 'Round 2 review fixes: added real-binary CLI acceptance tests for agent-mode refusal across all six structural tag families, forced replacement Git subject, and doctor detection/heal using the exact 13 incident IDs. Retained and reran the MCP forced-update ledger test. Commit f08a6a7198 pushed to PR branch.'
   created_at: 2026-09-19T11:57:50.819289485Z
   modified_at: 2026-09-19T11:57:50.819289485Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b994-3e7b-77f1-be8a-a551da546488
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1961
+    agent: codex
+    ran-at: 2026-09-19 05:11 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1252-drain-01a0b993-d5c0-70a0-a343-95d892d313a7.json
+    ? AC (0.98) — Healing a parent-tag-drift finding reconciles the requirement's entire parent:* tag set to its relationships: it removes parent:* tags that have no corresponding relationship as well as adding tags that are missing for relationships.
+    ? SEM (0.96) — The doctor category parent-tag-drift is also selectable by the aliases parent-tags and parent-drift.
+    ? SEM (0.88) — MCP update_requirement accepts replace_tags: true as an alias for force: true when intentionally dropping structural tags.
+  created_at: 2026-09-19T12:11:35.419320505Z
+  modified_at: 2026-09-19T12:11:35.419320505Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
