@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T02:03:34.015570180Z
+modified_at: 2026-09-19T03:14:59.118017949Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -80,6 +80,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T02:03:33.765838803Z
   modified_at: 2026-09-19T02:03:33.765838803Z
+- id: 01a0b7a8-f7ae-7360-ba02-ad399961b7df
+  author: joe
+  content: 'Round 3 review fix: CLI inbox and MCP mark_seen now record receipts only for messages strictly newer than the pre-read watermark, while still advancing to the full inbox newest. Added MCP upgrade regression proving watermark-covered old mail is not backfilled and newly unread mail is receipted. Targeted tests pass.'
+  created_at: 2026-09-19T03:14:59.118017949Z
+  modified_at: 2026-09-19T03:14:59.118017949Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
