@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b806-8049-7d62-9105-1d5c62ccbef4
+  position: 0
+  added_by: claude-product-1
+  note: 'Precise cause (supersedes the previous brief) for the round-2 red on PR #1961: doctor_detects_and_heals_all_thirteen_incident_specs — the detector correctly finds all 13 incident ids INCLUDING the unusual id form TASK-1-140, but the test''s expected list omits TASK-1-140 (left has it, right does not). Fix the expected fixture list to the full 13 ids (BUG-1222, BUG-1224, BUG-1226, BUG-1227, BUG-1229, BUG-1230, BUG-1233, SPIKE-82, STORY-1221, TASK-1-140, TASK-1271, TASK-1276, TASK-1278) and keep the sorted-id assertion. Nothing else in the run failed.'
+  added_at: 2026-09-19T09:30:59.028535470Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
