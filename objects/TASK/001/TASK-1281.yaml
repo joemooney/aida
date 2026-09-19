@@ -11,12 +11,12 @@ description: |-
   5. A substrate `when` job produces two store commits per firing (episode via write_cas_opts, then record_outcome). Fold into one mutate.
   6. Concurrent ticks from two sessions' hooks can both fire a when/on substrate job (min_gap reads last_tick_at, written only at end). Idempotency covers correctness; add a cheap tick lock or write last_tick_at at start.
   Acceptance: one test per item; no change to the registry format or the CLI surface.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:21:32.281544450Z
-modified_at: 2026-09-19T11:16:56.750489974Z
+modified_at: 2026-09-19T11:17:03.556480731Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -84,16 +84,27 @@ comments:
   created_at: 2026-09-19T11:16:56.750489974Z
   modified_at: 2026-09-19T11:16:56.750489974Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b962-51c3-7872-8751-168072afab44
+  author: aida-auto-bump
+  timestamp: 2026-09-19T11:17:03.555713284Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b962-51c4-7aa3-b7cb-700cad5e1b69
+  timestamp: 2026-09-19T11:17:03.556479689Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1281-2026-09-19T111658Z.md
+  commit_sha: 45856dec6a0840e1514dbfcf422c10df6899c58e
+  summary: Completed via merge 45856dec
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T07:44:26.292157987Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1281 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T07:56:48.853257536Z
+  completed_at: 2026-09-19T11:17:03.555498013Z
+  completion_sha: 45856dec6a0840e1514dbfcf422c10df6899c58e
