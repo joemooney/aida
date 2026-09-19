@@ -1,0 +1,32 @@
+id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
+spec_id: TASK-1292
+agreed_id: TASK-1292
+title: aida pr ship refuses while a reviewer is live on that PR, whatever spec the reviewer runs under — the in-drive guard keys on spec ownership and missed a sibling-spec reviewer
+description: |-
+  Filed by the advisor 2026-09-19 from its own near-miss, as the gate half of STORY-1351's thesis: a rule that failed as memory should become a gate.
+
+  The near-miss: at 2026-09-18 16:35 the advisor merged PR #1948 with aida pr ship. The drain's headless reviewer wrote CHANGES REQUESTED on that PR at 16:37, two minutes later. The advisor had checked the SPEC's state (STORY-1221, shelved after round 1) and concluded no reviewer was running. It was: the wave's BUG-1236 implementer had pushed onto story-1221's branch, so the reviewer phase running under BUG-1236 was reviewing #1948. The spec's state said nothing about the PR's reviewer. Nothing refused the merge.
+
+  The guard that exists: aida pr ship refuses when the target PR is owned by the LIVE DRIVE — it did exactly that to the advisor on #1965 at 08:21 on 09-19 ("target PR is owned by the live drive. The orchestrator's independent reviewer gates the merge"), which is the behaviour we want. But it keys on the drive's current spec, so in the #1948 case ownership resolved to the wrong spec and the guard did not fire. BUG-1244 (merged) fixed the contamination that produced that mismatch, so the specific path is closed — but the guard is still spec-keyed, and the property we actually want is PR-keyed.
+
+  Fix: before merging, aida pr ship checks whether a reviewer phase is live against THIS PR NUMBER, regardless of which spec's run it belongs to — the run's PhaseDonePr binding (BUG-1244) makes that resolvable — and refuses with the same message and the same AIDA_PR_SHIP_ALLOW_IN_DRIVE escape it uses today. A verdict file being absent while a reviewer phase is live must read as "a review is in flight", not as "no review".
+
+  Acceptance: with a live reviewer phase bound to PR-N under spec A, aida pr ship N refuses even when the drive's current spec is B; with no live reviewer, an otherwise-ready PR ships as today; the escape env var still overrides and the override is printed; unit test on the pure decision (live reviewer on this PR / live reviewer elsewhere / none) and a fixture that the sibling-spec case refuses.
+
+  Why it matters beyond the one incident: this is the merge gate. The advisor is the only actor allowed to release a supervised hold, so a gate that only sometimes fires is the one place where the independence rule can be lost silently — as it nearly was here, and the only reason it was caught is that the advisor re-read the verdict directory afterwards and found a verdict two minutes newer than its own merge.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:50:12.735351787Z
+modified_at: 2026-09-19T16:50:12.735351787Z
+req_type: Task
+tags:
+- batch:followups-0918i
+- drain-safe
+- gate
+- merge
+- orchestrator
+- parent:EPIC-62
+- substrate-as-bouncer
+execution_mode: drain
