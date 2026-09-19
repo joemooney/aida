@@ -26,20 +26,40 @@ description: |
 
   PROPOSED: emit a terminal event for every spec a merge closes, from the same code path that performs the Done-to-Completed bump, so it fires whether the close came from the drain, from `aida pull`, from `aida db reconcile-status`, or from a batch PR that named several specs in its trailer.
 
-  ACCEPTANCE
-  1. A new terminal event kind exists and is emitted for each spec transitioned to Completed, carrying the spec id, the merge commit and the PR number where known.
+  CORRECTION 2026-09-19 (product seat, verified by the advisor; this replaces the acceptance below the line). The original diagnosis said the drain path emits no terminal event. It does. A full stream read of BUG-1234 shipping end to end shows PrMerged fires and is keyed to the spec:
+
+    21:47:58  PhaseEntered idx=4 merge
+    21:48:01  PrMerged pr=1975
+    21:48:01  PhaseEntered idx=5 pull
+    21:48:11  PhaseEntered idx=6 build
+    21:50:41  PhaseDonePr pr=1975
+
+  So the 219 PhaseDonePr endings and the 205 UnshippedWorkDetected endings are not missing emissions. They are successful merges whose terminal event was buried by a later spec-keyed event from the trailing phases. This is current behaviour on today's binary, not a dated artifact, which also settles the no-backfill guard favourably.
+
+  That makes this TWO defects, and the original acceptance addressed only the second.
+
+  ON THE ORDERING FORK, THE FRAME WAS WRONG AND BOTH OFFERED FIXES INHERIT THE FLAW. The fork was posed as: either the trailing phases stop emitting spec-keyed events after PrMerged, or a completion event is emitted once pull and build finish. Both assume the invariant "a terminal event must be the LAST event for that spec." That is a POSITIONAL invariant on an append-only log, and positional invariants there are fragile by construction: any crash, retry, re-drive, or future phase breaks it, and it breaks silently. The concrete counterexample is already filed as BUG-1291 — a run that dies between the merge and the end of the run emits no completion event, so under option 2 the last event is PhaseEntered build and the consumer is wrong again, in the same direction, for the same reason.
+
+  The durable invariant is that TERMINALITY IS A PROPERTY OF THE EVENT KIND, NOT OF ITS POSITION. Mark the kinds that mean the spec reached an end state, and the consumer rule becomes "the last event whose kind is terminal" instead of "the last event". That still satisfies the success condition the product seat wrote — a consumer decides whether a spec is finished from the feed alone, with no join against the store — while surviving every case the positional rule does not. It costs one filter on a field the consumer already has.
+
+  A run-completion event is still worth emitting, but for its own sake: it records that pull and build finished, which is real information and is what makes drain-duration measurable. It is NOT the fix for ordering, and it must not be relied on as one.
+
+  ACCEPTANCE (revised 2026-09-19; supersedes the original five)
+
+  1. A terminal event kind exists and is emitted for each spec transitioned to Completed, carrying the spec id, the merge commit and the PR number where known.
   2. Merging a PR whose trailer names three specs emits three terminal events, one per spec, not one for the PR.
   3. `aida pull` auto-bumping a spec emits the event, as does `aida db reconcile-status`.
-  4. A test asserts that after a simulated merge-and-bump, the last event for that spec is the terminal kind.
-  5. Backfill is NOT required, but the docs state that events before this change have no terminal record so consumers do not treat the absence as "in flight".
-
-  Reported by the aida-monitor project; every number above independently reproduced in this repo before filing.
+  4. TERMINALITY IS QUERYABLE BY KIND. Event kinds carry a terminal predicate covering at minimum PrMerged and the new completed kind, and the failed/parked terminals where they genuinely end a run. A consumer can answer "is this spec finished" from the last event whose kind is terminal, with no join against the store. Trailing phase events are NOT suppressed: pull and build genuinely happen and their events are wanted.
+  5. A test asserts the predicate directly: given a recorded stream in which PrMerged is followed by PhaseEntered pull, PhaseEntered build and PhaseDonePr, the terminal-kind query returns PrMerged. A second test asserts the crash case: given a stream that stops after PhaseEntered build with no completion event, the query still returns PrMerged.
+  6. A run-completion event is emitted when a drain run finishes its trailing phases, recording that pull and build completed. This is additive and no correctness criterion depends on its position.
+  7. Backfill is NOT required, but the docs state that events before this change have no terminal record, so consumers do not read the absence as "in flight".
+  8. The consumer rule is documented where feed consumers will find it, because the aida-monitor project is being built against this feed right now and will otherwise re-derive the positional rule and inherit the bug.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-19T21:52:06.038691793Z
+modified_at: 2026-09-19T21:58:42.337866292Z
 req_type: Bug
 tags:
 - batch:followups-0918i
