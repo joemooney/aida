@@ -1,0 +1,40 @@
+id: 01a0bb03-3ec2-7c40-9d51-80b0b22fbb2f
+spec_id: BUG-1279
+agreed_id: BUG-1279
+title: 'This repo''s own discipline pack is stale: ten master guides missing, four README links dead — the dogfooding channel STORY-1351 depends on is broken here'
+description: |
+  Found while deciding where to put a new discipline lesson (2026-09-19): this repository's own discipline pack is stale against the master it ships, and its README links to four guides that are not present.
+
+  Facts:
+  - Master, aida-core/templates/.aida/discipline/: 22 files. Project copy, .aida/discipline/: 13 files (13th is glossary.yaml).
+  - TEN master guides are absent from the project copy: advisor-role.md, brief-polling.md, git-sync-and-review.md, implementer-discipline.md, integrator-role.md, lifecycle-vocabulary.md, observation-discipline.md, session-discipline.md, skill-cli-symmetry.md, workflow-patterns.md.
+  - FOUR of those are linked from the project copy's own README table and therefore resolve to nothing for any session that follows them: advisor-role.md, lifecycle-vocabulary.md, session-discipline.md, workflow-patterns.md.
+  - The README itself differs from the master.
+
+  Why it matters beyond tidiness. CLAUDE.md states this repo dogfoods its own scaffolding, and the discipline pack is the channel STORY-1351 relies on to carry seat behaviour to a cold session on any vendor. A session in THIS repo that follows the README lands on four dead links, and the guides it most needs — the advisor seat's responsibilities, session discipline, the implementer's discipline — are the ones missing. The pack is also the thing TASK-1170's refresh mechanism exists to keep level, so this is evidence that mechanism either did not run here or does not cover this pack.
+
+  Scope:
+  - Establish WHY the drift exists: does aida scaffold refresh / aida init --refresh cover .aida/discipline/ at all, and if it does, why this copy is behind (edited files, missing markers, or never run here). State the answer; do not guess.
+  - Bring the project copy level with the master without clobbering any genuinely local edit: files absent are added, files whose body still matches their generated marker are overlaid, files edited locally are left alone and LISTED for a human to reconcile.
+  - Fix the README so no link is dead, and keep the project README in sync with the master or state explicitly why it differs.
+  - Add a guard: a check that fails when the project copy's README links to a file that does not exist, and when a master guide is absent from a dogfooding project copy. A dead link in the pack that teaches discipline is a self-inflicted credibility problem.
+
+  Acceptance:
+  - Every link in .aida/discipline/README.md resolves.
+  - The project copy contains every master guide, or names the ones deliberately excluded and why.
+  - The drift cause is stated on this spec in one sentence.
+  - The guard fails on a synthetic dead link and passes on the repaired pack.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T18:52:27.202206555Z
+modified_at: 2026-09-19T18:52:27.202206555Z
+req_type: Bug
+tags:
+- discipline
+- docs
+- dogfooding
+- from:session-0919
+- parent:EPIC-62
+- scaffolding
