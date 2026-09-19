@@ -3,12 +3,12 @@ spec_id: TASK-1-140
 agreed_id: TASK-163
 title: aida why reports stalled/no live process for a spec whose drain orchestrator is alive in the CI-wait phase
 description: 'Observed 2026-09-18 11:52 by the driver advisor. aida why BUG-1224 printed "stalled - in-flight but 9m 44s elapsed, no live process working it (aida session end 01a0b5d3 to release)" while the batch drain (pid 815698, queue work --batch followups-0918d --auto-complete --no-human=both) was alive and in phase 2 (CI wait) on that very spec, with PR #1937 open and Build in_progress. aida ps likewise listed running:1 (only the advisor) and hid the orchestrator. The implementer child had exited (it finishes at PR-open), so liveness keyed on the implementer session pid reads dead, but the ORCHESTRATOR owns the lease through CI/review/merge. Risk: the hint invites an operator or a cron reaper to session-end a spec the live drain is about to merge. Expected: why/ps/status <spec> treat the drain orchestrator pid (from .aida/drain.lock) as the live process for every spec in its batch while the lock is live, and say "drain phase 2/6 (CI wait), orchestrator pid N". Related: BUG-623, STORY-694/696, TASK-1177 (reap predicate must not fire here).'
-status: Done
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-18T18:53:12.547342993Z
-modified_at: 2026-09-19T16:03:50.726971882Z
+modified_at: 2026-09-19T16:04:05.466004085Z
 req_type: Task
 tags:
 - batch:followups-0918e
