@@ -1,0 +1,12 @@
+id: 01a0bb8d-4691-74b1-88f0-e28446ae4362
+spec_id: BUG-1293
+agreed_id: BUG-1293
+title: probe normal title xyz
+description: probe
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:23:13.169058319Z
+modified_at: 2026-09-19T21:23:13.169058319Z
+req_type: Bug
