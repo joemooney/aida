@@ -8,12 +8,12 @@ description: |-
   THE COST IS DIAGNOSTIC AND REAL: a human or advisor reading .aida/review-verdicts/PR-N.json cannot tell which head it covers. Across 2026-09-18/19 I hand-pinned the head SHA into every advisor verdict file and had to re-pin it after each rebase (#1956, #1957, #1959, #1964, #1965) precisely because the reviewer's own file does not carry one; and on 2026-09-18 22:20 I misread a hold-gate state for want of the same kind of stamp.
   SUGGESTED FIX (one line of plumbing): have the reviewer phase write through review_verdict::record_verdict with the PR head SHA and branch it already knows (pr_head_sha_best_effort is right there), so PR-keyed and spec-keyed verdicts have the same shape. Then aida pr ship and the advisor can both say "this verdict covers this head" instead of inferring it from the file mtime.
   Related: TASK-1191 (verdict selection), BUG-1213 (rework rounds), the in-flight-review gate.
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T14:01:36.255012638Z
-modified_at: 2026-09-19T14:01:36.255012638Z
+modified_at: 2026-09-19T14:06:35.077625827Z
 req_type: Task
 tags:
 - from-advisor:general
