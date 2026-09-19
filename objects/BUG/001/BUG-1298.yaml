@@ -35,10 +35,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T22:03:17.289916672Z
-modified_at: 2026-09-19T22:03:46.491473768Z
+modified_at: 2026-09-19T23:12:04.589585081Z
 req_type: Bug
 tags:
 - ci
+- diagnostic-decay
 - diagnostics
 - drain-safe
 - from:session-0919
