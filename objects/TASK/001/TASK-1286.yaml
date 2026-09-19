@@ -1,0 +1,14 @@
+id: 01a0b81f-b2d1-70d0-b0fb-752852402838
+spec_id: TASK-1286
+agreed_id: TASK-1286
+title: Deprecation shim if any user has `aida schedule run <task>` scripted against the pre-seat `TaskConfig` names (keep names stable)
+description: ''
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T05:24:40.273837836Z
+modified_at: 2026-09-19T05:24:40.273837836Z
+req_type: Task
+tags:
+- followup-src:docs/plans/2026-09-18-story-1226-aida-cron.md
