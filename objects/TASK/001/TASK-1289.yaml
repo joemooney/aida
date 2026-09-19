@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T18:48:09.898799695Z
+modified_at: 2026-09-19T18:48:11.464401293Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -493,6 +493,26 @@ comments:
   created_at: 2026-09-19T18:42:32.722152312Z
   modified_at: 2026-09-19T18:42:32.722152312Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0baff-56c4-7290-bd5f-7ae46aa6fd01
+  author: joe
+  content: |-
+    Two items. The second is a design requirement the feature's own first live run exposed, and it matters more than the first.
+
+    1. Reviewer round 1 on PR #1972 (valid, mechanical): LifecycleSkip::from_tags clears no_ci_wait / no_review / no_build when batch:express is present but does NOT clear the newly added no_preflight, so tags [batch:express, lifecycle:no-preflight] would skip the implementer preflight while the express contract says every lifecycle short-circuit is overridden and the full gate enforced. Clear no_preflight in the express override and extend the lifecycle-skip express test to cover it.
+
+    2. THE GUARD MUST RUN AGAINST A BINARY BUILT FROM THE WORKTREE SOURCE. The implementer filed a finding (TASK-1-145, now dismissed) claiming the CLI manual flag gate was red on main-era docs. The advisor re-checked: verify-manual.py against current main exits 0 with all four checks green, and all three cited flags are present in the current binary. There is no doc drift. The red came from this feature's own first live run — verify-manual.py compares the manual against the INSTALLED binary's --help output, so a worktree whose source adds, renames or hides a flag fails the guard until the binary is rebuilt.
+
+    That makes the failure mode: a preflight guard that reports a FALSE failure and blocks the PR, which is the worst possible outcome for a gate standing in front of every wave. It already happened once, on the first run.
+
+    Required:
+    - Any guard whose result depends on the binary's behaviour (verify-manual.py's completeness and flags checks, verify-interface-changes.py) must run against a binary built from the worktree source, not whatever is on PATH. Build first, point the guard at that artifact, or skip the binary-dependent checks with a stated reason rather than failing on them.
+    - Guards that read only source or diff (fmt, clippy, the portability ratchet) are unaffected; keep them as they are.
+    - The refusal message must distinguish a guard that genuinely failed from a guard that could not be evaluated, and never block on the latter.
+    - Test: a worktree whose source adds a new CLI flag not yet in the manual fails the flags guard; the SAME worktree with a stale binary and no source change does not produce a spurious failure.
+
+    Keep the rest of the implementation as accepted.
+  created_at: 2026-09-19T18:48:11.204879765Z
+  modified_at: 2026-09-19T18:48:11.204879765Z
 execution_mode: drive
 implementation_info:
   implemented: true
