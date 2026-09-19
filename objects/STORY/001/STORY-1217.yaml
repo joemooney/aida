@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T21:00:47.007029148Z
+modified_at: 2026-09-19T21:00:49.305303726Z
 req_type: Story
 tags:
 - audit
@@ -71,5 +71,48 @@ comments:
   content: '[advisor:re-disposition] Re-disposed after the operator''s reshaping, and the narrowing STANDS — I am ratifying it rather than reverting it. Two things on process, because the product seat raised them rather than assuming: editing an approved spec IS my disposition, and telling me instead of quietly proceeding is exactly right; and doing it on the operator''s explicit instruction makes it their call, not an overreach. Ratified. Disposition unchanged where it matters: still GUIDED, still keyboard with Joe, now correctly BlockedBy STORY-1353. What changed is that the story got smaller and better — with dispatch split out, the grant object only ever has to cover DISPOSITIONAL acts, which is the narrow thing a time-boxed grant is actually good for. The three forks that remain (who may issue, scope granularity, expiry vs revocation) are the right ones to take into that session, and the integrity-floor fork is now answered and recorded, so the session starts with one fewer open question. My answer there was no-floors-ever-grantable and I note the operator reached the same line independently — that is the strongest form of agreement available to us. One correction to the evidence for the record: the claim that the merge gate cost no throughput matches what I watched from the gate — while seven supervised PRs sat held overnight the waves kept shipping, because a drain moves to the next spec rather than waiting on a hold. The gate delayed individual specs, never the pipeline.'
   created_at: 2026-09-19T17:12:13.597244176Z
   modified_at: 2026-09-19T17:12:13.597244176Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bb78-c519-77e3-97e2-0acebdb90503
+  author: joe
+  content: |-
+    [advisor] TITLE CORRECTED, and the old one was my omission. When I ratified the narrowing at 10:10 I checked the description and the blocked-by edge and did not check the TITLE, which still advertised the pre-narrowing scope — 'proxy grant (aida grant advisor --for 8h) instead of AIDA_SESSION_ROLE=advisor prefixes'. That is the shape the operator declined, so a seat sweeping count: 30 of 39 open
+    specs[30]{id,title,status,type,modified_at}:
+      STORY-1217,"Time-boxed, ledgered grant for DISPOSITIONAL acts only (aida grant), after STORY-1353 separates dispatch from advisor authority",approved,story,"2026-09-19T21:00:47.007029148+00:00"
+      TASK-1277,"Typed protocols slice 2: protocol check at done — aida queue done / pr create evaluate the type protocol's machine-checkable items, warn by default, refuse when [protocol] enforce = refuse, --force wi",approved,task,"2026-09-19T20:53:42.207679120+00:00"
+      STORY-1218,"aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer",approved,story,"2026-09-19T20:53:40.421620817+00:00"
+      BUG-1285,"A drain cannot reclaim a lease its own previous run orphaned: a dead-pid lease burns the whole retry budget in seconds, and the error names session-id matching instead of the held lease",approved,bug,"2026-09-19T20:51:22.102102300+00:00"
+      EPIC-62,"Unattended drain reliability: a spec never sits parked for days — the drain self-recovers transient failures and escalates only genuine human-needs",in-progress,epic,"2026-09-19T20:51:14.623974242+00:00"
+      BUG-1284,"A batch-scoped drain never reports the approved, routed specs its --batch filter excluded, so a stale batch starves the queue invisibly",draft,bug,"2026-09-19T20:50:57.479605628+00:00"
+      BUG-1283,"Windows nightly red for a second night, new cause: BUG-1229's pull-rebase test asserts exact file content and git's autocrlf rewrites it to CRLF on checkout — plus the portability ratchet does not cat",approved,bug,"2026-09-19T20:50:49.800764402+00:00"
+      TASK-168,"Drain PR-keyed review verdicts omit reviewed_sha and recorded_at, so a reader cannot tell which head a verdict covers (spec-keyed verdicts already carry both)",approved,task,"2026-09-19T20:50:44.875096566+00:00"
+      TASK-1294,"Measure whether the round-1 full sweep actually reduced rounds-to-merge: median rounds per spec over the 20 specs after TASK-1291 lands, against the 2026-09-18/19 baseline",approved,task,"2026-09-19T20:49:41.309411893+00:00"
+      TASK-1290,"Wire the existing aida criteria trace into the done-gate and the reviewer prompt: an untraced acceptance criterion is named before review, not discovered by it",approved,task,"2026-09-19T20:49:36.076272980+00:00"
+      TASK-1289,"Pre-flight guard parity: the implementer phase runs CI's own guards before opening the PR, and refuses while one fails",in-progress,task,"2026-09-19T20:49:26.843597828+00:00"
+      BUG-1278,"auto-complete failure: phase 3 (reviewer) on TASK-1289",draft,bug,"2026-09-19T20:43:39.801769683+00:00"
+      BUG-1282,"auto-complete failure: phase 1 (implementer) on TASK-168",draft,bug,"2026-09-19T20:38:19.264486976+00:00"
+      BUG-1281,"auto-complete failure: phase 2 (ci) on TASK-1289",draft,bug,"2026-09-19T19:39:22.853696218+00:00"
+      BUG-1279,"This repo's own discipline pack is stale: ten master guides missing, four README links dead — the dogfooding channel STORY-1351 depends on is broken here",approved,bug,"2026-09-19T19:24:50.997342650+00:00"
+      STORY-1356,"Review PR-1972: feat(drain): gate PR publication on CI preflight (TASK-1289)",approved,story,"2026-09-19T18:43:53.184967122+00:00"
+      STORY-1351,"Seat handoff pack: make product/advisor reliability survive a cold session by moving each learned behaviour into a gate, a scheduled job or a role file — not memory",approved,story,"2026-09-19T18:23:02.326555982+00:00"
+      STORY-1352,Declare and guard a versioned read-only monitor contract (the eleven --json surfaces + an events follow feed) so an external dashboard cannot break silently,approved,story,"2026-09-19T18:18:07.880774057+00:00"
+      TASK-1293,"Post-deployment acceptance criteria belong on a follow-up spec, never on the spec that ships the change — a fifth failure class, found deadlocking TASK-1291",draft,task,"2026-09-19T18:17:39.517346688+00:00"
+      BUG-1277,"aida queue rework queues the pickup under the invoking user, not the role queue the drain reads — every reviewer finding needs two extra commands or the rework silently never runs",draft,bug,"2026-09-19T18:17:02.352747641+00:00"
+      BUG-1275,"CI idle window trips on a HEALTHY long run: a required check pending or in_progress is not counted as progress, so any run longer than 600s shelves ci-unavailable (GitHub twin of BUG-1224)",approved,bug,"2026-09-19T17:53:53.262571562+00:00"
+      BUG-1274,"auto-complete failure: phase 2 (ci) on BUG-1268",draft,bug,"2026-09-19T17:46:09.283698692+00:00"
+      EPIC-71,"Cost observability: make token spend a queryable dimension attributable to spec, round, phase, seat and vendor",draft,epic,"2026-09-19T17:39:10.047241001+00:00"
+      SPIKE-83,"Cost-observability spike: audit today's token capture, inventory the per-message sources already on disk, survey reusable prior art, and compute what the rework tail actually costs",draft,spike,"2026-09-19T17:39:05.953665768+00:00"
+      STORY-1354,"Review PR-1970: [AI:codex] fix(orchestrator): recover reviewer stale bases (BUG-1268)",approved,story,"2026-09-19T17:35:41.184811873+00:00"
+      STORY-1353,"Dispatch authority is not advisor authority: let the proxy seat route work in its own right, keep disposition with the advisor and integrity floors with the human",approved,story,"2026-09-19T17:11:57.998128163+00:00"
+      EPIC-69,"/aida-away: human-proxy authorization + auditable approval ledger",in-progress,epic,"2026-09-19T17:02:56.514806732+00:00"
+      TASK-1292,"aida pr ship refuses while a reviewer is live on that PR, whatever spec the reviewer runs under — the in-drive guard keys on spec ownership and missed a sibling-spec reviewer",approved,task,"2026-09-19T16:50:25.561564614+00:00"
+      TASK-1279,"Seat-parity audit: prove Codex can occupy every seat (product, advisor, implementer, reviewer, integrator) interactively and headless; fix the Claude-only surfaces",approved,task,"2026-09-19T16:40:11.780470901+00:00"
+      TASK-1272,"aida drain resume <SPEC>: re-drive parked work from the phase that failed, reusing an already-green pipeline",approved,task,"2026-09-19T16:39:37.107482251+00:00"
+    note: agent default cap — `aida list --all` or `--limit N` to widen
+    note: 2229 closed hidden (open lens) — `aida list --all` or `--status closed`
+    note: 19 accepted decisions hidden (terminal) — `aida list --type decision`
+    next[1]{cmd,to}:
+      aida show <id>,detail reasonably concluded this spec was obsolete and should be Superseded by STORY-1353. It is not obsolete: the description has been the narrowed remainder since 10:05 — a grant covering DISPOSITIONAL acts only, with dispatch moved to STORY-1353 where the operator put it. NOT superseded; still Approved, still guided for the keyboard, still blocked by STORY-1353. THE LESSON, worth more than the edit: narrowing a spec must rewrite its TITLE, because the title is the only field every list surface shows and it is therefore what other seats actually read. A correct description under a stale title is worse than no narrowing at all — it makes the spec look like the thing that was rejected while quietly being something else.
+  created_at: 2026-09-19T21:00:49.305303726Z
+  modified_at: 2026-09-19T21:00:49.305303726Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
