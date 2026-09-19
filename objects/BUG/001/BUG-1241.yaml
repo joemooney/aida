@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:59:57.713122119Z
-modified_at: 2026-09-19T04:55:14.557698196Z
+modified_at: 2026-09-19T04:56:55.934626672Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -46,6 +46,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T04:45:38.120898711Z
   modified_at: 2026-09-19T04:45:38.120898711Z
+- id: 01a0b806-4d7e-7fc3-910e-7a16762a551b
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1949 docs: batch tagging uses --add-tag, not --tags (BUG-1241)
+    verdict: APPROVE + merged (round 2; auto-bumped In Progress → Completed at a1a56c5)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (product seat authored by hand; advisor reviewed both rounds — .aida/review-verdicts/PR-1949-advisor.json)
+    gates: required Build (ubuntu-latest) = success at 8ce36c83; docs-only, no hold; merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: round-1 request applied — the two dated docs/plans hunks reverted (one had turned a `list --tags` filter into a flag `list` does not have; dated plans stay frozen); CLAUDE.md, the discipline glossary master and docs/cli/12-glossary.md now say `--add-tag` with the "never --tags, which replaces the whole set" warning.
+    scope note: this PR is the DOCS half only. The trailer completed the whole spec, so the code half (edit --tags refuses to drop structural tags; doctor check for parent-tag drift) is re-filed as its own bug, queued in wave followups-0918h, and BUG-1241 is dequeued. See the child linked below.
+    timestamp: 2026-09-18T21:56-07:00
+  created_at: 2026-09-19T04:56:55.934626672Z
+  modified_at: 2026-09-19T04:56:55.934626672Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b804-c176-7681-bd26-a9b86d982b5d
   author: aida-auto-bump
