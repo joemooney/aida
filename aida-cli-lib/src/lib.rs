@@ -87290,6 +87290,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // trace:BUG-1186 | ai:claude
         cmd.env("AIDA_FROM_PR_REVIEW", "1")
             .env("AIDA_FROM_PR_NUMBER", pr.to_string());
+        // Round 1 deliberately gets a broader prompt so the first reviewer
+        // reports the entire acceptance/defect surface. Re-review prompts stay
+        // unchanged and focus on the carried prior findings.
+        // trace:TASK-1291 | ai:codex
+        let review_round = load_store_for_lookup(&self.project_root)
+            .and_then(|store| {
+                store
+                    .get_requirement_by_spec_id(&self.spec)
+                    .map(|req| queue_cmd::review_round_from_comments(&req.comments))
+            })
+            .unwrap_or(1);
+        cmd.env("AIDA_REVIEW_ROUND", review_round.to_string());
         if let Some(head_sha) = pre_review_head_sha.as_deref() {
             cmd.env("AIDA_FROM_PR_HEAD_SHA", head_sha);
         }
