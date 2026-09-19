@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-19T16:49:51.522022733Z
+modified_at: 2026-09-19T18:23:02.326555982Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -70,5 +70,11 @@ comments:
     Keep the acceptance test exactly as written — a cold session on Claude AND on Codex, memory disabled, able to state what it gates, what it must never do, and what awaits it from launch context alone. That test is the whole point and it is the part that will be tempting to soften.
   created_at: 2026-09-19T16:49:51.522022733Z
   modified_at: 2026-09-19T16:49:51.522022733Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bae8-50b6-7901-862c-5a5df92810c6
+  author: joe
+  content: '[advisor] Content addition for the discipline pack this story ships: a spec-authoring convention learned the hard way on 2026-09-19. An acceptance criterion that can only be measured AFTER the change ships (''median rounds drops over the next 20 specs'') must live on a follow-up spec, never on the spec that ships the change — on the shipping spec it is unverifiable at every round forever and deadlocks its own merge. Worked example to cite: TASK-1291 carried one, the reviewer correctly marked it unverified, and the resolution was to move it to TASK-1294 blocked-by TASK-1291 and leave only merge-time-verifiable criteria behind. Pair it with the rule already implied by TASK-1290: the criteria gate should flag this shape at done time. This is the kind of craft that currently exists only in a mailbox thread, which is exactly what this story is for.'
+  created_at: 2026-09-19T18:23:02.326555982Z
+  modified_at: 2026-09-19T18:23:02.326555982Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
