@@ -881,6 +881,71 @@ mod bug_1265_finish_ci_tests {
         reads: std::path::PathBuf,
     }
 
+    /// Runs the production CI driver through the real drain orchestration
+    /// boundary. Only the CI implementation is delegated: the remaining
+    /// phases are unreachable because these regressions resume at phase 2 and
+    /// stop at `ThroughCi`.
+    // trace:BUG-1265 | ai:codex
+    struct DrainHarness {
+        real: RealPhaseDriver,
+    }
+
+    impl auto_complete::PhaseDriver for DrainHarness {
+        fn run_implementer(
+            &mut self,
+        ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
+            unreachable!("CI-resume harness must not run phase 1")
+        }
+
+        fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            auto_complete::PhaseDriver::finish_ci(&mut self.real)
+        }
+
+        fn run_reviewer(
+            &mut self,
+        ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must stop after phase 2")
+        }
+
+        fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must not merge")
+        }
+
+        fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must not pull")
+        }
+
+        fn build(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must not build")
+        }
+
+        fn hint_context(&self) -> auto_complete::HintContext {
+            auto_complete::PhaseDriver::hint_context(&self.real)
+        }
+
+        fn transient_retry_budget(&self) -> usize {
+            0
+        }
+
+        fn shelve_on_failure(
+            &mut self,
+            _spec: &str,
+            phase: auto_complete::Phase,
+            failure: &auto_complete::PhaseFailure,
+            recovery_hint: &str,
+        ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+            Ok(Some(aida_core::FailureReason {
+                phase: phase.slug().to_string(),
+                phase_index: phase.index() as u8,
+                kind: failure.kind.cause_slug().to_string(),
+                detail: failure.reason.clone(),
+                recovery_hint: Some(recovery_hint.to_string()),
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            }))
+        }
+    }
+
     impl Fixture {
         fn new() -> Self {
             let temp = tempfile::tempdir().unwrap();
@@ -984,7 +1049,7 @@ exit 2
             let _ = std::fs::remove_file(&self.reads);
         }
 
-        fn finish_ci(&self, mode: &str) -> Result<(), auto_complete::PhaseFailure> {
+        fn run_drain(&self, mode: &str) -> auto_complete::OrchestrationResult {
             self.set_mode(mode);
             let inherited = std::env::var_os("PATH").unwrap_or_default();
             let path = std::env::join_paths(
@@ -998,26 +1063,20 @@ exit 2
                 ("AIDA_TEST_GH_BINARY", gh.as_str()),
                 ("PATH", path.as_str()),
             ]);
-            auto_complete::PhaseDriver::finish_ci(&mut self.driver())
+            let mut harness = DrainHarness {
+                real: self.driver(),
+            };
+            auto_complete::orchestrate_with_resume(
+                &mut harness,
+                "BUG-1265",
+                auto_complete::AutoCompleteVariant::ThroughCi,
+                true,
+                auto_complete::EscalateMode::Blocks,
+                auto_complete::LifecycleSkip::none(),
+                true,
+                auto_complete::Phase::Ci,
+            )
         }
-    }
-
-    /// `finish_ci` returns the typed failure that the drain persists when it
-    /// shelves a member. Assert both halves of that boundary so these tests
-    /// cannot pass with the right diagnostic text but the wrong shelf cause.
-    // trace:BUG-1265 | ai:codex
-    fn assert_shelves_as(
-        failure: &auto_complete::PhaseFailure,
-        kind: auto_complete::FailureKind,
-        cause: &str,
-    ) {
-        assert_eq!(failure.kind, kind);
-        assert!(
-            failure.kind.is_shelvable(),
-            "{} must be a drain-shelvable failure",
-            failure.kind.cause_slug()
-        );
-        assert_eq!(failure.kind.cause_slug(), cause);
     }
 
     /// Exercise the real drain driver, not just `ci_gate::classify_red`: this
@@ -1027,26 +1086,32 @@ exit 2
     #[test]
     fn drain_finish_ci_completes_for_hold_gate_only_red() {
         let fixture = Fixture::new();
-        if let Err(failure) = fixture.finish_ci("hold") {
-            panic!(
-                "hold-gate-only red must complete without a shelf, got {}: {}",
-                failure.kind.cause_slug(),
-                failure.reason
-            );
-        }
+        let result = fixture.run_drain("hold");
+        assert!(result.failed_phase.is_none(), "{result:?}");
+        assert!(result.shelved_reason.is_none(), "{result:?}");
+        assert_eq!(result.process_exit_code(), auto_complete::DRIVE_EXIT_CLEAN);
     }
 
     // trace:BUG-1265 | ai:codex
     #[test]
     fn drain_finish_ci_shelves_real_red_naming_only_the_genuine_check() {
         let fixture = Fixture::new();
-        let failure = fixture.finish_ci("real").unwrap_err();
-        assert_shelves_as(&failure, auto_complete::FailureKind::CiRed, "ci-red");
-        assert!(failure.reason.contains("Build"), "{}", failure.reason);
+        let result = fixture.run_drain("real");
+        let shelf = result
+            .shelved_reason
+            .as_ref()
+            .expect("genuine red must shelve");
+        assert_eq!(result.failed_phase, Some(auto_complete::Phase::Ci));
+        assert_eq!(
+            result.process_exit_code(),
+            auto_complete::DRIVE_EXIT_SHELVED
+        );
+        assert_eq!(shelf.kind, "ci-red");
+        assert!(shelf.detail.contains("Build"), "{}", shelf.detail);
         assert!(
-            !failure.reason.contains("merge-hold-gate"),
+            !shelf.detail.contains("merge-hold-gate"),
             "{}",
-            failure.reason
+            shelf.detail
         );
     }
 
@@ -1054,13 +1119,18 @@ exit 2
     #[test]
     fn drain_finish_ci_retries_unavailable_rows_then_shelves_ci_unavailable() {
         let fixture = Fixture::new();
-        let failure = fixture.finish_ci("unavailable").unwrap_err();
-        assert_shelves_as(
-            &failure,
-            auto_complete::FailureKind::CiUnavailable,
-            "ci-unavailable",
+        let result = fixture.run_drain("unavailable");
+        let shelf = result
+            .shelved_reason
+            .as_ref()
+            .expect("unavailable rows under a hold must shelve");
+        assert_eq!(result.failed_phase, Some(auto_complete::Phase::Ci));
+        assert_eq!(
+            result.process_exit_code(),
+            auto_complete::DRIVE_EXIT_SHELVED
         );
-        assert_ne!(failure.kind.cause_slug(), "ci-red");
+        assert_eq!(shelf.kind, "ci-unavailable");
+        assert_ne!(shelf.kind, "ci-red");
         assert_eq!(
             std::fs::read_to_string(&fixture.reads).unwrap().trim(),
             "3",
