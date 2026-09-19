@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T15:39:10.891092561Z
+modified_at: 2026-09-19T15:42:49.250733334Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -78,6 +78,12 @@ comments:
   content: 'PR #1966 was 2 commits behind main with a conflict; the product seat rebased it onto main. The conflict was both branches adding the same FailureKind::CiUnavailable variant (BUG-1250 landed it first) — resolved by keeping ONE variant whose doc covers both causes and cites both specs; ci_gate + auto_complete tests green (256) after the rebase. Round-2 brief still stands: drain-level finish_ci coverage for the three cases (hold-gate-only red + marker completes; hold gate + genuine red shelves naming only the genuine check; rows-read failure + marker retries then shelves ci-unavailable). Verify and let the reviewer take round 2.'
   created_at: 2026-09-19T15:39:10.628146058Z
   modified_at: 2026-09-19T15:39:10.628146058Z
+- id: 01a0ba55-a1a2-7ac0-9a0a-67a92b5fcd3c
+  author: joe
+  content: 'Round 2: strengthened the real RealPhaseDriver::finish_ci regressions to assert the drain shelving boundary itself: hold-only returns no PhaseFailure; genuine required red is shelvable with cause ci-red and excludes merge-hold-gate; unavailable rows after retries are shelvable with cause ci-unavailable and explicitly never ci-red. Targeted 3-test suite and fmt/diff checks pass.'
+  created_at: 2026-09-19T15:42:49.250733334Z
+  modified_at: 2026-09-19T15:42:49.250733334Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
