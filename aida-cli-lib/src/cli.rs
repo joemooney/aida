@@ -8763,7 +8763,7 @@ pub enum Command {
         /// supersedes the closed one.
         // trace:TASK-47 | ai:claude
         // trace:TASK-487 | ai:claude
-        #[clap(long)]
+        #[clap(long, visible_alias = "replace-tags")]
         force: bool,
 
         /// Mark this spec as work no agent can do — a person-in-the-room

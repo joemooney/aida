@@ -1,4 +1,4 @@
-use super::tags_replace_warning;
+use super::{dropped_structural_tags, enforce_structural_tag_replacement, tags_replace_warning};
 use std::collections::HashSet;
 
 fn set(items: &[&str]) -> HashSet<String> {
@@ -46,5 +46,40 @@ fn empty_new_set_renders_none() {
     assert!(
         msg.contains("now: (none)"),
         "empty new set is (none): {msg}"
+    );
+}
+
+// trace:BUG-1252 | ai:codex
+#[test]
+fn refuses_each_structural_family_but_allows_force() {
+    for tag in [
+        "parent:EPIC-1",
+        "batch:nightly",
+        "lane:research",
+        "severity:high",
+        "lifecycle:skip-review",
+        "aida:internal",
+    ] {
+        let old = set(&[tag, "ordinary"]);
+        let new = set(&["ordinary"]);
+        let error = enforce_structural_tag_replacement(&old, &new, false).unwrap_err();
+        assert!(
+            error.to_string().contains(tag),
+            "missing dropped tag: {error}"
+        );
+        assert_eq!(
+            enforce_structural_tag_replacement(&old, &new, true).unwrap(),
+            vec![tag]
+        );
+    }
+}
+
+#[test]
+fn reports_only_removed_structural_tags_sorted() {
+    let old = set(&["severity:high", "parent:EPIC-2", "ordinary"]);
+    let new = set(&["ordinary", "batch:new"]);
+    assert_eq!(
+        dropped_structural_tags(&old, &new),
+        vec!["parent:EPIC-2", "severity:high"]
     );
 }

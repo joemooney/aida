@@ -16139,6 +16139,45 @@ pub(crate) fn tags_replace_warning(
     ))
 }
 
+// trace:BUG-1252 | ai:codex
+/// Structural tags participate in routing and graph integrity. A full tag-set
+/// replacement must not silently erase them.
+pub(crate) fn dropped_structural_tags(
+    old_tags: &HashSet<String>,
+    new_tags: &HashSet<String>,
+) -> Vec<String> {
+    const PREFIXES: &[&str] = &[
+        "parent:",
+        "batch:",
+        "lane:",
+        "severity:",
+        "lifecycle:",
+        "aida:",
+    ];
+    let mut dropped: Vec<String> = old_tags
+        .difference(new_tags)
+        .filter(|tag| PREFIXES.iter().any(|prefix| tag.starts_with(prefix)))
+        .cloned()
+        .collect();
+    dropped.sort();
+    dropped
+}
+
+pub(crate) fn enforce_structural_tag_replacement(
+    old_tags: &HashSet<String>,
+    new_tags: &HashSet<String>,
+    force: bool,
+) -> Result<Vec<String>> {
+    let dropped = dropped_structural_tags(old_tags, new_tags);
+    if !dropped.is_empty() && !force {
+        anyhow::bail!(
+            "AIDA_AGENT_OUTPUT structural_tags_dropped=[{}] refusal=use_--add-tag/--remove-tag_or_pass_--force; refusing --tags replacement because it would drop structural tags: {}. Use --add-tag/--remove-tag for incremental edits, or --force/--replace-tags to replace intentionally.",
+            dropped.join(","), dropped.join(", ")
+        );
+    }
+    Ok(dropped)
+}
+
 /// STORY-439: stamp `complexity:<level>` / `estimated-assistance:<level>`
 /// tags on `spec` so the new dimension composes with existing tag tooling
 /// (`aida queue list --tag-prefix complexity:`, batch routing). Mirrors
@@ -20354,6 +20393,41 @@ fn collect_doctor_findings(
         }
     };
 
+    // A parent edge is canonical; parent:* tags are a denormalized query aid.
+    // Surface either direction of drift without touching the graph.
+    // trace:BUG-1252 | ai:codex
+    for req in &store.requirements {
+        let mut expected = std::collections::BTreeSet::new();
+        for rel in &req.relationships {
+            if rel.rel_type == aida_core::models::RelationshipType::Child {
+                if let Some(parent) = store.requirements.iter().find(|r| r.id == rel.target_id) {
+                    if let Some(id) = parent.spec_id.as_deref() {
+                        expected.insert(format!("parent:{id}"));
+                    }
+                }
+            }
+        }
+        let actual: std::collections::BTreeSet<String> = req
+            .tags
+            .iter()
+            .filter(|tag| tag.starts_with("parent:"))
+            .cloned()
+            .collect();
+        if actual != expected {
+            push(DoctorFinding {
+                category: "parent-tag-drift".to_string(),
+                id: req.spec_id.clone().unwrap_or_else(|| req.id.to_string()),
+                summary: format!(
+                    "parent relationship expects [{}], tags contain [{}]",
+                    expected.iter().cloned().collect::<Vec<_>>().join(","),
+                    actual.iter().cloned().collect::<Vec<_>>().join(",")
+                ),
+                action: "align parent:* tags to the Parent relationship".to_string(),
+                safe_heal: true,
+            });
+        }
+    }
+
     // A detached/mid-rebase store can accept commits that disappear on
     // `rebase --abort`; surface this before any further maintenance writes.
     // trace:BUG-1229 | ai:codex
@@ -20983,6 +21057,7 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
         | "permissions"
         | "agent-permissions"
         | "sandbox-posture" => "permission-posture",
+        "parent-tag-drift" | "parent-tags" | "parent-drift" => "parent-tag-drift",
         // TASK-1124: deployed vendor prompts/skills (project .claude/.codex +
         // ~/.codex/prompts) drifted from the binary's embedded source templates
         // — rule-delivery-rot. trace:TASK-1124 | ai:claude
@@ -21009,7 +21084,7 @@ fn normalize_doctor_category(raw: &str) -> Result<String> {
              orphan-queue-entries, stale-reviewer-leases, stale-locks, dead-agents, \
              OBE-briefs, completed-without-commit, legacy-store-cruft, \
              store-tracked-runtime, remote-drift, ci, vendor-binary, permission-posture, \
-             scaffold-drift, store-scrub, agents-wiring, worktree-container-gitdir)",
+             scaffold-drift, store-scrub, agents-wiring, worktree-container-gitdir, parent-tag-drift)",
             other
         ),
     };

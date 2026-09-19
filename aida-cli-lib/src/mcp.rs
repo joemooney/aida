@@ -2016,6 +2016,14 @@ impl<'a> McpServer<'a> {
                 .iter()
                 .filter_map(|t| t.as_str().map(str::to_string))
                 .collect();
+            // trace:BUG-1252 | ai:codex
+            let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false)
+                || args
+                    .get("replace_tags")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+            crate::enforce_structural_tag_replacement(&req.tags, &new_tags, force)
+                .map_err(|e| e.to_string())?;
             if new_tags != req.tags {
                 changes.push("tags updated".to_string());
                 req.tags = new_tags;
@@ -6812,6 +6820,16 @@ pub fn tool_descriptors() -> Value {
                         "items": { "type": "string" },
                         "description": "Replace the requirement's tag set with this list. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags).",
                         "example": ["auth", "batch:login-rework"]
+                    },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Allow tags replacement to drop structural tags. The CLI alias is --replace-tags.",
+                        "example": false
+                    },
+                    "replace_tags": {
+                        "type": "boolean",
+                        "description": "Explicit alias for force when intentionally replacing structural tags.",
+                        "example": false
                     },
                     "parent": {
                         "type": "string",
