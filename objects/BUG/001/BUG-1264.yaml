@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T15:27:06.651314482Z
+modified_at: 2026-09-19T15:50:41.127820249Z
 req_type: Bug
 tags:
 - alias
@@ -98,6 +98,12 @@ comments:
     timestamp: 2026-09-19T08:26-07:00
   created_at: 2026-09-19T15:27:06.651314482Z
   modified_at: 2026-09-19T15:27:06.651314482Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0ba5c-d4e7-7c32-9dd5-aeeb56139226
+  author: joe
+  content: '[advisor] WILD CHECK PASSED, verified independently 2026-09-19 08:52. TASK-163 RunStarted at 15:43:25Z with PhaseEntered implementer, on the wave launched 15:39:33Z whose drain lock records binary_sha 81877d9935 — the #1965 merge commit, which I confirmed is on main. No tag change was made: the spec still carries the same batch tags it has held since 2026-09-18 12:11, when it became invisible. Four waves silently skipped it; the first wave on a binary carrying this fix picked it up. The alias WAS the whole cause and this spec stays closed. The binary_sha in that verification came from TASK-1285''s wave pin, which is the second time today one of these fixes made another one checkable.'
+  created_at: 2026-09-19T15:50:41.127820249Z
+  modified_at: 2026-09-19T15:50:41.127820249Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0ba45-96e1-7173-9b75-fca4cc5351b8
