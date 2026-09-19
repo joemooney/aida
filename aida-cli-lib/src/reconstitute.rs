@@ -643,9 +643,15 @@ mod tests {
         let directory = {
             use std::os::windows::fs::OpenOptionsExt;
 
+            // Round 3 (reviewer): backup semantics lets a DIRECTORY be opened,
+            // but a read-only handle lacks the access SetFileTime needs
+            // (OS error 5). Ask for FILE_WRITE_ATTRIBUTES explicitly — the
+            // one right set_times requires — instead of GENERIC_READ.
+            // trace:BUG-1233 | ai:claude
             const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+            const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
             std::fs::OpenOptions::new()
-                .read(true)
+                .access_mode(FILE_WRITE_ATTRIBUTES)
                 .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
                 .open(path)
                 .unwrap()
