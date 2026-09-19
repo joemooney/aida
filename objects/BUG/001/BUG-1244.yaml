@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T05:03:35.791165786Z
+modified_at: 2026-09-19T05:03:37.788870863Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -56,6 +56,16 @@ comments:
   created_at: 2026-09-19T05:03:17.579914008Z
   modified_at: 2026-09-19T05:03:17.579914008Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b80c-6d8e-7f53-9f67-83ab5ccb0e15
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1956-advisor):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1244 at c1510c82 — CI red (aida-cli/tests/agent_write_confirm.rs queue_done_non_interactive_without_yes_marks_done_not_cancelled; aida-cli/tests/journey.rs agent_journey_toon_list_search_queue_done_and_status) and partial scope. Cause of the red: the new queue-done guard refuses whenever the current branch does not NAME the target spec, so `queue done` from main / master / a batch or single-branch cluster branch is refused — the two failing tests run queue done on main. The guard must refuse only when the branch names a DIFFERENT spec (matches [A-Z]+-\d+ and that id != target), and must allow main, non-spec branches and batch/single-branch names. Same rule for the phase-1 workspace check. Scope: fixes (1) worktree check and (2) queue-done ownership are present; (3) CI/reviewer phases bind to THIS run's PhaseDonePr PR, (4) queue-entry status must not diverge from the spec (Done entry + Approved spec = fresh pickup), (5) rework brief keyed only to a PR this spec's run opened — are absent and are the mechanism behind recurrence 2. Also: the phase-1 refusal path uses FailureKind::Failed with the worktree path in the reason (good), but the drain banner promised in the acceptance (worktree + branch at phase-1 start) prints only when a retry/resume workspace is known — for the first attempt it prints the project root + current branch, which is the misleading case.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T05:03:37.358280976Z
+  modified_at: 2026-09-19T05:03:37.358280976Z
 execution_mode: drive
 implementation_info:
   implemented: true
