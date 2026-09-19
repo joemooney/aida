@@ -12,12 +12,12 @@ description: |-
   4. Docs: docs/mailbox.md gets a "Am I reading my mail?" paragraph naming the surface and the threshold.
 
   Acceptance: `aida mailbox latency` prints last-seen + oldest-unread age for the active role; with an unread message older than the threshold, `aida awaiting --notice` includes the ⚠ line and `aida status` shows it; unit tests on the pure age/threshold computation; TASK-160's quiet-tick contract unchanged (no unread = no line).
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T03:35:04.011972304Z
+modified_at: 2026-09-19T03:35:11.727953636Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -104,16 +104,29 @@ comments:
   created_at: 2026-09-19T03:35:04.011972304Z
   modified_at: 2026-09-19T03:35:04.011972304Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b7bb-786f-7ea3-a1ed-cf7e141e1acb
+  author: aida-auto-bump
+  timestamp: 2026-09-19T03:35:11.727135300Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b7bb-786f-7ea3-a1ed-cf824543d5f8
+  timestamp: 2026-09-19T03:35:11.727953075Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1271-2026-09-19T033505Z.md
+  commit_sha: ac24550439291d472e0337e6e2705288307321cd
+  summary: Completed via merge ac245504
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1942 base is 5 commits behind origin and overlaps 3 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: aida-cli-lib/src/cli.rs aida-cli-lib/src/mcp.rs aida-cli-lib/src/lib.rs Recover with: aida pr rebase 1942 # clean rebase + force-push-with-lease aida pr rebase 1942 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T20:41:11.093458005Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1271 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T02:03:08.183405444Z
+  completed_at: 2026-09-19T03:35:11.726867189Z
+  completion_sha: ac24550439291d472e0337e6e2705288307321cd
