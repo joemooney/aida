@@ -102,13 +102,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
-  position: 96000
-  added_by: role:implementer
-  added_at: 2026-09-19T20:36:43.544157644Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0bb67-f38d-7750-8851-7277d32ddb25
   position: 97000
   added_by: role:implementer
@@ -234,5 +227,12 @@
   added_by: role:implementer
   note: producer owns the classification via a typed signal, consumer never reads prose; sweep ALL prose-matched classifications in the orchestrator and record the inventory incl. any left unfixed; a test must FAIL when producer wording drifts without the classification following
   added_at: 2026-09-19T21:51:03.474842027Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
+  position: 113000
+  added_by: role:implementer
+  added_at: 2026-09-19T21:56:31.213959472Z
   for_role: implementer
   added_by_machine: imac
