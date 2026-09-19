@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b75b-60bc-7652-a3b4-0865a498169a
+  position: 0
+  added_by: claude-product-1
+  note: 'The ci-red shelve at 00:15 was a misclassification (BUG-1250 shape 2): the only red was the merge-hold gate with the marker present while Build was pending. The round-2 fix (aida_exe_path() instead of raw current_exe) is on PR #1959; verify resolve_aida_exe tests pass, push nothing if clean, and let the CI wait + reviewer run again.'
+  added_at: 2026-09-19T07:16:02.085392789Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
