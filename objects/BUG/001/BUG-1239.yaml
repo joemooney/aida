@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:26.124728352Z
-modified_at: 2026-09-19T06:13:20.216936132Z
+modified_at: 2026-09-19T08:27:08.740008647Z
 req_type: Bug
 tags:
 - agent-ux
@@ -54,6 +54,12 @@ comments:
   content: 'PR #1955 rebuilt on main (cherry-picked both commits; the awaiting-path conflict resolved by keeping the STORY-1226 cron block and this PR''s notice-gated unshipped scan). Round-2 brief still applies: --notice must never read stdin; make the deadline test deterministic. Verify tests and let the reviewer take round 2.'
   created_at: 2026-09-19T06:13:19.952235372Z
   modified_at: 2026-09-19T06:13:19.952235372Z
+- id: 01a0b8c6-c244-71c0-9952-1a0078ef9ead
+  author: joe
+  content: 'Round 2: moved the one-second notice watchdog ahead of time-line/session filesystem bookkeeping so the bound covers the entire notice path; separated the test''s strict <2s contract assertion from a 3s reap/diagnostic deadline. Verified 5 consecutive isolated runs, full task_1283_protocol_cli suite, and cargo fmt check.'
+  created_at: 2026-09-19T08:27:08.740008647Z
+  modified_at: 2026-09-19T08:27:08.740008647Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
