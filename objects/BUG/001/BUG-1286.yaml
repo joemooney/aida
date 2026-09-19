@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-19T21:11:35.850226180Z
+modified_at: 2026-09-19T21:52:06.038691793Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -71,4 +71,41 @@ comments:
   created_at: 2026-09-19T21:11:35.850226180Z
   modified_at: 2026-09-19T21:11:35.850226180Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bba7-b796-77c3-970a-7252186d63bd
+  author: joe
+  content: |-
+    CORRECTION TO THIS SPEC'S DIAGNOSIS, from a live case 2026-09-19 21:48. The filed description says the feed never records a terminal event. That is wrong for drain-driven specs, and the real defect is two problems rather than one. Read this before implementing.
+
+    BUG-1234 shipped end to end today. Its complete event stream:
+
+      21:15:46  RunStarted
+      21:15:46  PhaseEntered idx=1 implementer
+      21:22:50  PhaseEntered idx=2 ci
+      21:35:03  CiTerminal green=true
+      21:35:36  PhaseEntered idx=3 reviewer  seat=reviewer
+      21:35:48  PhaseEntered idx=3 reviewer          <- duplicate, see BUG-1290
+      21:47:58  PhaseEntered idx=4 merge
+      21:48:01  PrMerged pr=1975
+      21:48:01  PhaseEntered idx=5 pull
+      21:48:11  PhaseEntered idx=6 build
+      21:50:41  PhaseDonePr pr=1975
+
+    PrMerged IS emitted, and it IS keyed to the spec. So the drain path is not missing a terminal event at all. What happens instead is that PhaseDonePr fires two minutes and forty seconds AFTER the merge, so the spec's LAST event announces a PR rather than a completion. A consumer reading last-event-wins sees "a PR was done" for a spec that is Completed.
+
+    That is what produces the 219 PhaseDonePr endings in the original measurement — they are not failures to emit, they are successful merges whose terminal event was overwritten by a later phase event. The 206 UnshippedWorkDetected endings are the same shape from a different source.
+
+    SO THERE ARE TWO DEFECTS HERE, and they need different fixes:
+
+    1. ORDERING, which affects every drain-driven spec. A terminal event must be the last event for that spec. Either the post-merge phases (pull, build) stop emitting spec-keyed events after PrMerged, or a distinct completion event is emitted at the END of the run once the trailing phases finish. The second is safer: pull and build genuinely happen and hiding them loses information.
+
+    2. MISSING EMISSION, which affects specs closed OUTSIDE a drain run. A batch or review PR whose trailer names several specs, and the `aida pull` auto-bump, close specs with no run in flight and emit nothing at all. This is the half the original description got right, and TASK-1285 and BUG-1207 are its examples.
+
+    The acceptance as written covers 2 and not 1. Both are needed: fixing only the missing emission leaves every successful drain still ending on PhaseDonePr, which is the majority case.
+
+    WHAT A CONSUMER SHOULD BE ABLE TO DO AFTERWARDS, stated as the real success condition: take the last event for a spec and correctly decide whether it is finished, without joining against the store. Today that is impossible in both directions.
+
+    Verified live on a fresh same-day case, so this is current behaviour and not a historical artifact — which matters given the no-backfill guard.
+  created_at: 2026-09-19T21:52:06.038691793Z
+  modified_at: 2026-09-19T21:52:06.038691793Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
