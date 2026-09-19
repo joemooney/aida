@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T13:24:47.216007384Z
+modified_at: 2026-09-19T13:48:43.379143046Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -178,6 +178,12 @@ comments:
   created_at: 2026-09-19T13:24:47.216007384Z
   modified_at: 2026-09-19T13:24:47.216007384Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b9ed-2bf3-73f2-9131-6c5788ec5548
+  author: joe
+  content: 'Round 7: fixed queue-done evidence modeling in b9e43b99d4. Readable zero-commit ranges and untagged commits now proceed; target-tagged commits proceed; foreign-only tagged commits refuse naming the foreign specs; unreadable ranges remain fail-closed with --force override. Restored queue_done_ownership_allows_default_and_non_spec_branches and added pr-1948/STORY-1221 plus untagged-commit coverage. Both named integration gates pass.'
+  created_at: 2026-09-19T13:48:43.379143046Z
+  modified_at: 2026-09-19T13:48:43.379143046Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
