@@ -196,3 +196,11 @@
   added_at: 2026-09-19T21:23:35.807191460Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bae2-c5f6-7b50-9cf5-44e1e88e1b92
+  position: 108000
+  added_by: role:implementer
+  note: queue rework writes to the ROLE queue the drain reads (not the invoking user), printed next-step matches what was written, explicit --user still overrides; test asserts visibility to a batch drain; do NOT widen who may call rework
+  added_at: 2026-09-19T21:31:12.657121377Z
+  for_role: implementer
+  added_by_machine: imac
