@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:02.542178535Z
-modified_at: 2026-09-19T16:39:35.640202941Z
+modified_at: 2026-09-19T16:39:37.107482251Z
 req_type: Task
 tags:
 - aida:queue:work
@@ -23,4 +23,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T18:29:05.818912755Z
+comments:
+- id: 01a0ba89-a193-72c0-9a2a-5079c8531973
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRIVE (merge at the advisor gate — it changes how a parked spec re-enters the lifecycle, and a resume that re-enters at the wrong phase is the BUG-1244 contamination class). The need is proven twice over: seven runs for one throwaway spec on the mirror, and the LLM testimonial named a single resume verb as one of the six things it would change first. What makes it worth doing now rather than later: with BUG-1268 landing (rebase once on a stale base) and BUG-1265 (hold-gate red is not ci-red), the two commonest reasons a re-drive was needed are disappearing, so resume stops being a workaround for bugs and becomes the real verb for genuinely parked work. Scope guards: (1) resume re-enters at the phase that FAILED, using this run''s own PhaseDonePr (BUG-1244''s binding) to find the PR — never a branch-derived lookup; (2) a pipeline already green on the PR head is reused rather than re-waited, which was the specific cost in the seven-run case; (3) it refuses on a spec with no recorded failure instead of guessing a phase; (4) it does not resurrect the lease-coupled phases 1-2 replay that --resume-drain could not do — say so in the help text rather than implying it.'
+  created_at: 2026-09-19T16:39:37.107482251Z
+  modified_at: 2026-09-19T16:39:37.107482251Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
