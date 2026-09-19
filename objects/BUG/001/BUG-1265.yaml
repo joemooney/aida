@@ -17,7 +17,7 @@ description: |-
   Acceptance: a drive spec whose PR has a hold marker and whose only red check is merge-hold-gate finishes the drain's CI phase and holds for the advisor; the three recorded occurrences do not reproduce; no change to the no-marker lingering-label path (which stays real).
 
   Sibling: BUG-1250 keeps the transient-probe half (probe error → NoSignal → drain proceeds with no CI gate), which needs the network_retry classification and the finish_ci shelve-instead-of-proceed change.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
