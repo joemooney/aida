@@ -22,10 +22,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T07:04:46.773296066Z
-modified_at: 2026-09-19T21:00:22.322138317Z
+modified_at: 2026-09-19T21:00:23.937974419Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 01a0b75b-3dde-78b2-bab8-a7b50e522094
   created_at: 2026-09-19T07:04:51.135007838Z
   created_by: joe
+comments:
+- id: 01a0bb78-6201-76a1-a5a6-71d8b9085994
+  author: joe
+  content: '[advisor:triage] Closed Completed 2026-09-19: PR #1957 is MERGED, so this review request is satisfied and the reviewer round it asked for happened before the merge. Swept as one of six Review-PR specs left Approved against terminated PRs — invisible to aida queue gc, which prunes entries whose TARGET spec is terminal, while here the review spec IS the Approved thing. The recurring fix is filed separately.'
+  created_at: 2026-09-19T21:00:23.937974419Z
+  modified_at: 2026-09-19T21:00:23.937974419Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
