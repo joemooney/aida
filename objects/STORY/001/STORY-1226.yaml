@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-19T05:24:38.525265988Z
+modified_at: 2026-09-19T05:24:46.922612008Z
 req_type: Story
 tags:
 - keyboard-gate
@@ -88,6 +88,17 @@ comments:
   created_at: 2026-09-18T22:21:45.731537960Z
   modified_at: 2026-09-18T22:21:45.731537960Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b81f-cdd4-7d80-a8b6-b028600b003e
+  author: joe
+  content: |-
+    [aida:followups] extracted from docs/plans/2026-09-18-story-1226-aida-cron.md
+    filed 1 task(s): TASK-1286
+    skipped 3 pointer-to-existing-spec:
+      - STORY-1218: `aida schedule install --systemd-user|--cron` + unattended execution of substrate jobs + cold-boot of overdue seat jobs (≤1/hour/seat) → STORY-1218
+      - TASK-1271 rework: fold its latency row into the `mailbox-latency` job's snapshot field → TASK-1271
+      - Retire `schedule.rs` (STORY-262) once no project carries a `schedules.toml` → STORY-262
+  created_at: 2026-09-19T05:24:47.188190453Z
+  modified_at: 2026-09-19T05:24:47.188190453Z
 history:
 - id: 01a0b81f-abf6-72a0-bcfe-62ad13da3984
   author: aida-auto-bump
