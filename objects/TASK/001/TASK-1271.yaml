@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T02:03:31.303864378Z
+modified_at: 2026-09-19T02:03:32.812769941Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -65,6 +65,11 @@ comments:
   created_at: 2026-09-19T01:48:26.928842462Z
   modified_at: 2026-09-19T01:48:26.928842462Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b767-8f52-7760-a035-16ab26ffaf68
+  author: joe
+  content: 'Reviewer round 3 on PR #1942: TASK-1271: CLI inbox and MCP mark_seen call record_seen for every message in the full inbox before advancing the watermark. On the first post-upgrade read, messages already at or below the prior watermark receive a new receipt timestamp, so max_read_latency_ms reports now-sent_at rather than an actual recorded read latency. Capture receipts only for messages newly acknowledged past the pre-read watermark (while still advancing the watermark to the newest), and add a regression test with an existing watermark proving old read messages are not backfilled.  Concretely: in both the CLI inbox path and MCP mark_seen, compute the pre-read watermark first and call record_seen only for messages sent after it (newly acknowledged); messages at or below the prior watermark get no receipt, so max_read_latency_ms never reports now-minus-sent_at for history. Add a test: a mailbox with two old (pre-watermark) and one new message → exactly one receipt recorded, latency computed from the new one only.'
+  created_at: 2026-09-19T02:03:32.562088358Z
+  modified_at: 2026-09-19T02:03:32.562088358Z
 execution_mode: drain
 implementation_info:
   implemented: true
