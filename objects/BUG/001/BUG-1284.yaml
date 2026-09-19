@@ -1,0 +1,39 @@
+id: 01a0bb6f-b4ab-7810-b72e-196cabb7a16c
+spec_id: BUG-1284
+agreed_id: BUG-1284
+title: A batch-scoped drain never reports the approved, routed specs its --batch filter excluded, so a stale batch starves the queue invisibly
+description: |
+  A batch-scoped drain reports what it drained and never what it ignored, so a stale --batch filter starves the queue silently.
+
+  EVIDENCE (2026-09-19, measured not inferred). The standing launcher drove "queue work --batch followups-0918h --auto-complete". That batch had three open members. The role:implementer queue had nineteen entries, sixteen of them approved, routed and groomed with an execution_mode. The drain re-drove the same two or three specs for hours and the last wave reported shipped 0, shelved 2. Measured throughput across the day was 0.75 merges per hour with 75 percent of wall-clock idle. CI was not the constraint: sixty runs, zero queue wait. The constraint was a filter nobody could see.
+
+  WHY IT IS INVISIBLE. The drain's start-up banner and its drain status output both describe the batch: members, states, current spec. Neither mentions the queue the batch was selected from. A batch that has drained to near-empty looks exactly like a healthy small batch. The only way to notice is to run two separate queries and compare the counts by hand, which is not something anyone does while a drain appears to be working.
+
+  PROPOSED BEHAVIOUR. At start-up, when --batch is passed, the drain already resolves both sets. Report the difference:
+    batch followups-0918h: 3 members (2 approved)
+    note: 16 other approved specs routed to role:implementer are NOT in this batch
+  Emit the same line into drain status and the QueueDrained event, so the burndown record carries it and a monitor can alarm on it. A threshold is not needed; the number alone is the signal.
+
+  Optionally, refuse or warn loudly when the skipped count exceeds the batch count by some margin, since that is the signature of a stale filter rather than a deliberate scope.
+
+  ACCEPTANCE
+  1. A drain started with --batch B prints the count of approved specs routed to the same role that are outside B, or states that there are none.
+  2. The same count appears in drain status while the drain is active.
+  3. The QueueDrained event carries the count.
+  4. A drain started with no --batch prints no such line, since nothing is being filtered.
+  5. A test drives a fixture with three batch members and sixteen out-of-batch approved routed specs and asserts the reported number is sixteen.
+
+  Filed by the product seat as a proposal; disposition is the advisor's.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T20:50:55.275336868Z
+modified_at: 2026-09-19T20:50:55.275336868Z
+req_type: Bug
+tags:
+- from:session-0919
+- observability
+- orchestrator
+- parent:EPIC-62
+- throughput
