@@ -8192,7 +8192,7 @@ pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usi
         .filter(|comment| {
             comment
                 .content
-                .contains(crate::review_verdict::FINDINGS_BLOCK_PREFIX)
+                .starts_with(crate::review_verdict::FINDINGS_BLOCK_PREFIX)
         })
         .count()
         + 1

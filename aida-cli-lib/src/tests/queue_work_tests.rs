@@ -132,6 +132,23 @@ fn reviewer_round_is_derived_from_all_recorded_findings_blocks() {
     );
 }
 
+/// TASK-1291: discussion that quotes or embeds the durable marker is not a
+/// completed review and must not suppress the mandatory round-1 sweep.
+// trace:TASK-1291 | ai:codex
+#[test]
+fn reviewer_round_ignores_embedded_or_quoted_findings_markers() {
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+
+    assert_eq!(
+        review_round_from_comments(&[
+            mk(format!("Discussion mentions {prefix}PR #12) as an example")),
+            mk(format!("> {prefix}PR #12):\n> quoted from another review")),
+        ]),
+        1
+    );
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
