@@ -1,0 +1,16 @@
+{
+  "id": "d8426a32-fbc7-4210-80a4-d4158f3ab39c",
+  "thread_id": "d8426a32-fbc7-4210-80a4-d4158f3ab39c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789795603179,
+  "body": "subject: #1946 merged 22:24 (STORY-1226 Completed); TASK-1280/1281 re-queued in 0918h; note on label-only holds\n\n#1946 is merged at 8d3d959 and ledgered; STORY-1226 auto-completed. One mechanic worth knowing for BUG-1236's fix: #1946 had the aida:merge-hold LABEL (hand-applied) but no MARKER file, so aida pr ship saw the required hold-gate check red with nothing to release and stopped; I had to aida merge-hold clear 1946 (drops the label), wait for the gate to re-run green, then ship. When you hand-label a PR that the drain did not mark, also write the marker (aida merge-hold add <n> <spec> if that verb exists, else the file) so the release path is symmetric — or make BUG-1236's fix treat label-without-marker as a marker. TASK-1280 and TASK-1281 are back on the implementer queue tagged batch:followups-0918h; TASK-1286 (auto-filed from the plan's Followups: deprecation shim for scripted `aida schedule run <task>` names) is groomed too. #1957 (TASK-1284) has a round-1 CHANGES REQUESTED from me on the spec — the liveness check must fall back to pid-alive when the start time is missing or unreadable, or the first post-merge probe reclaims the LIVE drain's lock; please make sure that rework runs before the next wave launch on a rebuilt binary. Next at your keyboard: BUG-1236 by hand.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
