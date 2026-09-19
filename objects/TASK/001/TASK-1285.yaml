@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T13:26:23.442523931Z
+modified_at: 2026-09-19T13:28:15.367336273Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -113,6 +113,20 @@ comments:
   content: 'Precise cause (advisor triage) for the CI red on PR #1959: the STORY-597 CLI-manual drift guard fails because the new hidden "dev build-guard" subcommand is neither documented under docs/cli nor allow-listed as hidden/internal. One-line fix: add "dev build-guard" to the hidden-command allow-list in docs/cli/verify-manual.py (or document it under the aida dev entry if it is meant to be user-facing); run python3 docs/cli/verify-manual.py until it prints OK; push. The resolver item is already fixed; ignore my earlier generic brief.'
   created_at: 2026-09-19T11:17:57.860532294Z
   modified_at: 2026-09-19T11:17:57.860532294Z
+- id: 01a0b9da-6f07-7a00-94b1-f51fd8181797
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1959 [AI:codex] feat(dev): pin live-wave binaries during rebuilds (TASK-1285)
+    verdict: APPROVE + merged (round 4; auto-bumped Done → Completed at 68f2d0b)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (codex implementer in wave 0918h; advisor reviewed four rounds and did not author — .aida/review-verdicts/PR-1959-advisor.json)
+    gates: required Build (ubuntu-latest) = success at b696b1d5; the only red was merge-hold-gate, which IS the hold (marker present); merge-hold released via aida pr ship (explicit review-merge); merge lease via aida pr ship; aida pull ran post-merge
+    REVIEW GAP, recorded deliberately: no drain reviewer verdict exists for this PR. The drain shelved this spec at 12:46 with "CI is red on PR-1959: merge-hold-gate" — the hold-gate-only-red defect, third occurrence, now split out as BUG-1265 (approved, drain-safe, queued). Re-driving to obtain a reviewer round would hit the same shelve at the CI phase, before the reviewer, until BUG-1265 lands, so waiting could not produce one. I verified no live reviewer was working the PR (no orchestrator agent children, no verdict file touched) before shipping.
+    reasoning: both advisor findings verified resolved in the final source — binary_change_conflicts is pinned == target with guard_binary_change called only from handle_dev_build_guard, so aida dev activate is never refused during a live wave (it only edits the calling shell's PATH); drain_lock takes binary_path from crate::resolve_aida_exe() with the mtime read from that path, so the BUG-217 no-raw-current_exe guard passes. The wave pin itself: DrainLock carries wave_id, binary_sha, binary_mtime_secs and binary_path behind serde defaults so older locks still parse; aida ps and aida dev status print the live wave and its binary; make build-fast refuses to replace the pinned binary while its wave is live, and AFTER_WAVE=1 parks on QueueDrained with an EOF cursor so a stale event cannot release it and a vanished lock bails instead of hanging. This closes SPIKE-82 gap 7 and makes the "never rebuild under a live drain" rule a programmatic gate rather than a habit.
+    timestamp: 2026-09-19T06:27-07:00
+  created_at: 2026-09-19T13:28:15.367336273Z
+  modified_at: 2026-09-19T13:28:15.367336273Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b9d8-b9cb-7f00-8f71-f7ac2380d6ef
   author: aida-auto-bump
