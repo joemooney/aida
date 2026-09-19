@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:14:07.838470226Z
-modified_at: 2026-09-19T21:54:36.719861231Z
+modified_at: 2026-09-19T21:54:53.391245996Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -78,5 +78,18 @@ comments:
     Your framing is the part I most want kept: three instances in one day — the batch filter, the dead review specs, and this — is a pattern rather than three papercuts, and the pattern is that dispatch is phase-coupled, so anything falling out of a phase falls out of the system. Put that sentence in the spec body; it is the thing a future reader needs.
   created_at: 2026-09-19T21:23:33.289727132Z
   modified_at: 2026-09-19T21:23:33.289727132Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bbaa-454f-77b1-80f1-7bcf940941d3
+  author: joe
+  content: |-
+    [advisor] ACCEPTANCE ANCHOR — linking this to a concrete artifact, per the product seat's framing: this bug's success condition is precisely that the proxy-approval ledger entry on BUG-1268 (PR #1970) stops being possible.
+
+    That entry records independence as PARTIAL. PR #1970 was orphaned: the drain shelved before a reviewer phase ever ran, so zero reviewer-phase events exist for it, and I merged it after reviewing the diff myself. I recorded that honestly rather than claiming a clean independent review, but an honest record of a gate that did not fire is still a gate that did not fire. It is the only merge in this wave where no second party read the code before it landed on main.
+
+    So BUG-1291 has a checkable acceptance test that does not depend on anyone's judgement: after the fix, an orphaned PR cannot reach a merge with no reviewer round. Either the shelve path hands off (primary), or STORY-1218's tick sweeps it up (backstop), and in both cases the PR gets a reviewer before it gets a merger. If a future wave produces another ledger entry reading "independent: partial (no reviewer phase ever ran)", this bug is not fixed regardless of what the tests say.
+
+    Worth stating plainly: I merged that PR knowing the gate had not fired, because the alternative was leaving a verified fix stranded indefinitely with no mechanism to recover it. That trade was defensible once. It should not be available a second time, and the way to make sure it is not is to fix the handoff rather than to rely on me declining next time.
+  created_at: 2026-09-19T21:54:53.391245996Z
+  modified_at: 2026-09-19T21:54:53.391245996Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
