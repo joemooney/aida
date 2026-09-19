@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b691-2b61-7b72-a434-026d6f3d2733
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1954: BUG-1238 acceptance requires a PR touching aida-cli-lib/src/cli.rs without docs:impacted/interface_changes to fail. docs/cli/verify-interface-changes.py still prints WARN and exits 0 in that branch, and tests/test_verify_interface_changes.py only tests touches_surface(), so the required failure behavior is neither implemented nor verified.  Concretely: in verify-interface-changes.py, when the surface is touched and the spec carries neither docs:impacted nor interface_changes, print the reason and exit 1 (keep WARN+exit 0 only when no surface path changed); extend tests/test_verify_interface_changes.py with an end-to-end case that runs the script against a synthetic diff touching aida-cli-lib/src/cli.rs with no marker and asserts a non-zero exit, plus the marked case exiting 0; confirm the ci.yml step does not swallow the exit code.'
-  added_at: 2026-09-19T04:26:12.966599249Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
