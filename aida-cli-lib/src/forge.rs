@@ -2060,17 +2060,6 @@ impl Forge for GitLabForge {
         opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
-        // BUG-1232 review round 2: the REST merge endpoint has no rebase
-        // method (the retired `glab mr merge --rebase` path did); refuse
-        // explicitly rather than silently performing a plain merge.
-        // trace:BUG-1232 | ai:claude
-        anyhow::ensure!(
-            !matches!(opts.method, MergeMethod::Rebase),
-            "GitLab REST merge does not support MergeMethod::Rebase for MR !{}: use squash or merge \
-             (rebase the MR first with `glab mr rebase {}` if a linear history is required)",
-            c.id,
-            c.id
-        );
         // BUG-1232: `glab mr merge` rewrites some GitLab 405/409 responses as a
         // false "not enough privileges" error. Gate on GitLab's authoritative
         // detailed_merge_status, then call the REST merge endpoint directly.
@@ -2080,8 +2069,9 @@ impl Forge for GitLabForge {
         // the misleading `glab mr merge` wrapper text. trace:BUG-1232 | ai:codex
         let path = format!("projects/:id/merge_requests/{}", c.id);
         const MAX_GATE_READS: usize = 6;
+        let mut rebase_requested = false;
         for attempt in 0..MAX_GATE_READS {
-            let view = self.glab_api_get(&path, &[])?;
+            let view = self.glab_api_get(&path, &[("include_rebase_in_progress", "true")])?;
             anyhow::ensure!(
                 view.status.success(),
                 "GitLab could not read MR !{} before merge",
@@ -2098,17 +2088,35 @@ impl Forge for GitLabForge {
                 });
             }
             match classify_gitlab_merge_status(&snapshot.detailed_merge_status) {
-                GitLabMergeGate::Ready => {
-                    let squash = matches!(opts.method, MergeMethod::Squash).to_string();
-                    let remove = opts.delete_branch.to_string();
-                    let mut fields = vec![
-                        ("squash", squash.as_str()),
-                        ("should_remove_source_branch", remove.as_str()),
-                    ];
-                    if let Some(message) = opts.squash_subject.as_deref() {
-                        fields.push(("squash_commit_message", message));
+                _ if snapshot.rebase_in_progress => {
+                    if attempt + 1 == MAX_GATE_READS {
+                        anyhow::bail!("GitLab MR !{} is still rebasing", c.id);
                     }
-                    let merged = self.glab_api_put(&format!("{path}/merge"), &fields)?;
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                }
+                GitLabMergeGate::Ready => {
+                    // Rebase is a separate asynchronous GitLab transition.
+                    // Complete it before the ordinary merge request rather
+                    // than degrading Rebase into Merge. trace:BUG-1232 | ai:codex
+                    if matches!(opts.method, MergeMethod::Rebase) && !rebase_requested {
+                        let request = gitlab_merge_api_shape(&path, opts, true);
+                        let rebased = self.glab_api_put(&request.path, &[])?;
+                        anyhow::ensure!(
+                            rebased.status.success(),
+                            "GitLab rejected rebase of MR !{}{}",
+                            c.id,
+                            gitlab_api_message(&rebased.stderr)
+                        );
+                        rebase_requested = true;
+                        continue;
+                    }
+                    let request = gitlab_merge_api_shape(&path, opts, false);
+                    let fields: Vec<(&str, &str)> = request
+                        .fields
+                        .iter()
+                        .map(|(key, value)| (key.as_str(), value.as_str()))
+                        .collect();
+                    let merged = self.glab_api_put(&request.path, &fields)?;
                     if merged.status.success() {
                         return Ok(MergeResult {
                             merged: true,
@@ -2546,6 +2554,47 @@ enum GitLabMergeGate {
 struct GitLabMergeSnapshot {
     state: String,
     detailed_merge_status: String,
+    rebase_in_progress: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct GitLabMergeApiRequest {
+    path: String,
+    fields: Vec<(String, String)>,
+}
+
+/// Return the exact GitLab mutation shape for each merge method. Rebase is a
+/// distinct transition; after it completes, callers request the non-squash
+/// merge shape.
+// trace:BUG-1232 | ai:codex
+fn gitlab_merge_api_shape(
+    mr_path: &str,
+    opts: &MergeOptions,
+    request_rebase: bool,
+) -> GitLabMergeApiRequest {
+    if matches!(opts.method, MergeMethod::Rebase) && request_rebase {
+        return GitLabMergeApiRequest {
+            path: format!("{mr_path}/rebase"),
+            fields: Vec::new(),
+        };
+    }
+    let mut fields = vec![
+        (
+            "squash".into(),
+            matches!(opts.method, MergeMethod::Squash).to_string(),
+        ),
+        (
+            "should_remove_source_branch".into(),
+            opts.delete_branch.to_string(),
+        ),
+    ];
+    if let Some(message) = opts.squash_subject.as_deref() {
+        fields.push(("squash_commit_message".into(), message.into()));
+    }
+    GitLabMergeApiRequest {
+        path: format!("{mr_path}/merge"),
+        fields,
+    }
 }
 
 // GitLab documents these as temporary mergeability states. In particular,
@@ -2579,6 +2628,10 @@ fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
             .or_else(|| value.get("merge_status").and_then(|v| v.as_str()))
             .unwrap_or("unknown")
             .to_string(),
+        rebase_in_progress: value
+            .get("rebase_in_progress")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     })
 }
 
@@ -4044,31 +4097,29 @@ mod tests {
     }
 
     #[test]
-    // trace:BUG-1232 | ai:claude
-    #[test]
-    fn gitlab_merge_change_refuses_rebase_before_any_api_call() {
-        let tmp = tempfile::tempdir().unwrap();
-        let forge = GitLabForge::new(tmp.path());
-        let change = ChangeRef {
-            id: 7,
-            url: String::new(),
-            branch: "feature".into(),
-            base: "main".into(),
-            title: None,
-        };
-        let opts = MergeOptions {
-            method: MergeMethod::Rebase,
+    fn gitlab_merge_api_shape_distinguishes_all_methods() {
+        let opts = |method| MergeOptions {
+            method,
             squash_subject: None,
-            delete_branch: false,
+            delete_branch: true,
         };
-        let err = forge
-            .merge_change(&change, &opts, &mut crate::network_retry::NoopSink)
-            .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("does not support MergeMethod::Rebase"),
-            "{err}"
-        );
+        let path = "projects/:id/merge_requests/7";
+
+        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false);
+        assert_eq!(merge.path, format!("{path}/merge"));
+        assert!(merge.fields.contains(&("squash".into(), "false".into())));
+
+        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false);
+        assert_eq!(squash.path, format!("{path}/merge"));
+        assert!(squash.fields.contains(&("squash".into(), "true".into())));
+
+        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true);
+        assert_eq!(rebase.path, format!("{path}/rebase"));
+        assert!(rebase.fields.is_empty());
+
+        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false);
+        assert_eq!(after.path, format!("{path}/merge"));
+        assert!(after.fields.contains(&("squash".into(), "false".into())));
     }
 
     #[test]
