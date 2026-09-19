@@ -28931,6 +28931,25 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             }
             Ok(())
         }
+        // BUG-1236: the symmetric hand-hold — marker + label together.
+        crate::cli::MergeHoldAction::Add { pr, reason } => {
+            let reason = reason
+                .as_deref()
+                .map(str::trim)
+                .filter(|r| !r.is_empty())
+                .unwrap_or("held by hand — merge requires human/advisor review")
+                .to_string();
+            merge_hold::write_hold(&root, *pr, &reason)?;
+            match merge_hold::sync_label(&root, *pr, true) {
+                Ok(()) => println!(
+                    "Merge-hold placed on PR #{pr} (marker written, `aida:merge-hold` label applied). Release with `aida merge-hold clear {pr}`."
+                ),
+                Err(err) => println!(
+                    "Merge-hold marker written for PR #{pr}, but the label did not apply: {err} — retry with `aida merge-hold list --fix`."
+                ),
+            }
+            Ok(())
+        }
         crate::cli::MergeHoldAction::Clear { pr, stale } => match (pr, stale) {
             (Some(_), true) => {
                 anyhow::bail!(

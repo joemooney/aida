@@ -185,6 +185,18 @@ pub enum MergeHoldAction {
         #[clap(long)]
         fix: bool,
     },
+    /// Place a supervised merge-hold by hand: write the marker file AND mirror
+    /// the `aida:merge-hold` label, so a PR you hold outside a drain releases
+    /// through the same `aida merge-hold clear <pr>` path (a label applied by
+    /// hand alone leaves the required check red with nothing to release).
+    // trace:BUG-1236 | ai:claude
+    Add {
+        /// PR number to hold.
+        pr: u64,
+        /// Hold reason recorded on the marker (default: "held by hand").
+        #[clap(long)]
+        reason: Option<String>,
+    },
     /// Clear a merge-hold: remove the marker file and drop the
     /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
     /// or `--stale` to sweep every marker whose PR has already merged.
