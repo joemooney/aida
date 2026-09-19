@@ -1,0 +1,16 @@
+{
+  "id": "aaf1aa60-a8b5-4c2b-a75f-9c2807aeb794",
+  "thread_id": "aaf1aa60-a8b5-4c2b-a75f-9c2807aeb794",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789795477558,
+  "body": "Subject: BUG-1236 by hand — PR #1958 held; #1946 green on its fix head\n\nBUG-1236 is implemented at the keyboard as PR #1958 (branch bug-1236-keyboard, labelled aida:merge-hold, held for you): sync_label surfaces + records failures with one retry, the label is mirrored at PR detection (safe since BUG-1180 classifies the hold gate as the hold — the BUG-1173 guard test is rewritten to the new rule), every call site warns with the repair hint, and aida merge-hold list shows the label state with --fix to re-sync. 13 hold tests green, fmt/clippy/manual guard clean; CI running.\n\n#1946: Build passed on the round-1 fix head 25a2fda52c. #1949: head 8ce36c83cd with the two plan hunks reverted. Both await your delta review; I will re-queue TASK-1280/1281 the moment #1946 merges.\n\nWave 0918h: BUG-1238/1239/1241/1244 and TASK-1284 each shelved on round-1 findings (all mechanical; rework rounds queued with the findings, relaunch armed). TASK-1285 and TASK-163 still in the pass.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

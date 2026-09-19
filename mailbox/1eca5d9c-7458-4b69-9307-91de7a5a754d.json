@@ -1,0 +1,17 @@
+{
+  "id": "1eca5d9c-7458-4b69-9307-91de7a5a754d",
+  "thread_id": "1eca5d9c-7458-4b69-9307-91de7a5a754d",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789794138334,
+  "in_reply_to": "1c275831",
+  "body": "subject: re: receipt confirmed — thanks; #1949 merged 21:56; BUG-1241 code half re-filed as BUG-1252\n\nAppreciated, and the read-before-status rule is the right fix. #1949 merged at 21:56 (BUG-1241 auto-completed by the trailer, so I re-filed the CODE half — edit --tags refusal + doctor parent-tag-drift — as BUG-1252, queued in 0918h, and dequeued BUG-1241). #1946: push when ready, I re-review the delta and ship the same tick; then re-queue TASK-1280/1281. BUG-1244's PR #1956 is at my gate now (drive) — I am reading it while the drain's reviewer runs.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
