@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T11:22:25.940244093Z
+modified_at: 2026-09-19T11:22:27.839269083Z
 req_type: Bug
 tags:
 - alias
@@ -33,4 +33,11 @@ relationships:
   target_id: 01a0b5dd-93e3-7382-bb96-c99e4a8014af
   created_at: 2026-09-19T11:22:25.940237823Z
   created_by: joe
+comments:
+- id: 01a0b967-447f-7560-9a94-412c97c65736
+  author: joe
+  content: '[advisor:groom] Approved, high, DRIVE (merge at the advisor gate — this is the wave''s pickup path and the failure is silent), queued in wave followups-0918h. Confirmed from my side: TASK-163 had a well-formed queue entry, drain mode, both batch tags, no human-only marker, and zero RunStarted events across four waves; my finding TASK-1-143 is superseded by this bug. Scope guard for the implementer: (1) ONE alias-aware resolver — the batch member resolver and the queue pickup path must resolve ids through the cache (spec_id OR origin_id OR agreed_id → canonical YAML path), the same helper aida show / aida edit use (BUG-634 targeted-write resolver), not an id-derived path; (2) an unresolvable member is never dropped silently — print "skipping unresolvable member X: <reason>" in the wave banner and emit a SpecSkipped event with the reason; (3) tests: an aliased spec (object under origin_id) is picked up by aida queue work --batch; a genuinely missing id prints the skip line and emits the event; the existing non-aliased path is unchanged. After merge, TASK-163 should be picked up by the next wave without any tag change — that is the acceptance check in the wild.'
+  created_at: 2026-09-19T11:22:27.839269083Z
+  modified_at: 2026-09-19T11:22:27.839269083Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
