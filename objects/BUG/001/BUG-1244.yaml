@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T14:12:25.622142573Z
+modified_at: 2026-09-19T14:13:58.769847285Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -200,6 +200,25 @@ comments:
   created_at: 2026-09-19T14:06:16.852489639Z
   modified_at: 2026-09-19T14:06:16.852489639Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba04-4b71-7753-ad78-67b32994c3fa
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1956 [AI:codex] fix(drain): prevent cross-spec phase contamination (BUG-1244)
+    verdict: APPROVE + merged (round 5; auto-bumped Done → Completed at dd0ce07)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (codex implementer across five rounds; the drain's headless reviewer APPROVED round 5 at 07:05 — .aida/review-verdicts/PR-1956.json; advisor reviewed all five rounds — PR-1956-advisor.json)
+    gates: required Build (ubuntu-latest) = success at c3507e9e (the gate that mattered: rounds 1 and 4 both went red on the same two integration tests); merge-hold released via aida pr ship (explicit review-merge); merge lease via aida pr ship; aida pull ran post-merge. Verified before shipping that workflow_hints.rs and queue_cmd.rs at c3507e9e are byte-identical to the approved b9e43b99, so the rebase carried no new content.
+    what landed, against the five findings this spec collected:
+     1. phase 1 runs in the spec's OWN workspace — implementer_workspace resolves from the spec's lease (or its default worktree/branch), the phase-1 args are pinned to it even on the first attempt, and a sibling workspace is refused before the implementer runs.
+     2. queue done ownership — the final rule is the acceptance as clarified after round 3: a branch naming a different requirement refuses; a branch naming the target (slice suffixes, node-qualified ids) accepts; an unscoped branch consults commits since the merge-base ONLY when there are any, so no commits accepts, commits with no spec references accept, and commits naming only other specs refuse; an unreadable range fails closed; --force is the ledgered override. Requirement prefixes come from the new RequirementType::ALL rather than a second hand-maintained table.
+     3. CI and reviewer phases bind to THIS run's PhaseDonePr and refuse a mismatch, so a phase can no longer review a sibling's PR under this spec's name.
+     4. a queue entry whose status has diverged from the spec is treated as a fresh pickup (the mechanism behind recurrence 2).
+     5. rework recovery only adopts a PR that belongs to this spec.
+    origin: filed 2026-09-18 16:44 after BUG-1236's implementer ran on STORY-1221's branch twice and flipped Done with no work of its own. Both contaminated PRs (#1948, #1952) were caught at this gate.
+    timestamp: 2026-09-19T07:14-07:00
+  created_at: 2026-09-19T14:13:58.769847285Z
+  modified_at: 2026-09-19T14:13:58.769847285Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0ba02-df95-72a1-82c5-9a86b2ead1de
   author: aida-auto-bump
