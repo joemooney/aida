@@ -1,0 +1,47 @@
+id: 01a0bbb1-f5a9-71b1-b849-fcf2026215d5
+spec_id: BUG-1298
+agreed_id: BUG-1298
+title: A CI-red shelve can name the wrong workflow run in its recovery hint, sending the implementer to a run that contains no failure
+description: |
+  When a drain shelves on red CI, the recovery hint can name a DIFFERENT workflow run than the one containing the check that failed. The implementer is then sent to a run showing nothing wrong.
+
+  OBSERVED 2026-09-19 22:00:59 on BUG-1231 / PR #1976. The shelve event:
+
+    SpecShelved phase=ci kind=ci-red
+    detail: CI is red on PR-1976: Build (ubuntu-latest)
+    recovery_hint: CI failed on run 35471997274 - view it: gh run view 35471997274
+
+  The named check and the named run do not correspond:
+
+    run 35471997271  workflow "CI"                    Build (ubuntu-latest)  FAILURE   <- the actual failure
+    run 35471997274  workflow "Cross-platform (nightly)"  Build (windows-latest), Build (macos-latest)  both pending   <- what the hint names
+
+  Run ...274 does not contain a Build (ubuntu-latest) job at all. Following the hint shows a run with no failure in it.
+
+  WHY THIS HAPPENS NOW AND DID NOT BEFORE. Per CLAUDE.md the cross-platform matrix is meant to run on a nightly cron and on manual dispatch, with a path-filtered informational Windows/macOS matrix at PR time for fragile worktree/session/git-backend/workflow changes. So a PR touching those paths now has MORE THAN ONE run attached with similarly-named Build jobs, and whatever selects the run for the hint is picking by job-name prefix or by recency rather than by the run that owns the failing required check. The detail line gets the check right; only the hint's run id is wrong, which suggests the two are derived independently rather than from one resolved object.
+
+  WHY IT MATTERS MORE THAN IT LOOKS. The shelve verdict itself was CORRECT — the required check really had failed — so this never surfaces as a false shelve and nothing alerts on it. It surfaces as an implementer or a human opening a green-looking run and losing time, or worse, concluding the shelve was spurious and re-driving without fixing anything. It is the same family as BUG-1295: a diagnostic that degrades silently while the decision it accompanies stays right.
+
+  ACCEPTANCE
+  1. The recovery hint names the run that contains the failing required check. Where several runs are attached to the PR, the run is resolved FROM the failing check object, not selected separately by name or recency.
+  2. The detail line and the hint are derived from one resolved check result, so they cannot disagree about which run failed.
+  3. Where more than one check failed, the hint either names each failing check with its own run or names the required one explicitly and says how many others failed.
+  4. A test constructs a PR with two attached runs whose job names collide across workflows, one required and failing, one informational and pending, and asserts the hint names the failing required run.
+  5. An informational (non-required) job that is pending or failing never becomes the subject of the hint while a required check is the thing that actually shelved the spec.
+
+  Found by the advisor seat triaging the BUG-1231 shelve; both run ids and their job lists verified against the PR check rollup before filing.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T22:03:17.289916672Z
+modified_at: 2026-09-19T22:03:17.289916672Z
+req_type: Bug
+tags:
+- ci
+- diagnostics
+- drain-safe
+- from:session-0919
+- orchestrator
+- papercut
+- parent:EPIC-62
