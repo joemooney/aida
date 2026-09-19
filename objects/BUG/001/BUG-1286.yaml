@@ -1,0 +1,50 @@
+id: 01a0bb7d-1b68-7741-a94c-ef572887bc65
+spec_id: BUG-1286
+agreed_id: BUG-1286
+title: 'The event feed records no terminal event when a spec ships: 1 of 514 closed specs ends on PrMerged, 88 end on an event that says they are still in flight or failed'
+description: |
+  The event feed never records that a spec shipped. A spec emits RunStarted, PhaseEntered, CiTerminal, PhaseDonePr and SpecShelved, but nothing when it reaches Completed. The requirement record updates in the store and the cache; the feed does not.
+
+  MEASURED 2026-09-19 against this repo's .aida/events.jsonl (514 closed specs that appear in the feed):
+
+    last event for a CLOSED spec      count
+    PhaseDonePr                         219
+    UnshippedWorkDetected               205
+    SpecShelved                          76
+    PhaseEntered                         11
+    AdvisorEscalated                      1
+    PuntFiled                             1
+    PrMerged                              1
+
+  Exactly one closed spec in the entire history ends on a terminal event. Eighty-eight end on an event that asserts the spec is mid-flight or failed. Two worked examples: TASK-1285 is Completed and its last event is SpecShelved at 12:46 on 2026-09-19; BUG-1207 is Completed and its last event is SpecShelved at 07:39 on 2026-09-18.
+
+  There is no SpecCompleted or SpecMerged event kind at all. The feed has twelve kinds and none of them is terminal for the spec.
+
+  IMPACT, and it is not only cosmetic. Any consumer that reads the feed as the record of what happened concludes that shipped work is stuck: the aida-monitor project, built against this repo, reported TASK-1285 as stuck in round 1 for fifteen hours while it had merged hours earlier. Worse, any success rate, rounds-to-merge or drain-outcome metric computed from the feed is wrong in the same direction — it counts a shelve that was later recovered as the final outcome. That includes the measurements EPIC-62 is using to decide whether reliability is improving.
+
+  The gap opens specifically where the closing transition happens OUTSIDE the drain: a batch or review PR merges several child specs, or `aida pull` auto-bumps Done to Completed when a trailered commit lands on main. The drain emits events; the auto-bump scanner does not.
+
+  PROPOSED: emit a terminal event for every spec a merge closes, from the same code path that performs the Done-to-Completed bump, so it fires whether the close came from the drain, from `aida pull`, from `aida db reconcile-status`, or from a batch PR that named several specs in its trailer.
+
+  ACCEPTANCE
+  1. A new terminal event kind exists and is emitted for each spec transitioned to Completed, carrying the spec id, the merge commit and the PR number where known.
+  2. Merging a PR whose trailer names three specs emits three terminal events, one per spec, not one for the PR.
+  3. `aida pull` auto-bumping a spec emits the event, as does `aida db reconcile-status`.
+  4. A test asserts that after a simulated merge-and-bump, the last event for that spec is the terminal kind.
+  5. Backfill is NOT required, but the docs state that events before this change have no terminal record so consumers do not treat the absence as "in flight".
+
+  Reported by the aida-monitor project; every number above independently reproduced in this repo before filing.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:05:33.544062298Z
+modified_at: 2026-09-19T21:05:33.544062298Z
+req_type: Bug
+tags:
+- events
+- from:aida-monitor
+- monitor
+- observability
+- parent:EPIC-62
+- telemetry
