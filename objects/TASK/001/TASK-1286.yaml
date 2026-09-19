@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:24:40.273837836Z
-modified_at: 2026-09-19T05:27:06.101382020Z
+modified_at: 2026-09-19T05:27:14.580385358Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-18-story-1226-aida-cron.md
@@ -25,4 +25,4 @@ comments:
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 deferred: true
 deferred_at: 2026-09-19T05:27:03.998055608Z
-deferred_until: a user or script reports  failing on a pre-STORY-1226 task name; main already accepts interval|every aliases and lists legacy cadence tasks as fires_task with a run-time notice
+deferred_until: a user or script reports aida schedule run <task> failing on a pre-STORY-1226 task name; main already accepts interval|every aliases and lists legacy cadence tasks as fires_task with a run-time notice
