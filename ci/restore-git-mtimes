@@ -12,3 +12,15 @@ git ls-files --stage -z | perl -0ne '
     my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
     utime($mtime, $mtime, $path) or die "utime $path: $!\n";
 '
+
+# aida-cli-lib/build.rs intentionally watches HEAD and the index for its build
+# stamp. Normalize those too so a retry of the exact same commit stays warm;
+# a different commit/tree still receives a different timestamp and rebuilds.
+set -- "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})"
+perl -e '
+    for my $pair (0, 2) {
+        my ($hash, $path) = @ARGV[$pair, $pair + 1];
+        my $mtime = 946684800 + (hex(substr($hash, 0, 8)) % 630720000);
+        utime($mtime, $mtime, $path) or die "utime $path: $!\n";
+    }
+' "$1" "$(git rev-parse --git-path HEAD)" "$2" "$(git rev-parse --git-path index)"

@@ -74,7 +74,10 @@ can refresh tracked-file mtimes. Before each builder job,
 `ci/restore-git-mtimes` assigns every regular tracked file a deterministic past
 mtime derived from its Git blob ID. Unchanged content therefore keeps the same
 mtime across pipelines, while a content change gets a different mtime and
-continues to invalidate Cargo correctly.
+continues to invalidate Cargo correctly. The helper also normalizes `.git/HEAD`
+and `.git/index` from the commit and tree IDs because the CLI build-stamp script
+intentionally watches those paths; a retry of one SHA remains warm, while a new
+commit still refreshes the embedded build identity.
 
 Gotchas learned the hard way:
 
