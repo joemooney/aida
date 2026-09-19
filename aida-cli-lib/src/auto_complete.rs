@@ -6562,7 +6562,13 @@ mod tests {
     #[test]
     fn phase_one_refuses_a_sibling_specs_worktree_before_implementing() {
         let mut driver = MockPhaseDriver::all_ok();
-        driver.workspace = Some(("/tmp/aida-story-1221".to_string(), "story-1221".to_string()));
+        driver.workspace = Some((
+            std::env::temp_dir()
+                .join("aida-story-1221")
+                .display()
+                .to_string(),
+            "story-1221".to_string(),
+        ));
         let result = orchestrate(
             &mut driver,
             "BUG-1236",
