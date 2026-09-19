@@ -35,7 +35,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:23:44.192885433Z
-modified_at: 2026-09-19T21:31:37.365605027Z
+modified_at: 2026-09-19T21:31:39.367808519Z
 req_type: Bug
 tags:
 - agent-ux
@@ -49,4 +49,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T21:23:46.484470480Z
+comments:
+- id: 01a0bb94-ffe7-75c1-8412-6c8d4b18427c
+  author: joe
+  content: '[advisor:groom] Approved, low, DRAIN. Well-isolated report — a control title filed successfully while the hyphen-leading one failed, which is what makes this a bug rather than a guess. The sharp part is that the suggested escape does not work: clap''s tip about the -- separator is generic advice that does not apply when the value is already attached to a named flag, so a user who follows the tool''s own advice fails again. That is the same shape as BUG-1277 in miniature — printed guidance that cannot work is worse than none, because it costs a second attempt before the user doubts the message. Scope guard: fix it for the VALUE, not by special-casing --title — any flag taking free text has this problem, and a title is simply where we hit it. The idiomatic fix is allow_hyphen_values on the value parsers that take prose (title, description, note, reason), plus making the error name the working escape (--title=--foo, which does work) rather than the one that does not. Second guard: whatever the fix, add a test filing a title that begins with a hyphen, since this will otherwise regress invisibly the next time a flag is added.'
+  created_at: 2026-09-19T21:31:39.367808519Z
+  modified_at: 2026-09-19T21:31:39.367808519Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
