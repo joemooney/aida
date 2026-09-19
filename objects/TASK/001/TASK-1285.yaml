@@ -3,12 +3,12 @@ spec_id: TASK-1285
 agreed_id: TASK-1285
 title: 'Version pinning + rebuild handoff for a running wave: the drain records the binary SHA it started on, refuses a mid-wave binary swap, and hands off to a rebuilt binary at a phase boundary'
 description: 'SPIKE-82 gap 7. Today the drain prints ''your aida binary is now behind HEAD — run cargo build'' after every merge it makes, but a rebuild of target/release under a live wave replaces the binary the orchestrator and its child phases invoke mid-flight (the 2026-07-18 stale-debug-binary incident and today''s rule ''never make build-fast under a live drain''). Proposal: the wave records the binary SHA + mtime at launch (in the drain lock / drain state); aida dev status and aida ps show it; make build-fast (and aida dev activate) refuse or warn when a live wave is on the binary being replaced unless --after-wave is passed, which parks the rebuild until QueueDrained and then runs it; optionally the wave itself re-execs onto the rebuilt binary at the next spec boundary when the new SHA is an ancestor-compatible build. Acceptance: the lock records the SHA; a rebuild attempt under a live wave is refused with the wave id; --after-wave runs after the wave ends (event-driven, not polled); a test covers the refusal decision.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T04:02:25.461175864Z
+modified_at: 2026-09-19T05:16:41.122778194Z
 req_type: Task
 tags:
 - batch:followups-0918h
