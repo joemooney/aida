@@ -160,7 +160,7 @@ build. Five verbs, each with a recorded one-line reason (all already exist in
 
 - **accept** — eligible per litmus + worth doing now ⇒ apply the tier tag,
   queue it, and (per policy) drain. `aida edit <ID> --status approved` +
-  `--add-tag batch:express` (or `aida fasttrack` for the trivial tier).
+  `--tags batch:express` (or `aida fasttrack` for the trivial tier).
 - **reject** — stale / out-of-scope / not-worth-it ⇒ `aida edit <ID> --status
   rejected` + a comment naming why.
 - **dedupe** — duplicate of an existing spec ⇒ reject + link to the original
