@@ -1,0 +1,38 @@
+id: 01a0bb67-f38d-7750-8851-7277d32ddb25
+spec_id: BUG-1283
+agreed_id: BUG-1283
+title: 'Windows nightly red for a second night, new cause: BUG-1229''s pull-rebase test asserts exact file content and git''s autocrlf rewrites it to CRLF on checkout — plus the portability ratchet does not cat'
+description: |-
+  Cross-platform nightly run 35438189645 (created 2026-09-19T10:43:49Z) is red on Build (windows-latest) with one failure:
+
+    git_ops::tests::failed_pull_rebase_aborts_and_restores_branch
+    panicked at aida-core\src\git_ops.rs:5668
+    assertion `left == right` failed
+      left:  "value: local\r\n"
+      right: "value: local\n"
+
+  Cause: the test writes "value: local\n", commits it, and after the aborted rebase asserts the working-tree file still reads exactly "value: local\n". On Windows, git's core.autocrlf default converts LF to CRLF on checkout, so the restored file legitimately contains CRLF. The rebase-abort behaviour the test exists to prove — branch restored, HEAD unchanged, content preserved — is CORRECT; only the byte-exact comparison is wrong.
+
+  This is the SECOND consecutive night red and the second Windows-only TEST defect in three days: BUG-1233 (fixed, #1944) was a directory-mtime call that Windows refuses; this is a line-ending assumption. Both landed through PR CI green, because PR CI is Linux-only by design (TASK-257) and the nightly is the only place they surface.
+
+  Fix, in two parts:
+  1. The test. Compare content in a line-ending-insensitive way — normalise CRLF to LF before the assertion, or assert on the committed blob via `git show HEAD:shared.yaml` rather than the working tree, which is closer to what the test actually means: the abort restored the commit, not a particular checkout encoding. Prefer the blob form; it removes the platform variable entirely rather than papering over it.
+  2. The ratchet. scripts/check-portability.sh did not catch this, and did not catch BUG-1233 either. Add a check for the two shapes now seen twice: (a) an assertion comparing file content read from a working tree against a literal containing \n; (b) opening a DIRECTORY as a File (the BUG-1233 shape). Both are greppable patterns in test code, and the ratchet exists precisely so Linux-only PR CI does not ship Windows failures.
+
+  Acceptance: the test passes on windows-latest (verify by a cross-platform.yml dispatch, not by assertion); scripts/check-portability.sh flags a newly added assertion of either shape on a fixture; the nightly returns green and the tracking issue closes. Do NOT cfg-away the test on Windows — the behaviour it proves (BUG-1229's fail-closed store write path) matters most on the platform with the most surprising filesystem semantics.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T20:42:27.085616663Z
+modified_at: 2026-09-19T20:42:27.085616663Z
+req_type: Bug
+tags:
+- batch:followups-0918i
+- drain-safe
+- git-backend
+- nightly
+- portability
+- test-only
+- windows
+execution_mode: drain
