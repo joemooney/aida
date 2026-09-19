@@ -8189,11 +8189,7 @@ pub(crate) fn reviewer_prompt_for_round(pr: u64, round: usize) -> String {
 pub(crate) fn review_round_from_comments(comments: &[aida_core::Comment]) -> usize {
     comments
         .iter()
-        .filter(|comment| {
-            comment
-                .content
-                .starts_with(crate::review_verdict::FINDINGS_BLOCK_PREFIX)
-        })
+        .filter(|comment| crate::review_verdict::is_findings_block(&comment.content))
         .count()
         + 1
 }
@@ -8226,7 +8222,7 @@ pub(crate) fn derive_rework_queue_work_prompt(
 pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&str> {
     comments
         .iter()
-        .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
+        .filter(|c| review_verdict::is_findings_block(&c.content))
         .max_by_key(|c| c.created_at)
         .map(|c| c.content.as_str())
 }
@@ -8238,7 +8234,7 @@ pub(crate) fn latest_findings_block(comments: &[aida_core::Comment]) -> Option<&
 pub(crate) fn rework_round_from_comments(comments: &[aida_core::Comment]) -> usize {
     let recorded = comments
         .iter()
-        .filter(|c| c.content.starts_with(review_verdict::FINDINGS_BLOCK_PREFIX))
+        .filter(|c| review_verdict::is_findings_block(&c.content))
         .count();
     recorded.max(1) + 1
 }

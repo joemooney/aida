@@ -34,6 +34,14 @@
 // trace:BUG-1213 | ai:claude
 pub(crate) const FINDINGS_BLOCK_PREFIX: &str = "REVIEW FINDINGS TO ADDRESS (";
 
+/// True only for the canonical durable findings block written by the review
+/// hand-off. Discussion that merely embeds or quotes the marker is not review
+/// history and must not advance either the reviewer or rework round.
+// trace:TASK-1291 | ai:codex
+pub(crate) fn is_findings_block(content: &str) -> bool {
+    content.starts_with(FINDINGS_BLOCK_PREFIX)
+}
+
 use std::path::{Path, PathBuf};
 
 /// The verdict word, normalized from whatever the reviewer/skill wrote.

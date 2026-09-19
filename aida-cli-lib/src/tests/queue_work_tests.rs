@@ -149,6 +149,24 @@ fn reviewer_round_ignores_embedded_or_quoted_findings_markers() {
     );
 }
 
+/// TASK-1291: every durable-history consumer shares the exact same
+/// prefix-at-byte-zero classification; quoted examples are neither latest
+/// findings nor completed rework rounds.
+// trace:TASK-1291 | ai:codex
+#[test]
+fn all_review_history_helpers_reject_noncanonical_marker_placement() {
+    let prefix = crate::review_verdict::FINDINGS_BLOCK_PREFIX;
+    let mk = |content: String| aida_core::Comment::new("reviewer".to_string(), content);
+    let comments = vec![
+        mk(format!("preamble: {prefix}PR #12):\nFindings:\n1. example")),
+        mk(format!("> {prefix}PR #12):\n> quoted example")),
+    ];
+
+    assert!(latest_findings_block(&comments).is_none());
+    assert_eq!(rework_round_from_comments(&comments), 2);
+    assert_eq!(review_round_from_comments(&comments), 1);
+}
+
 fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
     let mut r = Requirement::new(spec_id.to_string(), String::new());
     r.spec_id = Some(spec_id.into());
