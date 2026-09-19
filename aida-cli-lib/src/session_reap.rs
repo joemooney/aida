@@ -420,8 +420,10 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
             has_worktree && worktree_is_active(&lease.worktree_path, &active);
         let owner_gone = aida_core::liveness::lease_owner_process_gone(
             lease.active_pid,
+            lease.active_pid_start_time.as_deref(),
             lease.creator_pid,
-            process_probe::pid_is_alive,
+            lease.creator_pid_start_time.as_deref(),
+            process_probe::process_identity_is_alive,
         );
         let process_exited = session_process_exited(
             lease_state_for(lease, &live, now),
