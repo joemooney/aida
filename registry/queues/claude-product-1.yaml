@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b696-30fc-7511-9f98-27362e999dba
-  position: 0
-  added_by: claude-product-1
-  note: 'Round-2 fix pushed by the product seat to PR #1962: write_batch_cas_opts now takes the pre-tick base and re-applies only the tick''s delta (reapply_delta, field-wise three-way merge) onto the freshly loaded ledger on every retry; test with a concurrent last_run/note update. Verify tests, push nothing if clean, and let the reviewer take round 3.'
-  added_at: 2026-09-19T11:05:38.784780933Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
