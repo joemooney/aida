@@ -17,12 +17,12 @@ description: |-
   Acceptance: a drive spec whose PR has a hold marker and whose only red check is merge-hold-gate finishes the drain's CI phase and holds for the advisor; the three recorded occurrences do not reproduce; no change to the no-marker lingering-label path (which stays real).
 
   Sibling: BUG-1250 keeps the transient-probe half (probe error → NoSignal → drain proceeds with no CI gate), which needs the network_retry classification and the finish_ci shelve-instead-of-proceed change.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T19:14:10.643965650Z
+modified_at: 2026-09-19T19:14:18.690287312Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -157,16 +157,32 @@ comments:
   created_at: 2026-09-19T19:14:10.643965650Z
   modified_at: 2026-09-19T19:14:10.643965650Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bb17-41c1-7902-a689-8d78890f0c78
+  author: aida-auto-bump
+  timestamp: 2026-09-19T19:14:18.689466755Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bb17-41c2-7c20-ba4e-f7e0def97667
+  timestamp: 2026-09-19T19:14:18.690286729Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1265-2026-09-19T191412Z.md
+  commit_sha: e4e75678aa867257f7ba00ac7d5ff2f24870b701
+  summary: Completed via merge e4e75678
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: PR-1966 base is 2 commits behind origin and overlaps 2 files touched on base since the PR forked — refusing to launch reviewer against stale code. Overlapping files: aida-cli-lib/src/lib.rs aida-cli-lib/src/auto_complete.rs Recover with: aida pr rebase 1966 # clean rebase + force-push-with-lease aida pr rebase 1966 --interactive # if conflicts need manual resolve Or pass `--allow-stale-base` to proceed anyway (review will be against stale code). (attempt 2/2)'
+  - 'punted: implementer worktree `/home/joe/ai/aida-bug1265` is on `bug-1265-work` but phase 2 is driving `bug-1265` — refusing to push or tear down (attempt 2/2)'
+  - 'punted: session end observed 3 commits ahead on branch `bug-1265-work` with no open PR; work may need manual push/PR recovery'
+  - 'punted: CI is red on PR-1966: failing: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1966: failing: Build (ubuntu-latest)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T14:12:59.762854069Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1966: failing: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35457897792 — view it: `gh run view 35457897792`. Push fixups to the same branch: `aida queue work BUG-1265 --branch bug-1265 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T17:29:35.374629748Z
+  completed_at: 2026-09-19T19:14:18.689104214Z
+  completion_sha: e4e75678aa867257f7ba00ac7d5ff2f24870b701
