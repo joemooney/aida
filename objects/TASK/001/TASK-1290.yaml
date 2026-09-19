@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-19T20:49:34.807676321Z
+modified_at: 2026-09-19T20:49:36.076272980Z
 req_type: Task
 tags:
 - acceptance
@@ -49,6 +49,9 @@ relationships:
   target_id: 01a0b5fc-ec4d-7493-a755-33abd4c39528
   created_at: 2026-09-19T16:37:53.696583001Z
   created_by: joe
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-19T20:49:36.076272980Z
 comments:
 - id: 01a0ba88-16d5-78d2-834a-1e4a3544c2e7
   author: joe
