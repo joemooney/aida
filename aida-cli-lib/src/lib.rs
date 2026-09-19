@@ -868,6 +868,182 @@ mod task_1244_drain_merge_lease_tests {
     }
 }
 
+#[cfg(all(test, unix))]
+mod bug_1265_finish_ci_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    struct Fixture {
+        _temp: tempfile::TempDir,
+        root: std::path::PathBuf,
+        gh: std::path::PathBuf,
+        mode: std::path::PathBuf,
+        reads: std::path::PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("repo");
+            std::fs::create_dir_all(&root).unwrap();
+            let git = |args: &[&str]| {
+                let out = std::process::Command::new("git")
+                    .current_dir(&root)
+                    .args(args)
+                    .output()
+                    .unwrap();
+                assert!(
+                    out.status.success(),
+                    "git {args:?}: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            };
+            git(&["init", "-q", "-b", "main"]);
+            git(&[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/finish-ci-fixture.git",
+            ]);
+
+            let mode = temp.path().join("mode");
+            let reads = temp.path().join("reads");
+            let gh = temp.path().join("gh");
+            let script = format!(
+                r###"#!/bin/sh
+set -eu
+if [ "${{1:-}}" = "--version" ]; then echo 'gh version test'; exit 0; fi
+if [ "$1 $2" = "pr list" ]; then
+  printf '%s\n' '[{{"number":1265,"statusCheckRollup":[{{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE"}}]}}]'
+  exit 0
+fi
+if [ "$1 $2" = "pr checks" ]; then
+  mode=$(cat '{}')
+  if [ "$mode" = unavailable ]; then
+    if printf '%s' "$*" | grep -q -- '--required'; then
+      printf '%s\n' '[{{"name":"merge-hold-gate","workflow":"merge-hold-gate","bucket":"fail"}},{{"name":"Build","workflow":"CI","bucket":"pass"}}]'
+      exit 1
+    fi
+    n=0; test ! -f '{}' || n=$(cat '{}'); n=$((n+1)); echo "$n" > '{}'
+    echo 'temporary rows failure' >&2
+    exit 1
+  fi
+  if [ "$mode" = real ]; then
+    printf '%s\n' '[{{"name":"merge-hold-gate","workflow":"merge-hold-gate","bucket":"fail"}},{{"name":"Build","workflow":"CI","bucket":"fail"}}]'
+  else
+    printf '%s\n' '[{{"name":"merge-hold-gate","workflow":"merge-hold-gate","bucket":"fail"}},{{"name":"Build","workflow":"CI","bucket":"pass"}}]'
+  fi
+  exit 1
+fi
+echo "unexpected gh call: $*" >&2
+exit 2
+"###,
+                mode.display(),
+                reads.display(),
+                reads.display(),
+                reads.display()
+            );
+            std::fs::write(&gh, script).unwrap();
+            let mut perms = std::fs::metadata(&gh).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&gh, perms).unwrap();
+            merge_hold::write_hold(&root, 1265, "supervised test hold").unwrap();
+            Self {
+                _temp: temp,
+                root,
+                gh,
+                mode,
+                reads,
+            }
+        }
+
+        fn driver(&self) -> RealPhaseDriver {
+            let mut driver = RealPhaseDriver::new(
+                self.root.clone(),
+                "BUG-1265".into(),
+                "test".into(),
+                None,
+                true,
+                None,
+                AutonomyMode::Default,
+                "test-token".into(),
+                false,
+                false,
+                false,
+                false,
+                auto_complete::LifecycleSkip::none(),
+                auto_complete::AutoCompleteVariant::ThroughCi,
+            );
+            driver.branch = Some("bug-1265".into());
+            driver.from_pr = true; // an already-open PR needs no worktree push
+            driver
+        }
+
+        fn set_mode(&self, mode: &str) {
+            std::fs::write(&self.mode, mode).unwrap();
+            let _ = std::fs::remove_file(&self.reads);
+        }
+
+        fn finish_ci(&self, mode: &str) -> Result<(), auto_complete::PhaseFailure> {
+            self.set_mode(mode);
+            let inherited = std::env::var_os("PATH").unwrap_or_default();
+            let path = std::env::join_paths(
+                std::iter::once(self.gh.parent().unwrap().to_path_buf())
+                    .chain(std::env::split_paths(&inherited)),
+            )
+            .unwrap();
+            let gh = self.gh.to_string_lossy().into_owned();
+            let path = path.to_string_lossy().into_owned();
+            let _env = crate::test_env::EnvVarsGuard::set(&[
+                ("AIDA_TEST_GH_BINARY", gh.as_str()),
+                ("PATH", path.as_str()),
+            ]);
+            auto_complete::PhaseDriver::finish_ci(&mut self.driver())
+        }
+    }
+
+    /// Exercise the real drain driver, not just `ci_gate::classify_red`: this
+    /// is the seam that originally bypassed refinement and shelved the coarse
+    /// hold-gate verdict as `ci-red`.
+    // trace:BUG-1265 | ai:codex
+    #[test]
+    fn drain_finish_ci_completes_for_hold_gate_only_red() {
+        let fixture = Fixture::new();
+        assert!(
+            fixture.finish_ci("hold").is_ok(),
+            "hold-gate-only red must complete the CI phase"
+        );
+    }
+
+    // trace:BUG-1265 | ai:codex
+    #[test]
+    fn drain_finish_ci_shelves_real_red_naming_only_the_genuine_check() {
+        let fixture = Fixture::new();
+        let failure = fixture.finish_ci("real").unwrap_err();
+        assert_eq!(failure.kind, auto_complete::FailureKind::CiRed);
+        assert!(failure.reason.contains("Build"), "{}", failure.reason);
+        assert!(
+            !failure.reason.contains("merge-hold-gate"),
+            "{}",
+            failure.reason
+        );
+    }
+
+    // trace:BUG-1265 | ai:codex
+    #[test]
+    fn drain_finish_ci_retries_unavailable_rows_then_shelves_ci_unavailable() {
+        let fixture = Fixture::new();
+        let failure = fixture.finish_ci("unavailable").unwrap_err();
+        assert_eq!(failure.kind, auto_complete::FailureKind::CiUnavailable);
+        assert_ne!(failure.kind, auto_complete::FailureKind::CiRed);
+        assert_eq!(
+            std::fs::read_to_string(&fixture.reads).unwrap().trim(),
+            "3",
+            "initial row read plus two bounded retries"
+        );
+    }
+}
+
 #[cfg(test)]
 mod bug_1205_ci_phase_fallthrough_tests {
     use super::*;
@@ -86487,7 +86663,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         hold_present,
                         hold_label_present,
                         std::time::Duration::from_secs(20 * 60),
-                        std::time::Duration::from_secs(15),
+                        ci_red_refine_poll_interval(),
                     ) {
                         Ok(r) if !r.is_real() && !r.has_pending() => {
                             if !self.json {
@@ -86515,7 +86691,11 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 auto_complete::FailureKind::CiRed,
                                 format!(
                                     "CI is red on PR-{pr_number}: {}",
-                                    r.describe(pr_number as u64)
+                                    // The supervised gate is the hold, not a
+                                    // failed check. A ci-red shelf must name
+                                    // only the genuine required failures.
+                                    // trace:BUG-1265 | ai:codex
+                                    r.real.join(", ")
                                 ),
                             ));
                         }
@@ -88404,6 +88584,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 false
             }
         }
+    }
+}
+
+/// Keep the production retry cadence patient while letting the drain-level
+/// `finish_ci` regression exercise all retries without making the unit suite
+/// sleep for thirty seconds. The retry count and control flow are identical.
+// trace:BUG-1265 | ai:codex
+fn ci_red_refine_poll_interval() -> std::time::Duration {
+    if cfg!(test) {
+        std::time::Duration::from_millis(1)
+    } else {
+        std::time::Duration::from_secs(15)
     }
 }
 
