@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T09:30:40.314743575Z
+modified_at: 2026-09-19T09:30:56.881296620Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -65,6 +65,11 @@ comments:
   content: 'Round 2 CI red on PR #1961 (run 35434601580): the new test tags_replace_warning_tests::doctor_detects_and_heals_all_thirteen_incident_specs fails at line 156 (left == right assertion on the detected/healed set) while the other new tests pass. Likely the doctor fixture or the git-log diff scan returns a different count than 13 in CI (e.g. the fixture commits lack the parent tag pre-image, or the scan window/author filter differs from local). Make the fixture self-contained (create the 13 specs + the tag-dropping commits inside the test''s temp store), assert on the sorted id list rather than a count, and run the test in an isolated temp HOME so no local store leaks in. Then push.'
   created_at: 2026-09-19T09:30:40.060101694Z
   modified_at: 2026-09-19T09:30:40.060101694Z
+- id: 01a0b901-2ae8-70d0-940c-432cb634b452
+  author: joe
+  content: 'Precise cause (supersedes the previous brief) for the round-2 red on PR #1961: doctor_detects_and_heals_all_thirteen_incident_specs — the detector correctly finds all 13 incident ids INCLUDING the unusual id form TASK-1-140, but the test''s expected list omits TASK-1-140 (left has it, right does not). Fix the expected fixture list to the full 13 ids (BUG-1222, BUG-1224, BUG-1226, BUG-1227, BUG-1229, BUG-1230, BUG-1233, SPIKE-82, STORY-1221, TASK-1-140, TASK-1271, TASK-1276, TASK-1278) and keep the sorted-id assertion. Nothing else in the run failed.'
+  created_at: 2026-09-19T09:30:56.616969756Z
+  modified_at: 2026-09-19T09:30:56.616969756Z
 execution_mode: drain
 implementation_info:
   implemented: true
