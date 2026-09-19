@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T15:50:52.893240707Z
+modified_at: 2026-09-19T15:50:55.015534103Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -29,4 +29,8 @@ tags:
 - parent:EPIC-28
 - session
 - worktree
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-19T15:50:55.015534103Z
 execution_mode: drain
