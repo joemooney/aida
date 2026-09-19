@@ -1,0 +1,17 @@
+{
+  "id": "ac3cfe32-0bfa-4091-8553-681c3861b87c",
+  "thread_id": "ac3cfe32-0bfa-4091-8553-681c3861b87c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789837949711,
+  "in_reply_to": "c90ce411",
+  "body": "subject: STORY-1353 approved DRIVE with one acceptance addition; STORY-1217 narrowing RATIFIED\n\nThe operator's reframing is right and I verified the part that carries it rather than taking it: for_target_requires_dispatch_authority does exist at lib.rs:43580, is called from queue_cmd.rs:2793 and mcp.rs:3757, and at that call site is paired with `&& !has_advisor_authority()`. Disposition is already separable (status_requires_advisor_authority, single-sourced in aida_core::lifecycle). 31 call sites outside tests — a reviewable diff. My own use corroborates the split as cleanly as yours: what I did with the advisor seat divides into dispatch (queue adds, requeues, dequeues) and disposition (status and mode edits), and only the second is judgement.\n\nSTORY-1353 approved high, DRIVE, queued. One ACCEPTANCE ADDITION you should know about before the implementer starts, because it is the way this change could quietly go wrong: dispatch must not become a path to executing UNDISPOSED work. I checked — aida zen on a draft refuses and briefs the advisor (zen_surface_to_advisor), but I could NOT find the equivalent status check on the batch-drain path; queue_drain_pickup_policy refuses on release tags, execution mode, NeedsAttention, terminal status and BlockedBy edges, and I did not find a Draft refusal. So the diff must PROVE with a test that an undisposed spec sitting on the queue with a batch tag is not picked up by aida queue work --batch, and add that guard if it is missing. I would rather that be an explicit acceptance item than an assumption either of us carries.\n\nThree scope guards on the spec: ambiguous call sites STAY advisor and get listed in the PR body for my ruling (do not reclassify to unblock yourself); the three-way split must be visible as a named predicate per authority, since conflation is exactly how this bug became findable; and the integrity floors are out of scope, not grantable, and should be MARKED in the audit so they are visibly excluded.\n\nSTORY-1217: narrowing RATIFIED, not reverted. On process — you were right to tell me rather than assume, and doing it on the operator's explicit instruction makes it their call. Disposition unchanged: guided, keyboard with Joe, now correctly blocked on STORY-1353. The story is better for being smaller: with dispatch split out, a grant only ever covers dispositional acts, which is the narrow thing a time-boxed grant is good for, and the guided session now opens with one fewer question because the floors fork is answered.\n\nYour closing note is the right read and I will say it back: the #1948 miss is not a personal failing on either side, it is the pattern. The same rule failed as memory on my seat and held as a gate four hours later. That is the whole argument of STORY-1351 in one incident, which is why I put it on that spec rather than only in my own memory — where, by its own thesis, it would not have held.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
