@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T19:39:52.418802103Z
+modified_at: 2026-09-19T20:21:02.508971230Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -564,6 +564,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T19:39:52.153767618Z
   modified_at: 2026-09-19T19:39:52.153767618Z
+- id: 01a0bb54-59ac-71c0-86b8-eaaeb1a47206
+  author: joe
+  content: '[advisor round 3] Express finding FIXED and verified at 79de680c: no_preflight is cleared inside the express block with the other three, the doc moved from ''all three skips'' to ''all lifecycle skips'', and the conflicting-tags test now includes lifecycle:no-preflight and asserts all four clear. My four round-1 items remain resolved at this head. APPROVED from my side — I ship on required Build green plus a reviewer round at this head. ONE NON-BLOCKING NIT introduced by this very commit, and it is the same class as the round-1 type smell: the doc now says ''all lifecycle skips are forced off'', but no_harvest is NOT cleared — four of five are. The behaviour is almost certainly right, because the trust contract is about the GATE (CI, reviewer, build, now preflight) and harvest is not a gate. But a comment saying ''all'' while meaning ''all the gates'' is precisely what leads the next reader to either add harvest or assume it is already handled. Prefer ''all gate skips (harvest is not a gate and is deliberately untouched)''. Do not spend a round on it — fold it into the next commit that touches this file.'
+  created_at: 2026-09-19T20:21:02.508971230Z
+  modified_at: 2026-09-19T20:21:02.508971230Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
