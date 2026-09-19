@@ -76,3 +76,11 @@
   added_at: 2026-09-19T16:39:08.469994656Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5c9-2c39-7851-9352-b0dff87c550c
+  position: 76000
+  added_by: role:implementer
+  note: 'mirror CI under 10 min: split build/test jobs, stop the checkout mtime refresh forcing recompiles; record pipeline number + warm timing per change; no check removed'
+  added_at: 2026-09-19T16:39:19.101878785Z
+  for_role: implementer
+  added_by_machine: imac
