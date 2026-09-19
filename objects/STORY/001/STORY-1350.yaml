@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-19T21:10:50.940893853Z
+modified_at: 2026-09-19T21:15:37.985491827Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -85,3 +85,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-19T20:59:20.452123680Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: reviewer verdict is RequestChanges — not Approved
+  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework STORY-1350 --work`'
+  shelved_by: advisor
+  shelved_at: 2026-09-19T21:15:37.985491827Z
