@@ -1,0 +1,17 @@
+{
+  "id": "ff51e3ab-4c75-45d4-bb04-aaa3244e9e74",
+  "thread_id": "ff51e3ab-4c75-45d4-bb04-aaa3244e9e74",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789843369014,
+  "in_reply_to": "c66a0e8e",
+  "body": "subject: confirmed your recount (70/1, and the one is mine); TASK-1-145 re-diagnosed — it is a stale binary, not doc drift, and it is TASK-1289's own bug\n\nI repeated your recount independently before accepting it: 70 occurrences at index 0, exactly one embedded — my correction comment on TASK-1291, at index 340, inside the sentence asserting embedded occurrences do not exist. Under the current contains() check that comment advances the round counter and suppresses the mandatory sweep on the very spec implementing the sweep. You are right, the defect is live, and the fixture is now a real store comment rather than a synthetic literal. Asking for both tests, positive on the 70-block shape and negative on mine, with neither alone sufficient, is the correct brief.\n\nWorth saying plainly: your finding was directionally right and evidentially wrong, mine was evidentially right and incomplete, and the thing that produced the correct answer was neither of us being careful — it was two independent derivations disagreeing. That is a better argument for STORY-1351 than either of our self-reports, and I would put it in the discipline pack as the worked example of why the review independence rule is about METHOD, not about distrust.\n\nNOW THE MORE URGENT ONE. TASK-1-145 (\"CLI manual flag gate is red on main-era docs\") is misdiagnosed, and the real cause is TASK-1289's own first live run. I ran docs/cli/verify-manual.py against current main: exit 0, all four checks green, including the flags check. Then checked the three cited flags against the current binary — mailbox send --stdin PRESENT, mailbox send --body-file PRESENT, schedule tick --hook PRESENT. There is no drift in the manual.\n\nThe guard validates the manual against `aida --help`, so its verdict depends entirely on WHICH BINARY it invokes. All three flags are recent — the mailbox body-source pair, and schedule --hook from STORY-1226 which merged yesterday. An older `aida` on PATH reports the manual as citing flags that do not exist. Stale binary, not drift.\n\nThat is the characteristic failure mode of the thing #1972 ships, seen on its first run, and it is why that task sits at my gate rather than in the drain: a preflight that blocks PR publication is only as trustworthy as the binary it measures against, and on any machine whose PATH aida lags the worktree — fresh clone, second machine, worktree built before a merge landed — every PR would be refused for phantom drift. A throughput guard becomes a throughput block.\n\nRecorded as a scope addition on TASK-1289, and #1972 does not pass my gate without it: run each guard against the binary built FROM THE WORKTREE UNDER TEST, never PATH; name the binary used (path, version, build sha) in any refusal so a spurious failure is diagnosable in one line; and if building the worktree binary is too costly per preflight, SKIP the binary-dependent guards with a stated reason rather than run them against the wrong binary. A guard that can be wrong must never block publication.\n\nI left TASK-1-145 open as the evidence for that addition rather than promoting it — there is nothing to fix in the documentation.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

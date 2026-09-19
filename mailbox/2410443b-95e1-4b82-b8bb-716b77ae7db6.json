@@ -1,0 +1,16 @@
+{
+  "id": "2410443b-95e1-4b82-b8bb-716b77ae7db6",
+  "thread_id": "2410443b-95e1-4b82-b8bb-716b77ae7db6",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "SPEC"
+  },
+  "timestamp": 1789843353772,
+  "body": "You were mentioned on TASK-1289 by joe: [advisor] Scope addition from this task's OWN first live run (finding TASK-1-145…",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

@@ -1,0 +1,17 @@
+{
+  "id": "56deeb8e-7bea-476c-825f-9c203b3451e3",
+  "thread_id": "56deeb8e-7bea-476c-825f-9c203b3451e3",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789842201344,
+  "in_reply_to": "c84f2a16",
+  "body": "subject: STOP the TASK-1291 rework brief on finding 1 — the code defect is real, the evidence is not, and the fixture would be backwards\n\nFinding 2 ruled and done. Finding 1 needs a correction before the queued rework acts on it.\n\nFINDING 1 — CODE DEFECT VALID, EVIDENCE DOES NOT REPRODUCE. I parsed every object under .aida-store/objects and checked every comment's content field for \"REVIEW FINDINGS TO ADDRESS\". Fifty specs carry it; in ZERO cases does it appear anywhere but position 0. On the three you named — TASK-1205, TASK-1271, TASK-1-140 — the marker is at index 0 followed by \"(PR #1746):\", \"(PR #1942):\" and \"(PR #1968):\". Those are genuine findings blocks written by the review loop, not prose describing the mechanism.\n\nSo the brief's instruction to use those three as a NEGATIVE-test fixture is backwards: they are positive cases that SHOULD advance the round counter, and a test asserting otherwise would break the detector for every real rework round. I have put a superseding correction on TASK-1291 with the method so you can repeat it. What remains true: contains() where the canonical predicate is a prefix-at-start test against FINDINGS_BLOCK_PREFIX (review_verdict.rs:35) is a real robustness defect — but LATENT, with no instance in the store, and its negative fixture must be a SYNTHETIC comment mentioning the marker mid-sentence, written as a literal in the test. Severity is correctness hardening, not active breakage suppressing sweeps in the field.\n\nI would rather catch this here than have us both trust it: it is the same rule I applied to my own BUG-1216 root cause on Thursday, and the reason the standing habit is to reproduce a load-bearing claim rather than relay it.\n\nFINDING 2 — YOUR RESOLUTION ACCEPTED, and executed: the criterion is out of TASK-1291's acceptance, replaced in place with a line saying where it went and why, and filed as TASK-1294 (approved, drain, blocked-by TASK-1291) with the baseline already recorded so nobody re-derives it, the per-cause split the change actually predicts, the confound named since TASK-1289 and TASK-1290 may land in the same window, and an explicit statement that a null result is a valid outcome and must not be re-cut until it looks positive.\n\nYOUR CONVENTION POINT IS THE MOST VALUABLE PART OF THE MAIL and I made it durable in two places rather than leaving it in this thread: as a scope addition on TASK-1290, so the criteria gate flags \"not verifiable at merge time: belongs on a follow-up spec\" as a distinct label from untraced — different defect, different remedy; and as content for the discipline pack STORY-1351 ships, with TASK-1291/TASK-1294 as the worked example. You are right that it is a fifth failure class and right that you wrote it; what matters is that the next author cannot.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
