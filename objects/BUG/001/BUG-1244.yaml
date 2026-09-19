@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-18T23:41:16.742657613Z
+modified_at: 2026-09-19T00:23:40.327329078Z
 req_type: Bug
 tags:
 - drain
@@ -32,4 +32,14 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T23:41:16.742657613Z
+comments:
+- id: 01a0b70c-2027-7513-871b-7334c1370e95
+  author: joe
+  content: |-
+    [advisor] Recurrence 2, 2026-09-18 17:09-17:18, same wave: BUG-1236 was picked up again (run 01a0b6ff) after the product seat reset the SPEC to Approved at 16:40 — but the QUEUE ENTRY for BUG-1236 still read status=Done (queue list --format json shows "status": "Done" on the entry). The drain's pickup therefore took the Done/rework path instead of a fresh implement, and the rework brief it attached was the last review verdict recorded under BUG-1236's run — #1948's round-2 findings (the missing protocol tests). Codex dutifully wrote those tests and opened PR #1952 with trailer (STORY-1221 TASK-1278); BUG-1236 flipped Done a second time with still no work of its own; the hold marker on PR-1952 names BUG-1236.
+    Mechanism to add to the fix list: (4) a queue entry's status must not diverge from the spec's — resetting a spec from Done to Approved (or any status edit) must reset its queue entry, or the pickup must read the SPEC status and treat a Done-entry/Approved-spec mismatch as fresh; (5) the rework brief must be keyed to a PR that this spec's run opened (PhaseDonePr for this spec), never to a verdict file written while this spec's phase was reviewing a sibling's PR.
+    Repair applied at the gate: #1952 retitled to TASK-1283 (the spec that actually asked for those tests); after this run's reviewer finishes, BUG-1236's queue entry is removed and re-added fresh and the spec reset to Approved so the next pickup implements BUG-1236 itself.
+  created_at: 2026-09-19T00:23:40.327329078Z
+  modified_at: 2026-09-19T00:23:40.327329078Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
