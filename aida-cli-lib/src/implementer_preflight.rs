@@ -210,7 +210,7 @@ mod tests {
         .unwrap();
         std::fs::write(
             root.path().join(".github/workflows/ci.yml"),
-            "jobs:\n  build:\n    steps:\n      - name: Portability\n        run: |\n          echo 'tests/x.rs:7 hard-coded /tmp; fix: use tempfile' >&2\n          exit 1\n",
+            "jobs:\n  build:\n    steps:\n      - name: Portability\n        run: |\n          echo 'tests/x.rs:7 non-portable path; fix: use tempfile' >&2\n          exit 1\n",
         )
         .unwrap();
 
@@ -220,7 +220,7 @@ mod tests {
             PreflightDecision::Refuse {
                 failed: vec![(
                     "Portability".into(),
-                    "tests/x.rs:7 hard-coded /tmp; fix: use tempfile".into()
+                    "tests/x.rs:7 non-portable path; fix: use tempfile".into()
                 )]
             }
         );
