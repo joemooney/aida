@@ -47,7 +47,11 @@ variables:
   # trace:TASK-1274 | ai:codex
   GIT_CLEAN_FLAGS: none
   CARGO_HOME: "/ci-cache/cargo-home"
-  CARGO_TARGET_DIR: "/ci-cache/target"
+  # Each concurrent runner slot has a different persistent checkout root.
+  # Pair it with a slot-local target dir so Cargo fingerprints never bounce
+  # between `/builds/.../concurrent-0` and `concurrent-1` source paths.
+  # trace:TASK-1274 | ai:codex
+  CARGO_TARGET_DIR: "/ci-cache/target-${CI_CONCURRENT_ID}"
   CARGO_INCREMENTAL: "1"
 
 default:
@@ -87,9 +91,9 @@ test:
     # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
     # STORY-1216: nextest (one process per test) for speed + isolation; it does
     # not run doctests, so those remain in the verify job.
-    # Split the suite deterministically across both runner slots. Compilation
-    # is shared through CARGO_TARGET_DIR; once that lock is released, the two
-    # partitions execute concurrently. trace:TASK-1274 | ai:codex
+    # Split the suite deterministically across both runner slots. Each slot's
+    # persistent target dir is paired with its persistent checkout, avoiding
+    # cross-slot Cargo fingerprint invalidation. trace:TASK-1274 | ai:codex
     - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
         --partition "hash:${CI_NODE_INDEX}/${CI_NODE_TOTAL}"
     - |
