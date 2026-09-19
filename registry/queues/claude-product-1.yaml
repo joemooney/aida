@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b75b-60bc-7652-a3b4-0865a498169a
-  position: 0
-  added_by: claude-product-1
-  note: 'CI red on PR #1959 (run 35424100583): resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup fails — the change calls std::env::current_exe() outside the resolver. BUG-1199 rule: every binary-path read goes through aida_exe_path() (the resolver honours the activated dev binary and the AIDA_EXE override). Use aida_exe_path() for the SHA/mtime pin, and if the pin needs the file''s identity beyond the path, derive it from that resolved path. Run cargo test -p aida-cli-lib resolve_aida_exe before pushing.'
-  added_at: 2026-09-19T05:36:14.481934210Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
