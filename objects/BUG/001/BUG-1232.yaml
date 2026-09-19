@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-19T01:16:22.794258100Z
+modified_at: 2026-09-19T01:16:24.083730519Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -57,6 +57,16 @@ comments:
   content: 'Round 3 fix already pushed by the product seat (f1dbc3fe64: unchecked → Wait; Rebase refused explicitly with recovery hint; tests added). Verify tests, push nothing if clean, and let the reviewer take round 3.'
   created_at: 2026-09-19T01:16:22.543887361Z
   modified_at: 2026-09-19T01:16:22.543887361Z
+- id: 01a0b73c-6599-77d2-9486-d85e2ea95db2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1950):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1232: aida-cli-lib/src/forge.rs:2092-2100 maps both MergeMethod::Merge and MergeMethod::Rebase to the same PUT /merge request with squash=false. Before this PR, Rebase emitted glab mr merge --rebase. Preserve the rebase contract (GitLab exposes rebase as a separate endpoint/state transition) and add a command/API-shape test that distinguishes Merge, Rebase, and Squash.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T01:16:23.833690500Z
+  modified_at: 2026-09-19T01:16:23.833690500Z
 execution_mode: drain
 implementation_info:
   implemented: true
