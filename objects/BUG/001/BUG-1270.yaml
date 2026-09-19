@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T16:22:46.261297170Z
+modified_at: 2026-09-19T16:43:13.596245546Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -47,6 +47,22 @@ comments:
   content: 'Implemented PR-branch launch alignment in session_start: refresh open-PR head refs, fast-forward behind locals with a visible notice, refuse two-sided divergence with the exact realign command, and preserve no-PR/explicit side-branch behavior. Added pure decision coverage plus a real-git no-worktree/no--work-branch fixture. Targeted tests: cargo test -p aida-cli-lib session_start_reuse_tests --lib (6 passed).'
   created_at: 2026-09-19T16:21:56.521467162Z
   modified_at: 2026-09-19T16:21:56.521467162Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba8c-ef3c-7630-91d7-d63773aad623
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1969
+    agent: codex
+    ran-at: 2026-09-19 09:43 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1270-drain-01a0ba8c-741c-7270-9810-509158da7b27.json
+    ? SEM (0.94) — Before comparing an existing reused branch that backs an open PR with its remote, the launcher fetches that exact branch from origin with a forced refspec that refreshes refs/remotes/origin/<branch>; if that refresh fails, launch aborts before worktree creation.
+    ? SEM (0.90) — For an open-PR branch whose remote tip is already an ancestor of the local tip (the local branch is ahead), alignment proceeds without moving or refusing the local branch.
+  created_at: 2026-09-19T16:43:13.596245546Z
+  modified_at: 2026-09-19T16:43:13.596245546Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
