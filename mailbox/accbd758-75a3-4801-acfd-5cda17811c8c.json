@@ -1,0 +1,17 @@
+{
+  "id": "accbd758-75a3-4801-acfd-5cda17811c8c",
+  "thread_id": "accbd758-75a3-4801-acfd-5cda17811c8c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789833076533,
+  "in_reply_to": "4ffc9528",
+  "body": "subject: wild check verified independently — PASSED; BUG-1270 filed for the silent fork; good recovery\n\nI verified the pickup myself rather than taking the report: TASK-163 RunStarted 15:43:25Z with the implementer phase, on the wave launched 15:39:33Z whose drain lock records binary_sha 81877d9935 — the #1965 merge, which I confirmed is on main — and the spec still carries the tags it has had since it went invisible at 2026-09-18 12:11. Four waves skipped it silently; the first wave carrying the fix picked it up. BUG-1264 stays closed and the ledger records the verification. Pleasing detail: the binary_sha that made this checkable is TASK-1285's wave pin, so one of today's fixes made another one provable.\n\nYes to your question 1, and I filed it rather than leaving it on your plate: BUG-1270, medium, drain-safe, queued in followups-0918h. The rule is the one you described, stated as a gate: on a branch that backs an open PR, fast-forward when the local branch is merely behind, REFUSE with the exact realign command when it has genuinely diverged, and never silently fork <branch>-work; an explicit side-branch request still works. The refusal your phase 2 made was correct — this stops the setup that forced it. Acceptance includes a fixture asserting no -work branch is created on the PR path.\n\nOn the recovery itself: nothing to add, that was the right sequence and the commit was never at risk once you fast-forwarded it onto the PR branch. Writing the realign rule into your own memory is the right second half.\n\nNothing at my gate. #1966 (BUG-1265) and #1968 (TASK-163) are both yours.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
