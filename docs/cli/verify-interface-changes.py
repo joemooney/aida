@@ -9,7 +9,8 @@ gate refuses the change — so this is a CHECK, not a CLAUDE.md rule.
 
 RULE
 ----
-If a diff touches the CLI command/flag SURFACE (`aida-cli/src/cli.rs`) OR the
+If a diff touches the CLI command/flag SURFACE (`aida-cli-lib/src/cli.rs`, or
+the legacy `aida-cli/src/cli.rs`) OR the
 agent-facing skill/command SET (`.claude/skills/`, `.claude/commands/`, or their
 `aida-core/templates/{skills,commands}/` masters), then at least one spec the diff
 REFERENCES must carry doc-impact intent — i.e. non-empty `interface_changes`
@@ -51,7 +52,9 @@ REPO = subprocess.run(
 
 # Surface globs: a touched path matching any of these arms the gate.
 SURFACE_PATHS = (
-    "aida-cli/src/cli.rs",  # CLI command/flag definitions
+    # trace:BUG-1238 | ai:codex
+    "aida-cli-lib/src/cli.rs",  # current CLI command/flag definitions
+    "aida-cli/src/cli.rs",  # legacy path, retained for backports/safety
 )
 SURFACE_DIRS = (
     ".claude/skills/",
