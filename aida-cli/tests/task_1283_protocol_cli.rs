@@ -201,7 +201,7 @@ fn pickup_commands_dispatch_and_render_protocols_before_acceptance() {
 }
 
 #[test]
-fn awaiting_notice_tracks_real_lease_through_queue_done() {
+fn awaiting_notice_tracks_real_lease_through_session_end() {
     let p = Project::new();
     let bug = p.add("bug", "notice lifecycle fixture");
 
@@ -260,20 +260,25 @@ fn awaiting_notice_tracks_real_lease_through_queue_done() {
     run(
         {
             let mut cmd = aida(&worktree, &p.home);
-            cmd.env("AIDA_SESSION_ID", session_id)
-                .args(["queue", "done", &bug, "--yes", "--force"]);
+            cmd.env("AIDA_SESSION_ID", session_id).args([
+                "session",
+                "end",
+                session_id,
+                "--yes",
+                "--skip-ci",
+            ]);
             cmd
         },
-        "queue done",
+        "session end",
     );
     let after = run(
         {
-            let mut cmd = aida(&worktree, &p.home);
+            let mut cmd = aida(&p.repo, &p.home);
             cmd.env("AIDA_SESSION_ID", session_id)
                 .args(["awaiting", "--notice"]);
             cmd
         },
-        "awaiting after queue done",
+        "awaiting after session end",
     );
     assert!(
         !text(&after).contains("protocol: bug [META-"),
