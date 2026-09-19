@@ -1,0 +1,38 @@
+id: 01a0bb7b-bce4-70e3-a413-1d96f5bc07a8
+spec_id: SPIKE-84
+agreed_id: SPIKE-84
+title: 'Re-classify codegraph: operator reports first-hand coexistence with AIDA, contradicting the 2026-06-09 ''compete'' read — and the deferred auto-population followup was never filed'
+description: |-
+  TRIGGER (2026-09-19): the operator is installing codegraph locally, reporting first-hand from work use that "it works well for me and plays nicely with aida." That is direct evidence of COEXISTENCE from a user running both — a stronger signal than any desk analysis, and it does not match how this repo currently classifies the tool.
+
+  WHAT THE REPO SAYS TODAY. The 2026-06-09 weekly scan names CodeGraph (with Augment Context Engine and CodeCompass) as Kill-shot 3 — auto-derived AST/dependency graphs served over MCP at zero discipline cost, satisfying the "agent needs a structural index" demand for free while AIDA's maintained requirement-to-code intent graph costs discipline. That read drove CR-6 and STORY-551: drop the "your project's missing index" headline and reposition onto intent traceability + lifecycle truth. Both Completed.
+
+  That repositioning may still be correct on MARKETING grounds while being wrong as a TECHNICAL classification. The scan's own framing is about who owns the word "index" in a newcomer's head — a positioning collision, not a functional overlap. Nothing in it establishes that the two tools conflict in a working repo, and the operator now reports they do not.
+
+  THE DROPPED THREAD. docs/plans/2026-09-12-entry-memory-lane.md scopes OUT "the codegraph -> requirements-graph auto-population (deferred; see Followups)" and its Followups section carries that bullet. EPIC-63 closed with six children, NONE of which is that followup. The bullet never became a spec, so the seam has had no owner since 2026-09-12. Same failure mode as SPIKE-81: a capability question leaves the working set when its parent spec closes.
+
+  THE DISTINCTION WORTH PRESERVING. The same plan already names it, under Risks: "Authored-memory rot — unlike codegraph (derived, self-fresh), this needs capture + staleness or it misleads." Derived graphs are self-freshening; authored graphs rot. That makes the two layers complementary by construction — codegraph answers "what calls this / what depends on this" from structure that cannot go stale, AIDA answers "why does this exist / what decided it" from intent that no tool can derive. `aida why <file:line>` (STORY-754) is precisely the seam where a derived code graph would COMPOSE rather than compete: codegraph can find the call site, only AIDA can say why it was written.
+
+  QUESTIONS THIS SPIKE ANSWERS
+  1. Classification. Under the ecosystem-watch taxonomy (Compete / Complement / Integrate / Ignore), is codegraph still Compete, or is it Complement or Integrate? State it as a fresh dated read; LEAVE the 2026-06-09 snapshot frozen per the dated-artifact convention and append a new entry rather than rewriting history.
+  2. What "plays nicely" means mechanically. Both MCP servers registered side by side? Does an agent reach for one over the other, or interleave? Does codegraph's index reduce the number of AIDA queries, or sit orthogonal? Any contention (context budget, tool-name collisions, duplicated graph vocabulary confusing the agent)?
+  3. Does the positioning conclusion survive? CR-6 / STORY-551 repositioned away from "index". If the tools are complementary in practice, the honest claim may be sharper than the defensive one: AIDA is the intent layer ON TOP of whatever code graph you already run. That is a stronger story than avoiding the word.
+  4. Is the auto-population followup still deferred, or does a local install make a bounded slice worth filing now? The plan called it "interactive hygiene session" — with codegraph present, that becomes a testable proposition rather than a thought experiment.
+
+  METHOD: this is a dogfooding observation spike, not a build. The operator running both on a real repo is the instrument. Capture what actually happens over normal use; do not construct a benchmark.
+
+  NON-GOAL: building any codegraph integration. Classification and evidence first; any integration is a separate filing with its own decision.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:04:03.812625637Z
+modified_at: 2026-09-19T21:04:03.812625637Z
+req_type: Spike
+tags:
+- codegraph
+- competitive-refresh
+- dogfooding
+- ecosystem-watch
+- positioning
+human_only: true
