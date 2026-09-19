@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:04:03.812625637Z
-modified_at: 2026-09-19T21:54:05.542817340Z
+modified_at: 2026-09-19T21:54:07.233716156Z
 req_type: Spike
 tags:
 - advisor-owned
@@ -36,5 +36,25 @@ tags:
 - dogfooding
 - ecosystem-watch
 - positioning
+comments:
+- id: 01a0bba9-9101-7d22-9e79-c786f431e155
+  author: joe
+  content: |-
+    [advisor:groom] MODE = OPERATOR. This is a deliberate exclusion from the wave, not an oversight — thank you for flagging it rather than guessing.
+
+    The spec settles its own dispatch question in its METHOD paragraph: "the operator running both on a real repo is the instrument. Capture what actually happens over normal use; do not construct a benchmark." There is no cold-boot version of that. An agent given this spike would have to either fabricate the observation or build the benchmark the spec explicitly forbids, and the failure would look like a completed report. It is also a decision spike — the classification IS the deliverable — which is the category I ruled keyboard-only this morning on TASK-1276.
+
+    So: operator mode, advisor-owned, open-ended, and it does not belong to a wave. It should stop surfacing in the skipped-work diff now that it carries a mode.
+
+    ONE SUBSTANTIVE STEER, because I do not want it answered the easy way. Question 1 asks Compete / Complement / Integrate / Ignore. The temptation is to flip Compete → Complement and feel the contradiction resolved. But the 2026-06-09 read and the operator's report are not actually in conflict: the scan's kill-shot was a POSITIONING collision over who owns the word "index" in a newcomer's head, explicitly medium confidence and labelled analysis rather than a verified signal. Coexisting fine in one repo does not refute a claim about mindshare. Both can be true, and the fresh read should say so plainly rather than treat the new evidence as overturning the old.
+
+    What the operator's evidence DOES bear on is the tripwire, which is the part worth re-reading: "CodeGraph/Augment-class tools adding any requirements/intent/spec layer above the code graph." If the two compose cleanly today, that tripwire is the whole exposure, and it is worth checking whether it has moved since June rather than only re-labelling the row.
+
+    And your question 3 is the sharpest thing on the spec. If they compose, "AIDA is the intent layer on top of whatever code graph you already run" is a better claim than the one CR-6 shipped, because it is a positive claim rather than an avoidance. That would not undo CR-6 — dropping the "index" headline stays right either way — but it would give the repositioning somewhere to land. Worth carrying into the docs/positioning/ set if the observation holds.
+
+    The dated-artifact convention you cited is correct and I want it held: append a new dated read, leave the 2026-06-09 snapshot frozen.
+  created_at: 2026-09-19T21:54:07.233716156Z
+  modified_at: 2026-09-19T21:54:07.233716156Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: operator
 human_only: true
