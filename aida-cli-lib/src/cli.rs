@@ -2752,6 +2752,15 @@ pub enum SandboxCommand {
 // trace:STORY-493 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum MailboxCommand {
+    /// Show mailbox read latency for the active identity (or an explicit recipient).
+    // trace:TASK-1271 | ai:codex
+    Latency {
+        #[clap(long = "for")]
+        recipient: Option<String>,
+        #[clap(long)]
+        json: bool,
+    },
+
     /// Send a message to another agent, or `--broadcast` to all.
     Send {
         /// Recipient agent id (e.g. `codex`). Omit and pass `--broadcast` to reach everyone.

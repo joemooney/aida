@@ -2657,12 +2657,25 @@ impl<'a> McpServer<'a> {
                 })
             })
             .collect();
-        // Explicit ack only: advance the watermark to the full inbox's newest
-        // so the unread/notice surface clears. Default is a non-marking peek
-        // (STORY-585 acceptance #4). trace:STORY-585
+        // Explicit ack only: record receipts for latency history, then advance
+        // the watermark to the full inbox's newest so the unread/notice surface
+        // clears. Default is a non-marking peek (STORY-585 acceptance #4).
+        // trace:STORY-585 trace:TASK-1271 | ai:codex
         if mark_seen {
             if let Some(newest) = full.iter().map(|m| m.timestamp).max() {
-                let _ = crate::mailbox_store::set_watermark(&self.project_root, &agent, newest);
+                // Only messages beyond the pre-read watermark were newly
+                // acknowledged. Older messages may predate receipt tracking,
+                // so backfilling them would invent a misleading latency.
+                // trace:TASK-1271 | ai:codex
+                let ids: Vec<&str> = full
+                    .iter()
+                    .filter(|m| m.timestamp > mark)
+                    .map(|m| m.id.as_str())
+                    .collect();
+                crate::mailbox_store::record_seen(&self.project_root, &agent, &ids)
+                    .map_err(|e| e.to_string())?;
+                crate::mailbox_store::set_watermark(&self.project_root, &agent, newest)
+                    .map_err(|e| e.to_string())?;
             }
         }
         serde_json::to_string_pretty(&json!({
@@ -9789,7 +9802,7 @@ mod tests {
         assert!(err.is_err(), "must require to/broadcast: {err:?}");
     }
 
-    // trace:STORY-585 | ai:claude
+    // trace:STORY-585 trace:TASK-1271 | ai:claude+codex
     /// read_inbox is a non-marking peek by default; `mark_seen` advances the
     /// watermark (the explicit ack) and `unread` filters to the unread slice.
     #[test]
@@ -9816,10 +9829,20 @@ mod tests {
         assert_eq!(unread1_p["count"], 2, "peek did not consume: {unread1}");
         assert_eq!(unread1_p["unread"], true);
 
-        // Explicit ack: mark_seen advances the watermark.
+        // Explicit ack: mark_seen records per-message latency history and
+        // advances the watermark.
         server
             .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
             .unwrap();
+        let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
+        let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
+        assert_eq!(receipts.len(), 2, "ack records a receipt for each message");
+        let max_read_latency_ms =
+            crate::mailbox_cmd::max_read_latency_ms(dir.path(), "claude", &messages);
+        assert!(
+            max_read_latency_ms.is_some(),
+            "latency history is populated after MCP mark_seen"
+        );
         let unread2 = server
             .tool_read_inbox(&json!({ "agent": "claude", "unread": true }))
             .unwrap();
@@ -9834,6 +9857,51 @@ mod tests {
             .unwrap();
         let full_p: Value = serde_json::from_str(&full).unwrap();
         assert_eq!(full_p["count"], 2);
+    }
+
+    // trace:TASK-1271 | ai:codex
+    #[test]
+    fn mcp_mark_seen_does_not_backfill_receipts_at_or_below_existing_watermark() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        server
+            .tool_send_message(&json!({ "to": "claude", "body": "already read", "from": "codex" }))
+            .unwrap();
+
+        let first = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
+        let old = first[0].timestamp;
+        crate::mailbox_store::set_watermark(dir.path(), "claude", old).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        server
+            .tool_send_message(&json!({ "to": "claude", "body": "new unread", "from": "codex" }))
+            .unwrap();
+        server
+            .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
+            .unwrap();
+
+        let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
+        let old_id = messages
+            .iter()
+            .find(|m| m.body == "already read")
+            .unwrap()
+            .id
+            .clone();
+        let new_id = messages
+            .iter()
+            .find(|m| m.body == "new unread")
+            .unwrap()
+            .id
+            .clone();
+        let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
+        assert!(
+            !receipts.contains_key(&old_id),
+            "a prior watermark must not be converted into a fabricated receipt"
+        );
+        assert!(
+            receipts.contains_key(&new_id),
+            "newly acknowledged mail needs a receipt"
+        );
     }
 
     /// graph-query moat (the CLI half is covered by graph_walk's unit tests).
