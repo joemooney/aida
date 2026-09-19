@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-19T21:17:50.339717086Z
+modified_at: 2026-09-19T21:23:51.682886483Z
 req_type: Story
 tags:
 - authority
@@ -90,4 +90,10 @@ comments:
   created_at: 2026-09-19T21:17:50.339717086Z
   modified_at: 2026-09-19T21:17:50.339717086Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb8d-dd02-7df1-af98-ad50d445f92e
+  author: joe
+  content: '[advisor] TWO LIVE INSTANCES FROM TODAY, for the acceptance — both reported by the product seat, both verified, and the second is the sharper one. (1) Requeueing an Approved, already-routed spec after a RequestChanges round is REFUSED with ''queuing work for execution needs advisor authority''. STORY-1350 was approved by me, routed to implementer by me, groomed drain by me, and already driven once by the wave; putting it back on the same queue for the same role after a review round decides NOTHING. The disposition happened at approval. This is dispatch classified as disposition, which is exactly this spec''s thesis, and it cost a round trip to my gate at 14:17. (2) THE WORKAROUND IS WORSE THAN THE REFUSAL, and this is the part I want in the acceptance rather than only in a mailbox: the escape available to the product seat is AIDA_SESSION_ROLE=advisor, which makes the audit trail say the ADVISOR queued it. A seat that must impersonate another seat to do its own job produces a FALSE RECORD — and that record is precisely what the ledger EPIC-69 is building would read. So the gate does not merely cost a round trip; under pressure it manufactures bad provenance. The product seat declined to use it on the grounds that quietly assuming the role would hollow out the distinction the operator asked for, which is the right call and is also the evidence that the gate is mis-drawn: a correctly-behaved seat is left with no way to do its own job. Acceptance addition: after the split, requeueing an Approved already-routed spec must succeed from the product seat in its own right, ledgered with the PRODUCT seat as actor — and the test should assert the recorded actor, not merely that the command exits zero.'
+  created_at: 2026-09-19T21:23:51.682886483Z
+  modified_at: 2026-09-19T21:23:51.682886483Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
