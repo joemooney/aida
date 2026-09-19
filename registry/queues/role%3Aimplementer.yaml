@@ -57,3 +57,11 @@
   added_at: 2026-09-19T05:41:37.496420362Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b69c-4ef9-7a32-b7ff-5561773fe56f
+  position: 46000
+  added_by: role:implementer
+  note: 're-queued by the advisor 22:42: #1946 merged 22:24 (8d3d959), schedule ledger is on main; do not park again'
+  added_at: 2026-09-19T05:41:38.758759405Z
+  for_role: implementer
+  added_by_machine: imac
