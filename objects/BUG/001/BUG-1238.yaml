@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:22.273637876Z
-modified_at: 2026-09-19T05:57:33.772596454Z
+modified_at: 2026-09-19T07:58:19.887767165Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -57,6 +57,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T05:57:33.520314738Z
   modified_at: 2026-09-19T05:57:33.520314738Z
+- id: 01a0b8ac-60ef-70f3-bb4e-7898b6818991
+  author: joe
+  content: 'Round 3: replaced the mocked main() gate test with subprocess coverage in a temporary synthetic Git repository. The test creates a real aida-cli-lib/src/cli.rs diff referencing BUG-9001 plus an aida-store branch, asserting exit 1 when unmarked and exit 0 for docs:impacted and interface_changes. Commit 1edb6b2ceb; python unittest and py_compile pass.'
+  created_at: 2026-09-19T07:58:19.887767165Z
+  modified_at: 2026-09-19T07:58:19.887767165Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
