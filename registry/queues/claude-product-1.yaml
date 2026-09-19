@@ -1,4 +1,22 @@
 - user_id: claude-product-1
+  requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
+  position: 0
+  added_by: claude-product-1
+  note: |-
+    Round 2 verdict is the FIRST produced under the new full-sweep prompt, and it returned four findings at once with an acceptance sweep rather than one finding per round. Treat all four as the round; do not fix one and push.
+
+    1. THE PUBLICATION BOUNDARY IS NOT ENFORCED (the defect that matters most). orchestrated_implementer_ship_instruction in lib.rs:25670-25675 still tells full / through-ci / through-merge / skip-build children to run "aida pr ship --no-merge" and exit at the PR-open checkpoint, while the parent runs preflight only AFTER the child exits. So the child opens the PR before any guard runs and the gate is decorative on exactly the paths that matter. Move the guard ahead of the publication point, or change the child's instruction so the PR is opened only after preflight passes — whichever, the invariant to prove is that no configured guard can be bypassed by the normal orchestrated path.
+
+    2. GUARDS FAIL OPEN ON INFRASTRUCTURE FAILURE. implementer_preflight.rs:286-306 maps a failed worktree-binary build, a guard timeout and a spawn error all to GuardResult::Skipped, and decide() treats every Skipped as Open. The acceptance permits skipping only an unknown or missing guard. A gate that opens when it cannot evaluate itself is worse than no gate, because it is trusted. Distinguish "not applicable / not configured" (skip, open) from "could not be evaluated" (refuse, with the reason), and test both.
+
+    3. SHELL SEMANTICS DIFFER FROM CI. implementer_preflight.rs:294-295 runs guard bodies under plain "bash -c", where GitHub Actions uses fail-fast semantics (bash --noprofile --norc -e -o pipefail). A multiline guard whose intermediate command fails but whose last command succeeds passes locally and fails in CI — the precise false-negative this feature exists to prevent. Match CI's invocation exactly and cover it with a multiline guard test.
+
+    4. LATENCY CRITERION UNMET. implementer_preflight.rs:259-265 builds the full aida binary before checking whether any resolved guard actually needs it, so a downstream project configuring only a lightweight guard such as formatting pays an unrelated cargo build. Resolve the guard set first, build only if a binary-dependent guard is present.
+
+    Carried forward and still open from round 1: the express override must clear no_preflight, and binary-dependent guards must run against a binary built from the worktree source rather than whatever is on PATH (finding 2 above is the stricter statement of the second half).
+  added_at: 2026-09-19T20:36:42.102120192Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
