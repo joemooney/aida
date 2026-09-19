@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-19T01:15:44.097642036Z
+modified_at: 2026-09-19T01:15:45.397991587Z
 req_type: Task
 tags:
 - batch:followups-0918g
@@ -44,6 +44,16 @@ comments:
   content: 'Reviewer round 1 on PR #1953: TASK-1283 requires regression tests that exercise queue work, do, worktree enter, awaiting --notice through lease release/queue done, and protocol seed. The new tests call extracted protocol helpers directly (and model release by passing None), so they do not verify CLI argument dispatch, storage/lease discovery, command output, or post-queue-done behavior; add command-level tests covering those named surfaces.  Approach: drive the real command entry points (crate::main_entry / the clap Command dispatch) in a tempdir project with a real .aida-store and lease file — assert stdout contains the protocol block for queue work / do / worktree enter, that awaiting --notice prints the protocol line while the lease exists and not after aida queue done, and that protocol seed is idempotent; see aida-cli/tests/agent_write_confirm.rs for the harness pattern.'
   created_at: 2026-09-19T01:15:43.846816492Z
   modified_at: 2026-09-19T01:15:43.846816492Z
+- id: 01a0b73b-ce7c-7a91-b4df-ac67a9d0fe70
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1953):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1283 requires regression tests that exercise queue work, do, worktree enter, awaiting --notice through lease release/queue done, and protocol seed. The new tests call extracted protocol helpers directly (and model release by passing None), so they do not verify CLI argument dispatch, storage/lease discovery, command output, or post-queue-done behavior; add command-level tests covering those named surfaces.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T01:15:45.148310258Z
+  modified_at: 2026-09-19T01:15:45.148310258Z
 execution_mode: drain
 implementation_info:
   implemented: true
