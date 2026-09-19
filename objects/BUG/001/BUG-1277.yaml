@@ -1,0 +1,41 @@
+id: 01a0bae2-c5f6-7b50-9cf5-44e1e88e1b92
+spec_id: BUG-1277
+agreed_id: BUG-1277
+title: aida queue rework queues the pickup under the invoking user, not the role queue the drain reads — every reviewer finding needs two extra commands or the rework silently never runs
+description: |
+  Observed continuously through 2026-09-18/19: `aida queue rework <SPEC> --for implementer --reason "..."` records the rework brief correctly, but queues the pickup under the INVOKING user rather than the role queue the drain reads. Its own next-step line proves it: "run aida queue work <SPEC> --user claude-product-1 --role implementer". A batch drain reads --user role:implementer, so the entry is invisible to it and the spec never gets re-driven.
+
+  The workaround, performed roughly thirty times in this window by the product seat, is a three-command dance for what should be one:
+    aida queue rework <SPEC> --for implementer --reason "..."
+    aida queue add    <SPEC> --user role:implementer --for implementer
+    aida queue remove <SPEC> --user <invoking-user>
+  Forgetting the third command leaves a duplicate entry; forgetting the second means the rework silently never runs. Both happened in this window.
+
+  This is also a substrate-vs-memory case (STORY-1351): correctness currently depends on a human or agent remembering two follow-up commands after every single reviewer finding — the highest-frequency operation in the whole drain loop.
+
+  Proposal: `aida queue rework` places the entry where the work will actually be picked up.
+  - Default the queue user to the role queue implied by --for (role:implementer for --for implementer), matching how the batch drain reads it.
+  - Keep --user as an explicit override for the case where a specific person should pick it up.
+  - Never create both entries: if an entry for that spec already exists under another user, move it rather than adding a second.
+  - The printed next-step line must name the queue the entry actually landed in.
+
+  Acceptance:
+  - aida queue rework SPEC --for implementer leaves exactly one queue entry, on the role:implementer queue, and the printed pickup command matches it.
+  - A batch drain launched afterwards picks the spec up with no further commands.
+  - An existing entry for the same spec under a different user is MOVED, not duplicated; a test covers the duplicate case.
+  - --user still overrides and is honoured verbatim.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T18:16:59.126029963Z
+modified_at: 2026-09-19T18:16:59.126029963Z
+req_type: Bug
+tags:
+- from:session-capture-0919
+- high-frequency
+- orchestrator
+- papercut
+- parent:EPIC-28
+- queue
+- substrate-as-bouncer
