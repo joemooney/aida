@@ -56,7 +56,16 @@ concurrent = 2
 
 `concurrent = 2` on purpose: jobs share one target dir and serialize on
 cargo's build lock, and the box has 6 cores — more slots only pile up cold
-builds (the 2026-09-18 validation hit load 45 with eight slots).
+builds (the 2026-09-18 validation hit load 45 with eight slots). The `verify`
+and two partitioned `test` jobs use those slots: their initial Cargo work may
+serialize, then the two halves of the nextest suite run concurrently.
+
+The pipeline sets `GIT_CLEAN_FLAGS: none`. The checkout and Cargo target are
+deliberately persistent, and cleaning the checkout caused Cargo to recompile
+unchanged workspace crates after GitLab refreshed their mtimes. Build outputs
+are in `/ci-cache/target`, not the checkout. If the runner workspace ever needs
+a clean reset, stop the runner and clean that project's directory explicitly
+rather than putting an unconditional clean back on every pipeline.
 
 Gotchas learned the hard way:
 
@@ -74,3 +83,4 @@ Gotchas learned the hard way:
   `needs: []` and no cache, so it runs in seconds regardless of the above.
 
 <!-- trace:STORY-1216 | ai:claude -->
+<!-- trace:TASK-1274 | ai:codex -->

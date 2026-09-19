@@ -40,6 +40,12 @@ variables:
   #                is incremental like a developer's `make build-fast`.
   # No GitLab `cache:` zip round-trip any more. trace:STORY-1216 | ai:claude
   GIT_STRATEGY: fetch
+  # Keep the persistent checkout intact between pipelines. GitLab Runner's
+  # default `git clean -ffdx` refreshes enough of the worktree to invalidate
+  # Cargo fingerprints even when the source is unchanged; build products live
+  # outside the checkout, so there is nothing useful for this clean to remove.
+  # trace:TASK-1274 | ai:codex
+  GIT_CLEAN_FLAGS: none
   CARGO_HOME: "/ci-cache/cargo-home"
   CARGO_TARGET_DIR: "/ci-cache/target"
   CARGO_INCREMENTAL: "1"
@@ -51,26 +57,46 @@ default:
   # pull_policy if-not-present. Bump the tag together with ci/Dockerfile.
   image: localhost/aida-ci:1.92
 
-# Single verify job mirroring the GitHub `build` job's always-run gates. Runs on
-# merge requests and on pushes to the default branch.
+# Fast compile/static gates. Tests are separate so they can start immediately
+# and overlap this job on the two-slot mirror runner. Release binaries are built
+# by release-linux-assets for tags; MR tests use the test profile and therefore
+# no longer pay for an unused workspace release build. trace:TASK-1274 | ai:codex
 verify:
   stage: verify
   rules:
     - if: $CI_MERGE_REQUEST_IID
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
-    - cargo build --workspace --release
-    # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
-    # STORY-1216: nextest (one process per test) for speed + isolation; it does
-    # not run doctests, so those keep `cargo test --doc`.
-    - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
     - env -u AIDA_SESSION_ROLE cargo test --workspace --doc
-    - bash tests/test_mcp_stdio.sh
-    - bash tests/test_mcp_doc_consistency.sh
     - cargo fmt --all -- --check
     # Deny-by-default CORRECTNESS lints; style/pedantic stay warnings (matches
     # the GitHub gate — no -D warnings on a floating stable toolchain).
     - cargo clippy -p aida-cli -- -D clippy::correctness
+
+# Runtime gates use the test profile, independently of the static checks above.
+# `needs: []` lets this later-stage job start as soon as a runner slot is free
+# instead of waiting for every verify-stage job.
+test:
+  stage: test
+  needs: []
+  parallel: 2
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
+    # STORY-1216: nextest (one process per test) for speed + isolation; it does
+    # not run doctests, so those remain in the verify job.
+    # Split the suite deterministically across both runner slots. Compilation
+    # is shared through CARGO_TARGET_DIR; once that lock is released, the two
+    # partitions execute concurrently. trace:TASK-1274 | ai:codex
+    - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
+        --partition "hash:${CI_NODE_INDEX}/${CI_NODE_TOTAL}"
+    - |
+      if [ "$CI_NODE_INDEX" = "1" ]; then
+        bash tests/test_mcp_stdio.sh
+        bash tests/test_mcp_doc_consistency.sh
+      fi
 
 # STORY-612 live OS-wrap confinement gate. Security boundary — proves
 # write-inside-OK / write-outside-blocked under a real bubblewrap run. Needs
