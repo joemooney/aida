@@ -355,7 +355,39 @@ card is a convenience snapshot, not a replacement. Reach for plain
 `aida show` (or `--card --full`) whenever the trimmed summary isn't
 enough. trace:TASK-265
 
-### Step 3d: Headless design-fork gate (`AIDA_HEADLESS=1`) — trace:STORY-276
+### Step 3d: Post the implementation approach before the first edit — trace:STORY-1350
+
+After reading the full contract, post a concise implementation approach as a
+comment on the picked-up spec **before the first source or documentation
+edit**. This is a thinking artifact, not an approval gate: post it and proceed
+immediately. Do not wait for an advisor or operator response.
+
+The comment must have these three sections:
+
+1. **Acceptance criteria as tests** — restate every acceptance criterion as
+   the test that will prove it and name the test layer (`unit`,
+   `command-level`, `fixture`, or `drain-level`). If a criterion cannot be
+   tested, flag that explicitly in this same section rather than silently
+   omitting it.
+2. **Expected files** — name the files or narrow file groups expected to be
+   touched. Treat an unexpected production file later as a reason to stop and
+   reassess scope.
+3. **Ambiguities / conflicts as questions** — phrase unclear acceptance text
+   or conflicts with review findings as questions rather than guesses. Write
+   `None` when the contract is unambiguous.
+
+For example:
+
+```bash
+aida comment add <spec_id> $'## Implementer approach\n\n### Acceptance criteria as tests\n- **Command-level:** `<test>` proves `<criterion>`.\n- **No automated test:** `<criterion>` — `<reason and verification plan>`.\n\n### Expected files\n- `path/to/code.rs`\n- `path/to/test.rs`\n\n### Ambiguities / conflicts as questions\n- `<question, or None>`'
+```
+
+The comment must exist before any edit made for the implementation. Reading
+the repository, inspecting history, and running existing tests are allowed
+while forming the approach; editing files is not. On a resumed run, reuse an
+existing complete approach comment instead of posting a duplicate.
+
+### Step 3e: Headless design-fork gate (`AIDA_HEADLESS=1`) — trace:STORY-276
 
 Under a headless `--no-human=both` drain there is no human to catch a wrong
 guess in real time. Before writing any code, decide whether the spec presents
@@ -400,9 +432,9 @@ to the next item; the advisor triages it later (`aida findings list`). Then
 **No genuine fork → proceed to Step 4** and implement normally. The common
 case is a clean spec that ships straight through headless.
 
-### Step 3e: Resumed with an advisor answer (`AIDA_HEADLESS=1`) — trace:STORY-306
+### Step 3f: Resumed with an advisor answer (`AIDA_HEADLESS=1`) — trace:STORY-306
 
-If this session **punted** on a design-fork (Step 3d) and is now being
+If this session **punted** on a design-fork (Step 3e) and is now being
 *resumed* — the incoming message opens with `ADVISOR DECISION:` and names the
 spec — the STORY-306 advisor tier has judged the fork. A decision has been
 made; do **not** re-evaluate whether to punt.
