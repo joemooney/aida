@@ -108,3 +108,11 @@
   added_at: 2026-09-19T16:40:12.935086210Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba8d-d592-7360-a4a8-c145527da34e
+  position: 80000
+  added_by: role:implementer
+  note: 'drive: handoff pack = role files + discipline docs (two-seat protocol, independence rule, rework-brief craft) + launch delivery + STORY-1226 seat jobs. New gates are separate specs. Keep the cold-session acceptance test verbatim.'
+  added_at: 2026-09-19T16:49:54.383070029Z
+  for_role: implementer
+  added_by_machine: imac
