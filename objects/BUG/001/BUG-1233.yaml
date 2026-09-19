@@ -13,12 +13,12 @@ description: |-
   Fix options (pick the smallest): on Windows open via std::os::windows::fs::OpenOptionsExt::custom_flags(FILE_FLAG_BACKUP_SEMANTICS) before set_times; or write a small cross-platform helper set_dir_mtime(path, time) used by this test (and any sibling fixture doing the same). Do NOT #[cfg(not(windows))] the whole test away — the GC behaviour must stay covered on Windows.
 
   Acceptance: the test passes on windows-latest (cross-platform.yml dispatch or the next nightly green); scripts/check-portability.sh still passes; no product-code change unless prune_scratch_runs itself is found to misread Windows dir mtimes.
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:36:40.157061609Z
-modified_at: 2026-09-19T02:47:50.140743316Z
+modified_at: 2026-09-19T02:47:57.145317379Z
 req_type: Bug
 tags:
 - batch:followups-0918f
@@ -83,16 +83,28 @@ comments:
   created_at: 2026-09-19T02:47:50.140743316Z
   modified_at: 2026-09-19T02:47:50.140743316Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b790-37d8-7e60-90ad-3c5a353a39a3
+  author: aida-auto-bump
+  timestamp: 2026-09-19T02:47:57.144595499Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b790-37d9-7ff2-9023-32e544666df2
+  timestamp: 2026-09-19T02:47:57.145316629Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1233-2026-09-19T024751Z.md
+  commit_sha: f055fe0321fb8cb693d5e88c36e76b6c013ff58f
+  summary: Completed via merge f055fe03
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-18T21:31:46.583758999Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1233 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T00:47:43.065977927Z
+  completed_at: 2026-09-19T02:47:57.144391070Z
+  completion_sha: f055fe0321fb8cb693d5e88c36e76b6c013ff58f
