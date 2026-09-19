@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T07:22:35.915864644Z
+modified_at: 2026-09-19T10:41:04.005732926Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -86,6 +86,12 @@ comments:
   created_at: 2026-09-19T07:22:35.915864644Z
   modified_at: 2026-09-19T07:22:35.915864644Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b941-5e05-73e2-83fc-a6e9103b52a8
+  author: joe
+  content: Implemented live-wave binary pinning and rebuild handoff in PR-1959. Follow-up commit 2df354ef81 fixes CI's hardened executable-resolver guard. Verified cargo fmt --all -- --check; resolver guard regression; TASK-1285 refusal decision; QueueDrained handoff; and drain_lock tests.
+  created_at: 2026-09-19T10:41:04.005732926Z
+  modified_at: 2026-09-19T10:41:04.005732926Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
   implemented: true
