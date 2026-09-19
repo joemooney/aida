@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
+  position: 0
+  added_by: claude-product-1
+  note: 'Round-3 guard failure fixed by the product seat and pushed (99cd81c2b6): the BUG-1205 fall-through guard searched the file for the first fn finish_ci and landed on one of THIS branch''s new drain-level harnesses, whose impl PhaseDriver body is a one-line delegation, so the Red arm was never found. The guard now anchors on the real impl block and finds finish_ci inside it, so it keeps asserting the production path however many harnesses exist. Test-only change; 15 guard + ci_gate tests green locally. Nothing is owed on the implementation — verify at the new head and let the reviewer take round 3.'
+  added_at: 2026-09-19T17:36:45.414175324Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
