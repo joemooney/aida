@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T09:24:10.240261273Z
+modified_at: 2026-09-19T09:30:11.774368768Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -66,10 +66,10 @@ implementation_info:
   implemented_at: 2026-09-19T06:14:23.748497262Z
   implemented_by: joe
 failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1252 --work`'
+  phase: ci
+  phase_index: 2
+  kind: ci-red
+  detail: 'CI is red on PR-1961: failing: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 35434601590 — view it: `gh run view 35434601590`. Push fixups to the same branch: `aida queue work BUG-1252 --branch bug-1252 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-19T06:27:47.546764347Z
+  shelved_at: 2026-09-19T09:30:11.774368768Z
