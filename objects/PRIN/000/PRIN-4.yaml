@@ -22,12 +22,27 @@ description: |
   BUG-1299 — a watchdog retry reached the operator as the bare word watchdog, because SpecShelved has a detail field and SpecRetried does not. The reason was produced and then met a struct with nowhere to put it. Two watchdog trips with opposite remedies collapse to one indistinguishable word.
 
   WHAT THE THREE SHARE, and what to look for. The decision stays right. Nothing fails. No test covers it, because tests assert the decision. The degradation is only visible to someone who follows the explanation and finds it does not lead anywhere, which in an unattended system is nobody. When adding or reviewing any failure path, ask where the explanation comes from, whether it can disagree with the decision, and what would fail if it did. If the answer to the last is nothing, that is the defect.
+
+  THE FOURTH INSTANCE, AND THE SHARPEST. Added 2026-09-19 23:47, from the same day as the three above.
+
+  A watchdog shelve emitted both fields in one event:
+
+    detail:        the implementer phase watchdog stopped the session - phase exceeded the 45m wall-clock ceiling (attempt 2/2)
+    recovery_hint: The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window - likely a degenerate spin. Inspect the worktree and pick the spec back up by hand.
+
+  The detail names the wall-clock ceiling. The hint describes the no-progress trip and calls the session a likely degenerate spin. The session had made ten commits and its log was written twenty-three seconds before the stop, so the hint is false and the detail is true. One appears hardcoded for one trip and emitted for both.
+
+  WHY THIS ONE IS WORSE IN KIND, and why it belongs in the principle rather than only in its spec. The first three instances DEGRADE: a type is lost on a reword, a pointer aims at the wrong place, a field is dropped. A reader gets less than they should and can usually tell. This one CONTRADICTS: it asserts something its own sibling field disproves, in the same event, and sends the reader to hunt a failure that never happened. A reader who trusts it is worse off than a reader given nothing.
+
+  So the class has two grades. A diagnostic that drifts AWAY from its decision costs information. A diagnostic that drifts INTO CONTRADICTING its decision costs trust, and it is the one that makes a reader stop believing the rest of the record. The second grade is what makes rule 1 - derive the explanation from the same object as the decision - preferable to rules 2 and 3 rather than merely tidier. Two strings assembled from the same fact cannot contradict each other. Two strings assembled separately from a shared enum can, and eventually will.
+
+  PRACTICAL TEST when reviewing any failure path that emits more than one field about one event: can these two fields disagree? If yes, they will, and the reader will believe the wrong one.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:11:47.618183122Z
-modified_at: 2026-09-19T23:11:47.618183122Z
+modified_at: 2026-09-19T23:53:31.248452939Z
 req_type: Principle
 tags:
 - diagnostic-decay
