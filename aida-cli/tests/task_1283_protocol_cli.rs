@@ -5,6 +5,7 @@
 //! store discovery, lease discovery, and user-visible output are all covered.
 // trace:TASK-1283 | ai:codex
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -249,6 +250,20 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
                 .and_then(|s| s.strip_suffix('\''))
         })
         .unwrap_or_else(|| panic!("no session id export in:\n{shell}"));
+
+    // `worktree enter` is itself a short-lived child process. In a Docker
+    // executor its creator PID cannot be resolved back through the runner's
+    // process tree, so explicitly attach the still-live test harness to the
+    // real lease before exercising notice and session-end behavior.
+    let lease_path = p
+        .repo
+        .join(".aida/sessions")
+        .join(format!("{session_id}.toml"));
+    let mut lease = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&lease_path)
+        .unwrap_or_else(|e| panic!("open lease {}: {e}", lease_path.display()));
+    writeln!(lease, "active_pid = {}", std::process::id()).unwrap();
 
     let held = run(
         {
