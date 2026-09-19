@@ -35,14 +35,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b69c-4ef9-7a32-b7ff-5561773fe56f
-  position: 42000
-  added_by: role:implementer
-  note: 'unparked: #1946 merged 22:24; builds on the schedule ledger now on main'
-  added_at: 2026-09-19T05:26:38.772982434Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b75b-60bc-7652-a3b4-0865a498169a
   position: 43000
   added_by: role:implementer
