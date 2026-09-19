@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-19T03:42:12.346449050Z
+modified_at: 2026-09-19T03:57:41.116969189Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -83,6 +83,27 @@ comments:
   content: 'Resolved PR #1950 review findings: GitLab REST merges now include the inspected MR head SHA and fail closed with a re-review error on SHA mismatch; approvals_syncing joins the bounded wait set. Verified cargo fmt, 5 focused gitlab_merge tests, and 63 forge tests (1 ignored live test).'
   created_at: 2026-09-19T03:42:06.074011490Z
   modified_at: 2026-09-19T03:42:06.074011490Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b7d0-0f7c-7e53-9ee7-7a35f68b009c
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1950
+    agent: codex
+    ran-at: 2026-09-18 20:57 -07:00
+    mode: propose-only (drain)
+    proposed: 7
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1232-drain-01a0b7cf-a552-7ca1-a498-d628e5e7681d.json
+    ? AC (0.99) — Before merging a GitLab merge request, the drain reads GitLab's merge-request API and proceeds only when `detailed_merge_status` is `mergeable`; `ci_must_pass`, `ci_still_running`, `checking`, `preparing`, `unchecked`, and `approvals_syncing` are treated as temporary states, while every other or unknown status fails closed and is reported.
+    ? AC (0.98) — The GitLab merge gate performs at most six status reads, waiting two seconds after a temporary status, a rebase-in-progress state, or a retryable merge rejection before rereading; exhaustion reports that the MR is still waiting or rebasing.
+    ? AC (1.00) — A GitLab merge mutation is pinned to the reviewed MR head SHA; if GitLab reports that the SHA no longer matches the source-branch head, the drain stops and requires review of the new head instead of rereading the SHA and merging it.
+    ? SEM (0.99) — GitLab merge operations use the REST API through `glab api` rather than `glab mr merge`; retryable 405/409 or cannot-be-merged responses cause a fresh gate read, and error output includes only GitLab's JSON `message`, never `glab mr merge` wrapper prose.
+    ? AC (0.99) — GitLab rebase merges first request the asynchronous MR rebase endpoint, wait until rebasing finishes, then perform a non-squash merge pinned to the post-rebase head SHA; rebase mode is not silently degraded to an ordinary merge.
+    ? AC (0.97) — GitLab merge API requests preserve the selected merge options: squash mode sets `squash=true`, merge and post-rebase modes set `squash=false`, source-branch deletion maps to `should_remove_source_branch`, and a supplied squash subject maps to `squash_commit_message`.
+    ? AC (0.96) — If the GitLab MR is already in state `merged` when the gate reads it, the operation succeeds idempotently without issuing another merge mutation.
+  created_at: 2026-09-19T03:57:41.116969189Z
+  modified_at: 2026-09-19T03:57:41.116969189Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
