@@ -41,3 +41,11 @@
   added_at: 2026-09-19T05:36:15.947708418Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b82c-4241-7c50-9257-5f1f3f8101b7
+  position: 44000
+  added_by: role:implementer
+  note: 'pr ship: label-only hold (no marker) is a releasable supervised hold — same release line, drop label, wait gate re-run, merge; classification test'
+  added_at: 2026-09-19T05:38:43.253450747Z
+  for_role: implementer
+  added_by_machine: imac
