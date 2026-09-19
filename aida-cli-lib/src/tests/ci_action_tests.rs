@@ -244,3 +244,40 @@ fn parse_malformed_is_no_signal() {
     assert!(matches!(parse_ci_probe("not json"), CiProbe::NoSignal(_)));
     assert!(matches!(parse_ci_probe(""), CiProbe::NoSignal(_)));
 }
+
+// BUG-1250: the exact stderr emitted by `gh` for a connect failure must be
+// classified as retryable; exhaustion must close the gate, never proceed.
+// trace:BUG-1250 | ai:codex
+#[test]
+fn gh_connect_error_retries_then_becomes_unavailable() {
+    let reason = "gh pr list failed: error connecting to api.github.com\ncheck your internet connection or https://githubstatus.com";
+    let patterns: Vec<String> = crate::network_retry::default_transient_patterns()
+        .iter()
+        .map(|pattern| (*pattern).to_string())
+        .collect();
+
+    assert_eq!(
+        decide_ci_probe_failure(reason, 1, 3, &patterns),
+        CiProbeFailureAction::Retry
+    );
+    assert_eq!(
+        decide_ci_probe_failure(reason, 2, 3, &patterns),
+        CiProbeFailureAction::Retry
+    );
+    assert_eq!(
+        decide_ci_probe_failure(reason, 3, 3, &patterns),
+        CiProbeFailureAction::Unavailable
+    );
+}
+
+#[test]
+fn hard_ci_probe_failure_is_immediately_unavailable() {
+    let patterns: Vec<String> = crate::network_retry::default_transient_patterns()
+        .iter()
+        .map(|pattern| (*pattern).to_string())
+        .collect();
+    assert_eq!(
+        decide_ci_probe_failure("gh pr list failed: HTTP 401", 1, 3, &patterns),
+        CiProbeFailureAction::Unavailable
+    );
+}

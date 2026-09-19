@@ -412,6 +412,11 @@ pub(crate) enum FailureKind {
     CiRed,
     /// Phase 2: CI never reached a terminal state within the wait window.
     CiTimeout,
+    /// Phase 2: a PR exists, but its CI state could not be read after the
+    /// bounded probe retries. This is transient infrastructure trouble, not
+    /// permission to bypass the gate.
+    // trace:BUG-1250 | ai:codex
+    CiUnavailable,
     /// Phase 3: the reviewer session wrote no verdict file, or an unreadable
     /// one — the review never produced a usable decision.
     NoVerdict,
@@ -509,6 +514,7 @@ impl FailureKind {
             Self::NoPr
                 | Self::CiRed
                 | Self::CiTimeout
+                | Self::CiUnavailable
                 | Self::NoVerdict
                 | Self::VerdictRequestChanges
                 | Self::VerdictReject
@@ -538,6 +544,7 @@ impl FailureKind {
             Self::ReviewerWrote => "reviewer-wrote",
             Self::ReworkNoOp => "rework-no-op",
             Self::CiRed => "ci-red",
+            Self::CiUnavailable => "ci-unavailable",
             Self::NoVerdict => "no-verdict",
             Self::NoPr => "no-pr",
             Self::Watchdog | Self::CiTimeout => "watchdog",
@@ -1658,6 +1665,19 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                 "GH could not be reached to confirm a PR after retrying — the spec is \
                  shelved, not failed. Re-run the drain when GH is reachable \
                  (`gh api /rate_limit` to check), then `aida queue work {spec} --auto-complete`."
+            );
+        }
+        // trace:BUG-1250 | ai:codex
+        FailureKind::CiUnavailable => {
+            let check = match ctx.forge {
+                crate::forge::ForgeKind::GitHub => "gh api /rate_limit",
+                crate::forge::ForgeKind::GitLab => "glab api /version",
+                crate::forge::ForgeKind::None => "check your CI provider",
+            };
+            return format!(
+                "CI state could not be read after bounded retries, so the gate stayed closed. \
+                 Check forge connectivity with `{check}`, then re-run: \
+                 `aida queue work {spec} --auto-complete`."
             );
         }
         // BUG-420: the no-progress / ceiling watchdog killed a degenerate
@@ -8802,6 +8822,17 @@ mod tests {
         assert!(hint.contains("CI is not red"));
         // A timeout is not a red run — must not route to `gh run view`.
         assert!(!hint.contains("CI failed on run"));
+    }
+
+    // trace:BUG-1250 | ai:codex
+    #[test]
+    fn ci_unavailable_is_shelvable_with_typed_cause_and_retry_hint() {
+        assert!(FailureKind::CiUnavailable.is_shelvable());
+        assert_eq!(FailureKind::CiUnavailable.cause_slug(), "ci-unavailable");
+        let hint = recovery_hint(Phase::Ci, FailureKind::CiUnavailable, &ctx());
+        assert!(hint.contains("gate stayed closed"), "{hint}");
+        assert!(hint.contains("gh api /rate_limit"), "{hint}");
+        assert!(hint.contains("--auto-complete"), "{hint}");
     }
 
     /// BUG-218 regression: a phase-2 subprocess spawn ENOENT must NOT be

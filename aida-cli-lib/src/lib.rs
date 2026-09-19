@@ -33453,6 +33453,32 @@ pub(crate) enum CiProbe {
     },
 }
 
+/// Pure policy for an unavailable CI probe while a wait is active.
+/// Transient failures get the configured retry budget; permanent failures
+/// close the wait immediately, and exhaustion returns `NoSignal` so the drain
+/// gate can shelve with the typed `ci-unavailable` cause.
+// trace:BUG-1250 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CiProbeFailureAction {
+    Retry,
+    Unavailable,
+}
+
+pub(crate) fn decide_ci_probe_failure(
+    reason: &str,
+    consecutive_failures: u32,
+    max_attempts: u32,
+    transient_patterns: &[String],
+) -> CiProbeFailureAction {
+    if crate::network_retry::classify_transient(reason, transient_patterns)
+        && consecutive_failures < max_attempts.max(1)
+    {
+        CiProbeFailureAction::Retry
+    } else {
+        CiProbeFailureAction::Unavailable
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CiAction {
     /// Run the rest of session_end as today.
@@ -33783,7 +33809,8 @@ pub(crate) fn parse_ci_probe(stdout: &str) -> CiProbe {
 /// legitimately-slow-but-moving CI keeps its monitor; only a genuine STALL dies
 /// after the idle window. The absolute ceiling still bounds a forever-progressing
 /// wait so it can't run unbounded. Returns NoSignal on either timeout so the
-/// caller proceeds rather than hanging. Ctrl+C interrupts cleanly.
+/// drain gate can shelve rather than hanging or proceeding unchecked. Ctrl+C
+/// interrupts cleanly.
 /// Windows: `AIDA_WORKER_CI_IDLE` (default 600s) / `AIDA_WORKER_CI_ABSOLUTE`
 /// (default 5400s).
 ///
@@ -33813,6 +33840,8 @@ pub(crate) fn wait_for_ci_terminal(
     let started = std::time::Instant::now();
     let mut last_progress = started;
     let mut last_fingerprint: Option<String> = None;
+    let retry_config = crate::network_retry::RetryConfig::load(git_root);
+    let mut consecutive_probe_failures = 0_u32;
 
     loop {
         std::thread::sleep(std::time::Duration::from_secs(POLL_INTERVAL_SECS));
@@ -33841,7 +33870,35 @@ pub(crate) fn wait_for_ci_terminal(
         let idle_elapsed = last_progress.elapsed().as_secs();
 
         match &probe {
+            CiProbe::NoSignal(reason) => {
+                consecutive_probe_failures += 1;
+                match decide_ci_probe_failure(
+                    reason,
+                    consecutive_probe_failures,
+                    retry_config.max_attempts,
+                    &retry_config.transient_patterns,
+                ) {
+                    CiProbeFailureAction::Retry => {
+                        let backoff = retry_config.base_delay.saturating_mul(
+                            retry_config
+                                .factor
+                                .saturating_pow(consecutive_probe_failures - 1),
+                        );
+                        eprintln!(
+                            "  ↻ CI probe unavailable (attempt {}/{}) — retrying in {}ms: {}",
+                            consecutive_probe_failures,
+                            retry_config.max_attempts,
+                            backoff.as_millis(),
+                            reason
+                        );
+                        std::thread::sleep(backoff);
+                        continue;
+                    }
+                    CiProbeFailureAction::Unavailable => return probe,
+                }
+            }
             CiProbe::InProgress { pr_number } => {
+                consecutive_probe_failures = 0;
                 match ci_wait_verdict(total_elapsed, idle_elapsed, idle_window, absolute_ceiling) {
                     CiWaitVerdict::Continue => {
                         eprintln!(
@@ -86255,13 +86312,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
             }
             CiProbe::NoSignal(reason) => {
-                // We confirmed a PR in phase 1, so this is an environment
-                // issue (gh missing / lookup failed), not "no PR". Can't
-                // gate on CI — proceed with a warning.
-                eprintln!(
-                    "  {} CI state unavailable ({reason}) — proceeding without a CI gate.",
-                    crate::glyph(crate::glyphs::Glyph::Info).cyan()
-                );
+                // Phase 1 confirmed a PR, so an unreadable CI state must keep
+                // the gate closed. A re-drive will retry the probe.
+                // trace:BUG-1250 | ai:codex
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!("CI state unavailable: {reason}"),
+                ));
             }
         }
 
