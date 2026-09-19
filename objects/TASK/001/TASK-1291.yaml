@@ -17,12 +17,12 @@ description: |
   - A round-1 verdict for a multi-criterion spec lists a status line per criterion.
   - Round-2+ prompts are unchanged apart from carrying the prior findings (today's behaviour).
   - Measured on the next 20 specs: median rounds-to-merge drops; recorded on this spec as the acceptance evidence.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T16:37:30.016101755Z
+modified_at: 2026-09-19T17:46:14.414097260Z
 req_type: Task
 tags:
 - batch:followups-0918h
