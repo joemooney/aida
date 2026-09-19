@@ -85,6 +85,10 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
     let live = process_probe::probe_live_claude_sessions();
     let lease_state = lease.map(|l| lease_state_for(l, &live, now));
     let mut verdict = classify_spec_liveness(lease_state, in_progress);
+    let drain = drain_state::live_drain_spec(&project_root, &disp);
+    if drain.is_some() {
+        verdict = SpecLiveness::Live;
+    }
 
     // BUG-623: an idle backstop on top of pid-liveness. A lease whose process
     // is alive but whose worktree has sat idle past the threshold with no spec
@@ -98,8 +102,10 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
         .num_seconds()
         .max(0) as u64;
     let idle_threshold_secs = idle_minutes.saturating_mul(60);
-    let idle_stalled =
-        verdict == SpecLiveness::Live && idle_threshold_secs > 0 && idle_secs > idle_threshold_secs;
+    let idle_stalled = drain.is_none()
+        && verdict == SpecLiveness::Live
+        && idle_threshold_secs > 0
+        && idle_secs > idle_threshold_secs;
     if idle_stalled {
         verdict = SpecLiveness::Stale;
     }
@@ -133,6 +139,10 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
                 "live": verdict == SpecLiveness::Live,
                 "idle_secs": idle_secs,
                 "idle_stalled": idle_stalled,
+                "drain": drain.as_ref().map(|d| serde_json::json!({
+                    "phase": d.phase,
+                    "orchestrator_pid": d.pid,
+                })),
                 "session": lease_json,
                 // STORY-732: inline the orchestrator failure for machine consumers.
                 "failure_reason": req.failure_reason.as_ref().map(|fr| serde_json::json!({
@@ -158,13 +168,25 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
     let warn = crate::glyph(crate::glyphs::Glyph::Warning);
     match verdict {
         SpecLiveness::Live => {
-            let l = lease.expect("Live verdict implies a lease");
-            println!(
-                "  {} {}",
-                "● live".green().bold(),
-                "a live process is working this".dimmed()
-            );
-            print_lease_detail(l, elapsed_secs);
+            if let Some(drain) = &drain {
+                println!(
+                    "  {} drain phase {}, orchestrator pid {}",
+                    "● live".green().bold(),
+                    drain.phase,
+                    drain.pid
+                );
+                if let Some(l) = lease {
+                    print_lease_detail(l, elapsed_secs);
+                }
+            } else {
+                let l = lease.expect("Live verdict implies a lease or drain");
+                println!(
+                    "  {} {}",
+                    "● live".green().bold(),
+                    "a live process is working this".dimmed()
+                );
+                print_lease_detail(l, elapsed_secs);
+            }
         }
         SpecLiveness::Stale => {
             let l = lease.expect("Stale verdict implies a lease");
