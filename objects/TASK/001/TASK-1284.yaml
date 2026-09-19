@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T10:44:10.680986285Z
+modified_at: 2026-09-19T10:45:44.108201918Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -121,6 +121,19 @@ comments:
   created_at: 2026-09-19T10:36:58.186395860Z
   modified_at: 2026-09-19T10:36:58.186395860Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b945-a42c-7480-b9ea-4d7ffd92e3a4
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1957 [AI:codex] fix(liveness): bind drain leases to process start (TASK-1284)
+    verdict: APPROVE + merged (round 3; auto-bumped Done → Completed at 5768078)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (codex implementer in wave 0918h; the drain's headless reviewer APPROVED at b85e6ca0 — .aida/review-verdicts/PR-1957.json 03:36; advisor reviewed all three rounds — PR-1957-advisor.json)
+    gates: required Build (ubuntu-latest) = success at b85e6ca0; merge-hold marker released via aida pr ship (explicit review-merge) after the reviewer's verdict; merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: drain lock, lock claims and process-backed session claims record pid + kernel start time; decide_lock / classify_lock / decide_claim take a two-argument probe so a recycled pid reads dead; round 2 fixed the fail-open hazard (missing or unreadable start time degrades to pid-alive instead of reading a live pre-merge drain as dead); round 3 closed the reviewer's gap — session leases carry creator/active start times (serde-default, legacy files keep pid-only), and lease_state_for / reap / aida ps use the identity check with a recycled-pid regression test; operator docs replace the pgrep guidance. TASK-163 (why/ps read a drain-owned spec as stalled) remains open and should reuse this helper.
+    timestamp: 2026-09-19T03:45-07:00
+  created_at: 2026-09-19T10:45:44.108201918Z
+  modified_at: 2026-09-19T10:45:44.108201918Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b944-3738-7373-b9bc-717865310e52
   author: aida-auto-bump
