@@ -1,0 +1,47 @@
+id: 01a0ba9e-f4f2-79b2-8a58-7df3a9234667
+spec_id: STORY-1353
+agreed_id: STORY-1353
+title: 'Dispatch authority is not advisor authority: let the proxy seat route work in its own right, keep disposition with the advisor and integrity floors with the human'
+description: |
+  Operator decision, 2026-09-19: the proxy seat is an independent proxy-HUMAN perspective, not a seat holding advisor authority. The env-var prefix used all of 2026-09-18/19 was papering over a gate boundary that is drawn in the wrong place, and fixing the boundary is the real work; the grant object (STORY-1217) is the much smaller remainder.
+
+  The boundary as the code draws it today: queue_cmd.rs has a predicate named for_target_requires_dispatch_authority, and it resolves through has_advisor_authority() in lib.rs. The system already NAMES dispatch as a distinct concept, then gates it behind the approval role. Status advance uses a separate predicate (status_advance_requires_advisor_authority), so disposition is already distinguishable in code.
+
+  Evidence from the window 2026-09-18 12:00 to 2026-09-19 10:00:
+  - The store took 246 "update queue" commits: routing work, writing rework briefs, dequeuing stale entries. That is the dispatch volume the prefix was gating.
+  - The product seat performed roughly twenty-five reviewer-finding-to-rework-brief cycles. Every one of them needed the advisor prefix, and not one of them approved anything.
+  - In the same window the product seat opened no merge, cleared no merge-hold, and approved no spec for execution. Every supervised PR went to the advisor's gate, and the advisor merged them.
+  - The merge gate cost no throughput: seven supervised PRs accumulated at the gate overnight while waves kept running, because a drain moves to the next spec rather than waiting. The gate delayed individual specs, not the pipeline.
+
+  Proposal: separate DISPATCH from DISPOSITION and APPROVAL as three distinct authorities.
+  - DISPATCH (routing; no approval semantics): queue add / rework / remove / move, launching a drain or a wave, requeuing after a reviewer finding, dequeuing a stale entry. Available to the product/proxy seat in its own right, no grant needed, ledgered with the actor as today.
+  - DISPOSITION (the advisor's judgement, ADR-3): edit --status across the approval boundary (draft to approved, approved to rejected), edit --mode, promoting a finding, archiving. Stays advisor; obtainable by a time-boxed grant (STORY-1217).
+  - APPROVAL / INTEGRITY FLOORS: merging a supervised PR, clearing a merge-hold, overriding independence, shipping without CI green. Human only. No grant covers these; that is the operator's standing decision.
+
+  Scope:
+  - Introduce has_dispatch_authority() alongside has_advisor_authority(), resolved from the role roster: product, advisor, integrator and a live orchestrator all hold dispatch; implementer and reviewer do not.
+  - Point for_target_requires_dispatch_authority at the new check, leaving status_advance_requires_advisor_authority untouched.
+  - The refusal message for a dispatch-gated command must name dispatch, not advisor, and say which roles hold it.
+  - Audit every current call site of has_advisor_authority() and classify it as dispatch or disposition in the diff; anything ambiguous stays advisor and is listed on this spec for the advisor to rule on.
+  - Document the three authorities in .aida/discipline/ and in the role files, so a cold seat learns the boundary at launch rather than from an error message.
+
+  Acceptance:
+  - A product-seat session with no AIDA_SESSION_ROLE prefix and no grant can: queue add, queue rework, queue remove, launch a batch wave. Verified by running each with the env var unset.
+  - The same session still CANNOT: edit --status draft to approved, edit --mode, merge a supervised PR, clear a merge-hold. Each refuses naming the authority required.
+  - The refusal text for a dispatch command never says "advisor authority" again.
+  - A unit test per authority class over the role matrix (product / advisor / implementer / reviewer / integrator / orchestrated).
+  - The call-site audit table is recorded on this spec, with every site classified.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T17:02:54.706318011Z
+modified_at: 2026-09-19T17:02:54.706318011Z
+req_type: Story
+tags:
+- authority
+- from:operator-0919
+- parent:EPIC-69
+- proxy
+- roles
+- throughput
