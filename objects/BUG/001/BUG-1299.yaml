@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-19T23:11:19.862257229Z
+modified_at: 2026-09-19T23:12:14.289619254Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -55,6 +55,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T23:04:09.399924377Z
+- rel_type: !Custom related
+  target_id: 01a0bbf0-ada2-71c3-a890-2ed927426bb7
+  created_at: 2026-09-19T23:12:14.289614937Z
+  created_by: joe
 comments:
 - id: 01a0bbf0-4136-7d50-9887-6b35db93021a
   author: joe
