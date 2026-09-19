@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:39:04.185770995Z
-modified_at: 2026-09-19T17:39:04.185770995Z
+modified_at: 2026-09-19T17:39:05.953665768Z
 req_type: Spike
 tags:
 - cost
@@ -48,4 +48,8 @@ tags:
 - parent:EPIC-71
 - research
 - telemetry
+relationships:
+- rel_type: Child
+  target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
+  created_at: 2026-09-19T17:39:05.953665768Z
 human_only: true
