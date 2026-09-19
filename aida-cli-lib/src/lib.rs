@@ -88056,7 +88056,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if self.lifecycle_skip.no_preflight {
             if !self.json {
                 eprintln!(
-                    "  {} implementer preflight skipped per lifecycle:no-preflight",
+                    "  {} implementer preflight skipped per lifecycle:no-preflight (binary: none; guards not executed)",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
                 );
             }
