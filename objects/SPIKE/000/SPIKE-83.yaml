@@ -35,15 +35,17 @@ description: |
   - Part 3 recommends reuse or build per item, with reasons.
   - Part 4 gives the three figures with their derivation shown, and an explicit statement of which optimisation the numbers favour.
   - It proposes the next slice's shape but implements nothing.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:39:04.185770995Z
-modified_at: 2026-09-19T17:39:05.953665768Z
+modified_at: 2026-09-19T21:32:49.720823750Z
 req_type: Spike
 tags:
+- batch:followups-0918i
 - cost
+- drive
 - from:operator-0919
 - parent:EPIC-71
 - research
@@ -52,4 +54,4 @@ relationships:
 - rel_type: Child
   target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
   created_at: 2026-09-19T17:39:05.953665768Z
-human_only: true
+execution_mode: drive
