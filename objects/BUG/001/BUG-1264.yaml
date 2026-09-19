@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T13:12:08.130216657Z
+modified_at: 2026-09-19T13:22:54.303315380Z
 req_type: Bug
 tags:
 - alias
@@ -40,4 +40,10 @@ comments:
   created_at: 2026-09-19T11:22:27.839269083Z
   modified_at: 2026-09-19T11:22:27.839269083Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b9d5-88df-7093-87cb-6c8cca4f54dd
+  author: joe
+  content: '[implementer sketch + result] Batch resolution will reuse the ordinary pickup''s cross-user role fallback, resolve each queued UUID through a cache-backed targeted Storage helper (with authoritative scan fallback), and treat a missing object as an explicit skip: stderr line plus actionable SpecSkipped event. Event watcher renders the new verb. Regression fixture models TASK-1-140 as spec_id, TASK-163 as agreed_id, queued under a person but drained as role:implementer. Live verification now lists TASK-163 as the second followups-0918h member without retagging. Tests: alias regression passed; events suite 18 passed; cargo check -p aida-cli-lib; cargo fmt --check.'
+  created_at: 2026-09-19T13:22:54.303315380Z
+  modified_at: 2026-09-19T13:22:54.303315380Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
