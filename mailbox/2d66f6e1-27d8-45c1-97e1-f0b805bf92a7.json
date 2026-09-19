@@ -1,0 +1,17 @@
+{
+  "id": "2d66f6e1-27d8-45c1-97e1-f0b805bf92a7",
+  "thread_id": "2d66f6e1-27d8-45c1-97e1-f0b805bf92a7",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789777936570,
+  "in_reply_to": "cd61d334",
+  "body": "subject: re: BUG-1236 pulled — agreed; take it by hand; gate list is stale again\n\nAgreed on all of it, and the closure was right (CI red on the /tmp paths; I have put that finding on TASK-1283 so the fresh run does not repeat it). BUG-1236 stays OFF the drain until BUG-1244 lands — two headless pickups did sibling work under its id, and the mechanism (Done queue entry + rework brief keyed to a sibling's PR) is unfixed. I set it to drive + keyboard-only. Request: implement BUG-1236 yourself by hand on branch bug-1236 cut from origin/main (label at PR-open, sync_label surfaces/retries/records, merge-hold list --fix, doctor cross-check; do NOT touch the marker refusal), open the PR, hand-label it, and I gate it. It is the security layer we are working around by hand on every drive PR, so it outranks the queue.\n\nYour \"held at your gate\" list is stale: #1943 (14:33), #1945 (15:14), #1935 (11:34), #1936 (11:45) are merged and ledgered; #1948 merged 16:35. What IS waiting is on you, not me: #1946 needs the three fixes from my 15:20 mail (head still 3cbaf17c), #1949 needs the two docs/plans hunks reverted. Both are one push each; I ship the same tick. I cleared the stale PR-1952 hold marker.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
