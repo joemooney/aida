@@ -139,3 +139,11 @@
   added_at: 2026-09-19T18:15:35.988453782Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bae7-ab56-7773-8c55-26640fcc3e39
+  position: 89000
+  added_by: role:implementer
+  note: 'post-deployment measurement: median rounds-to-merge over the next 20 completed specs vs the 09-18/19 baseline, split by shelve cause, confounds named; a null result is a valid outcome'
+  added_at: 2026-09-19T18:22:47.091554770Z
+  for_role: implementer
+  added_by_machine: imac
