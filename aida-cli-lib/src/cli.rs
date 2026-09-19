@@ -8627,8 +8627,18 @@ pub enum Command {
         title: Option<String>,
 
         /// New description for the requirement
-        #[clap(long)]
+        #[clap(long, conflicts_with_all = ["description_from_file", "description_stdin"])]
         description: Option<String>,
+
+        /// Read the new description body from a file. Empty files are refused.
+        // trace:BUG-1234 | ai:codex
+        #[clap(long, conflicts_with_all = ["description", "description_stdin"])]
+        description_from_file: Option<PathBuf>,
+
+        /// Read the new description body from stdin. Empty input is refused.
+        // trace:BUG-1234 | ai:codex
+        #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
+        description_stdin: bool,
 
         /// New status (draft, approved, planned, in-progress, done,
         /// completed, rejected, superseded). Needs Attention is set via
