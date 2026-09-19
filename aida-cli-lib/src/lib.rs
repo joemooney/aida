@@ -879,6 +879,7 @@ mod bug_1265_finish_ci_tests {
         gh: std::path::PathBuf,
         mode: std::path::PathBuf,
         reads: std::path::PathBuf,
+        calls: std::path::PathBuf,
     }
 
     /// Runs the production CI driver through the real drain orchestration
@@ -977,10 +978,12 @@ mod bug_1265_finish_ci_tests {
 
             let mode = temp.path().join("mode");
             let reads = temp.path().join("reads");
+            let calls = temp.path().join("calls");
             let gh = temp.path().join("gh");
             let script = format!(
                 r###"#!/bin/sh
 set -eu
+printf '%s\n' "$*" >> '{}'
 if [ "${{1:-}}" = "--version" ]; then echo 'gh version test'; exit 0; fi
 if [ "$1 $2" = "pr list" ]; then
   printf '%s\n' '[{{"number":1265,"statusCheckRollup":[{{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE"}}]}}]'
@@ -1007,6 +1010,7 @@ fi
 echo "unexpected gh call: $*" >&2
 exit 2
 "###,
+                calls.display(),
                 mode.display(),
                 reads.display(),
                 reads.display(),
@@ -1023,6 +1027,7 @@ exit 2
                 gh,
                 mode,
                 reads,
+                calls,
             }
         }
 
@@ -1051,6 +1056,7 @@ exit 2
         fn set_mode(&self, mode: &str) {
             std::fs::write(&self.mode, mode).unwrap();
             let _ = std::fs::remove_file(&self.reads);
+            let _ = std::fs::remove_file(&self.calls);
         }
 
         fn run_drain(&self, mode: &str) -> (auto_complete::OrchestrationResult, usize, usize) {
@@ -1093,6 +1099,10 @@ exit 2
     #[test]
     fn drain_finish_ci_completes_for_hold_gate_only_red() {
         let fixture = Fixture::new();
+        assert!(
+            merge_hold::read_hold(&fixture.root, 1265).is_some(),
+            "the regression requires a real local supervised-hold marker"
+        );
         let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("hold");
         assert_eq!(
             finish_ci_calls, 1,
@@ -1102,6 +1112,10 @@ exit 2
         assert!(result.failed_phase.is_none(), "{result:?}");
         assert!(result.shelved_reason.is_none(), "{result:?}");
         assert_eq!(result.process_exit_code(), auto_complete::DRIVE_EXIT_CLEAN);
+        assert!(
+            merge_hold::read_hold(&fixture.root, 1265).is_some(),
+            "finish_ci must not clear the supervised hold marker"
+        );
     }
 
     // trace:BUG-1265 | ai:codex
@@ -1130,6 +1144,13 @@ exit 2
             "{}",
             shelf.detail
         );
+        let calls = std::fs::read_to_string(&fixture.calls).unwrap();
+        assert!(
+            calls
+                .lines()
+                .any(|call| call.contains("pr checks") && call.contains("--required")),
+            "finish_ci must discover which red checks are genuinely required: {calls}"
+        );
     }
 
     // trace:BUG-1265 | ai:codex
@@ -1157,6 +1178,15 @@ exit 2
             std::fs::read_to_string(&fixture.reads).unwrap().trim(),
             "3",
             "initial row read plus two bounded retries"
+        );
+        let calls = std::fs::read_to_string(&fixture.calls).unwrap();
+        assert_eq!(
+            calls
+                .lines()
+                .filter(|call| call.contains("pr checks") && !call.contains("--required"))
+                .count(),
+            3,
+            "finish_ci must make the initial row read plus two bounded retries: {calls}"
         );
     }
 }
