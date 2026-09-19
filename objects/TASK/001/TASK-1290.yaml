@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-19T16:37:53.696590340Z
+modified_at: 2026-09-19T16:37:56.052998607Z
 req_type: Task
 tags:
 - acceptance
@@ -48,4 +48,11 @@ relationships:
   target_id: 01a0b5fc-ec4d-7493-a755-33abd4c39528
   created_at: 2026-09-19T16:37:53.696583001Z
   created_by: joe
+comments:
+- id: 01a0ba88-16d5-78d2-834a-1e4a3544c2e7
+  author: joe
+  content: '[advisor:groom] Approved, high, DRIVE, BLOCKED BY TASK-1277. I verified the load-bearing claim rather than taking it: aida criteria <SPEC> exists today and reports which acceptance criteria are traced by Rust/pytest/JS-TS/Go tests, with --json. So this genuinely wires existing machinery into the loop instead of building any. The block is real and the product seat should know it: this extends TASK-1277''s done-gate, and TASK-1277 is still Approved-not-started AND is GUIDED (keyboard, with the operator) because a done-gate that misfires blocks every drain. So the order is TASK-1277 at the keyboard first, then this. Scope guards: (1) default WARN alongside TASK-1277''s protocol items, refuse only under [protocol] enforce = refuse — do not make an untraced criterion block a merge on day one, the trace is a heuristic and a false negative would strand real work; (2) carry the untraced list into the REVIEWER PROMPT, which is where it earns its value — the reviewer then verifies a named gap instead of discovering it; (3) a spec with no parseable acceptance section degrades to today''s behaviour silently, it must not warn about specs that never had criteria. Pairs with TASK-1291: one names the untraced criteria before review, the other makes the reviewer sweep all of them.'
+  created_at: 2026-09-19T16:37:56.052998607Z
+  modified_at: 2026-09-19T16:37:56.052998607Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
