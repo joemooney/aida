@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-19T20:53:52.204801392Z
+modified_at: 2026-09-19T20:54:56.441644131Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -56,4 +56,24 @@ comments:
   created_at: 2026-09-19T16:38:28.252632749Z
   modified_at: 2026-09-19T16:38:28.252632749Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bb73-62b9-7661-a0b4-b2fedf26289c
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Template-level test:** assert the pickup prompt requires a spec comment before the first source edit and that the required ordering is explicit.
+    - **Template-level test:** assert the statement contains criteria-as-tests with a named test layer, expected files, and ambiguities/conflicts phrased as questions; criteria without a test must be flagged in that same comment.
+    - **Scope check (template-level):** assert the workflow remains non-gating and proceeds immediately after posting.
+    - **Not tested in this story:** advisor preview/waiting and the 20-spec measurement are excluded by the queue note (half (a) only; no advisor preview).
+
+    ### Expected files
+    - `aida-core/templates/skills/aida-pickup.md`
+    - `aida-core/src/templates.rs`
+
+    ### Ambiguities / conflicts as questions
+    - The full description still lists reviewer-prompt inclusion, advisor preview, and measurement, while the queue note narrows this pickup to half (a) only. Should those deferred criteria remain untouched here? I will follow the explicit queue note and implement only the pre-edit, three-section, non-gating approach statement.
+  created_at: 2026-09-19T20:54:56.441644131Z
+  modified_at: 2026-09-19T20:54:56.441644131Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
