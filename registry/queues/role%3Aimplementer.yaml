@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b691-3a6c-7c21-b600-e3ead9c4ddfe
-  position: 24000
-  added_by: role:implementer
-  note: awaiting --notice must never read stdin (no body); test spawns it with a held-open pipe and asserts exit under 2s
-  added_at: 2026-09-18T22:14:09.571390809Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b6bf-7c91-70a3-86a2-af570fb16c29
   position: 28000
   added_by: role:implementer
