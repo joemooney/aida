@@ -171,3 +171,11 @@
   added_at: 2026-09-19T21:11:37.061679809Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb7e-cff5-7c50-b79a-f2b0e8dbac87
+  position: 102000
+  added_by: role:implementer
+  note: stop the two call sites double-announcing; add an attempt number so a real re-entry is distinguishable by value not adjacency; do NOT suppress repeated (spec,run,phase) — that swallows the 121 legitimate retries; additive field only
+  added_at: 2026-09-19T21:11:51.389250417Z
+  for_role: implementer
+  added_by_machine: imac
