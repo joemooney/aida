@@ -888,6 +888,8 @@ mod bug_1265_finish_ci_tests {
     // trace:BUG-1265 | ai:codex
     struct DrainHarness {
         real: RealPhaseDriver,
+        finish_ci_calls: usize,
+        shelf_calls: usize,
     }
 
     impl auto_complete::PhaseDriver for DrainHarness {
@@ -898,6 +900,7 @@ mod bug_1265_finish_ci_tests {
         }
 
         fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            self.finish_ci_calls += 1;
             auto_complete::PhaseDriver::finish_ci(&mut self.real)
         }
 
@@ -934,6 +937,7 @@ mod bug_1265_finish_ci_tests {
             failure: &auto_complete::PhaseFailure,
             recovery_hint: &str,
         ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+            self.shelf_calls += 1;
             Ok(Some(aida_core::FailureReason {
                 phase: phase.slug().to_string(),
                 phase_index: phase.index() as u8,
@@ -1049,7 +1053,7 @@ exit 2
             let _ = std::fs::remove_file(&self.reads);
         }
 
-        fn run_drain(&self, mode: &str) -> auto_complete::OrchestrationResult {
+        fn run_drain(&self, mode: &str) -> (auto_complete::OrchestrationResult, usize, usize) {
             self.set_mode(mode);
             let inherited = std::env::var_os("PATH").unwrap_or_default();
             let path = std::env::join_paths(
@@ -1065,8 +1069,10 @@ exit 2
             ]);
             let mut harness = DrainHarness {
                 real: self.driver(),
+                finish_ci_calls: 0,
+                shelf_calls: 0,
             };
-            auto_complete::orchestrate_with_resume(
+            let result = auto_complete::orchestrate_with_resume(
                 &mut harness,
                 "BUG-1265",
                 auto_complete::AutoCompleteVariant::ThroughCi,
@@ -1075,7 +1081,8 @@ exit 2
                 auto_complete::LifecycleSkip::none(),
                 true,
                 auto_complete::Phase::Ci,
-            )
+            );
+            (result, harness.finish_ci_calls, harness.shelf_calls)
         }
     }
 
@@ -1086,7 +1093,12 @@ exit 2
     #[test]
     fn drain_finish_ci_completes_for_hold_gate_only_red() {
         let fixture = Fixture::new();
-        let result = fixture.run_drain("hold");
+        let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("hold");
+        assert_eq!(
+            finish_ci_calls, 1,
+            "drain must execute production finish_ci"
+        );
+        assert_eq!(shelf_calls, 0, "the supervised hold is not a failure shelf");
         assert!(result.failed_phase.is_none(), "{result:?}");
         assert!(result.shelved_reason.is_none(), "{result:?}");
         assert_eq!(result.process_exit_code(), auto_complete::DRIVE_EXIT_CLEAN);
@@ -1096,7 +1108,12 @@ exit 2
     #[test]
     fn drain_finish_ci_shelves_real_red_naming_only_the_genuine_check() {
         let fixture = Fixture::new();
-        let result = fixture.run_drain("real");
+        let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("real");
+        assert_eq!(
+            finish_ci_calls, 1,
+            "drain must execute production finish_ci"
+        );
+        assert_eq!(shelf_calls, 1, "a genuine required red must shelf once");
         let shelf = result
             .shelved_reason
             .as_ref()
@@ -1119,7 +1136,12 @@ exit 2
     #[test]
     fn drain_finish_ci_retries_unavailable_rows_then_shelves_ci_unavailable() {
         let fixture = Fixture::new();
-        let result = fixture.run_drain("unavailable");
+        let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("unavailable");
+        assert_eq!(finish_ci_calls, 1, "row retries belong inside finish_ci");
+        assert_eq!(
+            shelf_calls, 1,
+            "persistent row unavailability must shelf once"
+        );
         let shelf = result
             .shelved_reason
             .as_ref()
