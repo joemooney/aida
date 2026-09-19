@@ -75,6 +75,9 @@ non-integrity phases during `aida queue work --auto-complete`:
   in progress.
 - `lifecycle:no-review` — skip the phase-3 reviewer model session.
 - `lifecycle:no-build` — skip the final local build verification.
+- `lifecycle:no-preflight` — skip the local CI-parity guards before the
+  implementer branch is published. Use only when the change is genuinely
+  unrelated to those guards; the drain banner names this opt-out.
 - `lifecycle:trivial` — shorthand for all three skips.
 
 Merge and pull/auto-bump never short-circuit. These tags are for small,

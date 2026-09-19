@@ -103,6 +103,7 @@ pub(crate) const EXPRESS_TIER_TAG: &str = "batch:express";
 // trace:TASK-907 | ai:claude
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct LifecycleSkip {
+    pub(crate) no_preflight: bool,
     pub(crate) no_ci_wait: bool,
     pub(crate) no_review: bool,
     pub(crate) no_build: bool,
@@ -127,6 +128,7 @@ impl LifecycleSkip {
                 "lifecycle:no-ci-wait" => skip.no_ci_wait = true,
                 "lifecycle:no-review" => skip.no_review = true,
                 "lifecycle:no-build" => skip.no_build = true,
+                "lifecycle:no-preflight" => skip.no_preflight = true,
                 // trace:TASK-1249 | ai:claude
                 "lifecycle:no-harvest" => skip.no_harvest = true,
                 "lifecycle:trivial" => {
@@ -154,7 +156,11 @@ impl LifecycleSkip {
     }
 
     pub(crate) fn is_empty(self) -> bool {
-        !self.no_ci_wait && !self.no_review && !self.no_build && !self.no_harvest
+        !self.no_preflight
+            && !self.no_ci_wait
+            && !self.no_review
+            && !self.no_build
+            && !self.no_harvest
     }
 
     /// TASK-525: the active short-circuit tokens (`no-ci-wait`, `no-review`,
@@ -163,6 +169,9 @@ impl LifecycleSkip {
     /// Empty when no skip is active. trace:TASK-525 | ai:claude
     pub(crate) fn active_tokens(self) -> Vec<String> {
         let mut v = Vec::new();
+        if self.no_preflight {
+            v.push("no-preflight".to_string());
+        }
         if self.no_ci_wait {
             v.push("no-ci-wait".to_string());
         }
@@ -187,6 +196,7 @@ pub(crate) const RECOGNIZED_LIFECYCLE_TAGS: &[&str] = &[
     "lifecycle:no-ci-wait",
     "lifecycle:no-review",
     "lifecycle:no-build",
+    "lifecycle:no-preflight",
     "lifecycle:no-harvest",
     "lifecycle:trivial",
 ];
@@ -210,6 +220,9 @@ impl LifecycleSkip {
             return None;
         }
         let mut parts = Vec::new();
+        if self.no_preflight {
+            parts.push("implementer preflight");
+        }
         if self.no_ci_wait {
             parts.push("CI wait");
         }
@@ -6750,12 +6763,24 @@ mod tests {
         assert_eq!(
             skip,
             LifecycleSkip {
+                no_preflight: false,
                 no_ci_wait: true,
                 no_review: true,
                 no_build: true,
                 no_harvest: false,
                 express: false,
             }
+        );
+    }
+
+    #[test]
+    fn lifecycle_no_preflight_is_recognized_and_named_in_banner() {
+        let skip = LifecycleSkip::from_tags(["LIFECYCLE:NO-PREFLIGHT"]);
+        assert!(skip.no_preflight);
+        assert_eq!(skip.active_tokens(), vec!["no-preflight".to_string()]);
+        assert_eq!(
+            skip.banner_summary().as_deref(),
+            Some("skipping implementer preflight")
         );
     }
 
