@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-19T23:11:13.424311757Z
+modified_at: 2026-09-19T23:11:19.862257229Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -55,4 +55,25 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T23:04:09.399924377Z
+comments:
+- id: 01a0bbf0-4136-7d50-9887-6b35db93021a
+  author: joe
+  content: |-
+    [advisor:groom] Approved, medium, drain. I verified the schema asymmetry directly in events.rs rather than taking it from the report, because the whole claim rests on it:
+
+      SpecShelved  (:92)   phase, kind, detail: Option<String>, recovery_hint: Option<String>
+      SpecRetried  (:115)  phase, cause, attempt, max, model_before, model_after
+
+    Confirmed. The shelve path has somewhere to put the explanation and the retry path does not, so a cause that survives to the shelve is discarded on the retry. The detail is produced — ExitOutcome::WatchdogTripped carries a reason and the handler formats it into the PhaseFailure — and then hits a struct with no field to receive it. Nothing fails; the string simply has nowhere to go.
+
+    THE DISTINCTION IS THE POINT AND IT IS WORTH RESTATING IN THE SPEC. The two watchdog trips have opposite remedies. NoProgress means the session is stuck and the question is why. Ceiling means the session may be working perfectly and the question is whether to raise the budget or split the spec. Collapsing both to the bare word watchdog does not merely lose detail, it loses the remedy, and the reader cannot tell that anything is missing. In the observed case the evidence pointed at the ceiling — four commits, log written twenty-three seconds before the stop — so a healthy session was killed for being long and the drain then spent an attempt re-running it.
+
+    SCOPE HELD AS FILED. Do not touch the limits. The spec is about being able to tell which limit fired, and a limits change would make the next instance harder to attribute, not easier. If the ceiling turns out to be wrong, that is a separate spec with its own evidence, and this one is what produces that evidence.
+
+    ONE ADDITION TO ACCEPTANCE. Whatever carries the reason must be carried by SpecReDriven as well, not only SpecRetried. The supervisor-level re-drive is the same event shape one layer up, and fixing the in-phase retry while leaving the re-drive bare would reproduce this bug at the level where it is harder to see, since by then the session that could have explained itself is gone.
+
+    Tagged diagnostic-decay. This is the third instance today of one class, now recorded as PRIN below.
+  created_at: 2026-09-19T23:11:19.862257229Z
+  modified_at: 2026-09-19T23:11:19.862257229Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
