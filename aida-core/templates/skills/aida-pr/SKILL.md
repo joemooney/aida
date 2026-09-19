@@ -366,6 +366,17 @@ Show the title and the Summary paragraph. Ask explicitly: "Open this PR?"  The u
 
 ### 10. Open the PR
 
+**Orchestrated implementer exception (TASK-1289).** If `aida orchestrator
+status` reports `orchestrated`, do not open the PR in this child session. The
+parent phase owns the publication boundary: after this skill has committed and
+pushed the branch, exit cleanly (touch `$AIDA_EXIT_SENTINEL` last in headless
+mode). The parent resolves its `[preflight].guards` names to the actual `run:`
+bodies in `.github/workflows/ci.yml`, runs them in this worktree, and opens the
+PR only when they pass. A failing guard therefore cannot race an already-open
+PR. The normal steps 10–12 below apply only outside corroborated orchestrator
+mode. `lifecycle:no-preflight` is the explicit per-spec escape hatch and is
+announced in the drain banner. trace:TASK-1289 | ai:codex
+
 ```bash
 gh pr create --base <base> --head <branch> --title "<title>" --body "$(cat <<'EOF'
 <body>
