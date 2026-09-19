@@ -1,0 +1,45 @@
+id: 01a0bb84-f45e-7502-a8d3-5fc93152a275
+spec_id: BUG-1291
+agreed_id: BUG-1291
+title: 'A run that shelves before its reviewer phase orphans its open PR forever: dispatch is phase-coupled and nothing else claims ready work'
+description: |
+  Dispatch is phase-coupled: a run that shelves before its reviewer phase leaves its open PR with no owner, and nothing else will ever claim it. Reviewer-routed queue entries exist but no driver serves them, because the single per-repo drain lock is held by the implementer wave.
+
+  OBSERVED 2026-09-19. PR 1970 (BUG-1268, reviewer stale-base recovery) opened 17:35Z, merge state CLEAN, Build pass, merge-hold-gate pass, no hold marker, spec Done, no review verdict file. It sat unowned for 3.6 hours while PR 1971 merged at 20:07Z, half an hour after 1970 was already clean. Its drain reached Done and then shelved in the reviewer phase, so the run never reached phase 4 and never handed anyone a merge. STORY-1354, the standalone review spec for it, is Approved and routed to reviewer and was never served.
+
+  THE GENERAL SHAPE. Reviewer-routed entries are only ever served as phase 3 of an implementer run that gets that far. A run that shelves earlier drops its PR on the floor. A reviewer drain cannot be started alongside the implementer wave because the single-drain-per-repo lock is held, and that lock is correct — the answer is not to weaken it.
+
+  This is the third instance of one pattern in a single day. BUG-1264: a batch member dropped silently. TASK-1297: a stale batch filter excluded sixteen approved specs while reporting healthy waves. This one: a PR orphaned by the phase that would have owned it failing. In each case work reached a ready state and no component was responsible for it, and in each case the system reported normally.
+
+  THE FORK, which this spec must decide before implementing. Three candidate fixes, listed with what each costs:
+
+  1. Let the drain lock admit one reviewer drain alongside one implementer drain. Serves the queue directly, but weakens a lock that exists to prevent exactly the concurrent-claim problems that produced BUG-1285, and the two drains would contend for the same worktrees and leases.
+
+  2. A shelving run hands its open PR to the reviewer queue on the way out. Puts the handoff where the information already is — the run knows its PR number and that it is abandoning it — and needs no new process. Does not help a PR orphaned some other way.
+
+  3. A periodic sweep claims any PR that is clean, has no verdict, no hold and no live owner. Catches every orphaning cause including ones not yet seen, but is a new always-on component and can race a run that is about to resume.
+
+  Option 2 is the author's recommendation, held loosely: it is the smallest change, it needs no new moving part, and it places responsibility at the moment responsibility is actually dropped. Option 3 is the honest safety net if we find orphaning causes beyond phase failure.
+
+  ACCEPTANCE
+  1. The fork is decided and the decision recorded as an ADR linked to this spec, with the reasoning, before implementation.
+  2. A run that shelves while holding an open PR does not leave that PR without an owner; the chosen mechanism is exercised by a test that shelves a run mid-reviewer-phase and asserts the PR is claimable afterwards.
+  3. PR 1970 and STORY-1354 are the regression fixture for the historical case.
+  4. Whatever is chosen, the single-drain-per-repo lock keeps its current strictness for implementer drains, or the ADR states explicitly why not.
+  5. A clean PR with no verdict, no hold and no live owner is visible somewhere an operator or a monitor reads — `aida awaiting` is the natural home — so this class is never again discovered by someone noticing a stale timestamp.
+
+  Filed by the product seat as a proposal; the fork is the advisor's to decide.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:14:07.838470226Z
+modified_at: 2026-09-19T21:14:07.838470226Z
+req_type: Bug
+tags:
+- dispatch
+- from:session-0919
+- orchestrator
+- parent:EPIC-62
+- reviewer
+- throughput
