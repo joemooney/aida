@@ -1,7 +1,7 @@
 id: 01a0ba4a-e269-7cf3-93ae-4abce913f36e
 spec_id: BUG-1268
 agreed_id: BUG-1268
-title: 'auto-complete failure: phase 3 (reviewer) on BUG-1265'
+title: 'Reviewer phase shelves on a stale PR base instead of rebasing once and continuing: 3 full re-drives in 15h for ''main moved while the round was in flight'''
 description: |-
   PROMOTED from an auto-drafted phase record (TASK-266) by the advisor 2026-09-19 09:40, because the pattern recurs and the recovery is mechanical.
 
@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:31:04.937729263Z
-modified_at: 2026-09-19T16:36:55.886461742Z
+modified_at: 2026-09-19T16:36:57.366464497Z
 req_type: Bug
 tags:
 - auto-complete
