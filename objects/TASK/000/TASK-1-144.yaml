@@ -1,5 +1,6 @@
 id: 01a0b9f8-f6ff-7002-8921-db993bc1a347
 spec_id: TASK-1-144
+agreed_id: TASK-168
 title: Drain PR-keyed review verdicts omit reviewed_sha and recorded_at, so a reader cannot tell which head a verdict covers (spec-keyed verdicts already carry both)
 description: |-
   Verified 2026-09-19 07:05 by the driver advisor, from code and data.
