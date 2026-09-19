@@ -1,0 +1,27 @@
+id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
+spec_id: STORY-1234
+agreed_id: STORY-1234
+title: 'Review PR-1952: [AI:codex] test(protocol): cover pickup and lease notices (STORY-1221 TASK-1278)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b6ff`) for branch `bug-1236-2`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1952>
+  - Branch: `bug-1236-2` → `main`
+
+  ## Covers
+
+  - STORY-1221
+  - TASK-1278
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1952` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T00:18:16.019325314Z
+modified_at: 2026-09-19T00:18:16.019325314Z
+req_type: Story
