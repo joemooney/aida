@@ -1,20 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b640-4cc4-72e0-ab7f-5cb11c514414
-  position: 17000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0b638); covers 1 spec
-  added_at: 2026-09-18T20:41:09.383751883Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b66e-95a3-7371-bd22-130c6370290a
-  position: 19000
-  added_by: role:implementer
-  note: auto-queued by `aida pr` (01a0b66b); covers 1 spec
-  added_at: 2026-09-18T21:31:44.826371368Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b691-2b61-7b72-a434-026d6f3d2733
   position: 23000
   added_by: role:implementer
@@ -55,39 +39,10 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b6c3-78d6-7573-ba47-f61427ba7390
-  position: 29000
-  added_by: role:implementer
-  note: auto-queued by `session end` (01a0b6bd); covers 1 spec
-  added_at: 2026-09-18T23:04:24.501142312Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
   position: 32000
   added_by: role:implementer
   note: 'drive (merge at advisor gate): member worktree must be its own or punt; queue done verifies branch/commits belong to the spec (refuse, --force ledgered); CI/reviewer phases bind to THIS run''s PhaseDonePr PR; tests + banner names worktree/branch'
   added_at: 2026-09-18T23:41:23.522149729Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b5ce-6f5d-7be3-b693-e98175dbb944
-  position: 39000
-  added_by: role:implementer
-  added_at: 2026-09-19T01:16:38.071496906Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b6e4-4406-75b3-bd4b-8edb17119ec9
-  position: 40000
-  added_by: role:implementer
-  added_at: 2026-09-19T01:45:08.565911894Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a0b5bf-fa25-7e80-b111-4bd751958e05
-  position: 41000
-  added_by: role:implementer
-  added_at: 2026-09-19T02:03:36.008914667Z
   for_role: implementer
   added_by_machine: imac
