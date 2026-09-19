@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-19T16:31:11.970306394Z
+modified_at: 2026-09-19T16:31:14.375508686Z
 req_type: Task
 tags:
 - acceptance
@@ -36,3 +36,7 @@ tags:
 - orchestrator
 - parent:EPIC-28
 - review
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-19T16:31:14.375508686Z
