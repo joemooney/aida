@@ -12,12 +12,12 @@ description: |-
   4. Docs: docs/mailbox.md gets a "Am I reading my mail?" paragraph naming the surface and the threshold.
 
   Acceptance: `aida mailbox latency` prints last-seen + oldest-unread age for the active role; with an unread message older than the threshold, `aida awaiting --notice` includes the ⚠ line and `aida status` shows it; unit tests on the pure age/threshold computation; TASK-160's quiet-tick contract unchanged (no unread = no line).
-status: Done
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T02:03:08.183405444Z
+modified_at: 2026-09-19T02:03:31.303864378Z
 req_type: Task
 tags:
 - batch:followups-0918f
