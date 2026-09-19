@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b69c-4ef9-7a32-b7ff-5561773fe56f
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1963: TASK-1281: maintenance_schedule.rs computes fired_condition at lines 748-763, but the JobKind::Seat write at lines 814-817 persists only due_since/due_reason. After aida schedule done clears due_since, the ledger still has no open episode, so the next true evaluation returns Fired and re-delivers the seat job without a false transition. Preserve apply_condition in the seat-job ledger mutation and add a seat when regression test covering tick -> done/clear due -> still-true tick.  Concretely: in tick_core, the JobKind::Seat ledger mutation must also persist the condition episode (call apply_condition / keep first_true and fired_at) so once-until-cleared holds for seat jobs; aida schedule done clears due_since but must not clear the open episode; add a seat-when regression test: predicate true → delivered once; done; predicate still true → NOT re-delivered; predicate false then true → delivered again.'
-  added_at: 2026-09-19T07:57:22.325787529Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
