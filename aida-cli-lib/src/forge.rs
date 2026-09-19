@@ -2060,6 +2060,17 @@ impl Forge for GitLabForge {
         opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
+        // BUG-1232 review round 2: the REST merge endpoint has no rebase
+        // method (the retired `glab mr merge --rebase` path did); refuse
+        // explicitly rather than silently performing a plain merge.
+        // trace:BUG-1232 | ai:claude
+        anyhow::ensure!(
+            !matches!(opts.method, MergeMethod::Rebase),
+            "GitLab REST merge does not support MergeMethod::Rebase for MR !{}: use squash or merge \
+             (rebase the MR first with `glab mr rebase {}` if a linear history is required)",
+            c.id,
+            c.id
+        );
         // BUG-1232: `glab mr merge` rewrites some GitLab 405/409 responses as a
         // false "not enough privileges" error. Gate on GitLab's authoritative
         // detailed_merge_status, then call the REST merge endpoint directly.
@@ -2545,7 +2556,11 @@ struct GitLabMergeSnapshot {
 fn classify_gitlab_merge_status(status: &str) -> GitLabMergeGate {
     match status {
         "mergeable" => GitLabMergeGate::Ready,
-        "ci_must_pass" | "ci_still_running" | "checking" | "preparing" => GitLabMergeGate::Wait,
+        // `unchecked` = GitLab has not computed mergeability yet (a fresh MR):
+        // transient like `checking`, never a reason to shelve. trace:BUG-1232 | ai:claude
+        "ci_must_pass" | "ci_still_running" | "checking" | "preparing" | "unchecked" => {
+            GitLabMergeGate::Wait
+        }
         _ => GitLabMergeGate::Blocked,
     }
 }
@@ -4029,11 +4044,45 @@ mod tests {
     }
 
     #[test]
+    // trace:BUG-1232 | ai:claude
+    #[test]
+    fn gitlab_merge_change_refuses_rebase_before_any_api_call() {
+        let tmp = tempfile::tempdir().unwrap();
+        let forge = GitLabForge::new(tmp.path());
+        let change = ChangeRef {
+            id: 7,
+            url: String::new(),
+            branch: "feature".into(),
+            base: "main".into(),
+            title: None,
+        };
+        let opts = MergeOptions {
+            method: MergeMethod::Rebase,
+            squash_subject: None,
+            delete_branch: false,
+        };
+        let err = forge
+            .merge_change(&change, &opts, &mut crate::network_retry::NoopSink)
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("does not support MergeMethod::Rebase"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn gitlab_merge_gate_classifies_every_transient_status() {
         // Fixture classes from the BUG-1232 drain contract: these must wait
         // and reread instead of invoking merge against stale GitLab state.
         // trace:BUG-1232 | ai:codex
-        for status in ["ci_must_pass", "ci_still_running", "checking", "preparing"] {
+        for status in [
+            "ci_must_pass",
+            "ci_still_running",
+            "checking",
+            "preparing",
+            "unchecked",
+        ] {
             assert_eq!(
                 classify_gitlab_merge_status(status),
                 GitLabMergeGate::Wait,
