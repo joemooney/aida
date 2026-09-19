@@ -1,0 +1,51 @@
+id: 01a0bac0-0f79-7ec0-9e4a-ca3f33c5d621
+spec_id: SPIKE-83
+agreed_id: SPIKE-83
+title: 'Cost-observability spike: audit today''s token capture, inventory the per-message sources already on disk, survey reusable prior art, and compute what the rework tail actually costs'
+description: |
+  First slice of EPIC-71. Deliverable is a dated report at docs/spikes/YYYY-MM-DD-cost-observability.md — evidence-grounded, no implementation.
+
+  PART 1 — audit what exists (all of this is checkable locally, no guessing):
+  - TASK-967 writes token accounting at drain exit to ~/.aida/usage.jsonl. Establish WHY 57 to 58 of the 92 token-bearing records carry cumulative_tokens: 0 and tokens_per_spec: 0 while drain stdout prints real cumulative figures at the same moment. Name the code path and the condition under which it records zero.
+  - Establish exactly what granularity exists today and what it can and cannot attribute: can a record be tied to a spec, a phase, a seat, a vendor, a round?
+  - Quantify the blind spot: over a known window, total tokens reported by drain stdout versus total recorded in usage.jsonl.
+
+  PART 2 — inventory the sources already on disk (do not build collectors, just prove they are usable):
+  - Claude Code session transcripts under ~/.claude/projects/<slug>/*.jsonl carry per-assistant-message {"usage": {input_tokens, cache_creation_input_tokens, cache_read_input_tokens, output_tokens, output_tokens_details.thinking_tokens}}. Confirm the shape, whether every message has it, and whether a session can be correlated to a spec/run (AIDA already records session ids on leases).
+  - Codex sessions under ~/.codex/sessions: establish the equivalent shape and whether codex exec --json emits usage on the stream the drain already captures.
+  - Antigravity: same question, or record that it is unknown.
+  - State plainly for each vendor whether per-message attribution is achievable from artefacts we already keep, or needs a vendor API call.
+
+  PART 3 — prior art, because the operator is right that material exists (survey, recommend reuse over invention):
+  - Vendor usage/cost APIs and what they can reconcile that local artefacts cannot.
+  - The OpenTelemetry GenAI semantic conventions for token attributes — adopting the names costs nothing and buys tooling compatibility.
+  - Existing Claude Code usage analysers (ccusage and similar) — what they parse, and whether we can borrow the parsing rather than write it.
+  - Published price/token maps (LiteLLM-style model cost tables, tokencost) as the source for a rates table that is DATA, not code, and can be updated without a release.
+  For each: what to reuse, what to adapt, what not to touch, with a reason.
+
+  PART 4 — the numbers that would change a decision, computed once by hand from the window already analysed (2026-09-18 12:00 to 2026-09-19 10:00, 40 shelved rounds across 19 specs):
+  - Estimated cost per merged spec.
+  - Estimated cost of the REWORK TAIL as a share of the total. If the tail dominates, the cheapest optimisation is the review round-trip (TASK-1289/1290/1291), not model choice — and that reframes the whole epic.
+  - Cache-hit ratio on a sampled session, given that one observed message showed input_tokens 2 against cache_read_input_tokens 868,439. If cache reads dominate, prompt/context stability is the main cost lever.
+
+  Acceptance:
+  - The report exists, dated, with every claim traceable to a file path, a command or a cited source.
+  - Part 1 names the zero-recording cause in code, or states precisely what could not be determined and why.
+  - Part 2 gives a per-vendor yes/no on per-message attribution from existing artefacts.
+  - Part 3 recommends reuse or build per item, with reasons.
+  - Part 4 gives the three figures with their derivation shown, and an explicit statement of which optimisation the numbers favour.
+  - It proposes the next slice's shape but implements nothing.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T17:39:04.185770995Z
+modified_at: 2026-09-19T17:39:04.185770995Z
+req_type: Spike
+tags:
+- cost
+- from:operator-0919
+- parent:EPIC-71
+- research
+- telemetry
+human_only: true
