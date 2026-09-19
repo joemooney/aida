@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:31:04.937729263Z
-modified_at: 2026-09-19T17:34:54.253643806Z
+modified_at: 2026-09-19T17:35:07.684236997Z
 req_type: Bug
 tags:
 - auto-complete
@@ -47,5 +47,11 @@ comments:
   content: 'Implemented reviewer-only headless stale-base recovery by widening the existing one-attempt auto-rebase gate, adding typed stale-base-conflict shelving with the interactive manual recipe, and preserving generic classification for non-conflict failures. Verification: cargo test -p aida-cli-lib story_429_auto_rebase_tests (9 passed); cargo fmt --all -- --check; git diff --check.'
   created_at: 2026-09-19T17:34:54.253643806Z
   modified_at: 2026-09-19T17:34:54.253643806Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0babc-73a4-73b0-be15-03cfeb15b980
+  author: joe
+  content: 'Implemented reviewer-only headless stale-base recovery by widening the existing one-attempt auto-rebase gate, adding typed stale-base-conflict shelving with the interactive manual recipe, and preserving generic classification for non-conflict failures. Verification: cargo test -p aida-cli-lib story_429_auto_rebase_tests (9 passed); cargo fmt --all -- --check; git diff --check.'
+  created_at: 2026-09-19T17:35:07.684236997Z
+  modified_at: 2026-09-19T17:35:07.684236997Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
