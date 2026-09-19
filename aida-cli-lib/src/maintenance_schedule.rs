@@ -812,6 +812,9 @@ where
                 }
                 let seat_label = task.seats.join(",");
                 schedule_ledger::write_cas_opts(&store, &task.name, !hook, |l| {
+                    if fired_condition {
+                        schedule_ledger::apply_condition(l, true, now);
+                    }
                     l.due_since = Some(now);
                     l.due_reason = Some(reason.clone());
                 })?;
@@ -2513,6 +2516,55 @@ every = "1h"
         let ledger = schedule_ledger::load(&store, "mailbox-latency").unwrap();
         assert_eq!(ledger.result.as_deref(), Some("ok"));
         assert_eq!(ledger.episode.unwrap().fired_at, Some(at(12)));
+    }
+
+    // trace:TASK-1281 | ai:codex
+    #[test]
+    fn seat_when_stays_debounced_after_done_clears_due() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let mut state = ScheduleState::default();
+        let mut job = seat_task("mailbox-triage", &["advisor"], None, &[]);
+        job.when = Some(schedule_predicate::parse("mail.oldest_unread_age > 15m").unwrap());
+        job.when_raw = Some("mail.oldest_unread_age > 15m".into());
+        let run = |state: &mut ScheduleState, now| {
+            tick_core(
+                tmp.path(),
+                config(vec![job.clone()]),
+                state,
+                now,
+                false,
+                |_root, _command| panic!("seat jobs must never execute"),
+                |_| Snapshot {
+                    mail_oldest_unread_age_secs: 20 * 60,
+                    ..Default::default()
+                },
+                &[],
+            )
+            .unwrap()
+        };
+
+        assert_eq!(
+            run(&mut state, at(10)),
+            vec!["schedule tick: mailbox-triage due (when) → seat advisor"]
+        );
+        let ledger = schedule_ledger::load(&store, "mailbox-triage").unwrap();
+        assert!(ledger.episode.as_ref().is_some_and(|ep| ep.is_open()));
+
+        // Simulate `aida schedule done`: it clears delivery state, but the
+        // condition episode remains open until the predicate turns false.
+        schedule_ledger::write_cas(&store, "mailbox-triage", |l| {
+            l.last_run = Some(at(11));
+            l.result = Some("done".into());
+            l.due_since = None;
+            l.due_reason = None;
+        })
+        .unwrap();
+
+        assert!(run(&mut state, at(12)).is_empty());
+        let ledger = schedule_ledger::load(&store, "mailbox-triage").unwrap();
+        assert!(ledger.due_since.is_none());
+        assert!(ledger.episode.as_ref().is_some_and(|ep| ep.is_open()));
     }
 
     // trace:STORY-1226 | ai:claude
