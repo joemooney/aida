@@ -16,12 +16,12 @@ description: |
   - A drive-mode spec driven by the batch drain has the label on its PR within seconds of the PR opening (assert via gh pr view --json labels in the live test); merge-hold-gate reads FAIL until cleared.
   - sync_label failure prints a warning with gh's stderr and marks the hold as label-unsynced; aida merge-hold list shows it; --fix repairs it.
   - Unit test on the pure command builder stays; new test that a failed status yields the unsynced state rather than silence.
-status: Done
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T21:26:03.945081691Z
-modified_at: 2026-09-19T00:29:53.829172636Z
+modified_at: 2026-09-19T00:29:54.992146046Z
 req_type: Bug
 tags:
 - batch:followups-0918e
