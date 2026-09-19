@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:26.124728352Z
-modified_at: 2026-09-19T04:43:11.040861099Z
+modified_at: 2026-09-19T06:04:53.303685450Z
 req_type: Bug
 tags:
 - agent-ux
@@ -38,6 +38,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T04:43:10.786862080Z
   modified_at: 2026-09-19T04:43:10.786862080Z
+- id: 01a0b844-84b7-7031-b96a-f51d7c29fffa
+  author: joe
+  content: 'Round 2 review fix: armed a 1s fail-open watchdog immediately after the guaranteed notice time line so cache refresh, lease discovery, or protocol loading cannot violate the 2s acceptance budget. The open-stdin test now also requires the time line, preventing silent early exit from passing. Verified 3 isolated reruns, full task_1283_protocol_cli (4/4), fmt, and 3 large-repo runs at ~1.02s.'
+  created_at: 2026-09-19T06:04:53.303685450Z
+  modified_at: 2026-09-19T06:04:53.303685450Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
