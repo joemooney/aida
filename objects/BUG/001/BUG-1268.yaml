@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:31:04.937729263Z
-modified_at: 2026-09-19T17:35:53.854239625Z
+modified_at: 2026-09-19T17:46:07.166262840Z
 req_type: Bug
 tags:
 - auto-complete
@@ -63,3 +63,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-09-19T17:35:46.883925109Z
   implemented_by: joe
+failure_reason:
+  phase: ci
+  phase_index: 2
+  kind: ci-unavailable
+  detail: 'CI state unavailable: CI idle for 600s with no progress — giving up'
+  recovery_hint: 'CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1268 --auto-complete`.'
+  shelved_by: advisor
+  shelved_at: 2026-09-19T17:46:07.166262840Z
