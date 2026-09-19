@@ -439,6 +439,7 @@ pub(crate) fn acquire_drain_lock_with_specs(
             if let Some(parent) = path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
+            let binary_path = crate::resolve_aida_exe();
             let record = DrainLock {
                 pid: std::process::id(),
                 started_at_utc: Utc::now().to_rfc3339(),
@@ -447,17 +448,16 @@ pub(crate) fn acquire_drain_lock_with_specs(
                 // trace:TASK-1285 | ai:codex
                 wave_id: uuid::Uuid::new_v4().to_string(),
                 binary_sha: env!("AIDA_BUILD_GIT_SHA").to_string(),
-                binary_mtime_secs: std::env::current_exe()
+                binary_mtime_secs: std::fs::metadata(&binary_path)
                     .ok()
-                    .and_then(|p| std::fs::metadata(p).ok())
                     .and_then(|m| m.modified().ok())
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs()),
-                binary_path: std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.canonicalize().ok().or(Some(p)))
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_default(),
+                binary_path: binary_path
+                    .canonicalize()
+                    .unwrap_or(binary_path)
+                    .display()
+                    .to_string(),
                 // trace:BUG-759 | ai:claude
                 specs: specs.to_vec(),
             };
