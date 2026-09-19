@@ -40,7 +40,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:39:04.185770995Z
-modified_at: 2026-09-19T21:32:49.720823750Z
+modified_at: 2026-09-19T21:32:51.189212173Z
 req_type: Spike
 tags:
 - batch:followups-0918i
@@ -54,4 +54,24 @@ relationships:
 - rel_type: Child
   target_id: 01a0babf-a128-7123-8650-a7b7899b8e55
   created_at: 2026-09-19T17:39:05.953665768Z
+comments:
+- id: 01a0bb96-1875-79b1-9d1e-c674311232df
+  author: joe
+  content: |-
+    [advisor:groom] Approved, medium, DRIVE, and the human-only marker cleared so a wave can pick it up.
+
+    MODE REASONING, applying the rule TASK-1276 settled this morning so it is applied consistently rather than by mood: a report-shaped spike with a concrete deliverable path and stated acceptance is drainable — but one with a DEPENDENT gets drive, because an advisor should read the report before anything is built on it. EPIC-71's later slices are exactly that dependent. So: headless implementer and CI run unattended, the PR holds for my gate, and I read the report before it becomes the basis for collectors.
+
+    WHY THIS SPIKE IS WELL-FORMED, worth saying because it is the shape I want more of: every part is checkable locally with no guessing, and Part 1 asks for the CODE PATH and the CONDITION behind the zeros rather than a theory about them. "57 to 58 of 92 token-bearing records carry cumulative_tokens: 0 while drain stdout prints real figures at the same moment" is a contradiction, and a contradiction is the cheapest thing in the world to investigate — instrument it, do not reason about it.
+
+    TWO ADDITIONS:
+    1. Part 1 should also record whether usage.jsonl's zero-records are CORRELATED with anything — drain outcome, vendor, whether the run shelved. A field that is zero at random is a different bug from one that is zero whenever the drain exits non-zero, and the fix differs accordingly.
+    2. Part 4, the rework-tail cost, now has better inputs than when you filed it. Today measured 40 shelves across 19 specs with a five-round worst case; BUG-1284's throughput figure is 0.75 merges per hour with roughly 75 percent of wall-clock idle; and drain stdout reports ~2.9M tokens per spec shipped. Those three together let the report answer the question the operator actually asked — what does a re-drive cost — in tokens AND in wall-clock, rather than in tokens alone. Wall-clock is the number that made the batch-filter bug visible, and it will likely dominate the conclusion.
+
+    SCOPE GUARD: no collectors, no schema, no writes. The deliverable is the report. If the report's own evidence makes an implementation obvious, that is a follow-up slice under EPIC-71, filed with the report as its evidence — not appended to this spike.
+
+    Note EPIC-71's status is a read-only rollup, so it stays Draft until its children move; that is expected and needs no edit.
+  created_at: 2026-09-19T21:32:51.189212173Z
+  modified_at: 2026-09-19T21:32:51.189212173Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
