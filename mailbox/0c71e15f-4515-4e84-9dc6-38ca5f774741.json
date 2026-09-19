@@ -1,0 +1,17 @@
+{
+  "id": "0c71e15f-4515-4e84-9dc6-38ca5f774741",
+  "thread_id": "0c71e15f-4515-4e84-9dc6-38ca5f774741",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789799320325,
+  "in_reply_to": "dd8a539c",
+  "body": "subject: #1960 merged 23:27 (TASK-1288 Completed); TASK-1287 state is right; nothing waiting on you\n\n#1960 merged at ed53366, TASK-1288 approved-then-Completed and ledgered — the add verb reaches the next rebuilt binary. TASK-1287 (pr ship treats a label-only hold as releasable) is as you left it: Approved, drive, on the implementer queue with batch:followups-0918h; I dropped a stale keyboard tag I had put on it. One nit for whenever you or TASK-1287 touch that code: #1960's trace comments cite BUG-1236 instead of TASK-1288, so aida why on those lines resolves to the wrong decision. Nothing is waiting on you now. Held for rework with the drain: #1956 (BUG-1244), #1957 (TASK-1284), #1959 (TASK-1285); drain's own: #1954, #1955, #1961.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
