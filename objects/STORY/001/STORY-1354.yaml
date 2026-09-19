@@ -1,0 +1,26 @@
+id: 01a0babc-dee7-7b02-a7c7-196124cf417d
+spec_id: STORY-1354
+agreed_id: STORY-1354
+title: 'Review PR-1970: [AI:codex] fix(orchestrator): recover reviewer stale bases (BUG-1268)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0bab7`) for branch `bug-1268-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1970>
+  - Branch: `bug-1268-work` → `main`
+
+  ## Covers
+
+  - BUG-1268
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1970` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T17:35:35.143024723Z
+modified_at: 2026-09-19T17:35:35.143024723Z
+req_type: Story
