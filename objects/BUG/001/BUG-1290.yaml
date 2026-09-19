@@ -39,12 +39,14 @@ description: |
   5. Consumers are not asked to deduplicate; the docs state the feed is free of duplicate phase entries from this version on.
 
   Reported by the aida-monitor project as "deduplicate at the emission site"; the recommendation is deliberately NOT followed as written, for the reason set out above.
+
+  6. THE FIX MUST NOT KEY ON THE ABSENCE OF . In all 292 spurious back-to-back pairs measured 2026-09-19, the second event has no `seat` field (292 of 292) while the first carries one 172 times, because seat is Option<String> with skip_serializing_if at events.rs:70. That fingerprint identifies WHICH emitter is the spurious one and makes locating the two call sites a lookup instead of a search. It is NOT a runtime rule: 120 first-of-pair events also lack seat, because seat is legitimately unknown for phase 1. A dedup that drops PhaseEntered with no seat would be a second wrong fix inside the same spec, of exactly the shape this spec was filed to prevent. A test must cover a legitimate seat-less phase-1 entry surviving the fix.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:25.301380079Z
-modified_at: 2026-09-19T21:52:19.312580765Z
+modified_at: 2026-09-19T21:59:39.204199246Z
 req_type: Bug
 tags:
 - batch:followups-0918i
