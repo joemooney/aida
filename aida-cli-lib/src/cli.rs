@@ -2298,6 +2298,15 @@ pub enum DevCommand {
         auto: bool,
     },
 
+    /// Internal pre-build safety gate used by `make build-fast`.
+    #[command(hide = true)]
+    BuildGuard {
+        #[clap(value_parser = ["debug", "release"])]
+        profile: String,
+        #[clap(long)]
+        after_wave: bool,
+    },
+
     /// Emit shell code that undoes a previous `aida dev activate`.
     /// Use as: `eval "$(aida dev deactivate)"`.
     Deactivate,

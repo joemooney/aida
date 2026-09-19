@@ -2199,6 +2199,10 @@ mod tests {
             started_at_utc: "2026-07-19T11:30:00+00:00".to_string(),
             command: "burndown run (status=approved)".to_string(),
             host: "devbox".to_string(),
+            wave_id: "wave-test".to_string(),
+            binary_sha: "abc1234".to_string(),
+            binary_mtime_secs: Some(1_700_000_000),
+            binary_path: "/repo/target/release/aida".to_string(),
             specs: vec!["BUG-101".to_string(), "TASK-202".to_string()],
         }
     }

@@ -28,6 +28,8 @@ These commands exist because AIDA dogfoods itself: the people building AIDA run 
 
 **Gotchas.** `aida dev status`'s SHA verdict (`exact match` / `ancestor of HEAD` / `DIVERGED from HEAD`) is the thing to read before trusting a test result — a `DIVERGED` verdict means your live binary was built from a different branch's source than HEAD, so your "fix" might be running against stale code. The PS1 marker has two stale remedies: `⇄` means re-run `aida dev activate` to switch to the already-built HEAD match; `↻` means rebuild with `cargo build` or `cargo build --release`. The cross-worktree cargo-cache trap also bites here: if a `session end` removed a worktree, a sibling worktree's `cargo build` can fail on the deleted worktree's absolute paths — recover with `cargo clean -p <crate>`.
 
+Live drain waves pin their launching binary SHA and mtime. `make build-fast` refuses to replace that binary while the wave is live; `make build-fast AFTER_WAVE=1` waits for the wave's `QueueDrained` event before continuing. `aida dev activate` only updates the calling shell's PATH, so it remains available during a live wave.
+
 **Chains with** — `aida dev shell-init --install` once, then `aida dev activate` per shell; `aida dev status` to confirm; `aida dev serve` to run the stack; `aida dev release` (or the top-level `aida release`) to ship.
 
 ---
