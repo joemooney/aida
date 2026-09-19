@@ -1,0 +1,38 @@
+id: 01a0bac7-7938-7223-81f8-cf428f24e497
+spec_id: BUG-1275
+agreed_id: BUG-1275
+title: 'CI idle window trips on a HEALTHY long run: a required check pending or in_progress is not counted as progress, so any run longer than 600s shelves ci-unavailable (GitHub twin of BUG-1224)'
+description: |
+  Live instance 2026-09-19 17:46 UTC on BUG-1268 / PR #1970: the drain shelved "ci-unavailable: CI idle for 600s with no progress — giving up" while CI run 35458563676 was perfectly healthy — created AND started 17:35:31, still in_progress at 17:46:39, eleven minutes in. GitHub API was not rate limited (core 5000/5000). Nothing was wrong except that the run took longer than the idle window.
+
+  Why this is urgent rather than cosmetic. The idle window defaults to 600s. This repository's PR CI median is 9 to 10 minutes (CLAUDE.md, measured over 23 runs on 2026-09-18). A 600s window against a 9-10 minute median means a large share of ALL runs will now trip it. Every trip costs a shelve plus a full re-drive.
+
+  Why it appeared only now. While a single required check sits pending or in_progress, the GitHub rollup fingerprint does not change, so the idle clock never re-arms — the same defect BUG-1224 fixed for GitLab, where a long single job produced no pipeline-list change. The GitHub side was never fixed. Before BUG-1250 this was invisible because NoSignal simply proceeded without a gate (silently skipping CI, the bug BUG-1250 closed). BUG-1250 correctly converted that into a shelve, which turned a hidden correctness bug into a visible throughput bug. The trade is right; the window is now wrong.
+
+  Fix (mirror BUG-1224's resolution on the GitHub side):
+  - A required check that is present and in a non-terminal state (queued / pending / in_progress) IS progress: re-arm the idle clock on each poll that observes one, so the idle window only trips when NOTHING is running.
+  - Equivalently, fold the run's own started_at/updated_at (or the check's) into the progress fingerprint so an actively running job keeps the clock alive.
+  - Keep the absolute ceiling as the real backstop — that is the limit that should end a genuinely hung wait, not the idle window.
+  - Raise the default idle window above the observed CI median regardless, so the two are not in tension: the window must exceed p95 run duration, not the median.
+
+  Acceptance:
+  - A PR whose required check runs for 30 minutes with no state change does NOT shelve; the wait continues and reads the real verdict.
+  - With no check present at all and no progress for the window, the behaviour is unchanged (shelve ci-unavailable).
+  - Unit test on the pure decision: an in-flight check re-arms the idle clock; absence does not.
+  - The default idle window is documented against the measured CI p95, with the measurement cited.
+
+  Immediate mitigation until this lands: launchers export AIDA_WORKER_CI_IDLE well above the CI ceiling (2400 has been used successfully for slow GitLab drains).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T17:47:10.008439484Z
+modified_at: 2026-09-19T17:47:10.008439484Z
+req_type: Bug
+tags:
+- ci-wait
+- from:live-0919
+- orchestrator
+- parent:EPIC-62
+- regression-interaction
+- throughput
