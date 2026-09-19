@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b806-8049-7d62-9105-1d5c62ccbef4
+  position: 0
+  added_by: claude-product-1
+  note: 'Round 2 CI red on PR #1961 (run 35434601580): the new test tags_replace_warning_tests::doctor_detects_and_heals_all_thirteen_incident_specs fails at line 156 (left == right assertion on the detected/healed set) while the other new tests pass. Likely the doctor fixture or the git-log diff scan returns a different count than 13 in CI (e.g. the fixture commits lack the parent tag pre-image, or the scan window/author filter differs from local). Make the fixture self-contained (create the 13 specs + the tag-dropping commits inside the test''s temp store), assert on the sorted id list rather than a count, and run the test in an isolated temp HOME so no local store leaks in. Then push.'
+  added_at: 2026-09-19T09:30:42.676779873Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
