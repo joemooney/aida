@@ -19,12 +19,12 @@ description: |-
   Acceptance: with a PR whose base is behind and whose rebase is clean, the reviewer phase rebases, says so, and proceeds to review with no shelve; with a conflicting rebase, the spec shelves with the stale-base-conflict cause, the branch is untouched, and the message names the manual recipe; the rebase is attempted at most once per phase entry; unit test on the pure decision (behind+clean / behind+conflict / current) and a fixture for the bounded-attempt rule.
 
   Related: BUG-1218 (the guard being obeyed), TASK-1272 (drain resume — the manual counterpart), EPIC-62.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:31:04.937729263Z
-modified_at: 2026-09-19T17:46:07.166262840Z
+modified_at: 2026-09-19T21:21:33.422895869Z
 req_type: Bug
 tags:
 - auto-complete
@@ -58,16 +58,26 @@ comments:
   created_at: 2026-09-19T17:35:07.684236997Z
   modified_at: 2026-09-19T17:35:07.684236997Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bb8b-c0e7-7061-b7f9-8728ec5b80e8
+  author: aida-auto-bump
+  timestamp: 2026-09-19T21:21:33.415847075Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bb8b-c0ee-7353-979b-ed910638c008
+  timestamp: 2026-09-19T21:21:33.422894482Z
+  agent: implementer
+  commit_sha: fc28aae4117bf985be192845092da9229731533d
+  summary: Completed via merge fc28aae4
+  punted:
+  - 'punted: CI state unavailable: CI idle for 600s with no progress — giving up'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T17:35:46.883925109Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-unavailable
-  detail: 'CI state unavailable: CI idle for 600s with no progress — giving up'
-  recovery_hint: 'CI state could not be read after bounded retries, so the gate stayed closed. Check forge connectivity with `gh api /rate_limit`, then re-run: `aida queue work BUG-1268 --auto-complete`.'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T17:46:07.166262840Z
+  completed_at: 2026-09-19T21:21:33.415657074Z
+  completion_sha: fc28aae4117bf985be192845092da9229731533d
