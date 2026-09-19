@@ -153,8 +153,8 @@ pub(crate) struct RedRefinement {
     pub(crate) real: Vec<String>,
     /// Red checks ignored because they are non-required AND informational.
     pub(crate) ignored_informational: Vec<String>,
-    /// `merge-hold-gate` is red and the local hold marker exists: the hold
-    /// itself, released at merge — not a CI failure.
+    /// `merge-hold-gate` is red and a local marker or confirmed forge label
+    /// exists: the hold itself, released at merge — not a CI failure.
     pub(crate) hold_gate_is_the_hold: bool,
     /// `merge-hold-gate` is red but NO local marker exists — a lingering label
     /// (the marker was cleared without the label re-sync). Counted in `real`
@@ -207,7 +207,10 @@ pub(crate) fn classify_red(
     required: &[String],
     cfg: &CiGateConfig,
     hold_marker_present: bool,
+    hold_label_present: bool,
 ) -> RedRefinement {
+    // TASK-1287: an explicit `pr ship` may confirm a label-only supervised
+    // hold even when no drain-created marker exists.
     let mut out = RedRefinement::default();
     let is_required = |name: &str| required.iter().any(|r| r.eq_ignore_ascii_case(name));
     for row in rows {
@@ -222,7 +225,7 @@ pub(crate) fn classify_red(
             continue;
         }
         if row.name.eq_ignore_ascii_case(HOLD_GATE_CHECK) {
-            if hold_marker_present {
+            if hold_marker_present || hold_label_present {
                 out.hold_gate_is_the_hold = true;
             } else {
                 out.hold_gate_label_lingering = true;
@@ -310,6 +313,7 @@ pub(crate) fn refine_red(
     forge: &dyn crate::forge::Forge,
     change: &crate::forge::ChangeRef,
     hold_marker_present: bool,
+    hold_label_present: bool,
     settle_timeout: Duration,
     poll_interval: Duration,
 ) -> anyhow::Result<RedRefinement> {
@@ -318,7 +322,13 @@ pub(crate) fn refine_red(
     let deadline = Instant::now() + settle_timeout;
     loop {
         let rows = forge.check_rows(change)?;
-        let r = classify_red(&rows, &required, &cfg, hold_marker_present);
+        let r = classify_red(
+            &rows,
+            &required,
+            &cfg,
+            hold_marker_present,
+            hold_label_present,
+        );
         if r.is_real() || !r.has_pending() || Instant::now() >= deadline {
             return Ok(r);
         }
@@ -404,6 +414,7 @@ mod tests {
             &req(&[HOLD_GATE_CHECK]),
             &CiGateConfig::default(),
             true,
+            false,
         );
         assert!(!r.is_real(), "{r:?}");
         assert!(r.hold_gate_is_the_hold);
@@ -412,12 +423,13 @@ mod tests {
     }
 
     #[test]
-    fn hold_gate_red_without_marker_is_a_lingering_label_and_real() {
+    fn hold_gate_red_without_marker_or_confirmed_label_is_real() {
         let rows = [row(HOLD_GATE_CHECK, "merge-hold-gate", "fail")];
         let r = classify_red(
             &rows,
             &req(&[HOLD_GATE_CHECK]),
             &CiGateConfig::default(),
+            false,
             false,
         );
         assert!(r.is_real());
@@ -427,6 +439,21 @@ mod tests {
             "{}",
             r.describe(7)
         );
+    }
+
+    #[test]
+    fn hold_gate_red_with_label_only_is_the_hold_not_a_failure() {
+        let rows = [row(HOLD_GATE_CHECK, "merge-hold-gate", "fail")];
+        let r = classify_red(
+            &rows,
+            &req(&[HOLD_GATE_CHECK]),
+            &CiGateConfig::default(),
+            false,
+            true,
+        );
+        assert!(!r.is_real(), "{r:?}");
+        assert!(r.hold_gate_is_the_hold);
+        assert!(!r.hold_gate_label_lingering);
     }
 
     #[test]
@@ -443,6 +470,7 @@ mod tests {
             &req(&[HOLD_GATE_CHECK]),
             &CiGateConfig::default(),
             false,
+            false,
         );
         assert!(!r.is_real(), "{r:?}");
         assert_eq!(
@@ -454,6 +482,7 @@ mod tests {
             &rows,
             &req(&["Build (windows-latest)"]),
             &CiGateConfig::default(),
+            false,
             false,
         );
         assert_eq!(r.real, vec!["Build (windows-latest)".to_string()]);
@@ -472,17 +501,19 @@ mod tests {
             &req(&[HOLD_GATE_CHECK]),
             &CiGateConfig::default(),
             true,
+            false,
         );
         assert_eq!(r.real, vec!["Build (ubuntu-latest)".to_string()]);
         assert!(r.hold_gate_is_the_hold);
         // No branch protection at all + no allow-list hit → still real.
-        let r = classify_red(&rows[..1], &[], &CiGateConfig::default(), false);
+        let r = classify_red(&rows[..1], &[], &CiGateConfig::default(), false, false);
         assert!(r.is_real());
         // Cancelled counts as red.
         let r = classify_red(
             &[row("Build (ubuntu-latest)", "CI", "cancel")],
             &[],
             &CiGateConfig::default(),
+            false,
             false,
         );
         assert!(r.is_real());
@@ -499,7 +530,7 @@ mod tests {
             ),
             row(HOLD_GATE_CHECK, "merge-hold-gate", "fail"),
         ];
-        let r = classify_red(&rows, &[], &CiGateConfig::default(), true);
+        let r = classify_red(&rows, &[], &CiGateConfig::default(), true, false);
         assert!(!r.is_real());
         assert_eq!(r.pending, vec!["Build (ubuntu-latest)".to_string()]);
     }
@@ -690,13 +721,31 @@ mod tests {
                 },
             ]),
         );
-        let r = refine_red(dir.path(), &f, &change(), true, Duration::from_secs(1), ms).unwrap();
+        let r = refine_red(
+            dir.path(),
+            &f,
+            &change(),
+            true,
+            false,
+            Duration::from_secs(1),
+            ms,
+        )
+        .unwrap();
         assert!(!r.is_real() && r.hold_gate_is_the_hold);
         assert!(!wait_hold_gate_green(&f, &change(), Duration::from_millis(3), ms).unwrap());
         // No rows (the pure-git default) → Err, callers keep the coarse verdict;
         // and the hold-gate wait has nothing to wait on.
         let f = fake(&[R::Registered], None);
-        assert!(refine_red(dir.path(), &f, &change(), true, Duration::from_secs(1), ms).is_err());
+        assert!(refine_red(
+            dir.path(),
+            &f,
+            &change(),
+            true,
+            false,
+            Duration::from_secs(1),
+            ms,
+        )
+        .is_err());
         assert!(wait_hold_gate_green(&f, &change(), Duration::from_millis(3), ms).unwrap());
     }
 
