@@ -9,7 +9,8 @@ gate refuses the change — so this is a CHECK, not a CLAUDE.md rule.
 
 RULE
 ----
-If a diff touches the CLI command/flag SURFACE (`aida-cli/src/cli.rs`) OR the
+If a diff touches the CLI command/flag SURFACE (`aida-cli-lib/src/cli.rs`, or
+the legacy `aida-cli/src/cli.rs`) OR the
 agent-facing skill/command SET (`.claude/skills/`, `.claude/commands/`, or their
 `aida-core/templates/{skills,commands}/` masters), then at least one spec the diff
 REFERENCES must carry doc-impact intent — i.e. non-empty `interface_changes`
@@ -36,8 +37,7 @@ USAGE
     python3 docs/cli/verify-interface-changes.py <base> <head>
 
 Exit 0 = clean (no surface change, or surface change with a marked spec).
-Exit 0 (+ ::warning::) = surface change with no doc-impact-marked spec
-(WARN-FIRST, non-blocking — STORY-603 / operator 2026-06-13; graduate to hard fail once proven).
+Exit 1 = surface change with no doc-impact-marked spec.
 Exit 2 = could not resolve the store (can't verify) — soft, prints SKIP.
 """
 import os
@@ -51,7 +51,9 @@ REPO = subprocess.run(
 
 # Surface globs: a touched path matching any of these arms the gate.
 SURFACE_PATHS = (
-    "aida-cli/src/cli.rs",  # CLI command/flag definitions
+    # trace:BUG-1238 | ai:codex
+    "aida-cli-lib/src/cli.rs",  # current CLI command/flag definitions
+    "aida-cli/src/cli.rs",  # legacy path, retained for backports/safety
 )
 SURFACE_DIRS = (
     ".claude/skills/",
@@ -180,13 +182,13 @@ def main():
     specs = referenced_specs(base, head)
     if not specs:
         print(
-            "WARN doc-intent (non-blocking) — surface changed but the diff references no spec.\n"
+            "ERROR doc-intent — surface changed but the diff references no spec.\n"
             "    A CLI/skill surface change must trace to a spec. Add a (SPEC-ID)\n"
             "    commit trailer or a `// trace:SPEC-ID` comment, then mark doc-impact\n"
             "    on that spec (populate interface_changes or add a `docs:impacted` tag)."
         )
-        print("::warning::doc-intent: surface changed but the diff references no spec (WARN-first; non-blocking)")
-        sys.exit(0)
+        print("::error::doc-intent: surface changed but the diff references no spec")
+        sys.exit(1)
 
     print(f"referenced spec(s): {', '.join(sorted(specs))}")
 
@@ -215,15 +217,15 @@ def main():
         sys.exit(2)
 
     print(
-        "WARN doc-intent (non-blocking) — surface changed but NO referenced spec marks doc-impact.\n"
+        "ERROR doc-intent — surface changed but NO referenced spec marks doc-impact.\n"
         f"    Referenced: {', '.join(sorted(specs))}\n"
         "    Fix: on the shaping spec, populate `interface_changes` (value-framed cli/\n"
         "    mcp/tui deltas — see `aida queue done --interface-cli ...`) OR add a\n"
         "    `docs:impacted` tag (`aida edit <spec> --tags docs:impacted`). This is the\n"
         "    doc-intent protocol: the spec is the source of WHY the documenter needs."
     )
-    print("::warning::doc-intent: surface change not marked with doc-impact (WARN-first; non-blocking — populate interface_changes or add docs:impacted to silence)")
-    sys.exit(0)
+    print("::error::doc-intent: surface change not marked with doc-impact (populate interface_changes or add docs:impacted)")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

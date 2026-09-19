@@ -258,6 +258,8 @@ jobs:
           fi
           BASE="origin/${{ github.base_ref }}"
           git fetch --no-tags origin "${{ github.base_ref }}" 2>/dev/null || true
+          # trace:BUG-1238 | ai:codex
+          python3 -m unittest tests/test_verify_interface_changes.py
           python3 docs/cli/verify-interface-changes.py "${BASE}" HEAD
 
       # STORY-597: CLI-manual drift-guard (substrate-as-bouncer). Asserts every
