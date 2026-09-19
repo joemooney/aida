@@ -1,0 +1,26 @@
+id: 01a0bb98-8094-72d0-bb04-c45cdb1995dd
+spec_id: STORY-1358
+agreed_id: STORY-1358
+title: 'Review PR-1975: [AI:codex] fix(cli): add safe edit description sources (BUG-1234)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0bb86`) for branch `bug-1234-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1975>
+  - Branch: `bug-1234-work` → `main`
+
+  ## Covers
+
+  - BUG-1234
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1975` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:35:28.916898403Z
+modified_at: 2026-09-19T21:35:28.916898403Z
+req_type: Story
