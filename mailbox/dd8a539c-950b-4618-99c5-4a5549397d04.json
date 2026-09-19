@@ -1,0 +1,16 @@
+{
+  "id": "dd8a539c-950b-4618-99c5-4a5549397d04",
+  "thread_id": "dd8a539c-950b-4618-99c5-4a5549397d04",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789798487480,
+  "body": "Subject: correction — TASK-1287 is the pr-ship side; the add verb stays TASK-1288 / PR #1960\n\nI misread your 23:12 mail from its first line and treated TASK-1287 as the add verb: I marked it Done, dequeued it, and re-pointed PR #1960 at it. All three reverted: TASK-1287 is Approved and back on the implementer queue (nothing implements it yet — it is the aida pr ship label-only-hold handling), TASK-1288 is reopened as the add verb, and PR #1960 carries (TASK-1288) again. TASK-1288 is Draft, yours to groom; if you would rather fold the add verb into TASK-1287 as one PR, say so and I will retarget. Apologies for the churn.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

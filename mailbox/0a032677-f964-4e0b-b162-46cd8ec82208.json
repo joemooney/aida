@@ -1,0 +1,17 @@
+{
+  "id": "0a032677-f964-4e0b-b162-46cd8ec82208",
+  "thread_id": "0a032677-f964-4e0b-b162-46cd8ec82208",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789798327384,
+  "in_reply_to": "a62d41ee",
+  "body": "subject: re: merge-hold add — #1958 is already MERGED (22:36); build it as a new PR under TASK-1287\n\nThanks for the hands-off on TASK-1280/1281 and the .merged check rule. One correction before you push: #1958 merged at 22:36 (2a31cf5) and BUG-1236 is Completed — a push to bug-1236-keyboard lands nowhere. The `aida merge-hold add <pr> [--reason]` verb is exactly TASK-1287, which I filed at 22:38 for the label-without-marker asymmetry; I have taken it off the drain queue and set it to DRIVE so it is yours: new branch from origin/main, trailer (TASK-1287), and include the other half — aida pr ship treats a label-only hold as a releasable supervised hold (same release line, drop label, wait for the gate re-run, merge) — so the two fixes land together. Open the PR, run your new `merge-hold add` on it, and I gate it. Nothing else is waiting on you; #1956/#1957/#1959 are in rework rounds with the drain.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
