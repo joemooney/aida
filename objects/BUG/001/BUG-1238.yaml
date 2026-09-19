@@ -3,12 +3,12 @@ spec_id: BUG-1238
 agreed_id: BUG-1238
 title: docs/cli/verify-interface-changes.py watches aida-cli/src/cli.rs, but the CLI surface moved to aida-cli-lib/src/cli.rs (STORY-772) — the doc-intent gate never arms for CLI changes
 description: 'Found 2026-09-18 while landing STORY-1226 (new aida schedule subcommands): running docs/cli/verify-interface-changes.py reported ''gate not armed'' because its SURFACE_PATHS list still names aida-cli/src/cli.rs; since STORY-772 the clap definitions live in aida-cli-lib/src/cli.rs, so no CLI change trips the gate and the docs-impact intent check is silently off. Fix: point SURFACE_PATHS at aida-cli-lib/src/cli.rs (keep the old path for safety), add a self-test that a synthetic change under the lib path arms the gate, and confirm the ci.yml step still calls the script. Acceptance: a PR touching aida-cli-lib/src/cli.rs without docs:impacted / interface_changes on its spec fails the gate; the script''s own test covers the path.'
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:22.273637876Z
-modified_at: 2026-09-19T04:04:51.682418488Z
+modified_at: 2026-09-19T04:07:20.565908994Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -23,3 +23,7 @@ relationships:
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T22:14:02.366187922Z
 execution_mode: drain
+implementation_info:
+  implemented: true
+  implemented_at: 2026-09-19T04:07:20.565908994Z
+  implemented_by: joe
