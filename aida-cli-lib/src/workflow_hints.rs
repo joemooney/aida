@@ -340,31 +340,45 @@ pub(crate) enum QueueDoneOwnership {
     Forced(String),
 }
 
-/// A target-named branch passes. Otherwise at least one commit since the
-/// merge-base must reference the target; `--force` is the ledgered override.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueDoneCommitEvidence {
+    pub(crate) commits_seen: usize,
+    pub(crate) spec_ids: Vec<String>,
+}
+
+/// A target-named branch passes. On an unscoped branch, readable commit
+/// evidence refuses only when commits exclusively name other requirements;
+/// `--force` is the ledgered override.
 // trace:BUG-1244 | ai:codex
 pub(crate) fn queue_done_ownership(
     branch: &str,
     spec: &str,
-    commit_spec_ids: &[String],
+    commit_evidence: Option<&QueueDoneCommitEvidence>,
     force: bool,
 ) -> QueueDoneOwnership {
     if branch_belongs_to_spec(branch, spec) {
         return QueueDoneOwnership::Proceed;
     }
     let foreign_branch = branch_names_requirement(branch);
-    if !foreign_branch
-        && commit_spec_ids
-            .iter()
-            .any(|id| id.eq_ignore_ascii_case(spec))
-    {
-        return QueueDoneOwnership::Proceed;
+    if !foreign_branch {
+        if let Some(evidence) = commit_evidence {
+            if evidence.commits_seen == 0
+                || evidence.spec_ids.is_empty()
+                || evidence
+                    .spec_ids
+                    .iter()
+                    .any(|id| id.eq_ignore_ascii_case(spec))
+            {
+                return QueueDoneOwnership::Proceed;
+            }
+        }
     }
     let evidence = if foreign_branch {
         "the branch names a different requirement".to_string()
-    } else if commit_spec_ids.is_empty() {
-        "no since-merge-base commit references the target".to_string()
+    } else if commit_evidence.is_none() {
+        "since-merge-base commit evidence could not be read".to_string()
     } else {
+        let commit_spec_ids = &commit_evidence.expect("checked above").spec_ids;
         format!(
             "since-merge-base commits reference {}, not the target",
             commit_spec_ids.join(", ")
@@ -1362,7 +1376,7 @@ mod tests {
     }
 
     #[test]
-    fn queue_done_ownership_requires_commit_evidence_on_unscoped_branches() {
+    fn queue_done_ownership_allows_default_and_non_spec_branches() {
         for branch in [
             "main",
             "master",
@@ -1372,20 +1386,40 @@ mod tests {
             "cluster/one",
         ] {
             assert!(!branch_belongs_to_spec(branch, "BUG-1236"), "{branch}");
-            assert!(matches!(
-                queue_done_ownership(branch, "BUG-1236", &[], false),
-                QueueDoneOwnership::Refuse(_)
-            ));
             assert_eq!(
-                queue_done_ownership(branch, "BUG-1236", &["BUG-1236".into()], false),
+                queue_done_ownership(
+                    branch,
+                    "BUG-1236",
+                    Some(&QueueDoneCommitEvidence {
+                        commits_seen: 0,
+                        spec_ids: vec![],
+                    }),
+                    false,
+                ),
+                QueueDoneOwnership::Proceed
+            );
+            assert_eq!(
+                queue_done_ownership(
+                    branch,
+                    "BUG-1236",
+                    Some(&QueueDoneCommitEvidence {
+                        commits_seen: 1,
+                        spec_ids: vec!["BUG-1236".into()],
+                    }),
+                    false,
+                ),
                 QueueDoneOwnership::Proceed
             );
         }
     }
 
     #[test]
-    fn queue_done_command_refuses_without_target_evidence() {
-        let outcome = queue_done_ownership("pr-1948", "BUG-1236", &["STORY-1221".into()], false);
+    fn queue_done_command_pr_branch_refuses_foreign_spec_evidence() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["STORY-1221".into()],
+        };
+        let outcome = queue_done_ownership("pr-1948", "BUG-1236", Some(&evidence), false);
         let QueueDoneOwnership::Refuse(reason) = outcome else {
             panic!("queue done must refuse, got {outcome:?}");
         };
@@ -1395,23 +1429,38 @@ mod tests {
 
     #[test]
     fn queue_done_command_foreign_branch_cannot_borrow_target_commit() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 1,
+            spec_ids: vec!["STORY-1221".into(), "BUG-1236".into()],
+        };
         assert!(matches!(
-            queue_done_ownership(
-                "story-1221",
-                "BUG-1236",
-                &["STORY-1221".into(), "BUG-1236".into()],
-                false,
-            ),
+            queue_done_ownership("story-1221", "BUG-1236", Some(&evidence), false,),
             QueueDoneOwnership::Refuse(_)
         ));
     }
 
     #[test]
-    fn queue_done_command_force_explicitly_overrides_missing_evidence() {
-        let outcome = queue_done_ownership("main", "BUG-1236", &[], true);
+    fn queue_done_command_allows_untagged_commits() {
+        let evidence = QueueDoneCommitEvidence {
+            commits_seen: 2,
+            spec_ids: vec![],
+        };
+        assert_eq!(
+            queue_done_ownership("feature/no-spec", "BUG-1236", Some(&evidence), false),
+            QueueDoneOwnership::Proceed
+        );
+    }
+
+    #[test]
+    fn queue_done_command_force_explicitly_overrides_unreadable_evidence() {
+        assert!(matches!(
+            queue_done_ownership("main", "BUG-1236", None, false),
+            QueueDoneOwnership::Refuse(_)
+        ));
+        let outcome = queue_done_ownership("main", "BUG-1236", None, true);
         let QueueDoneOwnership::Forced(reason) = outcome else {
             panic!("--force must produce a recorded override, got {outcome:?}");
         };
-        assert!(reason.contains("no since-merge-base commit"), "{reason}");
+        assert!(reason.contains("could not be read"), "{reason}");
     }
 }

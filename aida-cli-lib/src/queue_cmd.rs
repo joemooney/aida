@@ -8,13 +8,16 @@
 use crate::*;
 use std::path::Path;
 
-/// Collect requirement references from commits introduced since the current
-/// branch diverged from the default branch. Failure yields no evidence, which
-/// intentionally makes the ownership gate fail closed.
+/// Collect commit and requirement-reference evidence introduced since the
+/// current branch diverged from the default branch. `None` means the range
+/// could not be read and intentionally makes the ownership gate fail closed.
 // trace:BUG-1244 | ai:codex
-fn queue_done_commit_spec_ids(project_root: &Path, branch: &str) -> Vec<String> {
+fn queue_done_commit_evidence(
+    project_root: &Path,
+    branch: &str,
+) -> Option<workflow_hints::QueueDoneCommitEvidence> {
     let Some(default_ref) = resolve_default_branch_ref(project_root) else {
-        return Vec::new();
+        return None;
     };
     let range = format!("{default_ref}..{branch}");
     let output = std::process::Command::new("git")
@@ -23,13 +26,18 @@ fn queue_done_commit_spec_ids(project_root: &Path, branch: &str) -> Vec<String> 
         .args(["log", "--format=%B%x00", &range])
         .output();
     let Ok(output) = output else {
-        return Vec::new();
+        return None;
     };
     if !output.status.success() {
-        return Vec::new();
+        return None;
     }
     let mut ids = Vec::new();
-    for message in String::from_utf8_lossy(&output.stdout).split('\0') {
+    let output = String::from_utf8_lossy(&output.stdout);
+    let messages: Vec<_> = output
+        .split('\0')
+        .filter(|message| !message.trim().is_empty())
+        .collect();
+    for message in &messages {
         let mut found = extract_spec_ids_from_commit(message);
         found.extend(extract_referenced_spec_ids_from_commit(message));
         for id in found {
@@ -41,7 +49,10 @@ fn queue_done_commit_spec_ids(project_root: &Path, branch: &str) -> Vec<String> 
             }
         }
     }
-    ids
+    Some(workflow_hints::QueueDoneCommitEvidence {
+        commits_seen: messages.len(),
+        spec_ids: ids,
+    })
 }
 
 /// STORY-566: `aida queue advance` — a ROUTER over the queue. Walks each queued
@@ -4375,17 +4386,18 @@ pub(crate) fn handle_queue_command(
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
 
-            // BUG-1244: fail closed before any lifecycle mutation unless the
-            // branch names this spec or a commit since its merge-base does.
+            // BUG-1244: fail closed before any lifecycle mutation when a
+            // branch names another spec, commit evidence exclusively names
+            // other specs, or the since-merge-base range cannot be read.
             // `--force` remains the explicit, ledgered recovery escape hatch.
             // trace:BUG-1244 | ai:codex
             if let Ok(root) = find_project_root() {
                 if let Some(branch) = current_branch_at(&root) {
-                    let commit_ids = queue_done_commit_spec_ids(&root, &branch);
+                    let commit_evidence = queue_done_commit_evidence(&root, &branch);
                     match workflow_hints::queue_done_ownership(
                         &branch,
                         display_id,
-                        &commit_ids,
+                        commit_evidence.as_ref(),
                         *force,
                     ) {
                         workflow_hints::QueueDoneOwnership::Proceed => {}
