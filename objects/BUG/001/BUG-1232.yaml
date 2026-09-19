@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:35:48.973706941Z
-modified_at: 2026-09-19T02:22:35.015620423Z
+modified_at: 2026-09-19T03:42:06.074011490Z
 req_type: Bug
 tags:
 - batch:followups-0918e
@@ -78,6 +78,12 @@ comments:
   content: 'Reviewer round 3 on PR #1950: aida-cli-lib/src/forge.rs:2093-2099 builds the merge request without GitLab''s sha field. A commit pushed after the detailed_merge_status read can therefore be merged without being the reviewed caeffc4a head. Parse the MR sha and send it on PUT /merge, treating a 409 SHA mismatch as stale-head/re-review rather than retrying an unpinned merge. | aida-cli-lib/src/forge.rs:2605-2609 classifies GitLab''s documented approvals_syncing state as Blocked even though it is transient. Add it to the bounded wait-and-reread set and cover it in the status-classification test.  Concretely: parse the MR''s sha from the same detailed-status read and send it as the sha field on PUT /merge; map a 409 (SHA mismatch) to a stale-head outcome that shelves for re-review instead of retrying; add approvals_syncing to the Wait set and to gitlab_merge_gate_classifies_every_transient_status; fixture-test the sha field and the 409 path.'
   created_at: 2026-09-19T02:22:34.749983650Z
   modified_at: 2026-09-19T02:22:34.749983650Z
+- id: 01a0b7c1-cafa-7502-932f-2137099aa6f3
+  author: joe
+  content: 'Resolved PR #1950 review findings: GitLab REST merges now include the inspected MR head SHA and fail closed with a re-review error on SHA mismatch; approvals_syncing joins the bounded wait set. Verified cargo fmt, 5 focused gitlab_merge tests, and 63 forge tests (1 ignored live test).'
+  created_at: 2026-09-19T03:42:06.074011490Z
+  modified_at: 2026-09-19T03:42:06.074011490Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
