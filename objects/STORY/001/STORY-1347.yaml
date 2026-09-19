@@ -1,0 +1,26 @@
+id: 01a0ba16-f892-79d2-8069-e0d9d2e6c859
+spec_id: STORY-1347
+agreed_id: STORY-1347
+title: 'Review PR-1967: [AI:codex] fix(ci): keep unavailable probes behind gate (BUG-1250)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a0ba12`) for branch `bug-1250`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1967>
+  - Branch: `bug-1250` → `main`
+
+  ## Covers
+
+  - BUG-1250
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1967` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T14:34:22.738597335Z
+modified_at: 2026-09-19T14:34:22.738597335Z
+req_type: Story
