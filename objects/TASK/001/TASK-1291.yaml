@@ -1,0 +1,32 @@
+id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
+spec_id: TASK-1291
+agreed_id: TASK-1291
+title: 'Round-1 reviewer does a full sweep: enumerate every acceptance criterion with its verification status and list all defects, so rounds converge instead of tailing one finding at a time'
+description: |
+  Evidence (2026-09-18 12:00 → 2026-09-19 09:30): reviewer rounds did not converge, they tailed — each round surfaced ONE new finding rather than the full set, so a spec paid a fresh implementer session plus a ~9-10 min CI cycle per finding.
+  - BUG-1244: five rounds, five different findings (fail-open → broke two integration tests → portability ratchet → followed the reviewer's literal wording over the clarified acceptance → merged)
+  - BUG-1232: four rounds (unchecked status + rebase semantics → rebase contract → SHA pinning + approvals_syncing → merged)
+  - TASK-1271: four rounds (MCP path missing record_seen → stale base → backfill fabricates historical latency → merged)
+  - TASK-1285, BUG-1265: four rounds each
+  The findings within a spec were mostly INDEPENDENT of each other and visible in the same diff — they did not require the previous fix to exist before they could be seen.
+
+  Proposal: the round-1 reviewer prompt requires a full sweep before any verdict — enumerate EVERY acceptance criterion of the spec with its verification status (verified by <test//evidence> | unverified | not-applicable-because), and list every defect found across the whole diff, not the first one. The verdict then carries the complete list. Later rounds keep today's behaviour (verify the previous findings are addressed, plus anything newly introduced). Cheap to state, no new agent, no extra phase.
+
+  Acceptance:
+  - The round-1 reviewer prompt contains the enumerate-all-criteria instruction and the "list every defect, not the first" instruction.
+  - A round-1 verdict for a multi-criterion spec lists a status line per criterion.
+  - Round-2+ prompts are unchanged apart from carrying the prior findings (today's behaviour).
+  - Measured on the next 20 specs: median rounds-to-merge drops; recorded on this spec as the acceptance evidence.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:31:49.842260131Z
+modified_at: 2026-09-19T16:31:49.842260131Z
+req_type: Task
+tags:
+- cycle-time
+- from:failure-analysis-0919
+- orchestrator
+- parent:EPIC-28
+- review
