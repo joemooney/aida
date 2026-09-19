@@ -41,7 +41,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:15:17.281972438Z
-modified_at: 2026-09-19T16:36:12.213314537Z
+modified_at: 2026-09-19T16:36:15.876739191Z
 req_type: Bug
 tags:
 - auto-complete
@@ -49,3 +49,10 @@ tags:
 - ci
 - failure-2
 - failure-kind:ci-red
+comments:
+- id: 01a0ba86-8f84-7c93-939c-f18e0c0e8cca
+  author: joe
+  content: '[advisor:triage] Rejected as an auto-drafted phase record (TASK-266): a red Build on BUG-1265''s own round is the work failing its tests, not an orchestrator defect. The round was reworked and the spec is progressing normally.'
+  created_at: 2026-09-19T16:36:15.876739191Z
+  modified_at: 2026-09-19T16:36:15.876739191Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
