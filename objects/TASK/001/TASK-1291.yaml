@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T19:24:41.312515808Z
+modified_at: 2026-09-19T19:42:24.422183229Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -118,6 +118,12 @@ comments:
   content: 'Recovered by the product seat: the codex implementer COMPLETED the corrected fix but exited before committing, so phase 2 correctly refused to end a session with uncommitted changes. The work matched the corrected brief exactly — contains() replaced by the prefix predicate on the trimmed comment, plus a negative test for embedded and quoted markers beside the existing positive test for real findings blocks. Both tests pass. Committed as ca309b1e78 and pushed to PR #1971; session ended. Nothing is owed on the implementation — verify at the new head and let the reviewer take round 2.'
   created_at: 2026-09-19T19:24:41.040490004Z
   modified_at: 2026-09-19T19:24:41.040490004Z
+- id: 01a0bb30-faa6-7303-8a60-d3c6d071b141
+  author: joe
+  content: 'Round 2 acceptance resolution (2026-09-19): reviewer finding 2 cites the former post-deployment 20-spec measurement criterion. The owning spec''s Acceptance section now explicitly moves that measurement to related follow-up TASK-1294 because TASK-1291 must merge before twenty post-deployment specs can exist. No median is claimed or fabricated here; TASK-1294 is the durable measurement obligation. Round 2 also centralizes the canonical findings-block prefix-at-start predicate and verifies all durable-history consumers reject embedded/quoted markers.'
+  created_at: 2026-09-19T19:42:24.422183229Z
+  modified_at: 2026-09-19T19:42:24.422183229Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
