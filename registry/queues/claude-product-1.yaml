@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 3 on PR #1956 (portability fixed; one fail-open left): aida-cli-lib/src/workflow_hints.rs: branch_belongs_to_spec returns true when ids.is_empty(), so branches such as pr-1948, main, or arbitrary feature branches are accepted for every target without verifying any since-merge-base commit references that target. BUG-1244 requires branch-name ownership OR a target-referencing commit, otherwise refusal. Add the missing commit-evidence gate and command-level unit coverage for both refusal and the explicit --force override.  Concretely: in workflow_hints::branch_belongs_to_spec, when the branch name carries no spec id, do NOT return true — scan the commits since the merge-base with the default branch for a (SPEC-ID) trailer or trace: reference to the target and accept only then; otherwise refuse with the existing message and the --force escape. Tests: pr-1948-style branch with no target-referencing commit → refused; same branch with one commit referencing the target → accepted; --force on the refused case → proceeds and ledgers. Keep the two integration tests green and the ratchet clean.'
+  added_at: 2026-09-19T10:04:09.168998941Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
