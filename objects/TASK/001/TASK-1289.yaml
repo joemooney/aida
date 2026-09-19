@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T20:36:39.739180643Z
+modified_at: 2026-09-19T20:36:41.000269501Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -586,6 +586,19 @@ comments:
     Carried forward and still open from round 1: the express override must clear no_preflight, and binary-dependent guards must run against a binary built from the worktree source rather than whatever is on PATH (finding 2 above is the stricter statement of the second half).
   created_at: 2026-09-19T20:36:39.463781544Z
   modified_at: 2026-09-19T20:36:39.463781544Z
+- id: 01a0bb62-aa95-71f1-8096-3051a03c1556
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1972):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1289: The publication boundary is not actually enforced. `orchestrated_implementer_ship_instruction` in aida-cli-lib/src/lib.rs:25670-25675 still tells full/through-ci/through-merge/skip-build children to run `aida pr ship --no-merge` and exit after the PR-open checkpoint (and other variants to run plain `aida pr ship`). The new preflight is reached only after that child exits, at aida-cli-lib/src/lib.rs:86498-86510. Updating only the aida-pr skill template leaves the generated launch prompt/context contradictory and permits the exact race acceptance forbids: a failing branch can already have an open PR before preflight refuses. Change the orchestrated launch/context instruction and enforce the child-side ship path so it commits/pushes without opening; add an integration-level test proving a failed portability guard leaves no PR while a passing guard lets the parent open it.
+    2. TASK-1289: Executable guards fail open on infrastructure/runtime failures. In aida-cli-lib/src/implementer_preflight.rs:286-306, a failed worktree-binary build, guard timeout, or process spawn error becomes `GuardResult::Skipped`; `decide` treats every Skipped result as Open. The acceptance exception permits skipping only an unknown/missing guard definition, not a configured guard that could not run. As written, a configured binary-dependent guard can be skipped after a compile failure, or any guard can time out/fail to start, and the PR is still opened without CI parity. Model resolved-but-unexecutable guards as failures/refusal (while retaining skip only for unknown/missing definitions) and test each fail-closed path.
+    3. TASK-1289: CI command bodies are not executed with CI-equivalent shell semantics. aida-cli-lib/src/implementer_preflight.rs:294-295 uses `bash -c`, whereas GitHub Actions' bash run steps use fail-fast semantics (`bash --noprofile --norc -e -o pipefail`). A multiline configured guard with an intermediate failed command followed by a successful command, or a failed pipeline component, can therefore pass preflight and fail CI. Invoke the extracted body with the same fail-fast/pipefail behavior and add regression tests for an intermediate `false` and a failing pipeline.
+    4. TASK-1289: The clean/custom-config latency criterion is not met because aida-cli-lib/src/implementer_preflight.rs:259-265 builds the full `aida` binary before inspecting whether any resolved configured guard uses it. A downstream project configuring only a lightweight guard such as formatting still pays an unrelated cargo build, beyond its guards' own runtime. Resolve guards first and lazily build only when at least one executable guard actually requires the worktree binary; cover a non-aida custom guard with a test that proves no build is attempted.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T20:36:40.725767178Z
+  modified_at: 2026-09-19T20:36:40.725767178Z
 execution_mode: drive
 implementation_info:
   implemented: true
