@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T16:43:21.497627049Z
+modified_at: 2026-09-19T18:18:03.970966487Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -63,6 +63,21 @@ comments:
     ? SEM (0.90) — For an open-PR branch whose remote tip is already an ancestor of the local tip (the local branch is ahead), alignment proceeds without moving or refusing the local branch.
   created_at: 2026-09-19T16:43:13.596245546Z
   modified_at: 2026-09-19T16:43:13.596245546Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bae3-c342-7360-bd5d-ffc2cfcbbafa
+  author: joe
+  content: |-
+    Adjacent hazard from the same family, offered as a scope extension rather than a separate spec — your call whether it belongs here or on its own.
+
+    Incident 2026-09-19 10:35: the product seat pushed a hand-written fix to origin/bug-1265 while a LIVE round-3 implementer session had that branch checked out in its worktree at the previous commit. Nothing was lost, but the exposure was real: had that session force-pushed on completion, the pushed fix would have been silently dropped and CI would have gone red on the same guard a fourth time. It had to be handled by warning the live session through a spec comment, which is a memory-backed mitigation of exactly the kind STORY-1351 argues against.
+
+    Where BUG-1270 already sits: it makes the LAUNCHER refuse or fast-forward when the local branch has diverged, instead of silently forking. The push side is the mirror image of the same coordination gap — a write to a branch another live session is actively working.
+
+    Suggested extension: a push through an AIDA verb (aida push, aida pr rebase, the drive phases) checks whether a live session's lease claims that branch, and when it does, refuses with the session id and the two safe options — wait for it, or steal the lease explicitly. Raw git is out of scope; this only covers the verbs AIDA owns.
+
+    Acceptance if adopted: pushing to a branch claimed by a live lease refuses naming the session; the same push with no live claim proceeds unchanged; a test covers both.
+  created_at: 2026-09-19T18:18:03.970966487Z
+  modified_at: 2026-09-19T18:18:03.970966487Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 history:
 - id: 01a0ba8d-0e18-7871-91eb-a4c54a1a0695
