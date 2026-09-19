@@ -1192,12 +1192,25 @@ mod bug_1205_ci_phase_fallthrough_tests {
     #[test]
     fn informational_red_falls_through_to_the_green_steps() {
         let src = include_str!("lib.rs");
-        let start = src
+        // BUG-1265 added drain-level test harnesses that also `impl PhaseDriver`,
+        // so searching the file for the first `fn finish_ci` now lands on a mock
+        // whose body is a one-line delegation. Anchor on the REAL impl block
+        // first, then find finish_ci inside it, so the guard keeps asserting the
+        // production path no matter how many harnesses exist.
+        // trace:BUG-1205 trace:BUG-1265 | ai:claude
+        let real_impl = src
+            .find(concat!(
+                "impl auto_complete::PhaseDriver ",
+                "for RealPhaseDriver {"
+            ))
+            .expect("real PhaseDriver impl present");
+        let start = src[real_impl..]
             .find(concat!(
                 "fn finish_ci",
                 "(&mut self) -> Result<(), auto_complete::PhaseFailure>"
             ))
-            .expect("finish_ci present");
+            .map(|i| real_impl + i)
+            .expect("finish_ci present in the real impl");
         let end = src[start..]
             .find(concat!("    fn ", "run_reviewer("))
             .map(|e| start + e)
