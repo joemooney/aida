@@ -637,6 +637,54 @@ fn prune_scratch_runs(root: &Path, keep: usize, max_age: Duration, now: SystemTi
 mod tests {
     use super::*;
 
+    // trace:BUG-1233 | ai:codex
+    fn set_dir_modified(path: &Path, modified: SystemTime) {
+        #[cfg(windows)]
+        let directory = {
+            use std::os::windows::fs::OpenOptionsExt;
+
+            // Round 3 (reviewer): backup semantics lets a DIRECTORY be opened,
+            // but a read-only handle lacks the access SetFileTime needs
+            // (OS error 5). Ask for FILE_WRITE_ATTRIBUTES explicitly — the
+            // one right set_times requires — instead of GENERIC_READ.
+            // trace:BUG-1233 | ai:claude
+            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+            const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
+            std::fs::OpenOptions::new()
+                .access_mode(FILE_WRITE_ATTRIBUTES)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+                .open(path)
+                .unwrap()
+        };
+        #[cfg(not(windows))]
+        let directory = std::fs::File::open(path).unwrap();
+
+        directory
+            .set_times(std::fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    // trace:BUG-1233 | ai:codex
+    fn windows_directory_handle_can_write_modified_time() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("timestamp-target");
+        std::fs::create_dir(&directory).unwrap();
+        let expected = SystemTime::now() - Duration::from_secs(60 * 60);
+
+        set_dir_modified(&directory, expected);
+
+        let actual = std::fs::metadata(&directory).unwrap().modified().unwrap();
+        let drift = actual
+            .duration_since(expected)
+            .unwrap_or_else(|error| error.duration());
+        assert!(
+            drift < Duration::from_secs(2),
+            "directory mtime differs from the requested value by {drift:?}"
+        );
+    }
+
     fn m(c: &str, t: &str, v: MatchVerdict, r: &str) -> TestMatch {
         TestMatch {
             criterion: c.into(),
@@ -769,20 +817,11 @@ mod tests {
             let run = root.path().join(format!("run-{index}"));
             std::fs::create_dir(&run).unwrap();
             let modified = now - Duration::from_secs((index as u64 + 1) * 60);
-            std::fs::File::open(&run)
-                .unwrap()
-                .set_times(std::fs::FileTimes::new().set_modified(modified))
-                .unwrap();
+            set_dir_modified(&run, modified);
         }
         let expired = root.path().join("expired");
         std::fs::create_dir(&expired).unwrap();
-        std::fs::File::open(&expired)
-            .unwrap()
-            .set_times(
-                std::fs::FileTimes::new()
-                    .set_modified(now - SCRATCH_MAX_AGE - Duration::from_secs(1)),
-            )
-            .unwrap();
+        set_dir_modified(&expired, now - SCRATCH_MAX_AGE - Duration::from_secs(1));
         let marker = root.path().join("leave-me.txt");
         std::fs::write(&marker, "not a run directory").unwrap();
 
