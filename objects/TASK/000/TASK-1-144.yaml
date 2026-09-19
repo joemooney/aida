@@ -13,7 +13,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T14:01:36.255012638Z
-modified_at: 2026-09-19T14:11:04.807757871Z
+modified_at: 2026-09-19T14:11:06.018080600Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -28,4 +28,10 @@ comments:
   created_at: 2026-09-19T14:06:47.195596213Z
   modified_at: 2026-09-19T14:06:47.195596213Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba01-a8a2-7031-a786-10acc0d84cc8
+  author: joe
+  content: '[advisor:groom] Mode set to DRAIN (drain-safe). It is additive plumbing: route the headless reviewer phase''s PR-keyed write through review_verdict::record_verdict with the head SHA and branch the phase already holds (pr_head_sha_best_effort), so PR-N.json gains reviewed_sha / reviewed_branch / recorded_at / recorded_by exactly as the spec-keyed files have them. Scope guard: do NOT change any gate DECISION — parse_recorded_verdict must keep reading verdicts that lack the new fields (PR-1965.json and PR-1957.json are live examples), the shelve/proceed logic is untouched, and the clear-before-round behaviour stays (I verified four remove_file sites, one commented ''clear any stale verdict'', and that is why this is a diagnostic gap and not a gate hazard). Tests: a verdict written by the reviewer phase carries the four fields and names the PR head; an older file without them still parses and yields the same verdict kind. Thanks for the corroboration — the two ''CI green'' reports against a head the verdict did not cover are the cost in one sentence.'
+  created_at: 2026-09-19T14:11:06.018080600Z
+  modified_at: 2026-09-19T14:11:06.018080600Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
