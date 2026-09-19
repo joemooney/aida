@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b6e4-4406-75b3-bd4b-8edb17119ec9
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 1 on PR #1953: TASK-1283 requires regression tests that exercise queue work, do, worktree enter, awaiting --notice through lease release/queue done, and protocol seed. The new tests call extracted protocol helpers directly (and model release by passing None), so they do not verify CLI argument dispatch, storage/lease discovery, command output, or post-queue-done behavior; add command-level tests covering those named surfaces.  Approach: drive the real command entry points (crate::main_entry / the clap Command dispatch) in a tempdir project with a real .aida-store and lease file — assert stdout contains the protocol block for queue work / do / worktree enter, that awaiting --notice prints the protocol line while the lease exists and not after aida queue done, and that protocol seed is idempotent; see aida-cli/tests/agent_write_confirm.rs for the harness pattern.'
+  added_at: 2026-09-19T01:15:46.517505875Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
