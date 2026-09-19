@@ -21,6 +21,32 @@ use std::io::Read;
 use crate::cli::MailboxCommand;
 use crate::*;
 
+/// Largest recorded read latency among the recipient's 100 most recent
+/// acknowledgements. Keeping this calculation shared lets transport-level
+/// acknowledgement tests verify the same history consumed by the CLI.
+// trace:TASK-1271 | ai:codex
+pub(crate) fn max_read_latency_ms(
+    project_root: &std::path::Path,
+    recipient: &str,
+    messages: &[aida_core::mailbox::Message],
+) -> Option<i64> {
+    let receipts = mailbox_store::read_receipts(project_root, recipient);
+    let mut read_latencies: Vec<(i64, i64)> = messages
+        .iter()
+        .filter_map(|message| {
+            receipts
+                .get(&message.id)
+                .map(|seen| (*seen, seen.saturating_sub(message.timestamp).max(0)))
+        })
+        .collect();
+    read_latencies.sort_by_key(|(seen, _)| std::cmp::Reverse(*seen));
+    read_latencies
+        .into_iter()
+        .take(100)
+        .map(|(_, latency)| latency)
+        .max()
+}
+
 /// Handler for `aida mailbox` — the local layer of the hybrid inter-agent
 /// mailbox (STORY-493). Reads/writes `.aida/mailbox/` via the pure
 /// `aida_core::mailbox` core; the git-canonical digest is a later slice.
@@ -58,21 +84,7 @@ pub(crate) fn handle_mailbox_command(
                 .map(|who| {
                     let watermark = mailbox_store::read_watermark(project_root, who);
                     let latency = aida_core::mailbox::mailbox_latency(who, &merged, watermark, now);
-                    let receipts = mailbox_store::read_receipts(project_root, who);
-                    let mut read_latencies: Vec<(i64, i64)> = merged
-                        .iter()
-                        .filter_map(|m| {
-                            receipts
-                                .get(&m.id)
-                                .map(|seen| (*seen, seen.saturating_sub(m.timestamp).max(0)))
-                        })
-                        .collect();
-                    read_latencies.sort_by_key(|(seen, _)| std::cmp::Reverse(*seen));
-                    let max_read = read_latencies
-                        .into_iter()
-                        .take(100)
-                        .map(|(_, latency)| latency)
-                        .max();
+                    let max_read = max_read_latency_ms(project_root, who, &merged);
                     serde_json::json!({
                         "recipient": who,
                         "last_seen_at": mailbox_store::read_last_seen(project_root, who),
@@ -344,8 +356,8 @@ pub(crate) fn handle_mailbox_command(
                     let full_inbox = inbox_for(who, &merged);
                     if let Some(newest) = full_inbox.iter().map(|m| m.timestamp).max() {
                         let ids: Vec<&str> = full_inbox.iter().map(|m| m.id.as_str()).collect();
-                        let _ = mailbox_store::record_seen(project_root, who, &ids);
-                        let _ = mailbox_store::set_watermark(project_root, who, newest);
+                        mailbox_store::record_seen(project_root, who, &ids)?;
+                        mailbox_store::set_watermark(project_root, who, newest)?;
                     }
                 }
             }

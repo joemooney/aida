@@ -2664,8 +2664,10 @@ impl<'a> McpServer<'a> {
         if mark_seen {
             if let Some(newest) = full.iter().map(|m| m.timestamp).max() {
                 let ids: Vec<&str> = full.iter().map(|m| m.id.as_str()).collect();
-                let _ = crate::mailbox_store::record_seen(&self.project_root, &agent, &ids);
-                let _ = crate::mailbox_store::set_watermark(&self.project_root, &agent, newest);
+                crate::mailbox_store::record_seen(&self.project_root, &agent, &ids)
+                    .map_err(|e| e.to_string())?;
+                crate::mailbox_store::set_watermark(&self.project_root, &agent, newest)
+                    .map_err(|e| e.to_string())?;
             }
         }
         serde_json::to_string_pretty(&json!({
@@ -9824,28 +9826,11 @@ mod tests {
         server
             .tool_read_inbox(&json!({ "agent": "claude", "mark_seen": true }))
             .unwrap();
+        let messages = crate::mailbox_store::read_local_messages(dir.path()).unwrap();
         let receipts = crate::mailbox_store::read_receipts(dir.path(), "claude");
-        let message_ids: Vec<&str> = peek_p["messages"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|m| m["id"].as_str().unwrap())
-            .collect();
         assert_eq!(receipts.len(), 2, "ack records a receipt for each message");
-        let max_read_latency_ms = message_ids
-            .iter()
-            .filter_map(|id| {
-                let sent_at = peek_p["messages"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .find(|m| m["id"].as_str() == Some(id))?["timestamp"]
-                    .as_i64()?;
-                receipts
-                    .get(*id)
-                    .map(|seen_at| seen_at.saturating_sub(sent_at).max(0))
-            })
-            .max();
+        let max_read_latency_ms =
+            crate::mailbox_cmd::max_read_latency_ms(dir.path(), "claude", &messages);
         assert!(
             max_read_latency_ms.is_some(),
             "latency history is populated after MCP mark_seen"
