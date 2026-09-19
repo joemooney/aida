@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T03:14:59.118017949Z
+modified_at: 2026-09-19T03:35:04.011972304Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -85,6 +85,24 @@ comments:
   content: 'Round 3 review fix: CLI inbox and MCP mark_seen now record receipts only for messages strictly newer than the pre-read watermark, while still advancing to the full inbox newest. Added MCP upgrade regression proving watermark-covered old mail is not backfilled and newly unread mail is receipted. Targeted tests pass.'
   created_at: 2026-09-19T03:14:59.118017949Z
   modified_at: 2026-09-19T03:14:59.118017949Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b7bb-5a4b-7a20-8233-349f680e2340
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1942
+    agent: codex
+    ran-at: 2026-09-18 20:35 -07:00
+    mode: propose-only (drain)
+    proposed: 4
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1271-drain-01a0b7bb-09e7-7322-9ba3-9813e518eb7b.json
+    ? SEM (0.99) — The reported maximum read latency is computed over the recipient's 100 most recently acknowledged messages, ordered by acknowledgement time.
+    ? SEM (0.99) — When mail is explicitly acknowledged, read receipts are created only for messages newer than the recipient's pre-existing read watermark; messages already covered by an older or legacy watermark are not backfilled with fabricated seen times.
+    ? SEM (0.96) — Oldest-unread age is clamped to zero for future-dated messages, and the warning activates when the age is equal to or greater than the configured threshold.
+    ? AC (0.97) — `aida mailbox latency --json` emits an array of recipient records containing `recipient`, `last_seen_at`, `unread`, `oldest_unread_age_ms`, and `max_read_latency_ms`, with unavailable timestamps or latency values represented as null.
+  created_at: 2026-09-19T03:35:04.011972304Z
+  modified_at: 2026-09-19T03:35:04.011972304Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
