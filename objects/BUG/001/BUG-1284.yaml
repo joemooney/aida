@@ -29,7 +29,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:50:55.275336868Z
-modified_at: 2026-09-19T20:50:55.275336868Z
+modified_at: 2026-09-19T20:50:57.479605628Z
 req_type: Bug
 tags:
 - from:session-0919
@@ -37,3 +37,7 @@ tags:
 - orchestrator
 - parent:EPIC-62
 - throughput
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-19T20:50:57.479605628Z
