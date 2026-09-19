@@ -4463,6 +4463,7 @@ pub(crate) fn handle_git_backend_command(
             };
 
             let mut changed = false;
+            let mut force_dropped_structural_tags: Vec<String> = Vec::new();
             if let Some(t) = title {
                 req.title = t.clone();
                 changed = true;
@@ -4758,6 +4759,9 @@ pub(crate) fn handle_git_backend_command(
                         req.tags.insert(trimmed.to_string());
                     }
                 }
+                // trace:BUG-1252 | ai:codex
+                force_dropped_structural_tags =
+                    enforce_structural_tag_replacement(&old_tags, &req.tags, *force)?;
                 if let Some(msg) = tags_replace_warning(&old_tags, &req.tags) {
                     eprintln!(
                         "  {} {}",
@@ -4846,7 +4850,18 @@ pub(crate) fn handle_git_backend_command(
 
             if changed {
                 req.modified_at = chrono::Utc::now();
-                backend.update_requirement(&req)?;
+                if force_dropped_structural_tags.is_empty() {
+                    backend.update_requirement(&req)?;
+                } else {
+                    backend.bulk_update(
+                        std::slice::from_ref(&req),
+                        &format!(
+                            "update {}: replaced tags, dropped: {}",
+                            req.spec_id.as_deref().unwrap_or(id),
+                            force_dropped_structural_tags.join(", ")
+                        ),
+                    )?;
+                }
                 // STORY-738: a transition INTO Completed is the payoff state —
                 // render the felt completion crescendo instead of the flat
                 // generic `Updated:` line (reused for any tag edit). Only the

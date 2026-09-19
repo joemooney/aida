@@ -129,7 +129,7 @@ struct DoctorRunOptions {
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
-struct DoctorHealResult {
+pub(crate) struct DoctorHealResult {
     category: String,
     id: String,
     action: String,
@@ -2075,7 +2075,6 @@ fn doctor_heal_category_order(category: &str) -> u8 {
 }
 
 fn confirm_doctor_category(category: &str, count: usize) -> Result<bool> {
-    use std::io::Write;
     // BUG-407: never block on a prompt nobody can answer. In a non-interactive
     // shell (no TTY — a background task, CI, or piped stdin) `stdin.read_line`
     // blocks forever on an open-but-empty socket (the observed `aida doctor
@@ -2146,6 +2145,7 @@ fn heal_doctor_finding(
         // through the same merge-preserving writer as `config permissions set`.
         // trace:STORY-1128 | ai:codex
         "permission-posture" => heal_doctor_permission_posture(project_root, finding),
+        "parent-tag-drift" => heal_doctor_parent_tag_drift(project_root, finding),
         "orphan-branches" if opts.force && opts.yes => {
             heal_doctor_orphan_branch(project_root, finding)
         }
@@ -2184,6 +2184,42 @@ fn heal_doctor_finding(
             detail: Some("diagnostic-only category; follow the printed action".to_string()),
         }),
     }
+}
+
+// Relationship edges are the source of truth; rebuild only the denormalized
+// parent:* tags for this requirement. trace:BUG-1252 | ai:codex
+pub(crate) fn heal_doctor_parent_tag_drift(
+    project_root: &std::path::Path,
+    finding: &DoctorFinding,
+) -> Result<DoctorHealResult> {
+    let storage = Storage::new(project_root.join(".aida-store"));
+    let mut store = storage.load()?;
+    let req_id = store
+        .get_requirement_by_spec_id(&finding.id)
+        .context("parent-tag-drift requirement disappeared")?
+        .id;
+    let expected: Vec<String> = store
+        .get_requirement_by_id(&req_id)
+        .into_iter()
+        .flat_map(|req| req.relationships.iter())
+        .filter(|rel| rel.rel_type == aida_core::models::RelationshipType::Child)
+        .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
+        .filter_map(|parent| parent.spec_id.as_deref())
+        .map(|id| format!("parent:{id}"))
+        .collect();
+    let req = store
+        .get_requirement_by_id_mut(&req_id)
+        .context("requirement disappeared")?;
+    req.tags.retain(|tag| !tag.starts_with("parent:"));
+    req.tags.extend(expected);
+    storage.save(&store)?;
+    Ok(DoctorHealResult {
+        category: finding.category.clone(),
+        id: finding.id.clone(),
+        action: finding.action.clone(),
+        status: "healed".to_string(),
+        detail: None,
+    })
 }
 
 // trace:STORY-1128 | ai:codex

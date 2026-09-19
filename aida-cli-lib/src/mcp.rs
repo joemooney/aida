@@ -1973,6 +1973,7 @@ impl<'a> McpServer<'a> {
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
 
         let mut changes = Vec::new();
+        let mut force_dropped_structural_tags = Vec::new();
 
         // STORY-82: title.
         if let Some(title) = args.get("title").and_then(|v| v.as_str()) {
@@ -2016,6 +2017,15 @@ impl<'a> McpServer<'a> {
                 .iter()
                 .filter_map(|t| t.as_str().map(str::to_string))
                 .collect();
+            // trace:BUG-1252 | ai:codex
+            let force = args.get("force").and_then(|v| v.as_bool()).unwrap_or(false)
+                || args
+                    .get("replace_tags")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+            force_dropped_structural_tags =
+                crate::enforce_structural_tag_replacement(&req.tags, &new_tags, force)
+                    .map_err(|e| e.to_string())?;
             if new_tags != req.tags {
                 changes.push("tags updated".to_string());
                 req.tags = new_tags;
@@ -2208,7 +2218,19 @@ impl<'a> McpServer<'a> {
             return Ok(format!("No changes applied to {}", id));
         }
 
-        self.storage.save(&store).map_err(|e| e.to_string())?;
+        if force_dropped_structural_tags.is_empty() {
+            self.storage.save(&store).map_err(|e| e.to_string())?;
+        } else {
+            self.storage
+                .save_with_commit_subject(
+                    &store,
+                    &format!(
+                        "update {id}: replaced tags, dropped: {}",
+                        force_dropped_structural_tags.join(", ")
+                    ),
+                )
+                .map_err(|e| e.to_string())?;
+        }
         Ok(format!("Updated {}: {}", id, changes.join(", ")))
     }
 
@@ -6813,6 +6835,16 @@ pub fn tool_descriptors() -> Value {
                         "description": "Replace the requirement's tag set with this list. Follows the CLI tag conventions (colon-namespaced `aida:<subcommand>` surface tags; flat behavior/severity/batch tags).",
                         "example": ["auth", "batch:login-rework"]
                     },
+                    "force": {
+                        "type": "boolean",
+                        "description": "Allow tags replacement to drop structural tags. The CLI alias is --replace-tags.",
+                        "example": false
+                    },
+                    "replace_tags": {
+                        "type": "boolean",
+                        "description": "Explicit alias for force when intentionally replacing structural tags.",
+                        "example": false
+                    },
                     "parent": {
                         "type": "string",
                         "description": "Re-parent the requirement under this SPEC-ID (adds a Parent/Child edge to the new parent; existing parent edges are left in place). The parent must exist and not be terminal-status.",
@@ -9662,6 +9694,57 @@ mod tests {
             .tool_update_requirement(&json!({ "id": id, "type": "nonsense" }))
             .expect_err("invalid type should fail");
         assert!(err.contains("Invalid requirement type 'nonsense'"), "{err}");
+    }
+
+    #[test]
+    // Forced MCP replacement must use the same destructive-edit ledger subject
+    // as `aida edit --tags ... --force`. trace:BUG-1252 | ai:codex
+    fn mcp_force_tag_replacement_records_dropped_tags_in_git_subject() {
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join(".aida-store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        for args in [
+            vec!["init"],
+            vec!["config", "user.email", "test@example.com"],
+            vec!["config", "user.name", "AIDA Test"],
+        ] {
+            assert!(Command::new("git")
+                .args(args)
+                .current_dir(&store_root)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let storage = Box::leak(Box::new(Storage::new(&store_root)));
+        let server = McpServer::new(storage, dir.path().to_path_buf());
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = Requirement::new("destructive edit".into(), String::new());
+        req.spec_id = Some("BUG-1252".into());
+        req.tags = ["parent:EPIC-28", "lane:research", "ordinary"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+
+        server
+            .tool_update_requirement(&json!({
+                "id": "BUG-1252", "tags": ["ordinary"], "force": true
+            }))
+            .unwrap();
+        let subject = String::from_utf8(
+            Command::new("git")
+                .args(["log", "-1", "--format=%s"])
+                .current_dir(&store_root)
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap();
+        assert!(
+            subject.contains("replaced tags, dropped: lane:research, parent:EPIC-28"),
+            "{subject}"
+        );
     }
 
     // trace:STORY-82 | ai:claude

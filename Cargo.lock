@@ -35,6 +35,7 @@ name = "aida-cli"
 version = "0.15.0"
 dependencies = [
  "aida-cli-lib",
+ "aida-core",
  "tempfile",
 ]
 
