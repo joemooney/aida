@@ -103,7 +103,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-16T20:53:56.520309864Z
-modified_at: 2026-09-19T04:57:10.943030077Z
+modified_at: 2026-09-19T05:38:25.912305438Z
 req_type: Epic
 tags:
 - advisor-vision
@@ -170,6 +170,9 @@ relationships:
 - rel_type: Parent
   target_id: 01a0b806-8049-7d62-9105-1d5c62ccbef4
   created_at: 2026-09-19T04:57:10.943030077Z
+- rel_type: Parent
+  target_id: 01a0b82c-4241-7c50-9257-5f1f3f8101b7
+  created_at: 2026-09-19T05:38:25.912305438Z
 comments:
 - id: 019e3375-f0ce-77b3-b32b-6610e5ead95c
   author: joe
