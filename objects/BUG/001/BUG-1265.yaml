@@ -1,0 +1,36 @@
+id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
+spec_id: BUG-1265
+agreed_id: BUG-1265
+title: 'A hold-gate-only red with the marker present must never shelve as ci-red: the drain''s own CI phase shelves a Done drive spec whose only red check is merge-hold-gate (3 occurrences, 2 in one night)'
+description: |-
+  Split out of BUG-1250 (2026-09-19, advisor + product seat): BUG-1250 bundles two defects with different shapes. This is the cheap, independent half.
+
+  Symptom, three live occurrences (2026-09-19 00:15 and 12:46 on TASK-1285 / PR #1959, plus an earlier one): the drain's CI phase shelves a spec with "CI is red on PR-N: merge-hold-gate" when merge-hold-gate is the ONLY red check, the local marker .aida/merge-holds/PR-N exists, and the required Build check has passed. The hold gate IS the hold on a drive/guided spec — the drain's own message says "releasing at merge" — so the correct outcome is Done, awaiting the advisor's gate, not a ci-red shelve. Each occurrence costs a full re-drive (implementer + CI + reviewer) of already-finished work.
+
+  ci_gate::classify_red already models this exactly: RedRefinement.hold_gate_is_the_hold is set when merge-hold-gate is red and the marker (or, since TASK-1287, a confirmed label) is present, and is_real() is false for that refinement. The defect is that the CI phase reaches the shelve before, or instead of, consulting it — on the refine_red Err path (per-check rows unreadable) the coarse red verdict is kept, and the coarse verdict cannot tell a hold-gate red from a real failure.
+
+  Fix:
+  1. Before any ci-red shelve, if a hold marker or confirmed hold label exists for the PR, re-classify: when merge-hold-gate is the only red required check, treat it as the hold — finish the CI phase normally (spec reaches Done and holds for the advisor), never shelve.
+  2. On the refine_red Err path (rows unreadable), do NOT fall back to the coarse red when a hold marker/label exists: retry the rows read (bounded), and if the rows stay unreadable, shelve with a typed ci-unavailable cause rather than ci-red — the "no per-check rows on this forge" branch is for forges without rows, not for a transient read failure.
+  3. Tests: hold-gate-only red + marker present → phase completes, no shelve; hold-gate red + a genuinely red required check + marker → shelves ci-red naming the real check only; refine_red Err + marker → retry then ci-unavailable, never ci-red.
+
+  Acceptance: a drive spec whose PR has a hold marker and whose only red check is merge-hold-gate finishes the drain's CI phase and holds for the advisor; the three recorded occurrences do not reproduce; no change to the no-marker lingering-label path (which stays real).
+
+  Sibling: BUG-1250 keeps the transient-probe half (probe error → NoSignal → drain proceeds with no CI gate), which needs the network_retry classification and the finish_ci shelve-instead-of-proceed change.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T13:24:10.800340531Z
+modified_at: 2026-09-19T13:24:10.800340531Z
+req_type: Bug
+tags:
+- batch:followups-0918h
+- ci-wait
+- drain-safe
+- merge-hold
+- orchestrator
+- parent:EPIC-62
+- reliability
+- split-from:BUG-1250
+execution_mode: drain
