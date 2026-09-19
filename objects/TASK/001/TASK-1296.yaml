@@ -26,7 +26,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:01:07.081451092Z
-modified_at: 2026-09-19T21:01:07.081451092Z
+modified_at: 2026-09-19T21:01:11.476931896Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -35,4 +35,8 @@ tags:
 - parent:EPIC-28
 - queue
 - reviewer
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-19T21:01:11.476931896Z
 execution_mode: drain
