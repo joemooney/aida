@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b691-2b61-7b72-a434-026d6f3d2733
-  position: 23000
-  added_by: role:implementer
-  note: point verify-interface-changes.py SURFACE_PATHS at aida-cli-lib/src/cli.rs (keep old path); self-test that a lib-path change arms the gate; confirm ci.yml still calls it
-  added_at: 2026-09-18T22:14:07.644183432Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b691-3a6c-7c21-b600-e3ead9c4ddfe
   position: 24000
   added_by: role:implementer
