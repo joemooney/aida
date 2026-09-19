@@ -18,7 +18,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:36:40.157061609Z
-modified_at: 2026-09-19T00:44:30.349638571Z
+modified_at: 2026-09-19T00:47:43.065977927Z
 req_type: Bug
 tags:
 - batch:followups-0918f
@@ -51,4 +51,4 @@ failure_reason:
   detail: reviewer verdict is RequestChanges — not Approved
   recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework BUG-1233 --work`'
   shelved_by: advisor
-  shelved_at: 2026-09-18T21:57:10.342667854Z
+  shelved_at: 2026-09-19T00:47:43.065977927Z
