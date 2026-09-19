@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:49:09.217213996Z
-modified_at: 2026-09-19T21:51:00.892687321Z
+modified_at: 2026-09-19T21:51:02.080524333Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -60,6 +60,10 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:49:12.434377855Z
+- rel_type: !Custom related
+  target_id: 01a0ba4a-e269-7cf3-93ae-4abce913f36e
+  created_at: 2026-09-19T21:51:02.080516875Z
+  created_by: joe
 comments:
 - id: 01a0bba6-b91c-7942-b695-3bace0f034c9
   author: joe
