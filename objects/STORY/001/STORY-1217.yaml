@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T16:39:49.951631582Z
+modified_at: 2026-09-19T17:03:00.455977735Z
 req_type: Story
 tags:
 - audit
@@ -23,6 +23,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0ab07-332f-7bc0-9c56-10307b5ced35
   created_at: 2026-09-18T18:29:29.744446677Z
+- rel_type: BlockedBy
+  target_id: 01a0ba9e-f4f2-79b2-8a58-7df3a9234667
+  created_at: 2026-09-19T17:03:00.455972329Z
+  created_by: joe
 comments:
 - id: 01a0ba89-d3bf-7d52-9bd5-2ddaedadd3d4
   author: joe
