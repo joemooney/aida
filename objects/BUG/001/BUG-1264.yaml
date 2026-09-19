@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T13:41:35.314935146Z
+modified_at: 2026-09-19T13:50:36.687291110Z
 req_type: Bug
 tags:
 - alias
@@ -55,6 +55,12 @@ comments:
   content: 'Reviewer round 1 on PR #1965 (alias resolution itself accepted): Add a regression test that queues a missing UUID, invokes batch member resolution, verifies the visible unresolvable-member skip diagnostic, and asserts that an actionable SpecSkipped event is emitted with the expected reason.  Concretely: add a test that stages a batch whose member id resolves to nothing (a queued entry for an id with no store object — a stale UUID), runs the batch member resolution, and asserts BOTH the human-visible skip line naming the member and an emitted SpecSkipped event carrying the reason; keep the existing aliased-fixture test green.'
   created_at: 2026-09-19T13:41:35.044942555Z
   modified_at: 2026-09-19T13:41:35.044942555Z
+- id: 01a0b9ee-e68f-7660-b0a8-d00971258761
+  author: joe
+  content: '[advisor round 1] Behaviour APPROVED at 61f6abe5 (.aida/review-verdicts/PR-1965-advisor.json): alias-aware resolution via Storage::resolve_queued_requirement with the acceptance-case test, the SpecSkipped event wired through is_actionable/known_names/watch, and the bundled cross-user role-fallback read of the batch queue. The drain reviewer''s request (PR-1965.json) STANDS and governs the merge, and it is my own scope-guard bullet: the skip path has no test. Add one that queues a UUID with no stored object, runs batch member resolution, asserts the visible ''skipping unresolvable member <uuid>: <reason>'' diagnostic and an actionable SpecSkipped event carrying that reason — the alias half is tested, this half is not. While you are there, consider the non-blocking item on my verdict: resolve_queued_requirement bails for a storage path that is neither SQLite nor a directory and resolve_batch_members propagates it with ?, so a legacy standalone-YAML project would hard-error the whole batch where it used to skip one member; Ok(None) is the safer shape and would fall into the new skip path you are about to test. One commit; then I ship.'
+  created_at: 2026-09-19T13:50:36.687291110Z
+  modified_at: 2026-09-19T13:50:36.687291110Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
