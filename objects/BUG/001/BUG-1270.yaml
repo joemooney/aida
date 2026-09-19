@@ -14,12 +14,12 @@ description: |-
   A side branch is defensible for ad-hoc work; for a branch that backs an open PR it is never what the caller wants, because the round's commits must land where the PR points.
 
   Acceptance: with a local branch behind its remote and an open PR, the launcher fast-forwards and reports it; with a genuinely diverged local branch, it refuses naming the realign command and creates no <branch>-work; an explicit side-branch request still works; unit test on the pure decision (behind / diverged / equal / no-PR) and a fixture test that no -work branch is created on the PR path.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T16:43:13.596245546Z
+modified_at: 2026-09-19T16:43:21.497627049Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -64,8 +64,25 @@ comments:
   created_at: 2026-09-19T16:43:13.596245546Z
   modified_at: 2026-09-19T16:43:13.596245546Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0ba8d-0e18-7871-91eb-a4c54a1a0695
+  author: aida-auto-bump
+  timestamp: 2026-09-19T16:43:21.496793622Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ba8d-0e19-7182-8cd5-182cdf5dce07
+  timestamp: 2026-09-19T16:43:21.497626153Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1270-2026-09-19T164315Z.md
+  commit_sha: b2ff97bea377d71c013b350c05c516aa0207f31b
+  summary: Completed via merge b2ff97be
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T16:22:46.261297170Z
   implemented_by: joe
+  completed_at: 2026-09-19T16:43:21.496613648Z
+  completion_sha: b2ff97bea377d71c013b350c05c516aa0207f31b
