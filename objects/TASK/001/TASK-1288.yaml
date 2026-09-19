@@ -3,12 +3,12 @@ spec_id: TASK-1288
 agreed_id: TASK-1288
 title: 'aida merge-hold add <pr>: place a hand-hold symmetrically (marker + label) so a PR held outside a drain releases through aida merge-hold clear'
 description: 'Advisor note on #1946 (2026-09-18 22:26): a PR labelled aida:merge-hold by hand with no marker file leaves the required merge-hold-gate check red with nothing for aida pr ship to release; the advisor had to clear the label, wait for the gate to re-run, then ship. BUG-1236 (#1958, merged) made the drain''s own holds symmetric; hand-holds still are not. Add aida merge-hold add <pr> [--reason]: writes the marker (write_hold), mirrors the label via the BUG-1236 sync_label (recording the sync state), prints the release command. Implementation exists on commit e94c6039d6 (pushed to the bug-1236-keyboard branch after #1958 had merged, so it never landed); cherry-pick it. Acceptance: aida merge-hold add N writes .aida/merge-holds/PR-N and the label; aida merge-hold list shows it as synced; clear N releases both; help text documents it.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T06:11:04.160481349Z
-modified_at: 2026-09-19T06:22:33.069924177Z
+modified_at: 2026-09-19T06:27:06.638018265Z
 req_type: Task
 tags:
 - cli
@@ -43,4 +43,22 @@ comments:
   created_at: 2026-09-19T06:22:33.069924177Z
   modified_at: 2026-09-19T06:22:33.069924177Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0b858-dd06-7c90-b773-9a6bed58c90d
+  author: aida-auto-bump
+  timestamp: 2026-09-19T06:27:06.630972334Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a0b858-dd0e-7b61-a5ee-9ec8f1e994f5
+  timestamp: 2026-09-19T06:27:06.638017064Z
+  agent: aida
+  commit_sha: ed533669a3b01fafc71fb1a72ee81cd790df75db
+  summary: Completed via merge ed533669
 execution_mode: drive
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-19T06:27:06.630830102Z
+  completion_sha: ed533669a3b01fafc71fb1a72ee81cd790df75db
