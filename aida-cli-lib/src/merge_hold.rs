@@ -52,7 +52,9 @@ pub(crate) fn write_hold(project_root: &Path, pr: u64, reason: &str) -> std::io:
 pub(crate) fn read_hold(project_root: &Path, pr: u64) -> Option<String> {
     match std::fs::read_to_string(hold_path(project_root, pr)) {
         Ok(body) => {
-            let reason = body.trim();
+            // BUG-1236: the marker's first line is the reason; a second
+            // `label: …` line records the Layer-2 label sync state.
+            let reason = body.lines().next().unwrap_or("").trim();
             Some(if reason.is_empty() {
                 format!("PR-{pr} is under a supervised merge-hold")
             } else {
@@ -104,6 +106,72 @@ pub(crate) fn list_holds(project_root: &Path) -> Vec<(u64, String)> {
 // trace:BUG-1167 | ai:claude
 pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
 
+/// BUG-1236: whether the `aida:merge-hold` label on the change mirrors the
+/// marker. Recorded on the marker's second line so `aida merge-hold list`
+/// can show it without a network call and `--fix` can re-sync it.
+// trace:BUG-1236 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LabelState {
+    Synced,
+    Unsynced(String),
+    Unknown,
+}
+
+impl LabelState {
+    pub(crate) fn render(&self) -> String {
+        match self {
+            LabelState::Synced => "label: synced".to_string(),
+            LabelState::Unsynced(err) => format!("label: UNSYNCED — {err}"),
+            LabelState::Unknown => "label: unknown".to_string(),
+        }
+    }
+}
+
+/// Record the label sync state on an existing marker (no-op without one).
+// trace:BUG-1236 | ai:claude
+pub(crate) fn record_label_state(
+    project_root: &Path,
+    pr: u64,
+    state: &LabelState,
+) -> std::io::Result<()> {
+    let path = hold_path(project_root, pr);
+    let body = match std::fs::read_to_string(&path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    let reason = body.lines().next().unwrap_or("").trim();
+    let line = match state {
+        LabelState::Synced => "label: synced".to_string(),
+        LabelState::Unsynced(err) => {
+            format!("label: unsynced: {}", err.lines().next().unwrap_or(""))
+        }
+        LabelState::Unknown => String::new(),
+    };
+    let out = if line.is_empty() {
+        format!("{reason}\n")
+    } else {
+        format!("{reason}\n{line}\n")
+    };
+    std::fs::write(path, out)
+}
+
+/// The recorded label state for `pr` (Unknown when the marker predates
+/// BUG-1236 or carries no state line).
+// trace:BUG-1236 | ai:claude
+pub(crate) fn read_label_state(project_root: &Path, pr: u64) -> LabelState {
+    let Ok(body) = std::fs::read_to_string(hold_path(project_root, pr)) else {
+        return LabelState::Unknown;
+    };
+    match body.lines().nth(1).map(str::trim) {
+        Some("label: synced") => LabelState::Synced,
+        Some(l) if l.starts_with("label: unsynced:") => {
+            LabelState::Unsynced(l["label: unsynced:".len()..].trim().to_string())
+        }
+        _ => LabelState::Unknown,
+    }
+}
+
 /// Best-effort mirror of the marker state to the `aida:merge-hold` label on the
 /// change (PR/MR), so Layer 2 can enforce server-side. Failures are swallowed:
 /// the file marker is the source of truth; the label is a convenience mirror and
@@ -114,18 +182,71 @@ pub(crate) const HOLD_LABEL: &str = "aida:merge-hold";
 /// label). This is what lets the GitLab merge-hold-gate CI job (the Layer-2
 /// analog of merge-hold-gate.yml) see the label on an MR.
 // trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)
-pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) {
+pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(), String> {
+    sync_label_with(project_root, pr, held, run_forge_cli)
+}
+
+/// BUG-1236: the real sync loop with the forge CLI injected. Retries once on
+/// failure, records the outcome on the marker (`label: synced` /
+/// `label: unsynced: <err>`) when holding, and RETURNS the failure instead of
+/// swallowing it — every caller prints it, `aida merge-hold list` shows it,
+/// and `--fix` re-syncs it. Before this the label silently never landed on
+/// three supervised PRs while the required merge-hold-gate check read pass.
+// trace:BUG-1236 | ai:claude
+pub(crate) fn sync_label_with(
+    project_root: &Path,
+    pr: u64,
+    held: bool,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<(), String> {
     let kind = crate::forge::resolve_forge_kind(project_root);
     let Some((cli, args)) = sync_label_command(kind, pr, held) else {
         // pure-git has no forge to carry a label; the file marker still holds.
-        return;
+        return Ok(());
     };
-    let _ = std::process::Command::new(cli)
+    let mut last_err = String::new();
+    for attempt in 0..2 {
+        match runner(project_root, cli, &args) {
+            Ok((true, _)) => {
+                if held {
+                    let _ = record_label_state(project_root, pr, &LabelState::Synced);
+                }
+                return Ok(());
+            }
+            Ok((false, stderr)) => {
+                last_err = stderr
+                    .lines()
+                    .next()
+                    .unwrap_or("non-zero exit")
+                    .trim()
+                    .to_string();
+            }
+            Err(e) => last_err = e,
+        }
+        if attempt == 0 {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
+    if held {
+        let _ = record_label_state(project_root, pr, &LabelState::Unsynced(last_err.clone()));
+    }
+    Err(format!("`{cli} {}` failed: {last_err}", args.join(" ")))
+}
+
+fn run_forge_cli(
+    project_root: &Path,
+    cli: &str,
+    args: &[String],
+) -> Result<(bool, String), String> {
+    let out = std::process::Command::new(cli)
         .current_dir(project_root)
-        .args(&args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+        .args(args)
+        .output()
+        .map_err(|e| format!("could not run {cli}: {e}"))?;
+    Ok((
+        out.status.success(),
+        String::from_utf8_lossy(&out.stderr).to_string(),
+    ))
 }
 
 /// The CLI + argv for mirroring the merge-hold label on a change, per forge —
@@ -268,5 +389,53 @@ mod tests {
             holds.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
             vec![5, 30]
         );
+    }
+
+    // trace:BUG-1236 | ai:claude
+    #[test]
+    fn sync_failure_is_returned_and_recorded_on_the_marker() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // A git repo with a GitHub origin so the forge resolves to GitHub.
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        git(&["init", "-q"]);
+        git(&["remote", "add", "origin", "https://github.com/o/r.git"]);
+        write_hold(root, 7, "drive").unwrap();
+        let calls = std::cell::Cell::new(0);
+        let err = sync_label_with(root, 7, true, |_, _, _| {
+            calls.set(calls.get() + 1);
+            Ok((false, "gh: HTTP 502 bad gateway\n".to_string()))
+        })
+        .unwrap_err();
+        assert_eq!(calls.get(), 2, "one retry");
+        assert!(err.contains("502"), "{err}");
+        assert_eq!(
+            read_label_state(root, 7),
+            LabelState::Unsynced("gh: HTTP 502 bad gateway".to_string())
+        );
+        assert_eq!(
+            read_hold(root, 7).as_deref(),
+            Some("drive"),
+            "reason line untouched"
+        );
+        // A later successful sync flips the state.
+        sync_label_with(root, 7, true, |_, _, _| Ok((true, String::new()))).unwrap();
+        assert_eq!(read_label_state(root, 7), LabelState::Synced);
+    }
+
+    // trace:BUG-1236 | ai:claude
+    #[test]
+    fn markers_without_a_state_line_read_as_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        write_hold(dir.path(), 9, "guided").unwrap();
+        assert_eq!(read_label_state(dir.path(), 9), LabelState::Unknown);
+        assert_eq!(read_label_state(dir.path(), 10), LabelState::Unknown);
     }
 }

@@ -178,6 +178,12 @@ pub enum MergeHoldAction {
         /// Machine-readable JSON output.
         #[clap(long)]
         json: bool,
+        /// Re-sync the `aida:merge-hold` label on every live hold whose
+        /// recorded label state is not `synced` (repairs a hold whose label
+        /// never landed, so the required merge-hold-gate check enforces it).
+        // trace:BUG-1236 | ai:claude
+        #[clap(long)]
+        fix: bool,
     },
     /// Clear a merge-hold: remove the marker file and drop the
     /// `aida:merge-hold` label, releasing the PR for merge. Give a PR number,
