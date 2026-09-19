@@ -63,14 +63,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b6e4-4406-75b3-bd4b-8edb17119ec9
-  position: 31000
-  added_by: role:implementer
-  note: CLI-level regression tests for protocol pickup injection, notice lease lifecycle, protocol seed; at least 6 tests under aida-cli-lib protocol
-  added_at: 2026-09-18T23:40:15.030034299Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
   position: 32000
   added_by: role:implementer
