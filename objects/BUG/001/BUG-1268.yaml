@@ -19,12 +19,12 @@ description: |-
   Acceptance: with a PR whose base is behind and whose rebase is clean, the reviewer phase rebases, says so, and proceeds to review with no shelve; with a conflicting rebase, the spec shelves with the stale-base-conflict cause, the branch is untouched, and the message names the manual recipe; the rebase is attempted at most once per phase entry; unit test on the pure decision (behind+clean / behind+conflict / current) and a fixture for the bounded-attempt rule.
 
   Related: BUG-1218 (the guard being obeyed), TASK-1272 (drain resume — the manual counterpart), EPIC-62.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:31:04.937729263Z
-modified_at: 2026-09-19T16:36:57.366464497Z
+modified_at: 2026-09-19T17:29:42.206576017Z
 req_type: Bug
 tags:
 - auto-complete
