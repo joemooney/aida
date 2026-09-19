@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T06:11:04.160481349Z
-modified_at: 2026-09-19T06:14:03.000091985Z
+modified_at: 2026-09-19T06:14:38.315369378Z
 req_type: Task
 tags:
 - cli
@@ -20,4 +20,10 @@ comments:
   content: 'Duplicate of the advisor''s TASK-1287 (filed 22:38 for the same aida merge-hold add verb). Closing; PR #1960 now carries the TASK-1287 trailer.'
   created_at: 2026-09-19T06:14:02.013923909Z
   modified_at: 2026-09-19T06:14:02.013923909Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b84d-71eb-7e71-b5fe-bcfca35a225c
+  author: joe
+  content: 'Reopened: not a duplicate after all — TASK-1287 is the pr-ship side (label-only hold releasable), this spec is the merge-hold add verb; PR #1960 carries this id.'
+  created_at: 2026-09-19T06:14:38.315369378Z
+  modified_at: 2026-09-19T06:14:38.315369378Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
