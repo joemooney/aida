@@ -198,6 +198,35 @@ pub enum EventKind {
         /// for dispatch-policy learning.
         spec_kind: String,
     },
+    /// STORY-1226: a `[schedule]` SEAT job became due — a nudge for whoever
+    /// holds that seat (`aida schedule due --seat <seat>`). Substrate jobs
+    /// never emit this (they run quietly; the ledger records them).
+    /// **Actionable.**
+    // trace:STORY-1226 | ai:claude
+    CronJobFired {
+        /// Job name from the registry.
+        job: String,
+        /// Seat the job is routed to (`advisor`, `product`, …; `*` = any).
+        seat: String,
+    },
+    /// STORY-1226: a `[schedule]` SUBSTRATE job ran and exited non-zero.
+    /// **Actionable.**
+    // trace:STORY-1226 | ai:claude
+    CronJobFailed {
+        /// Job name from the registry.
+        job: String,
+        /// Seat the job is scoped to (`*` for substrate jobs).
+        seat: String,
+        /// Exit status / stderr tail.
+        error: String,
+    },
+    /// STORY-1226: a mailbox message was sent to `to` — the event fast-path
+    /// for `on = ["MailReceived"]` jobs (mailbox-triage). **Actionable.**
+    // trace:STORY-1226 | ai:claude
+    MailReceived {
+        /// Recipient handle / role / broadcast as the sender addressed it.
+        to: String,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -240,8 +269,64 @@ impl EventKind {
             | EventKind::UnreadMail
             | EventKind::UnshippedWorkDetected { .. }
             | EventKind::CompeteOutcome { .. }
+            | EventKind::CronJobFired { .. }
+            | EventKind::CronJobFailed { .. }
+            | EventKind::MailReceived { .. }
             | EventKind::Unknown => true,
         }
+    }
+
+    /// The serialized `event` tag of this kind (e.g. `PrMerged`) — the name a
+    /// `[schedule]` job's `on = [...]` list matches against.
+    // trace:STORY-1226 | ai:claude
+    pub fn name(&self) -> &'static str {
+        match self {
+            EventKind::RunStarted => "RunStarted",
+            EventKind::PhaseEntered { .. } => "PhaseEntered",
+            EventKind::CiTerminal { .. } => "CiTerminal",
+            EventKind::PhaseDonePr { .. } => "PhaseDonePr",
+            EventKind::SpecShelved { .. } => "SpecShelved",
+            EventKind::SpecRetried { .. } => "SpecRetried",
+            EventKind::SpecReDriven { .. } => "SpecReDriven",
+            EventKind::ReclassifiedNeedsHuman { .. } => "ReclassifiedNeedsHuman",
+            EventKind::PuntFiled { .. } => "PuntFiled",
+            EventKind::AdvisorEscalated { .. } => "AdvisorEscalated",
+            EventKind::PrMerged { .. } => "PrMerged",
+            EventKind::QueueDrained { .. } => "QueueDrained",
+            EventKind::UnreadMail => "UnreadMail",
+            EventKind::UnshippedWorkDetected { .. } => "UnshippedWorkDetected",
+            EventKind::CompeteOutcome { .. } => "CompeteOutcome",
+            EventKind::CronJobFired { .. } => "CronJobFired",
+            EventKind::CronJobFailed { .. } => "CronJobFailed",
+            EventKind::MailReceived { .. } => "MailReceived",
+            EventKind::Unknown => "Unknown",
+        }
+    }
+
+    /// Every event name a `[schedule]` job may list under `on`. Kept in step
+    /// with the enum by [`Self::name`] (exhaustive match).
+    // trace:STORY-1226 | ai:claude
+    pub fn known_names() -> &'static [&'static str] {
+        &[
+            "RunStarted",
+            "PhaseEntered",
+            "CiTerminal",
+            "PhaseDonePr",
+            "SpecShelved",
+            "SpecRetried",
+            "SpecReDriven",
+            "ReclassifiedNeedsHuman",
+            "PuntFiled",
+            "AdvisorEscalated",
+            "PrMerged",
+            "QueueDrained",
+            "UnreadMail",
+            "UnshippedWorkDetected",
+            "CompeteOutcome",
+            "CronJobFired",
+            "CronJobFailed",
+            "MailReceived",
+        ]
     }
 }
 
@@ -707,6 +792,35 @@ mod tests {
         assert!(!json.contains("rubric_total\":null"));
         let back: EventKind = serde_json::from_str(&json).unwrap();
         assert_eq!(back, kind);
+    }
+
+    // trace:STORY-1226 | ai:claude
+    #[test]
+    fn cron_kinds_are_actionable() {
+        let fired = EventKind::CronJobFired {
+            job: "mailbox-triage".into(),
+            seat: "advisor".into(),
+        };
+        assert!(fired.is_actionable());
+        assert!(EventKind::CronJobFailed {
+            job: "session-reap".into(),
+            seat: "*".into(),
+            error: "exit 2".into(),
+        }
+        .is_actionable());
+        assert!(EventKind::MailReceived {
+            to: "advisor".into()
+        }
+        .is_actionable());
+        // The `on = [...]` name is the serialized tag and is in the known set.
+        assert_eq!(fired.name(), "CronJobFired");
+        let json = serde_json::to_string(&fired).unwrap();
+        assert!(json.contains("\"event\":\"CronJobFired\""), "{json}");
+        for n in ["CronJobFired", "CronJobFailed", "MailReceived", "PrMerged"] {
+            assert!(EventKind::known_names().contains(&n), "{n}");
+        }
+        let back: EventKind = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, fired);
     }
 
     #[test]

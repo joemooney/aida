@@ -66,6 +66,15 @@ pub(crate) struct AwaitingReport {
     /// directives view is the real surface — this is the breadcrumb.
     // trace:TASK-1146 | ai:claude
     pub worker_directives: DirectivesChannel,
+    /// Due SEAT jobs from the `[schedule]` registry (STORY-1226) for the
+    /// session's seat (every seat when none is known). The scheduler never
+    /// runs a seat job — this line IS its delivery on Codex/Antigravity, and
+    /// the nudge on Claude. Cheap: config parse + ledger/state file reads,
+    /// never git or the network, so it rides the per-turn notice. Substrate
+    /// jobs never appear here (the tick runs them). Renders as ONE collapsed
+    /// line with the head job; `aida schedule due` is the real surface.
+    // trace:STORY-1226 | ai:claude
+    pub cron: CronChannel,
     /// Spec-linked branches ahead of main, with no open PR and no live lease.
     /// These are recoverable pushed/local commits that can otherwise disappear
     /// from the operator's field of view after a drain dies before PR creation.
@@ -87,6 +96,18 @@ pub(crate) struct DirectivesChannel {
     pub pending: usize,
     /// One-line summary of the next (FIFO-head) directive, e.g.
     /// `human-audit /aida-human-audit` or `drain batch:x --zen`.
+    pub next: Option<String>,
+}
+
+/// Due-seat-jobs summary for the awaiting-you report: how many seat jobs are
+/// due for the session's seat plus the head job's due-line. `due == 0` → the
+/// channel renders nothing.
+// trace:STORY-1226 | ai:claude
+#[derive(Debug, Default, Clone)]
+pub(crate) struct CronChannel {
+    pub due: usize,
+    /// One-line summary of the first due job, e.g.
+    /// `mailbox-triage (every 30m, last 47m ago) → triage the mailbox`.
     pub next: Option<String>,
 }
 
@@ -227,6 +248,8 @@ impl AwaitingReport {
             } else {
                 0
             })
+            // trace:STORY-1226 | ai:claude — due seat jobs are one row.
+            + (if self.cron.due > 0 { 1 } else { 0 })
             + self.unshipped_work.len()
             + (if self.nightly_red.is_some() { 1 } else { 0 })
             + self.reviewer_queue_items.len()
@@ -383,6 +406,26 @@ impl AwaitingReport {
                 budget -= 1;
             }
         }
+        // trace:STORY-1226 | ai:claude
+        if self.cron.due > 0 {
+            if budget == 0 {
+                overflow += 1;
+            } else {
+                let next = match self.cron.next.as_deref() {
+                    Some(n) if !n.is_empty() => format!(" — {n}"),
+                    _ => String::new(),
+                };
+                writeln!(
+                    w,
+                    "  ⏰ {} due seat job{}{} — `{}`",
+                    self.cron.due,
+                    if self.cron.due == 1 { "" } else { "s" },
+                    next,
+                    "aida schedule due".cyan(),
+                )?;
+                budget -= 1;
+            }
+        }
         // trace:STORY-1043 | ai:codex
         for item in &self.unshipped_work {
             if budget == 0 {
@@ -489,6 +532,11 @@ impl AwaitingReport {
                 "pending": self.worker_directives.pending,
                 "next": self.worker_directives.next,
             },
+            // trace:STORY-1226 | ai:claude
+            "cron": {
+                "due": self.cron.due,
+                "next": self.cron.next,
+            },
             "unshipped_work": self.unshipped_work.iter().map(|i| serde_json::json!({
                 "spec_id": i.spec_id,
                 "branch": i.branch,
@@ -560,6 +608,14 @@ impl AwaitingReport {
                 self.worker_directives.pending,
                 "directive",
                 "directives",
+            ));
+        }
+        // trace:STORY-1226 | ai:claude
+        if self.cron.due > 0 {
+            parts.push(format!(
+                "{} due job{}",
+                self.cron.due,
+                if self.cron.due == 1 { "" } else { "s" }
             ));
         }
         // trace:STORY-1043 | ai:codex
@@ -1152,6 +1208,44 @@ mod tests {
             line.contains("aida awaiting"),
             "line must point at the full view: {line}"
         );
+    }
+
+    // STORY-1226: due seat jobs are a channel — counted in the total, on the
+    // compact per-turn line, in the rendered report, and in the JSON shape.
+    // trace:STORY-1226 | ai:claude
+    #[test]
+    fn cron_channel_counts_in_total_and_compact_line() {
+        let r = AwaitingReport {
+            cron: CronChannel {
+                due: 2,
+                next: Some("mailbox-triage (every 30m, last 47m ago) → triage the mailbox".into()),
+            },
+            ..Default::default()
+        };
+        assert_eq!(r.total(), 1, "due jobs collapse to one row");
+        assert!(!r.is_empty());
+        let line = r.compact_line().expect("due jobs alone must fire a line");
+        assert!(line.contains("2 due jobs"), "cron channel missing: {line}");
+        let mut buf = Vec::new();
+        assert!(r.render(false, &mut buf).unwrap());
+        let s = String::from_utf8(buf).unwrap();
+        assert!(s.contains("2 due seat jobs"), "{s}");
+        assert!(s.contains("mailbox-triage (every 30m"), "{s}");
+        assert!(s.contains("aida schedule due"), "{s}");
+        let v = r.to_json();
+        assert_eq!(v["cron"]["due"], 2);
+        assert!(v["cron"]["next"]
+            .as_str()
+            .unwrap()
+            .starts_with("mailbox-triage"));
+        // Singular form, and absent when nothing is due.
+        let one = AwaitingReport {
+            cron: CronChannel { due: 1, next: None },
+            ..Default::default()
+        };
+        assert!(one.compact_line().unwrap().contains("1 due job"));
+        assert!(AwaitingReport::default().to_json()["cron"]["next"].is_null());
+        assert_eq!(AwaitingReport::default().to_json()["cron"]["due"], 0);
     }
 
     // TASK-1146: the JSON contract gains a stable `worker_directives` object.

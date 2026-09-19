@@ -131,6 +131,11 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
     if directives > 0 {
         v.push((directives, label(directives, "directive", "directives")));
     }
+    // trace:STORY-1226 | ai:claude
+    let cron = report.cron.due;
+    if cron > 0 {
+        v.push((cron, "cron".to_string()));
+    }
     // trace:STORY-1043 | ai:codex
     let unshipped = report.unshipped_work.len();
     if unshipped > 0 {
@@ -304,8 +309,8 @@ pub(crate) fn handle_statusbar_command(
 mod tests {
     use super::*;
     use crate::awaiting_you::{
-        AwaitingReport, DirectivesChannel, EscalationItem, MailChannel, MergeablePrItem,
-        NightlyRedItem, PendingBriefItem, ReviewerQueueItem, UnshippedWorkItem,
+        AwaitingReport, CronChannel, DirectivesChannel, EscalationItem, MailChannel,
+        MergeablePrItem, NightlyRedItem, PendingBriefItem, ReviewerQueueItem, UnshippedWorkItem,
     };
 
     #[test]
@@ -395,6 +400,7 @@ mod tests {
                 pending: 1,
                 next: None,
             },
+            cron: CronChannel { due: 1, next: None },
             unshipped_work: vec![UnshippedWorkItem {
                 spec_id: "".into(),
                 branch: "".into(),
@@ -433,6 +439,7 @@ mod tests {
                 "2 findings",
                 "3 mail",
                 "1 directive",
+                "1 cron",
                 "1 unshipped",
                 "1 nightly-red",
                 "1 approve",
@@ -445,7 +452,7 @@ mod tests {
             you: channels,
             ..Default::default()
         };
-        assert_eq!(c.you_total(), 13);
+        assert_eq!(c.you_total(), 14);
     }
 
     #[test]

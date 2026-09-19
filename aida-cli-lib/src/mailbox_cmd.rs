@@ -203,6 +203,22 @@ pub(crate) fn handle_mailbox_command(
                 archived: false,
             };
             mailbox_store::write_message(project_root, &msg)?;
+            // STORY-1226: the event fast-path for `on = ["MailReceived"]`
+            // schedule jobs (mailbox-triage). Best-effort, never fails the send.
+            // trace:STORY-1226 | ai:claude
+            crate::events::emit(
+                project_root,
+                &crate::events::Event::new(
+                    None,
+                    "",
+                    crate::events::EventKind::MailReceived {
+                        to: match &msg.to {
+                            aida_core::mailbox::Recipient::Agent(a) => a.clone(),
+                            aida_core::mailbox::Recipient::Broadcast => "*".to_string(),
+                        },
+                    },
+                ),
+            );
             let mut flag = String::new();
             if *urgent {
                 flag.push_str(&format!(" {}", "[urgent]".red().bold()));

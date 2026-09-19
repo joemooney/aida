@@ -8147,6 +8147,21 @@ pub(crate) fn findings_recur_consecutively(comments: &[aida_core::Comment], bloc
 /// description or an earlier commit, the first and authoritative instruction
 /// a rework implementer sees.
 // trace:BUG-1213 | ai:codex
+/// STORY-1226: lead a seat's pickup prompt with its due `[schedule]` jobs.
+/// `due_block` is `maintenance_schedule::render_due_jobs_block` output (empty
+/// → the prompt is returned unchanged). Same construction as
+/// [`rework_pickup_prompt`]: the block comes first, the pickup line last, so
+/// the skill invocation stays the final line. Never applied to an agent-gate
+/// prompt (those wear a tighter verdict contract).
+// trace:STORY-1226 | ai:claude
+pub(crate) fn prepend_due_jobs(prompt: String, due_block: &str) -> String {
+    let block = due_block.trim_end();
+    if block.is_empty() || std::env::var("AIDA_AGENT_GATE_NAME").is_ok() {
+        return prompt;
+    }
+    format!("{block}\n\n{prompt}")
+}
+
 pub(crate) fn rework_pickup_prompt(findings: &str, pickup: &str, round: usize) -> String {
     format!(
         "ROUND {round} — ITEMS STILL OPEN (AUTHORITATIVE TASK):\n{findings}\n\n\
@@ -8736,6 +8751,20 @@ pub(crate) fn handle_queue_work(
                 prompt = crate::protocol_cmd::prepend_resolved_pickup_protocol(&store, req, prompt);
             }
         }
+    }
+    // STORY-1226: due seat jobs for this pickup's role lead the prompt (the
+    // Codex/Antigravity delivery channel; a nudge on Claude). File-only read.
+    // trace:STORY-1226 | ai:claude
+    {
+        let due_root = project_root_for_config
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+        let due = maintenance_schedule::due_seat_jobs(&due_root, Some(&role));
+        prompt = prepend_due_jobs(
+            prompt,
+            &maintenance_schedule::render_due_jobs_block(&due, &role),
+        );
     }
     // BUG-809: orchestrated reviewer child — the parent set the verdict-file
     // env; bake the absolute anchor into the prompt text as well.
