@@ -10,7 +10,7 @@ description: |-
   - 16:24 CI phase and 16:34 reviewer phase for "BUG-1236" ran against PR #1948 (STORY-1221's PR); the reviewer wrote .aida/review-verdicts/PR-1948.json round 2 (CHANGES REQUESTED, 16:37) — while the advisor, seeing STORY-1221 shelved and no review story for round 2, merged #1948 at 16:35. Auto-drafted failure record: BUG-1243. The product seat reset BUG-1236 to Approved at 16:40.
   Three defects, one root:
   1. Worktree/branch selection for a wave member must be the member's own (bug-1236), never a sibling's shelved worktree; if the intended worktree is unavailable the phase must punt, not fall through to whatever is checked out (BUG-553 class: reset/isolate between specs).
-  2. queue done <SPEC> must verify the branch it is finishing belongs to SPEC: the branch name or at least one commit since merge-base must reference SPEC, and the diff must not be attributable only to another spec's trailer; otherwise refuse with the mismatch named (--force for the rare deliberate shared branch, ledgered).
+  2. queue done <SPEC> must verify the branch it is finishing belongs to SPEC (clarified 2026-09-19 after the #1956 round-3 review): (a) the branch names a DIFFERENT requirement id (type-prefixed, numeric core; slice suffixes and node-qualified ids belong to their spec) → refuse; (b) the branch names SPEC → accept; (c) the branch names no requirement id (main, master, pr-N, batch-*, single-branch/*, feature/*) → commit evidence decides ONLY when commits exist since the merge-base with the default branch: no commits → accept; a commit references SPEC (subject or trailer) → accept; commits reference a different spec and none reference SPEC → refuse naming the foreign spec; commits reference no spec → accept. --force overrides any refusal and is recorded in the store commit subject.
   3. The CI and reviewer phases must bind to the PR opened for THIS spec (PhaseDonePr for this run) — never resolve a PR by branch name inherited from a sibling; if no PR exists for the spec, punt/shelve, do not review another spec's PR under this spec's name (and do not write that spec's verdict file).
   Acceptance: unit tests for the queue-done ownership check (refuse / --force paths); an orchestrator test where a member's worktree is a sibling's branch punts instead of committing; a test that the reviewer phase refuses when the run has no PhaseDonePr for its spec; the drain banner names the worktree + branch it is operating on at phase 1 start.
 status: InProgress
@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T10:11:14.740545222Z
+modified_at: 2026-09-19T10:11:39.972594950Z
 req_type: Bug
 tags:
 - batch:followups-0918h
