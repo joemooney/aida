@@ -7,14 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b5c8-2b02-7b42-9a71-301429cb1630
-  position: 77000
-  added_by: role:implementer
-  note: nightly per-forge live smoke through the TRAIT (open_change → CI watch → verdict → merge_change) asserting lifecycle events; nightly cadence only; ASK the operator about mirror credential provisioning before wiring, never inline a token
-  added_at: 2026-09-19T16:39:23.924879065Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b5c7-73ce-7452-8e86-12a9c741bfde
   position: 78000
   added_by: role:implementer
