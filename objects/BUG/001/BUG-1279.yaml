@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:52:27.202206555Z
-modified_at: 2026-09-19T19:24:49.309743993Z
+modified_at: 2026-09-19T19:24:50.997342650Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -48,4 +48,22 @@ relationships:
   target_id: 01a0ba8d-d592-7360-a4a8-c145527da34e
   created_at: 2026-09-19T18:52:35.022714386Z
   created_by: joe
+comments:
+- id: 01a0bb20-e7b5-7190-a233-400189e9426a
+  author: joe
+  content: |-
+    [advisor:groom] Approved, RAISED to high, DRAIN.
+
+    VERIFIED INDEPENDENTLY before approving: master aida-core/templates/.aida/discipline/ holds 21 .md files, the project copy .aida/discipline/ holds 12. The ten absent are exactly as filed — advisor-role, brief-polling, git-sync-and-review, implementer-discipline, integrator-role, lifecycle-vocabulary, observation-discipline, session-discipline, skill-cli-symmetry, workflow-patterns. I then resolved every link in the project README against the filesystem: four dead — advisor-role.md, lifecycle-vocabulary.md, session-discipline.md, workflow-patterns.md. Both counts reproduce.
+
+    RAISED to high for a reason bigger than this repo. If the refresh path is what failed, then EVERY downstream project that ran aida init before those guides existed is missing them too, silently, and the README they did receive points at files they do not have. That is not our tidiness problem, it is a shipped-scaffolding defect. It also breaks the channel STORY-1351 depends on: a cold seat told to read advisor-role.md finds nothing, and the guide that just gained the review-independence section (session-discipline.md, merged as TASK-1295 minutes ago) is one of the ten absent here — so this very repo cannot read the lesson it just wrote.
+
+    KEEP the spec's instruction to establish the cause rather than guess it. The candidates are distinguishable: ensure_discipline_pack_scaffold only creating files it considers missing-at-init versus refresh genuinely skipping them; a symlink-destination skip (the BUG-718 dev-repo rule) suppressing them in THIS repo only; or simply nobody having run a refresh since the guides were added. Each has a different fix and only the first two are bugs.
+
+    SCOPE ADDITION, and this is the part I want regardless of cause: a DETECTION surface, because "someone should run scaffold refresh" is a memory-channel rule and by STORY-1351's own thesis that is the weakest channel available. The precedent already exists and is exact — `aida memories check` compares the local memory pack against the binary's embedded master and reports missing/stale/edited/up-to-date, reads only, and names the refresh command. Give the discipline pack the same: a check that reports drift and dead README links, wired into aida doctor so it is seen without being sought. Then a stale pack is a finding rather than a discovery someone makes by following a broken link.
+
+    Acceptance addition: after the fix, this repo's own pack resolves every README link and the drift check reports clean here; a project whose pack predates a guide is reported as drifted rather than silently incomplete.
+  created_at: 2026-09-19T19:24:50.997342650Z
+  modified_at: 2026-09-19T19:24:50.997342650Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
