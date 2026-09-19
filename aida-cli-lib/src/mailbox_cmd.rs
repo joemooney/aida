@@ -353,9 +353,19 @@ pub(crate) fn handle_mailbox_command(
                 );
             } else {
                 for who in &who_list {
+                    let prior_watermark =
+                        mailbox_store::read_watermark(project_root, who).unwrap_or(i64::MIN);
                     let full_inbox = inbox_for(who, &merged);
                     if let Some(newest) = full_inbox.iter().map(|m| m.timestamp).max() {
-                        let ids: Vec<&str> = full_inbox.iter().map(|m| m.id.as_str()).collect();
+                        // Receipts describe reads observed by this version of AIDA.
+                        // Do not backfill messages already acknowledged by a legacy
+                        // watermark: their actual read time is unknowable.
+                        // trace:TASK-1271 | ai:codex
+                        let ids: Vec<&str> = full_inbox
+                            .iter()
+                            .filter(|m| m.timestamp > prior_watermark)
+                            .map(|m| m.id.as_str())
+                            .collect();
                         mailbox_store::record_seen(project_root, who, &ids)?;
                         mailbox_store::set_watermark(project_root, who, newest)?;
                     }
