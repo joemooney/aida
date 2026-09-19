@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T01:16:17.846707044Z
+modified_at: 2026-09-19T01:48:26.928842462Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -59,6 +59,12 @@ comments:
   content: Round 2 commit (record MCP read receipts) is on the branch and the PR was rebased onto main by the product seat (conflict in the --notice path resolved by keeping both the protocol line and the latency warning). Re-run tests, push nothing if clean, and let the reviewer take round 3.
   created_at: 2026-09-19T01:16:17.596246570Z
   modified_at: 2026-09-19T01:16:17.596246570Z
+- id: 01a0b759-bdb0-7d00-9aa7-1e713c783e94
+  author: joe
+  content: 'Round 2 PR #1942: made receipt persistence authoritative before watermark advancement in both CLI and MCP acknowledging reads; extracted the production max-read-latency calculation and updated the MCP regression to exercise it. Commit b5762af4b7. Tests: cargo test -p aida-cli-lib mcp_read_inbox_peek_unread_and_mark_seen; cargo test -p aida-cli-lib mailbox_latency; cargo fmt --all -- --check; git diff --check.'
+  created_at: 2026-09-19T01:48:26.928842462Z
+  modified_at: 2026-09-19T01:48:26.928842462Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
