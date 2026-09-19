@@ -1,0 +1,26 @@
+id: 01a0b917-9cc6-70a2-a22c-d90125318611
+spec_id: STORY-1344
+agreed_id: STORY-1344
+title: 'Review PR-1956: [AI:codex] fix(drain): prevent cross-spec phase contamination (BUG-1244)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b900`) for branch `bug-1244`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1956>
+  - Branch: `bug-1244` → `main`
+
+  ## Covers
+
+  - BUG-1244
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1956` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T09:55:27.558121295Z
+modified_at: 2026-09-19T09:55:27.558121295Z
+req_type: Story
