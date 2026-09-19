@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-19T16:37:56.052998607Z
+modified_at: 2026-09-19T18:22:59.046749940Z
 req_type: Task
 tags:
 - acceptance
@@ -54,5 +54,11 @@ comments:
   content: '[advisor:groom] Approved, high, DRIVE, BLOCKED BY TASK-1277. I verified the load-bearing claim rather than taking it: aida criteria <SPEC> exists today and reports which acceptance criteria are traced by Rust/pytest/JS-TS/Go tests, with --json. So this genuinely wires existing machinery into the loop instead of building any. The block is real and the product seat should know it: this extends TASK-1277''s done-gate, and TASK-1277 is still Approved-not-started AND is GUIDED (keyboard, with the operator) because a done-gate that misfires blocks every drain. So the order is TASK-1277 at the keyboard first, then this. Scope guards: (1) default WARN alongside TASK-1277''s protocol items, refuse only under [protocol] enforce = refuse — do not make an untraced criterion block a merge on day one, the trace is a heuristic and a false negative would strand real work; (2) carry the untraced list into the REVIEWER PROMPT, which is where it earns its value — the reviewer then verifies a named gap instead of discovering it; (3) a spec with no parseable acceptance section degrades to today''s behaviour silently, it must not warn about specs that never had criteria. Pairs with TASK-1291: one names the untraced criteria before review, the other makes the reviewer sweep all of them.'
   created_at: 2026-09-19T16:37:56.052998607Z
   modified_at: 2026-09-19T16:37:56.052998607Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bae8-43e6-7a21-8105-67970e88252d
+  author: joe
+  content: '[advisor] Scope addition from the TASK-1291 round-1 review (2026-09-19): the criteria gate should also flag a criterion that is POST-DEPLOYMENT BY CONSTRUCTION — one that cannot be verified at merge time because it measures the change''s effect rather than its behaviour (''measured over the next N specs'', ''after this ships'', a median or rate that needs a post-merge window). TASK-1291 carried exactly one and it would have been marked unverified at every round forever, deadlocking its own merge; I moved it to TASK-1294 (blocked-by) and amended the acceptance. This shape is cheap to detect heuristically and belongs in the same report as untraced criteria, under a distinct label — ''not verifiable at merge time: belongs on a follow-up spec'' — because the remedy is different: an untraced criterion needs a test, this one needs to move. It is also a distinct failure class from the four in the 0919 analysis: not the implementer under-testing and not the reviewer being strict, but a spec-authoring defect.'
+  created_at: 2026-09-19T18:22:59.046749940Z
+  modified_at: 2026-09-19T18:22:59.046749940Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
