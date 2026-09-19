@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T15:44:26.356724044Z
+modified_at: 2026-09-19T15:44:27.908571790Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -84,6 +84,18 @@ comments:
   created_at: 2026-09-19T15:42:49.250733334Z
   modified_at: 2026-09-19T15:42:49.250733334Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba57-2203-7592-9b79-e08e0eb5ce66
+  author: joe
+  content: |-
+    Recovered by the product seat 08:44 (no code change needed, round 2 is complete and pushed):
+
+    What happened: I rebased PR #1966 onto main and force-pushed origin/bug-1265, but left the LOCAL bug-1265 branch at the pre-rebase commit. The next implementer pickup saw a diverged local branch, forked bug-1265-work instead, and committed round 2 there (459400cdc9 "assert finish_ci shelf causes"); phase 2 then correctly refused to push or tear down a worktree on a branch it was not driving.
+
+    Recovery: 459400cdc9 fast-forwarded cleanly onto origin/bug-1265 (PR #1966 head is now 459400cdc9, MERGEABLE); local bug-1265 realigned to origin; the stuck session ended, worktree removed, bug-1265-work deleted.
+
+    Nothing is owed on the code. Verify the tests still pass at the new head and let the reviewer take round 2 — its brief stands: drain-level finish_ci coverage for (1) hold-gate-only red + marker completes without shelving, (2) hold gate + a genuine required red shelves ci-red naming only the genuine check, (3) rows-read failure + marker retries then shelves ci-unavailable, never ci-red.
+  created_at: 2026-09-19T15:44:27.651983891Z
+  modified_at: 2026-09-19T15:44:27.651983891Z
 execution_mode: drain
 implementation_info:
   implemented: true
