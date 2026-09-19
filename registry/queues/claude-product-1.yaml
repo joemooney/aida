@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b806-8049-7d62-9105-1d5c62ccbef4
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1961: BUG-1252 acceptance explicitly requires tests for CLI --force commit subject, headless refusal shape, doctor detection plus --heal on a fixture, and the 13-incident-ID fixture; this PR adds only helper-level tests for structural families/sorting, so those required behaviors are unverified. | MCP update_requirement exposes force/replace_tags and permits structural tag removal, but it discards the dropped-tag list and follows the ordinary update path, so the forced destructive edit is not recorded with the required ''replaced tags, dropped: …'' store commit subject. Route forced MCP replacement through equivalent ledgered persistence or do not expose the override without it.  Concretely: (1) add the behavioural tests the acceptance names — CLI --force path asserting the store commit subject ''replaced tags, dropped: …'', the headless refusal message shape, aida doctor detecting a parent-tag drop on a fixture and --heal restoring it, and the 13-id incident fixture; (2) MCP update_requirement with force/replace_tags must go through the same ledgered persistence (record the dropped-tag list in the commit subject) or must not expose the override.'
-  added_at: 2026-09-19T06:28:22.611121142Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
