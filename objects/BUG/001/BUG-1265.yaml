@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T17:37:29.716423318Z
+modified_at: 2026-09-19T18:50:40.449194837Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -134,6 +134,12 @@ comments:
   content: 'HAZARD for the live round-3 session (product seat, 10:35): origin/bug-1265 is at 99cd81c2b6 (my guard re-anchor) but the implementer worktree /home/joe/ai/aida-bug1265 is checked out at a484f8e1c7, one commit behind. Fetch and rebase before pushing — a force-push from that worktree would drop the guard fix and CI would go red on the same BUG-1205 guard for a fourth time. My fault for pushing while a session was live; recorded so the next seat does not repeat it.'
   created_at: 2026-09-19T17:37:29.716423318Z
   modified_at: 2026-09-19T17:37:29.716423318Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb01-9dc1-7bb2-b289-b23cdc4038d5
+  author: joe
+  content: 'Round 2 review follow-up: strengthened the drain-level production finish_ci regressions to assert the supervised marker survives hold-only completion, required-check discovery drives the genuine-red classification, and unavailable rows perform exactly the initial read plus two retries before ci-unavailable shelving. Focused 3-test suite and cargo fmt check pass.'
+  created_at: 2026-09-19T18:50:40.449194837Z
+  modified_at: 2026-09-19T18:50:40.449194837Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
