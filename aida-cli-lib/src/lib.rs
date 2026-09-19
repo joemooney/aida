@@ -102,6 +102,7 @@ mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;
 mod findings;
+mod implementer_preflight;
 // trace:STORY-700 | ai:claude — passive first-run hint chain through the core loop.
 mod first_run;
 mod focus;
@@ -88047,6 +88048,48 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             &recorded_branch,
         );
         self.branch = Some(branch.clone());
+
+        // TASK-1289: the orchestrator owns the publication boundary. Run the
+        // configured commands exactly as CI defines them, in the implementer
+        // worktree, before either accepting an agent-opened PR or exercising
+        // the BUG-893 auto-open recovery below.
+        if self.lifecycle_skip.no_preflight {
+            if !self.json {
+                eprintln!(
+                    "  {} implementer preflight skipped per lifecycle:no-preflight",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+                );
+            }
+        } else {
+            let results = implementer_preflight::run(&worktree_path);
+            if !self.json {
+                for result in &results {
+                    match result {
+                        implementer_preflight::GuardResult::Passed(name) => eprintln!(
+                            "  {} preflight passed: {name}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green()
+                        ),
+                        implementer_preflight::GuardResult::Skipped(note) => eprintln!(
+                            "  {} preflight skipped: {note}",
+                            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+                        ),
+                        implementer_preflight::GuardResult::Failed { .. } => {}
+                    }
+                }
+            }
+            if let implementer_preflight::PreflightDecision::Refuse { failed } =
+                implementer_preflight::decide(&results)
+            {
+                let detail = failed
+                    .into_iter()
+                    .map(|(name, output)| format!("guard `{name}` failed:\n{output}"))
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                return Err(auto_complete::PhaseFailure::new(format!(
+                    "implementer preflight refused to open the PR:\n{detail}"
+                )));
+            }
+        }
 
         // The pipeline has nothing to review or merge without a PR — verify
         // the implementer opened one before exiting. The branch-keyed lookup
