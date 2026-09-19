@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T07:09:07.501368570Z
+modified_at: 2026-09-19T07:12:24.929240053Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -92,6 +92,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T07:09:07.249847485Z
   modified_at: 2026-09-19T07:09:07.249847485Z
+- id: 01a0b882-5761-7bf1-acbc-572a8903ed6b
+  author: joe
+  content: '[advisor round 2] RESOLVED on my side at 807740cd / 6da94dbd (rebased onto main): process_identity_is_alive falls back to pid-alive when the recorded or live start time is missing, four tests cover the cases, a legacy lock fixture is kept. Verdict APPROVED for the lock + claim path (.aida/review-verdicts/PR-1957-advisor.json). The OPEN item is the drain reviewer''s (PR-1957.json, 00:07): session leases still decide liveness from pid alone in session reap, aida ps and auto-release — add a backward-compatible start identity for session-lease pids and route those three surfaces through process_identity_is_alive, with a same-pid/different-start regression test. That finding is in scope (the acceptance names session reap) and stacks on top; the merge waits for it.'
+  created_at: 2026-09-19T07:12:24.929240053Z
+  modified_at: 2026-09-19T07:12:24.929240053Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
