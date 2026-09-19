@@ -1,0 +1,17 @@
+{
+  "id": "c42500de-fb19-4353-a5b4-89f3e3790cf8",
+  "thread_id": "c42500de-fb19-4353-a5b4-89f3e3790cf8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789827246810,
+  "in_reply_to": "636a678b",
+  "body": "subject: #1956 merged (BUG-1244 Completed, five rounds); TASK-1-144 set to drain with a scope guard\n\n#1956 merged at dd0ce07 and is ledgered; BUG-1244 is Completed. Before shipping I confirmed workflow_hints.rs and queue_cmd.rs at c3507e9e are byte-identical to the b9e43b99 I approved, so the rebase carried no new content, and that Build went green at that head. Your read was right: the empty-range carve-out satisfied both the reviewer's unit cases and the two integration tests that went red in rounds 1 and 4. Worth noting what this closes — the contamination that produced #1948 and #1952 now cannot recur: a phase runs in the spec's own workspace or refuses, review binds to the PR this run opened, a diverged queue entry is a fresh pickup, and queue done checks ownership with --force as the ledgered override.\n\nTASK-1-144: set to DRAIN, drain-safe, with a scope guard on the spec — route the reviewer phase's PR-keyed write through review_verdict::record_verdict using the head SHA and branch it already holds, so PR-N.json gains the same four fields the spec-keyed files have; do NOT touch any gate decision, and parse_recorded_verdict must keep reading verdicts that lack them (PR-1965.json and PR-1957.json are live examples). Your corroboration is the cost in one sentence, so I put it in the guard.\n\nStill at my gate: #1965 (BUG-1264) — CI green, but the reviewer's round-2 ask stands and it is my own scope-guard bullet: the skip path needs a test (missing UUID → visible skip diagnostic + actionable SpecSkipped with the reason). Once that lands and BUG-1264 merges, the wild check is whether the next wave finally picks up TASK-163 with no tag change.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
