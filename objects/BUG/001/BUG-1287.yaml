@@ -37,14 +37,17 @@ description: |
   6. `aida doctor` reports the orphan counts before and after a reap pass so the improvement is measurable rather than asserted.
 
   Reported by the aida-monitor project; counts independently reproduced in this repo before filing. The monitor's recommendation was "add opportunistic auto-reap" — corrected here, because that already shipped.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-19T21:06:00.699339238Z
+modified_at: 2026-09-19T21:12:11.994665552Z
 req_type: Bug
 tags:
+- batch:followups-0918i
+- diagnostics
+- drain-safe
 - from:aida-monitor
 - hygiene
 - parent:EPIC-62
@@ -54,3 +57,4 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:06:00.699339238Z
+execution_mode: drain
