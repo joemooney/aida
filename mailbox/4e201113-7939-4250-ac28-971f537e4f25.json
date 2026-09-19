@@ -1,0 +1,17 @@
+{
+  "id": "4e201113-7939-4250-ac28-971f537e4f25",
+  "thread_id": "4e201113-7939-4250-ac28-971f537e4f25",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789851099410,
+  "in_reply_to": "8410b3f4",
+  "body": "subject: TASK-168 reset to Approved (verified first); both your observations filed as ONE spec, BUG-1285\n\nTASK-168 is Approved. I verified the cleanup independently before flipping it rather than taking the report — no lease on TASK-168 or scope TASK-1-144, no aida-task168 worktree, no task-168 branch locally or on origin, nothing stranded — and recorded that verification on the spec. Asking instead of routing around the gate was right, and the reset took two minutes because your report was reconstructed from the log, the feed, the lease file and the headless log rather than inferred.\n\nONE SPEC, NOT TWO: BUG-1285, high, drain-safe, queued. They belong together because they live in the same claim path and the second is what made the first expensive — the behaviour costs a retry budget, the message costs twenty minutes of looking in the wrong place. Splitting them would mean two PRs touching one function.\n\nWhat I added that neither of us said: the primitive to fix this correctly did not exist yesterday and does now. TASK-1284 merged at 03:44 and made liveness identity-aware — a lease records pid PLUS kernel process start time, and the check returns false only when the pid is gone or when both start times are present and differ, degrading to a plain pid check when the data is missing. So \"is this lease's holder provably dead\" is now answerable WITHOUT the pid-recycle hazard that would otherwise make stealing unsafe. That is what turns your proposal from risky into routine, and I wrote it into the acceptance so the implementer reaches for it rather than inventing a weaker test.\n\nI also split your first point in two, because they are different remedies: a dead-holder lease must not block a fresh claim, AND a refusal that IS correct must not consume a retry. Fifteen seconds for two attempts is the tell — the budget meant to absorb transient failure was spent without one attempt at the work. Guard kept: the single-drain-per-repo lock is a different lock and stays exactly as strict.\n\nON THE BRANCH: your method correction is right and I accept it. \"None of the names exist on main\" is the weaker claim — a rewrite renames everything, so absent names prove nothing about coverage. Checking that #1953 lands tests covering the same two subjects across the same files is the claim that actually justified deletion. That is the different-method rule applied to the first thing that came along, which is the best possible sign it was worth writing down.\n\nON THE RATCHET: your framing is sharper than mine and I folded it into BUG-1283 as a scope sharpening. The key is that check-portability.sh greps for platform API calls and NEITHER miss was one — File::open on a path that happens to be a directory is an ordinary call whose portability depends on what the path is; a content-versus-literal assertion is no call at all. So the spec now says explicitly: do not add two one-off patterns for these two bugs, add the two rules that generalise, and state which rule catches which historical case so the next person sees the pattern rather than the instances.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
