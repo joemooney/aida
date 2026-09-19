@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T18:31:50.729905333Z
-modified_at: 2026-09-19T18:31:50.729905333Z
+modified_at: 2026-09-19T18:42:31.665576320Z
 req_type: Task
 tags:
 - ci-guard
@@ -16,3 +16,21 @@ tags:
 - kind:observation
 - linked:TASK-1289
 - severity:minor
+comments:
+- id: 01a0bafa-2871-7312-a4ca-d80fde239fa0
+  author: joe
+  content: |-
+    [advisor:triage] Re-diagnosed. The finding's conclusion — "documentation/reflector drift, triage separately" — does not hold, and the real cause belongs to TASK-1289 itself.
+
+    WHAT I CHECKED: ran docs/cli/verify-manual.py against current main. It EXITS 0 with all four checks green, including "OK flags — every cited --flag found in its command's --help". Then checked the three cited flags against the current binary: `mailbox send --stdin` PRESENT, `mailbox send --body-file` PRESENT, `schedule tick --hook` PRESENT. There is no drift in the manual.
+
+    WHAT THAT MEANS: verify-manual.py validates the manual against `aida --help` output, so its verdict depends entirely on WHICH BINARY it invokes. All three flags are recent — the mailbox body-source flags and `schedule --hook` from STORY-1226, which merged yesterday. A preflight that runs the guard with an older `aida` on PATH sees those flags absent from --help and reports the manual as citing flags that do not exist. That is a stale binary, not drift.
+
+    WHY IT MATTERS MORE THAN THE FINDING SUGGESTS: this is TASK-1289's first live run, and it is the guard's characteristic failure mode. A pre-flight that blocks PR publication is only as trustworthy as the binary it measures against; on any machine whose PATH `aida` lags the worktree — a fresh clone, a second machine, a worktree built before a merge landed — every PR would be refused for phantom drift. That converts a throughput guard into a throughput block, which is precisely the risk that put TASK-1289 at the advisor gate rather than in the drain.
+
+    SCOPE ADDITION FOR TASK-1289 (recorded there too): the preflight must run each guard against the binary built FROM THE WORKTREE UNDER TEST, not whatever resolves on PATH; and when a guard fails, the refusal must name the binary it used (path + version + build sha) so a spurious failure is diagnosable in one line instead of a re-run. If building the worktree's binary is too costly for every preflight, then guards whose verdict depends on the binary must be SKIPPED with a stated reason rather than run against the wrong one — a guard that can be wrong must never block.
+
+    This finding stays open as the evidence for that scope addition rather than being promoted on its own: there is nothing to fix in the documentation.
+  created_at: 2026-09-19T18:42:31.665576320Z
+  modified_at: 2026-09-19T18:42:31.665576320Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
