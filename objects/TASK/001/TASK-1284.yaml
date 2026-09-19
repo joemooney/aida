@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T04:02:11.360170822Z
+modified_at: 2026-09-19T04:02:14.654736069Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -26,4 +26,11 @@ relationships:
   target_id: 01a0b5dd-93e3-7382-bb96-c99e4a8014af
   created_at: 2026-09-19T04:02:11.360164957Z
   created_by: joe
+comments:
+- id: 01a0b7d4-3bfe-7a42-ac33-df8047eb0bf4
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRIVE (touches the drain lock probe and reap predicate — integrity-adjacent, so merge at the advisor gate), queued in wave followups-0918h. Scope guard: liveness = lease record (pid + process start time, or boot id + pid) validated against /proc or the platform equivalent; keep the existing lock-file format readable by older binaries (add fields, do not rename); TASK-163 (why/ps read a drain-owned spec as stalled) is the surface twin — coordinate so both use one liveness helper rather than two. Replace the pgrep guidance in the discipline pack in the same PR.'
+  created_at: 2026-09-19T04:02:14.654736069Z
+  modified_at: 2026-09-19T04:02:14.654736069Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
