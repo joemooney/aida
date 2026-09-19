@@ -19,6 +19,7 @@
 //!
 //! trace:STORY-106 | ai:claude
 
+use aida_core::RequirementType;
 use colored::Colorize;
 use std::path::{Path, PathBuf};
 
@@ -293,13 +294,47 @@ pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
     {
         return true;
     }
-    let re = regex::Regex::new(r"(?i)(?:^|[^a-z0-9])([a-z]+-\d+(?:-\d+)*)(?:$|[^0-9])")
-        .expect("valid branch spec regex");
-    let ids: Vec<String> = re
+    let Some((target_prefix, target_numeric_core)) = requirement_id_parts(spec) else {
+        return false;
+    };
+    let re = regex::Regex::new(r"(?i)([a-z]+)-(\d+(?:-\d+)*)").expect("valid branch spec regex");
+    let ids: Vec<(String, String)> = re
         .captures_iter(branch)
-        .map(|capture| capture[1].to_ascii_uppercase())
+        .filter_map(|capture| {
+            let whole = capture.get(0)?;
+            let starts_at_boundary =
+                whole.start() == 0 || !branch.as_bytes()[whole.start() - 1].is_ascii_alphanumeric();
+            let ends_at_boundary = whole.end() == branch.len()
+                || !branch.as_bytes()[whole.end()].is_ascii_alphanumeric();
+            if !starts_at_boundary || !ends_at_boundary {
+                return None;
+            }
+            let prefix = capture[1].to_ascii_uppercase();
+            RequirementType::ALL
+                .iter()
+                .any(|req_type| req_type.default_prefix() == prefix)
+                .then(|| (prefix, capture[2].to_string()))
+        })
         .collect();
-    ids.is_empty() || ids.iter().all(|id| id.eq_ignore_ascii_case(spec))
+    ids.is_empty()
+        || ids.iter().all(|(prefix, numeric_core)| {
+            prefix == &target_prefix
+                && (numeric_core == &target_numeric_core
+                    || numeric_core
+                        .strip_prefix(&target_numeric_core)
+                        .is_some_and(|suffix| suffix.starts_with('-')))
+        })
+}
+
+fn requirement_id_parts(spec: &str) -> Option<(String, String)> {
+    let re =
+        regex::Regex::new(r"(?i)^([a-z]+)-(\d+(?:-\d+)*)$").expect("valid canonical spec id regex");
+    let capture = re.captures(spec)?;
+    let prefix = capture[1].to_ascii_uppercase();
+    RequirementType::ALL
+        .iter()
+        .any(|req_type| req_type.default_prefix() == prefix)
+        .then(|| (prefix, capture[2].to_string()))
 }
 
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
@@ -1257,6 +1292,9 @@ mod tests {
     fn queue_done_ownership_accepts_target_branch_variants() {
         assert!(branch_belongs_to_spec("bug-1244", "BUG-1244"));
         assert!(branch_belongs_to_spec("fix/bug-1244-drain", "BUG-1244"));
+        assert!(branch_belongs_to_spec("bug-1244-keyboard", "BUG-1244"));
+        assert!(branch_belongs_to_spec("task-1189-4", "TASK-1189"));
+        assert!(branch_belongs_to_spec("task-1-127", "TASK-1-127"));
         assert!(branch_belongs_to_spec(
             "refs/heads/joe-bug-1244",
             "BUG-1244"
@@ -1267,11 +1305,20 @@ mod tests {
     fn queue_done_ownership_refuses_sibling_branch_even_if_commit_could_name_target() {
         assert!(!branch_belongs_to_spec("story-1221", "BUG-1236"));
         assert!(!branch_belongs_to_spec("batch-story-1221", "BUG-1236"));
+        assert!(!branch_belongs_to_spec("task-1189", "TASK-1189-4"));
+        assert!(!branch_belongs_to_spec("bug-1236-story-1221", "BUG-1236"));
     }
 
     #[test]
     fn queue_done_ownership_allows_default_and_non_spec_branches() {
-        for branch in ["main", "master", "batch/followups-0918h", "cluster/one"] {
+        for branch in [
+            "main",
+            "master",
+            "pr-1948",
+            "batch-followups-0918h",
+            "batch/followups-0918h",
+            "cluster/one",
+        ] {
             assert!(branch_belongs_to_spec(branch, "BUG-1236"), "{branch}");
         }
     }
