@@ -1,6 +1,6 @@
 - user_id: claude-product-1
   requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
-  position: 0
+  position: -1000
   added_by: claude-product-1
   note: |-
     [rework round 4] PR #1972 — CHANGES REQUESTED, one finding, and it is the spec's own headline invariant.
@@ -26,7 +26,7 @@
     Round 3 added the "binary: {label}" annotation to these arms but left the open/refuse semantics untouched, which is why the finding survived. The annotation is fine; keep it.
 
     Push fixups to task-1289-work. Do not open a new PR.
-  added_at: 2026-09-19T20:45:37.103520708Z
+  added_at: 2026-09-19T20:46:11.688643560Z
   for_role: implementer
 - user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
