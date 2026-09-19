@@ -66603,6 +66603,16 @@ fn collect_awaiting_report(
     ctx: &UserStatusContext,
     no_ci: bool,
 ) -> awaiting_you::AwaitingReport {
+    collect_awaiting_report_inner(project_root, backend, ctx, no_ci, false)
+}
+
+fn collect_awaiting_report_inner(
+    project_root: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+    ctx: &UserStatusContext,
+    no_ci: bool,
+    notice_fast: bool,
+) -> awaiting_you::AwaitingReport {
     // Mergeable PRs — reuse the same `gh pr list` snapshot that the cleanup
     // report consumes, then filter via the awaiting-you classifier.
     let mergeable_prs = if no_ci {
@@ -66772,8 +66782,15 @@ fn collect_awaiting_report(
         }
     };
 
-    // trace:STORY-1043 | ai:codex
-    let unshipped_work = collect_unshipped_work_items(project_root, &summaries, no_ci, !no_ci);
+    // The per-turn notice has a hard latency contract. Branch divergence walks
+    // spawn git processes and can exceed that budget in a busy repository; the
+    // full awaiting/status views retain this channel. trace:BUG-1239 | ai:codex
+    let unshipped_work = if notice_fast {
+        Vec::new()
+    } else {
+        // trace:STORY-1043 | ai:codex
+        collect_unshipped_work_items(project_root, &summaries, no_ci, !no_ci)
+    };
     // trace:STORY-1043 | ai:codex
     let nightly_red = if no_ci {
         None
@@ -66813,19 +66830,17 @@ fn collect_awaiting_report(
 /// the store/backend can't be resolved — the per-turn hook always gets its time
 /// context and the escalation cascade always gets a fresh presence stamp.
 ///
-/// The UserPromptSubmit / SessionStart hook feeds its JSON payload on stdin
-/// (`session_id`, `hook_event_name`), which this inherits from the wrapping
-/// hook process. It reads that stdin ONLY when stdin is not a TTY, so a manual
-/// `aida awaiting --notice` in a terminal never blocks — it just renders the
+/// The UserPromptSubmit / SessionStart hook relay passes its JSON payload in
+/// `AIDA_HOOK_PAYLOAD` (`session_id`, `hook_event_name`). The command itself
+/// must never read stdin: scripted callers may attach an open pipe whose writer
+/// outlives this process. Missing or malformed hook metadata simply renders the
 /// time line with no session key. Fail-open throughout.
 fn emit_notice_time_line() {
-    use std::io::IsTerminal;
-    let (session_id, is_session_start) = if std::io::stdin().is_terminal() {
-        (None, false)
-    } else {
-        let payload = std::io::read_to_string(std::io::stdin()).unwrap_or_default();
-        presence::parse_hook_payload(&payload)
-    };
+    // trace:BUG-1239 | ai:codex
+    let (session_id, is_session_start) = std::env::var("AIDA_HOOK_PAYLOAD")
+        .ok()
+        .map(|payload| presence::parse_hook_payload(&payload))
+        .unwrap_or((None, false));
     if is_session_start {
         let project_root = std::env::current_dir()
             .ok()
@@ -66890,7 +66905,7 @@ fn handle_awaiting_command(
             queue_total: 0,
             agents: Vec::new(),
         };
-        let report = collect_awaiting_report(&project_root, backend, &ctx, true);
+        let report = collect_awaiting_report_inner(&project_root, backend, &ctx, true, true);
         if let Some(line) = report.compact_line() {
             println!("{line}");
         }

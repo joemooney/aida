@@ -6,7 +6,10 @@
 // trace:TASK-1283 | ai:codex
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
+
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn git(repo: &Path, args: &[&str]) {
     let status = Command::new("git")
@@ -155,6 +158,7 @@ fn assert_pickup_block(output: &str, kind: &str) {
 
 #[test]
 fn pickup_commands_dispatch_and_render_protocols_before_acceptance() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let spike = p.add("spike", "queue work protocol fixture");
     let bug = p.add("bug", "do protocol fixture");
@@ -202,6 +206,7 @@ fn pickup_commands_dispatch_and_render_protocols_before_acceptance() {
 
 #[test]
 fn awaiting_notice_tracks_real_lease_through_session_end() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let bug = p.add("bug", "notice lifecycle fixture");
 
@@ -288,7 +293,38 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
 }
 
 #[test]
+fn awaiting_notice_does_not_read_an_open_stdin_pipe() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let p = Project::new();
+    let mut child = aida(&p.repo, &p.home)
+        .args(["awaiting", "--notice"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn awaiting --notice");
+    // Keep the writer alive without sending data or EOF. Before BUG-1239 the
+    // child drained non-TTY stdin and remained blocked here indefinitely.
+    // trace:BUG-1239 | ai:codex
+    let _held_open = child.stdin.take().expect("piped stdin");
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if let Some(status) = child.try_wait().expect("poll awaiting --notice") {
+            assert!(status.success(), "awaiting --notice failed: {status}");
+            break;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("awaiting --notice blocked on an open stdin pipe for 2 seconds");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
 fn protocol_seed_dispatch_adds_four_and_is_idempotent() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let store = p.repo.join(".aida-store");
     let mut protocol_files = Vec::new();
