@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-19T20:49:41.309411893Z
+modified_at: 2026-09-19T21:11:18.334372308Z
 req_type: Task
 tags:
 - batch:followups-0918i
@@ -36,4 +36,20 @@ relationships:
   target_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
   created_at: 2026-09-19T18:22:38.642075506Z
   created_by: joe
+comments:
+- id: 01a0bb82-5e3e-7952-821c-161dfb4894da
+  author: joe
+  content: |-
+    [advisor:correction] MY METHOD ON THIS SPEC IS BROKEN BY BUG-1286, and I am correcting it before an implementer follows it.
+
+    I wrote: "count SpecShelved events between its first RunStarted and its PrMerged". I verified today that PrMerged is the last feed event for exactly ONE of 515 closed specs. The feed's most common final word for a closed spec is PhaseDonePr (219) or UnshippedWorkDetected (206) — "a PR was opened" or "there is unshipped work" — because the close usually happens OUTSIDE the drain, via a batch trailer or the pull auto-bump, and no event kind records it. There is no SpecCompleted or SpecMerged kind at all. So the window my method opens mostly never closes.
+
+    CORRECTED METHOD: bound the window with the STORE, not the feed. Per CLAUDE.md the authoritative time series for spec state is the aida-store branch's git log — `aida history events --id <spec>` emits one typed row per change, so the Done→Completed transition has a real timestamp. Take the window from the spec's first RunStarted in the feed to its Completed transition in the store, and count SpecShelved inside it. The feed remains the source for shelve counts and causes; the store becomes the source for the endpoint.
+
+    IF BUG-1286 LANDS FIRST, prefer it: with a terminal event emitted at both close paths the whole measurement comes from one feed and needs no join. Do not BLOCK on it — the store-bounded method works today and this measurement should not wait on a substrate change.
+
+    BIAS NOTE TO CARRY INTO THE REPORT: any earlier number computed from feed-terminal events alone is pessimistic, because a shelve that was later recovered reads as the final outcome. That includes the baseline in this spec's own description. The baseline counts SHELVES in a window, not outcomes, so it is unaffected — but say so explicitly in the report rather than leaving a reader to wonder.
+  created_at: 2026-09-19T21:11:18.334372308Z
+  modified_at: 2026-09-19T21:11:18.334372308Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
