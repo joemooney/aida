@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T10:51:12.468949748Z
+modified_at: 2026-09-19T10:51:44.470670395Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -97,6 +97,12 @@ comments:
   content: 'CI red on PR #1959 (run 35438062466): the CLI-manual drift guard (docs/cli/verify-manual.py) fails — a new command or flag from this PR has no manual entry:  . Add the entry for every new aida dev / wave-pin surface (flags such as --after-wave) to the matching chapter under docs/cli/ following the existing entry shape (no SPEC-IDs in the manual), run python3 docs/cli/verify-manual.py until it reports OK, then push. The code itself passed tests and the resolver guard.'
   created_at: 2026-09-19T10:51:12.211818472Z
   modified_at: 2026-09-19T10:51:12.211818472Z
+- id: 01a0b94b-23d6-7d52-a33e-cbb35d9840ae
+  author: joe
+  content: '[advisor round 3] Resolver item RESOLVED at 2df354ef (binary_path from crate::resolve_aida_exe, mtime read from that path; the raw current_exe call is gone). CI is still red at 2df354ef, this time on the "CLI-manual drift-guard (every command documented)" step (STORY-597 guard, run 35438062466): the new hidden subcommand `aida dev build-guard` has no entry in docs/cli/11-dev.md and is not on the guard''s hidden/internal allow-list. Fix in one commit: either add it to the guard''s allow-list for internal hidden commands (it is #[command(hide = true)] and exists only for the Makefile) or add a one-line "internal" entry under `aida dev` in docs/cli/11-dev.md — whichever the guard script''s convention is for hidden commands (check scripts/ or the guard''s own allow-list file first). Then CI is green and I ship; behaviour is already approved.'
+  created_at: 2026-09-19T10:51:44.470670395Z
+  modified_at: 2026-09-19T10:51:44.470670395Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
