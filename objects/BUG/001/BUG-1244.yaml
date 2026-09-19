@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T13:22:15.963126397Z
+modified_at: 2026-09-19T13:22:17.465782179Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -146,6 +146,21 @@ comments:
   created_at: 2026-09-19T12:20:52.955401753Z
   modified_at: 2026-09-19T12:20:52.955401753Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b9d4-f7f9-7321-b8dc-bc466fd4be66
+  author: joe
+  content: |-
+    Round 4 closed the fail-open but reintroduced the exact regression round 2 had fixed. CI run 35442689349 (Build ubuntu-latest, Run tests): aida-cli/tests/agent_write_confirm.rs:152 queue_done_non_interactive_without_yes_marks_done_not_cancelled and aida-cli/tests/journey.rs:386 agent_journey_toon_list_search_queue_done_and_status both FAILED again.
+
+    Cause: both tests run aida queue done in a fresh throwaway project whose branch carries no spec id AND has no commits since the merge-base, so the new commit-evidence gate refuses where nothing can possibly be contaminated.
+
+    Resolution (this is the advisor's clarified acceptance on the spec): the commit-evidence gate decides ONLY when commits exist since the merge-base with the default branch.
+    - branch name carries the target spec id -> accept (unchanged)
+    - no spec id in the name, and commits exist since merge-base -> accept only if one of them references the target ((SPEC-ID) trailer or trace:), else refuse with the --force escape
+    - no spec id in the name, and the range is EMPTY (fresh project, nothing committed yet) -> accept; there is no sibling work to contaminate
+
+    Tests to keep green together: the two integration tests above, plus the round-4 unit cases (pr-1948-style branch WITH unrelated commits -> refused; same branch with a target-referencing commit -> accepted; --force on the refused case -> proceeds and ledgers). Add one more unit case: empty commit range -> accepted. Run cargo test -p aida-cli --test agent_write_confirm --test journey locally before pushing, and keep the portability ratchet clean.
+  created_at: 2026-09-19T13:22:17.209382851Z
+  modified_at: 2026-09-19T13:22:17.209382851Z
 execution_mode: drive
 implementation_info:
   implemented: true
