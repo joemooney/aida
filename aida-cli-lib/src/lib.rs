@@ -53894,6 +53894,38 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
     // trace:BUG-626 | ai:claude
     let eff_status = effective_display_status(&store, req);
 
+    // TASK-163: terminal requirement status can arrive before the drain has
+    // finished its review/merge lifecycle. While the corroborated orchestrator
+    // still owns this spec, its live phase is more current than the store's
+    // terminal classification and must win.
+    // trace:TASK-163 | ai:codex
+    if let Some(drain) = drain_state::live_drain_spec(&project_root, &disp) {
+        let reason = format!(
+            "in-flight — drain phase {}, orchestrator pid {}",
+            drain.phase, drain.pid
+        );
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "spec": disp,
+                    "bucket": "in-flight",
+                    "reason": reason,
+                    "needs_human": false,
+                    "drain": { "phase": drain.phase, "orchestrator_pid": drain.pid },
+                }))?
+            );
+        } else {
+            println!(
+                "{}{} is {}",
+                why_headline_prefix(),
+                disp.cyan(),
+                reason.green()
+            );
+        }
+        return Ok(());
+    }
+
     // Terminal specs aren't "open" — answer plainly rather than forcing a bucket.
     if matches!(
         eff_status,
@@ -54016,35 +54048,6 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
     // ("being worked now"); only the stale case is rewritten here, so a genuine
     // live session is never mislabeled. trace:BUG-623 | ai:claude
     {
-        // TASK-163: after phase 1 the child exits, but the live drain
-        // orchestrator continues to own the spec through CI/review/merge.
-        // Never advertise session release while that authoritative PID lives.
-        if let Some(drain) = drain_state::live_drain_spec(&project_root, &disp) {
-            let reason = format!(
-                "in-flight — drain phase {}, orchestrator pid {}",
-                drain.phase, drain.pid
-            );
-            if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&serde_json::json!({
-                        "spec": disp,
-                        "bucket": "in-flight",
-                        "reason": reason,
-                        "needs_human": false,
-                        "drain": { "phase": drain.phase, "orchestrator_pid": drain.pid },
-                    }))?
-                );
-            } else {
-                println!(
-                    "{}{} is {}",
-                    why_headline_prefix(),
-                    disp.cyan(),
-                    reason.green()
-                );
-            }
-            return Ok(());
-        }
         let leases = list_leases(&project_root);
         let mut ids: Vec<String> = Vec::new();
         if let Some(a) = req.agreed_id.as_deref() {
