@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:11.970306394Z
-modified_at: 2026-09-19T16:37:51.925406762Z
+modified_at: 2026-09-19T16:37:53.696590340Z
 req_type: Task
 tags:
 - acceptance
@@ -44,4 +44,8 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T16:31:14.375508686Z
+- rel_type: BlockedBy
+  target_id: 01a0b5fc-ec4d-7493-a755-33abd4c39528
+  created_at: 2026-09-19T16:37:53.696583001Z
+  created_by: joe
 execution_mode: drive
