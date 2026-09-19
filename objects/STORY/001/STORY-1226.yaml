@@ -31,12 +31,12 @@ description: |-
   - Precedence with the seat's own judgment: a seat job's prompt is advice to the seat ("due: mailbox-triage"), never an automatic action; substrate jobs are idempotent and print nothing when idle (TASK-160).
   Operator decision (2026-09-18, fork "who owns seat-job delivery on Codex/Antigravity"): BOTH. (a) Due seat jobs always surface in the seat's pickup prompt and per-turn notice, so a live Codex/Antigravity seat acts on its next turn. (b) When a seat job is overdue and no live session holds that role, the scheduler tick cold-boots a headless seat for it (codex exec / claude -p per the configured vendor), rate-limited to at most once per hour per seat, ledgered like any run, and never for jobs that launch drains or merge.
   Acceptance addition: with no live advisor session and mailbox-triage overdue, one tick within the hour starts a headless advisor that triages and ledgers the run; a second overdue tick inside the same hour does not start another; a live advisor session suppresses the cold-boot entirely.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-18T22:21:45.731537960Z
+modified_at: 2026-09-19T05:24:38.525265988Z
 req_type: Story
 tags:
 - keyboard-gate
@@ -85,4 +85,22 @@ comments:
   created_at: 2026-09-18T22:21:45.731537960Z
   modified_at: 2026-09-18T22:21:45.731537960Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+history:
+- id: 01a0b81f-abf6-72a0-bcfe-62ad13da3984
+  author: aida-auto-bump
+  timestamp: 2026-09-19T05:24:38.518201991Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b81f-abfd-7633-9108-6e468b9d0ce5
+  timestamp: 2026-09-19T05:24:38.525264879Z
+  agent: aida
+  commit_sha: 8d3d9594a9415f570d89193ea672bc35afdc5738
+  summary: Completed via merge 8d3d9594
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-09-19T05:24:38.517942632Z
+  completion_sha: 8d3d9594a9415f570d89193ea672bc35afdc5738
