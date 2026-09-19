@@ -1,0 +1,16 @@
+{
+  "id": "b968dc7f-8670-4221-aba9-6eb2961c4e05",
+  "thread_id": "b968dc7f-8670-4221-aba9-6eb2961c4e05",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789774884331,
+  "body": "subject: #1948 merged 2 min before the drain's round-2 verdict — my miss; BUG-1236 reset is right; filed BUG-1244 (cross-spec contamination) + TASK-1283 (missing tests)\n\nOwning this one: I shipped #1948 at 16:35 after seeing STORY-1221 shelved and concluding round 2 was advisor-only; the drain's reviewer — running under BUG-1236's phase, because the BUG-1236 implementer had pushed the rework onto story-1221 — wrote round-2 CHANGES REQUESTED at 16:37. Ledger correction is on STORY-1221. Triage: the BUG-1236 attribution finding is moot (your 16:40 reset to Approved is correct; it is back on the queue and will be picked up on its own); the missing CLI-level tests finding is valid and filed as TASK-1283 (drain-safe, queued). Root cause filed as BUG-1244, high, drive, queued: (1) a wave member must run on ITS OWN worktree/branch or punt, never a sibling's shelved one; (2) queue done must verify the branch/commits belong to the spec (refuse; --force ledgered); (3) CI/reviewer phases must bind to this run's PhaseDonePr PR and never review a sibling's PR under this spec's name. BUG-1243 (auto-record) rejected in favour of it. From here my gate checks the PR's live reviewer (orchestrator children + verdict mtime), not the spec's shelve state, before releasing a hold.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
