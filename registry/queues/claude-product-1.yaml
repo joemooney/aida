@@ -53,3 +53,11 @@
   note: Promoted from finding TASK-1-144 via `aida findings promote`
   added_at: 2026-09-19T14:06:34.723637139Z
   for_role: implementer
+- user_id: claude-product-1
+  requirement_id: 01a0ba65-774c-7ec0-a960-6e303c723c20
+  position: 13000
+  added_by: claude-product-1
+  note: auto-queued by `session end` (01a0ba56); covers 1 spec
+  added_at: 2026-09-19T16:00:12.872564558Z
+  for_role: reviewer
+  added_by_machine: imac
