@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b696-30fc-7511-9f98-27362e999dba
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 1 on PR #1962: aida-cli-lib/src/schedule_ledger.rs:358-388 — write_batch_cas_opts retains full pre-pull ledger snapshots in next. After a rejected push, it pulls current store state but then saves those stale snapshots wholesale, so a concurrent update to the same job (for example schedule done updating due/result/note) can be lost. Preserve per-job mutations/deltas and reapply them to the freshly loaded ledgers on every retry, as write_cas_opts does, and add a conflicting-writer retry regression test.  Concretely: write_batch_cas_opts must hold the per-job mutation closures (or deltas), and on every retry after a rejected push reload each job''s ledger from the freshly pulled store and re-apply the mutation before saving — the same shape write_cas_opts uses — so a concurrent aida schedule done on the same job is never overwritten by a stale snapshot. Add a test that simulates a concurrent update between the first save and the retry and asserts both changes survive.'
+  added_at: 2026-09-19T07:36:30.641291191Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
