@@ -7,14 +7,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
-  position: 72000
-  added_by: role:implementer
-  note: 'drive: implementer runs CI''s own guard set in the worktree before opening the PR and refuses while one fails; list read from ci.yml/[preflight] not hand-copied; message names guard+line+fix; lifecycle:no-preflight opt-out'
-  added_at: 2026-09-19T16:37:40.281588354Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
   position: 73000
   added_by: role:implementer
