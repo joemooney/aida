@@ -1243,6 +1243,13 @@ pub(crate) trait PhaseDriver {
     /// [`ImplementerOutcome::Punted`] when a headless implementer hit a
     /// design-fork and punted the spec to `NeedsAttention` (STORY-276).
     fn run_implementer(&mut self) -> Result<ImplementerOutcome, PhaseFailure>;
+
+    /// BUG-1244: phase 1 must be operating in the target spec's own worktree.
+    /// Real drivers validate the lease's live branch; mocks default to valid.
+    // trace:BUG-1244 | ai:codex
+    fn implementer_workspace(&self) -> Option<(String, String)> {
+        None
+    }
     /// Phase 2 — wait for CI to go terminal, then end the implementer session
     /// (which auto-queues the `Review PR-N` item for the reviewer).
     fn finish_ci(&mut self) -> Result<(), PhaseFailure>;
@@ -3371,6 +3378,31 @@ pub(crate) fn orchestrate_with_resume(
         // continues) or escalates it (the run ends per `escalate_mode`).
         // trace:STORY-276, STORY-306 | ai:claude
         emit_start(Phase::Implementer, spec, json, start.elapsed().as_millis());
+        if let Some((worktree, branch)) = driver.implementer_workspace() {
+            if !json {
+                eprintln!(
+                    "  {} phase 1 workspace: {} [{}]",
+                    "↳".cyan(),
+                    worktree,
+                    branch
+                );
+            }
+            if !crate::workflow_hints::branch_belongs_to_spec(&branch, spec) {
+                let failure = PhaseFailure::of(
+                    FailureKind::Failed,
+                    format!("phase 1 refused sibling workspace `{worktree}` on branch `{branch}` for {spec}"),
+                );
+                return resolve_phase_failure(
+                    driver,
+                    Phase::Implementer,
+                    spec,
+                    json,
+                    &start,
+                    &failure,
+                    durations,
+                );
+            }
+        }
         driver.begin_rework_guard();
         let phase_start = Instant::now();
         let mut retries_used = 0usize;
@@ -5761,6 +5793,9 @@ mod tests {
         /// BUG-1213: successful phase 1 that nevertheless left the rework PR
         /// at its prior head.
         rework_no_op: bool,
+        /// BUG-1244: selected phase-1 worktree/branch, when a test needs to
+        /// exercise the cross-spec isolation gate.
+        workspace: Option<(String, String)>,
     }
 
     impl MockPhaseDriver {
@@ -5802,6 +5837,7 @@ mod tests {
                 phase1_pr_recovery: None,
                 harvest_gate_calls: 0,
                 rework_no_op: false,
+                workspace: None,
             }
         }
 
@@ -6018,6 +6054,9 @@ mod tests {
     }
 
     impl PhaseDriver for MockPhaseDriver {
+        fn implementer_workspace(&self) -> Option<(String, String)> {
+            self.workspace.clone()
+        }
         fn rework_no_op_failure(&mut self) -> Option<PhaseFailure> {
             self.rework_no_op.then(|| {
                 PhaseFailure::of(
@@ -6445,6 +6484,28 @@ mod tests {
                 Phase::Build,
             ]
         );
+    }
+
+    #[test]
+    fn phase_one_refuses_a_sibling_specs_worktree_before_implementing() {
+        let mut driver = MockPhaseDriver::all_ok();
+        driver.workspace = Some(("/tmp/aida-story-1221".to_string(), "story-1221".to_string()));
+        let result = orchestrate(
+            &mut driver,
+            "BUG-1236",
+            AutoCompleteVariant::Full,
+            true,
+            EscalateMode::Blocks,
+        );
+        assert_eq!(result.failed_phase, Some(Phase::Implementer));
+        assert!(
+            driver.calls.is_empty(),
+            "implementer must not run in sibling worktree"
+        );
+        assert!(result
+            .failure
+            .as_ref()
+            .is_some_and(|f| f.reason.contains("story-1221")));
     }
 
     // --- STORY-975: transient whole-phase self-retry ----------------------

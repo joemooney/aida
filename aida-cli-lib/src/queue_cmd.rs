@@ -4338,6 +4338,25 @@ pub(crate) fn handle_queue_command(
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
 
+            // BUG-1244: fail closed before any lifecycle mutation when this
+            // command is run from a sibling spec's worktree. A commit trailer
+            // naming both specs is not ownership evidence; the selected branch
+            // is. `--force` is the deliberate shared-branch escape hatch.
+            // trace:BUG-1244 | ai:codex
+            if !*force {
+                if let Ok(root) = find_project_root() {
+                    if let Some(branch) = current_branch_at(&root) {
+                        if !workflow_hints::branch_belongs_to_spec(&branch, display_id) {
+                            eprintln!(
+                                "queue done refused: branch `{branch}` belongs to another spec, not {display_id}.\n\
+                                 Run from {display_id}'s worktree/branch, or use `--force` for a deliberate shared branch (the override is ledgered)."
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+
             // BUG-269: refuse `queue done` when the branch carries
             // committed-but-unshipped work with no open PR. Without this
             // gate, a `--zen` or interactive session that forgot to run

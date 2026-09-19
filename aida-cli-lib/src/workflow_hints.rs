@@ -277,6 +277,33 @@ pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: 
     force || skip_pr_check
 }
 
+/// BUG-1244: `queue done` may only finish work from the target spec's branch.
+/// Commit subjects are deliberately not sufficient: the incident that prompted
+/// this guard had a sibling branch whose commit trailer named both specs even
+/// though its diff implemented only the sibling. Shared branches remain an
+/// explicit, ledgered `--force` operation at the command boundary.
+// trace:BUG-1244 | ai:codex
+pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
+    fn key(value: &str) -> String {
+        value
+            .trim()
+            .to_ascii_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect::<String>()
+            .split('-')
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join("-")
+    }
+    let branch = key(branch.trim_start_matches("refs/heads/"));
+    let spec = key(spec);
+    branch == spec
+        || branch.starts_with(&format!("{spec}-"))
+        || branch.ends_with(&format!("-{spec}"))
+        || branch.contains(&format!("-{spec}-"))
+}
+
 /// BUG-269 / BUG-285: pure decision for the `aida queue done` pre-check.
 /// Returns `Some(error_lines)` when the call must be refused (committed-
 /// but-unshipped work with no open PR), `None` to proceed.
@@ -1226,5 +1253,21 @@ mod tests {
             |_, _| panic!("pr lookup must not run when nothing is ahead"),
         );
         assert_eq!(result, QueueDoneGateDiagnose::Proceed);
+    }
+
+    #[test]
+    fn queue_done_ownership_accepts_target_branch_variants() {
+        assert!(branch_belongs_to_spec("bug-1244", "BUG-1244"));
+        assert!(branch_belongs_to_spec("fix/bug-1244-drain", "BUG-1244"));
+        assert!(branch_belongs_to_spec(
+            "refs/heads/joe-bug-1244",
+            "BUG-1244"
+        ));
+    }
+
+    #[test]
+    fn queue_done_ownership_refuses_sibling_branch_even_if_commit_could_name_target() {
+        assert!(!branch_belongs_to_spec("story-1221", "BUG-1236"));
+        assert!(!branch_belongs_to_spec("feature/unrelated", "BUG-1236"));
     }
 }

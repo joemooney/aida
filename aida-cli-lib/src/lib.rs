@@ -85327,6 +85327,21 @@ fn try_open_orchestrator_pr_for_no_pr_pushed_branch(
 }
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
+    // The initial driver cwd is diagnostic until the phase lease is minted;
+    // retries/resumes carry the exact selected worktree and branch here.
+    // trace:BUG-1244 | ai:codex
+    fn implementer_workspace(&self) -> Option<(String, String)> {
+        match (
+            &self.retry_implementer_worktree,
+            &self.retry_implementer_branch,
+        ) {
+            (Some(worktree), Some(branch)) => {
+                Some((worktree.display().to_string(), branch.clone()))
+            }
+            _ => current_branch_at(&self.project_root)
+                .map(|branch| (self.project_root.display().to_string(), branch)),
+        }
+    }
     /// BUG-770: the real driver already knows the project it is driving, so it
     /// hands the orchestrator that root rather than letting the escalation
     /// epilogue re-derive one from the process cwd. This is the only
