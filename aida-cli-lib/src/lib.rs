@@ -55222,10 +55222,14 @@ fn handle_worktree_enter(
     if let Ok(main_root) = find_main_worktree_root() {
         if let Ok(store) = Storage::new(main_root.join(".aida-store")).load() {
             if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg)) {
-                if let Some(protocol) =
-                    protocol_cmd::protocol_for_requirement(&store, &req.req_type)
-                {
-                    eprintln!("\n{}\n", protocol.pickup_block());
+                if let Some(block) = protocol_cmd::pickup_protocol_block(
+                    &store,
+                    req,
+                    protocol_cmd::ProtocolPickupSurface::WorktreeEnter,
+                    false,
+                    false,
+                ) {
+                    eprintln!("\n{block}\n");
                 }
             }
         }
@@ -66686,24 +66690,16 @@ fn handle_awaiting_command(
             .canonicalize()
             .unwrap_or_else(|_| project_root.clone());
         let lease_root = find_main_worktree_root().unwrap_or_else(|_| project_root.clone());
-        if let Some(scope) = list_leases(&lease_root)
-            .into_iter()
-            .find(|lease| canonical_cwd.starts_with(&lease.worktree_path))
-            .map(|lease| lease.scope)
-        {
-            if let Ok(store) = backend.load() {
-                if let Some(req) = store.requirements.iter().find(|r| {
-                    r.display_id().eq_ignore_ascii_case(&scope)
-                        || r.spec_id
-                            .as_deref()
-                            .is_some_and(|id| id.eq_ignore_ascii_case(&scope))
-                }) {
-                    if let Some(protocol) =
-                        protocol_cmd::protocol_for_requirement(&store, &req.req_type)
-                    {
-                        println!("{}", protocol.notice_line());
-                    }
-                }
+        let leases = list_leases(&lease_root);
+        if let Ok(store) = backend.load() {
+            if let Some(line) = protocol_cmd::leased_protocol_notice(
+                &store,
+                &canonical_cwd,
+                leases
+                    .iter()
+                    .map(|lease| (lease.worktree_path.as_path(), lease.scope.as_str())),
+            ) {
+                println!("{line}");
             }
         }
         let store_path = detect_distributed_store_from(&project_root)
@@ -80542,10 +80538,14 @@ fn run_do_drive(storage: &Storage, spec: &str, mode_flag: Option<&str>, force: b
     // `aida do` is a pickup surface; keep slice 1 interactive-only (headless
     // prompt propagation belongs to TASK-1278).
     // trace:STORY-1221 | ai:codex
-    if std::env::var("AIDA_HEADLESS").ok().as_deref() != Some("1") {
-        if let Some(protocol) = protocol_cmd::protocol_for_requirement(&store, &req.req_type) {
-            eprintln!("{}\n", protocol.pickup_block());
-        }
+    if let Some(block) = protocol_cmd::pickup_protocol_block(
+        &store,
+        req,
+        protocol_cmd::ProtocolPickupSurface::Do,
+        std::env::var("AIDA_HEADLESS").ok().as_deref() == Some("1"),
+        false,
+    ) {
+        eprintln!("{block}\n");
     }
     eprintln!(
         "  {} {} · {}",

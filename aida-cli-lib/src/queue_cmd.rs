@@ -8725,7 +8725,7 @@ pub(crate) fn handle_queue_work(
     // resolved, capped type+lane protocol. Reviewers are included headlessly
     // because there is no conversational pickup hook to inject it later.
     // trace:STORY-1221 trace:TASK-1278 | ai:codex
-    if no_human || !role.eq_ignore_ascii_case("reviewer") {
+    {
         let spec_id = plan
             .entries
             .first()
@@ -8733,10 +8733,14 @@ pub(crate) fn handle_queue_work(
             .unwrap_or(plan.anchor_display.as_str());
         if let Ok(store) = storage.load() {
             if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
-                if let Some(protocol) =
-                    crate::protocol_cmd::resolved_protocol_for_requirement(&store, req)
-                {
-                    prompt = format!("{}\n\n{}", protocol.pickup_block(), prompt);
+                if let Some(block) = crate::protocol_cmd::pickup_protocol_block(
+                    &store,
+                    req,
+                    crate::protocol_cmd::ProtocolPickupSurface::QueueWork,
+                    no_human,
+                    role.eq_ignore_ascii_case("reviewer"),
+                ) {
+                    prompt = format!("{block}\n\n{prompt}");
                 }
             }
         }
