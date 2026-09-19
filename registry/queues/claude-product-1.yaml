@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b963-50a1-73f1-87dd-de8bdc6a0d4d
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1965 (alias resolution itself accepted): Add a regression test that queues a missing UUID, invokes batch member resolution, verifies the visible unresolvable-member skip diagnostic, and asserts that an actionable SpecSkipped event is emitted with the expected reason.  Concretely: add a test that stages a batch whose member id resolves to nothing (a queued entry for an id with no store object — a stale UUID), runs the batch member resolution, and asserts BOTH the human-visible skip line naming the member and an emitted SpecSkipped event carrying the reason; keep the existing aliased-fixture test green.'
-  added_at: 2026-09-19T13:41:36.315929750Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
