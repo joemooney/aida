@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T18:15:00.883171610Z
+modified_at: 2026-09-19T18:27:05.358376679Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -45,4 +45,10 @@ comments:
   created_at: 2026-09-19T16:37:38.910370391Z
   modified_at: 2026-09-19T16:37:38.910370391Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0baec-060e-7060-a3b3-47333cf68fce
+  author: joe
+  content: Implemented orchestrated implementer preflight at the publication boundary. Corroborated orchestrator-mode /aida-pr now returns a committed/pushed branch without opening a PR; the parent resolves [preflight].guards against ci.yml run bodies, runs them in the implementer worktree, preserves guard output on refusal, skips missing guards with a note, and honors lifecycle:no-preflight in the drain banner. Tests cover pure open/refuse decision, defaults/missing workflow behavior, exact failure output, and lifecycle parsing/banner.
+  created_at: 2026-09-19T18:27:05.358376679Z
+  modified_at: 2026-09-19T18:27:05.358376679Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
