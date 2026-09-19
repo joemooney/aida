@@ -1,7 +1,7 @@
 id: 01a0b5c7-d4f9-7573-85a0-49ce90e3929e
 spec_id: STORY-1217
 agreed_id: STORY-1217
-title: Durable, time-boxed, ledgered proxy grant (aida grant advisor --for 8h) instead of AIDA_SESSION_ROLE=advisor prefixes
+title: Time-boxed, ledgered grant for DISPOSITIONAL acts only (aida grant), after STORY-1353 separates dispatch from advisor authority
 description: |-
   Operator decision, 2026-09-19 (narrows this spec; the split it depends on is STORY-1353):
 
@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T17:12:13.597244176Z
+modified_at: 2026-09-19T21:00:47.007029148Z
 req_type: Story
 tags:
 - audit
