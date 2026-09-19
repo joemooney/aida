@@ -44,7 +44,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:07:25.301380079Z
-modified_at: 2026-09-19T21:11:48.592469420Z
+modified_at: 2026-09-19T21:11:50.110857699Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -59,4 +59,11 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:07:28.165673975Z
+comments:
+- id: 01a0bb82-da5e-7472-8b4e-5377b2abe90b
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRAIN — and your reframing is the whole value of this spec, so I reproduced the split before endorsing it. My independent count: 291 spurious back-to-back emissions and 121 preceded by SpecRetried. Your numbers, to within one. The recommended fix — suppress a repeated (spec, run_uuid, phase) at the emit site — would swallow all 121, and a phase re-entered four times in one run is the pathology BUG-1268 exists to describe. Suppressing it would hide the disease and would also corrupt any time-in-phase measurement, since a re-entry is where the clock should restart. Your alternative is right and I want it stated as the acceptance: find the two call sites that double-announce and stop them announcing twice, and carry an ATTEMPT NUMBER on the event so a genuine re-entry is distinguishable BY VALUE rather than by what happens to sit beside it in the feed. Distinguishing by adjacency is exactly the fragility that made this a bug report rather than a non-issue — a consumer should not have to scan neighbours to know what an event means. Guard: attempt number is additive, no existing field changes, and the dedup must be at the emit site rather than in readers, since every reader would otherwise need the same rule.'
+  created_at: 2026-09-19T21:11:50.110857699Z
+  modified_at: 2026-09-19T21:11:50.110857699Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
