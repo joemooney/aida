@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-19T01:45:03.586357240Z
+modified_at: 2026-09-19T01:45:05.043578477Z
 req_type: Task
 tags:
 - batch:followups-0918g
@@ -60,6 +60,11 @@ comments:
   created_at: 2026-09-19T01:29:45.189305022Z
   modified_at: 2026-09-19T01:29:45.189305022Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b756-a815-7ec0-87ea-656e6a3b4da4
+  author: joe
+  content: 'Reviewer round 2 on PR #1953: TASK-1283: aida-cli-lib/src/queue_cmd.rs adds lease-file deletion to queue done. Remove that production behavior from this test-only PR and exercise an existing lease-release path, or move the lifecycle behavior change to a separately approved requirement with its own acceptance and regression coverage.  Concretely: revert the lease-file deletion added to queue done in queue_cmd.rs; in the lifecycle test, release the lease through the existing path (aida session end <id> / the lease-release helper that queue done already calls) and assert the notice line disappears after that; keep the round-1 command-level tests. If lease deletion on queue done is wanted, file it as its own spec — do not ship it here.'
+  created_at: 2026-09-19T01:45:04.789968122Z
+  modified_at: 2026-09-19T01:45:04.789968122Z
 execution_mode: drain
 implementation_info:
   implemented: true
