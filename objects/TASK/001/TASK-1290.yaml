@@ -1,0 +1,38 @@
+id: 01a0ba81-ec62-7220-9218-08fc9b286023
+spec_id: TASK-1290
+agreed_id: TASK-1290
+title: 'Wire the existing aida criteria trace into the done-gate and the reviewer prompt: an untraced acceptance criterion is named before review, not discovered by it'
+description: |
+  Evidence (2026-09-18 12:00 → 2026-09-19 09:30): the single largest reviewer-round category was "the acceptance named a test or a boundary and the implementation tested below it" — at least SEVEN rounds:
+  - STORY-1221 (#1948): required CLI-injection + lease-notice regression coverage; diff had only aida-core META tests
+  - TASK-1283 (#1953): helper-level calls instead of command-level dispatch
+  - BUG-1252 (#1961): acceptance named four behaviours; diff had only helper-level tests
+  - TASK-1287 (#1964): acceptance named a fixture-level ship test; diff tested only the classifier
+  - BUG-1264 (#1965): acceptance named the unresolvable-member telemetry; untested
+  - BUG-1265 (#1966): "classifier tests could pass while the original finish_ci bypass defect still exists"
+  - BUG-1238 (#1954): mocked main() instead of the subprocess test the prior round asked for
+  Every one was detectable WITHOUT running anything, by comparing the spec's acceptance criteria against the tests in the diff.
+
+  The machinery already exists and is not in the loop: STORY-1178 shipped `aida criteria <SPEC>`, which reports which acceptance criteria are traced by Rust/pytest/JS/Go tests.
+
+  Proposal (extends TASK-1277's done-gate rather than new machinery): at aida queue done and PR creation, run the criteria trace for the spec and report each acceptance criterion as traced/untraced with the test that traces it. Default WARN alongside TASK-1277's protocol items; [protocol] enforce = "refuse" makes an untraced criterion block with the criterion text quoted. Carry the same untraced list into the headless reviewer prompt so round 1 cites it instead of discovering it.
+
+  Acceptance:
+  - A spec with an untraced acceptance criterion produces a named warning at queue done listing the criterion verbatim.
+  - Under enforce = refuse it blocks, and --force overrides with a ledger comment.
+  - The reviewer prompt for that PR contains the untraced-criteria list.
+  - A spec whose criteria are all traced produces no output (quiet when clean).
+  - Reuses aida criteria's existing tracer; no second implementation.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:31:11.970306394Z
+modified_at: 2026-09-19T16:31:11.970306394Z
+req_type: Task
+tags:
+- acceptance
+- from:failure-analysis-0919
+- orchestrator
+- parent:EPIC-28
+- review
