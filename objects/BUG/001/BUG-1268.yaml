@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:31:04.937729263Z
-modified_at: 2026-09-19T21:21:33.422895869Z
+modified_at: 2026-09-19T21:23:04.715555812Z
 req_type: Bug
 tags:
 - auto-complete
@@ -58,6 +58,21 @@ comments:
   created_at: 2026-09-19T17:35:07.684236997Z
   modified_at: 2026-09-19T17:35:07.684236997Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb8d-258b-73a3-9c8e-78dc65f639cd
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1970 [AI:codex] fix(orchestrator): recover reviewer stale bases (BUG-1268)
+    verdict: APPROVE + merged (auto-bumped Done → Completed at fc28aae)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: PARTIAL, and recorded as such. Codex authored the code; I authored only this spec when promoting it from an auto-draft, so no one merged their own code. But NO REVIEWER EVER LOOKED AT THIS PR — zero reviewer-phase events exist for this spec. Its drain shelved before phase 3, and reviewer-routed work has no driver while the implementer wave holds the single per-repo drain lock. I verified no reviewer was live on the PR (the one live agent under the drain was BUG-1234's implementer) and reviewed the full diff myself as the independent check. Verdict at .aida/review-verdicts/PR-1970-advisor.json.
+    gates: required Build (ubuntu-latest) = success at 357b71db; MERGEABLE/CLEAN; no hold marker; merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: the acceptance is met — a conflicting rebase yields the typed StaleBaseConflict with slug stale-base-conflict, carries the manual recipe in its reason, and leaves the branch untouched because the rebase aborts and removes its disposable worktree first; the shelve path treats it like StaleBaseRefused; a test drives the whole path through a fake aida and asserts kind, slug, recipe and recorded outcome. One scope extension beyond what I wrote, correct and well argued: the headless precondition moved from "phase 1 was also headless" to "any headless reviewer", because the safety boundary is a headless reviewer rather than how phase 1 ran.
+    non-blocking follow-up: conflict-versus-failure is discriminated by substring match on `aida pr rebase` stderr, so a wording change there silently reclassifies a conflict as a generic failure and loses the typed cause. Both sides are in this repo, so an exit code or typed signal would remove the coupling.
+    why merged ahead of the queue: it had been CLEAN, green and unowned for 3.6 hours, and it is the fix for the reviewer shelving on a stale base — three occurrences in 15 hours, each costing a full re-drive. Every hour it sat, the drain kept paying the bug it fixes.
+    timestamp: 2026-09-19T14:22-07:00
+  created_at: 2026-09-19T21:23:04.715555812Z
+  modified_at: 2026-09-19T21:23:04.715555812Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0bb8b-c0e7-7061-b7f9-8728ec5b80e8
   author: aida-auto-bump
