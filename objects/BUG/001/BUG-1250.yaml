@@ -1,0 +1,31 @@
+id: 01a0b7fa-42b8-7911-bdfb-1815f831c1f2
+spec_id: BUG-1250
+agreed_id: BUG-1250
+title: CI wait treats a transient gh API error as NoSignal and the drain proceeds to review with the required check still pending (GitHub twin of BUG-1224)
+description: |
+  Observed 2026-09-18 21:37 on wave followups-0918h, BUG-1239 / PR #1955 (GitHub). One minute into the CI wait the drain printed:
+    ⓘ CI state unavailable (gh pr list failed: error connecting to api.github.com
+    check your internet connection or https://githubstatus.com) — proceeding without a CI gate.
+  and ended the implementer session, filed the review story and ran the headless reviewer while the PR's required Build (ubuntu-latest) run was still in_progress (created 04:35:32Z; the reviewer verdict landed 04:42:39Z with Build still pending). A momentary API blip turned the CI gate off for the whole spec. GitHub status was green; the blip lasted seconds.
+
+  This is the second live instance of "NoSignal means no gate" this week: BUG-1224 covered the GitLab idle-window case (CI idle for N s → NoSignal → proceed). Here the trigger is a transient network error in ci_probe_via_forge inside wait_for_ci_terminal / watch_ci_for_context, and finish_ci's CiProbe::NoSignal arm proceeds with a warning.
+
+  Fix:
+  1. In the CI poll loop, a probe error that is transient (network/connect/timeout/5xx — reuse network_retry's classification from BUG-286) must be RETRIED in place with backoff, not returned as NoSignal; keep polling until the idle window / absolute ceiling say otherwise.
+  2. finish_ci must not proceed past the CI phase on NoSignal when a PR exists and checks were registered earlier: shelve with a typed cause (ci-unavailable) and the recovery hint, so a re-drive picks up the wait; reserve "proceed without a gate" for forges with genuinely no CI (PrNoChecks) or an explicit --no-ci-gate opt-in.
+  3. Unit test on the pure decision (transient error → keep polling; N consecutive hard failures → shelve, never proceed), plus a fixture test for the gh connect-error stderr.
+
+  Acceptance: with a PR whose required check is pending, injecting a transient gh failure into the probe keeps the drain in the CI wait and it later reads the real verdict; a persistent failure shelves the spec as ci-unavailable; no path reaches the reviewer while a required check is pending.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T04:43:46.744452633Z
+modified_at: 2026-09-19T04:43:46.744452633Z
+req_type: Bug
+tags:
+- ci-wait
+- gate
+- orchestrator
+- parent:EPIC-62
+- reliability
