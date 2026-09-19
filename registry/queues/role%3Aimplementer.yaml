@@ -116,3 +116,11 @@
   added_at: 2026-09-19T16:49:54.383070029Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba93-547f-7223-b2ba-6296e2f2cba4
+  position: 81000
+  added_by: role:implementer
+  note: pr ship refuses while a reviewer phase is live against THIS PR number regardless of the spec it runs under (resolve via PhaseDonePr); absent verdict + live reviewer = in flight; escape env var still overrides and is printed; sibling-spec fixture
+  added_at: 2026-09-19T16:50:26.798093188Z
+  for_role: implementer
+  added_by_machine: imac
