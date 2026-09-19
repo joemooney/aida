@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T16:37:28.332376735Z
+modified_at: 2026-09-19T16:37:30.016101755Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -38,4 +38,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T16:31:51.568416462Z
+comments:
+- id: 01a0ba87-b120-76a0-970c-413b925d9026
+  author: joe
+  content: '[advisor:groom] Approved, high, DRAIN. This is the cheapest of the four and the one I would land first, ahead of the product seat''s suggested order: it is a prompt change with no new machinery, no new phase and no dependency, and it attacks the tail directly. I verified the shelve data independently — 40 shelves across 19 specs, 26 verdict:request-changes / 10 ci-red / 4 tool-exit in the stated window — and it matches exactly. I also lived the BUG-1244 tail from the gate side: five rounds, five independent findings, every one visible in the same diff, and my own round-4 finding was a case of the reviewer''s earlier wording being followed literally rather than the whole acceptance being swept. Scope guard: round 1 enumerates every acceptance criterion with its verification status AND lists every defect; later rounds keep today''s behaviour (verify the prior findings plus anything newly introduced) — do not make every round a full re-sweep, that trades one cost for another. The verdict file should carry the complete list so the advisor gate can read it without re-deriving.'
+  created_at: 2026-09-19T16:37:30.016101755Z
+  modified_at: 2026-09-19T16:37:30.016101755Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
