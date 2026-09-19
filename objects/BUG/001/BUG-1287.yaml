@@ -1,0 +1,52 @@
+id: 01a0bb7d-7f12-78d1-a0ea-4c530343130e
+spec_id: BUG-1287
+agreed_id: BUG-1287
+title: 'The automatic session reap is not keeping up: 30 orphan worktrees, 13 dead agent records, 8 stale leases and 141 GiB of sibling checkouts remain despite the post-merge reap pass'
+description: |
+  The automatic session reap exists and is not keeping up. TASK-1177 made `aida session reap` run after an AIDA-managed merge lands, and FR-284 added the notify path for live-but-finished sessions. The mechanism is in place, so this is not "add auto-reap" — it is "find out why the existing pass leaves this much behind".
+
+  MEASURED 2026-09-19 in this repo:
+
+    aida doctor --json findings
+      956  parent-tag-drift
+      311  completed-without-commit
+      301  stale-remote-branches
+       38  OBE-briefs
+       38  brief-spec-drift
+       34  worktree-container-gitdir
+       30  orphan-worktrees
+       17  orphan-branches
+       13  dead-agents
+        8  stale-leases
+         (1759 findings total)
+
+    git worktree list        38 entries
+    ls .aida/agents/         16 entries
+    sibling worktree dirs    73 directories under ~/ai/, 141 GiB on disk
+
+  IMPACT. Disk is the visible cost and the least interesting one. The operational cost is that `git` commands that walk the worktree registry and the ref space get slower for every session on the machine, and that the noise hides the orphans that DO matter — eight stale leases and thirteen dead agent records are exactly the state that made a spec unreclaimable earlier today (BUG-1285).
+
+  WHAT TO FIND OUT FIRST, before writing any cleanup code. The reap predicate is deliberately strict: spec Done or Completed, AND branch merged, AND process exited. Any one of the three failing leaves the worktree in place, correctly. The question this spec must answer is which of the three fails for the thirty orphans — if it is "spec not Completed" then this is a symptom of the missing terminal transition rather than a reaper bug, and the fix belongs upstream. Classify the thirty before proposing a change.
+
+  ACCEPTANCE
+  1. Each of the 30 orphan worktrees is classified by which reap predicate it fails; the counts are recorded on this spec.
+  2. Where the predicate is correct and the state is genuinely stale, the reap pass is extended to cover it, reusing the existing safety checks — dirty, locked, or unique-unmerged-commit worktrees are never removed.
+  3. Dead agent records in .aida/agents/ are pruned by the same pass, with the same liveness test TASK-1284 introduced (pid plus process start time, degrading to a plain pid check when start time is absent).
+  4. Stale remote branches are reported, not deleted — branch deletion stays an explicit operator action.
+  5. A test drives a fixture with one reapable and one not-yet-reapable worktree and asserts exactly one is removed.
+  6. `aida doctor` reports the orphan counts before and after a reap pass so the improvement is measurable rather than asserted.
+
+  Reported by the aida-monitor project; counts independently reproduced in this repo before filing. The monitor's recommendation was "add opportunistic auto-reap" — corrected here, because that already shipped.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:05:59.058325197Z
+modified_at: 2026-09-19T21:05:59.058325197Z
+req_type: Bug
+tags:
+- from:aida-monitor
+- hygiene
+- parent:EPIC-62
+- reaper
+- worktree
