@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T18:50:40.449194837Z
+modified_at: 2026-09-19T19:14:10.643965650Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -140,6 +140,22 @@ comments:
   content: 'Round 2 review follow-up: strengthened the drain-level production finish_ci regressions to assert the supervised marker survives hold-only completion, required-check discovery drives the genuine-red classification, and unavailable rows perform exactly the initial read plus two retries before ci-unavailable shelving. Focused 3-test suite and cargo fmt check pass.'
   created_at: 2026-09-19T18:50:40.449194837Z
   modified_at: 2026-09-19T18:50:40.449194837Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb17-2253-71b3-85da-641287426d26
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1966
+    agent: codex
+    ran-at: 2026-09-19 12:14 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1265-drain-01a0bb16-c8c4-7b61-93e4-3780d4b18ec0.json
+    ? SEM (0.98) — When per-check rows are unreadable while a supervised merge hold is present, CI refinement performs exactly two retries after the initial read (three total row-read attempts) before shelving as ci-unavailable.
+    ? SEM (0.93) — Per-check row-read failures are retried only when a local hold marker or confirmed hold label is present; without either form of supervised hold, refinement returns the first row-read error without retrying.
+  created_at: 2026-09-19T19:14:10.643965650Z
+  modified_at: 2026-09-19T19:14:10.643965650Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
