@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
-  position: 0
-  added_by: claude-product-1
-  note: 'Recovered by the product seat: the codex implementer COMPLETED the corrected fix but exited before committing, so phase 2 correctly refused to end a session with uncommitted changes. The work matched the corrected brief exactly — contains() replaced by the prefix predicate on the trimmed comment, plus a negative test for embedded and quoted markers beside the existing positive test for real findings blocks. Both tests pass. Committed as ca309b1e78 and pushed to PR #1971; session ended. Nothing is owed on the implementation — verify at the new head and let the reviewer take round 2.'
-  added_at: 2026-09-19T19:24:43.612796886Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
