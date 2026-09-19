@@ -13,12 +13,12 @@ description: |-
   Fix options (pick the smallest): on Windows open via std::os::windows::fs::OpenOptionsExt::custom_flags(FILE_FLAG_BACKUP_SEMANTICS) before set_times; or write a small cross-platform helper set_dir_mtime(path, time) used by this test (and any sibling fixture doing the same). Do NOT #[cfg(not(windows))] the whole test away — the GC behaviour must stay covered on Windows.
 
   Acceptance: the test passes on windows-latest (cross-platform.yml dispatch or the next nightly green); scripts/check-portability.sh still passes; no product-code change unless prune_scratch_runs itself is found to misread Windows dir mtimes.
-status: Done
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:36:40.157061609Z
-modified_at: 2026-09-19T00:53:59.431260642Z
+modified_at: 2026-09-19T01:16:26.935824776Z
 req_type: Bug
 tags:
 - batch:followups-0918f
