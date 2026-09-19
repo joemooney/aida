@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b75b-60bc-7652-a3b4-0865a498169a
-  position: 34000
-  added_by: role:implementer
-  note: 'drive: lock records binary SHA+mtime; ps/dev status show it; build-fast + dev activate refuse under a live wave unless --after-wave (event-driven park until QueueDrained); no mid-wave re-exec in this slice; tests'
-  added_at: 2026-09-19T04:02:28.019666115Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b691-2b61-7b72-a434-026d6f3d2733
   position: 35000
   added_by: role:implementer
