@@ -110,6 +110,11 @@ build-release: ## Build all packages (release mode, optimized)
 # optimization, so this is for LOCAL iteration, not shipping. Shipped releases
 # build fresh (non-incremental) via CI (.github/workflows/release.yml).
 build-fast: ## Build all packages (release + incremental — for iteration, NOT shipping)
+	@if aida dev build-guard --help >/dev/null 2>&1; then \
+		aida dev build-guard release $(if $(filter 1 true yes,$(AFTER_WAVE)),--after-wave,); \
+	else \
+		echo "Note: current aida predates the live-wave build guard; bootstrapping it now."; \
+	fi
 	CARGO_INCREMENTAL=1 cargo build --workspace --release
 	@$(MAKE) --no-print-directory restart-mcp-servers
 

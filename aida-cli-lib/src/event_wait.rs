@@ -24,6 +24,28 @@ use std::time::{Duration, Instant};
 
 use crate::events::{Event, EventKind};
 
+/// Park a rebuild on the event stream until the active wave reaches its
+/// terminal QueueDrained boundary. The byte cursor starts at EOF, so an old
+/// drain event can never release a new build request.
+// trace:TASK-1285 | ai:codex
+pub(crate) fn wait_for_queue_drained(project_root: &Path, wave_id: &str) -> anyhow::Result<()> {
+    let path = crate::events::events_path(project_root);
+    let mut pos = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+    loop {
+        if let Some(EventKind::QueueDrained { .. }) =
+            scan_new_focus_actionable(&path, &mut pos, None)
+        {
+            return Ok(());
+        }
+        if crate::drain_lock::read_pid_live_lock(project_root).is_none() {
+            anyhow::bail!(
+                "wave {wave_id} ended without a QueueDrained event; rebuild was not started"
+            );
+        }
+        std::thread::sleep(Duration::from_secs(WAIT_POLL_SECS));
+    }
+}
+
 /// How often [`wait_for_actionable`] re-checks the event stream while blocking.
 /// Small enough to stay responsive (an event wakes the loop within a couple of
 /// seconds) without busy-spinning; the idle backstop, not this, governs the
@@ -301,5 +323,52 @@ mod tests {
             WakeReason::Event(EventKind::CiTerminal { green: true }),
             "an in-scope event wakes the focused loop"
         );
+    }
+
+    #[test]
+    fn after_wave_wait_ignores_old_terminal_event_and_wakes_on_new_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        seed_events(
+            root,
+            &[Event::new(
+                None,
+                "old-wave",
+                EventKind::QueueDrained {
+                    shipped: 1,
+                    shelved: 0,
+                },
+            )],
+        );
+        let lock = crate::drain_lock::DrainLock {
+            pid: std::process::id(),
+            started_at_utc: chrono::Utc::now().to_rfc3339(),
+            command: "test wave".into(),
+            host: "test".into(),
+            wave_id: "wave-test".into(),
+            binary_sha: "abc1234".into(),
+            binary_mtime_secs: Some(1),
+            binary_path: "/repo/target/release/aida".into(),
+            specs: vec![],
+        };
+        let lock_path = crate::drain_lock::drain_lock_path(root);
+        std::fs::write(&lock_path, serde_json::to_string(&lock).unwrap()).unwrap();
+        let events_path = crate::events::events_path(root);
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            write_lines(
+                &events_path,
+                &[Event::new(
+                    None,
+                    "wave-test",
+                    EventKind::QueueDrained {
+                        shipped: 2,
+                        shelved: 0,
+                    },
+                )],
+            );
+        });
+        wait_for_queue_drained(root, "wave-test").unwrap();
+        writer.join().unwrap();
     }
 }

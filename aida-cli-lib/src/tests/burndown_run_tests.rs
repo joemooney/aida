@@ -102,6 +102,10 @@ fn sample_lock(pid: u32) -> crate::drain_lock::DrainLock {
         started_at_utc: "2026-06-13T21:53:00Z".to_string(),
         command: "burndown run --status approved".to_string(),
         host: "devbox".to_string(),
+        wave_id: "wave-1".to_string(),
+        binary_sha: "abc1234".to_string(),
+        binary_mtime_secs: Some(1_700_000_000),
+        binary_path: "/repo/target/release/aida".to_string(),
         // trace:BUG-759 | ai:claude
         specs: Vec::new(),
     }
