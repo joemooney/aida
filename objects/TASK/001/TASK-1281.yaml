@@ -11,7 +11,7 @@ description: |-
   5. A substrate `when` job produces two store commits per firing (episode via write_cas_opts, then record_outcome). Fold into one mutate.
   6. Concurrent ticks from two sessions' hooks can both fire a when/on substrate job (min_gap reads last_tick_at, written only at end). Idempotency covers correctness; add a cheap tick lock or write last_tick_at at start.
   Acceptance: one test per item; no change to the registry format or the CLI surface.
-status: InProgress
+status: Done
 priority: Low
 owner: ''
 feature: Uncategorized
