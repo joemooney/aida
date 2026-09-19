@@ -35,3 +35,11 @@
   added_at: 2026-09-19T14:29:40.081918273Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba16-f892-79d2-8069-e0d9d2e6c859
+  position: 64000
+  added_by: role:implementer
+  note: auto-queued by `aida pr` (01a0ba12); covers 1 spec
+  added_at: 2026-09-19T14:34:28.620229429Z
+  for_role: reviewer
+  added_by_machine: imac
