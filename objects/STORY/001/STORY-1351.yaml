@@ -29,14 +29,16 @@ description: |
   - A fresh session for the advisor seat, started with the memory pack DISABLED, on Claude and again on Codex, can state from its launch context alone: what it gates, what it must never do, how it writes a rework brief, and what is waiting for it — verified by reading its first reply, recorded on this spec.
   - The recurring duties appear as due seat jobs within one tick of launch rather than requiring the session to remember them.
   - No behaviour listed in channel 1 or 2 is delivered as prose in the role file (they are cross-checked: anything mechanised is deleted from the prose).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:12.562647785Z
-modified_at: 2026-09-19T16:44:15.603827244Z
+modified_at: 2026-09-19T16:49:46.697646014Z
 req_type: Story
 tags:
+- batch:followups-0918i
+- drive
 - from:failure-analysis-0919
 - multivendor
 - parent:EPIC-62
@@ -48,3 +50,4 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T16:44:15.603827244Z
+execution_mode: drive
