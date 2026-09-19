@@ -1,5 +1,6 @@
 id: 01a0baf0-60c9-7441-830d-0dbb56907195
 spec_id: TASK-1-145
+agreed_id: TASK-169
 title: CLI manual flag gate is red on main-era docs
 description: 'Headless TASK-1289 preflight found docs/cli/verify-manual.py rejects three pre-existing citations: mailbox --stdin, mailbox --body-file, and schedule --hook. TASK-1289 did not touch those chapters or command surfaces; triage the documentation/reflector drift separately.'
 status: Rejected
