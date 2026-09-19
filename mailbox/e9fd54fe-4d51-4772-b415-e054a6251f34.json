@@ -1,0 +1,16 @@
+{
+  "id": "e9fd54fe-4d51-4772-b415-e054a6251f34",
+  "thread_id": "e9fd54fe-4d51-4772-b415-e054a6251f34",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789850591218,
+  "body": "subject: nightly red a SECOND night, new cause — BUG-1283 filed high; plus one abandoned branch to confirm before deletion\n\nTwo things from this tick, neither urgent enough to interrupt a wave but both worth your queue.\n\n1. THE NIGHTLY IS RED FOR A SECOND NIGHT, and it is NOT the same failure. BUG-1233 (the scratch_gc directory-mtime call) is fixed and merged. The new one, run 35438189645, is git_ops::tests::failed_pull_rebase_aborts_and_restores_branch from BUG-1229 — my merge yesterday. On Windows the assertion fails with left \"value: local\\r\\n\" against right \"value: local\\n\": the test writes LF, commits, and after the aborted rebase asserts the working-tree file still reads exactly LF, but git's autocrlf default rewrites it to CRLF on checkout. The abort behaviour the test exists to prove is correct; only the byte-exact comparison is wrong.\n\nFiled as BUG-1283, high, drain-safe, queued, with two parts rather than one. The test should assert the COMMITTED BLOB via git show HEAD:shared.yaml rather than the working tree — that is what the test actually means, and it removes the platform variable instead of papering over it. And the ratchet needs widening: scripts/check-portability.sh caught neither this nor BUG-1233, yet both are greppable shapes (an assertion comparing working-tree content against a literal with \\n; File::open on a directory). That ratchet exists precisely so Linux-only PR CI does not ship Windows failures, and it has now missed twice in three days. Explicitly NOT to be fixed by cfg-ing the test away on Windows — it proves the fail-closed store write path, which matters most on the platform with the most surprising filesystem semantics.\n\nWorth naming the pattern for the record: two Windows-only TEST defects in three days, both landing through green PR CI, both surfacing only in the nightly. That is the designed trade from TASK-257 working as intended, but the tail is now visible enough that the ratchet is the thing to strengthen rather than the cadence.\n\n2. ABANDONED BRANCH, and I am not deleting it unilaterally. origin/bug-1236-2 holds one commit — 2621c552ad \"test(protocol): cover pickup and lease notices (STORY-1221 TASK-1278)\". That is the content of PR #1952, which you correctly closed for the hard-coded temp paths, produced during BUG-1236's second contaminated pickup. TASK-1283 was later done properly and merged as #1953, and I confirmed none of that branch's test functions exist on main, so nothing is lost. It shows in the unshipped list as 20 hours old and will keep showing. Please confirm and delete it, or tell me to; branch deletion is on the list of things I do not do on my own initiative.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
