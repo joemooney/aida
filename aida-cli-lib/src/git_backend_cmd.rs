@@ -4211,6 +4211,8 @@ pub(crate) fn handle_git_backend_command(
             id,
             title,
             description,
+            description_from_file,
+            description_stdin,
             status,
             priority,
             r#type,
@@ -4387,6 +4389,12 @@ pub(crate) fn handle_git_backend_command(
             // Best-effort; no `[team] protected_tags` => no-op (slice-1 behavior).
             // trace:STORY-647 | ai:claude
             enforce_protected_spec_gate(req.tags.iter(), *force)?;
+
+            // trace:BUG-1234 | ai:codex — mirror `aida add`'s safe long-form
+            // sources after lookup/authorization, but before any mutation.
+            let resolved_description =
+                resolve_edit_description(description, description_from_file, *description_stdin)?;
+            let description = &resolved_description;
 
             // TASK-1117: `aida edit <spec>` with NO field flags (or with
             // `--interactive`) opens the user's editor (AIDA_EDITOR → VISUAL
