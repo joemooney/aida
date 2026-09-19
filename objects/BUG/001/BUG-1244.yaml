@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T06:43:15.828897056Z
+modified_at: 2026-09-19T06:49:03.895790546Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -103,7 +103,7 @@ failure_reason:
   phase: ci
   phase_index: 2
   kind: ci-red
-  detail: 'CI is red on PR-1956: failing: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35422445854 — view it: `gh run view 35422445854`. Push fixups to the same branch: `aida queue work BUG-1244 --branch bug-1244 --steal`'
+  detail: 'CI is red on PR-1956: `merge-hold-gate` is red because PR-1956 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
+  recovery_hint: 'CI failed on run 35427171972 — view it: `gh run view 35427171972`. Push fixups to the same branch: `aida queue work BUG-1244 --branch bug-1244 --steal`'
   shelved_by: advisor
-  shelved_at: 2026-09-19T04:58:33.627303190Z
+  shelved_at: 2026-09-19T06:49:03.895790546Z
