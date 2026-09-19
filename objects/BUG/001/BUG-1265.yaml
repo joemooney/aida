@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T14:29:36.321307353Z
+modified_at: 2026-09-19T14:29:37.525802014Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -57,6 +57,16 @@ comments:
   content: 'Reviewer round 1 on PR #1966 (classifier fix accepted; the drain boundary is untested): Add drain-level finish_ci regression coverage for all three required cases: hold-gate-only red plus marker completes without shelving; hold gate plus a genuine required red shelves ci-red naming only the genuine check; unavailable check rows plus marker retries and shelves as ci-unavailable, never ci-red. The existing classifier tests could pass while the original finish_ci bypass defect still exists.  The reviewer''s point is exact: the defect was never in ci_gate::classify_red, it was that finish_ci shelved before consulting RedRefinement.hold_gate_is_the_hold — so classifier-level tests cannot prove it fixed. Drive the PhaseDriver''s finish_ci with a FakeForge (see ci_gate''s FakeForge) across the three cases: (1) hold-gate-only red + marker present → no shelve, phase completes; (2) hold gate red + a genuine required red → shelves CiRed naming only the genuine check, never the gate; (3) check-rows read fails (refine_red Err) + marker present → retries the rows read, then shelves ci-unavailable, never ci-red. Keep the existing classifier tests.'
   created_at: 2026-09-19T14:29:36.066790028Z
   modified_at: 2026-09-19T14:29:36.066790028Z
+- id: 01a0ba12-9d76-7721-87b6-e9f48ab92d21
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1966):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. Add drain-level finish_ci regression coverage for all three required cases: hold-gate-only red plus marker completes without shelving; hold gate plus a genuine required red shelves ci-red naming only the genuine check; unavailable check rows plus marker retries and shelves as ci-unavailable, never ci-red. The existing classifier tests could pass while the original finish_ci bypass defect still exists.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T14:29:37.270344579Z
+  modified_at: 2026-09-19T14:29:37.270344579Z
 execution_mode: drain
 implementation_info:
   implemented: true
