@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:20:52.645970995Z
-modified_at: 2026-09-19T02:03:32.812769941Z
+modified_at: 2026-09-19T02:03:34.015570180Z
 req_type: Task
 tags:
 - batch:followups-0918f
@@ -70,6 +70,16 @@ comments:
   content: 'Reviewer round 3 on PR #1942: TASK-1271: CLI inbox and MCP mark_seen call record_seen for every message in the full inbox before advancing the watermark. On the first post-upgrade read, messages already at or below the prior watermark receive a new receipt timestamp, so max_read_latency_ms reports now-sent_at rather than an actual recorded read latency. Capture receipts only for messages newly acknowledged past the pre-read watermark (while still advancing the watermark to the newest), and add a regression test with an existing watermark proving old read messages are not backfilled.  Concretely: in both the CLI inbox path and MCP mark_seen, compute the pre-read watermark first and call record_seen only for messages sent after it (newly acknowledged); messages at or below the prior watermark get no receipt, so max_read_latency_ms never reports now-minus-sent_at for history. Add a test: a mailbox with two old (pre-watermark) and one new message → exactly one receipt recorded, latency computed from the new one only.'
   created_at: 2026-09-19T02:03:32.562088358Z
   modified_at: 2026-09-19T02:03:32.562088358Z
+- id: 01a0b767-9405-7ac1-9d3a-57465aa39f35
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1942):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1271: CLI inbox and MCP mark_seen call record_seen for every message in the full inbox before advancing the watermark. On the first post-upgrade read, messages already at or below the prior watermark receive a new receipt timestamp, so max_read_latency_ms reports now-sent_at rather than an actual recorded read latency. Capture receipts only for messages newly acknowledged past the pre-read watermark (while still advancing the watermark to the newest), and add a regression test with an existing watermark proving old read messages are not backfilled.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T02:03:33.765838803Z
+  modified_at: 2026-09-19T02:03:33.765838803Z
 execution_mode: drain
 implementation_info:
   implemented: true
