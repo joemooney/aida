@@ -868,6 +868,329 @@ mod task_1244_drain_merge_lease_tests {
     }
 }
 
+#[cfg(all(test, unix))]
+mod bug_1265_finish_ci_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    struct Fixture {
+        _temp: tempfile::TempDir,
+        root: std::path::PathBuf,
+        gh: std::path::PathBuf,
+        mode: std::path::PathBuf,
+        reads: std::path::PathBuf,
+        calls: std::path::PathBuf,
+    }
+
+    /// Runs the production CI driver through the real drain orchestration
+    /// boundary. Only the CI implementation is delegated: the remaining
+    /// phases are unreachable because these regressions resume at phase 2 and
+    /// stop at `ThroughCi`.
+    // trace:BUG-1265 | ai:codex
+    struct DrainHarness {
+        real: RealPhaseDriver,
+        finish_ci_calls: usize,
+        shelf_calls: usize,
+    }
+
+    impl auto_complete::PhaseDriver for DrainHarness {
+        fn run_implementer(
+            &mut self,
+        ) -> Result<auto_complete::ImplementerOutcome, auto_complete::PhaseFailure> {
+            unreachable!("CI-resume harness must not run phase 1")
+        }
+
+        fn finish_ci(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            self.finish_ci_calls += 1;
+            auto_complete::PhaseDriver::finish_ci(&mut self.real)
+        }
+
+        fn run_reviewer(
+            &mut self,
+        ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must stop after phase 2")
+        }
+
+        fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must not merge")
+        }
+
+        fn pull(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must not pull")
+        }
+
+        fn build(&mut self) -> Result<(), auto_complete::PhaseFailure> {
+            unreachable!("ThroughCi harness must not build")
+        }
+
+        fn hint_context(&self) -> auto_complete::HintContext {
+            auto_complete::PhaseDriver::hint_context(&self.real)
+        }
+
+        fn transient_retry_budget(&self) -> usize {
+            0
+        }
+
+        fn shelve_on_failure(
+            &mut self,
+            _spec: &str,
+            phase: auto_complete::Phase,
+            failure: &auto_complete::PhaseFailure,
+            recovery_hint: &str,
+        ) -> anyhow::Result<Option<aida_core::FailureReason>> {
+            self.shelf_calls += 1;
+            Ok(Some(aida_core::FailureReason {
+                phase: phase.slug().to_string(),
+                phase_index: phase.index() as u8,
+                kind: failure.kind.cause_slug().to_string(),
+                detail: failure.reason.clone(),
+                recovery_hint: Some(recovery_hint.to_string()),
+                shelved_by: None,
+                shelved_at: chrono::Utc::now(),
+            }))
+        }
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path().join("repo");
+            std::fs::create_dir_all(&root).unwrap();
+            let git = |args: &[&str]| {
+                let out = std::process::Command::new("git")
+                    .current_dir(&root)
+                    .args(args)
+                    .output()
+                    .unwrap();
+                assert!(
+                    out.status.success(),
+                    "git {args:?}: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
+            };
+            git(&["init", "-q", "-b", "main"]);
+            git(&[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/finish-ci-fixture.git",
+            ]);
+
+            let mode = temp.path().join("mode");
+            let reads = temp.path().join("reads");
+            let calls = temp.path().join("calls");
+            let gh = temp.path().join("gh");
+            let script = format!(
+                r###"#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> '{}'
+if [ "${{1:-}}" = "--version" ]; then echo 'gh version test'; exit 0; fi
+if [ "$1 $2" = "pr list" ]; then
+  printf '%s\n' '[{{"number":1265,"statusCheckRollup":[{{"name":"merge-hold-gate","status":"COMPLETED","conclusion":"FAILURE"}}]}}]'
+  exit 0
+fi
+if [ "$1 $2" = "pr checks" ]; then
+  mode=$(cat '{}')
+  if [ "$mode" = unavailable ]; then
+    if printf '%s' "$*" | grep -q -- '--required'; then
+      printf '%s\n' '[{{"name":"merge-hold-gate","workflow":"merge-hold-gate","bucket":"fail"}},{{"name":"Build","workflow":"CI","bucket":"pass"}}]'
+      exit 1
+    fi
+    n=0; test ! -f '{}' || n=$(cat '{}'); n=$((n+1)); echo "$n" > '{}'
+    echo 'temporary rows failure' >&2
+    exit 1
+  fi
+  if [ "$mode" = real ]; then
+    printf '%s\n' '[{{"name":"merge-hold-gate","workflow":"merge-hold-gate","bucket":"fail"}},{{"name":"Build","workflow":"CI","bucket":"fail"}}]'
+  else
+    printf '%s\n' '[{{"name":"merge-hold-gate","workflow":"merge-hold-gate","bucket":"fail"}},{{"name":"Build","workflow":"CI","bucket":"pass"}}]'
+  fi
+  exit 1
+fi
+echo "unexpected gh call: $*" >&2
+exit 2
+"###,
+                calls.display(),
+                mode.display(),
+                reads.display(),
+                reads.display(),
+                reads.display()
+            );
+            std::fs::write(&gh, script).unwrap();
+            let mut perms = std::fs::metadata(&gh).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&gh, perms).unwrap();
+            merge_hold::write_hold(&root, 1265, "supervised test hold").unwrap();
+            Self {
+                _temp: temp,
+                root,
+                gh,
+                mode,
+                reads,
+                calls,
+            }
+        }
+
+        fn driver(&self) -> RealPhaseDriver {
+            let mut driver = RealPhaseDriver::new(
+                self.root.clone(),
+                "BUG-1265".into(),
+                "test".into(),
+                None,
+                true,
+                None,
+                AutonomyMode::Default,
+                "test-token".into(),
+                false,
+                false,
+                false,
+                false,
+                auto_complete::LifecycleSkip::none(),
+                auto_complete::AutoCompleteVariant::ThroughCi,
+            );
+            driver.branch = Some("bug-1265".into());
+            driver.from_pr = true; // an already-open PR needs no worktree push
+            driver
+        }
+
+        fn set_mode(&self, mode: &str) {
+            std::fs::write(&self.mode, mode).unwrap();
+            let _ = std::fs::remove_file(&self.reads);
+            let _ = std::fs::remove_file(&self.calls);
+        }
+
+        fn run_drain(&self, mode: &str) -> (auto_complete::OrchestrationResult, usize, usize) {
+            self.set_mode(mode);
+            let inherited = std::env::var_os("PATH").unwrap_or_default();
+            let path = std::env::join_paths(
+                std::iter::once(self.gh.parent().unwrap().to_path_buf())
+                    .chain(std::env::split_paths(&inherited)),
+            )
+            .unwrap();
+            let gh = self.gh.to_string_lossy().into_owned();
+            let path = path.to_string_lossy().into_owned();
+            let _env = crate::test_env::EnvVarsGuard::set(&[
+                ("AIDA_TEST_GH_BINARY", gh.as_str()),
+                ("PATH", path.as_str()),
+            ]);
+            let mut harness = DrainHarness {
+                real: self.driver(),
+                finish_ci_calls: 0,
+                shelf_calls: 0,
+            };
+            let result = auto_complete::orchestrate_with_resume(
+                &mut harness,
+                "BUG-1265",
+                auto_complete::AutoCompleteVariant::ThroughCi,
+                true,
+                auto_complete::EscalateMode::Blocks,
+                auto_complete::LifecycleSkip::none(),
+                true,
+                auto_complete::Phase::Ci,
+            );
+            (result, harness.finish_ci_calls, harness.shelf_calls)
+        }
+    }
+
+    /// Exercise the real drain driver, not just `ci_gate::classify_red`: this
+    /// is the seam that originally bypassed refinement and shelved the coarse
+    /// hold-gate verdict as `ci-red`.
+    // trace:BUG-1265 | ai:codex
+    #[test]
+    fn drain_finish_ci_completes_for_hold_gate_only_red() {
+        let fixture = Fixture::new();
+        assert!(
+            merge_hold::read_hold(&fixture.root, 1265).is_some(),
+            "the regression requires a real local supervised-hold marker"
+        );
+        let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("hold");
+        assert_eq!(
+            finish_ci_calls, 1,
+            "drain must execute production finish_ci"
+        );
+        assert_eq!(shelf_calls, 0, "the supervised hold is not a failure shelf");
+        assert!(result.failed_phase.is_none(), "{result:?}");
+        assert!(result.shelved_reason.is_none(), "{result:?}");
+        assert_eq!(result.process_exit_code(), auto_complete::DRIVE_EXIT_CLEAN);
+        assert!(
+            merge_hold::read_hold(&fixture.root, 1265).is_some(),
+            "finish_ci must not clear the supervised hold marker"
+        );
+    }
+
+    // trace:BUG-1265 | ai:codex
+    #[test]
+    fn drain_finish_ci_shelves_real_red_naming_only_the_genuine_check() {
+        let fixture = Fixture::new();
+        let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("real");
+        assert_eq!(
+            finish_ci_calls, 1,
+            "drain must execute production finish_ci"
+        );
+        assert_eq!(shelf_calls, 1, "a genuine required red must shelf once");
+        let shelf = result
+            .shelved_reason
+            .as_ref()
+            .expect("genuine red must shelve");
+        assert_eq!(result.failed_phase, Some(auto_complete::Phase::Ci));
+        assert_eq!(
+            result.process_exit_code(),
+            auto_complete::DRIVE_EXIT_SHELVED
+        );
+        assert_eq!(shelf.kind, "ci-red");
+        assert!(shelf.detail.contains("Build"), "{}", shelf.detail);
+        assert!(
+            !shelf.detail.contains("merge-hold-gate"),
+            "{}",
+            shelf.detail
+        );
+        let calls = std::fs::read_to_string(&fixture.calls).unwrap();
+        assert!(
+            calls
+                .lines()
+                .any(|call| call.contains("pr checks") && call.contains("--required")),
+            "finish_ci must discover which red checks are genuinely required: {calls}"
+        );
+    }
+
+    // trace:BUG-1265 | ai:codex
+    #[test]
+    fn drain_finish_ci_retries_unavailable_rows_then_shelves_ci_unavailable() {
+        let fixture = Fixture::new();
+        let (result, finish_ci_calls, shelf_calls) = fixture.run_drain("unavailable");
+        assert_eq!(finish_ci_calls, 1, "row retries belong inside finish_ci");
+        assert_eq!(
+            shelf_calls, 1,
+            "persistent row unavailability must shelf once"
+        );
+        let shelf = result
+            .shelved_reason
+            .as_ref()
+            .expect("unavailable rows under a hold must shelve");
+        assert_eq!(result.failed_phase, Some(auto_complete::Phase::Ci));
+        assert_eq!(
+            result.process_exit_code(),
+            auto_complete::DRIVE_EXIT_SHELVED
+        );
+        assert_eq!(shelf.kind, "ci-unavailable");
+        assert_ne!(shelf.kind, "ci-red");
+        assert_eq!(
+            std::fs::read_to_string(&fixture.reads).unwrap().trim(),
+            "3",
+            "initial row read plus two bounded retries"
+        );
+        let calls = std::fs::read_to_string(&fixture.calls).unwrap();
+        assert_eq!(
+            calls
+                .lines()
+                .filter(|call| call.contains("pr checks") && !call.contains("--required"))
+                .count(),
+            3,
+            "finish_ci must make the initial row read plus two bounded retries: {calls}"
+        );
+    }
+}
+
 #[cfg(test)]
 mod bug_1205_ci_phase_fallthrough_tests {
     use super::*;
@@ -899,12 +1222,25 @@ mod bug_1205_ci_phase_fallthrough_tests {
     #[test]
     fn informational_red_falls_through_to_the_green_steps() {
         let src = include_str!("lib.rs");
-        let start = src
+        // BUG-1265 added drain-level test harnesses that also `impl PhaseDriver`,
+        // so searching the file for the first `fn finish_ci` now lands on a mock
+        // whose body is a one-line delegation. Anchor on the REAL impl block
+        // first, then find finish_ci inside it, so the guard keeps asserting the
+        // production path no matter how many harnesses exist.
+        // trace:BUG-1205 trace:BUG-1265 | ai:claude
+        let real_impl = src
+            .find(concat!(
+                "impl auto_complete::PhaseDriver ",
+                "for RealPhaseDriver {"
+            ))
+            .expect("real PhaseDriver impl present");
+        let start = src[real_impl..]
             .find(concat!(
                 "fn finish_ci",
                 "(&mut self) -> Result<(), auto_complete::PhaseFailure>"
             ))
-            .expect("finish_ci present");
+            .map(|i| real_impl + i)
+            .expect("finish_ci present in the real impl");
         let end = src[start..]
             .find(concat!("    fn ", "run_reviewer("))
             .map(|e| start + e)
@@ -86464,9 +86800,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // Returning early here left the implementer lease held and the
                 // headless reviewer died on the "branch held by lease" prompt.
                 // trace:BUG-1205 | ai:claude
+                // BUG-1265: when a marker or confirmed label makes the coarse
+                // red ambiguous, row-read failure is ci-unavailable, never
+                // evidence of a real failing check. trace:BUG-1265 | ai:codex
                 let refined_green = {
                     let hold_present =
                         merge_hold::read_hold(&self.project_root, pr_number as u64).is_some();
+                    let hold_label_present = !hold_present
+                        && merge_hold::label_present(&self.project_root, pr_number as u64)
+                            .unwrap_or(false);
                     let refine_change = crate::forge::ChangeRef {
                         id: pr_number as u64,
                         url: String::new(),
@@ -86479,9 +86821,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         self.lifecycle_forge().as_ref(),
                         &refine_change,
                         hold_present,
-                        false,
+                        hold_label_present,
                         std::time::Duration::from_secs(20 * 60),
-                        std::time::Duration::from_secs(15),
+                        ci_red_refine_poll_interval(),
                     ) {
                         Ok(r) if !r.is_real() && !r.has_pending() => {
                             if !self.json {
@@ -86509,7 +86851,20 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 auto_complete::FailureKind::CiRed,
                                 format!(
                                     "CI is red on PR-{pr_number}: {}",
-                                    r.describe(pr_number as u64)
+                                    // The supervised gate is the hold, not a
+                                    // failed check. A ci-red shelf must name
+                                    // only the genuine required failures.
+                                    // trace:BUG-1265 | ai:codex
+                                    r.real.join(", ")
+                                ),
+                            ));
+                        }
+                        Err(error) if hold_present || hold_label_present => {
+                            self.ci_run_id = latest_run_id_for_branch(&branch);
+                            return Err(auto_complete::PhaseFailure::of(
+                                auto_complete::FailureKind::CiUnavailable,
+                                format!(
+                                    "CI check details are unavailable on PR-{pr_number} after retries while a supervised merge-hold is present: {error:#}"
                                 ),
                             ));
                         }
@@ -88389,6 +88744,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 false
             }
         }
+    }
+}
+
+/// Keep the production retry cadence patient while letting the drain-level
+/// `finish_ci` regression exercise all retries without making the unit suite
+/// sleep for thirty seconds. The retry count and control flow are identical.
+// trace:BUG-1265 | ai:codex
+fn ci_red_refine_poll_interval() -> std::time::Duration {
+    if cfg!(test) {
+        std::time::Duration::from_millis(1)
+    } else {
+        std::time::Duration::from_secs(15)
     }
 }
 

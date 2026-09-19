@@ -305,9 +305,12 @@ pub(crate) fn wait_for_checks_to_register(
 /// still pending (the coarse watcher returned on the first red) — keep polling
 /// until they settle or `settle_timeout` elapses. A timeout leaves the
 /// still-pending names in `pending`; the caller decides (pr ship bails, the
-/// drain shelves CiTimeout). `Err` means the forge exposes no per-check rows
-/// (pure-git) or the read failed — callers keep the coarse verdict.
+/// drain shelves CiTimeout). While a supervised hold is present, row-read
+/// failures receive two bounded retries. `Err` then means the forge exposes no
+/// per-check rows (pure-git) or the read stayed unavailable; callers must not
+/// turn that ambiguity into a real red failure for a supervised hold.
 // trace:STORY-1166 | ai:claude (forge-routed; was gh-only under BUG-1180)
+// trace:BUG-1265 | ai:codex
 pub(crate) fn refine_red(
     project_root: &Path,
     forge: &dyn crate::forge::Forge,
@@ -320,8 +323,22 @@ pub(crate) fn refine_red(
     let cfg = read_ci_gate_config(project_root);
     let required = forge.required_check_names(change);
     let deadline = Instant::now() + settle_timeout;
+    let supervised_hold = hold_marker_present || hold_label_present;
+    let mut row_read_failures = 0usize;
     loop {
-        let rows = forge.check_rows(change)?;
+        let rows = match forge.check_rows(change) {
+            Ok(rows) => rows,
+            Err(error) if supervised_hold && row_read_failures < 2 => {
+                // BUG-1265: a coarse red cannot distinguish the supervised
+                // merge-hold gate from a real failure. Retry transient row
+                // reads before returning an unavailable classification to the
+                // caller; never let it degrade into ci-red while held.
+                row_read_failures += 1;
+                std::thread::sleep(poll_interval);
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
         let r = classify_red(
             &rows,
             &required,
@@ -568,6 +585,7 @@ mod tests {
         registrations: std::cell::RefCell<Vec<crate::forge::CheckRegistration>>,
         rows: Option<Vec<CheckRow>>,
         required: Vec<String>,
+        row_reads: std::cell::Cell<usize>,
     }
     impl crate::forge::Forge for FakeForge {
         fn change_metadata(
@@ -662,6 +680,7 @@ mod tests {
             Ok(if v.len() > 1 { v.remove(0) } else { v[0] })
         }
         fn check_rows(&self, _: &crate::forge::ChangeRef) -> anyhow::Result<Vec<CheckRow>> {
+            self.row_reads.set(self.row_reads.get() + 1);
             self.rows
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("no rows on this forge"))
@@ -684,6 +703,7 @@ mod tests {
             registrations: std::cell::RefCell::new(regs.to_vec()),
             rows,
             required: vec![HOLD_GATE_CHECK.into()],
+            row_reads: std::cell::Cell::new(0),
         }
     }
 
@@ -746,7 +766,30 @@ mod tests {
             ms,
         )
         .is_err());
+        assert_eq!(f.row_reads.get(), 3, "a supervised hold retries row reads");
         assert!(wait_hold_gate_green(&f, &change(), Duration::from_millis(3), ms).unwrap());
+    }
+
+    #[test]
+    fn red_refinement_without_a_hold_does_not_retry_unavailable_rows() {
+        use crate::forge::CheckRegistration as R;
+        let dir = tempfile::tempdir().unwrap();
+        let f = fake(&[R::Registered], None);
+        assert!(refine_red(
+            dir.path(),
+            &f,
+            &change(),
+            false,
+            false,
+            Duration::from_secs(1),
+            Duration::from_millis(1),
+        )
+        .is_err());
+        assert_eq!(
+            f.row_reads.get(),
+            1,
+            "no-hold forge behavior stays unchanged"
+        );
     }
 
     /// Source-shape guard: this module never shells out to a forge CLI itself.
