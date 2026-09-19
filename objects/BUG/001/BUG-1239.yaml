@@ -8,11 +8,12 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:26.124728352Z
-modified_at: 2026-09-18T22:14:08.434375564Z
+modified_at: 2026-09-19T03:58:50.680726909Z
 req_type: Bug
 tags:
 - agent-ux
 - aida:awaiting
+- batch:followups-0918h
 - cli
 - drain-safe
 - papercut
