@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
-  position: 0
-  added_by: claude-product-1
-  note: 'PR #1966 was 2 commits behind main with a conflict; the product seat rebased it onto main. The conflict was both branches adding the same FailureKind::CiUnavailable variant (BUG-1250 landed it first) — resolved by keeping ONE variant whose doc covers both causes and cites both specs; ci_gate + auto_complete tests green (256) after the rebase. Round-2 brief still stands: drain-level finish_ci coverage for the three cases (hold-gate-only red + marker completes; hold gate + genuine red shelves naming only the genuine check; rows-read failure + marker retries then shelves ci-unavailable). Verify and let the reviewer take round 2.'
-  added_at: 2026-09-19T15:39:13.030101829Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
