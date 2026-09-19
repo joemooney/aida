@@ -41,13 +41,10 @@ pub(crate) struct LastBy {
     pub vendor: Option<String>,
 }
 
-/// One once-until-cleared firing of a condition (`when`) job: the predicate
-/// turned true at `first_true`, the job fired at `fired_at`, and the predicate
-/// went false again at `cleared_at` (absent while the episode is still open).
-// trace:STORY-1226 | ai:claude
+/// One once-until-cleared firing of a condition (`when`) job.
+// trace:TASK-1281 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Episode {
-    pub first_true: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fired_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -125,7 +122,6 @@ pub(crate) fn apply_condition(
         (Some(ep), true) if ep.is_open() => EpisodeTransition::Unchanged,
         (_, true) => {
             ledger.episode = Some(Episode {
-                first_true: now,
                 fired_at: Some(now),
                 cleared_at: None,
             });
@@ -222,11 +218,16 @@ pub(crate) fn should_write(prev: Option<&JobLedger>, next: &JobLedger) -> bool {
     if prev == next {
         return false;
     }
+    if prev.last_by.as_ref().map(|by| &by.seat) != next.last_by.as_ref().map(|by| &by.seat) {
+        // A different seat reporting the same result is durable provenance.
+        // trace:TASK-1281 | ai:codex
+        return true;
+    }
     let mut same_clock = next.clone();
     same_clock.last_run = prev.last_run;
     same_clock.last_by = prev.last_by.clone();
     if &same_clock != prev {
-        // Something other than the run clock / reporter changed.
+        // Something other than the run clock / same-seat reporter changed.
         return true;
     }
     match (prev.last_run, next.last_run) {
@@ -369,7 +370,6 @@ mod tests {
             due_since: None,
             due_reason: None,
             episode: Some(Episode {
-                first_true: at(0, 0),
                 fired_at: Some(at(0, 0)),
                 cleared_at: Some(at(0, 30)),
             }),
@@ -415,6 +415,16 @@ mod tests {
         due.due_since = Some(at(0, 30));
         assert!(should_write(Some(&base), &due));
 
+        // A second seat's report is not debounce noise.
+        let mut advisor = noise.clone();
+        advisor.last_by = Some(LastBy {
+            seat: "advisor".into(),
+            ..Default::default()
+        });
+        let mut implementer = advisor.clone();
+        implementer.last_by.as_mut().unwrap().seat = "implementer".into();
+        assert!(should_write(Some(&advisor), &implementer));
+
         // And through write_cas on a plain directory: the noisy write is a no-op.
         let dir = tempfile::tempdir().unwrap();
         assert!(write_cas(dir.path(), "session-reap", |l| *l = base.clone()).unwrap());
@@ -445,7 +455,6 @@ mod tests {
             EpisodeTransition::Fired
         );
         let ep = l.episode.clone().unwrap();
-        assert_eq!(ep.first_true, at(1, 0));
         assert_eq!(ep.fired_at, Some(at(1, 0)));
         assert!(ep.is_open());
         // still true → no re-fire (once-until-cleared).
@@ -453,7 +462,7 @@ mod tests {
             apply_condition(&mut l, true, at(2, 0)),
             EpisodeTransition::Unchanged
         );
-        assert_eq!(l.episode.as_ref().unwrap().first_true, at(1, 0));
+        assert_eq!(l.episode.as_ref().unwrap().fired_at, Some(at(1, 0)));
         // goes false → cleared.
         assert_eq!(
             apply_condition(&mut l, false, at(3, 0)),
@@ -470,7 +479,7 @@ mod tests {
             apply_condition(&mut l, true, at(5, 0)),
             EpisodeTransition::Fired
         );
-        assert_eq!(l.episode.as_ref().unwrap().first_true, at(5, 0));
+        assert_eq!(l.episode.as_ref().unwrap().fired_at, Some(at(5, 0)));
         assert!(l.episode.as_ref().unwrap().is_open());
     }
 
