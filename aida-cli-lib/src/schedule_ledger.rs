@@ -345,6 +345,80 @@ pub(crate) fn write_cas_opts(
     )
 }
 
+/// Persist all ledger changes produced by one scheduler tick in one store
+/// commit. The per-job debounce is still evaluated independently; only the
+/// surviving files are staged.
+// trace:TASK-1280 | ai:codex
+pub(crate) fn write_batch_cas_opts(
+    store_root: &Path,
+    next: &BTreeMap<String, JobLedger>,
+    push: bool,
+) -> Result<usize> {
+    use aida_core::git_ops;
+
+    let changed = |current: &BTreeMap<String, JobLedger>| {
+        next.iter()
+            .filter(|(job, ledger)| should_write(current.get(*job), ledger))
+            .map(|(job, ledger)| (job.clone(), ledger.clone()))
+            .collect::<Vec<_>>()
+    };
+
+    if !is_git_checkout(store_root) {
+        let writes = changed(&load_all(store_root));
+        for (_, ledger) in &writes {
+            save(store_root, ledger)?;
+        }
+        return Ok(writes.len());
+    }
+    if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
+        eprintln!("  schedule ledgers not written this tick: {err}");
+        return Ok(0);
+    }
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let local_only = !push || !git_ops::has_remote(store_root, "origin");
+
+    for attempt in 0..MAX_RETRIES {
+        if attempt > 0 && !local_only {
+            git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
+        }
+        let writes = changed(&load_all(store_root));
+        if writes.is_empty() {
+            return Ok(0);
+        }
+        for (_, ledger) in &writes {
+            save(store_root, ledger)?;
+        }
+        let rels = writes
+            .iter()
+            .map(|(job, _)| ledger_rel(job))
+            .collect::<Vec<_>>();
+        let refs = rels.iter().map(String::as_str).collect::<Vec<_>>();
+        git_ops::add(store_root, &refs)?;
+        let msg = format!("schedule: tick ({} jobs)", writes.len());
+        if !git_ops::commit(store_root, &msg)? || local_only {
+            return Ok(writes.len());
+        }
+        match git_ops::push(store_root, "origin", &branch) {
+            Ok(true) => return Ok(writes.len()),
+            Ok(false) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(store_root)
+                    .output();
+            }
+            Err(e) => {
+                eprintln!(
+                    "note: schedule tick committed locally; push failed ({e}) — it uploads on the next `aida push`"
+                );
+                return Ok(writes.len());
+            }
+        }
+    }
+    anyhow::bail!(
+        "could not write the schedule tick after {MAX_RETRIES} attempts (store push kept being rejected)"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
