@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T14:01:36.255012638Z
-modified_at: 2026-09-19T20:38:17.382113412Z
+modified_at: 2026-09-19T20:43:40.559137551Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -35,6 +35,12 @@ comments:
   created_at: 2026-09-19T14:11:06.018080600Z
   modified_at: 2026-09-19T14:11:06.018080600Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bb69-128f-7890-8465-686df3a73fb9
+  author: joe
+  content: 'Requeue (no rework needed). The 2026-09-19 13:36 attempt was not a spec failure: the implementer''s codex session was killed mid-exploration when the drain''s parent process group was torn down during a launcher swap. The two fast retries that followed (6s, 9s) failed only because attempt 1''s lease 01a0bb6261fe was still held on scope TASK-1-144; the drain reported that as ''could not match the orchestrated session ... to a session lease'', which misdirects. Lease released and the stale task-168-work worktree/branch removed; the spec is unstarted and clean.'
+  created_at: 2026-09-19T20:43:40.559137551Z
+  modified_at: 2026-09-19T20:43:40.559137551Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 failure_reason:
   phase: implementer
