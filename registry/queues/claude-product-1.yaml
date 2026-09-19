@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1966 (classifier fix accepted; the drain boundary is untested): Add drain-level finish_ci regression coverage for all three required cases: hold-gate-only red plus marker completes without shelving; hold gate plus a genuine required red shelves ci-red naming only the genuine check; unavailable check rows plus marker retries and shelves as ci-unavailable, never ci-red. The existing classifier tests could pass while the original finish_ci bypass defect still exists.  The reviewer''s point is exact: the defect was never in ci_gate::classify_red, it was that finish_ci shelved before consulting RedRefinement.hold_gate_is_the_hold — so classifier-level tests cannot prove it fixed. Drive the PhaseDriver''s finish_ci with a FakeForge (see ci_gate''s FakeForge) across the three cases: (1) hold-gate-only red + marker present → no shelve, phase completes; (2) hold gate red + a genuine required red → shelves CiRed naming only the genuine check, never the gate; (3) check-rows read fails (refine_red Err) + marker present → retries the rows read, then shelves ci-unavailable, never ci-red. Keep the existing classifier tests.'
-  added_at: 2026-09-19T14:29:38.585776034Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
