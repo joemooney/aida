@@ -1,0 +1,45 @@
+id: 01a0bb8d-bfc0-7c31-bfeb-a83e49f9a456
+spec_id: BUG-1294
+agreed_id: BUG-1294
+title: A spec title beginning with a hyphen cannot be filed, and the parser's suggested escape does not work for a named flag's value
+description: |
+  A spec title that begins with a hyphen cannot be filed. `aida add --title "--format json returns human text"` fails with "unexpected argument found" and a tip suggesting the `--` separator, which does not help when the value is already attached to a named flag.
+
+  REPRODUCED 2026-09-19, isolated against a control:
+
+    aida add --title "probe normal title xyz" --type bug --status draft --description "probe"
+      -> created BUG-1293
+
+    aida add --title "--foo does the wrong thing" --type bug --status draft --description "probe"
+      -> error: unexpected argument '--foo does the wrong thing' found
+         tip: to pass '--foo does the wrong thing' as a value, use '-- --foo does the wrong thing'
+
+  Only the leading hyphen differs. The suggested `--` escape is for positional arguments; here the text is the value of an explicit `--title`, and the parser should accept it without ceremony.
+
+  WHY THIS BITES EXACTLY WHEN IT MATTERS. A title starting with a hyphen is almost always a bug report ABOUT A FLAG — "--format json returns human text on aida status" was the real case that hit it. So the failure is concentrated on filing CLI defects, which is the category a dogfooding project files most. The workaround is to reword the title away from the flag name, which makes the spec harder to find by the exact string a searcher would use.
+
+  The tip also misleads. Following it literally produces a different error, because `-- --foo ...` makes the text a positional while `--title` still expects its own value. An agent that trusts the tip burns a second attempt.
+
+  PROPOSED: set clap's `allow_hyphen_values` on the fields that carry free text. At minimum `--title` and `--description` on `aida add`, and the equivalents on `aida edit`. Audit every free-text option for the same setting rather than fixing the two that were noticed, since the next one will be found the same way this one was.
+
+  ACCEPTANCE
+  1. `aida add --title "--format json returns human text"` files a spec whose title is exactly that string.
+  2. The same holds for `aida edit <ID> --title`, and for `--description` on both.
+  3. An audit lists every option taking free-form text and confirms each accepts a leading hyphen; the list is recorded on this spec.
+  4. A test covers a leading single hyphen, a leading double hyphen, and a value that exactly matches an existing flag name such as `--force`.
+  5. Short-flag clustering and genuine typos still produce a clear error; this must not become a parser that swallows a mistyped flag as a title.
+
+  Found while filing a real bug, not while probing. Same family as BUG-1234 (no --description-from-file on edit) and BUG-1231 (no --subject on mailbox send): the filing path is the one an agent uses most and it is where the papercuts are.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:23:44.192885433Z
+modified_at: 2026-09-19T21:23:44.192885433Z
+req_type: Bug
+tags:
+- agent-ux
+- cli
+- from:session-0919
+- papercut
+- parent:EPIC-28
