@@ -46,3 +46,10 @@
   added_at: 2026-09-19T13:35:02.356240415Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-product-1
+  requirement_id: 01a0b9f8-f6ff-7002-8921-db993bc1a347
+  position: 12000
+  added_by: claude-product-1
+  note: Promoted from finding TASK-1-144 via `aida findings promote`
+  added_at: 2026-09-19T14:06:34.723637139Z
+  for_role: implementer
