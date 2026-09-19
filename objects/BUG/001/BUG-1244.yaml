@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T13:22:17.465782179Z
+modified_at: 2026-09-19T13:24:47.216007384Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -161,6 +161,23 @@ comments:
     Tests to keep green together: the two integration tests above, plus the round-4 unit cases (pr-1948-style branch WITH unrelated commits -> refused; same branch with a target-referencing commit -> accepted; --force on the refused case -> proceeds and ledgers). Add one more unit case: empty commit range -> accepted. Run cargo test -p aida-cli --test agent_write_confirm --test journey locally before pushing, and keep the portability ratchet clean.
   created_at: 2026-09-19T13:22:17.209382851Z
   modified_at: 2026-09-19T13:22:17.209382851Z
+- id: 01a0b9d7-41f0-77c0-9dfb-15d047e43a09
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1956, advisor round 4):
+    Verdict: CHANGES REQUESTED — CI is red at e3ee0d0a on exactly the two tests round 1 broke, for the same reason.
+    Failing: aida-cli/tests/agent_write_confirm.rs::queue_done_non_interactive_without_yes_marks_done_not_cancelled (line 152) and aida-cli/tests/journey.rs::agent_journey_toon_list_search_queue_done_and_status (line 386). Both run `queue done` from the default branch with NO commits since merge-base. queue_done_ownership refuses them because commit_spec_ids is empty.
+    The acceptance on this spec (clarified 2026-09-19 after round 3) is not "unscoped branch must have commit evidence". It is four cases, and the implementation collapses two of them into a refusal:
+      1. Branch names a DIFFERENT requirement id → REFUSE. (implemented, correct)
+      2. Branch names the target (incl. slice/node-qualified) → ACCEPT. (implemented, correct)
+      3. Branch names NO requirement id AND there are NO commits since the merge-base → ACCEPT. (currently REFUSED — this is the CI red; finishing docs-only work, or a spec whose PR was opened from another worktree, from main is legitimate and is what those two tests exercise)
+      4. Branch names NO requirement id AND commits exist → look at them: any commit references the target → ACCEPT; commits reference a different spec and none the target → REFUSE naming the foreign spec; commits reference NO spec at all → ACCEPT (untagged chores). (currently: "commits with no spec refs" is indistinguishable from "no commits" because both yield an empty commit_spec_ids, so both refuse)
+    Fix: have queue_done_commit_spec_ids return enough to tell the three cases apart — e.g. Option<Vec<String>> where None = the range could not be read (fail closed as today), Some(vec![]) with zero commits = no commits, and a separate count of commits seen vs ids found; or return a small struct { commits_seen: usize, spec_ids: Vec<String> }. Then: commits_seen == 0 → Proceed; spec_ids contains the target → Proceed; spec_ids non-empty without the target → Refuse naming them; spec_ids empty with commits_seen > 0 → Proceed.
+    Tests to restore/add: main with no commits → Proceed (this is queue_done_ownership_allows_default_and_non_spec_branches, which round 4 inverted — restore it); pr-1948 whose commits name STORY-1221 while finishing BUG-1236 → Refuse; feature/x with untagged commits → Proceed; --force on any refusal → Forced. Keep the round-3 branch-id rule exactly as it is.
+    Contract: one commit; CI green is the gate — if those two integration tests still fail, the rule is still wrong.
+  created_at: 2026-09-19T13:24:47.216007384Z
+  modified_at: 2026-09-19T13:24:47.216007384Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
