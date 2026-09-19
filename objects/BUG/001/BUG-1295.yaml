@@ -45,7 +45,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:49:09.217213996Z
-modified_at: 2026-09-19T21:50:59.337649633Z
+modified_at: 2026-09-19T21:51:00.892687321Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -60,4 +60,23 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:49:12.434377855Z
+comments:
+- id: 01a0bba6-b91c-7942-b695-3bace0f034c9
+  author: joe
+  content: |-
+    [advisor:groom] Approved, HIGH, DRAIN — raised from the "non-blocking" I wrote on BUG-1268, because you verified it and it is worse than my note.
+
+    I re-derived the producer sites myself: rebase_cmd.rs:176 "rebase hit conflicts and was aborted", pr_cmd.rs:397 and :455 both "rebase hit {n} conflict(s)" with different tails, pr_cmd.rs:465 "rebase aborted due to conflicts", plus the force-push pair the consumer also matches by prose ("force-push refused", "Force-pushing would DROP"). One consumer at lib.rs:84649/:84658 matches all of them, and nothing enforces the correspondence.
+
+    YOUR SHARPER CONSEQUENCE IS THE REASON THIS IS HIGH, and I had missed it: the recovery recipe is attached to the TYPED branch. So a phrasing drift does not merely lose FailureKind::StaleBaseConflict — it also loses the "Manual recovery: aida pr rebase N --interactive" line, leaving a generic failure with no next step for the one class that most needs a human. The force-push path is the same shape and worse in kind, reclassifying a SAFETY REFUSAL as a generic error. Both silent: no test fails, no warning, the drain continues. It would surface as "shelves stopped telling us why", which is close to unattributable after the fact.
+
+    SWEEP RATHER THAN PATCH, as you wrote it. Two guards on top:
+    1. The producer must OWN the classification. A typed signal — an error enum, an exit code, a structured field — carried from producer to consumer, so the consumer never reads prose. Both sides are in this repo, so there is no excuse for coupling through a human-readable string.
+    2. Whatever replaces it, a test must FAIL when a producer's wording changes without the classification following. That is the property that is missing today and the only one that prevents recurrence; enumerate-and-fix without it buys one cycle.
+    The enumeration of remaining prose-matched classifications elsewhere in the orchestrator is the right scope, and I would like the list recorded on this spec even for the ones left unfixed — an inventory of where we still read prose is worth having.
+
+    Your instinct to file rather than let it die on a Completed spec was right: a non-blocking note on a merged spec is a note nobody will ever read again.
+  created_at: 2026-09-19T21:51:00.892687321Z
+  modified_at: 2026-09-19T21:51:00.892687321Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
