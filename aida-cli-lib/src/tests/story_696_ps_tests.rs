@@ -12,7 +12,9 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         hostname: "h".into(),
         role: Some("implementer".into()),
         creator_pid: None,
+        creator_pid_start_time: None,
         active_pid: None,
+        active_pid_start_time: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -95,6 +97,19 @@ fn ps_process_backed_lease_uses_active_pid() {
     assert_eq!(rows[0].state, LeaseState::Live);
     assert_eq!(rows[0].pid, Some(std::process::id()));
     assert!(orphans.is_empty());
+}
+
+#[test]
+fn ps_rejects_recycled_active_pid_with_different_start_identity() {
+    let mut l = ps_lease("l-recycled", "TASK-1284", std::path::PathBuf::from("."));
+    l.active_pid = Some(std::process::id());
+    l.active_pid_start_time = Some("1970-01-01T00:00:00+00:00".to_string());
+
+    assert_eq!(
+        lease_state_for(&l, &[], chrono::Utc::now()),
+        LeaseState::Stale,
+        "a live recycled PID must not keep the prior process's lease live"
+    );
 }
 
 /// BUG-752: an Agent-tool (harness) subagent lease with the parent claude

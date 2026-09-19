@@ -27102,6 +27102,11 @@ pub(crate) struct SessionLease {
     /// the worktree). Optional for back-compat. trace:STORY-73 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     creator_pid: Option<u32>,
+    /// Kernel start identity paired with `creator_pid`. Missing on legacy
+    /// leases, which deliberately retain the historical PID-only behavior.
+    // trace:TASK-1284 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    creator_pid_start_time: Option<String>,
     /// BUG-741: PID of the currently hosted agent child for process-backed
     /// launches such as headless `codex exec`. Unlike `creator_pid`, this is
     /// the worker process itself: alive => Live, dead => Stale.
@@ -27113,6 +27118,11 @@ pub(crate) struct SessionLease {
     // trace:BUG-752 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     active_pid: Option<u32>,
+    /// Kernel start identity paired with `active_pid`; prevents a recycled PID
+    /// from keeping a dead process-backed session live.
+    // trace:TASK-1284 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    active_pid_start_time: Option<String>,
     /// Parent project's `target/` dir, captured so the session shell can
     /// share its cargo build cache with the parent worktree (avoids a full
     /// rebuild on first `cargo build` inside the session). `None` when the
@@ -27280,6 +27290,7 @@ fn session_harness_worktree_register(
         .ok()
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
+    let active_pid = process_probe::nearest_claude_ancestor_pid(std::process::id());
     let lease = SessionLease {
         id: id.clone(),
         scope: spec.scope.clone(),
@@ -27294,6 +27305,7 @@ fn session_harness_worktree_register(
         hostname: hostname(),
         role: spec.agent_type.clone(),
         creator_pid: None,
+        creator_pid_start_time: None,
         // BUG-752: an Agent-tool subagent runs INSIDE the parent claude
         // harness process (cwd = parent project root, never the isolation
         // worktree), so the cwd-based worktree probe can never see it — a
@@ -27305,7 +27317,8 @@ fn session_harness_worktree_register(
         // codex child-pid stamp. `None` when no claude ancestor is found
         // (e.g. a detached hook runner); the classifier then treats
         // liveness as unknown rather than dead. trace:BUG-752 | ai:claude
-        active_pid: process_probe::nearest_claude_ancestor_pid(std::process::id()),
+        active_pid,
+        active_pid_start_time: active_pid.and_then(process_probe::process_start_identity),
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -27991,7 +28004,9 @@ fn lease_state_for(
     if (l.review_verb || l.claim_verb) && l.worktree_path.as_os_str().is_empty() {
         let alive = l
             .creator_pid
-            .map(process_probe::pid_is_alive)
+            .map(|pid| {
+                process_probe::process_identity_is_alive(pid, l.creator_pid_start_time.as_deref())
+            })
             .unwrap_or(false);
         return if alive {
             LeaseState::Live
@@ -28000,7 +28015,8 @@ fn lease_state_for(
         };
     }
     if let Some(pid) = l.active_pid {
-        return if process_probe::pid_is_alive(pid) {
+        return if process_probe::process_identity_is_alive(pid, l.active_pid_start_time.as_deref())
+        {
             LeaseState::Live
         } else {
             LeaseState::Stale
@@ -31239,6 +31255,7 @@ fn session_start(
     // self-introspection fails, we leave the field None and fall back to
     // the cwd / single-active heuristics. trace:STORY-73 | ai:claude
     let creator_pid = creator_shell_pid();
+    let creator_pid_start_time = creator_pid.and_then(process_probe::process_start_identity);
 
     let lease = SessionLease {
         id: id.clone(),
@@ -31253,7 +31270,9 @@ fn session_start(
         hostname: hostname(),
         role: inherited_role.clone(),
         creator_pid,
+        creator_pid_start_time,
         active_pid: None,
+        active_pid_start_time: None,
         cargo_target_dir: cargo_target_dir.clone(),
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -54301,7 +54320,9 @@ fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         hostname: hostname(),
         role: std::env::var("AIDA_SESSION_ROLE").ok(),
         creator_pid: my_pid,
+        creator_pid_start_time: my_pid.and_then(process_probe::process_start_identity),
         active_pid: None,
+        active_pid_start_time: None,
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -65785,7 +65806,9 @@ mod story_1043_unshipped_work_tests {
             hostname: hostname(),
             role: Some("implementer".to_string()),
             creator_pid: None,
+            creator_pid_start_time: None,
             active_pid: Some(std::process::id()),
+            active_pid_start_time: process_probe::process_start_identity(std::process::id()),
             cargo_target_dir: None,
             parent_project_root: Some(root.to_path_buf()),
             pr_head_sha: None,
@@ -74021,7 +74044,9 @@ fn acquire_review_lease_with_mode(
         hostname: hostname(),
         role: Some("reviewer".to_string()),
         creator_pid: Some(std::process::id()),
+        creator_pid_start_time: process_probe::process_start_identity(std::process::id()),
         active_pid: None,
+        active_pid_start_time: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -88396,8 +88421,10 @@ fn stale_lease_recovery_for_lease(lease: &SessionLease) -> StaleLeaseRecoveryRep
     // trace:BUG-1111 | ai:codex
     let owner_gone = lease_owner_process_gone(
         lease.active_pid,
+        lease.active_pid_start_time.as_deref(),
         lease.creator_pid,
-        process_probe::pid_is_alive,
+        lease.creator_pid_start_time.as_deref(),
+        process_probe::process_identity_is_alive,
     );
     // A worktree-less advisory lease (review / claim verb, or the TASK-474
     // empty-path MCP claim) has no tree to inspect — treat it as "missing",

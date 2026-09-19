@@ -90,6 +90,11 @@ pub(crate) struct Claim {
     pub host: String,
     /// PID of the process that took the claim (the `session start` shell).
     pub pid: u32,
+    /// Kernel process start time paired with `pid`; prevents a recycled PID
+    /// from keeping a dead process-backed claim alive.
+    // trace:TASK-1284 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_start_time: Option<String>,
     /// Agent name/role context, best-effort (informational in the refusal).
     pub agent: String,
     /// RFC3339 UTC when the claim was taken.
@@ -174,7 +179,7 @@ pub(crate) fn decide_claim(
     ours: &Claim,
     now: DateTime<Utc>,
     our_host: &str,
-    is_alive: impl Fn(u32) -> bool,
+    is_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> ClaimDecision {
     let Some(holder) = existing else {
         return ClaimDecision::Acquire;
@@ -202,7 +207,8 @@ pub(crate) fn decide_claim(
     // (its pid is the ephemeral `session start` shell), so its death is
     // meaningless — only the TTL backstop governs it. trace:STORY-637
     let same_host = !holder.host.is_empty() && holder.host == our_host;
-    if holder.process_backed && same_host && !is_alive(holder.pid) {
+    if holder.process_backed && same_host && !is_alive(holder.pid, holder.pid_start_time.as_deref())
+    {
         return ClaimDecision::Reclaim {
             stale_reason: format!(
                 "holder pid {} on {} is not running",
@@ -351,6 +357,7 @@ fn build_claim(
         clone_path: canonical_clone_path(clone_path),
         host: hostname(),
         pid: std::process::id(),
+        pid_start_time: aida_core::liveness::process_start_identity(std::process::id()),
         agent: agent.to_string(),
         started_at: now.clone(),
         // Slice 1: heartbeat == started_at. Slice 2 refreshes periodically.
@@ -439,7 +446,7 @@ pub(crate) fn acquire_claim(
                 &ours,
                 Utc::now(),
                 &our_host,
-                crate::process_probe::pid_is_alive,
+                crate::process_probe::process_identity_is_alive,
             ) {
                 ClaimDecision::Refuse { holder } => {
                     anyhow::bail!("{}", refusal_message(scope, &holder, &path));
@@ -692,6 +699,7 @@ fn build_lock_claim(
         clone_path: canonical_clone_path(clone_path),
         host: hostname(),
         pid: std::process::id(),
+        pid_start_time: aida_core::liveness::process_start_identity(std::process::id()),
         agent: command.to_string(),
         started_at: now.clone(),
         heartbeat_at: now,
@@ -780,7 +788,7 @@ pub(crate) fn acquire_lock_claim(
                 &ours,
                 Utc::now(),
                 &our_host,
-                crate::process_probe::pid_is_alive,
+                crate::process_probe::process_identity_is_alive,
             ) {
                 ClaimDecision::Refuse { holder } => {
                     anyhow::bail!("{}", lock_refusal_message(kind, &holder, &path));
@@ -967,6 +975,7 @@ mod tests {
             clone_path: "/home/joe/ai/aida-b".to_string(),
             host: host.to_string(),
             pid,
+            pid_start_time: Some("2026-06-16T11:59:00+00:00".to_string()),
             agent: "codex-implementer-1".to_string(),
             started_at: heartbeat_at.to_string(),
             heartbeat_at: heartbeat_at.to_string(),
@@ -993,6 +1002,7 @@ mod tests {
             clone_path: "/home/joe/ai/aida-a".to_string(),
             host: host.to_string(),
             pid: 1234,
+            pid_start_time: Some("2026-06-16T11:59:00+00:00".to_string()),
             agent: "claude".to_string(),
             started_at: "2026-06-16T12:00:00Z".to_string(),
             heartbeat_at: "2026-06-16T12:00:00Z".to_string(),
@@ -1013,7 +1023,7 @@ mod tests {
 
     #[test]
     fn no_claim_acquires() {
-        let d = decide_claim(None, &ours("1", "imac"), now(), "imac", |_| true);
+        let d = decide_claim(None, &ours("1", "imac"), now(), "imac", |_, _| true);
         assert_eq!(d, ClaimDecision::Acquire);
     }
 
@@ -1025,7 +1035,13 @@ mod tests {
         // — is the per-clone discriminator.)
         let mut existing = claim("2", "imac", 4242, "2026-06-16T11:59:30Z");
         existing.clone_path = "/home/joe/ai/aida-a".to_string(); // same as ours()
-        let d = decide_claim(Some(&existing), &ours("2", "imac"), now(), "imac", |_| true);
+        let d = decide_claim(
+            Some(&existing),
+            &ours("2", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+        );
         assert_eq!(d, ClaimDecision::Acquire);
     }
 
@@ -1037,7 +1053,7 @@ mod tests {
         // node ids. trace:STORY-637
         let existing = claim("1", "imac", 4242, "2026-06-16T11:59:30Z"); // clone aida-b
         let mine = ours("1", "imac"); // clone aida-a, same node_id "1"
-        let d = decide_claim(Some(&existing), &mine, now(), "imac", |_| true);
+        let d = decide_claim(Some(&existing), &mine, now(), "imac", |_, _| true);
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
 
@@ -1046,9 +1062,13 @@ mod tests {
         // PROCESS-BACKED foreign clone, same host, pid dead → reclaim
         // immediately (fast path), even though heartbeat is fresh.
         let existing = claim("2", "imac", 4242, "2026-06-16T11:59:50Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
@@ -1059,9 +1079,13 @@ mod tests {
         // dead pid must therefore NOT reclaim a fresh-heartbeat session lease;
         // it stays REFUSED until its TTL or an explicit release. trace:STORY-637
         let existing = session_claim("2", "imac", 4242, "2026-06-16T11:59:50Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
 
@@ -1070,9 +1094,13 @@ mod tests {
         // A session lease is still reclaimable once its heartbeat ages past the
         // TTL — the crash backstop that prevents a permanent deadlock.
         let existing = session_claim("2", "imac", 4242, "2026-06-16T11:00:00Z"); // 3600s
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
@@ -1080,7 +1108,13 @@ mod tests {
     fn live_heartbeat_refuses() {
         // foreign clone, pid alive (or cross-host), heartbeat within TTL → refuse.
         let existing = claim("2", "imac", 4242, "2026-06-16T11:59:00Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+        );
         match d {
             ClaimDecision::Refuse { holder } => assert_eq!(holder.node_id, "2"),
             other => panic!("expected Refuse, got {other:?}"),
@@ -1092,7 +1126,13 @@ mod tests {
         // foreign clone, heartbeat older than ttl_secs (1800) → reclaim,
         // even with pid reported alive (covers cross-host where pid is meaningless).
         let existing = claim("2", "imac", 4242, "2026-06-16T11:00:00Z"); // 3600s old
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+        );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
@@ -1102,9 +1142,13 @@ mod tests {
         // pid is on another machine), so a dead-pid probe must NOT reclaim a
         // claim whose heartbeat is still fresh → refuse.
         let existing = claim("2", "otherhost", 4242, "2026-06-16T11:59:00Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
 
@@ -1113,9 +1157,13 @@ mod tests {
         // foreign clone on another host whose heartbeat aged out → reclaim
         // via the universal TTL backstop (no pid probe needed).
         let existing = claim("2", "otherhost", 4242, "2026-06-16T11:00:00Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
@@ -1123,14 +1171,24 @@ mod tests {
     fn unparseable_heartbeat_falls_back_to_pid_liveness_same_host() {
         // age unknown → same-host pid decides. Alive → refuse; dead → reclaim.
         let existing = claim("2", "imac", 4242, "not-a-timestamp");
-        let alive = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        let alive = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+        );
         assert!(
             matches!(alive, ClaimDecision::Refuse { .. }),
             "got {alive:?}"
         );
-        let dead = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let dead = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(
             matches!(dead, ClaimDecision::Reclaim { .. }),
             "got {dead:?}"
@@ -1276,6 +1334,7 @@ ttl_secs = 1800
             clone_path: "/home/joe/ai/aida-b".to_string(),
             host: host.to_string(),
             pid,
+            pid_start_time: Some("2026-06-16T11:59:00+00:00".to_string()),
             agent: "burndown run".to_string(),
             started_at: heartbeat_at.to_string(),
             heartbeat_at: heartbeat_at.to_string(),
@@ -1291,9 +1350,13 @@ ttl_secs = 1800
         // The slice-2 fast path: a drain holder whose pid is dead on OUR host
         // → reclaim now (the process IS the drain), even with a fresh heartbeat.
         let existing = lock_claim("imac", 4242, "2026-06-16T11:59:55Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
@@ -1301,8 +1364,27 @@ ttl_secs = 1800
     fn drain_live_pid_same_host_refuses() {
         // A live drain in another clone, same host → refuse.
         let existing = lock_claim("imac", 4242, "2026-06-16T11:59:30Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+        );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
+    }
+
+    #[test]
+    fn drain_same_pid_different_start_time_reclaims() {
+        let existing = lock_claim("imac", 4242, "2026-06-16T11:59:30Z");
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |pid, start| pid == 4242 && start == Some("different-start"),
+        );
+        assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
     #[test]
@@ -1310,7 +1392,13 @@ ttl_secs = 1800
         // Heartbeat aged past the TTL (pid-recycle / cross-host backstop) →
         // reclaim even with the pid reported alive.
         let existing = lock_claim("imac", 4242, "2026-06-16T11:00:00Z"); // 3600s
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| true);
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| true,
+        );
         assert!(matches!(d, ClaimDecision::Reclaim { .. }), "got {d:?}");
     }
 
@@ -1319,9 +1407,13 @@ ttl_secs = 1800
         // A drain holder on a DIFFERENT host within TTL: pid probe is meaningless
         // → refuse (no fast-path reclaim of a remote live drain).
         let existing = lock_claim("otherhost", 4242, "2026-06-16T11:59:00Z");
-        let d = decide_claim(Some(&existing), &ours("1", "imac"), now(), "imac", |_| {
-            false
-        });
+        let d = decide_claim(
+            Some(&existing),
+            &ours("1", "imac"),
+            now(),
+            "imac",
+            |_, _| false,
+        );
         assert!(matches!(d, ClaimDecision::Refuse { .. }), "got {d:?}");
     }
 

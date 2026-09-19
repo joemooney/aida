@@ -2617,6 +2617,9 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
         .parse::<DocumentMut>()
         .with_context(|| format!("parsing lease {}", path.display()))?;
     doc["active_pid"] = value(i64::from(pid));
+    if let Some(start_time) = crate::process_probe::process_start_identity(pid) {
+        doc["active_pid_start_time"] = value(start_time);
+    }
     std::fs::write(&path, doc.to_string())
         .with_context(|| format!("writing lease {}", path.display()))?;
     Ok(())
@@ -3950,6 +3953,28 @@ mod tests {
             .unwrap();
         assert_eq!(doc["creator_pid"].as_integer(), Some(111));
         assert_eq!(doc["active_pid"].as_integer(), Some(4242));
+    }
+
+    #[test]
+    fn stamp_lease_active_pid_records_process_start_identity() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sessions = tmp.path().join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let lease = sessions.join("lease1284.toml");
+        std::fs::write(&lease, "id = \"lease1284\"\nscope = \"TASK-1284\"\n").unwrap();
+
+        let pid = std::process::id();
+        stamp_lease_active_pid_at(tmp.path(), "lease1284", pid).unwrap();
+
+        let doc = std::fs::read_to_string(lease)
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        assert_eq!(doc["active_pid"].as_integer(), Some(i64::from(pid)));
+        assert_eq!(
+            doc["active_pid_start_time"].as_str(),
+            crate::process_probe::process_start_identity(pid).as_deref()
+        );
     }
 
     /// RAII guard for the `AIDA_AGENT_CMD` resolver tests. It shares the

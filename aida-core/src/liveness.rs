@@ -505,6 +505,49 @@ pub fn pid_is_alive(pid: u32) -> bool {
     pid_is_alive_impl(pid)
 }
 
+/// Return the kernel-reported start time for `pid` as a canonical timestamp.
+/// Together with the PID this is a stable process identity: if the OS recycles
+/// a PID, the new process necessarily has a different start time.
+// trace:TASK-1284 | ai:codex
+pub fn process_start_identity(pid: u32) -> Option<String> {
+    process_start_time(pid).map(|time| time.to_rfc3339())
+}
+
+/// True when the PID is alive unless both the recorded and live kernel start
+/// times are available and differ. Missing start-time data degrades to the
+/// pre-TASK-1284 PID-only check so legacy lock holders are never reclaimed
+/// merely because their record predates process identities or the platform
+/// cannot report a live start time.
+// trace:TASK-1284 | ai:codex
+pub fn process_identity_is_alive(pid: u32, recorded_start_time: Option<&str>) -> bool {
+    process_identity_is_alive_with(
+        pid,
+        recorded_start_time,
+        pid_is_alive,
+        process_start_identity,
+    )
+}
+
+fn process_identity_is_alive_with(
+    pid: u32,
+    recorded_start_time: Option<&str>,
+    is_pid_alive: impl FnOnce(u32) -> bool,
+    live_start_time: impl FnOnce(u32) -> Option<String>,
+) -> bool {
+    if !is_pid_alive(pid) {
+        return false;
+    }
+
+    let Some(recorded) = recorded_start_time else {
+        return true;
+    };
+
+    match live_start_time(pid) {
+        Some(actual) => recorded == actual,
+        None => true,
+    }
+}
+
 /// BUG-613: liveness must be O(1), not a full process-table walk. The old
 /// implementation built a fresh `sysinfo::System` and refreshed EVERY process
 /// (and, on Linux, every thread via `/proc/<pid>/task/<tid>/...`) just to test
@@ -700,11 +743,16 @@ pub enum StaleLeaseRecovery {
 // trace:BUG-777 | ai:claude
 pub fn lease_owner_process_gone(
     active_pid: Option<u32>,
+    active_pid_start_time: Option<&str>,
     creator_pid: Option<u32>,
-    pid_alive: impl Fn(u32) -> bool,
+    creator_pid_start_time: Option<&str>,
+    process_alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> Option<bool> {
-    let pid = active_pid.or(creator_pid)?;
-    Some(!pid_alive(pid))
+    let (pid, start_time) = match active_pid {
+        Some(pid) => (pid, active_pid_start_time),
+        None => (creator_pid?, creator_pid_start_time),
+    };
+    Some(!process_alive(pid, start_time))
 }
 
 /// Pure recovery verdict for one same-scope lease conflict.
@@ -766,11 +814,19 @@ pub struct SessionLeaseLite {
     /// worktree-less review/claim leases).
     #[serde(default)]
     pub creator_pid: Option<u32>,
+    /// Kernel start identity paired with `creator_pid`. Absent on legacy leases.
+    // trace:TASK-1284 | ai:codex
+    #[serde(default)]
+    pub creator_pid_start_time: Option<String>,
     /// BUG-741: PID of a process-backed agent child (for example headless
     /// `codex exec`). When present it is the lease's primary liveness signal.
     // trace:BUG-741 | ai:codex
     #[serde(default)]
     pub active_pid: Option<u32>,
+    /// Kernel start identity paired with `active_pid`. Absent on legacy leases.
+    // trace:TASK-1284 | ai:codex
+    #[serde(default)]
+    pub active_pid_start_time: Option<String>,
     /// BUG-511: a review lease (`aida review`) is a worktree-less advisory lock.
     #[serde(default)]
     pub review_verb: bool,
@@ -854,7 +910,10 @@ pub fn lease_state_for(
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
     if l.review_verb || l.claim_verb {
-        let alive = l.creator_pid.map(pid_is_alive).unwrap_or(false);
+        let alive = l
+            .creator_pid
+            .map(|pid| process_identity_is_alive(pid, l.creator_pid_start_time.as_deref()))
+            .unwrap_or(false);
         return if alive {
             LeaseState::Live
         } else {
@@ -862,7 +921,7 @@ pub fn lease_state_for(
         };
     }
     if let Some(pid) = l.active_pid {
-        return if pid_is_alive(pid) {
+        return if process_identity_is_alive(pid, l.active_pid_start_time.as_deref()) {
             LeaseState::Live
         } else {
             LeaseState::Stale
@@ -1170,6 +1229,46 @@ mod tests {
     }
 
     #[test]
+    fn process_identity_accepts_alive_legacy_record_without_start_time() {
+        assert!(process_identity_is_alive_with(
+            42,
+            None,
+            |_| true,
+            |_| panic!("legacy records do not require a kernel start-time probe"),
+        ));
+    }
+
+    #[test]
+    fn process_identity_accepts_alive_pid_when_live_start_time_is_unreadable() {
+        assert!(process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| true,
+            |_| None,
+        ));
+    }
+
+    #[test]
+    fn process_identity_rejects_alive_pid_with_different_start_time() {
+        assert!(!process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| true,
+            |_| Some("2026-09-18T12:00:01+00:00".to_string()),
+        ));
+    }
+
+    #[test]
+    fn process_identity_accepts_alive_pid_with_equal_start_time() {
+        assert!(process_identity_is_alive_with(
+            42,
+            Some("2026-09-18T12:00:00+00:00"),
+            |_| true,
+            |_| Some("2026-09-18T12:00:00+00:00".to_string()),
+        ));
+    }
+
+    #[test]
     fn pid_is_alive_false_for_unused_pid() {
         assert!(!pid_is_alive(u32::MAX - 1));
     }
@@ -1260,7 +1359,9 @@ mod tests {
             worktree_path: PathBuf::from(worktree),
             started_at: chrono::Utc::now(),
             creator_pid: None,
+            creator_pid_start_time: None,
             active_pid: None,
+            active_pid_start_time: None,
             review_verb: false,
             claim_verb: false,
             authorized_by: None,
@@ -1407,14 +1508,14 @@ started_at = "2026-01-01T00:00:00Z"
     /// Every recorded pid absent from the process table → verifiably gone.
     #[test]
     fn owner_gone_when_every_recorded_pid_is_dead() {
-        let gone = lease_owner_process_gone(Some(11), Some(22), |_| false);
+        let gone = lease_owner_process_gone(Some(11), None, Some(22), None, |_, _| false);
         assert_eq!(gone, Some(true));
     }
 
     /// A live creator pid pins leases that have no active child pid.
     #[test]
     fn owner_not_gone_when_creator_pid_is_alive_without_active_pid() {
-        let gone = lease_owner_process_gone(None, Some(22), |p| p == 22);
+        let gone = lease_owner_process_gone(None, None, Some(22), None, |p, _| p == 22);
         assert_eq!(gone, Some(false));
     }
 
@@ -1423,20 +1524,29 @@ started_at = "2026-01-01T00:00:00Z"
     /// vendor child.
     #[test]
     fn active_pid_is_authoritative_over_live_creator_pid() {
-        let gone = lease_owner_process_gone(Some(11), Some(22), |p| p == 22);
+        let gone = lease_owner_process_gone(Some(11), None, Some(22), None, |p, _| p == 22);
         assert_eq!(gone, Some(true));
     }
 
     #[test]
     fn live_active_pid_is_not_gone_even_if_creator_pid_is_dead() {
-        let gone = lease_owner_process_gone(Some(11), Some(22), |p| p == 11);
+        let gone = lease_owner_process_gone(Some(11), None, Some(22), None, |p, _| p == 11);
         assert_eq!(gone, Some(false));
+    }
+
+    #[test]
+    fn owner_gone_when_pid_is_recycled_with_different_start_identity() {
+        let gone =
+            lease_owner_process_gone(Some(11), Some("old-start"), None, None, |pid, start| {
+                pid == 11 && start == Some("new-start")
+            });
+        assert_eq!(gone, Some(true));
     }
 
     /// No pid recorded at all → undeterminable, never "gone".
     #[test]
     fn owner_liveness_undeterminable_without_any_recorded_pid() {
-        let gone = lease_owner_process_gone(None, None, |_| true);
+        let gone = lease_owner_process_gone(None, None, None, None, |_, _| true);
         assert_eq!(gone, None);
     }
 

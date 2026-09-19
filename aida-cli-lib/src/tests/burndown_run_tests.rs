@@ -99,6 +99,7 @@ fn drain_log_path_is_under_aida_burndown() {
 fn sample_lock(pid: u32) -> crate::drain_lock::DrainLock {
     crate::drain_lock::DrainLock {
         pid,
+        pid_start_time: Some("2026-06-13T21:52:59+00:00".to_string()),
         started_at_utc: "2026-06-13T21:53:00Z".to_string(),
         command: "burndown run --status approved".to_string(),
         host: "devbox".to_string(),

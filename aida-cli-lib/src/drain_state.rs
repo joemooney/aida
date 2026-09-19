@@ -1585,13 +1585,16 @@ mod tests {
     fn write_lock(dir: &std::path::Path, pid: u32) {
         let path = drain_lock::drain_lock_path(dir);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let lock = drain_lock::DrainLock {
-            pid,
-            started_at_utc: "2026-09-05T12:00:00+00:00".to_string(),
-            command: "aida queue work --auto-complete".to_string(),
-            host: "test-host".to_string(),
-            specs: Vec::new(),
-        };
+        // Keep this fixture in the pre-TASK-1284 shape: legacy locks without a
+        // start time must remain readable and use PID-only liveness.
+        // trace:TASK-1284 | ai:codex
+        let lock = serde_json::json!({
+            "pid": pid,
+            "started_at_utc": "2026-09-05T12:00:00+00:00",
+            "command": "aida queue work --auto-complete",
+            "host": "test-host",
+            "specs": [],
+        });
         std::fs::write(path, serde_json::to_string(&lock).unwrap()).unwrap();
     }
 
@@ -2192,6 +2195,7 @@ mod tests {
     fn burndown_lock() -> crate::drain_lock::DrainLock {
         crate::drain_lock::DrainLock {
             pid: 3_822_683,
+            pid_start_time: Some("2026-07-19T11:29:59+00:00".to_string()),
             started_at_utc: "2026-07-19T11:30:00+00:00".to_string(),
             command: "burndown run (status=approved)".to_string(),
             host: "devbox".to_string(),
