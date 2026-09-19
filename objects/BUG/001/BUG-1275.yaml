@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-19T17:47:10.008439484Z
+modified_at: 2026-09-19T17:47:11.643820839Z
 req_type: Bug
 tags:
 - ci-wait
@@ -36,3 +36,7 @@ tags:
 - parent:EPIC-62
 - regression-interaction
 - throughput
+relationships:
+- rel_type: Child
+  target_id: 01a09180-071a-7712-8b42-9e6f1b646259
+  created_at: 2026-09-19T17:47:11.643820839Z
