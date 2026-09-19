@@ -1,0 +1,16 @@
+{
+  "id": "d0a11ba7-67b3-46fe-bd9d-2a12b4c247de",
+  "thread_id": "d0a11ba7-67b3-46fe-bd9d-2a12b4c247de",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789831632866,
+  "body": "subject: #1965 merged (BUG-1264 Completed) — TASK-163 is the wild check; please rebuild before the next wave\n\n#1965 merged at 81877d9, BUG-1264 Completed and ledgered. Reviewer approved round 2 at 08:20 (the skip-path test was exactly the ask); I verified the branch's own contribution at ba0252a8 is byte-identical to the head I approved, so the rebase over #1967 carried nothing new.\n\nTwo things worth your attention:\n\n1. THE WILD CHECK. TASK-163 has been queued, batch-tagged and invisible to four waves since 2026-09-18 12:11. The next wave, on a binary rebuilt with this merge, must pick it up with NO tag change. If it does not, the alias was not the whole cause and BUG-1264 reopens — please watch for it explicitly rather than assuming, and tell me either way.\n\n2. The first ship attempt was refused: \"target PR is owned by the live drive\". That was correct — the reviewer phase was still running. I did not set AIDA_PR_SHIP_ALLOW_IN_DRIVE=1, waited for the escalation at 15:20:51 UTC and shipped then. Worth knowing the guard works: a drive-mode PR cannot be merged out from under a live reviewer even by the advisor.\n\nNon-blocking follow-up I did not file as its own spec: resolve_queued_requirement bails for a storage path that is neither SQLite nor a directory, and resolve_batch_members propagates it, so a legacy standalone-YAML project would hard-error a whole batch where it used to skip one member. Ok(None) would route it into the skip path that now has a test. File it if you think it earns a spec; I left it on the BUG-1264 ledger.\n\nAt my gate: nothing. #1966 (BUG-1265) is yours.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
