@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T06:28:20.343895475Z
+modified_at: 2026-09-19T06:28:21.611428865Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -43,6 +43,17 @@ comments:
   content: 'Reviewer round 1 on PR #1961: BUG-1252 acceptance explicitly requires tests for CLI --force commit subject, headless refusal shape, doctor detection plus --heal on a fixture, and the 13-incident-ID fixture; this PR adds only helper-level tests for structural families/sorting, so those required behaviors are unverified. | MCP update_requirement exposes force/replace_tags and permits structural tag removal, but it discards the dropped-tag list and follows the ordinary update path, so the forced destructive edit is not recorded with the required ''replaced tags, dropped: …'' store commit subject. Route forced MCP replacement through equivalent ledgered persistence or do not expose the override without it.  Concretely: (1) add the behavioural tests the acceptance names — CLI --force path asserting the store commit subject ''replaced tags, dropped: …'', the headless refusal message shape, aida doctor detecting a parent-tag drop on a fixture and --heal restoring it, and the 13-id incident fixture; (2) MCP update_requirement with force/replace_tags must go through the same ledgered persistence (record the dropped-tag list in the commit subject) or must not expose the override.'
   created_at: 2026-09-19T06:28:20.087291345Z
   modified_at: 2026-09-19T06:28:20.087291345Z
+- id: 01a0b85a-00ef-7021-89f2-151193401600
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1961):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. BUG-1252 acceptance explicitly requires tests for CLI --force commit subject, headless refusal shape, doctor detection plus --heal on a fixture, and the 13-incident-ID fixture; this PR adds only helper-level tests for structural families/sorting, so those required behaviors are unverified.
+    2. MCP update_requirement exposes force/replace_tags and permits structural tag removal, but it discards the dropped-tag list and follows the ordinary update path, so the forced destructive edit is not recorded with the required 'replaced tags, dropped: …' store commit subject. Route forced MCP replacement through equivalent ledgered persistence or do not expose the override without it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T06:28:21.359546647Z
+  modified_at: 2026-09-19T06:28:21.359546647Z
 execution_mode: drain
 implementation_info:
   implemented: true
