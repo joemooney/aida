@@ -57448,6 +57448,8 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
 
     let (rows, orphans) = gather_running_work(&project_root);
+    // trace:TASK-1285 | ai:codex
+    let live_wave = drain_lock::read_pid_live_lock(&project_root);
 
     // STORY-769: the last-human-input presence oracle — "operator last seen Nm
     // ago" + an active/idle/stale verdict, from the per-turn `aida awaiting
@@ -57521,6 +57523,13 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
                 "orphaned": orphaned,
                 // STORY-769: last-human-input oracle, null when never stamped.
                 "operator": operator,
+                "wave": live_wave.as_ref().map(|l| serde_json::json!({
+                    "id": if l.wave_id.is_empty() { format!("pid-{}", l.pid) } else { l.wave_id.clone() },
+                    "pid": l.pid,
+                    "binary_sha": l.binary_sha,
+                    "binary_mtime_secs": l.binary_mtime_secs,
+                    "binary_path": l.binary_path,
+                })),
             }))?
         );
         return Ok(());
@@ -57556,6 +57565,23 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
         println!("running: {}", shown.len());
         println!("stale_hidden: {}", hidden_stale.len());
         println!("orphaned: {}", orphans.len());
+        if let Some(lock) = &live_wave {
+            println!(
+                "wave_id: {}",
+                if lock.wave_id.is_empty() {
+                    format!("pid-{}", lock.pid)
+                } else {
+                    lock.wave_id.clone()
+                }
+            );
+            println!("wave_binary_sha: {}", lock.binary_sha);
+            println!(
+                "wave_binary_mtime_secs: {}",
+                lock.binary_mtime_secs
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "-".into())
+            );
+        }
         // STORY-769: last-human-input oracle as flat scalars for agent consumers.
         match operator_last_seen {
             Some(last) => {
@@ -57682,6 +57708,20 @@ fn handle_ps(json: bool, all: bool) -> Result<()> {
     }
 
     println!("{}", "Running work".bold());
+    if let Some(lock) = &live_wave {
+        let wave = if lock.wave_id.is_empty() {
+            format!("pid-{}", lock.pid)
+        } else {
+            lock.wave_id.clone()
+        };
+        println!(
+            "live wave {wave} · binary {} · mtime {}",
+            truncate(&lock.binary_sha, 8),
+            lock.binary_mtime_secs
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "?".into())
+        );
+    }
     // STORY-769: last-human-input oracle line — "operator last seen Nm ago —
     // active/idle/stale". Quiet ("unknown") until the per-turn notice stamps.
     match presence::last_seen_line(now, thresholds) {

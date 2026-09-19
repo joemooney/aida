@@ -20,7 +20,19 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             debug,
             release,
             auto,
-        } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
+            after_wave,
+        } => handle_dev_activate(
+            repo.as_deref(),
+            profile.as_deref(),
+            *debug,
+            *release,
+            *auto,
+            *after_wave,
+        ),
+        DevCommand::BuildGuard {
+            profile,
+            after_wave,
+        } => handle_dev_build_guard(profile, *after_wave),
         DevCommand::Deactivate => handle_dev_deactivate(),
         DevCommand::Status => handle_dev_status(),
         DevCommand::Ps1 => handle_dev_ps1(),
@@ -602,6 +614,7 @@ fn handle_dev_activate(
     debug_flag: bool,
     release_flag: bool,
     auto_flag: bool,
+    after_wave: bool,
 ) -> Result<()> {
     let repo = resolve_aida_repo(repo_arg)?;
 
@@ -656,6 +669,7 @@ fn handle_dev_activate(
         resolve_activation_request(cli_request, env_pin.as_deref().filter(|s| !s.is_empty()));
 
     let (bin_dir, profile, reason) = pick_dev_binary_dir(&repo, effective_request)?;
+    guard_binary_change(&repo, &bin_dir.join("aida"), after_wave, true)?;
     let stale = alternate_build_is_newer(&repo, profile);
     let ps1_marker = if stale { "*" } else { "" };
 
@@ -801,6 +815,80 @@ fn handle_dev_activate(
     Ok(())
 }
 
+/// Refuse replacing/switching away from the binary pinned by a live wave, or
+/// park on the event stream until that wave emits QueueDrained.
+// trace:TASK-1285 | ai:codex
+fn guard_binary_change(
+    repo: &std::path::Path,
+    target: &std::path::Path,
+    after_wave: bool,
+    activation: bool,
+) -> Result<()> {
+    let main_root = crate::find_main_worktree_root().unwrap_or_else(|_| repo.to_path_buf());
+    let Some(lock) = crate::drain_lock::read_pid_live_lock(&main_root) else {
+        return Ok(());
+    };
+    let target = target
+        .canonicalize()
+        .unwrap_or_else(|_| target.to_path_buf());
+    let pinned = std::path::PathBuf::from(&lock.binary_path)
+        .canonicalize()
+        .unwrap_or_else(|_| std::path::PathBuf::from(&lock.binary_path));
+    if !binary_change_conflicts(&pinned, &target, activation) {
+        return Ok(());
+    }
+    let wave = if lock.wave_id.is_empty() {
+        format!("pid-{}", lock.pid)
+    } else {
+        lock.wave_id.clone()
+    };
+    if !after_wave {
+        anyhow::bail!("refusing to replace the binary pinned by live wave {wave} (pid {}); retry with --after-wave", lock.pid);
+    }
+    eprintln!("Waiting for live wave {wave} to emit QueueDrained before rebuilding…");
+    crate::event_wait::wait_for_queue_drained(&main_root, &wave)?;
+    Ok(())
+}
+
+fn binary_change_conflicts(
+    pinned: &std::path::Path,
+    target: &std::path::Path,
+    activation: bool,
+) -> bool {
+    activation || pinned == target
+}
+
+fn handle_dev_build_guard(profile: &str, after_wave: bool) -> Result<()> {
+    let repo = resolve_aida_repo(None)?;
+    guard_binary_change(
+        &repo,
+        &repo.join("target").join(profile).join("aida"),
+        after_wave,
+        false,
+    )
+}
+
+#[cfg(test)]
+mod task_1285_tests {
+    use super::*;
+
+    #[test]
+    fn rebuild_refusal_decision_only_blocks_the_pinned_binary() {
+        let pinned = std::path::Path::new("/repo/target/release/aida");
+        assert!(binary_change_conflicts(pinned, pinned, false));
+        assert!(!binary_change_conflicts(
+            pinned,
+            std::path::Path::new("/repo/target/debug/aida"),
+            false,
+        ));
+        assert!(binary_change_conflicts(
+            pinned,
+            std::path::Path::new("/repo/target/debug/aida"),
+            true,
+        ));
+    }
+}
+
 fn handle_dev_deactivate() -> Result<()> {
     // trace:TASK-1171 | ai:claude
     let _eval = crate::shell_eval::EvalBlock::open();
@@ -831,6 +919,19 @@ fn handle_dev_deactivate() -> Result<()> {
 
 fn handle_dev_status() -> Result<()> {
     let active = std::env::var("AIDA_DEV_ACTIVE").is_ok();
+    // trace:TASK-1285 | ai:codex
+    if let Ok(root) = crate::find_main_worktree_root() {
+        if let Some(lock) = crate::drain_lock::read_pid_live_lock(&root) {
+            println!("Live wave:    {} (pid {})", wave_label(&lock), lock.pid);
+            println!(
+                "Wave binary:  {} @ {}",
+                short_sha(&lock.binary_sha),
+                lock.binary_mtime_secs
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "?".into())
+            );
+        }
+    }
     println!(
         "Activation:   {}",
         if active {
@@ -1015,6 +1116,18 @@ fn handle_dev_status() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn wave_label(lock: &crate::drain_lock::DrainLock) -> String {
+    if lock.wave_id.is_empty() {
+        format!("pid-{}", lock.pid)
+    } else {
+        lock.wave_id.clone()
+    }
+}
+
+fn short_sha(sha: &str) -> &str {
+    sha.get(..sha.len().min(8)).unwrap_or(sha)
 }
 
 /// The three states a caller's shell wrapper can be in, from the binary's point

@@ -157,6 +157,18 @@ pub(crate) struct DrainLock {
     pub(crate) command: String,
     /// Host the drain runs on — informational, for cross-machine shared clones.
     pub(crate) host: String,
+    /// Stable identity for this drain wave, used by rebuild refusal messages.
+    // trace:TASK-1285 | ai:codex
+    #[serde(default)]
+    pub(crate) wave_id: String,
+    /// Embedded git SHA and filesystem identity of the binary that launched
+    /// the wave. Older lock files remain readable through serde defaults.
+    #[serde(default)]
+    pub(crate) binary_sha: String,
+    #[serde(default)]
+    pub(crate) binary_mtime_secs: Option<u64>,
+    #[serde(default)]
+    pub(crate) binary_path: String,
     // BUG-759: the spec set the drain set out to work (the burndown-blessed
     // ready set). Read-side tooling (`aida drain status`) names it when the
     // launcher holds the lock but writes no per-phase drain-state file. Serde
@@ -439,6 +451,20 @@ pub(crate) fn acquire_drain_lock_with_specs(
                 started_at_utc: Utc::now().to_rfc3339(),
                 command: command.to_string(),
                 host: hostname(),
+                // trace:TASK-1285 | ai:codex
+                wave_id: uuid::Uuid::new_v4().to_string(),
+                binary_sha: env!("AIDA_BUILD_GIT_SHA").to_string(),
+                binary_mtime_secs: std::env::current_exe()
+                    .ok()
+                    .and_then(|p| std::fs::metadata(p).ok())
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs()),
+                binary_path: std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.canonicalize().ok().or(Some(p)))
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
                 // trace:BUG-759 | ai:claude
                 specs: specs.to_vec(),
             };
@@ -628,6 +654,10 @@ mod tests {
             started_at_utc: started_at_utc.to_string(),
             command: "queue work --auto-complete".to_string(),
             host: "testhost".to_string(),
+            wave_id: String::new(),
+            binary_sha: String::new(),
+            binary_mtime_secs: None,
+            binary_path: String::new(),
             specs: Vec::new(),
         }
     }
@@ -758,6 +788,11 @@ mod tests {
             let on_disk = read_lock(&path).expect("a parseable lock");
             assert_eq!(on_disk.pid, std::process::id());
             assert_eq!(on_disk.command, "burndown run (test)");
+            // trace:TASK-1285 | ai:codex
+            assert!(!on_disk.wave_id.is_empty());
+            assert!(!on_disk.binary_sha.is_empty());
+            assert!(on_disk.binary_mtime_secs.is_some());
+            assert!(!on_disk.binary_path.is_empty());
         }
         // Guard dropped → file removed (it still recorded our pid).
         assert!(
@@ -797,6 +832,10 @@ mod tests {
             started_at_utc: Utc::now().to_rfc3339(),
             command: "crashed drain".to_string(),
             host: "ghost".to_string(),
+            wave_id: String::new(),
+            binary_sha: String::new(),
+            binary_mtime_secs: None,
+            binary_path: String::new(),
             specs: Vec::new(),
         };
         std::fs::write(&path, serde_json::to_string(&dead).unwrap()).unwrap();
@@ -821,6 +860,10 @@ mod tests {
             started_at_utc: Utc::now().to_rfc3339(),
             command: "successor".to_string(),
             host: "h".to_string(),
+            wave_id: String::new(),
+            binary_sha: String::new(),
+            binary_mtime_secs: None,
+            binary_path: String::new(),
             specs: Vec::new(),
         };
         std::fs::write(&path, serde_json::to_string(&successor).unwrap()).unwrap();
