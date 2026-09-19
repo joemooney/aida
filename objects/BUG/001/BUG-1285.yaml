@@ -1,0 +1,33 @@
+id: 01a0bb6f-f968-7082-8192-40e4ea1779c8
+spec_id: BUG-1285
+agreed_id: BUG-1285
+title: 'A drain cannot reclaim a lease its own previous run orphaned: a dead-pid lease burns the whole retry budget in seconds, and the error names session-id matching instead of the held lease'
+description: |-
+  Observed 2026-09-19, reconstructed by the product seat from the drain log, the events feed, the lease file and the codex headless log, and reported rather than guessed.
+
+  Sequence: the 10:53 drain launched an implementer for TASK-168 at 13:36:14 local, taking lease 01a0bb6261fe on scope TASK-1-144. A launcher swap tore down the parent process group; nohup guards SIGHUP, not a group kill, so the drain and its codex child died together, the headless log stopping mid-item with no result. The relaunched drain then burned BOTH retries in fifteen seconds — six seconds, then nine — because lease 01a0bb6261fe was still held on that scope. The spec parked NeedsAttention with no work attempted and nothing judged.
+
+  TWO DEFECTS, filed together because they live in the same claim path and the second is what made the first expensive.
+
+  1. BEHAVIOUR. A drain restart cannot reclaim a lease its own previous run orphaned. The batch drive carries no --steal, so any drain death mid-implementer poisons that spec for its entire retry budget — and the retries are consumed almost instantly, because failing to claim is fast, which means the budget meant to absorb transient failure is spent without a single attempt at the work. This is generic: an OOM kill or a machine reboot produces the identical shape, and then there is no launcher swap to blame.
+     The primitive to fix it correctly now exists and did not a day ago. TASK-1284 (merged 2026-09-19 03:44) made liveness identity-aware: a lease records pid PLUS the kernel process start time, and process_identity_is_alive returns false only when the pid is gone or when both start times are present and differ, degrading to a plain pid check when the data is missing. So "is this lease's holder actually dead" is now answerable without the pid-recycle hazard that would otherwise make stealing unsafe. Use it: a lease whose holder is provably dead must not block a fresh claim — either reclaim it, or do not count the refusal against the retry budget.
+
+  2. DIAGNOSTICS. The refusal reported "could not match the orchestrated session (claude id 01a0bb64) to a session lease" — a true statement about the wrong thing, which sent the reporting seat into twenty minutes of session-id investigation before a lease listing showed the real cause. The code already gathers candidate lease ids as diagnostics; it can notice that one of them holds THIS spec's scope and say so: "the previous attempt's lease <id> is still held on scope <scope> (holder pid <pid>, dead since <t>)". An error that names the symptom rather than the cause converts a two-minute fix into a twenty-minute hunt, and this one did.
+
+  Acceptance: a lease whose recorded holder is provably dead (per the TASK-1284 identity check) does not block a fresh claim by a new drain run, and a refusal that IS correct does not consume a retry; the refusal message names the holding lease, its scope and its holder's liveness rather than session-id matching; unit tests on the pure decision (dead holder / live holder / missing start-time data → degrade to pid) and on the message content; no change to the single-drain-per-repo invariant, which is a different lock and must stay exactly as strict.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T20:51:12.872457642Z
+modified_at: 2026-09-19T20:51:12.872457642Z
+req_type: Bug
+tags:
+- batch:followups-0918i
+- diagnostics
+- drain-safe
+- lease
+- orchestrator
+- parent:EPIC-62
+- self-recovery
+execution_mode: drain
