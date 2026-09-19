@@ -18,7 +18,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:36:40.157061609Z
-modified_at: 2026-09-19T02:44:04.616843530Z
+modified_at: 2026-09-19T02:47:50.140743316Z
 req_type: Bug
 tags:
 - batch:followups-0918f
@@ -66,6 +66,22 @@ comments:
   content: 'Exact-head cross-platform proof: GitHub Actions run 35415625155 completed successfully on d0a2f80b9b790d1454eaa9ec0256ba66ac821cf4; both Build (windows-latest) and Build (macos-latest) passed, including the original scratch_gc test and the new direct directory-mtime regression.'
   created_at: 2026-09-19T02:44:04.616843530Z
   modified_at: 2026-09-19T02:44:04.616843530Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b790-1c7c-70d1-9bba-bda00cb537e3
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1944
+    agent: codex
+    ran-at: 2026-09-18 19:47 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1233-drain-01a0b78f-d2a1-7400-8325-2b6cd6d9d58f.json
+    ? AC (0.98) — On Windows, the directory-mtime fixture can set a directory's modified time to a requested value, and reading the directory metadata reports that value with less than two seconds of drift.
+    ? SEM (0.97) — On Windows, setting a directory mtime opens the directory with FILE_FLAG_BACKUP_SEMANTICS and requests FILE_WRITE_ATTRIBUTES access rather than relying on a read-only or generic-read handle.
+  created_at: 2026-09-19T02:47:50.140743316Z
+  modified_at: 2026-09-19T02:47:50.140743316Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
