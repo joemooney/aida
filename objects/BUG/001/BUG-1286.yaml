@@ -39,7 +39,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:33.544062298Z
-modified_at: 2026-09-19T21:11:34.286144931Z
+modified_at: 2026-09-19T21:11:35.850226180Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -55,4 +55,20 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:05:35.747753511Z
+comments:
+- id: 01a0bb82-a2aa-77f1-841a-2f9e4b09bc11
+  author: joe
+  content: |-
+    [advisor:groom] Approved, HIGH, DRAIN. I reproduced the counts independently and they hold, with one detail sharper than reported: of 515 closed specs present in the feed, exactly ONE ends on PrMerged and 89 end on an in-flight or failed event — but the most common final word is PhaseDonePr (219) and UnshippedWorkDetected (206). So for most closed specs the feed's last statement is "a PR was opened" or "there is unshipped work", which is worse than ending on a shelve: it reads as work still outstanding. Confirmed too that no SpecCompleted or SpecMerged kind exists in EventKind::known_names.
+
+    WHY THIS IS HIGH AND NOT COSMETIC: this feed is what EPIC-62's own measurements read. I corrected TASK-1294 an hour after approving it because the method I wrote — count shelves between RunStarted and PrMerged — opens a window that closes for one spec in 515. Any metric built on feed-terminal events is biased pessimistic, because a shelve later recovered reads as the outcome. We would have measured our own reliability as worse than it is and drawn conclusions from it.
+
+    SCOPE GUARDS:
+    1. ADDITIVE ONLY. New kinds join EventKind::known_names; no existing kind is renamed or repurposed. The forward-compatible rule (unknown kinds are logged and ignored) means consumers tolerate the addition, and STORY-1352's contract work depends on that property holding.
+    2. EMIT AT BOTH CLOSE PATHS, and name them in the fix: the drain's own merge step, and the out-of-drain closes — the pull auto-bump when a trailered commit lands, and a batch/cluster PR closing several specs at once. The gap is precisely that the second path is silent, so a fix that only covers the drain changes nothing for the 219.
+    3. The event carries enough to be useful without a join: spec, terminal state, and what closed it (PR number or commit).
+    4. Backfill is NOT in scope and must not be attempted — historical events are a dated artifact. Consumers needing history join against the store's git log, which is the authoritative time series.
+  created_at: 2026-09-19T21:11:35.850226180Z
+  modified_at: 2026-09-19T21:11:35.850226180Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
