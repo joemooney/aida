@@ -1,0 +1,38 @@
+id: 01a0bae3-3204-7040-a898-dc92c87ca6d1
+spec_id: TASK-1293
+agreed_id: TASK-1293
+title: Post-deployment acceptance criteria belong on a follow-up spec, never on the spec that ships the change — a fifth failure class, found deadlocking TASK-1291
+description: |
+  Failure class found on TASK-1291 (2026-09-19) that none of the four in the 2026-09-19 failure analysis covers, and that will recur because nothing prevents it.
+
+  The instance: TASK-1291's acceptance included "Measured on the next 20 specs: median rounds-to-merge drops; recorded on this spec as the acceptance evidence". The reviewer correctly marked it unverified. It will be unverified at every round forever, because the measurement cannot exist until the change has shipped and twenty specs have flowed through it. Blocking merge on it is a deadlock by construction. The product seat wrote that criterion; this is a spec-AUTHORING defect, not an implementer under-testing or a reviewer being strict.
+
+  Why it will recur: outcome criteria are exactly what a good spec wants — they state the change's PURPOSE rather than its mechanism, and the failure analysis that produced TASK-1289/1290/1291 leaned on measured outcomes throughout. The defect is not writing them; it is writing them on the spec that ships the change.
+
+  Convention to adopt:
+  - An acceptance criterion that can only be evaluated AFTER the change ships belongs on a follow-up measurement spec, blocked-by the shipping spec — never on the shipping spec itself.
+  - The shipping spec's acceptance keeps only what is verifiable at merge time: the mechanism, its tests, and its observable behaviour on a fixture.
+  - The follow-up spec carries the outcome criterion, the window over which to measure, and the figure that would falsify the change.
+
+  Scope:
+  - Write the convention into the discipline pack (a short section in the spec-authoring guidance) with this instance as the worked example.
+  - Extend TASK-1290's criteria gate to FLAG a post-deployment-shaped criterion at done time rather than reporting it as merely untraced, since no test can ever trace it. Detection can be shallow and honest: phrases such as "measured on the next N", "after N specs", "over the following", "once deployed" — flagged for a human to confirm, never auto-deleted.
+  - Where an existing open spec carries such a criterion, split it rather than weakening it.
+
+  Acceptance:
+  - The convention exists in the discipline pack with the TASK-1291 example.
+  - The criteria gate distinguishes three states for a criterion: traced, untraced, and post-deployment (cannot be traced by construction); the third does not block done and says why.
+  - A spec carrying a post-deployment criterion is reported with the suggested split, naming the follow-up spec shape.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T18:17:26.788188477Z
+modified_at: 2026-09-19T18:17:26.788188477Z
+req_type: Task
+tags:
+- acceptance
+- discipline
+- from:session-capture-0919
+- parent:EPIC-28
+- spec-authoring
