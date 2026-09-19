@@ -1,0 +1,34 @@
+id: 01a0ba82-9fb0-7763-a986-b54029980a2c
+spec_id: STORY-1350
+agreed_id: STORY-1350
+title: Implementer posts an approach statement before its first edit (criteria-as-tests with the layer named, files to touch, ambiguities as questions); opt-in advisor preview for drive/guided
+description: |
+  Operator suggestion (2026-09-19): an extra agent gate that pre-reviews or previews the implementation plan before code is written.
+
+  Honest scoping against the 2026-09-18/19 data (40 shelves, 26 reviewer rounds): a plan preview would NOT have caught the dominant categories — untested acceptance criteria (~7 rounds, see TASK-1290) and guard failures (~5 rounds, see TASK-1289) are both mechanical and post-hoc. It WOULD plausibly have caught a third group, where the approach itself was wrong or incomplete before a line was written:
+  - TASK-1284: fixed liveness for drain locks and coordination claims but not session leases — a coverage gap visible in a one-paragraph plan
+  - BUG-1265: tested the classifier when the defect was that the CALLER bypassed it — a boundary error, stated in a plan as "I will test classify_red"
+  - TASK-1283: slipped a production behaviour change (queue done deleting a lease file) into a test-only task — scope creep, visible as soon as the plan names files it will touch
+  - BUG-1244: implemented the reviewer's literal wording against the advisor's clarified acceptance — a conflict a plan would have surfaced as a question
+
+  Proposal, as the cheapest form that captures that value: NOT a new agent gate, but a required self-statement at the START of the implementer phase, posted as a spec comment before any edit — (1) each acceptance criterion restated as the test that will prove it, naming the LAYER that test sits at (unit / command-level / fixture / drain-level); (2) the files it expects to touch; (3) anything in the acceptance it believes is ambiguous or conflicts with a review finding, as a question rather than a guess. The orchestrator posts it and proceeds; it is a thinking artifact, not an approval gate, so it costs no round-trip. A second, opt-in mode ([preview] gate = "advisor") escalates the statement for a cheap read before coding, for keystone or drive-mode specs only, where a wrong approach is expensive.
+
+  Acceptance:
+  - The implementer phase posts the plan statement as a spec comment before its first edit, with the three sections.
+  - The statement names a layer per test; a criterion with no test named is flagged in the same comment.
+  - The reviewer prompt includes the statement so round 1 can compare intent against diff.
+  - Opt-in [preview] gate = advisor escalates it for drive/guided specs and waits; default is off (no round-trip).
+  - Measured: of the next 20 specs, how many round-1 findings were already named as questions in the statement — recorded here.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:31:57.872533301Z
+modified_at: 2026-09-19T16:31:57.872533301Z
+req_type: Story
+tags:
+- from:failure-analysis-0919
+- operator-idea
+- orchestrator
+- parent:EPIC-28
+- review
