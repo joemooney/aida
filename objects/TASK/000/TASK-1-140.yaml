@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-18T18:53:12.547342993Z
-modified_at: 2026-09-19T16:04:08.250336538Z
+modified_at: 2026-09-19T16:51:32.470424611Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -49,6 +49,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T16:04:07.987743557Z
   modified_at: 2026-09-19T16:04:07.987743557Z
+- id: 01a0ba94-8bf6-78c3-81b4-fcf9b9d6ff2d
+  author: joe
+  content: 'Round 2 review fix: moved live drain detection ahead of Completed/Rejected handling in aida why, and added a black-box CLI regression covering a Completed spec during live phase 3 (reviewer) and phase 4 (merge), including orchestrator PID assertions. Tests: cargo test -p aida-cli-lib live_drain_spec; cargo test -p aida-cli --test task_163_why_live_drain; cargo fmt --all -- --check.'
+  created_at: 2026-09-19T16:51:32.470424611Z
+  modified_at: 2026-09-19T16:51:32.470424611Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
