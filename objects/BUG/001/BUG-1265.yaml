@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T17:36:43.113366056Z
+modified_at: 2026-09-19T17:37:29.716423318Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -129,6 +129,12 @@ comments:
   content: 'Round-3 guard failure fixed by the product seat and pushed (99cd81c2b6): the BUG-1205 fall-through guard searched the file for the first fn finish_ci and landed on one of THIS branch''s new drain-level harnesses, whose impl PhaseDriver body is a one-line delegation, so the Red arm was never found. The guard now anchors on the real impl block and finds finish_ci inside it, so it keeps asserting the production path however many harnesses exist. Test-only change; 15 guard + ci_gate tests green locally. Nothing is owed on the implementation — verify at the new head and let the reviewer take round 3.'
   created_at: 2026-09-19T17:36:42.838490868Z
   modified_at: 2026-09-19T17:36:42.838490868Z
+- id: 01a0babe-9e74-7ba2-b475-9625f2a5ad5d
+  author: joe
+  content: 'HAZARD for the live round-3 session (product seat, 10:35): origin/bug-1265 is at 99cd81c2b6 (my guard re-anchor) but the implementer worktree /home/joe/ai/aida-bug1265 is checked out at a484f8e1c7, one commit behind. Fetch and rebase before pushing — a force-push from that worktree would drop the guard fix and CI would go red on the same BUG-1205 guard for a fourth time. My fault for pushing while a session was live; recorded so the next seat does not repeat it.'
+  created_at: 2026-09-19T17:37:29.716423318Z
+  modified_at: 2026-09-19T17:37:29.716423318Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
