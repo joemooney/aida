@@ -1,0 +1,50 @@
+id: 01a0bbb0-8032-72a1-8089-6a058cfeb3cf
+spec_id: BUG-1297
+agreed_id: BUG-1297
+title: The mailbox prints a short message id that then fails against read, thread and --in-reply-to, and --in-reply-to detaches the reply instead of refusing
+description: |
+  The mailbox inbox prints a SHORT id for every message, and that short id then fails against three of the commands an agent would reach for next. Hit three times in one exchange on 2026-09-19 while replying to a single message; each failure was silent-ish or actively misleading rather than a clean "use the full id".
+
+  WHAT THE INBOX PRINTS
+
+    Unread for joe + advisor (1)
+      0fa629d6 claude-product-1 -> advisor  2026-09-19 14:52  <subject>
+
+  So 0fa629d6 is the handle the surface offers. What it does against the three obvious next moves:
+
+  1. aida mailbox read 0fa629d6
+     error: unrecognized subcommand 'read'
+     There IS no read subcommand. The suggestion offered was "retract" and "thread", neither of which reads a message. The full body is only obtainable by re-running inbox, which also marks it read, so a second attempt to re-read it returns "no unread mail" and the body is gone from the surface entirely. Recovering it meant reading the raw JSON out of .aida/mailbox/ by hand.
+
+  2. aida mailbox thread 0fa629d6
+     "no messages in thread 0fa629d6"
+     This is the misleading one. The id is real, the thread is real, and the command reports emptiness rather than a resolution failure. An agent reasonably concludes the thread is empty and stops looking. It needs the full UUID.
+
+  3. aida mailbox send --in-reply-to 0fa629d6
+     "warning: --in-reply-to '0fa629d6' matches no known message; starting a new thread"
+     Best of the three because it warns, but the outcome is still a silently-detached thread. The reply I sent is now a new root rather than attached to the message it answers, which breaks the conversation for anyone reading the thread later.
+
+  ROOT SHAPE. The inbox renders a truncated id and no other command resolves prefixes. Every other AIDA id surface accepts any unambiguous form: aida show takes a spec id, an agreed id, or a raw UUID, and aida history --id resolves a UUID back to its spec id (BUG-588 did exactly this work for that surface). The mailbox is the outlier.
+
+  ACCEPTANCE
+  1. A unique id PREFIX resolves wherever a message id is accepted: --in-reply-to, --thread, thread, retract, and any future read verb. An ambiguous prefix errors and lists the candidates; it never silently starts a new thread.
+  2. --in-reply-to with an unresolvable id REFUSES rather than warning and detaching. Silently converting a reply into a new root loses the conversation, which is the one thing the flag exists to preserve. An explicit new thread is already expressible by omitting the flag.
+  3. mailbox thread distinguishes "no such message" from "thread has no messages" and says which.
+  4. A message body is readable without consuming its unread state. Whether that is a read verb, a --peek on inbox, or thread accepting a message id, reading a message must not be the only way to get the body AND must not be destructive of the surface that showed it. Today the body is unrecoverable through the CLI after one inbox call.
+  5. Tests cover: prefix resolution, ambiguous prefix erroring, --in-reply-to refusing an unknown id, and re-reading a message after it is marked read.
+
+  Found by the advisor seat while replying to a product-seat message; all three failures reproduced in sequence on today's binary.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T22:01:41.682369432Z
+modified_at: 2026-09-19T22:01:41.682369432Z
+req_type: Bug
+tags:
+- agent-surface
+- drain-safe
+- from:session-0919
+- mailbox
+- papercut
+- severity:workflow
