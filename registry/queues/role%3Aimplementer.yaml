@@ -100,3 +100,11 @@
   added_at: 2026-09-19T16:39:38.521239919Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b5fe-5f73-78d3-8529-b9a0f585470e
+  position: 79000
+  added_by: role:implementer
+  note: 'drive: (a) audit coordination-seat surfaces → neutral/Claude-only table with the deciding file; (b) fixes or explicit degradations. Answer specifically: can a Codex advisor hold the merge gate, can a Codex product launch+supervise a wave without fork-from-live. No live two-advisor exercise.'
+  added_at: 2026-09-19T16:40:12.935086210Z
+  for_role: implementer
+  added_by_machine: imac
