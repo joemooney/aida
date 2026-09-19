@@ -8,12 +8,12 @@ description: |
   Also affected: my tag-loss audit on 2026-09-18 found the same spec under TASK-1-140, and aida queue list shows it as TASK-163 — the two surfaces disagree.
 
   Fix: every id → object resolution in the orchestrator's batch/queue path must go through the same alias-aware resolver the CLI uses (cache lookup by spec_id OR origin_id → canonical YAML path), and a member that cannot be resolved must be reported ("skipping un-resolvable member X") rather than dropped silently. Acceptance: a queued, batch-tagged spec whose object lives under its origin_id is picked up by aida queue work --batch; an unresolvable member prints a skip line and emits a SpecSkipped event; unit test on the resolver with an aliased fixture.
-status: Done
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T13:41:19.320073816Z
+modified_at: 2026-09-19T13:41:33.728078164Z
 req_type: Bug
 tags:
 - alias
