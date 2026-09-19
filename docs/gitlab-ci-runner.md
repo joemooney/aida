@@ -60,7 +60,7 @@ pairs its persistent checkout with `/ci-cache/target-$CI_CONCURRENT_ID`.
 Keeping targets slot-local matters: Cargo fingerprints contain source paths,
 so sharing one target between the runner's `concurrent-0` and `concurrent-1`
 checkout roots made the slots repeatedly recompile each other's crates. The
-`verify` and two partitioned `test` jobs use both slots without that churn.
+separate `verify` and `test` jobs can use both slots without that churn.
 
 The pipeline sets `GIT_CLEAN_FLAGS: none`. The checkout and Cargo target are
 deliberately persistent, and cleaning the checkout caused Cargo to recompile

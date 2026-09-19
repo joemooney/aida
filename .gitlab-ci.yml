@@ -83,7 +83,6 @@ verify:
 test:
   stage: test
   needs: []
-  parallel: 2
   rules:
     - if: $CI_MERGE_REQUEST_IID
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -91,16 +90,13 @@ test:
     # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
     # STORY-1216: nextest (one process per test) for speed + isolation; it does
     # not run doctests, so those remain in the verify job.
-    # Split the suite deterministically across both runner slots. Each slot's
-    # persistent target dir is paired with its persistent checkout, avoiding
-    # cross-slot Cargo fingerprint invalidation. trace:TASK-1274 | ai:codex
+    # Nextest already fans tests across the host's cores. A second partition
+    # only contends for those cores and lets stateful tests overlap each other.
+    # The slot-local target keeps this full-suite job warm without cross-slot
+    # Cargo fingerprint invalidation. trace:TASK-1274 | ai:codex
     - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
-        --partition "hash:${CI_NODE_INDEX}/${CI_NODE_TOTAL}"
-    - |
-      if [ "$CI_NODE_INDEX" = "1" ]; then
-        bash tests/test_mcp_stdio.sh
-        bash tests/test_mcp_doc_consistency.sh
-      fi
+    - bash tests/test_mcp_stdio.sh
+    - bash tests/test_mcp_doc_consistency.sh
 
 # STORY-612 live OS-wrap confinement gate. Security boundary — proves
 # write-inside-OK / write-outside-blocked under a real bubblewrap run. Needs
