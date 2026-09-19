@@ -6,14 +6,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
-  requirement_id: 01a0b7fa-42b8-7911-bdfb-1815f831c1f2
-  position: 60000
-  added_by: role:implementer
-  note: 'transient-probe half only (BUG-1265 has the hold-gate half): probe error retried with network_retry classification, never NoSignal; finish_ci shelves ci-unavailable instead of proceeding gate-less; pure-decision test + gh connect-error fixture'
-  added_at: 2026-09-19T13:24:35.858836794Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b963-50a1-73f1-87dd-de8bdc6a0d4d
   position: 61000
   added_by: role:implementer
