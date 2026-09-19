@@ -3,19 +3,24 @@ spec_id: STORY-1217
 agreed_id: STORY-1217
 title: Durable, time-boxed, ledgered proxy grant (aida grant advisor --for 8h) instead of AIDA_SESSION_ROLE=advisor prefixes
 description: 'Follow-up to STORY-1173 (proxy-approval ledger; its non-goal ''fork 2: the durable revocable grant object''). Observed 2026-09-18: under the operator''s standing ''you are my proxy'' mandate, a product-seat agent had to prefix every advisor-gated command (queue add, edit --mode, launching a drain, closing a spec) with AIDA_SESSION_ROLE=advisor for a whole day. The gate is right in principle, but an env var is invisible to the ledger and becomes a prefix nobody reads. Proposal: aida grant <role> --for <duration> --reason <text> [--scope batch:NAME|EPIC-N] writes a grant object (who, from whom, until when, scope) to the store; role checks accept a live grant as authority and every write made under it is ledgered with the grant id (reusing the STORY-1173 [aida:proxy-approval] marker); aida grant list / revoke; expiry is enforced by the check, not by memory. Acceptance: with a live grant, the advisor-gated commands succeed without the env var and their ledger entries name the grant; after expiry or revoke they fail with the same message as today; the env var keeps working (deprecation note) so scripts do not break; the grant is visible in aida status / awaiting.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-18T18:29:29.744446677Z
+modified_at: 2026-09-19T16:39:48.093292948Z
 req_type: Story
 tags:
 - audit
+- authority
+- keyboard
+- parent:EPIC-62
 - parent:EPIC-69
 - proxy
 - roles
+- security
 relationships:
 - rel_type: Child
   target_id: 01a0ab07-332f-7bc0-9c56-10307b5ced35
   created_at: 2026-09-18T18:29:29.744446677Z
+execution_mode: guided
