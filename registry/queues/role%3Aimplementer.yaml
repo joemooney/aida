@@ -203,3 +203,11 @@
   added_at: 2026-09-19T21:12:25.875020164Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba82-9fb0-7763-a986-b54029980a2c
+  position: 106000
+  added_by: role:implementer
+  note: 'round 2 after RequestChanges: reviewer prompt must carry the approach statement (generate_review_prompt reads title + acceptance only); the post-nothing rule for a spec with no parseable acceptance is missing from aida-pickup.md step 3d; share one constant for the ''## Implementer approach'' marker across both ends. Criteria 4-5 remain OUT of scope per the advisor''s binding scope decision — do not implement the advisor preview or the 20-spec measurement.'
+  added_at: 2026-09-19T21:20:41.842654542Z
+  for_role: implementer
+  added_by_machine: imac
