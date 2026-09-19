@@ -1,0 +1,21 @@
+id: 01a0b9f8-f6ff-7002-8921-db993bc1a347
+spec_id: TASK-1-144
+title: Drain PR-keyed review verdicts omit reviewed_sha and recorded_at, so a reader cannot tell which head a verdict covers (spec-keyed verdicts already carry both)
+description: |-
+  Verified 2026-09-19 07:05 by the driver advisor, from code and data.
+  FACTS: review_verdict::record_verdict stamps reviewed_sha, reviewed_branch, recorded_at and recorded_by, and the module docs say reviewed_sha exists so a gate can know "the commit the reviewer actually looked at". Spec-keyed files match: BUG-1017.json has [recorded_at, recorded_by, reviewed_branch, reviewed_sha, summary, verdict]. The drain's PR-keyed files do not: PR-1965.json is [findings, mode, summary, verdict] and PR-1957.json is [mode, summary, verdict]. So the headless reviewer phase writes the raw file instead of going through record_verdict.
+  NOT A GATE HAZARD, checked: the orchestrator clears a stale verdict before a new reviewer round (four remove_file sites, one commented "clear any stale verdict"), and PR-1956.json was in fact removed when round 5 started. So a stale APPROVED is not carried into a new round.
+  THE COST IS DIAGNOSTIC AND REAL: a human or advisor reading .aida/review-verdicts/PR-N.json cannot tell which head it covers. Across 2026-09-18/19 I hand-pinned the head SHA into every advisor verdict file and had to re-pin it after each rebase (#1956, #1957, #1959, #1964, #1965) precisely because the reviewer's own file does not carry one; and on 2026-09-18 22:20 I misread a hold-gate state for want of the same kind of stamp.
+  SUGGESTED FIX (one line of plumbing): have the reviewer phase write through review_verdict::record_verdict with the PR head SHA and branch it already knows (pr_head_sha_best_effort is right there), so PR-keyed and spec-keyed verdicts have the same shape. Then aida pr ship and the advisor can both say "this verdict covers this head" instead of inferring it from the file mtime.
+  Related: TASK-1191 (verdict selection), BUG-1213 (rework rounds), the in-flight-review gate.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-09-19T14:01:36.255012638Z
+modified_at: 2026-09-19T14:01:36.255012638Z
+req_type: Task
+tags:
+- from-advisor:general
+- kind:observation
+- severity:minor
