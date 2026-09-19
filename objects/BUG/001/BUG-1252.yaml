@@ -10,7 +10,7 @@ description: |-
   2. `aida doctor` check `parent-tag-drift`: a spec whose Parent relationship exists but whose parent:<ID> tag is missing (and the reverse — a parent:* tag with no relationship) is listed; `--heal` re-adds the tag from the relationship (relationship is the truth). The check must list the 13 ids from the incident on a fixture.
   3. MCP parity: update_requirement's tags edit routes through the same guard (STORY-82 mirror rule).
   Acceptance: unit tests for the refuse path (each structural family), the --force path with its commit subject, the headless refusal shape, the doctor check + --heal on a fixture; no change to --add-tag / --remove-tag.
-status: InProgress
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
