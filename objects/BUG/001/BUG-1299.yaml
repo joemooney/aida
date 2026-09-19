@@ -39,7 +39,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T23:03:57.581552445Z
-modified_at: 2026-09-19T23:12:14.289619254Z
+modified_at: 2026-09-19T23:47:56.063323077Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -80,4 +80,29 @@ comments:
   created_at: 2026-09-19T23:11:19.862257229Z
   modified_at: 2026-09-19T23:11:19.862257229Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bc11-c41f-7501-b4a0-adc20d5214d6
+  author: joe
+  content: |-
+    SCOPE ADDITION, confirmed by event 2026-09-19 23:47:24. Not a new spec — the operator has asked us to stop growing the backlog, and this belongs here because it is the same field and the same fix.
+
+    TASK-1274's second attempt shelved, and the SHELVE path carried the detail exactly as this spec predicts the RETRY path does not:
+
+      detail:        "the implementer phase watchdog stopped the session — phase exceeded the 45m wall-clock ceiling (attempt 2/2)"
+      recovery_hint: "The phase watchdog stopped a headless session that made no progress (no commit or file-change) within its window — likely a degenerate spin. Inspect the worktree and pick the spec back up by hand."
+
+    THE TWO CONTRADICT EACH OTHER. The detail says the wall-clock CEILING fired. The hint describes the NO-PROGRESS trip and calls the session a likely degenerate spin. Both cannot be true, and the hint is the false one: that session made TEN commits on task-1274-work and its headless log was still being written 23 seconds before the stop. It was a healthy long-running session killed for length.
+
+    So the hint is not merely uninformative — it asserts something the detail already disproves, and it sends the reader to inspect a worktree for a spin that never happened. It appears to be hardcoded for the NoProgress trip and emitted for both.
+
+    This also settles the open question in the description above. I inferred Ceiling from four commits and a live log; the shelve detail names it outright. A healthy session was killed for being long, and the drain then spent its entire second attempt on it before shelving — 2h17m of a serial drain, roughly three merges of lost capacity, from one spec.
+
+    ADDITIONAL ACCEPTANCE
+    7. The recovery hint is selected by which trip fired, not hardcoded. A Ceiling trip's hint must not claim the session made no progress.
+    8. A test asserts detail and recovery_hint agree: a Ceiling-caused shelve produces a ceiling hint, a NoProgress-caused shelve produces a no-progress hint, and neither emits the other's text.
+    9. The Ceiling hint's advice differs in kind from the NoProgress hint's. "Inspect the worktree for a spin" is the wrong next action for a session that ran out of clock; the right one names the ceiling, what it was, and that the remedy is a larger budget or a smaller spec.
+
+    Worth noting for whoever picks this up: this is the fourth instance in one day of the same shape — BUG-1295 (typed cause recovered by substring-matching prose), BUG-1298 (recovery hint naming the wrong CI run), this spec's original finding (retry drops the detail a shelve keeps), and now a hint that contradicts its own detail. The decision stays correct while the diagnostic explaining it degrades, disappears, or lies. That may deserve naming as a class rather than carrying four specs.
+  created_at: 2026-09-19T23:47:56.063323077Z
+  modified_at: 2026-09-19T23:47:56.063323077Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
