@@ -1,0 +1,32 @@
+id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
+spec_id: TASK-1289
+agreed_id: TASK-1289
+title: 'Pre-flight guard parity: the implementer phase runs CI''s own guards before opening the PR, and refuses while one fails'
+description: |
+  Evidence (2026-09-18 12:00 → 2026-09-19 09:30): 40 shelves across 19 specs — 26 verdict:request-changes, 10 ci-red, 4 tool-exit. At least five of those rounds were guard failures that CI reported minutes after the PR opened and that the implementer could have run locally in seconds:
+  - PR #1952 and BUG-1244 round 3: scripts/check-portability.sh (hard-coded /tmp literals in new tests)
+  - TASK-1285: docs/cli/verify-manual.py (a new hidden `dev build-guard` subcommand neither documented nor allow-listed)
+  - several rounds: cargo fmt drift, caught only by the pre-commit hook or CI
+  Each cost a full re-drive: a fresh implementer session, a CI cycle (~9-10 min), and a reviewer round.
+
+  Proposal: before the implementer phase opens the PR, run the same guards CI runs, in the worktree, and refuse to open the PR while any fails (printing the failing guard and its own remediation line). The set comes from .github/workflows/ci.yml so it cannot drift: cargo fmt --all -- --check, cargo clippy -p aida-cli -- -D clippy::correctness, scripts/check-portability.sh --check-allowlist-growth origin/main, docs/cli/verify-manual.py, docs/cli/verify-interface-changes.py. Skippable per-spec with lifecycle:no-preflight for a genuinely unrelated change, and the whole set is config-listed under [preflight] so a downstream project names its own guards.
+
+  Acceptance:
+  - A worktree with a portability-ratchet violation cannot open a PR; the message names the guard, the offending line and the fix, exactly as CI would.
+  - A clean worktree opens the PR with no extra latency beyond the guards' own runtime (they are all seconds except clippy).
+  - The guard list is read from config, defaults to the CI set, and an unknown/missing guard is skipped with a note rather than failing closed.
+  - lifecycle:no-preflight skips the phase and says so in the drain banner.
+  - Unit test on the pure decision (which guards ran, which failed, open/refuse).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:31:05.126161770Z
+modified_at: 2026-09-19T16:31:05.126161770Z
+req_type: Task
+tags:
+- ci
+- cycle-time
+- from:failure-analysis-0919
+- orchestrator
+- parent:EPIC-28
