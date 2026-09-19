@@ -1,0 +1,40 @@
+id: 01a0bb13-581b-78a1-9c12-8221052bb1ed
+spec_id: TASK-1295
+agreed_id: TASK-1295
+title: 'Discipline pack: write review independence as a property of method, with the marker disagreement as the worked example'
+description: |
+  Write the 2026-09-19 marker disagreement into the discipline pack as the worked example of why review independence is about METHOD, not distrust. Proposed by the advisor after the episode, agreed by the operator.
+
+  The episode, in full because the shape is the lesson:
+  1. A reviewer flagged that a round detector used contains() on a findings marker where the canonical predicate is starts_with. Correct finding.
+  2. The product seat wrote the rework brief and, to make the defect concrete, grepped the store for embedded occurrences. It found what looked like three and named them as the negative-test fixture.
+  3. The advisor checked before the brief was acted on, by parsing each comment's content field rather than grepping raw YAML lines, and found the marker at index 0 in every case. The product seat's three examples were POSITIVE cases; a test built on them would have broken the detector for every real rework round.
+  4. The product seat repeated the advisor's method independently rather than deferring, recording the marker's INDEX rather than its presence. 70 occurrences at index 0 — and exactly one elsewhere: the advisor's own correction comment, at index 340, inside the sentence asserting that embedded occurrences do not exist.
+  5. So the defect was real and live, the first seat's evidence was wrong, the second seat's evidence was right but incomplete, and the only true fixture in the whole store was produced by the act of arguing that it could not exist.
+
+  The lesson to write: neither seat being careful produced the correct answer. Two independent derivations disagreeing did. Independence is therefore a property of METHOD — grep versus parse, presence versus index — not a social posture of distrust, and a second seat that merely re-reads the first seat's evidence adds nothing.
+
+  Scope:
+  - Add a section to the MASTER aida-core/templates/.aida/discipline/session-discipline.md (never the project copy alone — the master is what ships). It sits naturally beside "Trust the reviewer over intuition", which covers the adjacent case.
+  - Keep it to the pack's existing voice: short, imperative, no SPEC-IDs in the body (user-facing text convention), the example carried in prose rather than as a case study.
+  - State the actionable rule, not just the anecdote: when confirming or disputing a claim, derive it by a DIFFERENT method than the one that produced it; if both methods agree, the claim is strong; if they disagree, neither is trusted until a third settles it. Presence checks and position checks are different methods; two greps are not.
+  - Do not restate the substrate-versus-memory material that belongs in substrate-as-bouncer.md; cross-reference it if useful.
+
+  Acceptance:
+  - The section exists in the master file, in the pack's voice, with no SPEC-IDs in the body.
+  - It states the different-method rule explicitly, not only the story.
+  - The project copy is brought level for this file as part of the fix if the copy exists, or is left to the pack-staleness work if that has not landed yet.
+  - The PR is held for advisor review rather than auto-merged, since the advisor proposed it and should check it says what they meant.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T19:10:02.267130221Z
+modified_at: 2026-09-19T19:10:02.267130221Z
+req_type: Task
+tags:
+- discipline
+- docs
+- from:session-0919
+- parent:EPIC-62
+- review
