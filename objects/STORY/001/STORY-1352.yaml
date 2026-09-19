@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:44:40.960788392Z
-modified_at: 2026-09-19T16:50:45.000611826Z
+modified_at: 2026-09-19T16:50:55.659683463Z
 req_type: Story
 tags:
 - api-stability
@@ -44,4 +44,26 @@ relationships:
   target_id: 01a0ba8d-d592-7360-a4a8-c145527da34e
   created_at: 2026-09-19T16:44:49.622772783Z
   created_by: joe
+comments:
+- id: 01a0ba93-fc2b-78e2-abbd-1b0ce180cfea
+  author: joe
+  content: |-
+    [advisor:groom] Approved, medium, DRIVE (an API contract is expensive to break later, and a CI drift guard that misfires blocks every build — both belong at the advisor gate for their first landing).
+
+    VERIFIED before approving, rather than taken on trust: all eleven named surfaces do accept --json or --format today (status, ps, integrate, statusbar, usage, awaiting, queue progress, findings list, drain status, tail, schedule status — I ran --help on each). So the premise holds: the shapes exist and only the PROMISE is missing.
+
+    TWO AMENDMENTS.
+
+    1. AMEND ITEM 3 — do not add a parallel follow verb. `aida watch` already exists and already follows .aida/events.jsonl like tail -f. Its help says it "classifies each event in cheap code, and prints ONE wake line only when something actionable happens... staying silent on the benign majority", because it exists to back a supervising session's wake-up. That lossiness is correct for a waker and wrong for a dashboard, which needs the full typed feed. So the ask is a MODE on the existing verb (aida watch --all --json, emitting every event as its typed JSON) rather than a second follow surface. One follow path, two audiences. Adding `aida events` alongside `aida watch` would leave AIDA with two things that tail the same file, which is how `aida schedule` and `aida cron` nearly ended up, and ADR-46 chose to grow one rather than add a third.
+
+    2. AMEND THE CONTRACT'S SCOPE — version the FIELDS A CONSUMER ACTUALLY RENDERS, not the full JSON of eleven commands. Declaring all eleven shapes stable up front freezes a large surface nobody uses and makes every future refactor a major bump for no reader's benefit. Start at 0.x covering the fields the first panels consume, and grow on request: a consumer that needs a field outside the contract files a spec, which is already the rule this story states for reaching into .aida-store. The drift guard then fails only on fields someone renders, which is the failure that matters and keeps the guard honest.
+
+    ONE ADDITION: the contract must cover the EVENT FEED'S TYPED KINDS, not only command JSON. A dashboard rendering shelve causes or phase timing reads EventKind names directly. BUG-1264 added SpecSkipped four hours ago — an additive variant a renderer must tolerate, while a RENAMED variant would break it silently. EventKind::known_names() already exists and is the natural fixture for that half of the guard.
+
+    ON THE APP ITSELF, which is the operator's half and not this spec's: separate repo is right, and Antigravity is a good fit precisely because the work is read-only, bounded, and MECHANICALLY CROSS-CHECKABLE — every number the dashboard renders must equal what the corresponding aida --json call returns, which is a test anyone can run. That matches the standing AGY policy (bounded, mechanical, draft-for-review, cross-validate before shipping) better than most work we have given it.
+
+    ON WHICH PANELS EARN THEIR PLACE, from this window's data rather than taste: a "is a drain running" panel would have shown green all night while the actual cost accumulated elsewhere — 40 shelves across 19 specs, worst tail five rounds on one spec, roughly 9-10 minutes of CI per round. The bottleneck was the ROUND TRIP, not throughput. So the panels that would have told the operator something he did not already know are: rounds-per-spec in flight, time-in-phase, what is held at the advisor gate and for how long (the one queue a human can personally unblock), shelve causes over a window, and token burn per spec.
+  created_at: 2026-09-19T16:50:55.659683463Z
+  modified_at: 2026-09-19T16:50:55.659683463Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
