@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T16:31:49.842260131Z
+modified_at: 2026-09-19T16:31:51.568416462Z
 req_type: Task
 tags:
 - cycle-time
@@ -30,3 +30,7 @@ tags:
 - orchestrator
 - parent:EPIC-28
 - review
+relationships:
+- rel_type: Child
+  target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
+  created_at: 2026-09-19T16:31:51.568416462Z
