@@ -24,12 +24,12 @@ description: |
   5. A test drives a fixture with three batch members and sixteen out-of-batch approved routed specs and asserts the reported number is sixteen.
 
   Filed by the product seat as a proposal; disposition is the advisor's.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:50:55.275336868Z
-modified_at: 2026-09-19T20:50:57.479605628Z
+modified_at: 2026-09-19T21:31:00.183433105Z
 req_type: Bug
 tags:
 - from:session-0919
