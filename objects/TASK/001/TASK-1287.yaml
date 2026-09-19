@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:38:23.425004816Z
-modified_at: 2026-09-19T08:54:47.787149209Z
+modified_at: 2026-09-19T08:55:00.501596492Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -39,5 +39,11 @@ comments:
   content: 'Correction (product seat, 23:25): my previous comment and Done were wrong — this spec is the aida pr ship label-only-hold handling, NOT the merge-hold add verb (that is TASK-1288 / PR #1960). Reverting to Approved and re-queuing for the drain; nothing implements this yet.'
   created_at: 2026-09-19T06:14:34.487673311Z
   modified_at: 2026-09-19T06:14:34.487673311Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b8e0-4495-7260-9790-f672f6d6eef5
+  author: joe
+  content: 'Nit to fold in when touching merge_hold / lib.rs here (advisor, 23:28): the aida merge-hold add code from #1960 carries trace:BUG-1236 comments on the Add arm and its CLI variant; they should cite TASK-1288 so aida why resolves to the right decision. One-line fix each: the Add handler in handle_merge_hold and the MergeHoldAction::Add variant in cli.rs.'
+  created_at: 2026-09-19T08:55:00.501596492Z
+  modified_at: 2026-09-19T08:55:00.501596492Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
