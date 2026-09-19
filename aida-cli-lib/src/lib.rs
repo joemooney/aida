@@ -1002,6 +1002,24 @@ exit 2
         }
     }
 
+    /// `finish_ci` returns the typed failure that the drain persists when it
+    /// shelves a member. Assert both halves of that boundary so these tests
+    /// cannot pass with the right diagnostic text but the wrong shelf cause.
+    // trace:BUG-1265 | ai:codex
+    fn assert_shelves_as(
+        failure: &auto_complete::PhaseFailure,
+        kind: auto_complete::FailureKind,
+        cause: &str,
+    ) {
+        assert_eq!(failure.kind, kind);
+        assert!(
+            failure.kind.is_shelvable(),
+            "{} must be a drain-shelvable failure",
+            failure.kind.cause_slug()
+        );
+        assert_eq!(failure.kind.cause_slug(), cause);
+    }
+
     /// Exercise the real drain driver, not just `ci_gate::classify_red`: this
     /// is the seam that originally bypassed refinement and shelved the coarse
     /// hold-gate verdict as `ci-red`.
@@ -1009,10 +1027,13 @@ exit 2
     #[test]
     fn drain_finish_ci_completes_for_hold_gate_only_red() {
         let fixture = Fixture::new();
-        assert!(
-            fixture.finish_ci("hold").is_ok(),
-            "hold-gate-only red must complete the CI phase"
-        );
+        if let Err(failure) = fixture.finish_ci("hold") {
+            panic!(
+                "hold-gate-only red must complete without a shelf, got {}: {}",
+                failure.kind.cause_slug(),
+                failure.reason
+            );
+        }
     }
 
     // trace:BUG-1265 | ai:codex
@@ -1020,7 +1041,7 @@ exit 2
     fn drain_finish_ci_shelves_real_red_naming_only_the_genuine_check() {
         let fixture = Fixture::new();
         let failure = fixture.finish_ci("real").unwrap_err();
-        assert_eq!(failure.kind, auto_complete::FailureKind::CiRed);
+        assert_shelves_as(&failure, auto_complete::FailureKind::CiRed, "ci-red");
         assert!(failure.reason.contains("Build"), "{}", failure.reason);
         assert!(
             !failure.reason.contains("merge-hold-gate"),
@@ -1034,8 +1055,12 @@ exit 2
     fn drain_finish_ci_retries_unavailable_rows_then_shelves_ci_unavailable() {
         let fixture = Fixture::new();
         let failure = fixture.finish_ci("unavailable").unwrap_err();
-        assert_eq!(failure.kind, auto_complete::FailureKind::CiUnavailable);
-        assert_ne!(failure.kind, auto_complete::FailureKind::CiRed);
+        assert_shelves_as(
+            &failure,
+            auto_complete::FailureKind::CiUnavailable,
+            "ci-unavailable",
+        );
+        assert_ne!(failure.kind.cause_slug(), "ci-red");
         assert_eq!(
             std::fs::read_to_string(&fixture.reads).unwrap().trim(),
             "3",
