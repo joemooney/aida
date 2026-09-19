@@ -3132,8 +3132,11 @@ fn run() -> Result<()> {
         ..
     } = &cli.command
     {
-        emit_notice_time_line();
+        // Arm before any notice-specific filesystem work. Session-start
+        // registration and the turn-clock stamp are intentionally fail-open,
+        // but can still stall on a contended filesystem.
         arm_notice_deadline();
+        emit_notice_time_line();
     }
 
     // STORY-696: `aida ps` is the GLOBAL running-work table — the project-wide
@@ -66874,8 +66877,8 @@ fn emit_notice_time_line() {
 /// dispatch path. Most notice reads are deliberately cheap, but cache refresh,
 /// lease discovery, or an unusually large protocol store can still stall after
 /// this early dispatch point. A detached watchdog bounds all of those paths and
-/// exits successfully because the notice is advisory; the always-on time line
-/// has already been emitted before this is armed.
+/// exits successfully because the notice is advisory. Arm this before the
+/// time-line/session bookkeeping so that work is covered by the same bound.
 // trace:BUG-1239 | ai:codex
 fn arm_notice_deadline() {
     const NOTICE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(1);

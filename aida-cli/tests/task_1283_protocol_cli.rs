@@ -307,10 +307,20 @@ fn awaiting_notice_does_not_read_an_open_stdin_pipe() {
     // child drained non-TTY stdin and remained blocked here indefinitely.
     // trace:BUG-1239 | ai:codex
     let _held_open = child.stdin.take().expect("piped stdin");
-    let deadline = Instant::now() + Duration::from_secs(2);
+    let started = Instant::now();
+    let contract_budget = Duration::from_secs(2);
+    // Give the test harness one extra second to reap and diagnose a late child,
+    // while separately asserting the command met its two-second contract. This
+    // avoids a scheduler race exactly at the assertion/kill boundary.
+    let reap_deadline = started + Duration::from_secs(3);
     loop {
         if let Some(status) = child.try_wait().expect("poll awaiting --notice") {
+            let elapsed = started.elapsed();
             assert!(status.success(), "awaiting --notice failed: {status}");
+            assert!(
+                elapsed < contract_budget,
+                "awaiting --notice exceeded its two-second budget: {elapsed:?}"
+            );
             let stdout = child.stdout.take().expect("piped stdout");
             let output = std::io::read_to_string(stdout).expect("read notice stdout");
             assert!(
@@ -319,10 +329,13 @@ fn awaiting_notice_does_not_read_an_open_stdin_pipe() {
             );
             break;
         }
-        if Instant::now() >= deadline {
+        if Instant::now() >= reap_deadline {
             let _ = child.kill();
             let _ = child.wait();
-            panic!("awaiting --notice blocked on an open stdin pipe for 2 seconds");
+            panic!(
+                "awaiting --notice remained alive for {:?} with an open stdin pipe",
+                started.elapsed()
+            );
         }
         std::thread::sleep(Duration::from_millis(20));
     }
