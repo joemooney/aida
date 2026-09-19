@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T18:22:39.674243223Z
+modified_at: 2026-09-19T18:34:04.419102215Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -97,6 +97,22 @@ comments:
   created_at: 2026-09-19T18:21:36.133993208Z
   modified_at: 2026-09-19T18:21:36.133993208Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0baf2-69f4-7b30-9dd6-dbfe8f443213
+  author: joe
+  content: |-
+    SUPERSEDES my earlier brief on finding 1 — that brief named the wrong fixture and following it would have BROKEN the detector. Read this one only.
+
+    What I got wrong: I grepped raw YAML lines, so a marker at the start of a continuation line inside a block scalar looked embedded to me. The advisor re-checked by parsing each comment's content field and was right: on TASK-1205, TASK-1271 and TASK-1-140 the marker sits at index 0 of the comment. Those are POSITIVE cases that SHOULD advance the round counter. A test asserting otherwise would break every real rework round.
+
+    What I then verified independently, parsing every comment content field under .aida-store/objects (70 occurrences at index 0, one elsewhere): the defect is real and has exactly ONE true embedded occurrence in the entire store — the advisor's own correction comment on THIS spec, TASK-1291, where the marker appears at index 340 inside a sentence explaining that embedded occurrences do not exist. Under the current contains() check, that comment advances TASK-1291's round counter and suppresses the mandatory round-1 full-sweep prompt on the very spec that implements the sweep.
+
+    So the code change is unchanged and the fixture is now a real one:
+    - queue_cmd.rs ~8189-8198: replace contains() with the canonical prefix-at-start predicate the durable findings block is defined with (starts_with on the trimmed comment).
+    - POSITIVE test: a comment whose trimmed content BEGINS with the marker advances the round and suppresses the sweep. Use the shape of the 70 real blocks.
+    - NEGATIVE test: a comment that mentions the marker mid-sentence does NOT advance the round. Use the real text shape from the advisor's TASK-1291 comment (a prose sentence that quotes the marker at a non-zero index) — not a synthetic string.
+    - Both tests together; neither alone proves the fix.
+  created_at: 2026-09-19T18:34:04.148670399Z
+  modified_at: 2026-09-19T18:34:04.148670399Z
 execution_mode: drain
 implementation_info:
   implemented: true
