@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:38:23.425004816Z
-modified_at: 2026-09-19T06:12:27.140844392Z
+modified_at: 2026-09-19T06:14:07.151143628Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -29,4 +29,10 @@ comments:
   created_at: 2026-09-19T06:12:05.257766158Z
   modified_at: 2026-09-19T06:12:27.140844212Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0b84c-f82f-7273-91a6-24134084f124
+  author: joe
+  content: 'Implemented at the keyboard by the product seat as PR #1960 (branch task-1288-merge-hold-add, commit trailer TASK-1287): aida merge-hold add <pr> [--reason] writes the marker and mirrors the label through the BUG-1236 sync, printing the release command. Removed from the implementer queue so the drain does not build it a second time; marking Done awaiting merge.'
+  created_at: 2026-09-19T06:14:07.151143628Z
+  modified_at: 2026-09-19T06:14:07.151143628Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
