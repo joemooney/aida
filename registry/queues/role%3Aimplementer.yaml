@@ -1,12 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a0b6bf-7c91-70a3-86a2-af570fb16c29
-  position: 28000
-  added_by: role:implementer
-  note: aida edit --tags refuses to drop structural tags (parent:/batch:/lane/severity/lifecycle:/aida:*) without --force; doctor check + --heal for parent tag vs relationship drift; tests
-  added_at: 2026-09-18T23:02:41.633480928Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
   requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
   position: 32000
   added_by: role:implementer
@@ -42,5 +34,12 @@
   position: 36000
   added_by: role:implementer
   added_at: 2026-09-19T04:43:12.893976282Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b6bf-7c91-70a3-86a2-af570fb16c29
+  position: 37000
+  added_by: role:implementer
+  added_at: 2026-09-19T04:45:40.458346488Z
   for_role: implementer
   added_by_machine: imac
