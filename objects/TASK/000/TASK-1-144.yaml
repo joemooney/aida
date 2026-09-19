@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T14:01:36.255012638Z
-modified_at: 2026-09-19T20:50:43.535385273Z
+modified_at: 2026-09-19T20:50:44.875096566Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -42,4 +42,10 @@ comments:
   created_at: 2026-09-19T20:43:40.559137551Z
   modified_at: 2026-09-19T20:43:40.559137551Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb6f-8c0b-7601-80d4-53d5b22d085f
+  author: joe
+  content: '[advisor] Status reset NeedsAttention → Approved. I verified the cleanup independently before flipping it rather than taking the report: no lease is held on TASK-168 or scope TASK-1-144, no aida-task168 worktree exists, no task-168 branch exists locally or on origin, and nothing is stranded. The shelve was infrastructure — a drain and its codex child killed together by a process-group teardown during a launcher swap, then two retries burned in fifteen seconds against the orphaned lease the dead run left behind. Nothing about the spec''s work was attempted or judged. It is routed on role:implementer and will be picked up on the next wave. This is the same spec whose finding I filed at 07:05 today about PR-keyed verdicts lacking reviewed_sha; nothing about that analysis changed.'
+  created_at: 2026-09-19T20:50:44.875096566Z
+  modified_at: 2026-09-19T20:50:44.875096566Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
