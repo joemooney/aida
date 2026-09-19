@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T07:09:04.126413392Z
+modified_at: 2026-09-19T07:09:06.298011688Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -77,6 +77,11 @@ comments:
   created_at: 2026-09-19T06:53:03.884102985Z
   modified_at: 2026-09-19T06:53:03.884102985Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b87f-4e80-7033-8458-eb115c1a620b
+  author: joe
+  content: 'Reviewer round 2 on PR #1957 (drain locks + claims done; session leases still PID-only): TASK-1284 requires session reap and aida ps to decide liveness from the lease''s PID plus process start time. SessionLease records only creator_pid/active_pid, and session_reap::reap_sessions plus lease_state_for/auto-release still call pid_is_alive without a recorded start identity; a recycled PID can therefore keep a dead session lease live. Add backward-compatible start identities for session lease PIDs, use process_identity_is_alive on these surfaces, and add a same-PID/different-start regression test.  Concretely: extend SessionLease with optional creator_pid_start / active_pid_start (process start identity, recorded at acquire; absent on legacy leases), and make session_reap::reap_sessions, lease_state_for and the auto-release path decide liveness via process_identity_is_alive when the identity is present, falling back to pid_is_alive only for legacy leases; tests for a recycled-pid lease reading dead and a legacy lease keeping today''s behaviour; keep the portability ratchet clean.'
+  created_at: 2026-09-19T07:09:06.048125526Z
+  modified_at: 2026-09-19T07:09:06.048125526Z
 execution_mode: drive
 implementation_info:
   implemented: true
