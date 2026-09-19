@@ -598,6 +598,50 @@ fn batch_members_resolve_agreed_id_alias_to_origin_object() {
     assert_eq!(members[0].0.requirement_id, req_id);
 }
 
+// An orphaned queue UUID must be observable both to the operator and to event
+// consumers; silently dropping it can falsely make a batch look drained.
+// trace:BUG-1264 | ai:codex
+#[test]
+fn batch_members_report_and_emit_unresolvable_member() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("aida-store");
+    aida_core::GitBackend::new(&root).unwrap();
+    let storage = Storage::new(&root);
+    let missing_id = Uuid::now_v7();
+    storage
+        .queue_add(entry(missing_id, Some("implementer"), None))
+        .unwrap();
+
+    let mut diagnostic = Vec::new();
+    let members = resolve_batch_members_with_context(
+        &storage,
+        "role:implementer",
+        "missing-wave",
+        Some("implementer"),
+        Some(dir.path()),
+        &mut diagnostic,
+    )
+    .expect("missing queue member is skipped, not fatal");
+
+    assert!(members.is_empty());
+    let diagnostic = String::from_utf8(diagnostic).unwrap();
+    assert!(diagnostic.contains(&format!(
+        "batch:missing-wave — skipping unresolvable member {missing_id}"
+    )));
+    let events = crate::events::read_all(dir.path());
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].spec.as_deref(),
+        Some(missing_id.to_string()).as_deref()
+    );
+    assert!(events[0].kind.is_actionable());
+    assert!(matches!(
+        &events[0].kind,
+        crate::events::EventKind::SpecSkipped { reason }
+            if reason == "requirement id does not resolve to a stored object"
+    ));
+}
+
 fn implementer_lease(scope: &str) -> SessionLease {
     SessionLease {
         id: "lease-1082".to_string(),
