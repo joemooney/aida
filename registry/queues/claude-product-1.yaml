@@ -1,4 +1,21 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
+  position: 0
+  added_by: claude-product-1
+  note: |-
+    Round 4 closed the fail-open but reintroduced the exact regression round 2 had fixed. CI run 35442689349 (Build ubuntu-latest, Run tests): aida-cli/tests/agent_write_confirm.rs:152 queue_done_non_interactive_without_yes_marks_done_not_cancelled and aida-cli/tests/journey.rs:386 agent_journey_toon_list_search_queue_done_and_status both FAILED again.
+
+    Cause: both tests run aida queue done in a fresh throwaway project whose branch carries no spec id AND has no commits since the merge-base, so the new commit-evidence gate refuses where nothing can possibly be contaminated.
+
+    Resolution (this is the advisor's clarified acceptance on the spec): the commit-evidence gate decides ONLY when commits exist since the merge-base with the default branch.
+    - branch name carries the target spec id -> accept (unchanged)
+    - no spec id in the name, and commits exist since merge-base -> accept only if one of them references the target ((SPEC-ID) trailer or trace:), else refuse with the --force escape
+    - no spec id in the name, and the range is EMPTY (fresh project, nothing committed yet) -> accept; there is no sibling work to contaminate
+
+    Tests to keep green together: the two integration tests above, plus the round-4 unit cases (pr-1948-style branch WITH unrelated commits -> refused; same branch with a target-referencing commit -> accepted; --force on the refused case -> proceeds and ledgers). Add one more unit case: empty commit range -> accepted. Run cargo test -p aida-cli --test agent_write_confirm --test journey locally before pushing, and keep the portability ratchet clean.
+  added_at: 2026-09-19T13:22:19.674185436Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
