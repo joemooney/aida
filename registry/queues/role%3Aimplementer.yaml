@@ -146,3 +146,11 @@
   added_at: 2026-09-19T19:24:44.907789438Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb03-3ec2-7c40-9d51-80b0b22fbb2f
+  position: 92000
+  added_by: role:implementer
+  note: 'establish the cause (init-only vs refresh-skip vs symlink-skip vs never-run) before fixing; ADD a drift check for the discipline pack modelled on aida memories check, wired into doctor, reporting missing guides and dead README links; acceptance: this repo resolves every README link and reports clean'
+  added_at: 2026-09-19T19:24:52.409781454Z
+  for_role: implementer
+  added_by_machine: imac
