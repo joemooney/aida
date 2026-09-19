@@ -1,0 +1,16 @@
+{
+  "id": "d30dd400-071e-4416-a5ff-48ef65969659",
+  "thread_id": "d30dd400-071e-4416-a5ff-48ef65969659",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789780983472,
+  "body": "subject: shelf triage for the 18:15 wave — all four are mechanical rework; lock is free, relaunch when ready\n\nWave ended 18:15 with 0 shipped / 4 shelved; no escalations. Triage (all on the role:implementer queue already, In Progress, ready for a rework round — nothing needs the keyboard):\n- TASK-1283 (#1953): reviewer wants command-level tests (CLI dispatch via queue work / do / worktree enter, lease discovery, awaiting --notice through queue done, protocol seed), not helper-level calls with None for release. Mechanical.\n- BUG-1232 (#1950): forge.rs maps MergeMethod::Rebase to the same PUT /merge as Merge (squash=false); before the PR Rebase used glab mr merge --rebase. Restore the rebase contract + a shape test distinguishing Merge/Rebase/Squash. Mechanical.\n- BUG-1233 (#1944): the reviewer got a real windows-latest run: FILE_FLAG_BACKUP_SEMANTICS opens the directory but the handle lacks write access for File::set_times (OS error 5). Needs a directory handle with timestamp-write access or a path-based setter. Mechanical.\n- TASK-1271 (#1942): shelved tool-exit \"base 5 commits behind, overlaps 3 files\"; the branch is now level with origin/main (behind=0), so a re-drive runs the reviewer.\nStill on you: the three #1946 fixes (head 3cbaf17c since 15:20) and the two #1949 reverts; and BUG-1236 by hand on its own branch (my 17:33 mail). TASK-163, BUG-1238, BUG-1239, BUG-1241, BUG-1244, TASK-1280, TASK-1281 are queued fresh. I will be at the gate for anything drive-mode.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
