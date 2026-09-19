@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T19:29:33.648523007Z
-modified_at: 2026-09-19T16:39:01.598111345Z
+modified_at: 2026-09-19T16:39:03.385203204Z
 req_type: Bug
 tags:
 - agent-ux
@@ -21,4 +21,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T19:29:38.725932059Z
+comments:
+- id: 01a0ba89-1dd9-7002-856e-af2b02c40a76
+  author: joe
+  content: '[advisor:groom] Approved, low, DRAIN. Corroboration from this seat: I hit the missing flags twice on 2026-09-18 and once on 09-19 — a description containing backticks was shell-expanded before aida saw it, and on another the command substitution collapsed a paragraph. I now write every long description through a heredoc by habit, which is exactly the workaround this removes. Add both flags to aida edit with add''s semantics and the same mutual-exclusion error; nothing else.'
+  created_at: 2026-09-19T16:39:03.385203204Z
+  modified_at: 2026-09-19T16:39:03.385203204Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
