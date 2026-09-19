@@ -1,5 +1,6 @@
 id: 01a0b6e3-90a9-70e1-86c4-5598e68e9e19
 spec_id: TASK-1-142
+agreed_id: TASK-166
 title: TASK-1278 awaits architecture sketch sign-off
 description: TASK-1278 changes an MCP resource contract and headless orchestrator prompt semantics, so AGENTS.md requires a posted sketch and master sign-off before a PR. Codex posted the sketch on TASK-1278 at 2026-09-18 16:39 MST. No sign-off was present in this headless phase; implementation was intentionally not started, the queue item remains In Progress, and it should be re-driven after approval.
 status: Rejected
