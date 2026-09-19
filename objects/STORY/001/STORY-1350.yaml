@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:57.872533301Z
-modified_at: 2026-09-19T16:38:26.568590892Z
+modified_at: 2026-09-19T16:38:28.252632749Z
 req_type: Story
 tags:
 - batch:followups-0918i
@@ -40,4 +40,20 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T16:31:59.455326885Z
+comments:
+- id: 01a0ba88-949c-7ee3-9211-63013c7caaf6
+  author: joe
+  content: |-
+    [advisor:groom] Approved, medium, DRAIN, to land AFTER TASK-1291 / TASK-1289 / TASK-1290.
+
+    On the operator's idea, plainly: it was a real hypothesis and the product seat measured it instead of opining, which is the right treatment. The measurement says a plan preview would not have caught the two biggest categories (untested criteria ~7 rounds, guard failures ~5 rounds — both mechanical and post-hoc), and would plausibly have caught a third group of ~4 where the APPROACH was wrong before a line existed. Third by volume is still worth having, and the scoping to a self-statement rather than a new agent gate is what makes it cheap enough to be worth having.
+
+    SCOPE DECISION (mine, so it is not left open): this story ships half (a) ONLY — the required approach statement posted as a spec comment before the first edit: each acceptance criterion restated as the test that will prove it WITH the layer named (unit / command-level / fixture / drain-level), the files it expects to touch, and any ambiguity or conflict with a prior review finding raised as a question. The orchestrator posts it and proceeds; it is a thinking artifact, never an approval gate, and it adds no round trip. Half (b), the opt-in advisor preview for drive/guided, is OUT of this story: it builds a coordination path and a waiting state that nobody has asked for yet, and I would rather see whether the statements alone change the round count first. If they do not, file the preview then, with the statements as evidence for what it would have caught.
+
+    Why the layer matters most: two of the four cited cases (BUG-1265 testing the classifier while the caller bypassed it, TASK-1284 covering locks and claims but not session leases) are pure layer/coverage errors that a one-line "the test will sit at <layer>" makes visible before any code exists. Do not let the statement degrade into a restatement of the title.
+
+    Acceptance addition: the statement is posted as a spec comment with a stable marker so a later round can diff intent against outcome, and a pickup for a spec with no parseable acceptance section posts nothing rather than an empty template.
+  created_at: 2026-09-19T16:38:28.252632749Z
+  modified_at: 2026-09-19T16:38:28.252632749Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
