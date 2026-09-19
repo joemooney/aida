@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T13:24:10.800340531Z
-modified_at: 2026-09-19T16:16:02.026238523Z
+modified_at: 2026-09-19T17:22:20.111278721Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -118,6 +118,12 @@ comments:
     Round-2's own brief still stands (drain-level finish_ci coverage for the three cases); this is an additional item, not a replacement.
   created_at: 2026-09-19T16:16:01.771428231Z
   modified_at: 2026-09-19T16:16:01.771428231Z
+- id: 01a0bab0-bd4f-7143-b9e5-70f234f1a609
+  author: joe
+  content: 'Round 2 review follow-up: strengthened the drain-level regression harness to assert production finish_ci invocation and exact shelving-boundary call counts for hold-only red (0 shelves), genuine required red (1 ci-red shelf naming Build only), and unavailable rows (internal retries followed by 1 ci-unavailable shelf). Targeted tests pass.'
+  created_at: 2026-09-19T17:22:20.111278721Z
+  modified_at: 2026-09-19T17:22:20.111278721Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
