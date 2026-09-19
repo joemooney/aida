@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b691-3a6c-7c21-b600-e3ead9c4ddfe
+  position: 0
+  added_by: claude-product-1
+  note: 'PR #1955 rebuilt on main (cherry-picked both commits; the awaiting-path conflict resolved by keeping the STORY-1226 cron block and this PR''s notice-gated unshipped scan). Round-2 brief still applies: --notice must never read stdin; make the deadline test deterministic. Verify tests and let the reviewer take round 2.'
+  added_at: 2026-09-19T06:13:22.468200668Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
