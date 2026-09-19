@@ -2095,11 +2095,16 @@ impl Forge for GitLabForge {
                     std::thread::sleep(std::time::Duration::from_secs(2));
                 }
                 GitLabMergeGate::Ready => {
+                    anyhow::ensure!(
+                        !snapshot.head_sha.is_empty(),
+                        "GitLab MR !{} did not report a head SHA; refusing an unpinned merge",
+                        c.id
+                    );
                     // Rebase is a separate asynchronous GitLab transition.
                     // Complete it before the ordinary merge request rather
                     // than degrading Rebase into Merge. trace:BUG-1232 | ai:codex
                     if matches!(opts.method, MergeMethod::Rebase) && !rebase_requested {
-                        let request = gitlab_merge_api_shape(&path, opts, true);
+                        let request = gitlab_merge_api_shape(&path, opts, true, &snapshot.head_sha);
                         let rebased = self.glab_api_put(&request.path, &[])?;
                         anyhow::ensure!(
                             rebased.status.success(),
@@ -2110,7 +2115,7 @@ impl Forge for GitLabForge {
                         rebase_requested = true;
                         continue;
                     }
-                    let request = gitlab_merge_api_shape(&path, opts, false);
+                    let request = gitlab_merge_api_shape(&path, opts, false, &snapshot.head_sha);
                     let fields: Vec<(&str, &str)> = request
                         .fields
                         .iter()
@@ -2123,6 +2128,13 @@ impl Forge for GitLabForge {
                             sha: None,
                             method: opts.method,
                         });
+                    }
+                    if gitlab_merge_response_is_stale_head(&merged.stderr) {
+                        anyhow::bail!(
+                            "GitLab MR !{} head changed after review; re-review the new head before merging{}",
+                            c.id,
+                            gitlab_api_message(&merged.stderr)
+                        );
                     }
                     if gitlab_merge_response_is_retryable(&merged.stderr)
                         && attempt + 1 < MAX_GATE_READS
@@ -2555,6 +2567,7 @@ struct GitLabMergeSnapshot {
     state: String,
     detailed_merge_status: String,
     rebase_in_progress: bool,
+    head_sha: String,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -2571,6 +2584,7 @@ fn gitlab_merge_api_shape(
     mr_path: &str,
     opts: &MergeOptions,
     request_rebase: bool,
+    reviewed_head_sha: &str,
 ) -> GitLabMergeApiRequest {
     if matches!(opts.method, MergeMethod::Rebase) && request_rebase {
         return GitLabMergeApiRequest {
@@ -2579,6 +2593,7 @@ fn gitlab_merge_api_shape(
         };
     }
     let mut fields = vec![
+        ("sha".into(), reviewed_head_sha.into()),
         (
             "squash".into(),
             matches!(opts.method, MergeMethod::Squash).to_string(),
@@ -2607,9 +2622,8 @@ fn classify_gitlab_merge_status(status: &str) -> GitLabMergeGate {
         "mergeable" => GitLabMergeGate::Ready,
         // `unchecked` = GitLab has not computed mergeability yet (a fresh MR):
         // transient like `checking`, never a reason to shelve. trace:BUG-1232 | ai:claude
-        "ci_must_pass" | "ci_still_running" | "checking" | "preparing" | "unchecked" => {
-            GitLabMergeGate::Wait
-        }
+        "ci_must_pass" | "ci_still_running" | "checking" | "preparing" | "unchecked"
+        | "approvals_syncing" => GitLabMergeGate::Wait,
         _ => GitLabMergeGate::Blocked,
     }
 }
@@ -2632,7 +2646,29 @@ fn parse_gitlab_merge_snapshot(body: &str) -> Result<GitLabMergeSnapshot> {
             .get("rebase_in_progress")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        head_sha: value
+            .get("sha")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                value
+                    .get("diff_refs")
+                    .and_then(|v| v.get("head_sha"))
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("")
+            .to_string(),
     })
+}
+
+// GitLab rejects the optimistic `sha` merge parameter with 409 when the MR
+// head moved after it was inspected. That is a stale review, not a transient
+// mergeability race: retrying against a newly read SHA could merge unreviewed
+// code. trace:BUG-1232 | ai:codex
+fn gitlab_merge_response_is_stale_head(stderr: &[u8]) -> bool {
+    let stderr = String::from_utf8_lossy(stderr).to_ascii_lowercase();
+    stderr.contains("sha does not match")
+        || stderr.contains("sha mismatch")
+        || (stderr.contains("sha") && stderr.contains("head of source branch"))
 }
 
 fn gitlab_merge_response_is_retryable(stderr: &[u8]) -> bool {
@@ -4105,21 +4141,23 @@ mod tests {
         };
         let path = "projects/:id/merge_requests/7";
 
-        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false);
+        let merge = gitlab_merge_api_shape(path, &opts(MergeMethod::Merge), false, "abc123");
         assert_eq!(merge.path, format!("{path}/merge"));
         assert!(merge.fields.contains(&("squash".into(), "false".into())));
+        assert!(merge.fields.contains(&("sha".into(), "abc123".into())));
 
-        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false);
+        let squash = gitlab_merge_api_shape(path, &opts(MergeMethod::Squash), false, "abc123");
         assert_eq!(squash.path, format!("{path}/merge"));
         assert!(squash.fields.contains(&("squash".into(), "true".into())));
 
-        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true);
+        let rebase = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), true, "abc123");
         assert_eq!(rebase.path, format!("{path}/rebase"));
         assert!(rebase.fields.is_empty());
 
-        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false);
+        let after = gitlab_merge_api_shape(path, &opts(MergeMethod::Rebase), false, "def456");
         assert_eq!(after.path, format!("{path}/merge"));
         assert!(after.fields.contains(&("squash".into(), "false".into())));
+        assert!(after.fields.contains(&("sha".into(), "def456".into())));
     }
 
     #[test]
@@ -4133,6 +4171,7 @@ mod tests {
             "checking",
             "preparing",
             "unchecked",
+            "approvals_syncing",
         ] {
             assert_eq!(
                 classify_gitlab_merge_status(status),
@@ -4161,11 +4200,25 @@ mod tests {
     #[test]
     fn gitlab_merge_snapshot_and_retry_responses_are_fixture_driven() {
         let snapshot = parse_gitlab_merge_snapshot(
-            r#"{"state":"opened","detailed_merge_status":"ci_still_running"}"#,
+            r#"{"state":"opened","detailed_merge_status":"ci_still_running","sha":"abc123"}"#,
         )
         .unwrap();
         assert_eq!(snapshot.state, "opened");
         assert_eq!(snapshot.detailed_merge_status, "ci_still_running");
+        assert_eq!(snapshot.head_sha, "abc123");
+
+        let diff_ref_snapshot = parse_gitlab_merge_snapshot(
+            r#"{"state":"opened","detailed_merge_status":"mergeable","diff_refs":{"head_sha":"def456"}}"#,
+        )
+        .unwrap();
+        assert_eq!(diff_ref_snapshot.head_sha, "def456");
+
+        assert!(gitlab_merge_response_is_stale_head(
+            br#"{"message":"SHA does not match HEAD of source branch"}"#
+        ));
+        assert!(!gitlab_merge_response_is_stale_head(
+            br#"{"message":"405 Method Not Allowed"}"#
+        ));
 
         for response in [
             br#"glab: 405 Method Not Allowed"#.as_slice(),
