@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b691-3a6c-7c21-b600-e3ead9c4ddfe
+  position: 0
+  added_by: claude-product-1
+  note: 'Round-2 fix is on the branch; PR #1955 was 3 commits behind main with a lib.rs overlap and has been rebased (aida pr rebase 1955). Re-run tests, push nothing if clean, and let the reviewer take round 2 (its brief: --notice never reads stdin; deterministic test with a generous budget).'
+  added_at: 2026-09-19T06:10:01.022088521Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
