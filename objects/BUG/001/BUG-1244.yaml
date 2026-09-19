@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T05:03:37.788870863Z
+modified_at: 2026-09-19T05:07:52.192442885Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -66,6 +66,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T05:03:37.358280976Z
   modified_at: 2026-09-19T05:03:37.358280976Z
+- id: 01a0b810-4ff8-71f1-b4f3-fd945d955ea8
+  author: joe
+  content: 'CI red on PR #1956 (run 35422445837, Build ubuntu-latest): two integration tests fail — aida-cli/tests/agent_write_confirm.rs:152 queue_done_non_interactive_without_yes_marks_done_not_cancelled, and aida-cli/tests/journey.rs:386 agent_journey_toon_list_search_queue_done_and_status. Both exercise aida queue done in a fresh throwaway project, so the contamination guard is refusing or altering queue done where no sibling PR/worktree exists. Make the guard fire only when the session''s worktree/branch belongs to a DIFFERENT spec than the one being marked done (or when the rework brief targets a sibling PR); a plain single-spec queue done must behave exactly as before. Run both tests locally (cargo test -p aida-cli --test agent_write_confirm --test journey) before pushing.'
+  created_at: 2026-09-19T05:07:51.928322959Z
+  modified_at: 2026-09-19T05:07:51.928322959Z
 execution_mode: drive
 implementation_info:
   implemented: true
