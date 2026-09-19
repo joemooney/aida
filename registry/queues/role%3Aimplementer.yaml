@@ -179,3 +179,11 @@
   added_at: 2026-09-19T21:11:51.389250417Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bb7d-e389-7e33-96a0-036917d17b9d
+  position: 103000
+  added_by: role:implementer
+  note: profile before optimising and record where the 70s goes; fast paths (status 0.66/list 0.44/ps 0.38/notice 0.93) are a floor that must not regress; suspect the forge calls and the unshipped-work branch walk (cf BUG-1239)
+  added_at: 2026-09-19T21:11:59.879754009Z
+  for_role: implementer
+  added_by_machine: imac
