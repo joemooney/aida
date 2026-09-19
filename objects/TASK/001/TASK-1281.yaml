@@ -16,7 +16,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:21:32.281544450Z
-modified_at: 2026-09-18T22:21:42.844956888Z
+modified_at: 2026-09-19T03:59:00.698950973Z
 req_type: Task
 tags:
 - cron
@@ -33,4 +33,11 @@ relationships:
   target_id: 01a0b64f-a564-7e53-a0b0-95305e3df161
   created_at: 2026-09-18T22:21:42.844950862Z
   created_by: joe
+comments:
+- id: 01a0b7d1-465a-7453-9ed9-0fd6eb0b067c
+  author: joe
+  content: 'Parked from the implementer queue by the product seat (2026-09-18 21:00): this follow-up builds on the schedule ledger from PR #1946 (STORY-1226), which is still at the advisor''s gate; driving it against main before #1946 merges would implement against code that is not there. Re-queue once #1946 lands.'
+  created_at: 2026-09-19T03:59:00.698950973Z
+  modified_at: 2026-09-19T03:59:00.698950973Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
