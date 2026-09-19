@@ -8721,10 +8721,11 @@ pub(crate) fn handle_queue_work(
         review_findings.as_deref(),
         &rework_comments,
     );
-    // Slice 1 injects the editable type protocol into interactive pickup
-    // prompts. Headless/lane propagation is intentionally TASK-1278.
-    // trace:STORY-1221 | ai:codex
-    if !no_human && !role.eq_ignore_ascii_case("reviewer") {
+    // Interactive implementers and every headless phase receive the same
+    // resolved, capped type+lane protocol. Reviewers are included headlessly
+    // because there is no conversational pickup hook to inject it later.
+    // trace:STORY-1221 trace:TASK-1278 | ai:codex
+    if no_human || !role.eq_ignore_ascii_case("reviewer") {
         let spec_id = plan
             .entries
             .first()
@@ -8733,7 +8734,7 @@ pub(crate) fn handle_queue_work(
         if let Ok(store) = storage.load() {
             if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, spec_id)) {
                 if let Some(protocol) =
-                    crate::protocol_cmd::protocol_for_requirement(&store, &req.req_type)
+                    crate::protocol_cmd::resolved_protocol_for_requirement(&store, req)
                 {
                     prompt = format!("{}\n\n{}", protocol.pickup_block(), prompt);
                 }

@@ -1315,6 +1315,20 @@ impl<'a> McpServer<'a> {
                         "description": "Progress buckets for the batch:<name> tag set",
                         "mimeType": "text/plain"
                     },
+                    // TASK-1278: byte-identical mirror of `aida protocol show`.
+                    // The optional second segment selects a lane overlay.
+                    {
+                        "uriTemplate": "aida://protocol/{type}",
+                        "name": "Resolved type protocol",
+                        "description": "Editable type protocol (mirrors aida protocol show <type>)",
+                        "mimeType": "text/plain"
+                    },
+                    {
+                        "uriTemplate": "aida://protocol/{type}/{lane}",
+                        "name": "Resolved type + lane protocol",
+                        "description": "Merged type and lane protocol with precedence labels",
+                        "mimeType": "text/plain"
+                    },
                     // TASK-715: per-object schema detail. `aida://schema/requirement`
                     // returns the reflection-derived field table + the four
                     // controlled-vocabulary enums (status/type/priority/relationship)
@@ -1351,7 +1365,9 @@ impl<'a> McpServer<'a> {
             // exact-URI cases so the bare catalog URI wins. trace:TASK-715
             "aida://schema" => self.resource_schema_catalog(),
             _ => {
-                if let Some(object) = uri.strip_prefix("aida://schema/") {
+                if let Some(path) = uri.strip_prefix("aida://protocol/") {
+                    self.resource_protocol(path)
+                } else if let Some(object) = uri.strip_prefix("aida://schema/") {
                     self.resource_schema_object(object)
                 } else if let Some(n) = uri.strip_prefix("aida://pr/") {
                     self.resource_pr(n)
@@ -5506,6 +5522,32 @@ impl<'a> McpServer<'a> {
             .map_err(|e| format!("failed to serialize schema catalog: {}", e))
     }
 
+    /// `aida://protocol/<type>[/<lane>]` uses the same core renderer as CLI.
+    // trace:TASK-1278 | ai:codex
+    fn resource_protocol(&self, path: &str) -> Result<String, String> {
+        let mut segments = path.split('/');
+        let req_type = segments
+            .next()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "Missing requirement type in protocol resource URI".to_string())?;
+        let lane = segments.next().filter(|s| !s.is_empty());
+        if segments.next().is_some() {
+            return Err(format!(
+                "Invalid protocol resource URI: aida://protocol/{path}"
+            ));
+        }
+        let store = self.storage.load().map_err(|e| e.to_string())?;
+        let protocol = aida_core::resolve_protocol(&store, req_type, lane)
+            .ok_or_else(|| format!("No type protocol found for `{req_type}`"))?;
+        if lane.is_some() && protocol.lane_protocol.is_none() {
+            return Err(format!(
+                "No lane protocol found for `{}`",
+                lane.unwrap_or_default()
+            ));
+        }
+        Ok(protocol.render())
+    }
+
     /// `aida://schema/{object}` — per-object schema detail as pretty JSON.
     /// Every catalog kind returns its reflection-derived field table;
     /// `requirement` additionally carries the four controlled-vocabulary
@@ -8346,6 +8388,25 @@ mod tests {
         std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
         let storage = Box::leak(Box::new(Storage::new(cache_path)));
         McpServer::new(storage, dir.to_path_buf())
+    }
+
+    #[test]
+    // trace:TASK-1278 | ai:codex
+    fn protocol_resource_uses_the_canonical_cli_renderer() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let mut store = aida_core::RequirementsStore::default();
+        aida_core::seed_meta_requirements(&mut store).unwrap();
+        server.storage.save(&store).unwrap();
+
+        let expected = aida_core::resolve_protocol(&store, "spike", Some("research"))
+            .unwrap()
+            .render();
+        assert_eq!(
+            server.resource_protocol("spike/research").unwrap(),
+            expected
+        );
+        assert!(server.resource_protocol("spike/missing").is_err());
     }
 
     /// BUG-449: set a gated status directly in the store, bypassing the MCP
