@@ -17,20 +17,25 @@ description: |
   - The guard list is read from config, defaults to the CI set, and an unknown/missing guard is skipped with a note rather than failing closed.
   - lifecycle:no-preflight skips the phase and says so in the drain banner.
   - Unit test on the pure decision (which guards ran, which failed, open/refuse).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T16:31:06.913615297Z
+modified_at: 2026-09-19T16:37:37.307473172Z
 req_type: Task
 tags:
+- batch:followups-0918h
 - ci
 - cycle-time
+- drive
 - from:failure-analysis-0919
 - orchestrator
 - parent:EPIC-28
+- parent:EPIC-62
+- preflight
 relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T16:31:06.913615297Z
+execution_mode: drive
