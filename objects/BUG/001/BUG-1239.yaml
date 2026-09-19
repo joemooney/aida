@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:26.124728352Z
-modified_at: 2026-09-19T06:09:57.596856469Z
+modified_at: 2026-09-19T06:13:20.216936132Z
 req_type: Bug
 tags:
 - agent-ux
@@ -49,6 +49,11 @@ comments:
   content: 'Round-2 fix is on the branch; PR #1955 was 3 commits behind main with a lib.rs overlap and has been rebased (aida pr rebase 1955). Re-run tests, push nothing if clean, and let the reviewer take round 2 (its brief: --notice never reads stdin; deterministic test with a generous budget).'
   created_at: 2026-09-19T06:09:57.025350848Z
   modified_at: 2026-09-19T06:09:57.025350848Z
+- id: 01a0b84c-3fd0-7631-b2bb-89e48c27d39a
+  author: joe
+  content: 'PR #1955 rebuilt on main (cherry-picked both commits; the awaiting-path conflict resolved by keeping the STORY-1226 cron block and this PR''s notice-gated unshipped scan). Round-2 brief still applies: --notice must never read stdin; make the deadline test deterministic. Verify tests and let the reviewer take round 2.'
+  created_at: 2026-09-19T06:13:19.952235372Z
+  modified_at: 2026-09-19T06:13:19.952235372Z
 execution_mode: drain
 implementation_info:
   implemented: true
