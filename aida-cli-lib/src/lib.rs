@@ -29848,6 +29848,123 @@ fn should_reuse_branch(reuse_flag: bool, branch_explicit: bool, branch_preexists
     reuse_flag || (branch_explicit && branch_preexists)
 }
 
+// trace:BUG-1270 | ai:codex
+#[derive(Debug, PartialEq, Eq)]
+enum PrBranchAlignment {
+    Proceed,
+    FastForward,
+    RefuseDiverged,
+}
+
+/// Pure decision for an existing local branch that may back an open PR.
+// trace:BUG-1270 | ai:codex
+fn pr_branch_alignment(
+    has_open_pr: bool,
+    local_is_ancestor_of_remote: Option<bool>,
+    remote_is_ancestor_of_local: Option<bool>,
+) -> PrBranchAlignment {
+    if !has_open_pr {
+        return PrBranchAlignment::Proceed;
+    }
+    match (local_is_ancestor_of_remote, remote_is_ancestor_of_local) {
+        (Some(true), Some(false)) => PrBranchAlignment::FastForward,
+        (Some(false), Some(false)) => PrBranchAlignment::RefuseDiverged,
+        _ => PrBranchAlignment::Proceed,
+    }
+}
+
+fn git_is_ancestor(project_root: &std::path::Path, older: &str, newer: &str) -> Option<bool> {
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["merge-base", "--is-ancestor", older, newer])
+        .status()
+        .ok()?;
+    match status.code() {
+        Some(0) => Some(true),
+        Some(1) => Some(false),
+        _ => None,
+    }
+}
+
+fn session_git_ref_exists(project_root: &std::path::Path, ref_name: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--verify", "--quiet", ref_name])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+/// Keep an explicitly reused PR branch aligned with its remote before a
+/// worktree is created. Behind is safe to fast-forward; two-sided divergence
+/// requires an explicit realign because choosing history to discard is an
+/// operator decision.
+// trace:BUG-1270 | ai:codex
+fn align_reused_pr_branch(project_root: &std::path::Path, branch: &str) -> Result<()> {
+    let has_open_pr = matches!(
+        change_lookup_for_branch(project_root, branch),
+        crate::forge::ChangeLookup::Found(_)
+    );
+    if has_open_pr {
+        let refspec = format!("+refs/heads/{branch}:refs/remotes/origin/{branch}");
+        let fetch = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(["fetch", "origin", &refspec])
+            .output()?;
+        if !fetch.status.success() {
+            anyhow::bail!(
+                "could not refresh PR branch `{branch}` from origin before launch: {}",
+                String::from_utf8_lossy(&fetch.stderr).trim()
+            );
+        }
+    }
+    align_reused_pr_branch_with_status(project_root, branch, has_open_pr)
+}
+
+fn align_reused_pr_branch_with_status(
+    project_root: &std::path::Path,
+    branch: &str,
+    has_open_pr: bool,
+) -> Result<()> {
+    let local_ref = format!("refs/heads/{branch}");
+    let remote_ref = format!("refs/remotes/origin/{branch}");
+    if !session_git_ref_exists(project_root, &local_ref)
+        || !session_git_ref_exists(project_root, &remote_ref)
+    {
+        return Ok(());
+    }
+
+    match pr_branch_alignment(
+        has_open_pr,
+        git_is_ancestor(project_root, &local_ref, &remote_ref),
+        git_is_ancestor(project_root, &remote_ref, &local_ref),
+    ) {
+        PrBranchAlignment::Proceed => Ok(()),
+        PrBranchAlignment::FastForward => {
+            let status = std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args(["branch", "-f", branch, &format!("origin/{branch}")])
+                .status()?;
+            if !status.success() {
+                anyhow::bail!("could not fast-forward local branch `{branch}` to `origin/{branch}`");
+            }
+            eprintln!(
+                "{} fast-forwarded PR branch `{}` to `origin/{}` before creating its worktree",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(), branch, branch
+            );
+            Ok(())
+        }
+        PrBranchAlignment::RefuseDiverged => anyhow::bail!(
+            "refusing to launch on PR branch `{branch}` because local `{branch}` has diverged from `origin/{branch}`; creating a side branch would strand this round's commits off the PR. Realign it explicitly, then retry:\n  git fetch origin {branch} && git branch -f {branch} origin/{branch}"
+        ),
+    }
+}
+
 /// STORY-248: resolve the stacked-branch base for `aida queue work`.
 ///
 /// Returns `Ok(None)` when neither `--stack` nor `--base` is set — the
@@ -31020,6 +31137,8 @@ fn session_start(
                 branch_name
             );
         }
+        // BUG-1270: keep the next round on the branch the PR actually tracks.
+        align_reused_pr_branch(&project_root, &branch_name)?;
         // `git worktree add <path> <branch>` checks out an existing
         // local branch, or DWIM-creates a local tracking branch from a
         // unique `origin/<branch>` — no `-b`, no base.
