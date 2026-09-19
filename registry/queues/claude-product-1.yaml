@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b5bf-fa25-7e80-b111-4bd751958e05
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 3 on PR #1942: TASK-1271: CLI inbox and MCP mark_seen call record_seen for every message in the full inbox before advancing the watermark. On the first post-upgrade read, messages already at or below the prior watermark receive a new receipt timestamp, so max_read_latency_ms reports now-sent_at rather than an actual recorded read latency. Capture receipts only for messages newly acknowledged past the pre-read watermark (while still advancing the watermark to the newest), and add a regression test with an existing watermark proving old read messages are not backfilled.  Concretely: in both the CLI inbox path and MCP mark_seen, compute the pre-read watermark first and call record_seen only for messages sent after it (newly acknowledged); messages at or below the prior watermark get no receipt, so max_read_latency_ms never reports now-minus-sent_at for history. Add a test: a mailbox with two old (pre-watermark) and one new message → exactly one receipt recorded, latency computed from the new one only.'
-  added_at: 2026-09-19T02:03:35.037863033Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
