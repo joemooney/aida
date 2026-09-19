@@ -282,6 +282,14 @@ pub(crate) fn write_cas_opts(
         return Ok(true);
     }
 
+    // Advisor review round 1 (#1946): never commit a ledger onto a store that
+    // is mid-rebase or detached — the BUG-1229 data-loss class, now reachable
+    // from a per-turn hook tick. Skip the write with a note; the next tick
+    // retries once the store is repaired. trace:STORY-1226 | ai:claude
+    if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
+        eprintln!("  schedule ledger for '{job}' not written this tick: {err}");
+        return Ok(false);
+    }
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
     let local_only = !push || !git_ops::has_remote(store_root, "origin");
 
@@ -464,5 +472,44 @@ mod tests {
         );
         assert_eq!(l.episode.as_ref().unwrap().first_true, at(5, 0));
         assert!(l.episode.as_ref().unwrap().is_open());
+    }
+
+    // trace:STORY-1226 | ai:claude
+    #[test]
+    fn write_cas_skips_a_store_that_is_mid_rebase() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let git = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        git(&["init", "-q", "-b", "aida-store"]);
+        git(&[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "seed",
+        ]);
+        std::fs::create_dir_all(root.join(".git").join("rebase-merge")).unwrap();
+        let wrote = write_cas_opts(root, "mailbox-triage", false, |l| {
+            l.result = Some("ok".into());
+        })
+        .unwrap();
+        assert!(!wrote, "a mid-rebase store must not be written");
+        assert!(load(root, "mailbox-triage").is_none());
     }
 }

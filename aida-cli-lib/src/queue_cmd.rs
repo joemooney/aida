@@ -8751,6 +8751,7 @@ pub(crate) fn handle_queue_work(
                 prompt = crate::protocol_cmd::prepend_resolved_pickup_protocol(&store, req, prompt);
             }
         }
+    }
     // STORY-1226: due seat jobs for this pickup's role lead the prompt (the
     // Codex/Antigravity delivery channel; a nudge on Claude). File-only read.
     // trace:STORY-1226 | ai:claude

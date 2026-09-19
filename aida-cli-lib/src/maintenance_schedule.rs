@@ -382,13 +382,20 @@ fn load_global_config(home: &Path) -> Result<Option<LoadedScheduleConfig>> {
     let Ok(body) = std::fs::read_to_string(&path) else {
         return Ok(None);
     };
-    let raw: ScheduleConfig = match toml::from_str::<ConfigFile>(&body) {
-        Ok(ConfigFile {
-            schedule: Some(cfg),
-        }) => cfg,
-        _ => {
-            toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?
-        }
+    // Advisor review round 1 (#1946): fall back to the bare ScheduleConfig
+    // shape ONLY when the body has no `schedule` table; a typed error inside
+    // `[schedule]` must surface, not silently drop every global job.
+    // trace:STORY-1226 | ai:claude
+    let has_schedule_table = toml::from_str::<toml::Value>(&body)
+        .ok()
+        .is_some_and(|v| v.get("schedule").is_some());
+    let raw: ScheduleConfig = if has_schedule_table {
+        toml::from_str::<ConfigFile>(&body)
+            .with_context(|| format!("failed to parse {}", path.display()))?
+            .schedule
+            .unwrap_or_default()
+    } else {
+        toml::from_str(&body).with_context(|| format!("failed to parse {}", path.display()))?
     };
     build_config(raw, JobSource::Global)
 }
@@ -687,11 +694,26 @@ where
             }
         }
 
+        let mut continue_on = false;
         if !task.on.is_empty() {
             let cursor = local.and_then(|s| s.last_seen_event_ts).or(last_run);
+            // Advisor review round 1 (#1946): a job seen for the first time
+            // (no cursor, no last_run) must not replay every historical
+            // matching event — initialise the cursor to now and fire only on
+            // events after this tick. trace:STORY-1226 | ai:claude
+            if cursor.is_none() {
+                state
+                    .tasks
+                    .entry(task.name.clone())
+                    .or_default()
+                    .last_seen_event_ts = Some(now);
+                touched = true;
+                continue_on = true;
+            }
             let mut newest: Option<DateTime<Utc>> = None;
             let mut kind_hit: Option<String> = None;
-            for ev in events {
+            let scan: &[Event] = if continue_on { &[] } else { events };
+            for ev in scan {
                 if !task.on.iter().any(|k| k == ev.kind.name()) {
                     continue;
                 }
@@ -2139,6 +2161,83 @@ every = "1h"
     }
 
     // trace:STORY-1226 | ai:claude
+    // Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude
+    #[test]
+    fn on_job_first_sight_initialises_cursor_to_now_without_replaying_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let mk = |ts: DateTime<Utc>, kind: EventKind| Event {
+            ts,
+            spec: None,
+            run_uuid: String::new(),
+            kind,
+        };
+        // A week of historical merges before the job ever existed.
+        let history = vec![
+            mk(at(1), EventKind::PrMerged { pr: 1 }),
+            mk(at(5), EventKind::PrMerged { pr: 2 }),
+        ];
+        let mut job = task("capture-sweep", "24h", "queue gc");
+        job.interval = None;
+        job.on = vec!["PrMerged".to_string()];
+        let run = |state: &mut ScheduleState, now, events: &[Event]| {
+            tick_core(
+                tmp.path(),
+                config(vec![job.clone()]),
+                state,
+                now,
+                false,
+                ok_exec(Rc::clone(&seen)),
+                |_| Snapshot::default(),
+                events,
+            )
+            .unwrap()
+        };
+        // First sight: nothing fires, cursor = now.
+        let out = run(&mut state, at(10), &history);
+        assert!(out.is_empty(), "{out:?}");
+        assert!(seen.borrow().is_empty());
+        assert_eq!(
+            state.tasks["capture-sweep"].last_seen_event_ts,
+            Some(at(10))
+        );
+        // An event after the cursor fires once.
+        let mut later = history.clone();
+        later.push(mk(at(11), EventKind::PrMerged { pr: 3 }));
+        let out = run(&mut state, at(12), &later);
+        assert_eq!(out, vec!["schedule tick: capture-sweep ok"]);
+        assert_eq!(
+            state.tasks["capture-sweep"].last_seen_event_ts,
+            Some(at(11))
+        );
+    }
+
+    // Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude
+    #[test]
+    fn load_global_config_surfaces_a_type_error_inside_the_schedule_table() {
+        let home = tempfile::tempdir().unwrap();
+        let dir = home.path().join(".aida");
+        std::fs::create_dir_all(&dir).unwrap();
+        // `name` must be a string: a typed error INSIDE [schedule] must not be
+        // swallowed by the bare-shape fallback.
+        std::fs::write(
+            dir.join(GLOBAL_SCHEDULE_FILE),
+            "[schedule]\n[[schedule.jobs]]\nname = 5\nevery = \"30m\"\ncommand = \"doctor\"\n",
+        )
+        .unwrap();
+        let err = load_global_config(home.path()).unwrap_err();
+        assert!(err.to_string().contains("failed to parse"), "{err}");
+        // The bare shape (no `schedule` table) still loads.
+        std::fs::write(
+            dir.join(GLOBAL_SCHEDULE_FILE),
+            "[[jobs]]\nname = \"doctor\"\nevery = \"6h\"\ncommand = \"doctor\"\n",
+        )
+        .unwrap();
+        let cfg = load_global_config(home.path()).unwrap().unwrap();
+        assert_eq!(cfg.tasks.len(), 1);
+    }
+
     #[test]
     fn on_job_fires_once_per_new_event() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2170,27 +2269,28 @@ every = "1h"
             )
             .unwrap()
         };
-        // First tick: the PrMerged at 09:00 is new → runs once.
+        // First tick: the job is seen for the first time — history is NOT
+        // replayed (advisor round 1 on #1946); the cursor initialises to now.
         let out = run(&mut state, at(11), &events_a);
-        assert_eq!(out, vec!["schedule tick: queue-gc ok"]);
-        assert_eq!(seen.borrow().len(), 1);
+        assert!(out.is_empty(), "{out:?}");
+        assert!(seen.borrow().is_empty());
         assert_eq!(
             state.tasks["queue-gc"].last_seen_event_ts,
-            Some(at(9)),
-            "cursor advances to the consumed event"
+            Some(at(11)),
+            "cursor initialises to now on first sight"
         );
         // Same events again: nothing new → no run.
         let out = run(&mut state, at(12), &events_a);
         assert!(out.is_empty());
-        assert_eq!(seen.borrow().len(), 1);
-        // A new PrMerged after the cursor → runs once more; an unlisted kind
+        assert!(seen.borrow().is_empty());
+        // A new PrMerged after the cursor → runs once; an unlisted kind
         // (RunStarted) never triggers.
         let mut events_b = events_a.clone();
         events_b.push(mk(at(12), EventKind::RunStarted));
         events_b.push(mk(at(13), EventKind::PrMerged { pr: 2 }));
         let out = run(&mut state, at(14), &events_b);
         assert_eq!(out, vec!["schedule tick: queue-gc ok"]);
-        assert_eq!(seen.borrow().len(), 2);
+        assert_eq!(seen.borrow().len(), 1);
         assert_eq!(state.tasks["queue-gc"].last_seen_event_ts, Some(at(13)));
     }
 

@@ -935,6 +935,8 @@ fn prompt_spike_item_names_research_lane_and_report_contract() {
     assert!(prompt.contains("docs/spikes/<date>-<slug>.md"), "{prompt}");
     assert!(prompt.contains("open a PR"), "{prompt}");
     assert!(prompt.contains("Do not make or apply"), "{prompt}");
+}
+
 /// STORY-1226: a seat's due `[schedule]` jobs lead the pickup prompt, and the
 /// pickup line stays last; an empty block leaves the prompt untouched.
 // trace:STORY-1226 | ai:claude
