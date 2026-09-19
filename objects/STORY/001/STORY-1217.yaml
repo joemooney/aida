@@ -2,13 +2,38 @@ id: 01a0b5c7-d4f9-7573-85a0-49ce90e3929e
 spec_id: STORY-1217
 agreed_id: STORY-1217
 title: Durable, time-boxed, ledgered proxy grant (aida grant advisor --for 8h) instead of AIDA_SESSION_ROLE=advisor prefixes
-description: 'Follow-up to STORY-1173 (proxy-approval ledger; its non-goal ''fork 2: the durable revocable grant object''). Observed 2026-09-18: under the operator''s standing ''you are my proxy'' mandate, a product-seat agent had to prefix every advisor-gated command (queue add, edit --mode, launching a drain, closing a spec) with AIDA_SESSION_ROLE=advisor for a whole day. The gate is right in principle, but an env var is invisible to the ledger and becomes a prefix nobody reads. Proposal: aida grant <role> --for <duration> --reason <text> [--scope batch:NAME|EPIC-N] writes a grant object (who, from whom, until when, scope) to the store; role checks accept a live grant as authority and every write made under it is ledgered with the grant id (reusing the STORY-1173 [aida:proxy-approval] marker); aida grant list / revoke; expiry is enforced by the check, not by memory. Acceptance: with a live grant, the advisor-gated commands succeed without the env var and their ledger entries name the grant; after expiry or revoke they fail with the same message as today; the env var keeps working (deprecation note) so scripts do not break; the grant is visible in aida status / awaiting.'
+description: |-
+  Operator decision, 2026-09-19 (narrows this spec; the split it depends on is STORY-1353):
+
+  The proxy seat is an independent proxy-HUMAN perspective, not a holder of advisor authority. Almost everything the env-var prefix was used for in the 2026-09-18/19 window was DISPATCH (246 queue writes: routing, rework briefs, requeues, wave launches), which STORY-1353 makes available to the product seat in its own right. This spec therefore shrinks to the genuine remainder: a time-boxed, ledgered grant for the DISPOSITIONAL acts only.
+
+  In scope after the narrowing:
+  - aida grant <role> --for <duration> --reason <text>, writing a grant object to the store; aida grant list; aida grant revoke.
+  - Role checks accept a live grant as authority for DISPOSITION only: edit --status across the approval boundary, edit --mode, promoting a finding, archiving.
+  - Every write made under a grant records the grant id alongside the actor, so the proxy-approval ledger entries the advisor has been writing by hand become derivable rather than authored.
+  - Expiry is enforced by the check, not by anyone remembering; an expired grant fails exactly as no grant does.
+
+  Explicitly OUT of scope, by the operator's standing decision (the fork the advisor declined to decide alone):
+  - No grant may ever cover an integrity floor: merging a supervised PR, clearing a merge-hold, overriding the independence rule, or shipping without a green required check. Those stay human. The evidence that this costs nothing: across the 2026-09-18/19 window the merge gate never reduced throughput — seven supervised PRs accumulated at the advisor's gate overnight while waves kept running, because a drain moves to the next spec rather than waiting on one.
+  - Dispatch is not granted here; it is not a grant-shaped problem (STORY-1353).
+
+  Remaining forks for the guided session, to be put to the operator there:
+  1. Who may ISSUE a grant: the human only, or may an advisor delegate a strictly narrower one? Bears on whether authority can propagate without the operator.
+  2. Scope granularity for v1: time-boxed only, or time plus an optional --scope batch:NAME / EPIC-N?
+  3. Behaviour on expiry mid-operation: refuse the next gated write immediately (in-flight writes complete), or a grace window?
+
+  Acceptance:
+  - A live grant lets a non-advisor session perform the dispositional acts listed above and nothing else; each such write carries the grant id in its ledger entry.
+  - An expired or revoked grant fails identically to no grant, with the same message.
+  - An attempt to use a grant for an integrity floor is refused naming the floor, regardless of the grant's terms; unit test per floor.
+  - aida grant list shows issuer, holder, reason, expiry and remaining time; revoke takes effect on the next check with no restart.
+  - The proxy-approval ledger entries STORY-1173 defines are derivable from grant id plus actor, with no hand-authored comment.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T17:03:00.455977735Z
+modified_at: 2026-09-19T17:03:28.065970451Z
 req_type: Story
 tags:
 - audit
