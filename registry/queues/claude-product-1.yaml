@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b6bf-7c91-70a3-86a2-af570fb16c29
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 1 on PR #1949 addressed by the product seat: both docs/plans hunks reverted to main (dated plans are frozen artifacts; the burndown-sketch hunk had turned a read-side aida list --tags filter into an invalid --add-tag). Only CLAUDE.md and the glossary template + generated page change now. Verify, push nothing if clean, and let the reviewer take round 2.'
+  added_at: 2026-09-19T04:45:39.372485967Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
