@@ -36,3 +36,11 @@
   added_at: 2026-09-19T16:36:58.731283461Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
+  position: 71000
+  added_by: role:implementer
+  note: 'round-1 reviewer prompt: enumerate every acceptance criterion with verification status + list ALL defects; later rounds unchanged; verdict carries the full list'
+  added_at: 2026-09-19T16:37:31.223423080Z
+  for_role: implementer
+  added_by_machine: imac
