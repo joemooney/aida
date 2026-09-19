@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T18:15:31.590422815Z
+modified_at: 2026-09-19T18:15:32.968914832Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -67,6 +67,17 @@ comments:
     Finding 2 is NOT actionable by the implementer and must not be treated as one: "measured on the next 20 specs, median rounds-to-merge drops" is a POST-DEPLOYMENT measurement. It cannot exist before the change ships and twenty specs flow through it, so blocking the merge on it is a deadlock by construction. The advisor has been asked to split it into a follow-up measurement task; do not attempt to satisfy it in this PR and do not delete it from the acceptance yourself.
   created_at: 2026-09-19T18:15:31.323664864Z
   modified_at: 2026-09-19T18:15:31.323664864Z
+- id: 01a0bae1-7464-7662-94f6-273cfe10dea8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1971):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. aida-cli-lib/src/queue_cmd.rs:8189-8198 classifies any comment containing REVIEW FINDINGS TO ADDRESS ( as a completed non-approving review. Canonical durable findings blocks are defined elsewhere with starts_with; an ordinary discussion or quoted example containing the marker therefore advances the round and suppresses the mandatory round-1 full-sweep prompt. Use the canonical prefix-at-start predicate and add a negative test for an embedded/quoted marker.
+    2. Acceptance criterion 'Measured on the next 20 specs: median rounds-to-merge drops; recorded on this spec as the acceptance evidence' is unverified: TASK-1291 contains no post-deployment 20-spec measurement or recorded median evidence yet.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T18:15:32.708880883Z
+  modified_at: 2026-09-19T18:15:32.708880883Z
 execution_mode: drain
 implementation_info:
   implemented: true
