@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T05:36:12.234843448Z
+modified_at: 2026-09-19T05:36:13.428676959Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -57,6 +57,16 @@ comments:
   content: 'CI red on PR #1959 (run 35424100583): resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup fails — the change calls std::env::current_exe() outside the resolver. BUG-1199 rule: every binary-path read goes through aida_exe_path() (the resolver honours the activated dev binary and the AIDA_EXE override). Use aida_exe_path() for the SHA/mtime pin, and if the pin needs the file''s identity beyond the path, derive it from that resolved path. Run cargo test -p aida-cli-lib resolve_aida_exe before pushing.'
   created_at: 2026-09-19T05:36:11.984043211Z
   modified_at: 2026-09-19T05:36:11.984043211Z
+- id: 01a0b82a-457c-7942-9bd3-bcaf9e7ce7a4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1959-advisor):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-1285 at 3b0a5f1f. Slice 1 shape is right: DrainLock records wave_id, binary_sha (AIDA_BUILD_GIT_SHA), binary_mtime_secs and canonical binary_path with serde defaults so old locks still parse; aida ps / dev status print the live wave and its binary; make build-fast runs a hidden `aida dev build-guard` that refuses to replace the pinned binary while its wave is live and, with AFTER_WAVE=1, parks on event_wait::wait_for_queue_drained (cursor starts at EOF so an old QueueDrained cannot release it; bails if the lock disappears without the event) — both tested. One defect blocks: dev_cmd::binary_change_conflicts(pinned, target, activation) returns true whenever activation is true, so `aida dev activate` is REFUSED in every shell while any wave is live (the test rebuild_refusal_decision_only_blocks_the_pinned_binary asserts exactly that). Activation only edits the calling shell's PATH; it replaces no file and cannot affect the wave's children. Required: activation is never refused (drop the activation branch; guard_binary_change is called only from build-guard, or from activate purely to PRINT the live-wave line), and --after-wave on activate is removed or documented as wait-then-activate; update the test and the CLAUDE.md sentence accordingly. Non-blocking: Makefile guard runs whichever `aida` is on PATH — a released 0.9.x prints the bootstrap note and proceeds, acceptable; dev status prints binary_mtime_secs as a raw epoch — render it as local time like the rest of the CLI.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T05:36:13.180070742Z
+  modified_at: 2026-09-19T05:36:13.180070742Z
 execution_mode: drive
 implementation_info:
   implemented: true
