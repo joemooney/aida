@@ -97,7 +97,7 @@ pub(crate) const EXPRESS_TIER_TAG: &str = "batch:express";
 ///
 /// The express tier (`batch:express`) is the inverse: it carries no
 /// short-circuit at all and its trust contract is that it NEVER silently
-/// downgrades its gate. When `express` is set, all three skips are forced off
+/// downgrades its gate. When `express` is set, all lifecycle skips are forced off
 /// regardless of any `lifecycle:*` tag also present on the spec.
 /// trace:STORY-442 | ai:codex
 // trace:TASK-907 | ai:claude
@@ -148,6 +148,8 @@ impl LifecycleSkip {
         // would otherwise downgrade the gate, so an express spec can never
         // silently ship under a reduced gate.
         if skip.express {
+            // trace:TASK-1289 | ai:codex
+            skip.no_preflight = false;
             skip.no_ci_wait = false;
             skip.no_review = false;
             skip.no_build = false;
@@ -6844,6 +6846,7 @@ mod tests {
         // Plain express → marked, nothing skipped.
         let skip = LifecycleSkip::from_tags([EXPRESS_TIER_TAG]);
         assert!(skip.express, "batch:express sets the express marker");
+        assert!(!skip.no_preflight);
         assert!(!skip.no_ci_wait);
         assert!(!skip.no_review);
         assert!(!skip.no_build);
@@ -6862,10 +6865,14 @@ mod tests {
             "lifecycle:trivial",
             EXPRESS_TIER_TAG,
             "lifecycle:no-review",
+            "lifecycle:no-preflight",
         ]);
         assert!(conflicting.express);
         assert!(
-            !conflicting.no_ci_wait && !conflicting.no_review && !conflicting.no_build,
+            !conflicting.no_preflight
+                && !conflicting.no_ci_wait
+                && !conflicting.no_review
+                && !conflicting.no_build,
             "express overrides any lifecycle:* short-circuit — full gate enforced"
         );
 
