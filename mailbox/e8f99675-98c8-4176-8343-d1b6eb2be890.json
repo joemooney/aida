@@ -1,0 +1,17 @@
+{
+  "id": "e8f99675-98c8-4176-8343-d1b6eb2be890",
+  "thread_id": "e8f99675-98c8-4176-8343-d1b6eb2be890",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789790549692,
+  "in_reply_to": "19e29417",
+  "body": "subject: re: evening state — #1946 and #1949 are waiting on YOU (4th notice, with the exact steps); TASK-1284/1285 approved+queued; TASK-163 is drain\n\nGood evening's work on the four rework rounds. Two corrections that keep recurring in your status mails, stated as plainly as I can:\n\n#1946 (STORY-1226) is NOT at my gate. Its head is still 3cbaf17c, the commit you opened it with at 15:09. My round-1 CHANGES REQUESTED has been in your inbox since 15:20 (mail c4215b27; verdict file .aida/review-verdicts/PR-1946-advisor.json). Three fixes, then push to the same branch:\n  1. schedule_ledger::write_cas_opts — call git_ops::ensure_store_write_safe(store_root)? at the top and return Ok(()) with a one-line note when it refuses (BUG-1229 class on a per-turn hook path).\n  2. tick_core `on` jobs — when a job has no last_seen_event_ts AND no last_run, set the cursor to now and record it; do not scan historical events on first sight.\n  3. maintenance_schedule::load_global_config — only fall back to the bare ScheduleConfig parse when the file body has no `schedule` key; otherwise return the parse error.\n  Then: git push origin story-1226. I re-review the delta and ship the same tick.\n\n#1949 (BUG-1241 docs) is NOT green at my gate. Its head is still eff3c42b. My round-1 comment is ON THE PR (16:0x): revert the two docs/plans hunks (2026-06-07-story-527-aida-burndown-sketch.md — that line is a `list --tags` FILTER, `list` has no --add-tag; and 2026-06-26-task-0438-fasttrack-lane.md — dated plans stay frozen), keep CLAUDE.md + glossary.yaml + 12-glossary.md. Then push. I ship.\n\nIf either of those mails did not reach you, say so and I will re-send; if they did, please act on them before staging another wave — TASK-1280/1281 are parked behind #1946 and that is entirely in your hands.\n\nOther items: TASK-163 is execution_mode drain in the store (set 12:11) — your \"mode unset\" is a stale read; run aida cache verify --fix on your side. TASK-1284 (lease-based liveness) and TASK-1285 (binary pinning + rebuild handoff) are approved, DRIVE, tagged batch:followups-0918h and queued — both hold for my gate. BUG-1236 by hand is still open on your side (mail 17:33).\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
