@@ -54,11 +54,17 @@ fn fully_headless_first_stale_base_attempts_auto_rebase() {
 }
 
 #[test]
-fn human_permitted_mode_does_not_auto_rebase() {
+fn reviewer_only_headless_mode_attempts_auto_rebase() {
     let driver = driver(Some(auto_complete::NoHumanMode::ReviewerOnly), false, false);
+    assert_eq!(driver.should_auto_rebase_stale_base(false), Ok(()));
+}
+
+#[test]
+fn interactive_mode_does_not_auto_rebase() {
+    let driver = driver(None, false, false);
     assert_eq!(
         driver.should_auto_rebase_stale_base(false),
-        Err("not-fully-headless")
+        Err("not-headless")
     );
 }
 
@@ -145,4 +151,31 @@ fn force_push_refusal_is_typed_and_not_retryable() {
         failure.kind.cause_slug()
     ));
     assert!(failure.reason.contains("git fetch origin topic"));
+}
+
+#[cfg(unix)]
+#[test]
+fn conflicting_rebase_is_typed_and_keeps_the_manual_recipe() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let fake_aida = tmp.path().join("aida");
+    std::fs::write(
+        &fake_aida,
+        "#!/bin/sh\necho 'rebase hit 1 conflict(s) — aborted, worktree cleaned' >&2\necho 'Error: rebase aborted due to conflicts' >&2\nexit 1\n",
+    )
+    .unwrap();
+    let mut perms = std::fs::metadata(&fake_aida).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(&fake_aida, perms).unwrap();
+
+    let mut driver = driver(Some(auto_complete::NoHumanMode::ReviewerOnly), false, false);
+    driver.aida_exe = fake_aida;
+    driver.project_root = tmp.path().to_path_buf();
+    let failure = driver.attempt_phase3_auto_rebase(1268).unwrap_err();
+
+    assert_eq!(failure.kind, auto_complete::FailureKind::StaleBaseConflict);
+    assert_eq!(failure.kind.cause_slug(), "stale-base-conflict");
+    assert!(failure.reason.contains("aida pr rebase 1268 --interactive"));
+    assert_eq!(driver.auto_rebase_events[0].outcome, "conflict");
 }

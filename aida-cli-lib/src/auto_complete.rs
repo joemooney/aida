@@ -486,6 +486,12 @@ pub(crate) enum FailureKind {
     /// retry (which would deterministically hit the same guard again).
     // trace:BUG-1218 | ai:codex
     StaleBaseRefused,
+    /// BUG-1268: the reviewer pre-flight attempted its one bounded stale-base
+    /// recovery, but the rebase conflicted. `aida pr rebase` aborts and removes
+    /// its disposable worktree before this is returned, so the PR branch is
+    /// unchanged and a human can follow the interactive recovery recipe.
+    // trace:BUG-1268 | ai:codex
+    StaleBaseConflict,
     /// The spawned work ran and reported failure — the phase-specific default.
     /// The hint points at the phase's normal "address it and retry" path.
     Failed,
@@ -532,6 +538,7 @@ impl FailureKind {
                 // trace:BUG-1063 | ai:codex
                 | Self::HeadlessWait
                 | Self::StaleBaseRefused
+                | Self::StaleBaseConflict
                 | Self::Failed
         )
     }
@@ -559,6 +566,7 @@ impl FailureKind {
             | Self::LaunchNoOutput => "environmental",
             Self::HeadlessWait => "headless-wait",
             Self::StaleBaseRefused => "stale-base-refused",
+            Self::StaleBaseConflict => "stale-base-conflict",
             Self::Failed => "tool-exit",
         }
     }
