@@ -1,0 +1,55 @@
+id: 01a0bb7e-cff5-7c50-b79a-f2b0e8dbac87
+spec_id: BUG-1290
+agreed_id: BUG-1290
+title: PhaseEntered is emitted twice per phase entry (412 extra of 2190), but the proposed dedup would also swallow the 121 legitimate retry re-entries
+description: |
+  PhaseEntered is emitted twice for the same phase entry, seconds apart, and the obvious dedup would destroy real signal. Both halves of that sentence are measured; the second half is the reason this spec exists rather than a one-line patch.
+
+  MEASURED 2026-09-19 across this repo's .aida/events.jsonl:
+
+    PhaseEntered events                                            2190
+    distinct (spec, run_uuid, slug, idx)                           1778
+    keys emitted more than once                                     371
+    extra emissions                                                 412   (19 percent of all PhaseEntered)
+
+    PhaseEntered immediately following an identical PhaseEntered    290
+      gap seconds   min 3   p50 5   p90 12   max 32
+    PhaseEntered immediately following a SpecRetried                121
+
+  THE DISTINCTION THAT MATTERS. The 290 are spurious: the same phase announced twice within a median of five seconds, with no event in between. The 121 are a real re-entry of the phase after a retry, and each is preceded by SpecRetried. A worked example, TASK-1201 run 01a08b17:
+
+    11:49:30  PhaseEntered reviewer idx 3
+    11:49:34  PhaseEntered reviewer idx 3      <- spurious, 4 s later
+    12:00:05  SpecRetried reviewer watchdog attempt 2
+    12:00:05  PhaseEntered reviewer idx 3      <- legitimate re-entry
+    12:00:16  PhaseEntered reviewer idx 3      <- spurious, 11 s later
+
+  Suppressing a repeated (spec, run_uuid, phase) at the emit site — the fix as it was proposed — would swallow the 12:00:05 event along with the other two. That event is the one a monitor most needs, because a phase re-entered four times on one run is the pathology BUG-1268 exists to describe. The cure would hide the disease.
+
+  PROPOSED, in order:
+  1. Find why a single phase entry emits twice within a few seconds. The concentration on the reviewer phase and the small fixed gap suggest two call sites announcing the same entry — likely the phase driver and the session launcher — rather than a race. Name the two sites on this spec before changing anything.
+  2. Remove the duplicate emission at its source, not by filtering downstream.
+  3. Carry the attempt number on PhaseEntered so a legitimate re-entry is distinguishable by VALUE rather than by whether a SpecRetried happens to sit next to it. Adjacency is a fragile contract; a consumer reading a filtered or partial feed cannot rely on it.
+
+  ACCEPTANCE
+  1. A phase entry emits exactly one PhaseEntered.
+  2. A retry re-entering the same phase still emits a PhaseEntered, carrying an attempt number greater than the previous one.
+  3. Replaying the current feed through the new rule preserves all 121 retry re-entries and removes the 290 spurious ones.
+  4. A test asserts both directions: no duplicate on a single entry, and a retry produces a second event with an incremented attempt.
+  5. Consumers are not asked to deduplicate; the docs state the feed is free of duplicate phase entries from this version on.
+
+  Reported by the aida-monitor project as "deduplicate at the emission site"; the recommendation is deliberately NOT followed as written, for the reason set out above.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:07:25.301380079Z
+modified_at: 2026-09-19T21:07:25.301380079Z
+req_type: Bug
+tags:
+- events
+- from:aida-monitor
+- monitor
+- observability
+- orchestrator
+- parent:EPIC-62
