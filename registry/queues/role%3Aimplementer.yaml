@@ -30,3 +30,11 @@
   added_at: 2026-09-18T23:41:23.522149729Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b75b-3dde-78b2-bab8-a7b50e522094
+  position: 33000
+  added_by: role:implementer
+  note: 'drive: lease-based liveness helper (pid + start time) used by drain lock probe, claim heartbeat, session reap, aida ps; lock format extended not renamed; same-pid-different-start test; pgrep guidance replaced in docs + discipline pack'
+  added_at: 2026-09-19T04:02:19.891551020Z
+  for_role: implementer
+  added_by_machine: imac
