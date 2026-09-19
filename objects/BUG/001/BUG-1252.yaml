@@ -1,0 +1,28 @@
+id: 01a0b806-8049-7d62-9105-1d5c62ccbef4
+spec_id: BUG-1252
+agreed_id: BUG-1252
+title: 'aida edit --tags must not silently drop structural tags: refuse when the replacement set removes parent:/batch:/lane/severity/lifecycle:/aida:* tags (with --force to override, ledgered), and aida doct'
+description: |-
+  Code half of BUG-1241 (the docs half merged as #1949 and the trailer completed that spec, so this is re-filed on its own). Incident 2026-09-18: batch tagging with `aida edit <id> --tags batch:NAME`, exactly as the old docs said, replaced the whole tag set on 13 specs and stripped their parent:EPIC-* links, drain-safe, lane and severity tags; epic rollups silently broke until the tags were restored from store history.
+
+  Fix:
+  1. `aida edit --tags <set>`: compute the tags the replacement would REMOVE; if any matches a structural family — parent:*, batch:*, lane:*, severity:*, lifecycle:*, aida:* — refuse with the dropped list and the fix (`--add-tag` / `--remove-tag`); `--force` (or `--replace-tags`) performs the replacement anyway and records "replaced tags, dropped: …" in the store commit subject. Headless callers get the same refusal (non-zero exit, machine-readable line under AIDA_AGENT_OUTPUT).
+  2. `aida doctor` check `parent-tag-drift`: a spec whose Parent relationship exists but whose parent:<ID> tag is missing (and the reverse — a parent:* tag with no relationship) is listed; `--heal` re-adds the tag from the relationship (relationship is the truth). The check must list the 13 ids from the incident on a fixture.
+  3. MCP parity: update_requirement's tags edit routes through the same guard (STORY-82 mirror rule).
+  Acceptance: unit tests for the refuse path (each structural family), the --force path with its commit subject, the headless refusal shape, the doctor check + --heal on a fixture; no change to --add-tag / --remove-tag.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T04:57:08.937913149Z
+modified_at: 2026-09-19T04:57:08.937913149Z
+req_type: Bug
+tags:
+- batch:followups-0918h
+- cli
+- data-loss
+- drain-safe
+- parent:EPIC-28
+- split-from:BUG-1241
+- tags
+execution_mode: drain
