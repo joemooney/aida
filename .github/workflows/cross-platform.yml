@@ -42,6 +42,53 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # TASK-1273: a real nightly GitLab lifecycle catches provider assumptions that
+  # mocked CLI output cannot: open MR -> wait for pipeline -> read review verdict
+  # -> merge through the Forge trait. The ignored Rust test owns cleanup. An
+  # absent credential or unreachable mirror skips this optional external probe;
+  # once reached, every lifecycle failure is a hard failure with a named phase.
+  # trace:TASK-1273 | ai:codex
+  gitlab-forge-smoke:
+    name: GitLab live forge smoke
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AIDA_GITLAB_LIVE_HOST: gitlab.joemooney.com
+      GITLAB_TOKEN: ${{ secrets.AIDA_GITLAB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check mirror availability and credentials
+        id: preflight
+        shell: bash
+        run: |
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "::notice::Skipping GitLab forge smoke: AIDA_GITLAB_TOKEN is not provisioned"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          elif ! curl --silent --show-error --fail --max-time 15 \
+            "https://${AIDA_GITLAB_LIVE_HOST}/-/readiness" >/dev/null; then
+            echo "::notice::Skipping GitLab forge smoke: mirror is unreachable"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Rust and GitLab CLI
+        if: steps.preflight.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glab
+          rustup toolchain install stable --profile minimal
+
+      - name: Authenticate GitLab CLI
+        if: steps.preflight.outputs.run == 'true'
+        run: glab auth login --hostname "$AIDA_GITLAB_LIVE_HOST" --token "$GITLAB_TOKEN"
+
+      - name: Run open-CI-review-merge lifecycle
+        if: steps.preflight.outputs.run == 'true'
+        run: cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

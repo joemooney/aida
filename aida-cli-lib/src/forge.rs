@@ -3451,10 +3451,11 @@ mod tests {
     //     cargo test -p aida-cli-lib gitlab_live_mr_round_trip -- --ignored --nocapture
     // Requires glab authed to that host with project-create rights. Skips (passes)
     // when the env var is unset, so it never runs in normal CI. Creates a throwaway
-    // project, opens an MR via GitLabForge::open_change, reads it via change_status,
-    // squash-merges via merge_change, asserts Merged, and deletes the project (even
-    // on panic). Codifies the manual validation that retired SPIKE-80's #1 risk.
-    // trace:TASK-1241 | ai:claude
+    // project, opens an MR via GitLabForge::open_change, waits for its real pipeline,
+    // records the review verdict, squash-merges via merge_change, asserts Merged,
+    // and deletes the project (even on panic). The nightly workflow supplies the
+    // host/token; local and ordinary PR test runs remain inert.
+    // trace:TASK-1241 trace:TASK-1273 | ai:claude+codex
     #[test]
     #[ignore]
     fn gitlab_live_mr_round_trip() {
@@ -3552,6 +3553,11 @@ mod tests {
         );
         git(&repo, &["checkout", "-b", "live-round-trip"]);
         std::fs::write(repo.join("probe.txt"), "live forge round-trip").unwrap();
+        std::fs::write(
+            repo.join(".gitlab-ci.yml"),
+            "forge-smoke:\n  script:\n    - test -f probe.txt\n",
+        )
+        .unwrap();
         git(&repo, &["add", "-A"]);
         git(
             &repo,
@@ -3597,7 +3603,45 @@ mod tests {
             "MR should be open pre-merge"
         );
 
+        // TASK-1273: name each phase in the output so a nightly failure points
+        // directly at the broken Forge method. This is deliberately the trait
+        // call, not a parallel `glab` implementation.
+        eprintln!("forge-smoke phase=ci-registration mr={}", cr.id);
+        let mut registration = forge
+            .checks_registered(&cr)
+            .expect("phase ci-registration: checks_registered failed");
+        for _ in 0..12 {
+            if registration != CheckRegistration::NotYet {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            registration = forge
+                .checks_registered(&cr)
+                .expect("phase ci-registration: checks_registered failed");
+        }
+        assert_eq!(
+            registration,
+            CheckRegistration::Registered,
+            "phase ci-registration: pipeline did not register"
+        );
+
+        eprintln!("forge-smoke phase=ci-wait branch={}", cr.branch);
+        let ci = forge.watch_ci(&cr).expect("phase ci-wait: watch_ci failed");
+        assert_eq!(
+            ci,
+            CiState::Success,
+            "phase ci-verdict: pipeline was not green"
+        );
+
+        eprintln!("forge-smoke phase=review-verdict mr={}", cr.id);
+        let mut review_sink = crate::network_retry::StderrSink;
+        let review = forge
+            .change_reviews(cr.id, &mut review_sink)
+            .expect("phase review-verdict: change_reviews failed");
+        eprintln!("forge-smoke review={:?}", review.decision);
+
         // merge_change — the never-live-validated path
+        eprintln!("forge-smoke phase=merge mr={}", cr.id);
         let mut sink = crate::network_retry::StderrSink;
         forge
             .merge_change(
