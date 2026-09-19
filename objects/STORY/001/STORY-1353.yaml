@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:02:54.706318011Z
-modified_at: 2026-09-19T17:11:56.519513735Z
+modified_at: 2026-09-19T17:11:57.998128163Z
 req_type: Story
 tags:
 - authority
@@ -52,4 +52,29 @@ relationships:
 - rel_type: Child
   target_id: 01a0ab07-332f-7bc0-9c56-10307b5ced35
   created_at: 2026-09-19T17:02:56.514806732Z
+comments:
+- id: 01a0baa7-3f2e-74a3-8894-82b4ada22ba3
+  author: joe
+  content: |-
+    [advisor:groom] Approved, high, DRIVE (merge at the advisor gate — this REDRAWS an authority boundary, and the failure mode of getting it wrong is a protection silently removed).
+
+    I VERIFIED THE LOAD-BEARING CLAIM rather than accepting it, and it holds exactly:
+    - for_target_requires_dispatch_authority exists (lib.rs:43580), is called from queue_cmd.rs:2793 and mcp.rs:3757, and at that call site is paired with `&& !has_advisor_authority()`. So the system does name dispatch as its own concept and then gate it behind the approval role.
+    - Disposition is already separable: status_requires_advisor_authority / status_advance_requires_advisor_authority are distinct predicates, single-sourced in aida_core::lifecycle.
+    - The audit surface is 31 has_advisor_authority call sites outside tests. That is a reviewable diff, not a rewrite.
+    The operator's reframing is right on the merits too, and my own use corroborates it: what I used the advisor seat for splits cleanly into dispatch (queue adds, requeues, dequeues) and disposition (status and mode edits). Only the second is judgement.
+
+    THE INVARIANT THIS MUST NOT BREAK, and the reason it is drive: dispatch must never become a path to executing UNDISPOSED work. Today the boundary is load-bearing in the other direction too — if a seat can route work without advisor authority, then the only thing standing between a Draft spec and an implementer is the pickup gate. I checked: aida zen on a draft refuses and surfaces a pending-approval brief to the advisor (zen_surface_to_advisor), but I did NOT find the equivalent status check on the BATCH-DRAIN path in queue_drain_pickup_policy, whose refusals are about release tags, execution mode, NeedsAttention, terminal status and BlockedBy edges. So:
+    ACCEPTANCE ADDITION (mine): the diff must demonstrate, with a test, that a Draft (or otherwise undisposed) spec sitting on the queue with a batch tag is NOT picked up by aida queue work --batch — and if that guard does not exist today, this story adds it. Loosening dispatch without that check is the one way this change could quietly break ADR-3.
+
+    SCOPE GUARDS:
+    1. Default-deny on ambiguity. Any has_advisor_authority call site the audit cannot confidently classify as dispatch STAYS advisor and is listed in the PR body for my ruling — do not reclassify to unblock yourself. I would rather rule on ten leftovers than discover one silent loosening.
+    2. The three-way split must be visible in the code, not just the docs: a named predicate per authority (dispatch / disposition / integrity floor), so the next reader cannot re-conflate them by accident. That is what made this bug findable in the first place.
+    3. INTEGRITY FLOORS ARE NOT IN SCOPE AND ARE NOT GRANTABLE — required CI green before merge, one merger at a time, single drain per repo, and no one merges their own code. The operator's standing answer, recorded on STORY-1217, is that these stay human-only; this story must not touch them, and the audit should mark any call site that guards one so it is visibly excluded.
+    4. Ledger every dispatch act with the acting seat as today. Separating authority must not cost attribution.
+
+    Sequencing: this lands BEFORE STORY-1217, which is now correctly blocked on it — the grant object should only ever have to cover disposition, and its size depends on this split being made first.
+  created_at: 2026-09-19T17:11:57.998128163Z
+  modified_at: 2026-09-19T17:11:57.998128163Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
