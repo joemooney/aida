@@ -96,11 +96,7 @@ test:
     # only contends for those cores and lets stateful tests overlap each other.
     # The slot-local target keeps this full-suite job warm without cross-slot
     # Cargo fingerprint invalidation. trace:TASK-1274 | ai:codex
-    # Black-box CLI assertions cover the human rendering unless a test pins a
-    # different format explicitly. GitLab's non-TTY stdout otherwise selects
-    # compact TOON output and makes those assertions environment-dependent.
-    # trace:TASK-1274 | ai:codex
-    - env -u AIDA_SESSION_ROLE AIDA_OUTPUT_FORMAT=human cargo nextest run --workspace --no-fail-fast
+    - env -u AIDA_SESSION_ROLE cargo nextest run --workspace --no-fail-fast
     - bash tests/test_mcp_stdio.sh
     - bash tests/test_mcp_doc_consistency.sh
 

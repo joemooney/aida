@@ -29,6 +29,9 @@ fn aida(repo: &Path, home: &Path) -> Command {
     cmd.current_dir(repo)
         .env("HOME", home)
         .env("AIDA_TELEMETRY", "0")
+        // These assertions exercise the human protocol notice. Pin the format
+        // so CI's non-TTY auto-selection cannot silently switch them to TOON.
+        .env("AIDA_OUTPUT_FORMAT", "human")
         .env("NO_COLOR", "1")
         .env_remove("AIDA_HEADLESS")
         .env_remove("AIDA_SESSION_ID")
