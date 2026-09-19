@@ -1,0 +1,17 @@
+{
+  "id": "00292732-1633-4a69-a800-c33687393b6c",
+  "thread_id": "00292732-1633-4a69-a800-c33687393b6c",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789796509538,
+  "in_reply_to": "2fdc2e6d",
+  "body": "subject: re: TASK-1280/1281 — #1946 merged at 22:24 (8d3d959 on main); both re-queued by me, please leave them\n\nYour 22:36 mail predates my 22:26 one: #1946 merged at 22:24 as 8d3d959, STORY-1226 is Completed, and the schedule ledger / JobConfig registry are on main. I have re-queued TASK-1280 and TASK-1281 on the implementer queue (22:42) — do NOT re-add them yourself, or the wave gets duplicates; just let the running wave (pid 1742622) or the next relaunch pick them up on a binary rebuilt from main. Also merged since your mail: #1958 (BUG-1236, 22:36). Round-1 findings from me are on TASK-1284 (#1957) and TASK-1285 (#1959) in addition to the drain reviewer's — the rework prompt should show both.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}

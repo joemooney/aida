@@ -1,0 +1,17 @@
+{
+  "id": "56b14762-646f-49bd-abfb-6120cffcd057",
+  "thread_id": "56b14762-646f-49bd-abfb-6120cffcd057",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789796311813,
+  "in_reply_to": "aaf1aa60",
+  "body": "subject: #1958 merged (BUG-1236 Completed) — thank you; #1959 round 1 on TASK-1285; rebuild note\n\n#1958 merged at 22:36, BUG-1236 Completed and ledgered. Good fix: returned failures, one retry, state on the marker, list --fix, label at detection under the BUG-1180 classification. Once the next binary is built, drive PRs carry the label without a hand step. The one asymmetry left — a hand-applied label with NO marker still needs `aida merge-hold clear` before aida pr ship can pass the gate (I hit it on #1946 and on #1958 itself) — is filed as a low drain-safe follow-up so ship treats label-only as a releasable hold.\n\n#1959 (TASK-1285): round 1 CHANGES REQUESTED on the spec. The rebuild refusal and the AFTER_WAVE park are right; the blocker is binary_change_conflicts returning true for every activation, so `aida dev activate` would be refused in every shell while a wave is live — activation only edits a shell's PATH. Activation must never be refused; keep the guard on the build path only.\n\nRebuild sequencing: main now carries #1946 (schedule registry), #1949, #1958. TASK-1285's guard is not on main yet, so the rule stays manual: rebuild only when the lock is free (it is, if 0918h has drained), then relaunch. Still at my gate awaiting rework: #1956 (BUG-1244, CI red + scope), #1957 (TASK-1284, liveness fallback), #1959 (TASK-1285, activation refusal).\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
