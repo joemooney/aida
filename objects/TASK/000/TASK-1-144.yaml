@@ -13,9 +13,16 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T14:01:36.255012638Z
-modified_at: 2026-09-19T14:06:35.077625827Z
+modified_at: 2026-09-19T14:06:47.195596213Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
 - severity:minor
+comments:
+- id: 01a0b9fd-b59b-78d1-97c0-7f31bacd285b
+  author: joe
+  content: 'Promoted by the product seat with live corroboration from 2026-09-18/19: without reviewed_sha on a PR-keyed verdict I could not tell, from the verdict file alone, whether a CHANGES REQUESTED covered the head I had just pushed or a stale one. Concrete instances: PR #1948''s round-2 verdict was written three minutes after the advisor merged an earlier head; #1953/#1944 verdicts were read against branches that had since been rebased; and twice I reported ''CI green'' for a head the verdict did not cover. recorded_at plus reviewed_sha turns ''is this verdict current?'' into a one-line check for both seats.'
+  created_at: 2026-09-19T14:06:47.195596213Z
+  modified_at: 2026-09-19T14:06:47.195596213Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
