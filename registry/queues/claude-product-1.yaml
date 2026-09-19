@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b6e4-4406-75b3-bd4b-8edb17119ec9
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 2 on PR #1953: TASK-1283: aida-cli-lib/src/queue_cmd.rs adds lease-file deletion to queue done. Remove that production behavior from this test-only PR and exercise an existing lease-release path, or move the lifecycle behavior change to a separately approved requirement with its own acceptance and regression coverage.  Concretely: revert the lease-file deletion added to queue done in queue_cmd.rs; in the lifecycle test, release the lease through the existing path (aida session end <id> / the lease-release helper that queue done already calls) and assert the notice line disappears after that; keep the round-1 command-level tests. If lease deletion on queue done is wanted, file it as its own spec — do not ship it here.'
+  added_at: 2026-09-19T01:45:07.371611739Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
