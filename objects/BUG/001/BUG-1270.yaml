@@ -1,0 +1,32 @@
+id: 01a0ba5d-02dd-75b1-8aea-f669eb002d18
+spec_id: BUG-1270
+agreed_id: BUG-1270
+title: Session launcher silently forks <branch>-work when the local branch has diverged from its remote, stranding the round's commits off the PR branch — fast-forward or refuse with the realign command inst
+description: |-
+  Observed 2026-09-19 on BUG-1265 / PR #1966, reported by the product seat and recorded here as the substrate half of the fix.
+
+  What happened: the PR branch bug-1265 was rebased and force-pushed to origin, leaving the LOCAL bug-1265 at its pre-rebase commit. The next implementer pickup found the local branch diverged from origin, declined to check it out, and silently created a SIDE branch bug-1265-work instead. Round 2's commit (459400cdc9) landed there, off the PR branch. Phase 2 then correctly refused to push or tear down a worktree on a branch it was not driving, shelved tool-exit twice and filed a punt. The refusal was right; the silent fork that caused it was not. Recovery took a human-driven fast-forward, a local realign, a session end and a worktree/side-branch removal — no code change, pure lost time, and the round's work was one mistake away from being abandoned on a branch nobody would look at.
+
+  Fix (substrate-as-bouncer): when a session/worktree launcher is about to create a worktree for a branch that has an open PR, and the local branch has diverged from its remote:
+  1. If the local branch can fast-forward to the remote, do it and say so.
+  2. Otherwise REFUSE with the exact realign command (git fetch origin <branch> && git branch -f <branch> origin/<branch>, or the aida verb if one exists) and the reason — never silently fork <branch>-work.
+  3. Only fall back to a side branch when the caller explicitly asks for one.
+  A side branch is defensible for ad-hoc work; for a branch that backs an open PR it is never what the caller wants, because the round's commits must land where the PR points.
+
+  Acceptance: with a local branch behind its remote and an open PR, the launcher fast-forwards and reports it; with a genuinely diverged local branch, it refuses naming the realign command and creates no <branch>-work; an explicit side-branch request still works; unit test on the pure decision (behind / diverged / equal / no-PR) and a fixture test that no -work branch is created on the PR path.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T15:50:52.893240707Z
+modified_at: 2026-09-19T15:50:52.893240707Z
+req_type: Bug
+tags:
+- batch:followups-0918h
+- drain-safe
+- orchestrator
+- papercut
+- parent:EPIC-28
+- session
+- worktree
+execution_mode: drain
