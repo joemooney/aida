@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b5dd-93e3-7382-bb96-c99e4a8014af
-  position: 0
-  added_by: claude-product-1
-  note: 'Reviewer round 1 on PR #1968: TASK-163: handle_why checks Completed/Rejected and returns before live_drain_spec; during the expected Done review/merge phases, aida why reports closed instead of the live drain phase and orchestrator PID. Move or integrate the live-drain check ahead of terminal handling and add an end-to-end regression for the Done + live phase-3/4 case.  The finding matters because Done is precisely the state a spec sits in during phases 3-6 (review, merge, pull, build) — the window where someone is most likely to ask ''is this still being worked?''. Concretely: in handle_why, consult live_drain_spec BEFORE the Completed/Rejected/Done terminal short-circuit, and when a live drain owns the spec report the phase and orchestrator pid instead of the closed line; keep the terminal line for a spec with no live drain. Regression test: spec Done + a live drain record in phase 3 or 4 → aida why names the phase and pid, not ''closed''.'
-  added_at: 2026-09-19T16:04:09.199439501Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
