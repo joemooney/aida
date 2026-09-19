@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T20:51:12.872457642Z
-modified_at: 2026-09-19T20:51:22.102102300Z
+modified_at: 2026-09-19T22:21:48.043870618Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -42,4 +42,24 @@ relationships:
   target_id: 01a0b9f8-f6ff-7002-8921-db993bc1a347
   created_at: 2026-09-19T20:51:22.102096912Z
   created_by: joe
+comments:
+- id: 01a0bbc2-e88b-70d3-b57b-0482a48f194d
+  author: joe
+  content: |-
+    [advisor] LIVE CONFIRMATION 2026-09-19 ~15:11, and the workaround passed its first real test. Two separate findings, one good and one that narrows the remaining gap.
+
+    1. THE OOM CLASS IS CONFIRMED BY EVENT, NOT BY ARGUMENT. The host hit memory pressure and the harness killed the launcher; the drain died with it. setsid did not save it, and was never going to: setsid protects against a process-group teardown, which is what happened this morning, and an out-of-memory sweep reaps processes independently rather than as a group. So the two failures look identical from the substrate and have different causes, and only one of them has a workaround. That is the argument for making the lease survive the launcher rather than making the launcher harder to kill.
+
+    2. --steal RECLAIMED CLEANLY. The restarted launcher carried --steal and the reclaim behaved exactly as hoped:
+
+      lease 01a0bbbe   scope TASK-1274   branch task-1274-work   worktree /home/joe/ai/aida-task1274
+
+    Same branch, same worktree, no task-1274-work-work fork. The dormant lease from the killed run was taken over rather than sidestepped, and the implementer resumed on the existing commit. Verified live: the headless log for the new lease id was being written continuously ten minutes after the restart, with the implementer working the actual problem (shared Cargo target directory across two runner slots invalidating fingerprints). This is the case the fork would have broken, and it did not break.
+
+    3. ONE ODD EVENT WORTH A SECOND LOOK, non-blocking. A PuntFiled fired at 22:17:08, three seconds after PhaseEntered implementer. Three seconds is not enough for an implementer to have done work and reached a design fork. No punt file was written under .aida/punts/, no finding was raised, and the implementer then ran productively for the following ten minutes. So whatever filed it resolved or was superseded without leaving a record. Not worth chasing on its own, but if a PuntFiled that leaves no punt artifact turns out to be reproducible on resume, it would make punt-rate telemetry wrong in the same direction as BUG-1286 makes terminal-event telemetry wrong. Noting it here rather than filing, pending a second sighting.
+
+    The remaining gap after this evidence is narrower than it was this morning: lease reclaim works, so what is left is whether a lease should survive its launcher at all, rather than whether a restarted launcher can pick one up.
+  created_at: 2026-09-19T22:21:48.043870618Z
+  modified_at: 2026-09-19T22:21:48.043870618Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
