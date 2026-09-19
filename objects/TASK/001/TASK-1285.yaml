@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T10:51:10.932087151Z
+modified_at: 2026-09-19T10:51:12.468949748Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -92,6 +92,11 @@ comments:
   created_at: 2026-09-19T10:41:04.005732926Z
   modified_at: 2026-09-19T10:41:04.005732926Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b94a-a5d3-7ed0-9358-67471cf027a2
+  author: joe
+  content: 'CI red on PR #1959 (run 35438062466): the CLI-manual drift guard (docs/cli/verify-manual.py) fails — a new command or flag from this PR has no manual entry:  . Add the entry for every new aida dev / wave-pin surface (flags such as --after-wave) to the matching chapter under docs/cli/ following the existing entry shape (no SPEC-IDs in the manual), run python3 docs/cli/verify-manual.py until it reports OK, then push. The code itself passed tests and the resolver guard.'
+  created_at: 2026-09-19T10:51:12.211818472Z
+  modified_at: 2026-09-19T10:51:12.211818472Z
 execution_mode: drive
 implementation_info:
   implemented: true
