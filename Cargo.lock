@@ -50,6 +50,7 @@ dependencies = [
  "colored",
  "crossterm",
  "dirs",
+ "fs2",
  "hostname",
  "inquire",
  "libc",

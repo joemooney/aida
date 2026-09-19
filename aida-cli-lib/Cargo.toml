@@ -36,6 +36,7 @@ chrono = { workspace = true }
 regex = { workspace = true }
 sha2 = "0.10"
 dirs = { workspace = true }
+fs2 = { workspace = true }
 tokio = { workspace = true }
 hostname = "0.4"
 toml = { workspace = true }

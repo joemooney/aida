@@ -43,6 +43,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Local, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
@@ -555,6 +556,14 @@ fn tick(
     hook: bool,
     backend: Option<&aida_core::CachedGitBackend>,
 ) -> Result<Vec<String>> {
+    // Hooks from two sessions can arrive together. Only one may inspect and
+    // advance schedule cursors at a time; a hook never waits on its peer.
+    // trace:TASK-1281 | ai:codex
+    let Some(_tick_lock) = try_tick_lock(project_root)? else {
+        return Ok(vec![
+            "schedule tick: another tick is already running".to_string()
+        ]);
+    };
     let Some(config) = load_registry(project_root)? else {
         return Ok(vec![]);
     };
@@ -736,6 +745,7 @@ where
             }
         }
 
+        let mut fired_condition = false;
         if let (Some(expr), Some(snap)) = (&task.when, snap.as_ref()) {
             let is_true = match schedule_predicate::eval(expr, snap) {
                 Ok(v) => v,
@@ -744,12 +754,17 @@ where
                     false
                 }
             };
-            let mut transition = EpisodeTransition::Unchanged;
-            schedule_ledger::write_cas_opts(&store, &task.name, !hook, |l| {
-                transition = schedule_ledger::apply_condition(l, is_true, now);
-            })?;
+            let mut prospective = ledger
+                .cloned()
+                .unwrap_or_else(|| schedule_ledger::JobLedger::new(&task.name));
+            let transition = schedule_ledger::apply_condition(&mut prospective, is_true, now);
             if transition == EpisodeTransition::Fired {
+                fired_condition = true;
                 triggers.push(Trigger::Condition);
+            } else if transition == EpisodeTransition::Cleared {
+                schedule_ledger::write_cas_opts(&store, &task.name, !hook, |l| {
+                    schedule_ledger::apply_condition(l, false, now);
+                })?;
             }
         }
 
@@ -773,7 +788,15 @@ where
                     stderr: e.to_string(),
                 });
                 touched = true;
-                record_outcome(project_root, state, task, now, &outcome, !hook)?;
+                record_outcome(
+                    project_root,
+                    state,
+                    task,
+                    now,
+                    &outcome,
+                    !hook,
+                    fired_condition,
+                );
                 lines.push(format!(
                     "schedule tick: {} {}",
                     task.name,
@@ -789,6 +812,9 @@ where
                 }
                 let seat_label = task.seats.join(",");
                 schedule_ledger::write_cas_opts(&store, &task.name, !hook, |l| {
+                    if fired_condition {
+                        schedule_ledger::apply_condition(l, true, now);
+                    }
                     l.due_since = Some(now);
                     l.due_reason = Some(reason.clone());
                 })?;
@@ -837,6 +863,9 @@ where
     let mut ran_any = false;
     let mut lines = Vec::new();
     for task in &config.tasks {
+        if task.kind == JobKind::FiresTask {
+            continue;
+        }
         if only.is_some_and(|name| task.name != name) {
             continue;
         }
@@ -854,7 +883,7 @@ where
                     stderr: e.to_string(),
                 });
                 ran_any = true;
-                record_outcome(project_root, state, task, now, &outcome, true)?;
+                record_outcome(project_root, state, task, now, &outcome, true, false);
                 lines.push(format!(
                     "schedule run: {} {}",
                     task.name,
@@ -871,13 +900,7 @@ where
                     task.name
                 ));
             }
-            JobKind::FiresTask => {
-                lines.push(format!(
-                    "schedule run: {} is a legacy cadence task — fired by `aida pull` \
-                     (`aida advisor schedule fire {}` to force it)",
-                    task.name, task.name
-                ));
-            }
+            JobKind::FiresTask => unreachable!("legacy tasks are excluded by load_registry"),
         }
     }
     if ran_any {
@@ -1564,14 +1587,17 @@ fn record_outcome(
     now: DateTime<Utc>,
     outcome: &TaskOutcome,
     push: bool,
-) -> Result<()> {
+    fired_condition: bool,
+) {
     let entry = state.tasks.entry(task.name.clone()).or_default();
     entry.last_run_at = Some(now);
     entry.last_status = Some(outcome.status);
     if outcome.status == 0 {
         entry.last_success_at = Some(now);
     } else {
-        append_log(project_root, task, outcome)?;
+        if let Err(err) = append_log(project_root, task, outcome) {
+            eprintln!("warning: could not append schedule failure log: {err}");
+        }
         events::emit(
             project_root,
             &Event::new(
@@ -1601,12 +1627,38 @@ fn record_outcome(
             .filter(|s| !s.is_empty()),
         vendor: Some("tick".to_string()),
     };
-    schedule_ledger::write_cas_opts(&store_root(project_root), &task.name, push, |l| {
-        l.last_run = Some(now);
-        l.last_by = Some(by.clone());
-        l.result = Some(result.clone());
-    })?;
-    Ok(())
+    let ledger_result =
+        schedule_ledger::write_cas_opts(&store_root(project_root), &task.name, push, |l| {
+            if fired_condition {
+                schedule_ledger::apply_condition(l, true, now);
+            }
+            l.last_run = Some(now);
+            l.last_by = Some(by.clone());
+            l.result = Some(result.clone());
+        });
+    if let Err(err) = ledger_result {
+        eprintln!(
+            "warning: schedule ledger for '{}' was not written: {err}; local run state was retained",
+            task.name
+        );
+    }
+}
+
+fn try_tick_lock(project_root: &Path) -> Result<Option<std::fs::File>> {
+    use fs2::FileExt;
+
+    let dir = project_root.join(".aida");
+    std::fs::create_dir_all(&dir)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .open(dir.join("schedule-tick.lock"))?;
+    match file.try_lock_exclusive() {
+        Ok(()) => Ok(Some(file)),
+        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+        Err(err) => Err(err.into()),
+    }
 }
 
 fn state_path(project_root: &Path) -> PathBuf {
@@ -1861,6 +1913,71 @@ mod tests {
             ledger.last_by.as_ref().map(|b| b.seat.as_str()),
             Some("substrate")
         );
+    }
+
+    // trace:TASK-1281 | ai:codex
+    #[test]
+    fn ledger_failure_does_not_lose_local_run_suppression() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(store_root(tmp.path()), "not a directory").unwrap();
+        let mut state = ScheduleState::default();
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let out = tick_with_executor(
+            tmp.path(),
+            config(vec![task("cache", "1h", "cache verify")]),
+            &mut state,
+            at(12),
+            false,
+            ok_exec(Rc::clone(&seen)),
+        )
+        .unwrap();
+        assert_eq!(out, vec!["schedule tick: cache ok"]);
+        assert_eq!(state.tasks["cache"].last_run_at, Some(at(12)));
+        assert_eq!(
+            load_state(tmp.path()).unwrap().tasks["cache"].last_run_at,
+            Some(at(12))
+        );
+    }
+
+    // trace:TASK-1281 | ai:codex
+    #[test]
+    fn legacy_fires_task_has_no_run_hint() {
+        let tmp = tempfile::tempdir().unwrap();
+        let legacy = Task {
+            name: "legacy".into(),
+            kind: JobKind::FiresTask,
+            seats: vec!["*".into()],
+            command: None,
+            prompt: None,
+            interval: Some(Duration::hours(1)),
+            on: Vec::new(),
+            when: None,
+            when_raw: None,
+            quiet_hours: None,
+            enabled: true,
+            source: JobSource::Project,
+        };
+        let mut state = ScheduleState::default();
+        let lines = run_with_executor(
+            tmp.path(),
+            config(vec![legacy]),
+            &mut state,
+            at(12),
+            Some("legacy"),
+            |_root, _command| unreachable!(),
+        )
+        .unwrap();
+        assert!(lines.is_empty());
+    }
+
+    // trace:TASK-1281 | ai:codex
+    #[test]
+    fn tick_lock_is_nonblocking_and_reusable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let first = try_tick_lock(tmp.path()).unwrap().unwrap();
+        assert!(try_tick_lock(tmp.path()).unwrap().is_none());
+        drop(first);
+        assert!(try_tick_lock(tmp.path()).unwrap().is_some());
     }
 
     #[test]
@@ -2343,6 +2460,111 @@ every = "1h"
             vec!["schedule tick: mailbox-latency ok"]
         );
         assert_eq!(seen.borrow().len(), 2);
+    }
+
+    // trace:TASK-1281 | ai:codex
+    #[test]
+    fn substrate_when_firing_writes_one_ledger_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        std::fs::create_dir_all(&store).unwrap();
+        let git = |args: &[&str]| {
+            let output = ProcessCommand::new("git")
+                .arg("-C")
+                .arg(&store)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        };
+        git(&["init", "-q", "-b", "aida-store"]);
+        git(&["config", "user.email", "test@example.com"]);
+        git(&["config", "user.name", "Schedule Test"]);
+
+        let mut job = task("mailbox-latency", "1h", "notify check");
+        job.interval = None;
+        job.when = Some(schedule_predicate::parse("mail.oldest_unread_age > 15m").unwrap());
+        job.when_raw = Some("mail.oldest_unread_age > 15m".into());
+        let mut state = ScheduleState::default();
+        tick_core(
+            tmp.path(),
+            config(vec![job]),
+            &mut state,
+            at(12),
+            false,
+            |_root, _command| {
+                Ok(TaskOutcome {
+                    status: 0,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            },
+            |_| Snapshot {
+                mail_oldest_unread_age_secs: 20 * 60,
+                ..Default::default()
+            },
+            &[],
+        )
+        .unwrap();
+
+        assert_eq!(git(&["rev-list", "--count", "HEAD"]), "1");
+        let ledger = schedule_ledger::load(&store, "mailbox-latency").unwrap();
+        assert_eq!(ledger.result.as_deref(), Some("ok"));
+        assert_eq!(ledger.episode.unwrap().fired_at, Some(at(12)));
+    }
+
+    // trace:TASK-1281 | ai:codex
+    #[test]
+    fn seat_when_stays_debounced_after_done_clears_due() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = store_root(tmp.path());
+        let mut state = ScheduleState::default();
+        let mut job = seat_task("mailbox-triage", &["advisor"], None, &[]);
+        job.when = Some(schedule_predicate::parse("mail.oldest_unread_age > 15m").unwrap());
+        job.when_raw = Some("mail.oldest_unread_age > 15m".into());
+        let run = |state: &mut ScheduleState, now| {
+            tick_core(
+                tmp.path(),
+                config(vec![job.clone()]),
+                state,
+                now,
+                false,
+                |_root, _command| panic!("seat jobs must never execute"),
+                |_| Snapshot {
+                    mail_oldest_unread_age_secs: 20 * 60,
+                    ..Default::default()
+                },
+                &[],
+            )
+            .unwrap()
+        };
+
+        assert_eq!(
+            run(&mut state, at(10)),
+            vec!["schedule tick: mailbox-triage due (when) → seat advisor"]
+        );
+        let ledger = schedule_ledger::load(&store, "mailbox-triage").unwrap();
+        assert!(ledger.episode.as_ref().is_some_and(|ep| ep.is_open()));
+
+        // Simulate `aida schedule done`: it clears delivery state, but the
+        // condition episode remains open until the predicate turns false.
+        schedule_ledger::write_cas(&store, "mailbox-triage", |l| {
+            l.last_run = Some(at(11));
+            l.result = Some("done".into());
+            l.due_since = None;
+            l.due_reason = None;
+        })
+        .unwrap();
+
+        assert!(run(&mut state, at(12)).is_empty());
+        let ledger = schedule_ledger::load(&store, "mailbox-triage").unwrap();
+        assert!(ledger.due_since.is_none());
+        assert!(ledger.episode.as_ref().is_some_and(|ep| ep.is_open()));
     }
 
     // trace:STORY-1226 | ai:claude
