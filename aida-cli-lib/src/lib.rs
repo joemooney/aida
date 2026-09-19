@@ -1014,16 +1014,15 @@ mod bug_1195_review_story_lookup_tests {
 
 #[cfg(test)]
 mod bug_1173_detection_hold_tests {
-    // BUG-1173 regression guard (source assertion — this repo's idiom for "don't re-add X",
-    // cf. check-removed-flags.sh). PR-detection (`set_pr_number`) must stamp the LOCAL
-    // merge-hold marker (which blocks the concurrent-merger race) but must NOT sync the
-    // aida:merge-hold LABEL: applying the label at detection reddens the merge-hold-gate
-    // required check while phase-2 CI-watch runs, which the drain reads as a CI failure and
-    // self-shelves every DRIVE drain (the BUG-1168 #1864 interaction; CI-watch has no gate
-    // exclusion). The label is applied post-CI by record_merge_supervision_hold.
-    // trace:BUG-1173 | ai:claude
+    // BUG-1236 (supersedes the BUG-1173 guard this module held): set_pr_number stamps the
+    // marker AND mirrors the aida:merge-hold LABEL at PR-detection. The early
+    // label is safe since BUG-1180 / ADR-39 (the CI watch and `aida pr ship`
+    // classify a red merge-hold-gate as the hold when the marker exists), and
+    // deferring it let three supervised PRs go unlabelled while the required
+    // check read pass. A sync failure must be SURFACED (the `--fix` hint), never
+    // swallowed. trace:BUG-1173 trace:BUG-1236 | ai:claude
     #[test]
-    fn set_pr_number_stamps_marker_but_not_label() {
+    fn set_pr_number_stamps_marker_and_syncs_label_surfacing_failure() {
         let src = include_str!("lib.rs");
         // build the needle from split pieces so this test's own source cannot self-match
         // (the test module sits before the real function in the file).
@@ -1041,10 +1040,13 @@ mod bug_1173_detection_hold_tests {
             "set_pr_number must stamp the local merge-hold marker at PR-detection"
         );
         assert!(
-            !body.contains("merge_hold::sync_label"),
-            "BUG-1173 regression: set_pr_number must NOT sync the aida:merge-hold LABEL at \
-             PR-detection — it reddens merge-hold-gate during CI-watch and self-shelves DRIVE \
-             drains. Apply the label post-CI in record_merge_supervision_hold instead."
+            body.contains("merge_hold::sync_label"),
+            "BUG-1236 regression: set_pr_number must mirror the aida:merge-hold LABEL at \
+             PR-detection so the required merge-hold-gate check enforces Layer 2"
+        );
+        assert!(
+            body.contains("merge-hold list --fix"),
+            "a label sync failure must be surfaced with the repair hint, never swallowed"
         );
     }
 }
@@ -28802,15 +28804,41 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
     // trace:BUG-1188 | ai:codex
     let root = find_main_worktree_root()?;
     match action {
-        crate::cli::MergeHoldAction::List { json } => {
+        crate::cli::MergeHoldAction::List { json, fix } => {
             let holds = merge_hold::list_holds(&root);
             let (stale, live) = partition_stale_holds(holds, |pr| {
                 let mut sink = network_retry::StderrSink;
                 pr_is_merged_with_sink(&root, pr as u32, &mut sink)
             });
+            // BUG-1236: `--fix` re-syncs the Layer-2 label on every LIVE hold
+            // whose recorded state is not `synced`, then reports.
+            if *fix {
+                let mut fixed = 0usize;
+                for (pr, _) in &live {
+                    if merge_hold::read_label_state(&root, *pr) == merge_hold::LabelState::Synced {
+                        continue;
+                    }
+                    match merge_hold::sync_label(&root, *pr, true) {
+                        Ok(()) => {
+                            fixed += 1;
+                            println!("Re-synced `aida:merge-hold` label on PR #{pr}.");
+                        }
+                        Err(err) => println!("PR #{pr}: label still not applied — {err}"),
+                    }
+                }
+                if fixed == 0 {
+                    println!("No live hold needed a label re-sync.");
+                }
+            }
+            let label_of = |pr: u64| merge_hold::read_label_state(&root, pr);
             if *json {
                 let row = |pr: u64, reason: &str, is_stale: bool| {
-                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"stale\":{is_stale}}}")
+                    let label = match label_of(pr) {
+                        merge_hold::LabelState::Synced => "synced".to_string(),
+                        merge_hold::LabelState::Unsynced(e) => format!("unsynced: {e}"),
+                        merge_hold::LabelState::Unknown => "unknown".to_string(),
+                    };
+                    format!("{{\"pr\":{pr},\"reason\":{reason:?},\"stale\":{is_stale},\"label\":{label:?}}}")
                 };
                 let mut items: Vec<String> = Vec::new();
                 for (pr, reason) in &live {
@@ -28828,7 +28856,17 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             }
             println!("Active merge-holds:");
             for (pr, reason) in &live {
-                println!("  PR #{pr}  {reason}");
+                let state = label_of(*pr);
+                let rendered = match &state {
+                    merge_hold::LabelState::Synced => state.render().green().to_string(),
+                    merge_hold::LabelState::Unsynced(_) => {
+                        format!("{} (`aida merge-hold list --fix`)", state.render())
+                            .red()
+                            .to_string()
+                    }
+                    merge_hold::LabelState::Unknown => state.render().yellow().to_string(),
+                };
+                println!("  PR #{pr}  {reason}  [{rendered}]");
             }
             for (pr, reason) in &stale {
                 println!(
@@ -28852,7 +28890,12 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
             (Some(pr), false) => {
                 let existed = merge_hold::read_hold(&root, *pr).is_some();
                 merge_hold::clear_hold(&root, *pr)?;
-                merge_hold::sync_label(&root, *pr, false);
+                if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
+                    eprintln!(
+                        "  {} label not dropped on PR #{pr}: {err} — drop it by hand or re-run `aida merge-hold clear {pr}`",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                    );
+                }
                 if existed {
                     println!(
                             "Cleared merge-hold on PR #{pr} (marker removed, `aida:merge-hold` label dropped)."
@@ -28876,7 +28919,12 @@ fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<()> {
                 }
                 for (pr, _reason) in &stale {
                     let _ = merge_hold::clear_hold(&root, *pr);
-                    merge_hold::sync_label(&root, *pr, false);
+                    if let Err(err) = merge_hold::sync_label(&root, *pr, false) {
+                        eprintln!(
+                            "  {} label not dropped on PR #{pr}: {err}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                        );
+                    }
                     println!("Cleared stale merge-hold on PR #{pr} (PR already merged).");
                 }
                 println!("Swept {} stale merge-hold(s).", stale.len());
@@ -49102,7 +49150,14 @@ fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> b
         // drain) also refuses at the merge_change chokepoint — not just this
         // in-process guard, which was the BUG-1167 gap. trace:BUG-1167 | ai:claude
         let _ = crate::merge_hold::write_hold(project_root, pr.number, &label);
-        crate::merge_hold::sync_label(project_root, pr.number, true);
+        // trace:BUG-1236 | ai:claude
+        if let Err(err) = crate::merge_hold::sync_label(project_root, pr.number, true) {
+            eprintln!(
+                "  {} merge-hold label not applied on PR-{}: {err} — run `aida merge-hold list --fix`",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                pr.number
+            );
+        }
         eprintln!(
             "  {} refusing to auto-merge PR-{} ({}) — {}",
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -83500,15 +83555,20 @@ impl RealPhaseDriver {
         if let Some(reason) = auto_complete::PhaseDriver::merge_supervision_hold(self) {
             let pr = u64::from(pr);
             let _ = crate::merge_hold::write_hold(&self.project_root, pr, &reason);
-            // BUG-1173: stamp ONLY the local marker at PR-detection — do NOT sync the
-            // aida:merge-hold LABEL here. The local `.aida/merge-holds/PR-N` marker is what
-            // blocks the concurrent-merger race (the residual close); the label is a Layer-2
-            // convenience. Applying the label at PR-detection reddens the merge-hold-gate
-            // required check while phase-2 CI-watch runs, which the drain reads as a CI failure
-            // and self-shelves every DRIVE drain (the BUG-1168 #1864 interaction; CI-watch has
-            // no exclusion for the gate). The label is applied post-CI by
-            // record_merge_supervision_hold, Layer-2's real enforcement point.
-            // trace:BUG-1173 | ai:claude
+            // BUG-1173 deferred the LABEL to merge time because an early red
+            // merge-hold-gate read as a CI failure. Since BUG-1180 / ADR-39 the
+            // drain's CI watch and `aida pr ship` classify that red as THE HOLD
+            // when the marker exists, so the label is safe at PR-detection —
+            // and BUG-1236 showed the merge-time sync silently never landed on
+            // three supervised PRs, leaving Layer 2 off. Sync here, surface
+            // failure, and let `aida merge-hold list --fix` repair it.
+            // trace:BUG-1173 trace:BUG-1236 | ai:claude
+            if let Err(err) = crate::merge_hold::sync_label(&self.project_root, pr, true) {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{pr}: {err} — Layer 2 is off for this PR until `aida merge-hold list --fix` re-syncs it",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
         }
     }
 
@@ -86696,7 +86756,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         if let Some(pr) = self.pr_number {
             let pr = u64::from(pr);
             let _ = crate::merge_hold::write_hold(&self.project_root, pr, reason);
-            crate::merge_hold::sync_label(&self.project_root, pr, true);
+            // trace:BUG-1236 | ai:claude
+            if let Err(err) = crate::merge_hold::sync_label(&self.project_root, pr, true) {
+                eprintln!(
+                    "  {} merge-hold label not applied on PR-{pr}: {err} — run `aida merge-hold list --fix`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
         }
     }
 
