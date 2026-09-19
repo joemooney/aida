@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T11:18:08.801389466Z
-modified_at: 2026-09-19T15:25:17.922329574Z
+modified_at: 2026-09-19T15:27:06.651314482Z
 req_type: Bug
 tags:
 - alias
@@ -83,6 +83,22 @@ comments:
   created_at: 2026-09-19T15:20:47.995814976Z
   modified_at: 2026-09-19T15:20:47.995814976Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0ba47-3f9b-7000-b9fa-3c4fbf90b323
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1965 [AI:codex] fix(queue): resolve aliased batch members (BUG-1264)
+    verdict: APPROVE + merged (round 2; auto-bumped Done → Completed at 81877d9)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (codex implementer in wave 0918h; the drain's headless reviewer APPROVED round 2 at 08:20 — .aida/review-verdicts/PR-1965.json; advisor reviewed both rounds — PR-1965-advisor.json)
+    gates: required Build (ubuntu-latest) = success at ba0252a8; merge-hold released via aida pr ship (explicit review-merge) after the reviewer's verdict; merge lease via aida pr ship; aida pull ran post-merge. Verified before shipping that the branch's own contribution to every touched file at ba0252a8 is byte-identical to the approved b2865211 (the head moved only by a rebase over #1967).
+    in-drive note: the first ship attempt at 08:21 was REFUSED — "target PR is owned by the live drive; the orchestrator's independent reviewer gates the merge". Correct refusal: the reviewer phase was still running. I did NOT set AIDA_PR_SHIP_ALLOW_IN_DRIVE=1, which would have raced the orchestrator; I waited for AdvisorEscalated (15:20:51) and shipped after. That guard did its job.
+    reasoning: resolve_batch_members no longer looks a member up in the full-store projection; Storage::resolve_queued_requirement routes through the cache-backed backend (UUID → embedded spec id → canonical YAML, full-scan fallback retained), so an object stored under its origin_id alias resolves. Bundled and in scope: the batch queue is now read through queue_list_with_role_fallback, so a drain sees the same cross-user role-routed queue as ordinary pickup. Nothing is dropped silently any more — an unresolvable member prints "batch:<name> — skipping unresolvable member <uuid>: <reason>" and emits EventKind::SpecSkipped, which is actionable, rendered by watch, and in known_names. Tests cover both halves: the acceptance alias case (object under TASK-1-140 with agreed_id TASK-163) and the skip path (missing UUID → diagnostic + one actionable SpecSkipped with the exact reason).
+    WILD CHECK STILL OPEN: TASK-163 has been queued, batch-tagged and invisible to four waves since 2026-09-18 12:11. With this merged and the binary rebuilt, the next wave must pick it up with no tag change. If it does not, the alias was not the whole cause and this spec reopens.
+    follow-up (non-blocking, not filed as its own spec yet): resolve_queued_requirement bails for a storage path that is neither SQLite nor a directory, and resolve_batch_members propagates it, so a legacy standalone-YAML project would hard-error a whole batch where it used to skip one member; Ok(None) there would route it into the now-tested skip path.
+    timestamp: 2026-09-19T08:26-07:00
+  created_at: 2026-09-19T15:27:06.651314482Z
+  modified_at: 2026-09-19T15:27:06.651314482Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0ba45-96e1-7173-9b75-fca4cc5351b8
   author: aida-auto-bump
