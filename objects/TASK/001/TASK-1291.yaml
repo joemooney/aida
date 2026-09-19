@@ -2,7 +2,7 @@ id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
 spec_id: TASK-1291
 agreed_id: TASK-1291
 title: 'Round-1 reviewer does a full sweep: enumerate every acceptance criterion with its verification status and list all defects, so rounds converge instead of tailing one finding at a time'
-description: |
+description: |-
   Evidence (2026-09-18 12:00 → 2026-09-19 09:30): reviewer rounds did not converge, they tailed — each round surfaced ONE new finding rather than the full set, so a spec paid a fresh implementer session plus a ~9-10 min CI cycle per finding.
   - BUG-1244: five rounds, five different findings (fail-open → broke two integration tests → portability ratchet → followed the reviewer's literal wording over the clarified acceptance → merged)
   - BUG-1232: four rounds (unchecked status + rebase semantics → rebase contract → SHA pinning + approvals_syncing → merged)
@@ -16,13 +16,13 @@ description: |
   - The round-1 reviewer prompt contains the enumerate-all-criteria instruction and the "list every defect, not the first" instruction.
   - A round-1 verdict for a multi-criterion spec lists a status line per criterion.
   - Round-2+ prompts are unchanged apart from carrying the prior findings (today's behaviour).
-  - Measured on the next 20 specs: median rounds-to-merge drops; recorded on this spec as the acceptance evidence.
+  - (advisor 2026-09-19) The post-deployment measurement that stood here has MOVED to its own follow-up spec, blocked by this one. It could not be satisfied before this change ships and twenty specs flow through it, so as an acceptance criterion on THIS spec it was a deadlock by construction: unverifiable at every round, forever. Nothing about the effectiveness of this change is verifiable at merge time; only its behaviour is.
 status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T18:21:36.133993208Z
+modified_at: 2026-09-19T18:21:53.792733141Z
 req_type: Task
 tags:
 - batch:followups-0918h
