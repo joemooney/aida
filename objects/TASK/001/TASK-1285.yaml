@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:14.204633904Z
-modified_at: 2026-09-19T04:02:23.167885872Z
+modified_at: 2026-09-19T04:02:25.461175864Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -26,4 +26,11 @@ relationships:
   target_id: 01a0b5e0-7244-7451-89a9-f8c561574633
   created_at: 2026-09-19T04:02:23.167879950Z
   created_by: joe
+comments:
+- id: 01a0b7d4-6635-7411-84ca-7a19ba919224
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRIVE, queued in wave followups-0918h. Smallest valuable slice first: (1) the drain lock records binary SHA + mtime at launch and aida ps / aida dev status show it; (2) make build-fast and aida dev activate refuse (with the wave id) while a live wave is on the binary being replaced, --after-wave parks the rebuild until QueueDrained, event-driven not polled. The optional re-exec onto a rebuilt binary at a spec boundary is a follow-up, not this task — it changes orchestrator semantics and belongs with STORY-1218''s tick. Tests: the refusal decision and the --after-wave trigger on a fake QueueDrained event.'
+  created_at: 2026-09-19T04:02:25.461175864Z
+  modified_at: 2026-09-19T04:02:25.461175864Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
