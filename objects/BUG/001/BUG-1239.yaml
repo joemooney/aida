@@ -3,12 +3,12 @@ spec_id: BUG-1239
 agreed_id: BUG-1239
 title: aida awaiting --notice blocks on stdin when stdin is an open non-TTY pipe (hung 5 min in a scripted run)
 description: 'Found 2026-09-18 during STORY-1226''s throwaway e2e: aida awaiting --notice invoked from a script with stdin attached to a pipe that never closes blocked for 5 minutes until the caller passed </dev/null. The hook relay always closes stdin so the per-turn path is unaffected, but any scripted or cron invocation can hang. Fix: --notice must not read stdin at all (it takes no body), or guard the read with a zero-timeout / isatty check. Acceptance: aida awaiting --notice returns within its normal budget with stdin attached to an open pipe; a test spawns it with a held-open pipe and asserts exit under 2 s.'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:26.124728352Z
-modified_at: 2026-09-19T03:58:50.680726909Z
+modified_at: 2026-09-19T04:25:54.946599805Z
 req_type: Bug
 tags:
 - agent-ux
