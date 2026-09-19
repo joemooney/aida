@@ -664,6 +664,27 @@ mod tests {
             .unwrap();
     }
 
+    #[cfg(windows)]
+    #[test]
+    // trace:BUG-1233 | ai:codex
+    fn windows_directory_handle_can_write_modified_time() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("timestamp-target");
+        std::fs::create_dir(&directory).unwrap();
+        let expected = SystemTime::now() - Duration::from_secs(60 * 60);
+
+        set_dir_modified(&directory, expected);
+
+        let actual = std::fs::metadata(&directory).unwrap().modified().unwrap();
+        let drift = actual
+            .duration_since(expected)
+            .unwrap_or_else(|error| error.duration());
+        assert!(
+            drift < Duration::from_secs(2),
+            "directory mtime differs from the requested value by {drift:?}"
+        );
+    }
+
     fn m(c: &str, t: &str, v: MatchVerdict, r: &str) -> TestMatch {
         TestMatch {
             criterion: c.into(),
