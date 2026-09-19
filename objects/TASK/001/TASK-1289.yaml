@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T19:27:57.468956622Z
+modified_at: 2026-09-19T19:32:13.358959516Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -543,6 +543,12 @@ comments:
   created_at: 2026-09-19T19:27:57.468956622Z
   modified_at: 2026-09-19T19:27:57.468956622Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0bb27-a7ae-7d62-9d06-fe48a6ba7b2d
+  author: joe
+  content: '[advisor round 2] My four round-1 items are RESOLVED and I verified the subtle one rather than trusting the shape: the worktree binary is built and prepended to PATH for EVERY guard, so a guard whose command never names aida still gets the right one — which matters because the CLI-manual drift guard shells out to aida from python and its YAML command does not contain the word. I checked both default binary-dependent guards against guard_uses_aida: verify-manual.py does invoke aida by subprocess and is caught by the explicit name case; verify-interface-changes.py documents that it needs no aida binary and is correctly not caught. Skip-on-build-failure, bash -c with an explicit PATH, the 15-minute bound with timeout rendering as Skipped rather than Failed, setpgid so no grandchild outlives the kill, default_branch_of instead of the literal main, and ResolvedGuard separating resolution from execution — all present. THE DRAIN REVIEWER''S FINDING STANDS AND BLOCKS, and I concur: from_tags clears no_ci_wait/no_review/no_build under batch:express because the express trust contract says such a spec can never downgrade the gate, but no_preflight is not cleared, so [batch:express, lifecycle:no-preflight] skips the preflight on precisely the specs promised to be fully gated. One line. I reviewed the same diff and missed it — the express interaction lives in a file my review did not open, which is the method-independence rule earning its keep in the direction that is easy to forget: it protects against me too. While fixing, state explicitly whether no_harvest is deliberately left uncleared (the contract names CI, reviewer and build, so it appears so) rather than leaving the next reader to wonder.'
+  created_at: 2026-09-19T19:32:13.358959516Z
+  modified_at: 2026-09-19T19:32:13.358959516Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
 implementation_info:
   implemented: true
