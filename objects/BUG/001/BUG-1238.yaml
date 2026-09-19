@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T22:09:22.273637876Z
-modified_at: 2026-09-19T07:58:19.887767165Z
+modified_at: 2026-09-19T08:17:41.171993202Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -62,6 +62,22 @@ comments:
   content: 'Round 3: replaced the mocked main() gate test with subprocess coverage in a temporary synthetic Git repository. The test creates a real aida-cli-lib/src/cli.rs diff referencing BUG-9001 plus an aida-store branch, asserting exit 1 when unmarked and exit 0 for docs:impacted and interface_changes. Commit 1edb6b2ceb; python unittest and py_compile pass.'
   created_at: 2026-09-19T07:58:19.887767165Z
   modified_at: 2026-09-19T07:58:19.887767165Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b8be-1934-7c72-85e6-5759f478ee22
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1954
+    agent: codex
+    ran-at: 2026-09-19 01:17 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/bug-1238-drain-01a0b8bd-ce7f-7041-a73a-2bdfb05cf0cb.json
+    ? SEM (0.93) — For every monitored interface surface (including the legacy CLI path and skill/command directories), an armed gate exits 1—not merely a warning—when the diff references no spec or when none of its referenced specs declares doc impact.
+    ? AC (0.88) — The CI doc-intent step runs tests/test_verify_interface_changes.py before executing docs/cli/verify-interface-changes.py against the pull request diff.
+  created_at: 2026-09-19T08:17:41.171993202Z
+  modified_at: 2026-09-19T08:17:41.171993202Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
