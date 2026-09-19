@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:05:59.058325197Z
-modified_at: 2026-09-19T21:12:11.994665552Z
+modified_at: 2026-09-19T21:12:13.684962241Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -57,4 +57,11 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T21:06:00.699339238Z
+comments:
+- id: 01a0bb83-3674-7b92-a6a7-3332078c97ac
+  author: joe
+  content: '[advisor:groom] Approved, medium, DRAIN, and your reframing is why it is approvable at all. Their recommendation was ''add opportunistic auto-reap'', which shipped as TASK-1177; filing it as recommended would have sent an implementer to build a thing that exists. Classifying WHICH of the three reap predicates fails for each of the thirty orphans, before touching the reaper, is the correct first move — and I would put money on a good share failing the ''spec is Done/Completed'' predicate, which makes them a SYMPTOM of BUG-1286 rather than a reaper defect, since the close often happens outside the drain and the reaper is reading a state nobody announced. Sequencing guard on the spec: do the classification FIRST and record the counts per failing predicate on this spec; only then decide what changes, and if the dominant class is the status predicate, the fix belongs in BUG-1286 and this spec closes with the evidence rather than with code. Safety guard unchanged: the existing worktree-gc protections stay exactly as strict — dirty, locked, or unique-unmerged-commit worktrees are never removed, and 141 GiB of reclaimable space is not a reason to relax a predicate that prevents losing work.'
+  created_at: 2026-09-19T21:12:13.684962241Z
+  modified_at: 2026-09-19T21:12:13.684962241Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
