@@ -3,12 +3,12 @@ spec_id: TASK-1284
 agreed_id: TASK-1284
 title: 'Lease-based liveness: drain lock, launchers and session reap decide ''is it running'' from the lease''s pid + process start time, never from pgrep name matching'
 description: 'SPIKE-82 (docs/spikes/2026-09-18-spike-82-night-shift-post-mortem.md, gap 3) and two live incidents this week: (1) a product-seat launcher waited ~40 min on a phantom drain lock because its pgrep -f pattern matched the Monitor wrapper shell whose command line contained the pattern text; (2) a drain launched by full path was missed by an argv[0]-anchored pattern and nearly double-launched. Every liveness decision that matters (drain lock probe, cross-clone drain claim heartbeat, session reap''s process-exited predicate, aida ps, any wave launcher) should resolve liveness from the lease/lock record itself: pid + process start time (or boot id + pid) recorded at acquire, compared against /proc (Linux) / the platform equivalent, so a recycled pid or a wrapper shell can never read as alive. Acceptance: drain_lock::probe_lock and coordination claims store pid + start_time and validate both; a test proves a same-pid different-start-time record reads as dead; docs/autonomous-drain.md tells operators to use aida ps / the lock file rather than pgrep, and the pgrep guidance in the discipline pack is replaced.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T10:36:58.186395860Z
+modified_at: 2026-09-19T10:44:10.680986285Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -121,16 +121,28 @@ comments:
   created_at: 2026-09-19T10:36:58.186395860Z
   modified_at: 2026-09-19T10:36:58.186395860Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b944-3738-7373-b9bc-717865310e52
+  author: aida-auto-bump
+  timestamp: 2026-09-19T10:44:10.680219662Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b944-3738-7373-b9bc-7183474f67d3
+  timestamp: 2026-09-19T10:44:10.680985505Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1284-2026-09-19T103659Z.md
+  commit_sha: 57680780cb1999b1ff1de81164db5b6841f37571
+  summary: Completed via merge 57680780
+  punted:
+  - 'punted: CI is red on PR-1957: `merge-hold-gate` is red because PR-1957 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T05:11:14.210028026Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: reviewer verdict is RequestChanges — not Approved
-  recovery_hint: 'Address the review feedback, then push fixups: `aida queue rework TASK-1284 --work`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T07:08:32.807275186Z
+  completed_at: 2026-09-19T10:44:10.679902366Z
+  completion_sha: 57680780cb1999b1ff1de81164db5b6841f37571
