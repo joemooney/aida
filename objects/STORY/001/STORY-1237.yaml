@@ -1,0 +1,26 @@
+id: 01a0b7f4-b81d-7f63-9e33-eb7782a2ed15
+spec_id: STORY-1237
+agreed_id: STORY-1237
+title: 'Review PR-1955: [AI:codex] fix(awaiting): never read notice stdin (BUG-1239)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a0b7ea`) for branch `bug-1239`.
+
+  - PR: <https://github.com/joemooney/aida/pull/1955>
+  - Branch: `bug-1239` → `main`
+
+  ## Covers
+
+  - BUG-1239
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 1955` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T04:37:43.581833063Z
+modified_at: 2026-09-19T04:37:43.581833063Z
+req_type: Story
