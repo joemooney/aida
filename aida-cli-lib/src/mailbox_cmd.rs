@@ -121,6 +121,7 @@ pub(crate) fn handle_mailbox_command(
             to,
             broadcast,
             body,
+            subject,
             body_file,
             stdin,
             thread,
@@ -175,16 +176,16 @@ pub(crate) fn handle_mailbox_command(
                 let local = mailbox_store::read_local_messages(project_root)?;
                 let canonical = mailbox_store::read_canonical_messages(store_root)?;
                 let merged = merge_dedup(&local, &canonical);
-                aida_core::mailbox::reply_target_thread(reply_target, &merged).unwrap_or_else(
-                    || {
+                resolve_mailbox_message(&merged, reply_target)
+                    .map(|m| m.thread_id.clone())
+                    .unwrap_or_else(|_| {
                         eprintln!(
                             "{} --in-reply-to '{}' matches no known message; starting a new thread",
                             "warning:".yellow(),
                             reply_target
                         );
                         id.clone()
-                    },
-                )
+                    })
             } else {
                 id.clone()
             };
@@ -196,6 +197,7 @@ pub(crate) fn handle_mailbox_command(
                 timestamp: chrono::Utc::now().timestamp_millis(),
                 in_reply_to: in_reply_to.clone(),
                 body,
+                subject: subject.clone(),
                 urgent: *urgent,
                 intent: parsed_intent,
                 retracted: false,
@@ -631,7 +633,17 @@ pub(crate) fn handle_mailbox_command(
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let all = merge_dedup(&local, &canonical);
-            let msgs = thread_view(thread_id, &all);
+            // Inbox prints a short message id, so accept that exact token and
+            // resolve it to the containing thread. Full thread ids still work.
+            // trace:BUG-1231 | ai:codex
+            let resolved_thread = if all.iter().any(|m| m.thread_id == *thread_id) {
+                thread_id.clone()
+            } else {
+                resolve_mailbox_message(&all, thread_id)
+                    .map(|m| m.thread_id.clone())
+                    .unwrap_or_else(|_| thread_id.clone())
+            };
+            let msgs = thread_view(&resolved_thread, &all);
             if msgs.is_empty() {
                 println!(
                     "{} no messages in thread {}",
@@ -694,11 +706,11 @@ fn read_send_body(
                 .map_err(|e| anyhow::anyhow!("failed to read mailbox body from stdin: {e}"))?;
             Ok(buf)
         }
-        (None, None, false) => {
-            anyhow::bail!("provide a message body, --body-file <path>, or --stdin")
-        }
+        (None, None, false) => anyhow::bail!(
+            "provide exactly one mailbox body source; valid forms: `aida mailbox send <BODY>`, `aida mailbox send --body-file <PATH>`, or `aida mailbox send --stdin`"
+        ),
         _ => anyhow::bail!(
-            "choose exactly one mailbox body source: positional body, --body-file, or --stdin"
+            "choose exactly one mailbox body source; valid forms: `aida mailbox send <BODY>`, `aida mailbox send --body-file <PATH>`, or `aida mailbox send --stdin`"
         ),
     }
 }
@@ -811,7 +823,10 @@ mod tests {
         let body_path = dir.path().join("mail.txt");
         std::fs::write(&body_path, "from file").unwrap();
 
-        assert!(read_send_body(None, None, false).is_err());
+        let err = read_send_body(None, None, false).unwrap_err().to_string();
+        assert!(err.contains("send <BODY>"));
+        assert!(err.contains("send --body-file <PATH>"));
+        assert!(err.contains("send --stdin"));
         assert!(read_send_body(Some("arg"), Some(&body_path), false).is_err());
         assert!(read_send_body(Some("arg"), None, true).is_err());
         assert!(read_send_body(None, Some(&body_path), true).is_err());
@@ -828,14 +843,20 @@ mod tests {
             "codex",
             "--body-file",
             "mail.txt",
+            "--subject",
+            "Review requested",
         ])
         .unwrap();
         match from_file.command {
             Command::Mailbox(MailboxCommand::Send {
-                body, body_file, ..
+                body,
+                body_file,
+                subject,
+                ..
             }) => {
                 assert!(body.is_none());
                 assert_eq!(body_file.unwrap(), std::path::PathBuf::from("mail.txt"));
+                assert_eq!(subject.as_deref(), Some("Review requested"));
             }
             other => panic!("expected mailbox send, got {other:?}"),
         }

@@ -560,6 +560,7 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         .or_else(|| view.role.clone())
         .unwrap_or_else(|| view.agent_type.clone());
     let msg = aida_core::mailbox::Message {
+        subject: None,
         id: uuid::Uuid::new_v4().to_string(),
         thread_id: uuid::Uuid::new_v4().to_string(),
         from: crate::current_user_id(None),

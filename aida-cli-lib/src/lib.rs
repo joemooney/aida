@@ -9739,6 +9739,7 @@ pub(crate) fn send_notification(
     };
     let id = uuid::Uuid::new_v4().to_string();
     let msg = Message {
+        subject: None,
         id: id.clone(),
         thread_id: id,
         from: sender.to_string(),
@@ -19230,6 +19231,8 @@ fn print_mailbox_line(m: &aida_core::mailbox::Message) {
     };
     let body = if m.retracted {
         "[withdrawn]".dimmed().to_string()
+    } else if let Some(subject) = m.subject.as_deref() {
+        format!("{}\n{}", subject.bold(), m.body)
     } else {
         m.body.clone()
     };

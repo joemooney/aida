@@ -260,6 +260,7 @@ mod tests {
 
     fn msg(id: &str, from: &str, to: Recipient, ts: i64) -> Message {
         Message {
+            subject: None,
             id: id.to_string(),
             thread_id: "t1".to_string(),
             from: from.to_string(),

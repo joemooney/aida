@@ -292,6 +292,7 @@ fn send_advisor_nudge(project_root: &Path, advisor: &str, items: &[StuckItem]) -
     let id = uuid::Uuid::new_v4().to_string();
     let body = format_nudge_body(items);
     let msg = Message {
+        subject: None,
         id: id.clone(),
         thread_id: id,
         from: crate::current_user_id(None),

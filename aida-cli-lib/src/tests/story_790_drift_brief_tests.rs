@@ -43,6 +43,7 @@ fn mail_since_exit_counts_addressed_and_broadcast_not_others_or_older() {
     let tmp = tempfile::tempdir().unwrap();
     let ended_at = Utc::now() - Duration::minutes(30);
     let mk = |id: &str, to: aida_core::mailbox::Recipient, ts: i64| aida_core::mailbox::Message {
+        subject: None,
         id: id.into(),
         thread_id: id.into(),
         from: "advisor".into(),
