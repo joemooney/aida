@@ -155,6 +155,51 @@ reading the code, the reviewer is usually right. Read the reviewer's
 cited evidence before pushing back; if you push back, do the diff inspection
 yourself.
 
+## Confirm a claim by a different method than produced it
+
+Independence between seats is a property of *method*, not a posture of
+distrust. A second seat that re-reads the first seat's evidence the way the
+first seat gathered it adds nothing; a second seat that derives the same
+claim a different way is the only kind of check that can fail usefully.
+
+A worked example, because the shape matters more than the moral. A reviewer
+flagged that a round detector matched a marker anywhere in a comment where
+the canonical rule matches it only at the start. Correct. To make the defect
+concrete, the seat writing the rework brief grepped the store for comments
+where the marker appeared mid-text, found what looked like three, and named
+them as the negative-test fixture. A second seat checked before the brief was
+acted on — by parsing each comment's stored content rather than grepping raw
+file lines — and found the marker at position zero in all three. They were
+positive cases. A test built on them would have broken the detector for every
+real rework round.
+
+The first seat then repeated the second seat's method rather than deferring
+to its conclusion, and recorded the marker's *position* rather than its
+presence. Seventy occurrences sat at position zero. Exactly one did not: the
+second seat's own correction, where the marker appeared mid-sentence inside
+the argument that mid-sentence occurrences do not exist. The defect was real,
+the first evidence was wrong, the second was right but incomplete, and the
+only true fixture in the store was created by the act of arguing it could not
+exist.
+
+Neither seat being careful produced that answer. Two derivations disagreeing
+did.
+
+In practice:
+
+- When confirming or disputing a claim, change the method, not just the
+  reader. Searching text and parsing structure are different methods. Two
+  greps are one method run twice.
+- Prefer a check that measures rather than one that detects. "Does this
+  string appear?" and "where does it appear?" are not the same question, and
+  only the second can be wrong in an informative way.
+- If two methods agree, the claim is strong enough to build on. If they
+  disagree, neither is trusted until a third settles it — and say so plainly
+  instead of picking the more senior seat's answer.
+- Evidence gathered to support a conclusion deserves more scepticism than
+  evidence that arrived uninvited. The brief above was wrong precisely
+  because it went looking for confirmation.
+
 ## Check for in-flight work before rejecting
 
 Before rejecting a spec or pivoting its architecture, check whether an
