@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b5ce-6f5d-7be3-b693-e98175dbb944
-  position: -2000
-  added_by: claude-product-1
-  note: 'Round 3 fix already pushed by the product seat (f509eb5619: Windows directory handle opened with FILE_WRITE_ATTRIBUTES via access_mode so set_times succeeds). Verify, push nothing if clean, and let the reviewer take round 3 against the cross-platform run.'
-  added_at: 2026-09-19T01:16:31.521072823Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
