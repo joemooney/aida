@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:38:23.425004816Z
-modified_at: 2026-09-19T11:30:52.739623684Z
+modified_at: 2026-09-19T11:51:21.860895295Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -82,6 +82,22 @@ comments:
   content: 'Round 2 review fix: added black-box pr ship fixture coverage proving a label-only hold is released, merge-hold-gate re-runs green, and merge follows in one invocation; added no-label/no-marker control. Commit 183dda5998.'
   created_at: 2026-09-19T11:30:52.739623684Z
   modified_at: 2026-09-19T11:30:52.739623684Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b981-ba04-7e11-b662-9d5d50af92c3
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1964
+    agent: codex
+    ran-at: 2026-09-19 04:51 -07:00
+    mode: propose-only (drain)
+    proposed: 2
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1287-drain-01a0b981-770a-7e03-b108-4e6765a2c9fc.json
+    ? SEM (0.93) — Label-only hold recognition is based on a live forge label lookup at ship time; if that lookup fails or its response cannot be validated, the label is not assumed present and the existing red-gate refusal remains in force.
+    ? AC (0.88) — Label-only supervised holds are recognized on both GitHub pull requests and GitLab merge requests; GitLab label responses may represent labels as strings or as objects with a name field.
+  created_at: 2026-09-19T11:51:21.860895295Z
+  modified_at: 2026-09-19T11:51:21.860895295Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
