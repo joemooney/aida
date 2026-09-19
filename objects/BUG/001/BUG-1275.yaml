@@ -27,7 +27,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T17:47:10.008439484Z
-modified_at: 2026-09-19T17:51:19.527700354Z
+modified_at: 2026-09-19T17:51:22.005744095Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -51,4 +51,30 @@ relationships:
   target_id: 01a0b7fa-42b8-7911-bdfb-1815f831c1f2
   created_at: 2026-09-19T17:47:18.032154363Z
   created_by: joe
+comments:
+- id: 01a0bacb-5195-7390-a232-77659454a5f5
+  author: joe
+  content: |-
+    [advisor:groom] Approved, high, DRIVE (merge at the advisor gate — this is the CI gate's timing, and getting the new numbers wrong fails in one of two bad directions: shelving healthy work as now, or waiting past the point where a human should be told).
+
+    VERIFIED INDEPENDENTLY, and the detail is sharper than reported:
+    - Run 35458563676 was created 17:35:31, updated 17:46:49, and CONCLUDED SUCCESS. The shelve fired at 17:46:08 — forty-one seconds before that run went green. Nothing was failing; the drain gave up on the finish line.
+    - DEFAULT_CI_IDLE_SECS is 600 (ci_idle_timeout.rs:126, documented in docs/environment-variables.md).
+    - CLAUDE.md records this repo's PR CI at ~9-10 min median over 23 measured runs, p25 9.3 and p75 9.9. So the 600s window sits BELOW p75. More than a quarter of all runs trip it before any queue delay, which is why this reads as "every wave" rather than "sometimes".
+    - The re-arm condition is documented as "a check appears/transitions, the check set changes, or the PR head/base tip advances". While one required check sits in_progress, none of those occur, so the clock never re-arms — the GitHub twin of BUG-1224's GitLab case, exactly as the analysis says.
+    The diagnosis that this is an INTERACTION between two correct fixes is right, and worth preserving in the fix's comments: BUG-1250 correctly changed NoSignal from "proceed gate-less" to "shelve", which turned a silent hole into a visible stall. Do not undo that trade.
+
+    ON URGENCY, precisely: the launcher now exports AIDA_WORKER_CI_IDLE=2400, so the bleeding is stopped for waves it starts. That makes this high but not drop-everything — with one caveat that must go in the fix: an env export in one launcher script protects only that launcher. A hand-started wave, a fresh clone, a second machine, or any future launcher gets the broken default. That is why the DEFAULT has to change and not just the export.
+
+    SCOPE:
+    1. Re-arm on liveness, not only on transition: a required check in a non-terminal state (queued / in_progress) is PROGRESS. That is the actual defect and it is the half that generalises to both forges.
+    2. Set the default from measured p95, not the median — and state in the comment how it was derived, so the next person can re-derive it when CI changes. 600 was reasonable when CLAUDE.md still claimed 3-5 minutes; SPIKE-81 corrected that number on 09-18 and this default was never revisited. Pick the number from the same 23-run dataset, do not guess.
+    3. Keep AIDA_WORKER_CI_ABSOLUTE as the real backstop — the ceiling, not the idle window, is what must guarantee termination.
+    4. MAKE IT CONFIGURABLE, not env-only. ci_idle_window_secs reads the env var and falls back to a constant, with no config layer. Add the [worker] (or existing CI section) config knob with the env var still winning, so a project sets its own window durably instead of every launcher re-exporting it. Configurable policy with a safe default is the standing preference and this incident is the argument for it.
+    5. Test the pure decision: a required check in_progress with no transition for longer than the window re-arms and does not expire; a genuinely absent/stalled CI still expires; the absolute ceiling still terminates a forever-progressing PR.
+
+    BUG-1268 needs no code — re-drive it once its check is green; its own PR #1970 is the run that exposed this.
+  created_at: 2026-09-19T17:51:22.005744095Z
+  modified_at: 2026-09-19T17:51:22.005744095Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
