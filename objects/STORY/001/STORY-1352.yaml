@@ -1,0 +1,36 @@
+id: 01a0ba8e-4480-7991-a292-0ef0ad057b31
+spec_id: STORY-1352
+agreed_id: STORY-1352
+title: Declare and guard a versioned read-only monitor contract (the eleven --json surfaces + an events follow feed) so an external dashboard cannot break silently
+description: |
+  Context: the operator runs several terminals with `while :; do tput cup 0 0; tput ed; <aida|gh cmd>; sleep N; done` (drain status, gh run list, aida list) and wants more — token usage, PR verdicts, the schedule/cron view, logs, bottlenecks. The intent is a separate read-only application, `aida-monitor`, in its own repo, plausibly built by the idle Antigravity agent.
+
+  AIDA's side of that is NOT the app — it is the contract the app consumes. Today every read surface already emits machine output (`aida status|ps|integrate|statusbar|usage|awaiting|queue progress|findings list|drain status|tail|schedule` all accept --json/--format), and `.aida/events.jsonl` is an append-only typed feed. What is missing is any promise that those shapes are stable, so an external renderer would break silently on the next refactor — the same class of failure as docs/cli's drift guards, which exist precisely because prose drifted from the surface.
+
+  Scope:
+  1. Declare the monitor contract: a documented, versioned subset of read surfaces (the eleven above) plus the events feed, with a contract version reported by `aida contract --json` (name + semver + the surfaces covered). Additive changes bump minor; a field removal or rename bumps major and requires a note in the contract doc.
+  2. A drift guard in CI, mirroring docs/cli/verify-manual.py: a fixture per covered surface, regenerated on demand, that fails the build when a covered field disappears or changes type without a version bump.
+  3. `aida events --follow --json` as the single subscribe surface, so a renderer tails ONE feed instead of polling N commands (polling stays available; today's while-loops are exactly that and they re-read the cache every cycle per panel).
+  4. A docs page, docs/monitor-contract.md, stating explicitly: read-only, no writes, no dispatch; a consumer must never parse human output; any consumer that needs a field not in the contract files a spec rather than reaching into .aida-store.
+
+  Non-goals: building aida-monitor itself (separate repo, separate owner); replacing `aida tui`, which is a working surface for one project while a monitor is an operator's wall display across projects.
+
+  Acceptance:
+  - `aida contract --json` lists the covered surfaces and a semver; the doc exists and states the read-only rule.
+  - Removing or renaming a covered field without bumping the version fails CI with the field named.
+  - `aida events --follow --json` streams new events without polling and honours the no-network rule.
+  - A one-page consumer example (shell + jq) in the doc renders a drain/queue/gate summary using only the contract.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T16:44:40.960788392Z
+modified_at: 2026-09-19T16:44:40.960788392Z
+req_type: Story
+tags:
+- api-stability
+- contract
+- from:operator-0919
+- monitor
+- operator-idea
+- parent:EPIC-26
