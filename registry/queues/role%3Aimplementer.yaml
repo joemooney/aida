@@ -132,3 +132,11 @@
   added_at: 2026-09-19T17:47:43.720968090Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0bac7-7938-7223-81f8-cf428f24e497
+  position: 87000
+  added_by: role:implementer
+  note: 'drive: a non-terminal required check counts as progress and re-arms the idle clock (GitHub twin of BUG-1224); default from measured p95 with the derivation stated; absolute ceiling stays the backstop; add a config knob so it is not env-only; pure-decision tests. Do NOT undo BUG-1250''s shelve-instead-of-proceed.'
+  added_at: 2026-09-19T17:51:23.701623524Z
+  for_role: implementer
+  added_by_machine: imac
