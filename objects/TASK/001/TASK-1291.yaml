@@ -17,12 +17,12 @@ description: |-
   - A round-1 verdict for a multi-criterion spec lists a status line per criterion.
   - Round-2+ prompts are unchanged apart from carrying the prior findings (today's behaviour).
   - (advisor 2026-09-19) The post-deployment measurement that stood here has MOVED to its own follow-up spec, blocked by this one. It could not be satisfied before this change ships and twenty specs flow through it, so as an acceptance criterion on THIS spec it was a deadlock by construction: unverifiable at every round, forever. Nothing about the effectiveness of this change is verifiable at merge time; only its behaviour is.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:49.842260131Z
-modified_at: 2026-09-19T20:07:29.328501329Z
+modified_at: 2026-09-19T20:07:37.757206746Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -140,16 +140,28 @@ comments:
   created_at: 2026-09-19T20:07:29.328501329Z
   modified_at: 2026-09-19T20:07:29.328501329Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0bb48-121c-7081-b28c-2b9904e8d0fb
+  author: aida-auto-bump
+  timestamp: 2026-09-19T20:07:37.756407411Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0bb48-121d-76d1-91ef-c041770956ae
+  timestamp: 2026-09-19T20:07:37.757205878Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/TASK-1291-2026-09-19T200730Z.md
+  commit_sha: b1f25b98c2a839d7c5ebc239e401cabdafcd9228
+  summary: Completed via merge b1f25b98
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: could not end the implementer session — it may have uncommitted changes; commit or discard them, then re-run (attempt 2/2)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T17:58:44.885361747Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: tool-exit
-  detail: could not end the implementer session — it may have uncommitted changes; commit or discard them, then re-run (attempt 2/2)
-  recovery_hint: 'The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0bb19bb64 --skip-ci`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T19:18:25.978813902Z
+  completed_at: 2026-09-19T20:07:37.756081775Z
+  completion_sha: b1f25b98c2a839d7c5ebc239e401cabdafcd9228
