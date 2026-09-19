@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:39:25.989222132Z
-modified_at: 2026-09-18T23:39:28.861732713Z
+modified_at: 2026-09-19T00:29:58.130530333Z
 req_type: Task
 tags:
 - agent-ux
@@ -20,3 +20,10 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T23:39:28.861732713Z
+comments:
+- id: 01a0b711-e3f2-7680-b492-3f4a71e91a52
+  author: joe
+  content: 'Duplicate of the advisor''s TASK-1283 (same follow-up: CLI-level regression tests for protocol injection and the lease-notice lifecycle). Closing this one; TASK-1283 is approved, drain mode, and queued.'
+  created_at: 2026-09-19T00:29:58.130530333Z
+  modified_at: 2026-09-19T00:29:58.130530333Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
