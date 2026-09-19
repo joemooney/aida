@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:16:59.126029963Z
-modified_at: 2026-09-19T21:31:09.670764639Z
+modified_at: 2026-09-19T21:31:11.309839248Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -46,4 +46,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T18:17:02.352747641Z
+comments:
+- id: 01a0bb94-924d-7f70-afb5-7854f1c8f6fe
+  author: joe
+  content: '[advisor:groom] Approved, HIGH, DRAIN. This is the highest-value papercut in the backlog on volume alone: roughly thirty three-command dances in one window, every one of them after a review round, in the single most repeated loop we have. And the command''s own next-step line proves the defect — it prints ''aida queue work <SPEC> --user <invoking-user> --role implementer'' while a batch drain reads --user role:implementer, so the entry it just created is invisible to the thing that would act on it. A verb whose printed advice cannot work is worse than a missing verb, because it looks like it succeeded. Scope guard: queue the pickup on the ROLE queue by default — the same queue the drain reads and the same one aida queue add --for <role> targets — and make the printed next-step line match what was actually written; an explicit --user must still override for the rare personal-queue case. Second guard, and it is what makes this safe to land alongside STORY-1353: this is pure DISPATCH, so do not use it to widen who may call rework. Whoever may rework today may rework after; the fix is where the entry lands, not who may put it there. Regression test: after aida queue rework <SPEC>, the entry is visible to a batch drain reading the role queue — assert on the queue the drain actually reads, not on the command''s exit code.'
+  created_at: 2026-09-19T21:31:11.309839248Z
+  modified_at: 2026-09-19T21:31:11.309839248Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
