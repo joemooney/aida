@@ -13,12 +13,12 @@ description: |-
   2. queue done <SPEC> must verify the branch it is finishing belongs to SPEC (clarified 2026-09-19 after the #1956 round-3 review): (a) the branch names a DIFFERENT requirement id (type-prefixed, numeric core; slice suffixes and node-qualified ids belong to their spec) → refuse; (b) the branch names SPEC → accept; (c) the branch names no requirement id (main, master, pr-N, batch-*, single-branch/*, feature/*) → commit evidence decides ONLY when commits exist since the merge-base with the default branch: no commits → accept; a commit references SPEC (subject or trailer) → accept; commits reference a different spec and none reference SPEC → refuse naming the foreign spec; commits reference no spec → accept. --force overrides any refusal and is recorded in the store commit subject.
   3. The CI and reviewer phases must bind to the PR opened for THIS spec (PhaseDonePr for this run) — never resolve a PR by branch name inherited from a sibling; if no PR exists for the spec, punt/shelve, do not review another spec's PR under this spec's name (and do not write that spec's verdict file).
   Acceptance: unit tests for the queue-done ownership check (refuse / --force paths); an orchestrator test where a member's worktree is a sibling's branch punts instead of committing; a test that the reviewer phase refuses when the run has no PhaseDonePr for its spec; the drain banner names the worktree + branch it is operating on at phase 1 start.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:41:13.677938849Z
-modified_at: 2026-09-19T14:06:16.852489639Z
+modified_at: 2026-09-19T14:12:25.622142573Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -200,16 +200,30 @@ comments:
   created_at: 2026-09-19T14:06:16.852489639Z
   modified_at: 2026-09-19T14:06:16.852489639Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0ba02-df95-72a1-82c5-9a86b2ead1de
+  author: aida-auto-bump
+  timestamp: 2026-09-19T14:12:25.621359799Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0ba02-df96-7d21-bd03-0e373dc76462
+  timestamp: 2026-09-19T14:12:25.622141933Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1244-2026-09-19T140618Z.md
+  commit_sha: dd0ce073a02b9bf2256858151e14dd785d027d79
+  summary: Completed via merge dd0ce073
+  punted:
+  - 'punted: CI is red on PR-1956: failing: Build (ubuntu-latest)'
+  - 'punted: CI is red on PR-1956: `merge-hold-gate` is red because PR-1956 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: CI is red on PR-1956: `merge-hold-gate` is red because PR-1956 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
 execution_mode: drive
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T04:52:24.352799359Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1956: `merge-hold-gate` is red because PR-1956 is under a supervised merge-hold — releasing at merge; failing: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35442689331 — view it: `gh run view 35442689331`. Push fixups to the same branch: `aida queue work BUG-1244 --branch bug-1244 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T12:28:49.253877636Z
+  completed_at: 2026-09-19T14:12:25.620908414Z
+  completion_sha: dd0ce073a02b9bf2256858151e14dd785d027d79
