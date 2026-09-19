@@ -1,0 +1,51 @@
+id: 01a0bb1b-0f64-7e50-9480-72a3a3a32c66
+spec_id: BUG-1280
+agreed_id: BUG-1280
+title: 'auto-complete failure: phase 2 (ci) on TASK-1291'
+description: |
+  Auto-drafted by `aida queue work TASK-1291 --auto-complete` after phase 2 (ci) failed. Review this BUG and promote it to Approved if it is a real AIDA orchestrator bug — or reject it if it was a user error or a local environment issue. It is intentionally left in Draft and NOT queued. (TASK-266)
+
+  ## Failure
+
+  could not end the implementer session — it may have uncommitted changes; commit or discard them, then re-run (attempt 2/2)
+
+  Failure kind: `tool-exit`
+
+  ## Recovery hint shown to the user
+
+  The implementer session would not end cleanly — it may have uncommitted changes. Commit or discard them in the worktree, then end it: `aida session end 01a0bb19bb64 --skip-ci`
+
+  ## Recurrence
+
+  Attempts: 1
+  Latest recurrence: 2026-09-19T19:18:27.052352187+00:00
+
+  ## Phase durations
+
+    - phase 1 (implementer): 87262 ms
+    - phase 2 (ci): 5233 ms
+
+  ## Telemetry entry
+
+  The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+  ```json
+  {"spec_id":"TASK-1291","started_at":"2026-09-19T19:16:52.908991524+00:00","completed_at":"2026-09-19T19:18:27.052352187+00:00","outcome":"failed","variant":"full","failed_phase":2,"failure_kind":"tool-exit","failure_message":"could not end the implementer session — it may have uncommitted changes; commit or discard them, then re-run (attempt 2/2)","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":87262},{"phase":2,"slug":"ci","elapsed_ms":5233}],"total_ms":93060,"binary_sha":"c9ee1d7f50"}
+  ```
+
+  ## Recurse-fix
+
+  Once triaged and promoted, this BUG can itself be driven by the orchestrator: `aida queue work <THIS-BUG> --auto-complete` — the dogfood loop TASK-266 makes operational.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T19:18:27.940493661Z
+modified_at: 2026-09-19T19:18:27.940493661Z
+req_type: Bug
+tags:
+- auto-complete
+- auto-drafted
+- ci
+- failure-2
+- failure-kind:tool-exit
