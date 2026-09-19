@@ -54016,6 +54016,35 @@ fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
     // ("being worked now"); only the stale case is rewritten here, so a genuine
     // live session is never mislabeled. trace:BUG-623 | ai:claude
     {
+        // TASK-163: after phase 1 the child exits, but the live drain
+        // orchestrator continues to own the spec through CI/review/merge.
+        // Never advertise session release while that authoritative PID lives.
+        if let Some(drain) = drain_state::live_drain_spec(&project_root, &disp) {
+            let reason = format!(
+                "in-flight — drain phase {}, orchestrator pid {}",
+                drain.phase, drain.pid
+            );
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "spec": disp,
+                        "bucket": "in-flight",
+                        "reason": reason,
+                        "needs_human": false,
+                        "drain": { "phase": drain.phase, "orchestrator_pid": drain.pid },
+                    }))?
+                );
+            } else {
+                println!(
+                    "{}{} is {}",
+                    why_headline_prefix(),
+                    disp.cyan(),
+                    reason.green()
+                );
+            }
+            return Ok(());
+        }
         let leases = list_leases(&project_root);
         let mut ids: Vec<String> = Vec::new();
         if let Some(a) = req.agreed_id.as_deref() {
@@ -57408,7 +57437,7 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
     // trace:BUG-763 | ai:claude — the real (single-pid /proc-reading) start-time
     // seam, injected the same way as the git + lock probes so
     // `build_running_work` stays filesystem-free and unit-testable.
-    build_running_work(
+    let (mut rows, mut orphans) = build_running_work(
         &specs,
         &leases,
         &live,
@@ -57418,7 +57447,24 @@ fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>, Vec<PsOrp
         pid_start_time,
         |jsonl| session::role_from_jsonl(jsonl, "claude").ok().flatten(),
         |lease_id| manifest_roles.get(lease_id).cloned(),
-    )
+    );
+    // TASK-163: a dead phase child does not make its lease stale while the
+    // drain orchestrator owns that spec. Overlay the authoritative drain PID
+    // and suppress the contradictory orphan row.
+    for row in &mut rows {
+        let Some(spec) = row.spec.as_deref() else {
+            continue;
+        };
+        if let Some(drain) = drain_state::live_drain_spec(project_root, spec) {
+            row.state = LeaseState::Live;
+            row.pid = Some(drain.pid);
+            row.pid_started_at = pid_start_time(drain.pid);
+            row.role = Some(format!("drain {}", drain.phase));
+            row.dispatch = None;
+        }
+    }
+    orphans.retain(|orphan| drain_state::live_drain_spec(project_root, &orphan.spec).is_none());
+    (rows, orphans)
 }
 
 /// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec

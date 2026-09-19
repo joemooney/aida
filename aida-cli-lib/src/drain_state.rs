@@ -169,6 +169,62 @@ pub(crate) struct LiveDrainProbe {
     pub(crate) phase: Option<String>,
 }
 
+/// A spec whose lifecycle is currently owned by a corroborated live drain.
+/// The drain lock PID, rather than the phase child's PID, is the liveness
+/// authority after the implementer exits for CI/review/merge.
+// trace:TASK-163 | ai:codex
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LiveDrainSpec {
+    pub(crate) pid: u32,
+    pub(crate) phase: String,
+}
+
+/// Return the live orchestrator activity for `spec`, when that member is in a
+/// drain phase. Both state membership and the live lock must agree; stale state
+/// or a dead/missing lock fails closed.
+// trace:TASK-163 | ai:codex
+pub(crate) fn live_drain_spec(project_root: &Path, spec: &str) -> Option<LiveDrainSpec> {
+    let state = DrainState::read(project_root)?;
+    let lock = drain_lock::read_pid_live_lock(project_root)?;
+    let member = state
+        .members
+        .iter()
+        .find(|m| m.spec.eq_ignore_ascii_case(spec) && m.is_running())?;
+    let raw_phase = if state
+        .current
+        .as_deref()
+        .is_some_and(|s| s.eq_ignore_ascii_case(spec))
+    {
+        state
+            .current_phase
+            .clone()
+            .unwrap_or_else(|| member.state.clone())
+    } else {
+        member.state.clone()
+    };
+    Some(LiveDrainSpec {
+        pid: lock.pid,
+        phase: drain_phase_display(&raw_phase),
+    })
+}
+
+fn drain_phase_display(raw: &str) -> String {
+    let number = raw
+        .strip_prefix("in-phase-")
+        .or_else(|| raw.split_whitespace().next())
+        .unwrap_or(raw);
+    let label = match number {
+        "1" => "implementer",
+        "2" => "CI wait",
+        "3" => "reviewer",
+        "4" => "merge",
+        "5" => "pull",
+        "6" => "complete",
+        _ => return raw.to_string(),
+    };
+    format!("{number}/6 ({label})")
+}
+
 /// BUG-286: one orchestrator-side retry event recorded against the drain.
 /// Mirrors the [`crate::network_retry::RetryEvent`] shape with the spec /
 /// phase context the orchestrator carries.
@@ -1653,6 +1709,26 @@ mod tests {
                 "▶ drain in flight: spec 2/3 STORY-285 (ci) — watch: aida drain status".to_string()
             )
         );
+    }
+
+    #[test]
+    fn live_drain_spec_uses_orchestrator_for_ci_wait() {
+        let dir = tempfile::tempdir().unwrap();
+        write_lock(dir.path(), std::process::id());
+        let mut state = batch_state();
+        state.current = Some("STORY-285".to_string());
+        state.current_phase = Some("2 (ci)".to_string());
+        state.members[1].state = "in-phase-2".to_string();
+        state.write(dir.path()).unwrap();
+
+        assert_eq!(
+            live_drain_spec(dir.path(), "story-285"),
+            Some(LiveDrainSpec {
+                pid: std::process::id(),
+                phase: "2/6 (CI wait)".to_string(),
+            })
+        );
+        assert_eq!(live_drain_spec(dir.path(), "STORY-301"), None);
     }
 
     #[test]
