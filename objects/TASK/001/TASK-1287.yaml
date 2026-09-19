@@ -3,12 +3,12 @@ spec_id: TASK-1287
 agreed_id: TASK-1287
 title: aida pr ship treats an aida:merge-hold LABEL with no marker file as a hold it can release after review (today it stops on the red gate with nothing to release; the advisor must run merge-hold clear by
 description: 'Seen on #1946 and #1958 (2026-09-18): a PR hand-labelled aida:merge-hold (no .aida/merge-holds/PR-N marker, because the drain did not open it) makes the required merge-hold-gate check red; aida pr ship sees the red required check, finds no marker to release, and stops — the advisor has to run `aida merge-hold clear <n>`, wait for the gate to re-run, then ship again. Fix: in aida pr ship, when the only red required check is merge-hold-gate and the PR carries the label but no marker, treat it as a supervised hold: print the same "releasing supervised merge-hold (explicit review-merge)" line, drop the label via merge_hold::sync_label(.., false), wait for the gate re-run (bounded), and merge — exactly the marker path. Acceptance: a fixture PR with label-only hold ships in one `aida pr ship` invocation with the release line printed; a PR with neither label nor marker is unchanged; unit test on the classification (label-only → hold).'
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:38:23.425004816Z
-modified_at: 2026-09-19T06:22:34.578551165Z
+modified_at: 2026-09-19T08:54:47.787149209Z
 req_type: Task
 tags:
 - batch:followups-0918h
