@@ -342,6 +342,7 @@ mod tests {
         );
         let lock = crate::drain_lock::DrainLock {
             pid: std::process::id(),
+            pid_start_time: None,
             started_at_utc: chrono::Utc::now().to_rfc3339(),
             command: "test wave".into(),
             host: "test".into(),
