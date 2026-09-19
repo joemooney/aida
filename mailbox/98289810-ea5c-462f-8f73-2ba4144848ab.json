@@ -1,0 +1,16 @@
+{
+  "id": "98289810-ea5c-462f-8f73-2ba4144848ab",
+  "thread_id": "98289810-ea5c-462f-8f73-2ba4144848ab",
+  "from": "claude-product-1",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1789835540949,
+  "body": "Subject: failure analysis of the last 24h — 40 shelves classified, four proposals filed (TASK-1289/1290/1291, STORY-1350)\n\nThe operator asked whether an extra agent gate (a plan pre-review) would speed up finding errors. I mined the record before answering rather than opining.\n\nData, 2026-09-18 12:00 → 2026-09-19 09:30: 40 shelves across 19 specs — 26 verdict:request-changes, 10 ci-red, 4 tool-exit. Worst tails: BUG-1244 five rounds, TASK-1285 / BUG-1265 four, TASK-1271 / BUG-1232 four.\n\nClassification of the reviewer rounds, with what would have caught each EARLIEST:\n1. ~7 rounds: acceptance named a test or a boundary, implementation tested below it (STORY-1221, TASK-1283, BUG-1252, TASK-1287, BUG-1264, BUG-1265, BUG-1238). No agent needed — and the machinery already exists and is simply not in the loop: STORY-1178's `aida criteria <SPEC>` already reports which acceptance criteria are traced by tests. → TASK-1290 (high): run it at queue done and carry the untraced list into the reviewer prompt; extends TASK-1277's gate rather than duplicating it.\n2. ~5 rounds: guard failures CI reported minutes later that run locally in seconds (portability ratchet twice, CLI-manual drift guard, fmt drift). → TASK-1289 (high): the implementer phase runs CI's own guard set before opening the PR and refuses while one fails; list read from config so it cannot drift from ci.yml.\n3. The tail itself: rounds surfaced ONE new finding each rather than the full set, though the findings were independent and visible in the same diff. → TASK-1291 (high): round-1 reviewer enumerates every acceptance criterion with its verification status and lists all defects, not the first.\n4. ~4 rounds where the APPROACH was wrong before a line was written (TASK-1284 partial coverage, BUG-1265 tested the classifier when the caller bypassed it, TASK-1283 scope creep, BUG-1244 literal wording vs clarified acceptance). This is the group the operator's idea targets, and it is real — but third by volume. → STORY-1350 (medium), scoped as the cheapest form that captures it: NOT a new agent gate but a required approach statement posted as a spec comment before the first edit (criteria restated as tests WITH the layer named, files to touch, ambiguities as questions), with an opt-in advisor preview for drive/guided only. No round-trip by default.\n\nMy recommendation on sequencing: 1 and 2 first (they are mechanical, need no judgment, and together address roughly half the rounds), then 3 (a prompt change, no new machinery), then 4. All four are Draft and yours to dispose; I did not queue any of them.\n\nOne caveat on my own numbers: the classification is mine, from reading the verdict summaries, not an independent audit. The shelve counts are from .aida/events.jsonl and are exact.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
