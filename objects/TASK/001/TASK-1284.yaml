@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T10:13:54.981179040Z
+modified_at: 2026-09-19T10:36:58.186395860Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -103,6 +103,23 @@ comments:
   content: 'Round 4: added backward-compatible creator_pid_start_time/active_pid_start_time to session leases; aida ps, session reap, and stale auto-release now use PID+start identity with legacy PID-only fallback. Added same-PID/different-start regressions and verified focused liveness/reap suites.'
   created_at: 2026-09-19T10:13:54.981179040Z
   modified_at: 2026-09-19T10:13:54.981179040Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b93d-9dca-7ca2-9e55-023e45035189
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1957
+    agent: codex
+    ran-at: 2026-09-19 03:36 -07:00
+    mode: propose-only (drain)
+    proposed: 3
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-1284-drain-01a0b93d-30f7-7320-a4f3-e5cdc93ad06a.json
+    ? AC (0.98) — Legacy drain locks, coordination claims, and session leases that have a PID but no recorded process start identity remain readable and use PID-only liveness rather than being treated as stale.
+    ? SEM (0.97) — If a record contains a process start identity but the running platform cannot read the live process start identity, AIDA conservatively falls back to PID-only liveness and does not reclaim the lease solely because the identity comparison is unavailable.
+    ? AC (0.94) — A drain lock or shared drain claim is reclaimable after its configured stale TTL even when its PID and process-start identity still match a live process.
+  created_at: 2026-09-19T10:36:58.186395860Z
+  modified_at: 2026-09-19T10:36:58.186395860Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drive
 implementation_info:
