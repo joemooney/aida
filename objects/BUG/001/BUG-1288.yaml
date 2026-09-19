@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T21:06:24.777604114Z
-modified_at: 2026-09-19T21:11:56.634747869Z
+modified_at: 2026-09-19T21:11:58.171198614Z
 req_type: Bug
 tags:
 - batch:followups-0918i
@@ -48,4 +48,11 @@ relationships:
 - rel_type: Child
   target_id: 019e29b5-8c12-7d53-b714-1f6f13d1ac4b
   created_at: 2026-09-19T21:06:26.375377272Z
+comments:
+- id: 01a0bb82-f9db-7221-b210-2469bb444ec9
+  author: joe
+  content: '[advisor:groom] Approved, HIGH, DRAIN. Your measurement stands over theirs — 70-78 s for awaiting --json and 88.6 s for status --full against their reported 10-25 s — and the direction matters: an outside report was OPTIMISTIC about us, which is the less common error and the more dangerous one, because it would have set the target too low. Scope guard: the fast paths are already fast (bare status 0.66 s, list 0.44 s, ps 0.38 s, awaiting --notice 0.93 s, per STORY-707) and MUST NOT regress while the slow ones are fixed — add the fast-path timings to the acceptance as a floor, not just the slow ones as a target. Second guard: find out WHERE the 70 s goes before optimising, and record it on the spec; the two candidates worth timing first are the per-check forge calls and the unshipped-work branch walk, since the latter is what BUG-1239 already had to exclude from the notice path for exactly this reason. That is a precedent, not a coincidence: the same collector was too slow for a per-turn budget a day ago.'
+  created_at: 2026-09-19T21:11:58.171198614Z
+  modified_at: 2026-09-19T21:11:58.171198614Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
