@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T06:28:21.611428865Z
+modified_at: 2026-09-19T09:24:10.240261273Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -54,6 +54,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-09-19T06:28:21.359546647Z
   modified_at: 2026-09-19T06:28:21.359546647Z
+- id: 01a0b8fa-f780-7380-857a-4fc0043abd14
+  author: joe
+  content: 'Round 2: added behavioral coverage for the machine-readable headless refusal, doctor detection + heal using the exact 13 incident IDs from BUG-1241, and forced MCP replacement''s git commit subject. Forced MCP tag replacement now persists through an explicit audited commit-subject path shared by git-backed Storage. Commit c130ca6e28.'
+  created_at: 2026-09-19T09:24:10.240261273Z
+  modified_at: 2026-09-19T09:24:10.240261273Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
   implemented: true
