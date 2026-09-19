@@ -1,11 +1,4 @@
 - user_id: claude-product-1
-  requirement_id: 01a0b6e5-444d-7a00-a3c2-d1237930528c
-  position: 0
-  added_by: claude-product-1
-  note: 'Round 2 fixed the two integration tests; CI now fails the Rust portability ratchet (run 35427171838): new non-portable test assumptions — aida-cli-lib/src/auto_complete.rs:6565: tmp literal: driver.workspace = Some(("/tmp/aida-story-1221".to_string(), "story-1221".to_string()));  Move the code behind #[cfg(unix)] / #[cfg(target_os = "linux")], make it portable, or shrink/regenerate the baseline only for existing debt. ##[error]Process completed with exit code 1. . Replace hard-coded unix paths/separators in the new tests with tempdir + PathBuf joins (or cfg-gate a genuinely unix-only assertion), then run scripts/check-portability.sh --check-allowlist-growth origin/main locally until it is clean. Do not add entries to scripts/portability-allowlist.txt.'
-  added_at: 2026-09-19T06:49:55.227992746Z
-  for_role: implementer
-- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
