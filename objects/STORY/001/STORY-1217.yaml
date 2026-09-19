@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-09-19T16:39:48.093292948Z
+modified_at: 2026-09-19T16:39:49.951631582Z
 req_type: Story
 tags:
 - audit
@@ -23,4 +23,18 @@ relationships:
 - rel_type: Child
   target_id: 01a0ab07-332f-7bc0-9c56-10307b5ced35
   created_at: 2026-09-18T18:29:29.744446677Z
+comments:
+- id: 01a0ba89-d3bf-7d52-9bd5-2ddaedadd3d4
+  author: joe
+  content: |-
+    [advisor:groom] Approved, medium, GUIDED — keyboard, with the operator. Not drain, not drive.
+
+    Why guided: this creates an AUTHORITY object. A grant says "this agent may act as advisor until T", and role checks then accept it as authority for the gated writes — queue add, edit --mode, launching a drain, closing a spec. That is the mechanism that decides who can approve what, and it is the one place where an implementation detail becomes a policy decision. The forks are Joe's, not an implementer's: who may ISSUE a grant (only the operator? an advisor? any holder of a live grant — i.e. is it delegable?); whether a grant survives a session end and a machine restart; whether revocation is immediate or expiry-only; what a write made under a grant records so the ledger shows the chain rather than just the actor; and whether a grant can ever cover the integrity floors (my answer would be no — CI green, one merger, single drain, and the no-self-merge rule stay outside any grant, but that is exactly the kind of line the operator should draw explicitly rather than inherit from my comment).
+
+    The need is real and I am the evidence: under the standing proxy mandate the product seat prefixed AIDA_SESSION_ROLE=advisor onto every gated command for a full day, and I have used the same prefix in this session. An env var is invisible to the ledger, survives nothing, scopes nothing, and becomes a prefix nobody reads — the LLM testimonial named it as one of the six things it would change first, in those words. So the problem is worth solving; the solution is worth ten minutes of Joe's attention before it is built.
+
+    Suggested shape to take INTO that session, not to implement from this comment: aida grant <role> --for <duration> --reason <text> [--scope batch:NAME|EPIC-N] writing a grant object to the store; aida grant list / revoke; role checks accepting a live grant; every write made under one recording the grant id alongside the actor so the proxy-approval ledgers I have been writing by hand become derivable. Explicitly out of scope until Joe says otherwise: any grant that relaxes an integrity floor.
+  created_at: 2026-09-19T16:39:49.951631582Z
+  modified_at: 2026-09-19T16:39:49.951631582Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: guided
