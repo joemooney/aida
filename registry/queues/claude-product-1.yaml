@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0ba81-d1a6-7e53-be40-c73cbbfbf3b7
+  position: 0
+  added_by: claude-product-1
+  note: 'Mis-shelved, no code owed: PR #1972 has Build (ubuntu-latest) PASSING and merge-hold-gate as its only red — the hold gate IS the hold for a drive spec. That is exactly the BUG-1265 case, which merged at 19:14 UTC, twenty-five minutes AFTER this wave''s orchestrator started on its binary. A running wave keeps the binary it launched with (the subject of TASK-1285), so this wave still carries the pre-fix classifier. The next relaunch rebuilds from main and will not repeat it. Re-drive as-is; the two real items from round 1 (express override must clear no_preflight; binary-dependent guards must run against a binary built from the worktree source) still stand.'
+  added_at: 2026-09-19T19:39:53.386012444Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
