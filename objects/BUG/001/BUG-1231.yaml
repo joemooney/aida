@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:30:39.919772314Z
-modified_at: 2026-09-19T22:02:21.969383237Z
+modified_at: 2026-09-19T22:02:23.806654459Z
 req_type: Bug
 tags:
 - agent-ux
@@ -24,6 +24,33 @@ comments:
   created_at: 2026-09-19T16:39:07.412956311Z
   modified_at: 2026-09-19T16:39:07.412956311Z
   session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
+- id: 01a0bbb1-23b7-7a81-a97b-d21ece9b1c2d
+  author: joe
+  content: |-
+    [rework round 2] PR #1976 — CI RED. This is a compile error, not a test failure, and it is one missed initializer in a crate the change did not touch.
+
+    THE ERROR, from run 35471997271, Build (ubuntu-latest), failed in 1m35s:
+
+      error[E0063]: missing field `subject` in initializer of `aida_core::mailbox::Message`
+        --> aida-server/src/rest.rs:1172:15
+
+    CONFIRMED by reading the branch. Adding `pub subject: Option<String>` to `Message` in aida-core/src/mailbox.rs makes every struct-literal initializer of `Message` in the workspace incomplete. `#[serde(default)]` covers deserialization of old messages on disk, which is the right call and should stay, but it does nothing for Rust struct literals. Every one must name the field.
+
+    aida-cli-lib and aida-core were updated. aida-server was not. The site is `rest.rs:1172`, inside the assignment-notification helper — it builds a Message with id, thread_id, from, to, timestamp, in_reply_to, body, urgent, intent, retracted, deleted, archived, and no subject.
+
+    THE FIX for that site: add `subject: None`, or better, give it a real subject. It is an assignment notification whose body is "You were assigned {display_id}: {title}", so a subject carrying the display_id is exactly the kind of message this spec exists to make legible in an inbox listing. Use your judgement; `None` is acceptable and correct, a real subject is better.
+
+    DO NOT STOP AT THE ONE CI NAMED. A cross-crate field addition fails one crate at a time — the compiler reports aida-server only because aida-cli-lib happened to compile first. Before pushing, run a workspace-wide check so the next red is not the next crate:
+
+      cargo check --workspace --all-targets
+
+    That covers test targets too, which a plain `cargo check --workspace` does not, and there are Message literals in test modules (aida-core/src/mailbox.rs around lines 821, 839, 1082-1092, 1307; aida-cli-lib tests under bug_231_findings_promote_tests.rs and mailbox_digest_autotrigger_tests.rs). Confirm each names the field.
+
+    WHY THIS ROUND EXISTS AT ALL, worth one line for the record. This failure was detectable locally in well under a minute and instead cost a ten-minute PR cycle, a shelve and a rework round. That is precisely the gap TASK-1289 is closing — the implementer phase running CI's own guards before opening the PR. Until it lands, `cargo check --workspace --all-targets` before `aida pr ship` is the manual substitute; please run it here.
+
+    Everything else on the PR looks untouched by this — the failure is at 1m35s, so nothing got as far as running tests. Push fixups to bug-1231-work. Do not open a new PR.
+  created_at: 2026-09-19T22:02:23.543335170Z
+  modified_at: 2026-09-19T22:02:23.543335170Z
 execution_mode: drain
 implementation_info:
   implemented: true
