@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b5cd-a76d-7a80-b832-7f46598aff98
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 3 on PR #1950: aida-cli-lib/src/forge.rs:2093-2099 builds the merge request without GitLab''s sha field. A commit pushed after the detailed_merge_status read can therefore be merged without being the reviewed caeffc4a head. Parse the MR sha and send it on PUT /merge, treating a 409 SHA mismatch as stale-head/re-review rather than retrying an unpinned merge. | aida-cli-lib/src/forge.rs:2605-2609 classifies GitLab''s documented approvals_syncing state as Blocked even though it is transient. Add it to the bounded wait-and-reread set and cover it in the status-classification test.  Concretely: parse the MR''s sha from the same detailed-status read and send it as the sha field on PUT /merge; map a 409 (SHA mismatch) to a stale-head outcome that shelves for re-review instead of retrying; add approvals_syncing to the Wait set and to gitlab_merge_gate_classifies_every_transient_status; fixture-test the sha field and the 409 path.'
+  added_at: 2026-09-19T02:22:35.979300693Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
