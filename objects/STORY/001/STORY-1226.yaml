@@ -36,7 +36,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T20:57:48.132153187Z
-modified_at: 2026-09-19T05:24:46.922612008Z
+modified_at: 2026-09-19T05:26:31.665186880Z
 req_type: Story
 tags:
 - keyboard-gate
@@ -99,6 +99,19 @@ comments:
       - Retire `schedule.rs` (STORY-262) once no project carries a `schedules.toml` → STORY-262
   created_at: 2026-09-19T05:24:47.188190453Z
   modified_at: 2026-09-19T05:24:47.188190453Z
+- id: 01a0b821-65f1-7e00-a7fa-74bc60f64d43
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1946 [AI:claude] feat(schedule): per-seat job registry + ledger, aida cron alias (STORY-1226)
+    verdict: APPROVE + merged (round 2; auto-bumped Done → Completed at 8d3d959)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (product seat built it in a guided session with the operator; advisor + a read-only reviewer agent reviewed round 1 over the full 4,689-line diff; advisor reviewed the round-2 fix commit 25a2fda52c — .aida/review-verdicts/PR-1946-advisor.json)
+    gates: required Build (ubuntu-latest) = success at 25a2fda5 after the rebase onto main; the hold was a hand-applied label with no marker file (BUG-1236), so aida pr ship could not release it — the advisor cleared it deliberately via aida merge-hold clear after review, the merge-hold-gate check re-ran green, then aida pr ship merged; merge lease via aida pr ship; aida pull ran post-merge; ADR-46 accepted 15:14
+    reasoning: grows aida schedule (STORY-1047) into the per-seat registry with aida cron as alias; store-object ledger per job with CAS + 60 s debounce and last-writer-wins merge; project [schedule] + global ~/.aida/schedule.toml merged project-wins; typed predicate grammar over 9 documented fields; every/on/when schedule kinds with once-until-cleared episodes; CronChannel in awaiting/statusbar quiet when nothing is due; safety floor met (only allow-listed substrate verbs execute, nothing launches a drain, merges or releases a hold); slice boundary clean (install + unattended execution + cold-boot deferred to STORY-1218, whose acceptance now carries the cold-boot bullet). Round-1 fixes landed with tests: ledger write refuses on a detached/mid-rebase store; first-sight event cursor = now; strict [schedule] parse in the global file. Follow-ups: TASK-1281 (six hardening items), TASK-1280 (one ledger commit per tick), TASK-1286 (auto-filed deprecation shim for scripted task names) — all re-queued in wave followups-0918h.
+    timestamp: 2026-09-18T22:26-07:00
+  created_at: 2026-09-19T05:26:31.665186880Z
+  modified_at: 2026-09-19T05:26:31.665186880Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b81f-abf6-72a0-bcfe-62ad13da3984
   author: aida-auto-bump
