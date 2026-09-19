@@ -10,12 +10,12 @@ description: |-
   2. `aida doctor` check `parent-tag-drift`: a spec whose Parent relationship exists but whose parent:<ID> tag is missing (and the reverse — a parent:* tag with no relationship) is listed; `--heal` re-adds the tag from the relationship (relationship is the truth). The check must list the 13 ids from the incident on a fixture.
   3. MCP parity: update_requirement's tags edit routes through the same guard (STORY-82 mirror rule).
   Acceptance: unit tests for the refuse path (each structural family), the --force path with its commit subject, the headless refusal shape, the doctor check + --heal on a fixture; no change to --add-tag / --remove-tag.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T04:57:08.937913149Z
-modified_at: 2026-09-19T12:11:35.419320505Z
+modified_at: 2026-09-19T12:11:44.272778392Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -93,16 +93,28 @@ comments:
   created_at: 2026-09-19T12:11:35.419320505Z
   modified_at: 2026-09-19T12:11:35.419320505Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+history:
+- id: 01a0b994-610f-7210-9237-530c8b74acab
+  author: aida-auto-bump
+  timestamp: 2026-09-19T12:11:44.272010148Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a0b994-6110-7ba1-99bf-51cff5c6731c
+  timestamp: 2026-09-19T12:11:44.272777428Z
+  agent: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+  brief_ref: .aida/agent-briefs/advisor/BUG-1252-2026-09-19T121138Z.md
+  commit_sha: 6864f7ea0515718f9a636338b1928de929f71c4a
+  summary: Completed via merge 6864f7ea
+  punted:
+  - 'punted: reviewer verdict is RequestChanges — not Approved'
+  - 'punted: CI is red on PR-1961: failing: Build (ubuntu-latest)'
 execution_mode: drain
 implementation_info:
   implemented: true
   implemented_at: 2026-09-19T06:14:23.748497262Z
   implemented_by: joe
-failure_reason:
-  phase: ci
-  phase_index: 2
-  kind: ci-red
-  detail: 'CI is red on PR-1961: failing: Build (ubuntu-latest)'
-  recovery_hint: 'CI failed on run 35434601590 — view it: `gh run view 35434601590`. Push fixups to the same branch: `aida queue work BUG-1252 --branch bug-1252 --steal`'
-  shelved_by: advisor
-  shelved_at: 2026-09-19T09:30:11.774368768Z
+  completed_at: 2026-09-19T12:11:44.271764711Z
+  completion_sha: 6864f7ea0515718f9a636338b1928de929f71c4a
