@@ -33,3 +33,11 @@
   added_at: 2026-09-19T11:05:39.957623554Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a0b963-50a1-73f1-87dd-de8bdc6a0d4d
+  position: 61000
+  added_by: role:implementer
+  note: 'drive: alias-aware resolver (spec_id|origin_id|agreed_id via cache) for batch member + queue pickup; unresolvable member → skip line + SpecSkipped event, never silent; tests incl. aliased-object pickup; verify TASK-163 gets picked up afterwards'
+  added_at: 2026-09-19T11:22:29.471295657Z
+  for_role: implementer
+  added_by_machine: imac
