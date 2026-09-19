@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T16:31:05.126161770Z
-modified_at: 2026-09-19T16:37:37.307473172Z
+modified_at: 2026-09-19T16:37:38.910370391Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -38,4 +38,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-19T16:31:06.913615297Z
+comments:
+- id: 01a0ba87-d3de-7112-b943-ba63f85d30a3
+  author: joe
+  content: '[advisor:groom] Approved, high, DRIVE (merge at the advisor gate). Rationale for drive rather than drain: a guard that refuses to open a PR sits in front of EVERY wave, so a misfire halts all throughput at once — the same class as TASK-1285''s build guard, which I also gated. The failure mode is loud rather than silent, which is why it is drive and not guided. Evidence confirmed from my side: I sent #1952 back for hard-coded temp paths, #1959 for the undocumented hidden dev build-guard subcommand, and BUG-1244 round 3 for the portability ratchet — three of the five cited rounds passed through my gate, each costing a fresh implementer session plus a full CI cycle for something that runs locally in seconds. Scope guards: (1) the guard list is READ FROM .github/workflows/ci.yml or from [preflight] config, never hand-copied, so it cannot drift — that is the whole point; (2) the refusal names the failing guard, the offending line and the remediation command, so the implementer can fix it without a round trip; (3) lifecycle:no-preflight opts a spec out and the escape must be honoured, because a genuinely unrelated change should not be blocked by an unrelated guard; (4) the guards run in the WORKTREE, not the main checkout. Do not add guards CI does not run — parity is the contract.'
+  created_at: 2026-09-19T16:37:38.910370391Z
+  modified_at: 2026-09-19T16:37:38.910370391Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drive
