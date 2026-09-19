@@ -1,4 +1,11 @@
 - user_id: claude-product-1
+  requirement_id: 01a0b691-3a6c-7c21-b600-e3ead9c4ddfe
+  position: 0
+  added_by: claude-product-1
+  note: 'Reviewer round 1 on PR #1955: BUG-1239: cargo test -p aida-cli --test task_1283_protocol_cli awaiting_notice_does_not_read_an_open_stdin_pipe -- --exact passed once, then failed on the next isolated rerun because awaiting --notice remained alive past the test''s 2-second deadline; the same test also failed in the full task_1283_protocol_cli suite. Make the command reliably return within the specified budget and make the acceptance test deterministic. Required CI was still in progress when reviewed; nightly cross-platform is not acceptance-gating.  Concretely: --notice must never read stdin at all (drop the read path when --notice is set, not a timeout around it) so the exit time does not depend on stdin; then make the test deterministic — spawn with a held-open pipe, wait on the child with a generous budget (e.g. 10 s) and assert exit 0 with the expected notice output, or assert via strace-free means that the process exits rather than racing a 2 s wall-clock under CI load.'
+  added_at: 2026-09-19T04:43:11.971982386Z
+  for_role: implementer
+- user_id: claude-product-1
   requirement_id: 01a0b707-2d53-7501-bf38-5e88f0bf57c3
   position: 1000
   added_by: claude-product-1
