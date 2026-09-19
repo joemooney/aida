@@ -6,6 +6,43 @@
 // trace:STORY-771 | ai:claude
 
 use crate::*;
+use std::path::Path;
+
+/// Collect requirement references from commits introduced since the current
+/// branch diverged from the default branch. Failure yields no evidence, which
+/// intentionally makes the ownership gate fail closed.
+// trace:BUG-1244 | ai:codex
+fn queue_done_commit_spec_ids(project_root: &Path, branch: &str) -> Vec<String> {
+    let Some(default_ref) = resolve_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+    let range = format!("{default_ref}..{branch}");
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--format=%B%x00", &range])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    let mut ids = Vec::new();
+    for message in String::from_utf8_lossy(&output.stdout).split('\0') {
+        let mut found = extract_spec_ids_from_commit(message);
+        found.extend(extract_referenced_spec_ids_from_commit(message));
+        for id in found {
+            if !ids
+                .iter()
+                .any(|seen: &String| seen.eq_ignore_ascii_case(&id))
+            {
+                ids.push(id);
+            }
+        }
+    }
+    ids
+}
 
 /// STORY-566: `aida queue advance` — a ROUTER over the queue. Walks each queued
 /// spec in order, classifies it via `burndown::explain_open`, and dispatches to
@@ -4338,20 +4375,30 @@ pub(crate) fn handle_queue_command(
                 .or(req.spec_id.as_deref())
                 .unwrap_or("???");
 
-            // BUG-1244: fail closed before any lifecycle mutation when this
-            // command is run from a sibling spec's worktree. A commit trailer
-            // naming both specs is not ownership evidence; the selected branch
-            // is. `--force` is the deliberate shared-branch escape hatch.
+            // BUG-1244: fail closed before any lifecycle mutation unless the
+            // branch names this spec or a commit since its merge-base does.
+            // `--force` remains the explicit, ledgered recovery escape hatch.
             // trace:BUG-1244 | ai:codex
-            if !*force {
-                if let Ok(root) = find_project_root() {
-                    if let Some(branch) = current_branch_at(&root) {
-                        if !workflow_hints::branch_belongs_to_spec(&branch, display_id) {
+            if let Ok(root) = find_project_root() {
+                if let Some(branch) = current_branch_at(&root) {
+                    let commit_ids = queue_done_commit_spec_ids(&root, &branch);
+                    match workflow_hints::queue_done_ownership(
+                        &branch,
+                        display_id,
+                        &commit_ids,
+                        *force,
+                    ) {
+                        workflow_hints::QueueDoneOwnership::Proceed => {}
+                        workflow_hints::QueueDoneOwnership::Refuse(reason) => {
                             eprintln!(
-                                "queue done refused: branch `{branch}` belongs to another spec, not {display_id}.\n\
-                                 Run from {display_id}'s worktree/branch, or use `--force` for a deliberate shared branch (the override is ledgered)."
+                                "queue done refused: {reason}.\nRun from {display_id}'s worktree/branch, commit work referencing {display_id}, or use `--force` (the override is ledgered)."
                             );
                             std::process::exit(1);
+                        }
+                        workflow_hints::QueueDoneOwnership::Forced(reason) => {
+                            eprintln!(
+                                "warning: --force overriding queue-done ownership check: {reason}."
+                            );
                         }
                     }
                 }

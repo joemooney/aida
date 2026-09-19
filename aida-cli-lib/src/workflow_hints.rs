@@ -278,22 +278,11 @@ pub fn queue_done_should_bypass_pr_check(yes: bool, force: bool, skip_pr_check: 
     force || skip_pr_check
 }
 
-/// BUG-1244: refuse only when the branch itself names a *different* spec.
-/// Default branches and shared batch/cluster branches intentionally carry no
-/// spec id and are valid places to finish queued work. Commit subjects are not
-/// ownership evidence: the incident branch explicitly named STORY-1221 while
-/// the command attempted to finish BUG-1236.
+/// BUG-1244: branch-name ownership is positive evidence, not an absence of
+/// contradictory evidence. An unscoped branch must be checked against its
+/// since-merge-base commits by the queue-done command.
 // trace:BUG-1244 | ai:codex
 pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
-    let normalized = branch
-        .trim_start_matches("refs/heads/")
-        .to_ascii_lowercase();
-    if normalized.starts_with("batch/")
-        || normalized.starts_with("cluster/")
-        || normalized.starts_with("single-branch/")
-    {
-        return true;
-    }
     let Some((target_prefix, target_numeric_core)) = requirement_id_parts(spec) else {
         return false;
     };
@@ -316,14 +305,77 @@ pub(crate) fn branch_belongs_to_spec(branch: &str, spec: &str) -> bool {
                 .then(|| (prefix, capture[2].to_string()))
         })
         .collect();
-    ids.is_empty()
-        || ids.iter().all(|(prefix, numeric_core)| {
+    !ids.is_empty()
+        && ids.iter().all(|(prefix, numeric_core)| {
             prefix == &target_prefix
                 && (numeric_core == &target_numeric_core
                     || numeric_core
                         .strip_prefix(&target_numeric_core)
                         .is_some_and(|suffix| suffix.starts_with('-')))
         })
+}
+
+fn branch_names_requirement(branch: &str) -> bool {
+    let re = regex::Regex::new(r"(?i)([a-z]+)-(\d+(?:-\d+)*)").expect("valid branch spec regex");
+    let found = re.captures_iter(branch).any(|capture| {
+        let Some(whole) = capture.get(0) else {
+            return false;
+        };
+        let bounded = (whole.start() == 0
+            || !branch.as_bytes()[whole.start() - 1].is_ascii_alphanumeric())
+            && (whole.end() == branch.len()
+                || !branch.as_bytes()[whole.end()].is_ascii_alphanumeric());
+        bounded
+            && RequirementType::ALL
+                .iter()
+                .any(|req_type| req_type.default_prefix() == capture[1].to_ascii_uppercase())
+    });
+    found
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum QueueDoneOwnership {
+    Proceed,
+    Refuse(String),
+    Forced(String),
+}
+
+/// A target-named branch passes. Otherwise at least one commit since the
+/// merge-base must reference the target; `--force` is the ledgered override.
+// trace:BUG-1244 | ai:codex
+pub(crate) fn queue_done_ownership(
+    branch: &str,
+    spec: &str,
+    commit_spec_ids: &[String],
+    force: bool,
+) -> QueueDoneOwnership {
+    if branch_belongs_to_spec(branch, spec) {
+        return QueueDoneOwnership::Proceed;
+    }
+    let foreign_branch = branch_names_requirement(branch);
+    if !foreign_branch
+        && commit_spec_ids
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case(spec))
+    {
+        return QueueDoneOwnership::Proceed;
+    }
+    let evidence = if foreign_branch {
+        "the branch names a different requirement".to_string()
+    } else if commit_spec_ids.is_empty() {
+        "no since-merge-base commit references the target".to_string()
+    } else {
+        format!(
+            "since-merge-base commits reference {}, not the target",
+            commit_spec_ids.join(", ")
+        )
+    };
+    let reason = format!("branch `{branch}` is not owned by {spec}: {evidence}");
+    if force {
+        QueueDoneOwnership::Forced(reason)
+    } else {
+        QueueDoneOwnership::Refuse(reason)
+    }
 }
 
 fn requirement_id_parts(spec: &str) -> Option<(String, String)> {
@@ -1310,7 +1362,7 @@ mod tests {
     }
 
     #[test]
-    fn queue_done_ownership_allows_default_and_non_spec_branches() {
+    fn queue_done_ownership_requires_commit_evidence_on_unscoped_branches() {
         for branch in [
             "main",
             "master",
@@ -1319,7 +1371,47 @@ mod tests {
             "batch/followups-0918h",
             "cluster/one",
         ] {
-            assert!(branch_belongs_to_spec(branch, "BUG-1236"), "{branch}");
+            assert!(!branch_belongs_to_spec(branch, "BUG-1236"), "{branch}");
+            assert!(matches!(
+                queue_done_ownership(branch, "BUG-1236", &[], false),
+                QueueDoneOwnership::Refuse(_)
+            ));
+            assert_eq!(
+                queue_done_ownership(branch, "BUG-1236", &["BUG-1236".into()], false),
+                QueueDoneOwnership::Proceed
+            );
         }
+    }
+
+    #[test]
+    fn queue_done_command_refuses_without_target_evidence() {
+        let outcome = queue_done_ownership("pr-1948", "BUG-1236", &["STORY-1221".into()], false);
+        let QueueDoneOwnership::Refuse(reason) = outcome else {
+            panic!("queue done must refuse, got {outcome:?}");
+        };
+        assert!(reason.contains("STORY-1221"), "{reason}");
+        assert!(reason.contains("BUG-1236"), "{reason}");
+    }
+
+    #[test]
+    fn queue_done_command_foreign_branch_cannot_borrow_target_commit() {
+        assert!(matches!(
+            queue_done_ownership(
+                "story-1221",
+                "BUG-1236",
+                &["STORY-1221".into(), "BUG-1236".into()],
+                false,
+            ),
+            QueueDoneOwnership::Refuse(_)
+        ));
+    }
+
+    #[test]
+    fn queue_done_command_force_explicitly_overrides_missing_evidence() {
+        let outcome = queue_done_ownership("main", "BUG-1236", &[], true);
+        let QueueDoneOwnership::Forced(reason) = outcome else {
+            panic!("--force must produce a recorded override, got {outcome:?}");
+        };
+        assert!(reason.contains("no since-merge-base commit"), "{reason}");
     }
 }
