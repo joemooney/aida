@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T23:40:08.070346228Z
-modified_at: 2026-09-18T23:40:09.756556347Z
+modified_at: 2026-09-19T00:32:03.326362906Z
 req_type: Task
 tags:
 - drain-safe
@@ -27,4 +27,11 @@ relationships:
 - rel_type: Child
   target_id: 019e3291-30a8-7e12-bd9a-fae6bb9a3b64
   created_at: 2026-09-18T23:40:09.756556347Z
+comments:
+- id: 01a0b713-ccfe-7ff1-a7cf-c7df5130cee6
+  author: joe
+  content: '[advisor] Context for the fresh run: PR #1952 (opened under BUG-1236''s contaminated pickup, BUG-1244 recurrence 2) implemented most of this task — pickup_protocol_block + leased_protocol_notice with two tests — but was CLOSED: its CI failed and the drain reviewer flagged hard-coded /tmp/... paths in the notice-lifecycle test (not portable; Windows nightly would go red). Reuse the shape (centralise the decision in one helper so tests exercise the production call sites), but build fixtures with tempfile::tempdir() and join paths, never literal /tmp strings; keep the CLI-level aida protocol seed test from this task''s list. The closed PR''s diff is a valid reference; do not cherry-pick it blindly.'
+  created_at: 2026-09-19T00:32:03.326362906Z
+  modified_at: 2026-09-19T00:32:03.326362906Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 execution_mode: drain
