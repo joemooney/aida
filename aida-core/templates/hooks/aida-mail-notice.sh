@@ -19,11 +19,11 @@
 #   `Current date/time: <local tz>. Timing: first prompt of this session | continuation (Xm since last prompt).`
 # — so the agent gets fresh time + cadence context every turn even when nothing
 # awaits (this replaced the trial `~/.claude/hooks/inject-time.sh`). The verb
-# reads the hook's JSON payload (session_id + event) from the stdin this relay
-# inherits, and stamps a per-session last-human-input timestamp under
+# receives the hook's JSON payload (session_id + event) from this relay through
+# `AIDA_HOOK_PAYLOAD`, and stamps a per-session last-human-input timestamp under
 # `~/.aida/turn-clock/` that doubles as the human-presence oracle (`aida ps` /
-# `aida human presence`). No re-scaffold needed — existing projects inherit it on
-# the next binary upgrade because this relay is unchanged.
+# `aida human presence`). Existing managed hooks receive this relay update on
+# scaffold refresh.
 #
 # CHEAP by construction: `--notice` is cache/local-backed and makes NO network
 # call — PRs (the one gh-backed channel) are omitted from the per-turn line and
@@ -50,6 +50,13 @@
 # trace:STORY-585 | ai:claude
 # trace:STORY-741 | ai:claude
 # trace:BUG-681 | ai:claude
+# trace:BUG-1239 | ai:codex
+
+# Capture the bounded hook body once, before invoking helpers, so the notice
+# command itself never reads stdin. Direct/scripted `aida awaiting --notice`
+# callers may have an open non-TTY pipe with no EOF and must still return.
+AIDA_HOOK_PAYLOAD=$(cat 2>/dev/null || true)
+export AIDA_HOOK_PAYLOAD
 
 # Resolve the project root the same way the role-context hook does, so the verb
 # runs against the right store regardless of the hook's cwd.

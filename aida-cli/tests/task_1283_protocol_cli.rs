@@ -6,7 +6,10 @@
 // trace:TASK-1283 | ai:codex
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
+
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn git(repo: &Path, args: &[&str]) {
     let status = Command::new("git")
@@ -155,6 +158,7 @@ fn assert_pickup_block(output: &str, kind: &str) {
 
 #[test]
 fn pickup_commands_dispatch_and_render_protocols_before_acceptance() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let spike = p.add("spike", "queue work protocol fixture");
     let bug = p.add("bug", "do protocol fixture");
@@ -202,6 +206,7 @@ fn pickup_commands_dispatch_and_render_protocols_before_acceptance() {
 
 #[test]
 fn awaiting_notice_tracks_real_lease_through_session_end() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let bug = p.add("bug", "notice lifecycle fixture");
 
@@ -288,7 +293,57 @@ fn awaiting_notice_tracks_real_lease_through_session_end() {
 }
 
 #[test]
+fn awaiting_notice_does_not_read_an_open_stdin_pipe() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let p = Project::new();
+    let mut child = aida(&p.repo, &p.home)
+        .args(["awaiting", "--notice"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn awaiting --notice");
+    // Keep the writer alive without sending data or EOF. Before BUG-1239 the
+    // child drained non-TTY stdin and remained blocked here indefinitely.
+    // trace:BUG-1239 | ai:codex
+    let _held_open = child.stdin.take().expect("piped stdin");
+    let started = Instant::now();
+    let contract_budget = Duration::from_secs(2);
+    // Give the test harness one extra second to reap and diagnose a late child,
+    // while separately asserting the command met its two-second contract. This
+    // avoids a scheduler race exactly at the assertion/kill boundary.
+    let reap_deadline = started + Duration::from_secs(3);
+    loop {
+        if let Some(status) = child.try_wait().expect("poll awaiting --notice") {
+            let elapsed = started.elapsed();
+            assert!(status.success(), "awaiting --notice failed: {status}");
+            assert!(
+                elapsed < contract_budget,
+                "awaiting --notice exceeded its two-second budget: {elapsed:?}"
+            );
+            let stdout = child.stdout.take().expect("piped stdout");
+            let output = std::io::read_to_string(stdout).expect("read notice stdout");
+            assert!(
+                output.starts_with("Current date/time:"),
+                "notice did not emit its fail-open time line: {output:?}"
+            );
+            break;
+        }
+        if Instant::now() >= reap_deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!(
+                "awaiting --notice remained alive for {:?} with an open stdin pipe",
+                started.elapsed()
+            );
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
 fn protocol_seed_dispatch_adds_four_and_is_idempotent() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let store = p.repo.join(".aida-store");
     let mut protocol_files = Vec::new();
