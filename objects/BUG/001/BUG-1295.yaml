@@ -1,0 +1,55 @@
+id: 01a0bba5-04e1-7530-9c2d-33b3d51dc915
+spec_id: BUG-1295
+agreed_id: BUG-1295
+title: The orchestrator recovers typed rebase failure causes by substring-matching another AIDA command's prose, so any reword silently downgrades a conflict to an untyped failure and drops its recovery reci
+description: |
+  The orchestrator recovers a typed failure cause by substring-matching another AIDA command's prose output. Reword the message and the type is silently lost — the failure downgrades to a generic one, and the recovery recipe that depends on the type disappears with it. Both sides live in this repo, so the coupling is avoidable.
+
+  CONFIRMED 2026-09-19 on main after #1970 merged. In aida-cli-lib/src/lib.rs, `attempt_phase3_auto_rebase` classifies the outcome of an `aida pr rebase` subprocess by matching the concatenated stdout and stderr:
+
+    line 84649  detail.contains("force-push refused")
+                || detail.contains("Force-pushing would DROP")   -> FailureKind::StaleBaseRefused
+    line 84658  detail.contains("rebase aborted due to conflicts")
+                || detail.contains("rebase hit") && detail.contains("conflict")   -> FailureKind::StaleBaseConflict
+    otherwise   -> an untyped PhaseFailure
+
+  The producers are five bail sites across three files, each phrasing it differently:
+
+    pr_cmd.rs:465      "rebase aborted due to conflicts"
+    pr_cmd.rs:397      "rebase hit {n} conflict(s) in {path}"
+    pr_cmd.rs:455      "rebase hit {n} conflict(s) — aborted, worktree cleaned"
+    rebase_cmd.rs:176  "rebase hit conflicts and was aborted — resolve manually"
+    pr_cmd.rs:592/601  "force-push refused: ..."
+    pr_rebase.rs:758   "...Force-pushing would DROP..."
+
+  All six currently match. Nothing enforces that, and nothing fails when one stops.
+
+  WHAT BREAKS ON A REWORD, concretely. A conflict that stops matching falls through to the untyped arm. The drain then records `failed` rather than `conflict`, the shelve loses FailureKind::StaleBaseConflict, and the manual-recovery line — "Manual recovery: aida pr rebase N --interactive" — is never printed, because it is attached to the typed branch. So the operator gets a generic failure with no next step for the one failure class that genuinely needs a human. The same holds for the refused-force-push path, which is a safety refusal being reclassified as a generic error.
+
+  The failure is silent in both directions: no test fails, no warning fires, and the drain keeps running. It surfaces only as "shelves stopped telling us why", which is the hardest kind of regression to attribute later.
+
+  WHY THIS IS WORTH FIXING RATHER THAN NOTING. It is a coupling between two halves of the same binary, mediated by English. Nothing forces them to stay in step and nothing detects when they stop. It also sits directly under EPIC-62: a drain that cannot name why it stopped cannot self-recover, and the typed kinds are what the escalation ladder routes on.
+
+  PROPOSED: give `aida pr rebase` distinct exit codes for the conflict and the refused-force-push outcomes, and classify on the exit code. Keep the prose for humans; stop parsing it. If an exit code is judged too coarse, a structured marker line the consumer parses by a shared constant is acceptable — but the constant must be shared, not duplicated.
+
+  ACCEPTANCE
+  1. `attempt_phase3_auto_rebase` classifies StaleBaseConflict and StaleBaseRefused without matching free prose.
+  2. The message text of all six bail sites can be reworded without changing classification; a test proves it by asserting classification survives an altered message.
+  3. A conflict still produces the interactive-recovery recipe, and a refused force-push is still distinguishable from a generic failure.
+  4. Any remaining prose-matched classification anywhere in the orchestrator is enumerated on this spec, so this is a swept class rather than one fixed instance.
+  5. The exit codes or markers are documented where a future caller will look.
+
+  Origin: recorded by the advisor as a non-blocking note on BUG-1268 while reviewing #1970. Filed separately because a note on a Completed spec goes obsolete unread, and verified independently here against main before filing.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:49:09.217213996Z
+modified_at: 2026-09-19T21:49:09.217213996Z
+req_type: Bug
+tags:
+- coupling
+- from:session-0919
+- orchestrator
+- parent:EPIC-62
+- reliability
