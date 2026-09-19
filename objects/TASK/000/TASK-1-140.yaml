@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-18T18:53:12.547342993Z
-modified_at: 2026-09-19T16:51:32.470424611Z
+modified_at: 2026-09-19T17:16:23.025852576Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -54,6 +54,26 @@ comments:
   content: 'Round 2 review fix: moved live drain detection ahead of Completed/Rejected handling in aida why, and added a black-box CLI regression covering a Completed spec during live phase 3 (reviewer) and phase 4 (merge), including orchestrator PID assertions. Tests: cargo test -p aida-cli-lib live_drain_spec; cargo test -p aida-cli --test task_163_why_live_drain; cargo fmt --all -- --check.'
   created_at: 2026-09-19T16:51:32.470424611Z
   modified_at: 2026-09-19T16:51:32.470424611Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0baab-4a71-7f41-b8e1-8bc76f8fffe9
+  author: harvest
+  content: |
+    [aida:harvest]
+    source: PR-1968
+    agent: codex
+    ran-at: 2026-09-19 10:16 -07:00
+    mode: propose-only (drain)
+    proposed: 6
+    skipped: 0
+    candidates-file: /home/joe/ai/aida/.aida/harvest/task-163-drain-01a0baaa-e313-7a13-844b-545e886da546.json
+    ? AC (0.98) — A corroborated live drain takes precedence over a requirement's terminal store status: `aida why <spec>` still classifies a completed spec as `in-flight`, including during reviewer and merge phases.
+    ? AC (0.97) — `aida status <spec>` must not apply its worktree-idle stale threshold while that spec is owned by a corroborated live drain, regardless of the reported idle duration.
+    ? SEM (0.96) — Drain liveness is recognized only when two runtime facts agree: the drain state contains the spec as a running member and `.aida/drain.lock` names a currently live PID; stale state or a dead/missing lock does not make the spec live.
+    ? AC (0.94) — Machine-readable `why --json` reports live drain ownership with `bucket: "in-flight"`, `needs_human: false`, and a `drain` object containing normalized `phase` and `orchestrator_pid`; `status <spec> --json` exposes the same `drain` object.
+    ? SEM (0.86) — For the drain's current spec, phase reporting prefers the drain state's top-level `current_phase`; for other running batch members it uses that member's own state.
+    ? AC (0.88) — When `aida ps` overlays a live drain onto an existing lease row, it reports the orchestrator PID and a `drain <phase>` role, removes any dispatch attribution, and suppresses any contradictory orphan entry for that spec.
+  created_at: 2026-09-19T17:16:23.025852576Z
+  modified_at: 2026-09-19T17:16:23.025852576Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
 implementation_info:
