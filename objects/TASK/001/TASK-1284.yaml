@@ -3,12 +3,12 @@ spec_id: TASK-1284
 agreed_id: TASK-1284
 title: 'Lease-based liveness: drain lock, launchers and session reap decide ''is it running'' from the lease''s pid + process start time, never from pgrep name matching'
 description: 'SPIKE-82 (docs/spikes/2026-09-18-spike-82-night-shift-post-mortem.md, gap 3) and two live incidents this week: (1) a product-seat launcher waited ~40 min on a phantom drain lock because its pgrep -f pattern matched the Monitor wrapper shell whose command line contained the pattern text; (2) a drain launched by full path was missed by an argv[0]-anchored pattern and nearly double-launched. Every liveness decision that matters (drain lock probe, cross-clone drain claim heartbeat, session reap''s process-exited predicate, aida ps, any wave launcher) should resolve liveness from the lease/lock record itself: pid + process start time (or boot id + pid) recorded at acquire, compared against /proc (Linux) / the platform equivalent, so a recycled pid or a wrapper shell can never read as alive. Acceptance: drain_lock::probe_lock and coordination claims store pid + start_time and validate both; a test proves a same-pid different-start-time record reads as dead; docs/autonomous-drain.md tells operators to use aida ps / the lock file rather than pgrep, and the pgrep guidance in the discipline pack is replaced.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T01:50:05.278713524Z
-modified_at: 2026-09-19T04:02:14.654736069Z
+modified_at: 2026-09-19T04:58:48.802463068Z
 req_type: Task
 tags:
 - batch:followups-0918h
