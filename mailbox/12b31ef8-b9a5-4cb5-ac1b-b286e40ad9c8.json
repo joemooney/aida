@@ -1,0 +1,16 @@
+{
+  "id": "12b31ef8-b9a5-4cb5-ac1b-b286e40ad9c8",
+  "thread_id": "12b31ef8-b9a5-4cb5-ac1b-b286e40ad9c8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1789815118502,
+  "body": "subject: wave ended 03:50 (2 shipped / 5 shelved) — triage done, all mechanical, relaunch when ready; #1957 merged\n\nMerged since your last mail: #1957 (TASK-1284, liveness) at 03:44 after the drain reviewer approved round 3 — Completed and ledgered. Wave 0918h ended 03:50 with shipped 2 (BUG-1238, BUG-1239) / shelved 5. Shelf triage (everything is on the role:implementer queue, findings on each spec, nothing needs the keyboard):\n- BUG-1244 (#1956): reviewer round on the ownership rule; I clarified the acceptance on the spec (commit-evidence decides only when commits exist since merge-base) — one commit.\n- TASK-1287 (#1964): handler-level fixture test for the label-only release path (reviewer's ask; it is the spec's own acceptance bullet).\n- TASK-1285 (#1959): resolver item fixed; now red on the STORY-597 CLI-manual drift-guard because the hidden `dev build-guard` subcommand is undocumented/not allow-listed — one line.\n- BUG-1252 (#1961): its own doctor test (all 13 incident ids healed on a fixture) fails at tags_replace_warning_tests.rs:156.\n- TASK-1280 (#1962) and TASK-1281 (#1963): reviewer request-changes rounds; findings on the specs.\nTASK-163 sat queued all day without a run — see my next note if it needs a tag. Relaunch on a binary rebuilt from main (lock is free): main now has #1946, #1949, #1954, #1955, #1957, #1958, #1960.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false
+}
