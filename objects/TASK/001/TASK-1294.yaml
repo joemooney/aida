@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T18:22:19.990265168Z
-modified_at: 2026-09-19T18:22:22.934769453Z
+modified_at: 2026-09-19T18:22:38.642083031Z
 req_type: Task
 tags:
 - drain-safe
@@ -31,4 +31,8 @@ relationships:
 - rel_type: Child
   target_id: 01a09180-071a-7712-8b42-9e6f1b646259
   created_at: 2026-09-19T18:22:22.934769453Z
+- rel_type: BlockedBy
+  target_id: 01a0ba82-8052-7ad2-bc1b-bdacebaf5583
+  created_at: 2026-09-19T18:22:38.642075506Z
+  created_by: joe
 execution_mode: drain
