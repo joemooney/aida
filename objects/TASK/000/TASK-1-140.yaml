@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-18T18:53:12.547342993Z
-modified_at: 2026-09-19T16:04:07.010846840Z
+modified_at: 2026-09-19T16:04:08.250336538Z
 req_type: Task
 tags:
 - batch:followups-0918e
@@ -39,6 +39,16 @@ comments:
   content: 'Reviewer round 1 on PR #1968: TASK-163: handle_why checks Completed/Rejected and returns before live_drain_spec; during the expected Done review/merge phases, aida why reports closed instead of the live drain phase and orchestrator PID. Move or integrate the live-drain check ahead of terminal handling and add an end-to-end regression for the Done + live phase-3/4 case.  The finding matters because Done is precisely the state a spec sits in during phases 3-6 (review, merge, pull, build) — the window where someone is most likely to ask ''is this still being worked?''. Concretely: in handle_why, consult live_drain_spec BEFORE the Completed/Rejected/Done terminal short-circuit, and when a live drain owns the spec report the phase and orchestrator pid instead of the closed line; keep the terminal line for a spec with no live drain. Regression test: spec Done + a live drain record in phase 3 or 4 → aida why names the phase and pid, not ''closed''.'
   created_at: 2026-09-19T16:04:06.752747168Z
   modified_at: 2026-09-19T16:04:06.752747168Z
+- id: 01a0ba69-24b3-7ad2-aa1c-40be9ec4e1f1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #1968):
+    Verdict: CHANGES REQUESTED
+    Findings:
+    1. TASK-163: handle_why checks Completed/Rejected and returns before live_drain_spec; during the expected Done review/merge phases, aida why reports closed instead of the live drain phase and orchestrator PID. Move or integrate the live-drain check ahead of terminal handling and add an end-to-end regression for the Done + live phase-3/4 case.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-09-19T16:04:07.987743557Z
+  modified_at: 2026-09-19T16:04:07.987743557Z
 execution_mode: drain
 implementation_info:
   implemented: true
