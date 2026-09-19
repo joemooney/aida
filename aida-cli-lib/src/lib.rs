@@ -86464,9 +86464,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 // Returning early here left the implementer lease held and the
                 // headless reviewer died on the "branch held by lease" prompt.
                 // trace:BUG-1205 | ai:claude
+                // BUG-1265: when a marker or confirmed label makes the coarse
+                // red ambiguous, row-read failure is ci-unavailable, never
+                // evidence of a real failing check. trace:BUG-1265 | ai:codex
                 let refined_green = {
                     let hold_present =
                         merge_hold::read_hold(&self.project_root, pr_number as u64).is_some();
+                    let hold_label_present = !hold_present
+                        && merge_hold::label_present(&self.project_root, pr_number as u64)
+                            .unwrap_or(false);
                     let refine_change = crate::forge::ChangeRef {
                         id: pr_number as u64,
                         url: String::new(),
@@ -86479,7 +86485,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                         self.lifecycle_forge().as_ref(),
                         &refine_change,
                         hold_present,
-                        false,
+                        hold_label_present,
                         std::time::Duration::from_secs(20 * 60),
                         std::time::Duration::from_secs(15),
                     ) {
@@ -86510,6 +86516,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                                 format!(
                                     "CI is red on PR-{pr_number}: {}",
                                     r.describe(pr_number as u64)
+                                ),
+                            ));
+                        }
+                        Err(error) if hold_present || hold_label_present => {
+                            self.ci_run_id = latest_run_id_for_branch(&branch);
+                            return Err(auto_complete::PhaseFailure::of(
+                                auto_complete::FailureKind::CiUnavailable,
+                                format!(
+                                    "CI check details are unavailable on PR-{pr_number} after retries while a supervised merge-hold is present: {error:#}"
                                 ),
                             ));
                         }

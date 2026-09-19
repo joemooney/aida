@@ -412,10 +412,12 @@ pub(crate) enum FailureKind {
     CiRed,
     /// Phase 2: CI never reached a terminal state within the wait window.
     CiTimeout,
-    /// Phase 2: a PR exists, but its CI state could not be read after the
-    /// bounded probe retries. This is transient infrastructure trouble, not
-    /// permission to bypass the gate.
-    // trace:BUG-1250 | ai:codex
+    /// Phase 2: the CI verdict could not be established after bounded probe
+    /// retries — either the forge could not be read at all (transient
+    /// infrastructure trouble) or a supervised hold made the coarse red
+    /// ambiguous and the per-check rows stayed unavailable. Never permission
+    /// to bypass the gate.
+    // trace:BUG-1250 trace:BUG-1265 | ai:codex
     CiUnavailable,
     /// Phase 3: the reviewer session wrote no verdict file, or an unreadable
     /// one — the review never produced a usable decision.
@@ -1798,6 +1800,11 @@ pub(crate) fn recovery_hint(phase: Phase, kind: FailureKind, ctx: &HintContext) 
                  auto-complete once CI settles."
             )
         }
+        (Phase::Ci, FailureKind::CiUnavailable) => format!(
+            "CI check details stayed unavailable while PR-{pr} was under a supervised merge-hold. \
+             The coarse red may be the hold gate, so no code failure was inferred. Check the forge, \
+             then re-run auto-complete once per-check rows are readable."
+        ),
         (Phase::Ci, _) => format!(
             "The implementer session would not end cleanly — it may have uncommitted \
              changes. Commit or discard them in the worktree, then end it: \
@@ -6667,6 +6674,8 @@ mod tests {
         ));
         assert!(FailureKind::LeaseConflict.is_shelvable());
         assert_eq!(FailureKind::LeaseConflict.cause_slug(), "lease-conflict");
+        assert!(FailureKind::CiUnavailable.is_shelvable());
+        assert_eq!(FailureKind::CiUnavailable.cause_slug(), "ci-unavailable");
     }
 
     #[test]
