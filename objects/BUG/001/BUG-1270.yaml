@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T15:50:52.893240707Z
-modified_at: 2026-09-19T16:15:24.548950416Z
+modified_at: 2026-09-19T16:21:56.521467162Z
 req_type: Bug
 tags:
 - batch:followups-0918h
@@ -37,4 +37,11 @@ relationships:
   target_id: 01a0b9d6-b3b0-7993-ac66-c5066e1b4e81
   created_at: 2026-09-19T15:51:14.511516655Z
   created_by: joe
+comments:
+- id: 01a0ba79-72a9-70c0-80ae-e03861c22598
+  author: joe
+  content: 'Implemented PR-branch launch alignment in session_start: refresh open-PR head refs, fast-forward behind locals with a visible notice, refuse two-sided divergence with the exact realign command, and preserve no-PR/explicit side-branch behavior. Added pure decision coverage plus a real-git no-worktree/no--work-branch fixture. Targeted tests: cargo test -p aida-cli-lib session_start_reuse_tests --lib (6 passed).'
+  created_at: 2026-09-19T16:21:56.521467162Z
+  modified_at: 2026-09-19T16:21:56.521467162Z
+  session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
 execution_mode: drain
