@@ -591,3 +591,11 @@ blocks:
   range_end: 1440
   next: 1357
   allocated_at: 2026-09-18T19:31:52.217192439Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: TASK
+  range_start: 1415
+  range_end: 1514
+  next: 1415
+  allocated_at: 2026-09-19T21:01:08.490625158Z
