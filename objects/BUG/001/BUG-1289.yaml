@@ -1,0 +1,42 @@
+id: 01a0bb7e-6ed4-7d33-8a00-8011759a1c25
+spec_id: BUG-1289
+agreed_id: BUG-1289
+title: The json format flag returns human text on aida status and TOON on aida ps, and the per-spec view has no machine-readable form at all
+description: |
+  `--format json` does not produce JSON on at least two commands. A consumer that follows the documented flag gets human prose or TOON and has to parse it, which is the failure mode the format flag exists to prevent.
+
+  MEASURED 2026-09-19 in this repo, piping stdout so no TTY heuristic applies:
+
+    aida status TASK-1289 --format json   ->  human output, starting "TASK-1289  In Progress"
+    aida ps --format json                 ->  TOON, starting "view: ps"
+    aida awaiting --format json           ->  did not complete within 60 s (separate defect, filed as the latency bug)
+
+  The dedicated `--json` flag on `awaiting` does return JSON, so the two spellings disagree as well as the two commands.
+
+  This is the same class of problem STORY-1352 is about — a versioned read-only monitor contract — but it is a plain conformance defect rather than a design question, and it should be fixed whether or not the contract spec lands: today the flag is documented on the shared `--format` option as "json = machine JSON", and on these commands that statement is false.
+
+  WORTH DECIDING WHILE HERE. `aida status <SPEC>` already synthesises exactly the unified per-spec state an external consumer needs — requirement status, liveness with the flag-only distinction, why it is parked with the failure kind, and the next action. The gap is not that the synthesis is missing, it is that there is no machine-readable form of it. That makes this a small spec rather than a new command: give the existing per-spec view a JSON shape. Do NOT introduce a parallel `aida round status` verb; a second surface answering the same question is how the four-sources problem got created.
+
+  ACCEPTANCE
+  1. `--format json` returns parseable JSON on `aida status` (both bare and with a spec argument) and on `aida ps`.
+  2. An audit lists every command accepting `--format` and states, per command, whether json is honoured; any that are not are either fixed or explicitly documented as unsupported with an error rather than silently falling back.
+  3. `--format json` and a command's dedicated `--json` flag, where both exist, produce the same document.
+  4. The per-spec JSON carries at least: spec id, requirement status, liveness state including the flag-only case, active pid and worktree when present, the current phase and round, and the parked reason with its failure kind.
+  5. A test parses the output of each affected command as JSON and fails if parsing fails.
+  6. Field names and shape are stated somewhere a consumer can read without reading the source.
+
+  Reported by the aida-monitor project; the unified-endpoint half of their recommendation is narrowed here because the synthesis already exists in `aida status <SPEC>`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-09-19T21:07:00.436499599Z
+modified_at: 2026-09-19T21:07:00.436499599Z
+req_type: Bug
+tags:
+- agent-ux
+- cli
+- contract
+- from:aida-monitor
+- monitor
+- parent:EPIC-26
