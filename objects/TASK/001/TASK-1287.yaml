@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-19T05:38:23.425004816Z
-modified_at: 2026-09-19T13:21:56.263329586Z
+modified_at: 2026-09-19T13:23:30.625341930Z
 req_type: Task
 tags:
 - batch:followups-0918h
@@ -99,6 +99,20 @@ comments:
   created_at: 2026-09-19T11:51:21.860895295Z
   modified_at: 2026-09-19T11:51:21.860895295Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a0b9d6-16c1-7633-a2e9-9c9173bd0daf
+  author: joe
+  content: |-
+    [aida:proxy-approval] pr: #1964 [AI:codex] fix(pr): release label-only merge holds (TASK-1287)
+    verdict: APPROVE + merged (round 2; auto-bumped Done → Completed at fda8eff)
+    proxy: claude driver-advisor, session 01a0adee
+    independent: yes (codex implementer in wave 0918h; the drain's headless reviewer APPROVED at 04:50 — .aida/review-verdicts/PR-1964.json; advisor reviewed both rounds — PR-1964-advisor.json)
+    gates: required Build (ubuntu-latest) = success at 6d07e3dd; merge-hold marker + label released via aida pr ship (explicit review-merge) after the reviewer's verdict; merge lease via aida pr ship; aida pull ran post-merge
+    reasoning: ci_gate::classify_red / refine_red take hold_label_present, so a red merge-hold-gate with a confirmed forge label and no marker is the hold, not a lingering-label failure; merge_hold::label_present reads the label live from GitHub or GitLab (both label shapes parsed and tested) and surfaces errors so callers stay fail-closed; pr_ship_handler computes label_only_hold only when CI reads Failed with no marker, then releases through the same path as a marker hold. The drain's CI watch passes false, so only an explicit pr ship releases a label-only hold. Round 2 added the end-to-end fixture the acceptance asked for: label_only_hold_releases_waits_for_gate_and_merges_in_one_ship plus no_label_and_no_marker_ships_without_release.
+    closes: the hand-clear step I needed on #1946 and #1958 is gone. With BUG-1236 (#1958) and TASK-1288 (#1960), hold placement, release and repair are now symmetric for drain-created and hand-held PRs alike.
+    timestamp: 2026-09-19T06:22-07:00
+  created_at: 2026-09-19T13:23:30.625341930Z
+  modified_at: 2026-09-19T13:23:30.625341930Z
+  session_id: 01a0adee-16e1-7982-ac9f-e15abb207b6c
 history:
 - id: 01a0b9d4-a626-79c3-b4fe-6e36389a059f
   author: aida-auto-bump
