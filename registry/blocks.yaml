@@ -599,3 +599,11 @@ blocks:
   range_end: 1514
   next: 1415
   allocated_at: 2026-09-19T21:01:08.490625158Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: BUG
+  range_start: 1417
+  range_end: 1516
+  next: 1417
+  allocated_at: 2026-09-19T22:03:18.760352084Z
